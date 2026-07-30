@@ -12,12 +12,21 @@
 //!   may not, and the two names are kept apart rather than reconciled by mangling.
 //! - `types` — JSON Schema to Flux `TypeRef`, **including the documented `Any` fallback** for the
 //!   shapes Flux cannot express.
+//! - [`highlight`] — the other direction: formatted Flux rendered as a syntax-highlighted SVG,
+//!   coloured by flux-lang's own CST classifier (C-45). It lives beside the emitter because both
+//!   sides of "what Flux looks like" must come from flux-lang and never from a local imitation of
+//!   its grammar.
 
+pub mod highlight;
 mod names;
 mod op;
 mod types;
 
 pub use op::emit_operation;
+
+/// flux-lang's own token classification, re-exported so a consumer can name it without depending on
+/// flux-lang directly — `connector-cli` in particular does not, deliberately.
+pub use flux_lang::highlight::HighlightClass;
 
 /// Everything that can stop an IR operation from becoming a Flux `op`.
 ///

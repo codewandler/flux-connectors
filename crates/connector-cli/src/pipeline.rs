@@ -96,6 +96,7 @@ pub fn plan(workspace: &Workspace, only: Option<&str>) -> Result<Plan> {
             workspace.site_catalog_path(),
             site::document(entries)?,
         )?);
+        artifacts.extend(readme_images(workspace)?);
     }
 
     artifacts.sort_by(|a, b| a.path.cmp(&b.path));
@@ -104,6 +105,34 @@ pub fn plan(workspace: &Workspace, only: Option<&str>) -> Result<Plan> {
         providers: providers.into_iter().map(|p| p.name).collect(),
         artifacts,
     })
+}
+
+/// The README's syntax-highlighted images, planned like every other artifact (C-45).
+///
+/// This closes the gap the regex script it replaced left open in its own docstring: the image was a
+/// generated artifact that **nothing checked**, so the README could disagree with the compiler for
+/// as long as nobody re-ran the script by hand. Routed through [`plan`] it inherits every property
+/// the pipeline already holds — `build` rewrites it, `diff` reports it stale, an unchanged image is
+/// not rewritten, and `site_catalog.rs`'s whole-repo fixed-point assertion covers it for free.
+///
+/// A repository-level document rather than a provider artifact, so — exactly like
+/// `site/catalog.json` — it is a function of a **full** run only; see the note at its call site.
+/// Absent input means nothing to render, which is the ordinary case for the fixture trees the
+/// integration tests build: they have `providers/` and nothing else.
+fn readme_images(workspace: &Workspace) -> Result<Vec<PlannedArtifact>> {
+    let path = workspace.snippet_path();
+    let Some(source) = artifact::read_if_exists(&path)? else {
+        return Ok(Vec::new());
+    };
+    connector_flux::highlight::THEMES
+        .iter()
+        .map(|theme| {
+            planned(
+                workspace.snippet_svg_path(theme.name),
+                connector_flux::highlight::render_svg(&source, theme),
+            )
+        })
+        .collect()
 }
 
 /// What compiling one provider yields: its own artifacts, and its contribution to the catalogue

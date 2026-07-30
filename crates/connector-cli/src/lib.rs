@@ -36,6 +36,7 @@ pub mod diff;
 pub mod discovery;
 pub mod net;
 pub mod pipeline;
+pub mod png;
 pub mod seam;
 pub mod site;
 pub mod status;
@@ -78,7 +79,7 @@ fn build(invocation: &Invocation, out: &mut impl Write) -> Result<()> {
             "{} up to date; nothing written",
             summarize(plan.providers.len(), plan.artifacts.len())
         )?;
-        return Ok(());
+        return rasterize(invocation, &workspace, out);
     }
 
     let written = pipeline::apply(&plan)?;
@@ -91,6 +92,21 @@ fn build(invocation: &Invocation, out: &mut impl Write) -> Result<()> {
         summarize(plan.providers.len(), plan.artifacts.len()),
         written.len()
     )?;
+    rasterize(invocation, &workspace, out)
+}
+
+/// The `--png` half of a build: outside the plan, deliberately. See [`png`] for why the raster is
+/// not a checked artifact, and why an uninstalled `flux` skips instead of failing.
+fn rasterize(invocation: &Invocation, workspace: &Workspace, out: &mut impl Write) -> Result<()> {
+    if !invocation.png {
+        return Ok(());
+    }
+    match png::render(workspace)? {
+        png::Outcome::Written(path) => {
+            writeln!(out, "rendered {}", workspace.display_path(&path).display())?
+        }
+        png::Outcome::Skipped(reason) => writeln!(out, "no PNG written: {reason}")?,
+    }
     Ok(())
 }
 
