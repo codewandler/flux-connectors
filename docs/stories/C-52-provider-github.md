@@ -143,6 +143,15 @@ and babelforce each record — worth one story covering all of it.
   for a value that is still injectable, and because zero is a property a reviewer can check at a
   glance. It is asserted twice, once on the IR and once on the emitted URL, so an emitter that
   synthesised a query parameter from somewhere other than `params.query` could not slip past.
+- **The emitted-text assertion checks every `$url = ` line, and it has to.** Review caught the first
+  version selecting only the *first* one, which made the "could not slip past" claim above false: the
+  emitter binds `$url` once for the path and required query parameters and then **re-binds it once per
+  optional query parameter** inside a `when` guard, with the `?` carried on a separate `$sep`
+  binding (`crates/connector-flux/src/op.rs`, the `optional` loop; the shape is visible in
+  `connectors/zendesk.flux`). Injecting one optional query parameter into a github operation
+  therefore failed the IR assertion while *passing* the text assertion. The test now requires exactly
+  one `$url` binding, no `?` on any of them, and no `$sep` binding at all — verified by re-running
+  that same probe and watching both assertions fail, then reverting it.
 - **The path surface is safe rather than merely untested.** `{owner}` and `{repo}` are GitHub names
   restricted to `[A-Za-z0-9._-]` and the two `*_number` parameters are integers, so no path value can
   carry a character that changes the shape of the request. That asymmetry against the query string is
