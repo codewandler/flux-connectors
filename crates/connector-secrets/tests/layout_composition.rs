@@ -5,7 +5,9 @@
 //! without inventing a second addressing scheme. The property worth asserting is narrow —
 //! **a non-default layout changes the path, and nothing else.**
 
-use connector_secrets::{CredentialRef, Layout, MemoryStore, Secret, SecretStore, TenantLayout};
+use connector_secrets::{
+    CredentialRef, Layout, MemoryStore, Secret, SecretStore, StoreError, TenantLayout,
+};
 
 /// Obviously not a credential. Nothing in this repository commits a value shaped like a real token.
 const SENTINEL: &str = "SENTINEL-NOT-A-REAL-SECRET";
@@ -120,6 +122,43 @@ fn a_custom_layout_cannot_widen_what_an_address_may_contain() {
             .is_err(),
         "a layout parsing a hostile path must refuse rather than render it"
     );
+}
+
+/// A layout's refusal reaches a caller, as [`StoreError::Layout`].
+///
+/// [`Layout::render`] cannot fail, so [`Layout::parse`] is the only place a layout gets to refuse —
+/// which makes `reference`, the inverse of `path`, the only path from that refusal to a caller.
+/// Before C-149 no store called `parse`, so `StoreError::Layout` was a variant nothing could
+/// construct: a typed error promising an outcome that could not occur. Both stores expose it, so
+/// this asserts it over the two of them rather than over whichever one is convenient.
+#[test]
+fn a_layout_refusal_reaches_the_caller_as_a_layout_error() {
+    let blessed = MemoryStore::with_layout(TenantLayout);
+    let custom = MemoryStore::with_layout(FlatLayout);
+
+    // Each store recovers the address from a path its own layout wrote — the round trip an operator
+    // makes when they are holding a path and need to know whose credential it is.
+    let address = reference();
+    let blessed_path = blessed.path(&address);
+    assert_eq!(blessed.reference(&blessed_path), Ok(address.clone()));
+    assert_eq!(custom.reference(&custom.path(&address)), Ok(address));
+
+    // And each refuses the other's, rather than guessing at a convention it does not have.
+    let foreign = blessed_path;
+    match custom.reference(&foreign) {
+        Err(StoreError::Layout { reason }) => assert!(
+            reason.contains(&foreign),
+            "the layout's own words reach the caller, and they name the path: {reason:?}"
+        ),
+        other => panic!("a refused path must be a Layout error, got {other:?}"),
+    }
+
+    // The reserved-service spelling is the refusal that matters most: it is a *plausible* path, and
+    // accepting it would be the second spelling of one address the addressing contract forbids.
+    assert!(matches!(
+        blessed.reference("tenants/9f3a4b2c/com.zendesk.api/default/api_token"),
+        Err(StoreError::Layout { .. })
+    ));
 }
 
 /// `parse(render(r)) == r` is the [`Layout`] contract, and `default` never reaches a path. Both

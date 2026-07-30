@@ -130,10 +130,12 @@ pub trait SecretStore: Send + Sync {
 
 /// What a [`SecretStore`] can fail with.
 ///
-/// Every variant carries the rendered `path`, not the [`CredentialRef`], because the path is what
-/// an operator needs in order to go and look — and because a reference renders differently under
-/// each [`Layout`], so quoting the address alone would send them to the wrong place. Neither
-/// carries a value: a `StoreError` is safe to log.
+/// Every variant that names a location names the rendered `path`, not the [`CredentialRef`], because
+/// the path is what an operator needs in order to go and look — and because a reference renders
+/// differently under each [`Layout`], so quoting the address alone would send them to the wrong
+/// place. [`Layout`](Self::Layout) is the exception, and only because there is no rendered path in
+/// that case: the path was the *input*, and the layout's own message quotes it. None of them carries
+/// a value: a `StoreError` is safe to log.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum StoreError {
     /// The backend answered, and there is nothing stored at that path.
@@ -179,10 +181,14 @@ pub enum StoreError {
         reason: String,
     },
 
-    /// The configured [`Layout`] could not render or recover the address.
+    /// The configured [`Layout`] could not recover the address from a path.
     ///
-    /// A custom layout is allowed to refuse a reference it cannot spell; that is stated in
-    /// [`Layout`]'s contract as the alternative to guessing.
+    /// A custom layout is allowed to refuse a path it cannot spell; that is stated in [`Layout`]'s
+    /// contract as the alternative to guessing. [`Layout::render`] is infallible, so
+    /// [`Layout::parse`] is the only place a layout can refuse, and [`MemoryStore::reference`] and
+    /// `VaultStore::reference` are the two calls that raise this. That pairing is deliberate: a
+    /// variant no store can construct is a promise that does not hold, and this one used to be
+    /// exactly that (C-149).
     #[error("the layout could not resolve the address: {reason}")]
     Layout {
         /// The layout's own explanation.
