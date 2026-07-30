@@ -1,0 +1,2 @@
+providers/duplicate-service-role.toml is not a valid connector definition:
+  - service "models" declares role "llm_catalogue" more than once. A role is a claim; stating it twice states nothing the first one did not, and a set that tolerates repeats is a list pretending to be a set

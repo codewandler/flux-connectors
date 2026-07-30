@@ -1,0 +1,19 @@
+# C-120: a role is a claim, and stating it twice states nothing the first one did not. A list that
+# tolerates repeats is not the set `Connector::roles` unions.
+id = "acme"
+vendor = "Acme"
+base_url = "https://api.acme.example"
+
+[[services]]
+name = "models"
+description = "The model catalogue."
+roles = ["llm_catalogue", "llm_catalogue"]
+
+[[operations]]
+id = "acme-models-list"
+service = "models"
+method = "GET"
+path = "/v1/models"
+description = "List the models."
+risk = "low"
+idempotency = "idempotent"

@@ -128,8 +128,8 @@ fn no_snapshot_is_orphaned() {
     );
 }
 
-/// The four rejections C-3's Acceptance names by hand, plus the two C-2's review added, each tied
-/// to the fixture that covers it.
+/// The four rejections C-3's Acceptance names by hand, plus the two C-2's review added and the ones
+/// each later story's Acceptance names, each tied to the fixture that covers it.
 ///
 /// The snapshot test above would still pass if a fixture were deleted, so this list is what makes
 /// the required coverage explicit rather than incidental.
@@ -157,6 +157,18 @@ fn every_required_rejection_has_a_fixture() {
         // C-49 review: a service name reaches the emitted file path, so the address grammar is what
         // keeps a content field from choosing where a build writes.
         "service-name-escapes-the-repo",
+        // C-120: a role is a contract, so each of its four refusals is pinned. An unknown name is
+        // the failure mode the mechanism exists to prevent; an unsatisfied claim would make the
+        // catalogue lie; `roles` is derived at provider level, not authored; a repeat is not a set.
+        "unknown-service-role",
+        "service-claims-an-unsatisfied-role",
+        "provider-level-roles",
+        "duplicate-service-role",
+        // C-120 review: the two ways the mechanism was found to leak. A `default` entry beside a
+        // named service hands a multi-service provider back the implicit service C-49 denies it, and
+        // an event filling a role slot publishes a capability nothing can call.
+        "default-service-beside-a-named-one",
+        "role-slot-filled-by-an-event",
     ];
 
     let cases = cases();

@@ -335,6 +335,94 @@ pub struct Provenance {
 /// and an address is a promise that would have to be broken the day the provider grows a second one.
 pub const DEFAULT_SERVICE: &str = "default";
 
+/// A named capability shape a [`Service`] claims to implement, checked at load — C-120.
+///
+/// Seventeen connectors share structure that nothing named. `openai` and `openrouter` both list
+/// models; `zendesk`, `freshdesk`, `intercom` and `jira` all show a ticket. Nothing in the IR said
+/// so, so nothing could act on it: a UI could not group them, and a second vendor filling the same
+/// shape was a coincidence rather than a contract. A role is that missing declaration. See
+/// [`docs/designs/provider-roles.md`](../../../docs/designs/provider-roles.md).
+///
+/// # Why it is closed
+///
+/// An open string set is a tag system, and a tag system cannot be checked. A closed enum can, and
+/// the checking is the point: `llm_catalogue` is a *promise the loader enforces*, so a consumer
+/// reading the catalogue can rely on it without reading the provider's TOML. It also makes an
+/// unknown name a **load error** rather than a silent no-op, which is the failure mode this whole
+/// mechanism exists to prevent — a typo'd capability that quietly means "no capability" is invisible
+/// to everyone downstream.
+///
+/// # Why it attaches to a service
+///
+/// `openai` is not "an LLM provider": it exposes a management surface (`models`) and an inference
+/// surface (`chat`), which are different capabilities with different risk and different idempotency.
+/// C-49's service level is exactly that granularity. A role declared on the *provider* would smear
+/// the two together, so a provider's roles are **derived** ([`Connector::roles`]) and never authored
+/// — the same rule [`Level`](crate::config::Level) follows against `binds`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Role {
+    /// A live list of the models a vendor serves — the half of the LLM story a connector may own.
+    ///
+    /// flux's own model metadata lives in static tables that go stale the moment a vendor ships a
+    /// model; `openai-models-list` is live. So a connector *informs* the pool of `(provider, model)`
+    /// tuples while `flux-providers` keeps *serving* it. Serving inference from a connector is a
+    /// stated non-goal (C-123 is the charter decision), which is why there is no `llm_inference`
+    /// variant here.
+    LlmCatalogue,
+}
+
+impl Role {
+    /// Every role there is, in the order an error message lists them.
+    ///
+    /// A `const` rather than a derived iterator so that the "known set" a refusal prints and the set
+    /// the loader accepts are the same value, and a variant added without extending this fails the
+    /// exhaustive `match` below rather than silently going unlisted.
+    pub const ALL: [Self; 1] = [Self::LlmCatalogue];
+
+    /// The token this role serializes as, for error text.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::LlmCatalogue => "llm_catalogue",
+        }
+    }
+
+    /// The **operations** a service must have to claim this role.
+    ///
+    /// Named by **member name within the service** (`list`), never by full operation id
+    /// (`openai-models-list`) — see [`fills_slot`] for what "within the service" means and why it is
+    /// what makes a role vendor-independent. Only an operation fills a slot; see
+    /// [`Connector::missing_role_members`] for why an event does not.
+    pub fn required_members(self) -> &'static [&'static str] {
+        match self {
+            Self::LlmCatalogue => &["list"],
+        }
+    }
+}
+
+/// Whether an operation's name fills one of a role's required-member slots.
+///
+/// A role requires `list`, not `openai-models-list`. The slot is matched against the member's
+/// **trailing name segments**, so `openai-models-list` and `openrouter-models-list` fill the same
+/// slot and the vendor prefix nobody agreed on stays out of the contract — which is the whole reason
+/// a role is worth declaring rather than inferring.
+///
+/// Segments split on `-`, `_` and `.`: those are the three separators a member name admits (see
+/// [`Connector::member_names_of`]), so a role naming `comment.list` and a member named
+/// `zendesk-ticket-comment-list` are the same slot. The match is on whole segments and never on a
+/// substring, or `acme-blocklist-get` would satisfy a role it has nothing to do with.
+///
+/// **A one-segment slot is loose**, and known to be: a bare `list` is a suffix nine of seventeen
+/// shipped providers contain somewhere. That is a weakness of how a role spells its slots, not of the
+/// match, and C-121 addresses it by giving a slot a tighter spelling (`models.list`) and a set of
+/// accepted ones. Multi-segment slots are already tight.
+fn fills_slot(member: &str, slot: &str) -> bool {
+    const SEPARATORS: [char; 3] = ['-', '_', '.'];
+    let member: Vec<&str> = member.split(SEPARATORS).collect();
+    let slot: Vec<&str> = slot.split(SEPARATORS).collect();
+    member.len() >= slot.len() && member[member.len() - slot.len()..] == slot[..]
+}
+
 /// One API surface of a provider: the unit you address, version, select and install.
 ///
 /// `s3` and `bedrock-runtime` under AWS; `support` under Zendesk. A service is the middle level of
@@ -368,6 +456,21 @@ pub struct Service {
     /// multi-service provider. Resolve it with [`Connector::api_version_of`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub api_version: Option<String>,
+    /// The capability shapes this service claims to implement — see [`Role`].
+    ///
+    /// The loader checks every claim: a service declaring a role it does not satisfy is refused,
+    /// naming the member that is missing. That check is what makes the declaration worth anything to
+    /// a consumer.
+    ///
+    /// A **provider's** roles are the union of its services' ([`Connector::roles`]) and are never
+    /// authored — a provider-level `roles` key is a load error, because a value that is both derived
+    /// and writable is two sources of truth waiting to disagree.
+    ///
+    /// `skip_serializing_if` for the same reason the three fields above carry it: a service that
+    /// claims no role must hash to what it hashed before roles existed, or landing C-120 moves every
+    /// `ir_sha256` in the repository and churns `connectors.lock` for a provider nobody edited.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub roles: Vec<Role>,
 }
 
 /// One operation: a single HTTP call, and everything a Flux `op` declaration needs to wrap it.
@@ -612,8 +715,72 @@ impl Connector {
     ///
     /// The shape of every provider shipped today, and the shape whose emitted artifacts are named
     /// `<provider>.flux` rather than `<provider>-<service>.flux`.
+    ///
+    /// Declaring no services at all is the usual spelling, but not the only one: C-120 lets a
+    /// single-surface provider write a `[[services]]` entry named [`DEFAULT_SERVICE`] **to carry
+    /// roles**, because a role attaches to a service and there is no other service to attach it to.
+    /// Such an entry names the service that already exists rather than adding one, so it must not
+    /// rename a single artifact — which is what this predicate decides.
     pub fn is_default_only(&self) -> bool {
-        self.services.is_empty()
+        self.services
+            .iter()
+            .all(|service| service.name == DEFAULT_SERVICE)
+    }
+
+    /// The provider's roles: the union of its services', deduplicated, in declaration order.
+    ///
+    /// **Derived, never authored.** A provider-level `roles` key is a load error, for the reason
+    /// [`Level`](crate::config::Level) is derived from `binds`: an author who could state it could
+    /// state it wrongly, and then two sources of truth would disagree about what the connector can
+    /// do. It is also the wrong *level* — `openai`'s model-listing surface and its chat surface are
+    /// different capabilities of one vendor, and a provider-level role would smear them together.
+    ///
+    /// A `Vec` rather than a set type: the order is the declaration order, which is what a catalogue
+    /// and a UI want, and the loader has already refused a repeat within one service.
+    pub fn roles(&self) -> Vec<Role> {
+        let mut union: Vec<Role> = Vec::new();
+        for role in self.services.iter().flat_map(|service| &service.roles) {
+            if !union.contains(role) {
+                union.push(*role);
+            }
+        }
+        union
+    }
+
+    /// The required members of `role` that `service` does not have, in the role's own order.
+    ///
+    /// Empty when the service satisfies the claim. The loader calls this to refuse a claim that does
+    /// not hold; a consumer can call it to explain one. Matching is by member name *within the
+    /// service* — see [`fills_slot`].
+    ///
+    /// # Only an operation fills a slot
+    ///
+    /// Deliberately [`operations_of`](Self::operations_of) and **not**
+    /// [`member_names_of`](Self::member_names_of), even though the latter is the per-service
+    /// namespace every other rule here uses. A role is a claim that something is *callable*: a
+    /// consumer resolving `llm_catalogue` intends to call the listing.
+    ///
+    /// The other member kinds cannot answer that. An [`EventDecl`] and a [`ChannelBinding`] reach the
+    /// manifest and the catalogue and are emitted into no module at all — flux lifts `op`
+    /// declarations only — so a service whose only `list` is an event named `models.list` would
+    /// publish a live-listing capability that nothing can call. That is "an event dressed up as a
+    /// pollable op", which this repository refuses on sight. A [`ConfigField`](crate::ConfigField) is
+    /// not addressable in the calling sense either.
+    ///
+    /// [`Graph`](crate::graph::Graph) is the one arguable exclusion: it *does* lower to an emitted
+    /// `op`. It stays out because a role is a vendor's API shape and a graph is a composition this
+    /// repository wrote over it — admitting one would let a provider satisfy a role by wrapping
+    /// members that do not implement it. Nothing needs it today; widening later is cheap.
+    pub fn missing_role_members(&self, service: &str, role: Role) -> Vec<&'static str> {
+        let callable: Vec<&str> = self
+            .operations_of(service)
+            .map(|operation| operation.id.as_str())
+            .collect();
+        role.required_members()
+            .iter()
+            .copied()
+            .filter(|slot| !callable.iter().any(|member| fills_slot(member, slot)))
+            .collect()
     }
 
     /// The operations belonging to one service, in IR order.

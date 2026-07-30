@@ -1,0 +1,21 @@
+# C-120: `Role` is a closed enum, so an unknown name is serde's rejection — and serde's is better
+# than ours would be: it quotes the name that was written, lists every role that exists, and points
+# at the line. A typo'd capability that silently meant "no capability" is the failure mode the whole
+# mechanism exists to prevent.
+id = "acme"
+vendor = "Acme"
+base_url = "https://api.acme.example"
+
+[[services]]
+name = "models"
+description = "The model catalogue."
+roles = ["llm_catalog"]
+
+[[operations]]
+id = "acme-models-list"
+service = "models"
+method = "GET"
+path = "/v1/models"
+description = "List the models."
+risk = "low"
+idempotency = "idempotent"

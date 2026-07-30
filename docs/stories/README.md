@@ -29,6 +29,7 @@ Gate: `cargo build --workspace && cargo test --workspace && cargo clippy --works
 - [C-94 — The flow graph — connector members composed into one Flux op (epic)](C-94-flow-graph-epic.md) · Spec · EPIC — four waves built the vocabulary (Operation=call node, EventDecl=source, oip=node id, wire paths=edges); this is the graph. NOT a second language: every past rejection was an EXPRESSION language, every acceptance was declarative structure. IR landed
 
 ## Next (ready — take the top one unless the user named a story)
+- [C-142 — Make the explorer components attachable, without extracting a package yet](C-142-reusable-explorer-components.md) · Codegen · measured: the ENTIRE VitePress coupling is two functions — withBase in 5 components and inBrowser in 1 — and data/catalog.mts has zero imports. So this is a link port and a tier boundary, not a rewrite. The package boundary waits for a second consumer
 
 ### authentication as a connector surface — a login that cannot leak
 _Authentication is currently something the **host** does *around* a connector: `OAuth2Spec` declares_
@@ -96,7 +97,6 @@ _The explorer was designed against **6 providers and 25 operations** (C-42–C-4
 
 ### the flow graph — connector members composed into one Flux op
 _Four waves built this vocabulary without naming it:_
-- [C-95 — Lower a flow graph to a composite Flux op](C-95-graph-lowering.md) · Codegen · owns symbol generation and region nesting. MUST refuse a Select wired to an Operation output until http.request returns a record — today the response is one flat string
 - [C-96 — Map graph node ids to Flux AST paths, so a diagnostic lands on a canvas node](C-96-graph-node-path-map.md) · Bridge · flux ALREADY shipped this seam — D-139 added Diagnostic.node_path because a downstream graph canvas was parsing message text. Reuse it rather than reinventing
 - [C-97 — The boundary program pattern — what an operator writes around a generated flow](C-97-graph-boundary-program.md) · Bridge · flux lifts only `op`; channel and trigger are Program members an operator writes. So a boundary node is DOCUMENTED, never emitted — the same split C-63 uses for poll
 - [C-98 — The node kinds flux-lang already has — parallel, match, each, saga, fallback](C-98-richer-node-kinds.md) · Spec · exposure, not invention — all of these are existing flux_lang::ast::Node variants this repo has never constructed. Match is what finally lets a value escape a conditional
@@ -131,7 +131,6 @@ _A connector's operations are currently legible only by reading `providers/<name
 ### provider roles — a declared, checkable capability shape
 _Seventeen connectors share structure that nothing currently names. `zendesk`, `freshdesk`,_
 - [C-119 — Provider roles — a declared, checkable capability shape (epic)](C-119-provider-roles-epic.md) · Spec · EPIC — a role is a contract the loader enforces, declared on a SERVICE not a provider (openai's models surface and its chat surface are different capabilities). Connectors inform the model pool; flux keeps serving inference, per the vision non-goal
-- [C-120 — Declare roles on a service, with the closed set and its refusals](C-120-service-roles-declaration.md) · Spec · the mechanism — roles attach to a SERVICE and a provider's are derived; an unknown role name is a load error, because a typo'd capability that silently means 'no capability' is the whole failure mode
 - [C-121 — The llm_catalogue and ticketing roles, and the model pool they feed](C-121-llm-catalogue-role.md) · Spec · two roles, not one — a mechanism validated by a single role is designed around a single case. Connectors contribute a LIVE model list; flux's static pricing tables are explicitly 'the fallback'
 - [C-122 — Ship the Anthropic connector — management surface and model catalogue](C-122-provider-anthropic.md) · Spec · the third vendor to fill llm_catalogue, and the one that proves the role is vendor-independent rather than shaped around OpenAI. Management plane only — inference stays with flux's native anthropic provider
 - [C-123 — Decide: may a connector ever serve LLM inference?](C-123-decide-connector-inference.md) · Spec · DECISION, not a task — it contradicts a stated vision non-goal, so it needs an explicit answer before any code, exactly as C-34 gates the proxy. Nothing else in the epic depends on it
@@ -153,6 +152,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-26 — File the outbound $auth seam stories on flux's board](C-26-file-seam-stories-on-flux.md) · Bridge · **critical path** · 11 paste-ready drafts wait on a decision to write into ../flux
 - [C-35 — Specify the proxy request contract and its guardrails](C-35-proxy-request-contract.md) · Bridge · blocked on C-34
 - [C-36 — Prove the proxy and the Flux emitter build the same request](C-36-proxy-emitter-conformance.md) · Bridge · blocked on C-34 · two backends over one IR will drift without this
+- [C-95 — Lower a flow graph to a composite Flux op](C-95-graph-lowering.md) · Codegen · owns symbol generation and region nesting. MUST refuse a Select wired to an Operation output until http.request returns a record — today the response is one flat string
 
 ## Backlog
 - [C-133 — The brave connector — Brave Talk's room-token HTTP surface](C-133-provider-brave-talk-tokens.md) · Spec · ONLY the three HTTP calls. The XMPP MUC stream stays OUT — vision.md names protocol-rich technology adapters as a non-goal, and flux already has D-205/D-206 with feasibility proven live. Blocked on two real things; read Notes before starting
@@ -235,6 +235,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-111 — Ship the Fly.io Machines connector](C-111-ship-the-fly-machines-connector.md) · Spec · A deliberately narrow machine-lifecycle surface: nine typed operations, one named service, and no invented channel contract
 - [C-112 — Publish Flux core specifications in the connector explorer](C-112-publish-flux-core-specifications-in-the-explorer.md) · UX · Built-ins and language nodes become searchable beside connectors, with canonical JSON identities rather than fake providers
 - [C-114 — The connector-pack crate and the ToolSpec projection](C-114-tool-spec-projection.md) · Bridge · the foundation the rest of the epic builds on — a catalogue entry becomes a flux ToolSpec, dotted name and all
+- [C-120 — Declare roles on a service, with the closed set and its refusals](C-120-service-roles-declaration.md) · Spec · the mechanism — roles attach to a SERVICE and a provider's are derived; an unknown role name is a load error, because a typo'd capability that silently means 'no capability' is the whole failure mode
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

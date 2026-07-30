@@ -1,0 +1,2 @@
+providers/provider-level-roles.toml is not a valid connector definition:
+  - `roles` is not a provider-level key. A role is a capability of one API surface, so it is declared on a `[[services]]` entry, and a provider's roles are derived as the union of its services' — never authored, for the reason a config field's `level` is derived from its `binds`. A provider with a single API surface declares `[[services]]` with `name = "default"` and puts them there
