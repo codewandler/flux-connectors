@@ -68,7 +68,7 @@ const headline = computed(() => {
         </dd>
       </div>
       <div>
-        <dt>Own defects</dt>
+        <dt>Operation-specific issues</dt>
         <dd :class="defects ? 'card__warn' : 'card__ok'">
           {{ defects }} of {{ provider.operation_count }} operations
         </dd>

@@ -1,0 +1,84 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import { withBase } from 'vitepress'
+import { allOperations, type Catalog } from '../../../data/catalog.mts'
+
+const props = defineProps<{ catalog: Catalog }>()
+const operationCount = computed(() => allOperations(props.catalog).length)
+</script>
+
+<template>
+  <section class="snapshot">
+    <p class="snapshot__count">
+      <strong>{{ catalog.providers.length }}</strong> connectors ·
+      <strong>{{ operationCount }}</strong> operations
+    </p>
+    <ul class="snapshot__providers">
+      <li v-for="provider in catalog.providers" :key="provider.id">
+        <a :href="withBase(`/explorer#${provider.id}`)">{{ provider.vendor }}</a>
+        <span>{{ provider.operation_count }} operations</span>
+        <span class="snapshot__status">
+          {{ provider.operations.some((operation) => operation.status.works) ? 'Preview' : 'Not live yet' }}
+        </span>
+      </li>
+    </ul>
+  </section>
+</template>
+
+<style scoped>
+.snapshot {
+  margin: 20px 0 32px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.snapshot__count {
+  margin: 0;
+  padding: 14px 18px;
+  background: var(--vp-c-bg-soft);
+  color: var(--vp-c-text-2);
+}
+
+.snapshot__providers {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.snapshot__providers li {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 18px;
+}
+
+.snapshot__providers li + li {
+  border-top: 1px solid var(--vp-c-divider);
+}
+
+.snapshot__providers span {
+  color: var(--vp-c-text-2);
+  font-size: 13px;
+}
+
+.snapshot__status {
+  border-radius: 12px;
+  padding: 2px 9px;
+  background: var(--vp-c-warning-soft);
+  color: var(--vp-c-warning-1) !important;
+  font-weight: 600;
+}
+
+@media (max-width: 520px) {
+  .snapshot__providers li {
+    grid-template-columns: 1fr auto;
+  }
+
+  .snapshot__status {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+</style>

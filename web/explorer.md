@@ -7,14 +7,14 @@ outline: [2, 2]
 import { data as catalog } from './data/catalog.data.mts'
 </script>
 
-# Provider & operation explorer
+# Connector & operation explorer
 
-Everything below is read from the generated catalogue — the same intermediate representation that
-emits the `.flux` modules and the connector manifests, so it cannot drift from what actually ships.
-Each operation has its own page and its own URL, quotable from an issue or a chat.
+Browse the available connectors, filter operations by provider, risk, and idempotency, then open any
+operation to inspect its parameters, request path, credentials, hosts, safety metadata, and Flux
+source. Every operation has a stable page you can share directly.
 
-**Nothing here can make a live API call yet.** That is one condition affecting every operation
-equally, stated once below rather than stamped on all of them; an operation is flagged only for a
-defect it has of its own.
+> [!WARNING]
+> **Live API calls are not available yet.** Shared availability constraints are stated once below;
+> an operation is highlighted only when it also has a limitation of its own.
 
 <CatalogExplorer :catalog="catalog" />

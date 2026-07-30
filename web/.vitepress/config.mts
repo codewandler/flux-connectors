@@ -1,17 +1,20 @@
 import { defineConfig } from 'vitepress'
 
 const repo = 'https://github.com/codewandler/flux-connectors'
+const base = '/flux-connectors/'
 
 export default defineConfig({
   lang: 'en-US',
   title: 'flux-connectors',
-  description: 'Compiles vendor API specs into Flux-Lang.',
+  description: 'A catalogue of typed SaaS operations for Flux.',
+
+  head: [['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}brand/icon.svg` }]],
 
   // A *project* Pages site is served from https://codewandler.github.io/flux-connectors/, and every
   // asset URL and root-relative link is resolved against this prefix. It must match the repository
   // name exactly: with the default '/' the deployed site loads its own JS from the wrong origin path
   // and renders a blank page. Change this only alongside a rename or a custom domain.
-  base: '/flux-connectors/',
+  base,
 
   cleanUrls: true,
 
@@ -31,9 +34,10 @@ export default defineConfig({
   // language's rules.
 
   themeConfig: {
+    logo: { src: '/brand/icon.svg', alt: 'flux-connectors' },
     nav: [
-      { text: 'Explorer', link: '/explorer' },
-      { text: 'v0.0.1', link: `${repo}/releases` },
+      { text: 'Connectors', link: '/explorer' },
+      { text: 'v0.1.0', link: `${repo}/releases` },
     ],
 
     sidebar: [
@@ -41,7 +45,7 @@ export default defineConfig({
         text: 'flux-connectors',
         items: [
           { text: 'Overview', link: '/' },
-          { text: 'Provider & operation explorer', link: '/explorer' },
+          { text: 'Connector & operation explorer', link: '/explorer' },
         ],
       },
     ],

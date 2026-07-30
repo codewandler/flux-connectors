@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="flux-connectors">
+  <title>flux-connectors</title>
+  <defs>
+    <linearGradient id="fc-flow" x1="16" y1="18" x2="48" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7C5CFF"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Deep tile so the mark reads on a light or a dark page without two variants. -->
+  <rect width="64" height="64" rx="14" fill="#0F1629"/>
+
+  <!-- Three providers converging into one language: the whole pitch, as a shape.
+       Stroke-only and widely spaced so it survives at 16px. -->
+  <g fill="none" stroke="url(#fc-flow)" stroke-width="3.25" stroke-linecap="round">
+    <path d="M19 18 C31 18 33 32 43 32"/>
+    <path d="M19 32 H43"/>
+    <path d="M19 46 C31 46 33 32 43 32"/>
+  </g>
+
+  <g fill="#0F1629" stroke="url(#fc-flow)" stroke-width="2.75">
+    <circle cx="17" cy="18" r="3.25"/>
+    <circle cx="17" cy="32" r="3.25"/>
+    <circle cx="17" cy="46" r="3.25"/>
+  </g>
+
+  <!-- The single output node is solid: one compiled artifact, not three. -->
+  <circle cx="45.5" cy="32" r="5.5" fill="#22D3EE"/>
+</svg>

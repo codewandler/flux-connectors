@@ -101,10 +101,9 @@ const inherited = computed(() => (operation.value ? inheritedIssues(operation.va
       <pre class="op__schema"><code>{{ JSON.stringify(operation.response_schema, null, 2) }}</code></pre>
     </template>
 
-    <h2>Generated Flux</h2>
+    <h2>Flux source</h2>
     <p class="op__note">
-      Byte for byte what <code>connectors/{{ provider!.id }}.flux</code> carries for this operation.
-      Install the module and the <code>op</code> becomes a first-class operation and an LLM tool.
+      The exact Flux declaration for this operation. Live installation is not available yet.
     </p>
     <FluxSource :source="operation.flux" />
 

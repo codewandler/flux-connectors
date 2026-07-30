@@ -6,12 +6,14 @@ import DefaultTheme from 'vitepress/theme'
 import type { Theme } from 'vitepress'
 
 import CatalogExplorer from './components/CatalogExplorer.vue'
+import CatalogSnapshot from './components/CatalogSnapshot.vue'
 import OperationDetail from './components/OperationDetail.vue'
 
 export default {
   extends: DefaultTheme,
   enhanceApp({ app }) {
     app.component('CatalogExplorer', CatalogExplorer)
+    app.component('CatalogSnapshot', CatalogSnapshot)
     app.component('OperationDetail', OperationDetail)
   },
 } satisfies Theme

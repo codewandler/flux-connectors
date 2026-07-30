@@ -18,8 +18,8 @@ const own = computed(() => ownIssues(props.operation))
     Known defect
     <span v-if="own.length > 1">&times;{{ own.length }}</span>
   </span>
-  <span v-else class="badge badge--clear" title="Nothing wrong with this operation itself">
-    No known defect
+  <span v-else class="badge badge--clear" title="No limitation specific to this operation">
+    No operation-specific issue
   </span>
 </template>
 

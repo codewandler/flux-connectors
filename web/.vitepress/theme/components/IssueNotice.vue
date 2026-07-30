@@ -30,11 +30,9 @@ defineProps<{
     <ul class="notice__list">
       <li v-for="issue in issues" :key="issue.code" class="notice__item">
         <p class="notice__summary">{{ issue.summary }}</p>
-        <p class="notice__meta">
-          <span class="notice__code">{{ issue.code }}</span>
-          <span class="notice__story">closed by {{ issue.story }}</span>
-          <span v-if="issue.params.length" class="notice__params">
-            affects
+        <p v-if="issue.params.length" class="notice__meta">
+          <span class="notice__params">
+            Affected parameters:
             <code v-for="name in issue.params" :key="name">{{ name }}</code>
           </span>
         </p>
@@ -97,10 +95,6 @@ defineProps<{
   gap: 4px 12px;
   font-size: 12px;
   color: var(--vp-c-text-2);
-}
-
-.notice__code {
-  font-family: var(--vp-font-family-mono);
 }
 
 .notice__params code {

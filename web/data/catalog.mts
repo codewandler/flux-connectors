@@ -11,7 +11,6 @@ export type Scope = 'catalog' | 'provider' | 'operation'
 export interface Issue {
   code: string
   scope: Scope
-  story: string
   summary: string
   params: string[]
 }
@@ -77,7 +76,6 @@ export interface Provider {
 export interface Catalog {
   schema_version: number
   generator: string
-  documentation: string
   providers: Provider[]
 }
 

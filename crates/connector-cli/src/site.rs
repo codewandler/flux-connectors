@@ -60,10 +60,7 @@ use crate::status::{self, Status};
 /// Bumped only when an existing field changes meaning or disappears. **Adding a field does not bump
 /// it** — every consumer reads by name, so a new key is invisible to one that does not know it, and
 /// C-37's `oip` is the case this rule is written for.
-const SCHEMA_VERSION: u32 = 1;
-
-/// Where the shape is specified, carried in the document so the file is self-describing.
-const DOCUMENTATION: &str = "docs/designs/catalog-json.md";
+const SCHEMA_VERSION: u32 = 2;
 
 /// The whole catalogue: every provider, every operation, and what does not work.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -72,8 +69,6 @@ struct Document {
     schema_version: u32,
     /// The generator identity, matching the header every other artifact carries.
     generator: String,
-    /// Where the shape is specified.
-    documentation: &'static str,
     /// Every provider, ordered by id — discovery's order, and the order `crates/catalog` publishes.
     providers: Vec<ProviderEntry>,
 }
@@ -261,7 +256,6 @@ pub fn document(providers: Vec<ProviderEntry>) -> Result<String> {
     let document = Document {
         schema_version: SCHEMA_VERSION,
         generator: crate::seam::generator(),
-        documentation: DOCUMENTATION,
         providers,
     };
     Ok(format!("{}\n", serde_json::to_string_pretty(&document)?))
@@ -573,10 +567,15 @@ mod tests {
     }
 
     #[test]
-    fn the_document_names_its_version_and_its_specification() {
+    fn the_document_names_its_version_without_publishing_internal_references() {
         let document = rendered();
         assert_eq!(document["schema_version"], json!(SCHEMA_VERSION));
-        assert_eq!(document["documentation"], json!(DOCUMENTATION));
+        assert!(document.get("documentation").is_none());
+        assert!(
+            document["providers"][0]["operations"][0]["status"]["issues"][0]
+                .get("story")
+                .is_none()
+        );
         assert_eq!(document["providers"][0]["operation_count"], json!(1));
     }
 }

@@ -45,6 +45,17 @@ link, so a broken site fails the workflow instead of publishing silently.
 | `public/` | Served verbatim at the site root. Holds the generated `catalog.json`. |
 | `test/` | The explorer's contract with the catalogue, over the built site. |
 
+## Public content boundary
+
+This site is for connector consumers. It explains available services and operations, their call
+contracts, safety metadata, credentials, hosts, and current availability. Internal designs, roadmap
+and story mechanics, crate architecture, and agent instructions belong in the repository docs and
+must not be linked or reproduced on the public pages.
+
+The navigation, hero, and favicon use `public/brand/{icon,mark}.svg`. They are published copies of
+the canonical files in `assets/brand/`; `npm test` compares them byte for byte so the two locations
+cannot drift.
+
 ## Two things to keep right
 
 **The base path.** A project Pages site is served from `/flux-connectors/`, so

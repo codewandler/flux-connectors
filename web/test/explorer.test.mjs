@@ -103,7 +103,7 @@ function explorerSources() {
 test('the site ships the generated catalogue at the path VitePress serves', () => {
   const document = catalog()
 
-  assert.equal(document.schema_version, 1)
+  assert.equal(document.schema_version, 2)
   assert.ok(document.providers.length > 0, 'the catalogue names no providers')
   assert.ok(operations(document).length > 0, 'the catalogue names no operations')
 
@@ -113,6 +113,34 @@ test('the site ships the generated catalogue at the path VitePress serves', () =
     !existsSync(path.join(repoRoot, 'site', 'catalog.json')),
     'site/catalog.json still exists alongside web/public/catalog.json — one of them is stale by construction'
   )
+})
+
+test('the public catalogue and pages do not expose internal project documents', () => {
+  const document = catalog()
+
+  assert.ok(!('documentation' in document), 'catalog.json publishes its internal design document')
+  for (const operation of operations(document)) {
+    for (const issue of operation.status.issues) {
+      assert.ok(!('story' in issue), `issue ${issue.code} publishes its internal story`)
+    }
+  }
+
+  const publicHtml = [page('index.html'), page('explorer.html')]
+  for (const operation of operations(document)) {
+    publicHtml.push(page('operations', `${operation.id}.html`))
+  }
+  const source = publicHtml.join('\n')
+  for (const internal of ['docs/designs/', 'docs/roadmap.md', 'docs/stories/', 'AGENTS.md']) {
+    assert.ok(!source.includes(internal), `the public site exposes internal path ${internal}`)
+  }
+})
+
+test('the published logo and mark match the canonical brand assets', () => {
+  for (const name of ['icon.svg', 'mark.svg']) {
+    const canonical = readFileSync(path.join(repoRoot, 'assets', 'brand', name), 'utf-8')
+    const published = readFileSync(path.join(webRoot, 'public', 'brand', name), 'utf-8')
+    assert.equal(published, canonical, `web/public/brand/${name} drifted from assets/brand/${name}`)
+  }
 })
 
 test('every operation has its own deep-linkable page', () => {

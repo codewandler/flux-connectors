@@ -95,7 +95,9 @@ pub struct Issue {
     pub code: &'static str,
     /// How far the issue reaches. See [`Scope`].
     pub scope: Scope,
-    /// The story that closes it, so a reader can go from a badge to the reasoning.
+    /// The internal story that closes it. Kept for repository diagnostics, but never published in
+    /// the consumer-facing catalogue: the public site explains the limitation, not the backlog.
+    #[serde(skip_serializing)]
     pub story: &'static str,
     /// One line a site can render as-is.
     pub summary: String,

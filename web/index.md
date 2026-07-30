@@ -3,98 +3,72 @@ layout: home
 
 hero:
   name: flux-connectors
-  text: Vendor API specs, compiled into Flux-Lang
-  tagline: Describe a provider once in TOML. The build emits committed, reviewable Flux modules and a capability manifest — so you stop hand-writing the part a machine can derive.
+  text: SaaS operations for Flux
+  tagline: Browse typed operations, understand what each call needs, and see safety and availability information before you use it.
+  image:
+    src: /brand/mark.svg
+    alt: flux-connectors
   actions:
     - theme: brand
-      text: What works, and what does not
-      link: '#status'
+      text: Browse connectors
+      link: /explorer
     - theme: alt
-      text: View on GitHub
-      link: https://github.com/codewandler/flux-connectors
+      text: Current availability
+      link: '#availability'
 
 features:
-  - title: One IR, several backends
-    details: A provider is described once. The same IR emits the .flux module, the connector manifest, and the embedded Rust catalogue — no second source of truth to drift.
-  - title: Flux, not a template DSL
-    details: Modules are built as real flux-lang AST nodes and formatted by flux-lang's own formatter, never by string templates. Unparseable output is structurally impossible.
-  - title: Credentials stay out of artifacts
-    details: No credential ever enters a provider TOML, a generated .flux file, or the lockfile. The generated call carries an auth reference the host resolves and redacts.
+  - title: Find the right operation
+    details: Explore connectors by service, then filter operations by risk, idempotency, method, and known limitations.
+  - title: Know what a call needs
+    details: Every operation page shows its typed parameters, request path, credentials, destination hosts, and exact Flux source.
+  - title: Limits are part of the contract
+    details: Shared availability constraints and operation-specific issues are shown alongside the capability they affect.
 ---
 
-## What this is
+<script setup>
+import { data as catalog } from './data/catalog.data.mts'
+</script>
 
-flux-connectors compiles **vendor API specs into Flux-Lang**.
+## The connector catalogue
 
-Integrating a SaaS product into [flux](https://github.com/codewandler/flux) normally means writing a
-stdio plugin — a large hand-written Rust artifact for a handful of operations. But almost everything
-such a plugin encodes (base URL, auth kind, endpoints, parameters, response shapes) is already
-published by the vendor. A **connector** is what remains once you stop hand-writing that part:
-**auth + operations + quirks**.
+flux-connectors is a growing catalogue of SaaS operations designed for
+[Flux](https://github.com/codewandler/flux). It gives people and agents a consistent way to discover
+what a service can do, what inputs an operation accepts, how risky it is, whether it is safe to
+retry, which credentials it requires, and where the request goes.
 
-Describe a provider once in `providers/<name>.toml`, and the build emits committed, reviewable
-artifacts — `connectors/<name>.flux` (typed `op` declarations) and `connectors/<name>.connector.toml`
-(the capability manifest). flux loads the module and every `op` becomes a first-class operation and
-an LLM tool.
+<CatalogSnapshot :catalog="catalog" />
 
-```flux
-op zendesk-ticket-comment-add(ticket_id: Number, updated_stamp: String, body: String, public: Bool) -> Any
-  description "Add a comment to a ticket; the comment is an internal note unless public is explicitly true"
-  risk "medium"
-  idempotency "conditional"
-  effects ["network"]
-  expose true
+## What you can evaluate today
 
-  $base = "https://{subdomain}.zendesk.com"
-  $url = fmt("{base}/api/v2/tickets/{ticket_id}.json")
-  $content_type = "application/json"
-  $safe_update = true
-  $payload = { ticket: { comment: { body: $body, public: $public }, safe_update: $safe_update, updated_stamp: $updated_stamp } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "PUT", url: $url })
-  return $response
-```
+The catalogue is useful before live execution is enabled. For every operation you can inspect:
 
-## Status — v0.0.1 {#status}
+- a stable operation name and plain-language description;
+- HTTP method, request path, typed parameters, and published schemas;
+- risk and idempotency metadata for approval and retry decisions;
+- required credentials and destination hosts;
+- the exact Flux operation source; and
+- shared constraints plus any limitation specific to that operation.
 
-Early. The pipeline works end to end and three providers compile — **zendesk** (7 operations),
-**freshdesk** (9) and **babelforce** (9), 25 operations curated from 186 available.
+Open the [connector and operation explorer](/explorer) to compare the current surface or deep-link
+directly to one operation.
 
-**Nothing here can make a live API call yet.** Read the limits below before evaluating this.
+## Availability {#availability}
 
-## What does not work yet
+> [!CAUTION]
+> **The catalogue is preview-only. No connector can make a live API call yet.** Secure credential
+> application and tenant configuration still need host support. Do not treat the current modules as
+> production-ready integrations.
 
-Stated plainly, because a connector that looks like it works and doesn't is worse than one that says
-it doesn't:
+Some operations also have narrower limitations, including query values that cannot yet be encoded
+safely. Freshdesk currently has no credential configuration because publishing the apparent one
+would put a secret outside Flux's protection. These conditions are shown on the affected connector
+or operation page, where they matter.
 
-- **No provider can make a live call yet.** All three need credentials, and flux's `http.request`
-  cannot express any of their auth schemes — its `{"$secret": "ENV"}` marker is a whole-value
-  replacement, so it produces neither a `Bearer ` prefix nor a base64-joined Basic pair. The fix is
-  designed in
-  [docs/designs/auth-seam.md](https://github.com/codewandler/flux-connectors/blob/main/docs/designs/auth-seam.md)
-  and must land in flux.
-- **Freshdesk ships with no credential at all**, deliberately. Its `base64(<api_key>:X)` puts the
-  secret in the *username* position, which the IR cannot yet mark as secret — so it would escape
-  secret gating and redaction. Fail-closed 401s beat a leaked key.
-- **`zendesk-ticket-search` is non-functional.** Query values are not percent-encoded and flux has no
-  op that does it. Note that `url::Url::parse` already rescues *spaces*, so a casual test looks fine
-  while `&`, `#` and `+` corrupt the request — and a value like `x&per_page=1` injects parameters.
-  See
-  [docs/designs/query-encoding.md](https://github.com/codewandler/flux-connectors/blob/main/docs/designs/query-encoding.md).
-- **Base URLs carry unbound template variables** (`https://{subdomain}.zendesk.com`) with no env
-  binding yet.
-- **OpenAPI ingest is not wired.** All three providers are hand-authored; the loader refuses a
-  `[spec]`-backed provider rather than emitting an empty module.
-Each of those is recorded per operation in the
-[provider & operation explorer](/explorer), which reads them from the generated catalogue rather
-than from this page — an operation with a defect of its own carries it wherever it appears, and the
-conditions above are shown once, as what they are: catalogue- and provider-wide.
+The project fails closed: a capability is marked unavailable rather than presented as usable with
+an unsafe or incomplete request.
 
-## Where to read more
+## Follow the project
 
-| If you want | Read |
-|---|---|
-| Why this exists, and the principles | [docs/vision.md](https://github.com/codewandler/flux-connectors/blob/main/docs/vision.md) |
-| What ships next, and the epics | [docs/roadmap.md](https://github.com/codewandler/flux-connectors/blob/main/docs/roadmap.md) |
-| How a provider becomes a `.flux` module | [docs/designs/connector-pipeline.md](https://github.com/codewandler/flux-connectors/blob/main/docs/designs/connector-pipeline.md) |
-| One credential model for every provider | [docs/designs/unified-auth.md](https://github.com/codewandler/flux-connectors/blob/main/docs/designs/unified-auth.md) |
-| The operating contract, if you are an agent | [AGENTS.md](https://github.com/codewandler/flux-connectors/blob/main/AGENTS.md) |
+The source, release history, local build instructions, and contribution workflow live in the
+[GitHub repository](https://github.com/codewandler/flux-connectors). The public site stays focused
+on the connector catalogue and its user-facing contract.
