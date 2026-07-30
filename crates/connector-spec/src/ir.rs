@@ -10,9 +10,28 @@
 //!    `connectors.lock` (C-7) hashes this encoding and `flux-connectors check` fails on a
 //!    mismatch, so any leaked iteration order would surface as phantom drift on every build.
 //!
-//! Validation lives in the loader (C-3), not here: this module defines what the IR *is*, and the
-//! front-ends decide what they will accept. Consequently the types are permissive on
-//! deserialization — no `deny_unknown_fields` — while `providers/*.toml` is strict.
+//! # Why these types are strict on deserialization
+//!
+//! C-2 originally left them permissive, on the theory that "validation lives in the loader (C-3),
+//! not here". C-2's review disproved it. The provider loader parses `providers/*.toml` straight into
+//! these types, so a key the derived `Deserialize` does not recognize is discarded *before* any
+//! loader-level check can see it — the strictness cannot be bolted on from outside. Two concrete
+//! failures were demonstrated, and both fail in the dangerous direction:
+//!
+//! - a mistyped `authh` on an operation yields [`Operation::auth`] = `None`, which means *inherit
+//!   the connector default*, so the operation authenticates with the connector's default
+//!   credentials rather than the narrower set the author meant to name. The failure direction is
+//!   credential-**sending**, not fail-closed;
+//! - a mistyped `envv` on a credential yields an empty `env` list with no error at all.
+//!
+//! So every struct here carries `#[serde(deny_unknown_fields)]`, and
+//! [`AuthMethod::scheme`](crate::AuthMethod::scheme) lost its `#[serde(default)]` for the same
+//! reason [`Risk`] and [`Idempotency`] have no `Default`: how a secret reaches the wire is not a
+//! decision to make by silence. `tests/strict_fields.rs` pins all of it.
+//!
+//! *Semantic* validation — a credential named by no declaration, a degenerate empty auth mechanism,
+//! a `basic` scheme with no user half — still lives in the loader ([`crate::provider`]), because it
+//! is cross-field reasoning serde cannot express.
 
 use serde::{Deserialize, Serialize};
 
@@ -87,6 +106,7 @@ pub enum Idempotency {
 
 /// One request parameter, carrying its JSON Schema.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Param {
     /// The parameter name as the vendor API expects it.
     pub name: String,
@@ -105,6 +125,7 @@ pub struct Param {
 
 /// An operation's parameters, grouped by where they travel on the request.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ParamSet {
     /// Parameters interpolated into the path template (`/v2/calls/{call_id}`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -147,7 +168,7 @@ impl ParamSet {
 /// constraint worth honoring rather than working around. Compiling this into Flux control flow is
 /// C-12; this is only its declaration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum Pagination {
     /// Page-number pagination: `?page=2&per_page=100`.
     Page {
@@ -175,6 +196,7 @@ pub enum Pagination {
 
 /// A vendor's published rate limit, compiled into a Flux `throttle` by C-12.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RateLimit {
     /// Requests allowed per window.
     pub requests: u32,
@@ -191,6 +213,7 @@ pub struct RateLimit {
 /// `http.request` treats a non-2xx as a *result* rather than an op failure, so the generated op has
 /// to dig the message out itself. Both fields are JSON Pointers (RFC 6901) into the response body.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ErrorEnvelope {
     /// Pointer to the human-readable message.
     pub message_pointer: String,
@@ -205,6 +228,7 @@ pub struct ErrorEnvelope {
 /// `throttle`, a bounded pagination loop — which is the payoff for targeting a language instead of
 /// interpreting config.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Quirks {
     /// How the endpoint paginates, if it does.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -231,6 +255,7 @@ impl Quirks {
 /// depend on itself. It belongs in `connectors.lock` alongside the generated-artifact hash and the
 /// generator version, which is where C-7 writes it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Provenance {
     /// The URL the vendor spec was fetched from. `None` for a fully hand-authored connector — the
     /// Ollama case, where no vendor OpenAPI document exists at all.
@@ -257,6 +282,7 @@ pub struct Provenance {
 /// declares (`op … description "…" risk "low" idempotency "idempotent"`), which is also the
 /// `ToolSpec` surface flux exposes to a model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Operation {
     /// The op name, e.g. `babelforce.call.list`. This is a **stable public contract**: users and
     /// models call it by name, so it must survive regeneration and must not be derived from a
@@ -308,6 +334,7 @@ pub struct Operation {
 /// The two front-ends produce this same shape — spec ingest merely *pre-fills* it — which is what
 /// lets a vendor with no usable spec travel the identical codegen path.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Connector {
     /// The connector id, e.g. `babelforce`. Prefixes every operation id and names the generated
     /// `<id>.flux` and `<id>.connector.toml`.
