@@ -29,8 +29,8 @@ on this shape, so it lands before the loaders.
 - [ ] Auth scheme vocabulary matches `flux_plugin_protocol::AuthScheme` — `bearer`, `basic`,
       `header{name}`, `query{name}` — so no second vocabulary is invented.
 - [ ] **A connector declares many auth methods, and each operation selects among them.** The IR
-      models this as OpenAPI does: a connector carries `auth: Vec<AuthMethod>` keyed by purpose, and
-      an operation carries a list of *requirements*, where each requirement is a **set** of purposes
+      models this as OpenAPI does: a connector carries `auth: Vec<AuthMethod>` keyed by credential name, and
+      an operation carries a list of *requirements*, where each requirement is a **set** of credentials
       that must all be satisfied together (AND) and the list itself is a set of **alternatives**
       (OR).
 - [ ] The three cardinalities all round-trip and are covered by tests:
@@ -57,6 +57,6 @@ on this shape, so it lands before the loaders.
 - **The `X-Auth-*` pair is deprecated and must not be emitted** (see C-17). That does *not* remove
   the need to model AND: the IR still has to represent what the spec declares in order to
   deliberately exclude it, and "this requirement set is excluded" is a different statement from "this
-  scheme does not exist". A single-purpose shortcut cannot express either.
+  scheme does not exist". A single-credential shortcut cannot express either.
 - Babelforce ships **SSO-issued Bearer** today and plans **JWT**, so its own scheme list grows over
   time — the OR/alternatives case is permanent, not transitional.

@@ -18,10 +18,10 @@ declares what the host may resolve — so a connector's capabilities are manifes
 plugin's are.
 
 ## Acceptance
-- [ ] Auth headers emit `{"$auth": {purpose: "<name>"}}` — a reference, never a value.
+- [ ] Auth headers emit `{"$auth": {credential: "<name>"}}` — a reference, never a value.
 - [ ] `<provider>.connector.toml` is generated with `http_hosts`, the endpoint env spec, and one
-      `[[auth]]` entry per method (purpose, scheme, env, user_env).
-- [ ] **An operation requiring several purposes together emits one marker per purpose.** Babelforce
+      `[[auth]]` entry per method (credential name, scheme, env, user_env).
+- [ ] **An operation requiring several credentials together emits one marker each.** Babelforce
       sends `X-Auth-Access-Id` *and* `X-Auth-Access-Token` on the same request, so the emitter must
       handle an AND-set, not just a single credential.
 - [ ] When an operation offers **alternative** requirement sets, codegen picks one deterministically

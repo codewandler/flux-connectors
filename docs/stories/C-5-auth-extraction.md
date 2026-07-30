@@ -22,7 +22,7 @@ TOML, using the same scheme vocabulary flux already has for plugins.
       schemes are generated in v1 — the manifest schema should not need reshaping later.
 - [ ] A provider TOML can override or fully replace an extracted auth method, for the common case
       where a vendor's spec misdeclares its own auth.
-- [ ] Each auth method carries a `purpose` name and the env var names for its secret and, for
+- [ ] Each auth method carries a `credential` name and the env var names for its secret and, for
       `basic`, its user half — never a value.
 - [ ] A test asserts no credential value can be expressed anywhere in a provider TOML.
 

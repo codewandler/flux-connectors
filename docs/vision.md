@@ -45,7 +45,7 @@ reads directly is wrong, however convenient it looks.
 
 5. **Capabilities are manifest-scoped and deny-by-default.** A plugin is a manifest plus a binary; a
    connector is a manifest plus a Flux module. The same rule holds for both — a connector reaches
-   only the hosts and the secret purposes its manifest declares.
+   only the hosts and the secret credentials its manifest declares.
 
 6. **Types survive the whole pipeline.** Parameter and response schemas travel from the vendor spec
    through the IR into the op contract. An operation that takes an integer says so.

@@ -37,7 +37,7 @@ token passing through a string interpolator. We are not doing that.
 **Separate three concerns that every credential scheme actually has, and that flat enums conflate.**
 
 ```
-purpose ──▶  Source  ──▶  Acquisition  ──▶  Placement  ──▶  the request
+credential ─▶  Source  ──▶  Acquisition  ──▶  Placement  ──▶  the request
              where raw     how it becomes    where it goes
              material      a usable          on the wire
              comes from    credential
@@ -45,7 +45,7 @@ purpose ──▶  Source  ──▶  Acquisition  ──▶  Placement  ──�
 
 ```rust
 struct AuthMethod {
-    purpose: String,          // the name an operation references
+    name:    String,          // the credential name an operation references
     source:  Source,          // env vars, token store, key file
     acquire: Acquisition,     // static | basic_join | oauth2 | jwt | session | hmac
     place:   Placement,       // header{name, prefix} | query{name} | cookie{name} | signature
@@ -103,18 +103,18 @@ refresh-on-401. If those ran in generated Flux, every connector would re-impleme
 — fatally — the raw token would have to pass through a bound Flux symbol, defeating redaction and
 putting credentials in model-visible state.
 
-So the generated `.flux` **only ever names a purpose**. Everything behind that name is the host's.
+So the generated `.flux` **only ever names a credential**. Everything behind that name is the host's.
 This is also why the connector manifest, not the Flux module, carries the auth declaration.
 
 ### Requirement sets sit above this
 
-An operation does not reference a *method*; it references **requirement sets** over purposes — all
-purposes in a set (AND), any one set among alternatives (OR), an explicit empty set for
-unauthenticated. Each purpose then resolves through source → acquisition → placement independently,
+An operation does not reference a *method*; it references **requirement sets** over credentials — all
+credentials in a set (AND), any one set among alternatives (OR), an explicit empty set for
+unauthenticated. Each credential then resolves through source → acquisition → placement independently,
 which is what lets one request carry two credentials in two different places.
 
 **Alternative selection must be deterministic and recorded:** choose the first requirement set whose
-purposes are all *configured* (their sources resolve), and record the choice in the manifest so a
+credentials are all *configured* (their sources resolve), and record the choice in the manifest so a
 regeneration is stable and a reader can see why that scheme was picked.
 
 ### What this buys, concretely
@@ -147,7 +147,7 @@ of them:
   presets and `oauth2`; declare `jwt`, `session` and `hmac` in the schema but implement them only
   when a provider demands one. The schema must accept them without reshaping — that is the actual
   requirement, not working code for all six.
-- **flux must accept the seam.** The whole design assumes flux grows a purpose-resolving `$auth`
+- **flux must accept the seam.** The whole design assumes flux grows a credential-resolving `$auth`
   marker. If flux's maintainers prefer a different shape, this model still stands, but the *marker*
   changes — keep the two decoupled.
 - **Token cache semantics are unspecified here** — lifetime, scope (per-user? per-session?),

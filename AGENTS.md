@@ -56,7 +56,7 @@ not here. This boundary is the first question to ask about any new provider.
   them serializes to exactly what flux understands. See
   [docs/designs/unified-auth.md](docs/designs/unified-auth.md).
 - **Credential assembly never happens in generated Flux.** No prefixes, no base64, no token refresh
-  in a `.flux` file — the module names a *purpose* and nothing more. Effectful acquisition (OAuth2,
+  in a `.flux` file — the module names a *credential* and nothing more. Effectful acquisition (OAuth2,
   session login) is declared in the connector manifest and executed by the host; putting it in Flux
   would land the raw token in a model-visible symbol and defeat redaction.
 - **`connector-spec` performs no network IO.** Ingest takes bytes so it stays fully unit-testable.

@@ -17,7 +17,11 @@ Replace the flat auth-scheme enum with the three orthogonal axes, so a new provi
 one value on one axis rather than a new variant crossing all of them.
 
 ## Acceptance
-- [ ] `AuthMethod` carries `purpose`, `source`, `acquire`, and `place` as separate fields.
+- [ ] `AuthMethod` carries `name`, `source`, `acquire`, and `place` as separate fields. The name
+      identifies a **credential** an operation references. Deliberately *not* called a "purpose":
+      the name says *what the thing is* (`zendesk.api_token`), never what it is for, and the AND
+      case settles it — babelforce sends two headers together, which is **two credentials, one
+      mechanism**, not two purposes.
 - [ ] `Source` covers env-var names (tried in order), the flux token store, and a key file. **No
       variant can hold a literal credential value** — proven by a test that no serialization of any
       `AuthMethod` contains a secret.

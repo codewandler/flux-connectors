@@ -11,15 +11,15 @@ areas: [connector-flux]
 # Emit auth from the unified model
 
 ## Goal
-Make codegen consume the unified model: emit one purpose reference per required credential and
+Make codegen consume the unified model: emit one credential reference per requirement and
 declare the full method in the manifest, so the generated Flux stays free of assembly logic.
 
 ## Acceptance
-- [ ] Generated Flux **names purposes only** — no prefix strings, no base64, no token assembly
+- [ ] Generated Flux **names credentials only** — no prefix strings, no base64, no token assembly
       anywhere in a `.flux` file.
-- [ ] An AND requirement set emits one marker per purpose, so a request can carry two credentials in
+- [ ] An AND requirement set emits one marker per credential, so a request can carry two of them in
       two different placements.
-- [ ] Alternative requirement sets resolve by the documented rule (first set whose purposes are all
+- [ ] Alternative requirement sets resolve by the documented rule (first set whose credentials are all
       configured), and the selected alternative is **recorded in the manifest** so regeneration is
       stable and reviewable.
 - [ ] An operation with an explicit empty requirement set emits no credential at all.

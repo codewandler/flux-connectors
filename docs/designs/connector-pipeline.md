@@ -51,7 +51,7 @@ plus a Flux module.** Each provider generates two artifacts:
 | Artifact | Installed to | Purpose |
 |---|---|---|
 | `<provider>.flux` | `~/.flux/flows/` | The `op` declarations. |
-| `<provider>.connector.toml` | `~/.flux/connectors/` | Capability manifest: endpoint env, auth purposes + schemes, `http_hosts` allowlist. |
+| `<provider>.connector.toml` | `~/.flux/connectors/` | Capability manifest: endpoint env, auth credentials + schemes, `http_hosts` allowlist. |
 
 It mirrors the plugin manifest's `EndpointSpec` / `AuthMethod` / `Caps`
 (`../flux/crates/flux-plugin-protocol/src/lib.rs:422`), which preserves flux's non-negotiable
@@ -81,7 +81,7 @@ codegen path. Spec ingest is then just a way to *pre-fill* the IR.
 ```
 Connector {
   id, vendor, base_url (with tenant templating),
-  auth: Vec<AuthMethod>,          // purpose + scheme + env/user_env
+  auth: Vec<AuthMethod>,          // credential name + scheme + env/user_env
   operations: Vec<Operation {
     id,                            // the op name, e.g. zendesk.ticket.show — a stable public contract
     method, path,
@@ -123,7 +123,8 @@ of build-script magic.
 ### Emitting Flux
 
 `connector-flux` builds real `flux_lang::ast` nodes and formats them with flux-lang's own formatter,
-via a git dependency on `codewandler-flux-lang` (lib `flux_lang`) pinned to a flux tag. Unparseable
+via a crates.io dependency on `codewandler-flux-lang` (lib `flux_lang`) pinned to a published
+version. Unparseable
 or non-canonically-formatted output is therefore structurally impossible. Illustrative output:
 
 ```flux
@@ -136,7 +137,7 @@ op zendesk.ticket.show(ticket_id: Number) -> Any
 
   $url = fmt("{base}/api/v2/tickets/{ticket_id}.json")
   retry 3 backoff exponential delay 500 -> $res
-    http.request({url: $url, method: "GET", headers: {Authorization: {"$auth": {purpose: "zendesk.api_token"}}}})
+    http.request({url: $url, method: "GET", headers: {Authorization: {"$auth": {credential: "zendesk.api_token"}}}})
   return $res.body
 ```
 
@@ -150,7 +151,7 @@ action-proxy's YAML could never express any of these.
 ## Alternatives considered
 
 - **String-templated `.flux` output.** Fully decouples this repo from flux internals. Rejected: it
-  can emit invalid Flux, and the failure is caught late and only if a flux binary is present. The git
+  can emit invalid Flux, and the failure is caught late and only if a flux binary is present. The registry
   pin costs an occasional bump and buys structural correctness.
 - **A `build.rs` that fetches specs and generates at compile time.** Rejected: non-hermetic, invisible
   in review, and network-dependent builds. Committed artifacts are the point.
