@@ -595,3 +595,41 @@ test('nothing about the catalogue is hand-maintained in the explorer sources', (
     }
   }
 })
+
+test('a card fact holding several values can break between them', () => {
+  // C-100, rework. The hosts cell renders one `<code>` per host with no whitespace between them, so
+  // the markup offers no soft-wrap opportunity and the run is one unbreakable inline box. That was
+  // survivable while the explorer was one 609px column; widening it to two ~424px columns pushed the
+  // run off the *page* — 29px of horizontal overflow at 1280, against 0 at the merge base.
+  //
+  // Asserted on the built artefacts rather than on a screenshot: the class has to reach every card
+  // that needs it, and the rule has to survive in the emitted stylesheet. A layout regression here is
+  // silent, so the test names the mechanism.
+  const providers = catalog().providers
+  const multi = providers.filter((provider) => provider.hosts.length > 1)
+  assert.ok(
+    multi.length,
+    'no connector publishes more than one host, so this test no longer covers anything — if that is a real change in the catalogue, delete it'
+  )
+
+  const html = page('explorer.html')
+  const cells = html.match(/class="card__hosts"/g) ?? []
+  assert.equal(
+    cells.length,
+    providers.length,
+    `${cells.length} of ${providers.length} cards carry the wrapping hosts cell — every card needs it, because which connector grows a second host is the catalogue's business and not the site's`
+  )
+
+  const assets = path.join(distDir, 'assets')
+  const css = readdirSync(assets)
+    .filter((entry) => entry.endsWith('.css'))
+    .map((entry) => readFileSync(path.join(assets, entry), 'utf-8'))
+    .join('\n')
+  const rule = css.match(/\.card__hosts[^{]*\{([^}]*)\}/)
+  assert.ok(rule, 'the `.card__hosts` rule is gone from the built stylesheet')
+  assert.match(
+    rule[1],
+    /flex-wrap:\s*wrap/,
+    `\`.card__hosts\` no longer wraps (${rule[1]}) — the hosts run becomes one unbreakable box again and escapes the page at 1280px`
+  )
+})

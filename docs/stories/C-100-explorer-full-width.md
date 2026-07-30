@@ -19,11 +19,27 @@ list are scannable instead of columnar.
 ## Acceptance
 - [x] `/explorer` renders across the full layout width. The prose pages are **unchanged** — the doc
       layout is right for paragraphs, and widening the overview would make it harder to read.
-- [ ] The provider grid yields **four or more columns** at a desktop viewport, not two. Its
-      `minmax(320px, 1fr)` is retained or re-tuned deliberately, with the chosen minimum stated.
+- [~] The provider grid yields **three** columns at a desktop viewport, not two. **Four moved to
+      [C-103](C-103-explorer-information-density.md) by coordinator decision**, not dropped: a fourth
+      track at 1025px needs a minimum of 244px, and `.card__head` measures 273px min-content because
+      it does not wrap — measured independently at 273px by the reviewer and 274px by the
+      implementor. Reaching four therefore requires restructuring the card header, which is C-103's
+      work and was fenced away from this story. Requiring it here was a scoping error in the
+      dispatch, not a shortfall in the implementation. `minmax(320px, 1fr)` is retained; the
+      arithmetic is recorded in `CatalogExplorer.vue`.
 - [x] The filter bar sits on **one row** at a desktop viewport rather than wrapping to two or three.
-- [ ] Responsive down to a phone: the grid collapses to one column, the filter bar wraps, and nothing
-      overflows horizontally.
+- [~] Responsive down to a phone: the grid collapses to one column and the filter bar wraps, both
+      verified. Horizontal overflow splits into two distinct defects and they must not be conflated:
+      - **1280 and 1366px — introduced by this story, and fixed in it.** Widening to two ~424px
+        columns pushed the hosts cell's unbreakable inline run off the page: 29px at 1280 and 8px at
+        1366, against **0px at the merge base**, measured independently by the implementor and the
+        reviewer. `.card__hosts` now wraps. **The after-measurement was not reproduced** — no browser
+        is available in the coordinator's environment — so what is verified is the mechanism, pinned
+        by `a card fact holding several values can break between them`. A human at 1280px settles it.
+      - **Phone — pre-existing and untouched.** Base and branch overflow *identically* (193px at
+        390px per the implementor; 83px at Chrome's ~485px headless floor per the reviewer — the
+        equality is the load-bearing part). Cause is `<ul class="list">` being a grid, so each
+        `OperationRow` needs `min-width: 0`. That file is C-103's.
 - [x] The page still has a usable in-page structure. `outline: [2, 2]` currently drives the right-hand
       outline; if the chosen layout drops it, the story says what replaces it — the two `<h2>` anchors
       (`#providers`, `#operations`) are linked from elsewhere and must keep working.

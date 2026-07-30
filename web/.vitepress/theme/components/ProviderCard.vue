@@ -77,7 +77,7 @@ const headline = computed(() => {
       </div>
       <div>
         <dt>Hosts</dt>
-        <dd>
+        <dd class="card__hosts">
           <code v-for="host in provider.hosts" :key="host">{{ host }}</code>
         </dd>
       </div>
@@ -198,6 +198,25 @@ const headline = computed(() => {
 
 .card__facts code {
   font-size: 12px;
+  /* A single value with no break opportunity of its own must break rather than push its grid track
+     wider than the card. This is the *within a value* half; `.card__hosts` below is the *between
+     values* half. It sweeps the two `<code>` facts C-101 added — the Address and a service's gid —
+     which are single values and so are not covered by wrapping the hosts cell. */
+  overflow-wrap: anywhere;
+}
+
+/* The hosts cell renders one `<code>` per host with **no whitespace between them**, so the markup
+   offers no soft-wrap opportunity: two adjacent hostnames concatenate into one unbreakable ~298px
+   inline box. The 609px single-column card the 688px page forced absorbed it; the 424.5px
+   two-column track C-100 introduced does not, and it escaped the page — 29px of horizontal overflow
+   at 1280 and 8px at 1366, against 0 at the merge base.
+   Wrapping restores the break the missing whitespace never provided, and the gap replaces the
+   separation. Scoped to this one cell rather than to `.card__facts dd` so the text-only facts keep
+   their block layout. */
+.card__hosts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .card__services {
