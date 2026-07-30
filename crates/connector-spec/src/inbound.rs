@@ -442,12 +442,26 @@ pub const SIGNED_PLACEHOLDERS: [&str; 2] = ["body", "timestamp"];
 ///
 /// Used by the loader to refuse a template the host could not fill, and to require a
 /// [`HmacSpec::tolerance`] exactly when `{timestamp}` is present.
+///
+/// # An unterminated `{` is reported, never swallowed
+///
+/// `"v0:{timestamp}:{body"` — one missing brace, a plausible typo in a provider file — is not a
+/// template with one placeholder. Reporting it as one is how a signature comes to authenticate
+/// nothing: every check the loader makes passes (the placeholder list is non-empty, every name is
+/// fillable, the timestamp selector and the tolerance are present), and the host then signs
+/// `v0:1531420618:{body` — a string that does not contain the body at all. A signature captured
+/// from one delivery verifies **any** forged payload for as long as the window lasts.
+///
+/// So the unterminated fragment comes back verbatim, opening brace included, as a placeholder name
+/// no host can fill. It is not in [`SIGNED_PLACEHOLDERS`], so the loader's existing refusal catches
+/// it and names the template in the error.
 pub fn signed_placeholders(signed: &str) -> Vec<String> {
     let mut found = Vec::new();
     let mut rest = signed;
     while let Some(open) = rest.find('{') {
         let after = &rest[open + 1..];
         let Some(close) = after.find('}') else {
+            found.push(format!("{{{after}"));
             break;
         };
         found.push(after[..close].to_owned());
@@ -490,7 +504,25 @@ mod tests {
             vec!["timestamp", "body"]
         );
         assert!(signed_placeholders("nothing here").is_empty());
-        // An unterminated brace yields what it could read, not a panic.
-        assert!(signed_placeholders("{body").is_empty());
+    }
+
+    /// The one-character typo that would otherwise sign a string with no body in it.
+    #[test]
+    fn an_unterminated_placeholder_is_reported_as_one_no_host_can_fill() {
+        assert_eq!(signed_placeholders("{body"), vec!["{body"]);
+        assert_eq!(
+            signed_placeholders("v0:{timestamp}:{body"),
+            vec!["timestamp", "{body"],
+            "a well-formed placeholder before the typo must not hide it — every loader check \
+             passes on `[\"timestamp\"]`, and the body then leaves the signed string entirely"
+        );
+        for placeholder in signed_placeholders("v0:{timestamp}:{body") {
+            if placeholder.starts_with('{') {
+                assert!(
+                    !SIGNED_PLACEHOLDERS.contains(&placeholder.as_str()),
+                    "the fragment must be unfillable, so the loader's existing refusal catches it"
+                );
+            }
+        }
     }
 }
