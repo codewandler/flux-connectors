@@ -24,6 +24,14 @@ roles the file plays: a pointer at a vendor spec, and a complete hand-authored c
 - [ ] Golden-file error snapshots for each rejection above — failing-first, since error text is the
       authoring interface.
 - [ ] A documented JSON Schema for the provider TOML, kept in sync by a test.
+- [ ] **`deny_unknown_fields` (or a strict pre-pass) rejects typo'd keys.** C-2's review proved the
+      hole and its direction: a mistyped `authh` on an operation deserializes to `auth: None`, so the
+      operation silently **inherits the connector default credentials** rather than failing — the
+      failure direction is credential-*sending*, not fail-closed. Likewise `envv` yields `env: []`
+      with no error. Note the attribute must go on the IR types themselves; it cannot be added purely
+      "in the loader".
+- [ ] An **empty mechanism** (`{"credentials": []}`) inside a non-empty alternatives list is
+      rejected — it is a degenerate second spelling of "no auth" and must not have two encodings.
 
 ## Progress
 - (not started)
