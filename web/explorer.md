@@ -22,9 +22,10 @@ import { data as catalog } from './data/catalog.data.mts'
 
 # Connector & operation explorer
 
-Browse the available connectors, filter operations by connector, risk, and idempotency, then open any
-operation to inspect its parameters, request path, credentials, hosts, safety metadata, and Flux
-source. Every operation has a stable page you can share directly.
+Browse the available connectors, filter operations by connector, service, risk, and idempotency, sort
+the list, then open any operation to inspect its parameters, request path, credentials, hosts, safety
+metadata, and Flux source. Every operation has a stable page you can share directly, and a filtered
+list is in the address bar — copy the URL and it opens on the same view.
 
 > [!WARNING]
 > **Live API calls are not available yet.** Shared availability constraints are stated once below;

@@ -265,3 +265,177 @@ export function providerAddress(provider: Provider): string | null {
   const reserved = provider.services.find((service) => service.name === RESERVED_SERVICE)
   return reserved?.gid ?? null
 }
+
+// ---------------------------------------------------------------------------------------------
+// The shareable view.
+//
+// The explorer promises a stable page per operation. A *view* — "every destructive operation of one
+// connector" — had no address at all, because filtering was component state. Putting that state in
+// the query string is what makes the promise true of a view, and it is here rather than in the
+// component because a serialiser is exactly the kind of thing that should be provable by a test.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The complete filter and sort state of the operation list.
+ *
+ * Every field is a string, and the empty string means *unset* — not "any" as a magic value, but the
+ * absence of a constraint, which is what a missing query parameter means too. That correspondence is
+ * why the pair below is as short as it is.
+ */
+export interface View {
+  query: string
+  provider: string
+  service: string
+  risk: string
+  idempotency: string
+  defect: string
+  sort: string
+}
+
+/**
+ * The orders the list can be shown in.
+ *
+ * `catalog` is the default and it is not a fallback: it is the order the emitter writes operations
+ * into the generated module, so it is the order a reader of the Flux sees. The other two are the
+ * re-orderings worth offering over a list this long.
+ */
+export const SORTS = ['catalog', 'id', 'risk']
+
+/**
+ * Risk tiers from least to most consequential.
+ *
+ * The one ordering the catalogue cannot supply — JSON carries the tier of each operation and no
+ * notion of which tier is worse. It has to be declared, and declaring it is the whole point:
+ * alphabetically the most consequential tier sorts second of four, which is wrong without ever
+ * looking wrong.
+ */
+export const RISK_ORDER = ['low', 'medium', 'high', 'destructive']
+
+/** The choices the defect filter offers, which are vocabulary of this site and not catalogue data. */
+const DEFECTS = ['own', 'none']
+
+/**
+ * The query-string key for each field, in the order they are written.
+ *
+ * Both directions read this one table, so a key cannot be spelled one way when written and another
+ * way when read, and the order here is what makes the encoding canonical. The keys are what a
+ * visitor sees on the controls rather than what the code calls them — a URL is read and edited by
+ * people, and the control is called *Connector*.
+ */
+const VIEW_KEYS: [keyof View, string][] = [
+  ['query', 'q'],
+  ['provider', 'connector'],
+  ['service', 'service'],
+  ['risk', 'risk'],
+  ['idempotency', 'idempotency'],
+  ['defect', 'defect'],
+  ['sort', 'sort'],
+]
+
+/** The unfiltered view: no constraint anywhere, and the catalogue's own order. */
+export function emptyView(): View {
+  return {
+    query: '',
+    provider: '',
+    service: '',
+    risk: '',
+    idempotency: '',
+    defect: '',
+    sort: SORTS[0],
+  }
+}
+
+/**
+ * A view as a query string, without the leading `?`.
+ *
+ * An unset field contributes no parameter and the default sort is an unset field, so the unfiltered
+ * view is the empty string and the unfiltered URL is clean. Two routes to the same view produce the
+ * same string, because the key order is the table's and not the caller's.
+ */
+export function encodeView(view: View): string {
+  const unset = emptyView()
+  const params = new URLSearchParams()
+  for (const [field, key] of VIEW_KEYS) {
+    const value = String(view[field] ?? '').trim()
+    if (value && value !== unset[field]) params.set(key, value)
+  }
+  return params.toString()
+}
+
+/**
+ * The view a query string names, with anything unrecognised ignored rather than fatal.
+ *
+ * A link outlives the page it was copied from, so a parameter this build has never heard of is
+ * dropped and a field is only accepted when its value is one this file owns the vocabulary for —
+ * the sort and the defect filter. The catalogue's own vocabularies (connector, service, risk,
+ * idempotency) cannot be checked here, because a pure parse has no catalogue; `narrowView` is the
+ * other half.
+ */
+export function decodeView(search: string): View {
+  const params = new URLSearchParams(search)
+  const view = emptyView()
+
+  for (const [field, key] of VIEW_KEYS) {
+    const value = (params.get(key) ?? '').trim()
+    if (value) view[field] = value
+  }
+
+  if (!SORTS.includes(view.sort)) view.sort = SORTS[0]
+  if (view.defect && !DEFECTS.includes(view.defect)) view.defect = ''
+
+  return view
+}
+
+/**
+ * The view narrowed to what this catalogue actually offers.
+ *
+ * The second half of *ignored, not fatal*. A shared link naming a connector that has since been
+ * renamed, or a service its connector no longer publishes, must degrade to a **wider** view — a
+ * value nothing can match would render an empty catalogue and read as an outage. Dropping the
+ * constraint shows more than was asked for, which is the honest failure of the two.
+ *
+ * It also carries the service filter's one dependency: a service is only kept while the chosen
+ * connector still publishes it, so changing connector drops a service that connector never had.
+ */
+export function narrowView(view: View, providers: Provider[]): View {
+  const operations = providers.flatMap((owner) => owner.operations)
+  const offered = (value: string, options: string[]) => (options.includes(value) ? value : '')
+
+  const provider = offered(view.provider, providers.map((owner) => owner.id))
+
+  return {
+    ...view,
+    provider,
+    service: offered(view.service, serviceFacet(providers, provider)),
+    risk: offered(view.risk, facet(operations, (operation) => operation.risk)),
+    idempotency: offered(view.idempotency, facet(operations, (operation) => operation.idempotency)),
+  }
+}
+
+/** Where a risk tier ranks, with a tier this build has not heard of ranked after every one it has. */
+function riskRank(operation: Operation): number {
+  const rank = RISK_ORDER.indexOf(operation.risk)
+  return rank === -1 ? RISK_ORDER.length : rank
+}
+
+/**
+ * How two operations compare under one sort.
+ *
+ * The default compares everything as equal, which is not a stub: `Array.prototype.sort` is stable,
+ * so a comparator that separates nothing leaves the catalogue's own order exactly as it was. The
+ * same stability is what makes catalogue order the tiebreaker inside a risk tier, so choosing risk
+ * groups the list without discarding the order underneath it.
+ *
+ * Ids are compared by code point rather than by locale: the site is one document and the order it
+ * shows must not depend on the reader's browser.
+ */
+export function compareOperations(sort: string): (a: Operation, b: Operation) => number {
+  if (sort === 'id') return (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+  if (sort === 'risk') return (a, b) => riskRank(a) - riskRank(b)
+  return () => 0
+}
+
+/** The operations in one sort's order, as a new list — the caller's own is left alone. */
+export function sortOperations(operations: Operation[], sort: string): Operation[] {
+  return [...operations].sort(compareOperations(sort))
+}
