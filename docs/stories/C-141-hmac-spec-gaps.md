@@ -68,7 +68,12 @@ binding, it sends unix seconds, and it needed no edit.
   half keeps running after the fix, because it is the reason for it. At the merge base the test reached
   step 4 and failed there: the forgery verified and the declaration loaded.
 - **`inbound::parse_tolerance`** is the crate's one duration parser, called from `validate_hmac`. It
-  refuses no-unit, non-integer, zero, and anything over `MAX_TOLERANCE_SECONDS` (1h). C-60's
+  refuses no-unit, non-integer, zero, anything over `MAX_TOLERANCE_SECONDS` (1h), and — after review —
+  a count too large to scale. It scaled with `*`, which is unchecked fallible arithmetic on author
+  input: `tolerance = "9223372036854775807m"` panicked inside `provider::load` in a debug build and, in
+  a release build, wrapped `i64::MAX * 60` to `Ok(-60)`, a negative window that satisfies both bounds
+  and therefore **loaded**. That is this item's own defect reintroduced for the overflow class. It now
+  uses `checked_mul` and refuses; both profiles were checked through the public loader. C-60's
   `every_shipped_tolerance_is_a_window_a_host_can_actually_apply` became structurally redundant — every
   spec `shipped_specs()` returns has already been through `provider::load` — and was rewritten as
   `a_tolerance_no_host_could_apply_does_not_load`, which tests the loader's refusal directly and keeps
@@ -81,6 +86,13 @@ binding, it sends unix seconds, and it needed no edit.
   `the_declared_timestamp_format_is_read_instead_of_sniffed` pins the hazard it removes
   (`20220505183228` is a valid integer and a plausible date; sniffing dated it to the year 642,000, so
   no window could call it stale).
+- **The published schema carries no `pattern` for `tolerance`.** It briefly had `^[0-9]+[smh]$`, which
+  admits `0s` and `7200s` — both refused by the loader — and `tests/provider_schema.rs` compares only
+  key sets, so nothing caught the drift. A regex can express the grammar but not the 1s..=3600s range,
+  and nothing reachable from `connector-spec` can validate a regex against `parse_tolerance` (no regex
+  engine, and both `Cargo.toml`s are fenced), so a tightened pattern would be an untested second
+  spelling of the rule — which is how it drifted in the first place. The rule is stated in the
+  property's `description` instead, including what is refused and why there is no pattern.
 - **What did not follow the field downstream.** `timestamp_format` reaches the IR, the loader and the
   published JSON schema, but *not* `connector-cli`'s manifest, seam and site projections — those files
   belong to other stories in this wave, and adding a field there rewrites committed artifacts, which a

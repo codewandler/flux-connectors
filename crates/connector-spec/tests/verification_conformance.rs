@@ -1205,7 +1205,9 @@ tolerance = "{value}"
         "a window the vendor documents must still load"
     );
 
-    for unusable in ["banana", "5", "0s", "2h", "7d"] {
+    // The last is the overflow case: `*` panicked here in a debug build and, in a release build,
+    // wrapped `i64::MAX * 60` to a negative window that loaded cleanly.
+    for unusable in ["banana", "5", "0s", "2h", "7d", "9223372036854775807m"] {
         let error = provider::load("providers/fixture.toml", &with_tolerance(unusable))
             .err()
             .unwrap_or_else(|| {

@@ -554,10 +554,18 @@ pub fn parse_tolerance(tolerance: &str) -> Result<i64, String> {
              or `1h`"
         ));
     }
+    // `checked_mul`, not `*`. Scaling a count into seconds is fallible arithmetic on author input, and
+    // both of its failure modes are the very defect this function exists to close: in a debug build
+    // `"9223372036854775807m"` panics inside the loader, and in a release build it *wraps* — to `-60`,
+    // a negative window that passes every check below and ships a declared replay bound no host could
+    // apply. The contract is already `Result`, so the failure has somewhere to go. One message for
+    // both modes, because the author's mistake is the same either way: the number is too big.
+    let too_large = || format!("{tolerance:?} is too large to be a window");
     let seconds = digits
         .parse::<i64>()
-        .map(|count| count * scale)
-        .map_err(|_| format!("{tolerance:?} is too large to be a window"))?;
+        .ok()
+        .and_then(|count| count.checked_mul(scale))
+        .ok_or_else(too_large)?;
 
     // A zero window accepts only a request signed in the same second the host checks it, which is not
     // a strict policy but a broken one: it rejects nearly every genuine delivery.
@@ -641,6 +649,49 @@ mod tests {
                 parse_tolerance(spelling).is_err(),
                 "`tolerance = {spelling:?}` must not pass for a window"
             );
+        }
+    }
+
+    /// Scaling a count into seconds is fallible arithmetic on author input, and it must fail as a
+    /// `Result` rather than as a panic or a wrap.
+    ///
+    /// Both modes are the defect this function exists to close, arrived at from the other end. `*`
+    /// panicked inside the loader in a debug build; in a release build it wrapped
+    /// `"9223372036854775807m"` to `Ok(-60)` — a negative window that satisfies "not zero" and "not
+    /// over an hour", so the declaration **loaded** and shipped a replay bound no host could apply.
+    #[test]
+    fn a_count_too_large_to_scale_is_refused_rather_than_wrapped() {
+        for enormous in [
+            // i64::MAX with a unit that has to scale it: `* 60` wrapped to a negative window.
+            "9223372036854775807m",
+            "9223372036854775807h",
+            // The smallest multiple-of-60 overflow, which wrapped to `Ok(-16)`.
+            "307445734561825860m",
+            // Too large for `i64` before any scaling happens.
+            "99999999999999999999s",
+            // And the seconds unit, whose scale is 1, still has to clear the hour bound.
+            "9223372036854775807s",
+        ] {
+            let refusal = parse_tolerance(enormous);
+            assert!(
+                refusal.is_err(),
+                "`tolerance = {enormous:?}` must be refused, not wrapped into a window: got \
+                 {refusal:?}"
+            );
+        }
+
+        // The property behind the cases: no accepted window is outside the declared bound, whatever
+        // the arithmetic did on the way. A wrap would show up here as a negative `Ok`.
+        for digits in ["9223372036854775807", "307445734561825860", "3600", "61"] {
+            for unit in ["s", "m", "h"] {
+                if let Ok(window) = parse_tolerance(&format!("{digits}{unit}")) {
+                    assert!(
+                        (1..=MAX_TOLERANCE_SECONDS).contains(&window),
+                        "`tolerance = {digits}{unit}` was accepted as {window}s, outside \
+                         1..={MAX_TOLERANCE_SECONDS}"
+                    );
+                }
+            }
         }
     }
 

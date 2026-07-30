@@ -356,6 +356,23 @@ fn a_tolerance_that_is_not_a_duration_is_refused() {
     );
 }
 
+/// A count too large to scale is refused through the loader, in **both** build profiles.
+///
+/// `parse_tolerance` scaled with `*`, so this declaration panicked inside `provider::load` in a debug
+/// build and, in a release build, wrapped `i64::MAX * 60` to `-60` — a negative window that satisfies
+/// every remaining check and therefore *loaded*. A declared window no host could apply is the defect
+/// item 2 of this story exists to close, so the overflow class belongs in the same gate.
+#[test]
+fn a_tolerance_too_large_to_scale_is_refused_by_the_loader() {
+    let error = refuse(&fixture(
+        &HMAC.replace("\"5m\"", "\"9223372036854775807m\""),
+    ));
+    assert!(
+        error.contains("too large to be a window"),
+        "an overflowing count must come back as a refusal, never as a wrapped window:\n{error}"
+    );
+}
+
 /// Finding the timestamp would mean parsing the bytes whose trustworthiness it helps decide.
 #[test]
 fn a_verification_timestamp_read_from_the_body_is_refused() {

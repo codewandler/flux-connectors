@@ -504,8 +504,7 @@
         },
         "tolerance": {
           "type": "string",
-          "pattern": "^[0-9]+[smh]$",
-          "description": "How old a signed request may be (`5m`, `300s`, `1h`). Mandatory when `signed` interpolates `{timestamp}`, and refused when it does not: a timestamped signature with no window replays forever, which reads as though replay had been handled.\n\nParsed, not merely required — a whole number and one of `s`, `m`, `h`, at most one hour and never zero. `tolerance = \"banana\"` is a declared window nobody can apply, and it reads as though replay had been handled just as convincingly."
+          "description": "How old a signed request may be (`5m`, `300s`, `1h`). Mandatory when `signed` interpolates `{timestamp}`, and refused when it does not: a timestamped signature with no window replays forever, which reads as though replay had been handled.\n\nParsed by the loader, not merely required: a whole number and one of `s`, `m`, `h` — no fractions, no compound `1m30s`, no bare integer — and the window must fall in 1s..=3600s. So `banana`, `5`, `1.5m`, `0s` and `2h` are all refused, and a count too large to scale into seconds is refused rather than wrapped.\n\nDeliberately carries no `pattern`. A regex can express the grammar but not the range, so the obvious `^[0-9]+[smh]$` would admit `0s` and `7200s`, which the loader rejects — and a published schema that accepts what the loader refuses is a worse promise than none. Nothing in this crate can validate a regex against `inbound::parse_tolerance` either, so a pattern here would be an untested second spelling of the rule, which is how it drifted the first time."
         }
       }
     },
