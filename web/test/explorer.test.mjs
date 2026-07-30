@@ -153,6 +153,24 @@ function explorerSources() {
   return files.filter(existsSync)
 }
 
+/** Every Vue component the explorer is built from, as absolute paths in directory order. */
+function componentSources() {
+  const dir = path.join(webRoot, '.vitepress', 'theme', 'components')
+  return readdirSync(dir)
+    .filter((entry) => entry.endsWith('.vue'))
+    .map((entry) => path.join(dir, entry))
+}
+
+/**
+ * Every module specifier a source imports from.
+ *
+ * Anchored at the start of a line, so a specifier named in a comment — and these files carry a lot
+ * of comment — is not mistaken for an import.
+ */
+function importedModules(source) {
+  return [...source.matchAll(/^\s*import\b[\s\S]*?\bfrom\s*'([^']+)'/gm)].map((match) => match[1])
+}
+
 test('the site ships the generated catalogue at the path VitePress serves', () => {
   const document = catalog()
 
@@ -896,6 +914,53 @@ test('nothing about the catalogue is hand-maintained in the explorer sources', (
       assert.ok(
         !source.includes(token),
         `${path.relative(webRoot, file)} names \`${token}\` — catalogue data hand-written into the site is the failure this project exists to correct`
+      )
+    }
+  }
+})
+
+// C-142. The sibling of the test above: that one keeps catalogue *data* out of the components, this
+// one keeps the *site framework* out of them.
+//
+// Named as an identifier rather than as prose because the story names it as one.
+//
+// The measurement the story rests on is that the coupling was two symbols wide — `withBase` in five
+// components and `inBrowser` in one — so the components were already a tier that happened to import
+// its host. This asserts the boundary now that it is explicit: a component may import Vue, a sibling
+// component, and the catalogue's typed contract, and nothing else.
+//
+// Read off the sources rather than off the rendered page, because the failure is invisible in the
+// output: a component importing `withBase` renders exactly the same HTML here and simply cannot be
+// mounted anywhere else.
+test('no_component_imports_the_site_framework', () => {
+  const sources = componentSources()
+  assert.ok(sources.length > 0, 'no components were found; this test would pass vacuously')
+
+  const rel = (file) => path.relative(webRoot, file)
+  const imports = new Map(
+    sources.map((file) => [file, importedModules(readFileSync(file, 'utf-8'))])
+  )
+
+  // The framework itself. `withBase` is supplied through `provide`/`inject` by whoever mounts these,
+  // which for this site is `.vitepress/theme/index.mts`; the default is identity.
+  const coupled = sources.filter((file) =>
+    imports.get(file).some((module) => module === 'vitepress' || module.startsWith('vitepress/'))
+  )
+  assert.deepEqual(
+    coupled.map(rel),
+    [],
+    `${coupled.length} component(s) import VitePress directly, so they can only ever be mounted in this site: ${coupled.map(rel).join(', ')}`
+  )
+
+  // And nothing else either — a component that reaches for its own data, or for the filesystem,
+  // cannot be attached anywhere, whatever it imports it from.
+  const ALLOWED = /^(vue|\.\/[A-Za-z]+\.vue|(?:\.\.\/)+data\/catalog\.mts)$/
+  for (const file of sources) {
+    for (const module of imports.get(file)) {
+      assert.match(
+        module,
+        ALLOWED,
+        `${rel(file)} imports \`${module}\` — a component takes what it renders as props or injected context, and may otherwise import only Vue, a sibling component, or the catalogue's typed contract`
       )
     }
   }

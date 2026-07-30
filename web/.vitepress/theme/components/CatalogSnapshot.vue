@@ -1,9 +1,16 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { withBase } from 'vitepress'
-import { allOperations, type Catalog } from '../../../data/catalog.mts'
+import { computed, inject } from 'vue'
+import {
+  PATH_RESOLVER,
+  allOperations,
+  identityPath,
+  type Catalog,
+  type PathResolver,
+} from '../../../data/catalog.mts'
 
 const props = defineProps<{ catalog: Catalog }>()
+
+const resolvePath = inject<PathResolver>(PATH_RESOLVER, identityPath)
 const operationCount = computed(() => allOperations(props.catalog).length)
 const coreCount = computed(() =>
   props.catalog.core
@@ -32,7 +39,7 @@ function availability(provider: Catalog['providers'][number]): string {
     </p>
     <ul class="snapshot__providers">
       <li v-for="provider in catalog.providers" :key="provider.id">
-        <a :href="withBase(`/explorer#${provider.id}`)">{{ provider.vendor }}</a>
+        <a :href="resolvePath(`/explorer#${provider.id}`)">{{ provider.vendor }}</a>
         <span>{{ provider.operation_count }} operations</span>
         <span class="snapshot__status">{{ availability(provider) }}</span>
       </li>
