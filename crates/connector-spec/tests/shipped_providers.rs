@@ -104,6 +104,12 @@ fn operation_selection_stays_curated() {
         // `providers/openai.toml`.
         ("openai", 4),
         ("slack", 4),
+        // C-70 curates 6 of the Jira Cloud platform API's several hundred, all on the v2 issue
+        // resource tree. Two cuts shaped it: JQL search is excluded pending C-30 — a `jql` value is
+        // the most injectable query string in this fleet — and issue update is excluded pending
+        // C-56, because an update whose untouched fields travel as explicit nulls *clears* them on
+        // Jira. See the header comment in `providers/jira.toml`.
+        ("jira", 6),
     ];
     for (name, count) in expected {
         let loaded = load(name);
