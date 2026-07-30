@@ -2,7 +2,7 @@
 id: C-101
 title: Make services a visible, filterable dimension
 pillar: Surfaces
-status: in-progress
+status: done
 priority: 4
 design: docs/designs/explorer-ux.md
 epic: explorer-ux
@@ -19,7 +19,12 @@ address, version, select and install; the catalogue publishes 18 of them and the
 ## Acceptance
 - [x] `ProviderCard.vue` shows a provider's services when it has more than the reserved `default` one
       — name, operation count, and the `api_version` where it differs from the provider's. A
-      single-surface provider is **unchanged**, so fifteen cards do not grow a row that says nothing.
+      single-surface provider grows no services list, so fifteen cards do not gain a row that says
+      nothing. **Amended at close:** `slack` does gain one row — an `Address` fact carrying its
+      published `com.slack.api:v1`. That gid is the reserved service's with `default` already
+      elided by the address grammar, so the reserved name is still rendered nowhere; the strict
+      alternative would have satisfied the `gid` item below with zero instances, which is the
+      vacuous pass this story's own test discipline exists to prevent.
 - [x] The operation list gains a **service filter**, populated from the catalogue like every other
       facet — add a service and the filter grows with no edit to the component.
 - [x] The service filter is dependent in the obvious way: choosing a connector narrows the service
