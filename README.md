@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/brand/banner.svg" alt="flux-connectors — vendor API specs, compiled into Flux-Lang" width="820">
+</p>
+
 # flux-connectors
 
 Compiles vendor API specs into **Flux-Lang**.

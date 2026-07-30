@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-label="flux-connectors — vendor API specs, compiled into Flux-Lang">
+  <title>flux-connectors — vendor API specs, compiled into Flux-Lang</title>
+  <defs>
+    <linearGradient id="fc-bg" x1="0" y1="0" x2="1200" y2="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0F1629"/>
+      <stop offset="1" stop-color="#151F3D"/>
+    </linearGradient>
+    <linearGradient id="fc-flow" x1="120" y1="90" x2="330" y2="210" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7C5CFF"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="fc-word" x1="400" y1="120" x2="900" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#A5B4FC"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="300" fill="url(#fc-bg)"/>
+
+  <!-- The mark, at banner scale: three providers converging into one compiled artifact. -->
+  <g transform="translate(96 78)">
+    <g fill="none" stroke="url(#fc-flow)" stroke-width="7" stroke-linecap="round">
+      <path d="M24 22 C72 22 80 72 120 72"/>
+      <path d="M24 72 H120"/>
+      <path d="M24 122 C72 122 80 72 120 72"/>
+    </g>
+    <g fill="#0F1629" stroke="url(#fc-flow)" stroke-width="6">
+      <circle cx="18" cy="22" r="8"/>
+      <circle cx="18" cy="72" r="8"/>
+      <circle cx="18" cy="122" r="8"/>
+    </g>
+    <circle cx="126" cy="72" r="13" fill="#22D3EE"/>
+  </g>
+
+  <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif">
+    <text x="320" y="140" font-size="62" font-weight="700" letter-spacing="-1.5" fill="url(#fc-word)">flux-connectors</text>
+    <text x="322" y="184" font-size="25" fill="#94A3B8">Vendor API specs, compiled into Flux-Lang.</text>
+  </g>
+
+  <!-- What a connector actually is, in the project's own words. -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="19">
+    <text x="322" y="228" fill="#64748B">auth<tspan fill="#334155"> · </tspan><tspan fill="#64748B">operations</tspan><tspan fill="#334155"> · </tspan><tspan fill="#64748B">quirks</tspan></text>
+  </g>
+
+  <rect x="0" y="296" width="1200" height="4" fill="url(#fc-flow)"/>
+</svg>
