@@ -7,6 +7,50 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The explorer components are no longer welded to VitePress (C-142).** Six of fourteen imported
+  from `vitepress`, and between them they used exactly two symbols — `withBase` to prefix an href,
+  and `inBrowser` for a `typeof window` guard. No `useData`, no `useRouter`, no theme internals. So
+  detaching them was a **link port and a tier boundary, not a rewrite**: components now take a path
+  resolver through `provide`/`inject` with an identity default, and the site supplies `withBase`.
+
+  The three tiers are written down — presentational (props only), catalogue-aware, and page (owns
+  routing and state) — and a test enforces the import allow-list mechanically, so a component that
+  reaches for its own data fails the suite rather than review.
+
+  "Identical" was verified rather than asserted: the merge base and the branch were built separately
+  and compared page by page across every `core/**` and `operations/**` page, with zero differing
+  files once Vue's scoped-style ids and chunk hashes were normalised.
+
+  **No npm package was extracted.** `web/package.json` stays `private: true` — publishing a component
+  library is a distributed artifact with its own versioning and consumers, and that decision waits
+  for a second consumer to shape it.
+
+### Fixed
+
+- **`web/README.md` still carried the reasoning that shipped an unstyled site.** It claimed the
+  committed CNAME serves the site from a custom domain "so `config.mts` sets `base: '/'`" — the exact
+  inference that broke production, and one the config and its test have contradicted since. Rewritten
+  to say where the site is actually served from and what evidence would justify changing it.
+
+
+### Added
+
+- **A flow graph lowers to one composite Flux op (C-95).** Operation, Select, Template, Object,
+  Literal, Gate, Approval, Retry and Throttle lower through `flux_lang::ast`; Trigger, Schedule and
+  Endpoint are boundary declarations that reach no statement. Cycles, region-crossing edges, unbound
+  region outputs and a `Select` wired to an operation's response are all refusals rather than
+  degraded output.
+
+  It found an upstream defect and refused rather than working around it: **flux-lang 0.39's two
+  formatters disagree about durations.** `format::fmt_duration` never emits a bare number, so every
+  `throttle` and every `retry` with a delay produces text `format_cst` declines to re-print — though
+  both spellings parse to the same AST. Emitting a module flux's own formatter cannot format would
+  have been the alternative, so `throttle` is pinned as a refusal with the three steps to undo it
+  recorded.
+
+
 ### Added
 
 - **A service can declare the roles it implements (C-120).** `[[services]] roles = [...]` as a

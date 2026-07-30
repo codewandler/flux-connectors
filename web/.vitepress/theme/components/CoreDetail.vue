@@ -1,17 +1,21 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { withBase } from 'vitepress'
+import { computed, inject } from 'vue'
 import {
+  PATH_RESOLVER,
   allCoreEntries,
   coreEntryById,
   coreEntryHref,
+  identityPath,
   type Catalog,
   type CoreEntry,
+  type PathResolver,
 } from '../../../data/catalog.mts'
 import SchemaBlock from './SchemaBlock.vue'
 import SpecChip from './SpecChip.vue'
 
 const props = defineProps<{ catalog: Catalog; kind: string; name: string }>()
+
+const resolvePath = inject<PathResolver>(PATH_RESOLVER, identityPath)
 
 const entry = computed<CoreEntry | undefined>(() => {
   const singular = props.kind === 'capabilities' ? 'capability' : props.kind.replace(/s$/, '')
@@ -96,7 +100,7 @@ function operationHref(id: string): string | undefined {
       </p>
       <ul v-else>
         <li v-for="id in entry.operation_ids" :key="id">
-          <a v-if="operationHref(id)" :href="withBase(operationHref(id)!)"><code>{{ id }}</code></a>
+          <a v-if="operationHref(id)" :href="resolvePath(operationHref(id)!)"><code>{{ id }}</code></a>
           <a v-else :href="id"><code>{{ id }}</code></a>
         </li>
       </ul>
