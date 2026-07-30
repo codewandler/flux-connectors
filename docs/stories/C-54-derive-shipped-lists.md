@@ -2,7 +2,7 @@
 id: C-54
 title: Derive the shipped-provider lists instead of hand-maintaining seven of them
 pillar: Build
-status: in-progress
+status: done
 priority: 4
 design:
 epic: connectors-v1

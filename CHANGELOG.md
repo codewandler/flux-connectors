@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **C-54** — the five hand-maintained `SHIPPED` provider lists and the two hardcoded catalogue totals
+  are gone: every per-provider gate now derives its set from `providers/`, matching the definition
+  `connector-cli`'s own discovery uses. **Adding a provider costs one file instead of seven places in
+  five files across four crates.** The proof is a throwaway provider added with no test file edited —
+  at the previous baseline every per-provider gate ignored it and passed; now eleven catch it. An
+  empty `providers/` directory also fails loudly instead of passing vacuously, which is what made the
+  old form dangerous rather than merely repetitive.
+
 ## [0.2.0] — 2026-07-30
 
 Three connectors double the catalogue: **OpenAI**, **GitHub** and **Slack**. **No provider can make a
