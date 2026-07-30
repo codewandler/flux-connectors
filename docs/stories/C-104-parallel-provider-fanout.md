@@ -105,7 +105,15 @@ provider trips the third alone.
 - Added a loud refusal for a provider name that is not a Rust identifier. `providers/` admits `-` in
   a file stem, and `pub(crate) mod google-ads;` does not parse — while the index was hand-written a
   human hit that immediately, but generated it would ship a `crates/catalog` that does not compile.
+- Merged `main` (flux-lang 0.39, which rewrote every generated `.flux` into the new canonical syntax)
+  into the branch rather than rebasing, and re-took the failing-first proof against the new merge
+  base `38d8c53`. The merge was conflict-free: this story changes *who writes* the index, not any
+  `.flux` byte, so it does not overlap the 0.39 regeneration. The merged tree is a build fixed point
+  with no regeneration needed — the index is a list of provider names and carries no Flux syntax, so
+  the 0.39 upgrade could not have staled it.
 - Not done here: `CHANGELOG.md`, the board and `docs/roadmap.md` are coordinator-owned and untouched.
+  `Cargo.toml`/`Cargo.lock` changed only by inheriting main's 0.39 pin through the merge; this branch
+  contributes no manifest edit of its own (`git diff 38d8c53 HEAD` touches neither).
 
 ## Notes
 - **This is the enabler; file it before the fleet.** With it, wave size for provider stories becomes
