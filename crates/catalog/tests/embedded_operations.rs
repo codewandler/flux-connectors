@@ -14,8 +14,10 @@
 //!
 //! The staleness half of the story lives next door in
 //! `crates/connector-cli/tests/catalog_artifacts.rs`, which recomputes these bytes from
-//! `providers/*.toml`; this file needs no filesystem access at all except for the one test that
-//! checks the hand-written provider list.
+//! `providers/*.toml`; this file needs no filesystem access at all except for the two tests that
+//! check the embedded tables against the repository — the hand-written provider list in
+//! `src/generated.rs`, and the sizes of the catalog, which are derived from `providers/` and `ops/`
+//! rather than written down (C-54).
 
 use catalog::{Operation, OperationKey, ProviderKey};
 
@@ -28,19 +30,104 @@ fn all() -> Vec<&'static Operation> {
 }
 
 /// An empty catalog would satisfy every `for` loop below without saying a word.
+///
+/// Both sizes are **derived from the repository** rather than written down (C-54). A total is only a
+/// sum: `6` and `38` were two more copies of the shipped inventory, and a copy that has to be edited
+/// by hand is one that gets edited on some branches and not others — three of the C-51/52/53 merge
+/// conflicts were exactly these two numbers, computed against different baselines and unresolvable by
+/// taking either side. A per-provider *curated* count is a different thing and stays explicit; it
+/// lives in `connector-spec`'s `operation_selection_stays_curated`.
+///
+/// What the derived form still catches is everything the constants caught except the size itself: the
+/// catalog is non-empty, it holds one provider per `providers/*.toml`, and it embeds one operation per
+/// committed rendering under `ops/`. A provider or an operation dropped from the embedded tables fails
+/// here; the *set* is pinned name for name by
+/// [`the_provider_list_matches_the_repository`] below.
 #[test]
 fn the_catalog_is_not_empty() {
+    let providers = shipped_providers();
+    let renderings = committed_renderings();
+
+    assert!(
+        !providers.is_empty() && !renderings.is_empty(),
+        "the repository ships {} providers and {} renderings; a check against an empty tree proves \
+         nothing",
+        providers.len(),
+        renderings.len()
+    );
+
     assert_eq!(
         catalog::providers().len(),
-        6,
-        "C-17's three providers, plus github (C-52), openai (C-51) and slack (C-53)"
+        providers.len(),
+        "the catalog carries {} providers, but `providers/` holds {} ({providers:?}) — run \
+         `cargo run -p connector-cli -- build`",
+        catalog::providers().len(),
+        providers.len()
     );
     assert_eq!(
         all().len(),
-        38,
-        "38 operations ship today — C-17's 25, github's 5, openai's 4 and slack's 4; if \
-         this changed deliberately, change the number"
+        renderings.len(),
+        "the catalog embeds {} operations, but `crates/catalog/ops/` holds {} committed renderings \
+         — a rendering that no generated table includes is one no consumer can reach",
+        all().len(),
+        renderings.len()
     );
+}
+
+/// The provider ids the repository ships, from `providers/*.toml`.
+///
+/// The one filesystem read this crate's tests perform, shared by the two tests that check the
+/// embedded tables against the repository. `catalog` itself never touches the filesystem — that is
+/// its contract in AGENTS.md — and neither does anything here outside these helpers.
+fn shipped_providers() -> Vec<String> {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers");
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .expect("the repository's providers/ directory is readable")
+        .map(|entry| entry.expect("readable directory entry").file_name())
+        .filter_map(|name| {
+            name.to_string_lossy()
+                .strip_suffix(".toml")
+                .map(str::to_string)
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+/// Every committed per-operation rendering, as `<provider>/<operation>.flux`.
+///
+/// `ops/` also carries a `README.md`, and nothing but a `.flux` file under a provider directory is a
+/// rendering, so both are filtered rather than assumed away.
+fn committed_renderings() -> Vec<String> {
+    let ops = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("ops");
+    let mut found: Vec<String> = Vec::new();
+
+    for entry in std::fs::read_dir(&ops).expect("crates/catalog/ops is readable") {
+        let provider = entry.expect("readable directory entry").path();
+        if !provider.is_dir() {
+            continue;
+        }
+        let id = provider
+            .file_name()
+            .expect("a named directory")
+            .to_string_lossy()
+            .into_owned();
+
+        for entry in std::fs::read_dir(&provider)
+            .unwrap_or_else(|error| panic!("cannot read {}: {error}", provider.display()))
+        {
+            let path = entry.expect("readable directory entry").path();
+            if path.extension().is_some_and(|ext| ext == "flux") {
+                found.push(format!(
+                    "{id}/{}",
+                    path.file_name().expect("a named file").to_string_lossy()
+                ));
+            }
+        }
+    }
+
+    found.sort();
+    found
 }
 
 /// **The gate.** Each embedded rendering parses on its own, with no diagnostics.
@@ -200,16 +287,12 @@ fn listing_by_provider_round_trips() {
 /// provider by hand — see its docs for why — so a provider added to `providers/` without that line
 /// would be compiled, written into `ops/` and `src/generated/`, and then silently left out of every
 /// query.
+///
+/// This is the derivation C-54 generalised to the other four crates: the shipped set is read from the
+/// directory, so a provider cannot be omitted from a gate by being omitted from a list.
 #[test]
 fn the_provider_list_matches_the_repository() {
-    let providers_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers");
-    let mut shipped: Vec<String> = std::fs::read_dir(&providers_dir)
-        .expect("the repository's providers/ directory is readable")
-        .map(|entry| entry.expect("readable directory entry").file_name())
-        .map(|name| name.to_string_lossy().into_owned())
-        .filter_map(|name| name.strip_suffix(".toml").map(str::to_string))
-        .collect();
-    shipped.sort();
+    let shipped = shipped_providers();
 
     let catalogued: Vec<String> = catalog::providers()
         .iter()

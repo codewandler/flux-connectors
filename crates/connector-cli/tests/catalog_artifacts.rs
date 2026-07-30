@@ -21,17 +21,6 @@ use connector_cli::pipeline;
 use connector_cli::workspace::Workspace;
 use connector_spec::Connector;
 
-/// Every provider this repository ships: C-17's original three, then each connector added
-/// since — `github` (C-52), `openai` (C-51), `slack` (C-53).
-const SHIPPED: &[&str] = &[
-    "zendesk",
-    "freshdesk",
-    "babelforce",
-    "github",
-    "openai",
-    "slack",
-];
-
 /// The repository root, derived from this crate's manifest directory so the test is independent of
 /// the working directory a runner happens to use.
 fn repo_root() -> PathBuf {
@@ -39,6 +28,33 @@ fn repo_root() -> PathBuf {
         .join("../..")
         .canonicalize()
         .expect("the repository root exists")
+}
+
+/// Every provider this repository ships, **read from `providers/` rather than listed here** (C-54).
+///
+/// The directory is the source of truth for which providers exist, and a constant repeating it is a
+/// copy that nothing keeps in step: a provider added to `providers/` but not to the copy is compiled,
+/// written into `ops/` and `src/generated/`, and then never checked by the staleness gates below.
+/// Empty is a failure rather than a vacuous pass.
+fn shipped() -> Vec<String> {
+    let dir = repo_root().join("providers");
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|error| panic!("cannot read {}: {error}", rel(&dir)))
+        .map(|entry| entry.expect("readable directory entry").file_name())
+        .filter_map(|name| {
+            name.to_string_lossy()
+                .strip_suffix(".toml")
+                .map(str::to_string)
+        })
+        .collect();
+    names.sort();
+
+    assert!(
+        !names.is_empty(),
+        "{} holds no provider definitions, so every gate in this file would pass vacuously",
+        rel(&dir)
+    );
+    names
 }
 
 /// `crates/catalog/ops/<provider>` — one `.flux` rendering per operation.
@@ -94,7 +110,8 @@ fn committed_renderings(provider: &str) -> Vec<String> {
 /// module, and reads to a human as though it were still shipped.
 #[test]
 fn every_shipped_operation_has_a_committed_flux_rendering() {
-    for provider in SHIPPED {
+    for provider in shipped() {
+        let provider = provider.as_str();
         let connector = load(provider);
         let mut expected: Vec<String> = Vec::new();
 
@@ -135,7 +152,7 @@ fn every_shipped_operation_has_a_committed_flux_rendering() {
 }
 
 /// **A rebuild from unchanged inputs is byte-identical**, over every artifact a build writes — the
-/// six that ship *and* the catalog's thirty-odd.
+/// modules and manifests that ship *and* the catalog's per-operation renderings.
 ///
 /// [`pipeline::plan`] compiles everything and compares it against the committed tree without
 /// writing, so this is the same comparison `flux-connectors diff` renders and `build` acts on. An
@@ -178,7 +195,8 @@ fn the_committed_tree_is_a_fixed_point_of_a_build() {
 fn every_generated_catalog_module_matches_its_provider() {
     let workspace = Workspace::new(repo_root());
 
-    for provider in SHIPPED {
+    for provider in shipped() {
+        let provider = provider.as_str();
         let expected = connector_cli::seam::emit(&load(provider))
             .unwrap_or_else(|error| panic!("providers/{provider}.toml does not compile: {error:#}"))
             .catalog;
@@ -208,7 +226,8 @@ fn every_generated_catalog_module_matches_its_provider() {
 /// per-operation files the real artifact and the module a summary of them.
 #[test]
 fn every_rendering_is_the_text_the_shipped_module_carries() {
-    for provider in SHIPPED {
+    for provider in shipped() {
+        let provider = provider.as_str();
         let module_path = repo_root()
             .join("connectors")
             .join(format!("{provider}.flux"));
