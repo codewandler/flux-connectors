@@ -86,7 +86,8 @@ fn build_emits_the_operations_a_provider_declares() {
         r#"$base = "https://api.acme.example""#,
         r#"$url = fmt("{base}/v2/tickets/{ticket_id}")"#,
         "when $include",
-        r#"do http.request { method: "GET", url: $url }"#,
+        r#"$response = http.request({ method: "GET", url: $url })"#,
+        "return $response",
     ] {
         assert!(
             module.contains(expected),

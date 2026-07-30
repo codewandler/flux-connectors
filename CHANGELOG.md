@@ -69,6 +69,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   generated query values are injectable, recommends a structured `query` map on `http.request` over a
   pure `urlencode` op, and specifies the interim refusal.
 
+- **C-9** — request bodies, headers and response handling: POST/PUT/PATCH assemble a JSON body from
+  the IR, content-type and parameterized headers emit, and the response is bound and returned
+  explicitly so a non-2xx is data rather than an op failure. Write operations may not claim a read's
+  risk, and a JSON Schema `const` body field is sent without appearing in the op signature.
+
 ### Changed
 - **C-1** — flux-lang is depended on from **crates.io** (`codewandler-flux-lang = "0.37"`) rather
   than as a git or path dependency. The flux git remote uses a developer-only SSH host alias that

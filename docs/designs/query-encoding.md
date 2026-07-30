@@ -190,7 +190,7 @@ The emitted op collapses to:
 
 ```flux
 $url = fmt("{base}/api/v2/search.json")
-do http.request {
+$response = http.request(…)  # was `do http.request` before C-9 {
   method: "GET",
   url: $url,
   query: { query: $query, per_page: $per_page }

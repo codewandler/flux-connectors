@@ -3,7 +3,7 @@ id: C-9
 title: Emit request bodies, headers, and response handling
 pillar: Codegen
 status: in-progress
-priority: 6
+priority:
 design: docs/designs/connector-pipeline.md
 epic: connectors-v1
 areas: [connector-flux]
