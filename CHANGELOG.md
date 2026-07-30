@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-07-30
+
+Three connectors double the catalogue: **OpenAI**, **GitHub** and **Slack**. **No provider can make a
+live API call yet** — see the README's *Known limits*.
+
 ### Added
 - **C-51** — the **OpenAI** connector: the models pair, chat completions and embeddings, JSON in and
   JSON out with no query parameter of any type. `max_completion_tokens` is required rather than
