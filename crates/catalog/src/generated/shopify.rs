@@ -9,9 +9,21 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "shopify",
     vendor: "Shopify",
     description: "Shopify Admin REST API: read orders, products, customers and inventory levels, and update a product",
+    authority: None,
     base_url: "https://{shop}.myshopify.com",
+    auth: AUTH,
     operations: OPERATIONS,
 };
+
+#[rustfmt::skip]
+static AUTH: &[crate::Credential] = &[
+    crate::Credential {
+        name: "shopify.access_token",
+        leaf: "access_token",
+        acquire: crate::Acquisition::Static,
+        place: crate::Placement::Header { name: "X-Shopify-Access-Token", prefix: "" },
+    },
+];
 
 #[rustfmt::skip]
 static OPERATIONS: &[crate::Operation] = &[

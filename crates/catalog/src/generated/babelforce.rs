@@ -9,9 +9,21 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "babelforce",
     vendor: "Babelforce",
     description: "Babelforce voice platform: agent availability, live and reported calls, and the session variables a flow reads and writes",
+    authority: None,
     base_url: "https://services.babelforce.com",
+    auth: AUTH,
     operations: OPERATIONS,
 };
+
+#[rustfmt::skip]
+static AUTH: &[crate::Credential] = &[
+    crate::Credential {
+        name: "babelforce.access_token",
+        leaf: "access_token",
+        acquire: crate::Acquisition::Static,
+        place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+    },
+];
 
 #[rustfmt::skip]
 static OPERATIONS: &[crate::Operation] = &[

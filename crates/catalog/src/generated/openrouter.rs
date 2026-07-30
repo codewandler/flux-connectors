@@ -9,9 +9,21 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "openrouter",
     vendor: "OpenRouter",
     description: "OpenRouter model router: list models and their endpoints, create chat completions, and read credit balance",
+    authority: None,
     base_url: "https://openrouter.ai",
+    auth: AUTH,
     operations: OPERATIONS,
 };
+
+#[rustfmt::skip]
+static AUTH: &[crate::Credential] = &[
+    crate::Credential {
+        name: "openrouter.api_key",
+        leaf: "api_key",
+        acquire: crate::Acquisition::Static,
+        place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+    },
+];
 
 #[rustfmt::skip]
 static OPERATIONS: &[crate::Operation] = &[

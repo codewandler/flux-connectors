@@ -9,9 +9,21 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "github",
     vendor: "GitHub",
     description: "GitHub REST API: read repositories, issues and pull requests, and write issues and issue comments",
+    authority: None,
     base_url: "https://api.github.com",
+    auth: AUTH,
     operations: OPERATIONS,
 };
+
+#[rustfmt::skip]
+static AUTH: &[crate::Credential] = &[
+    crate::Credential {
+        name: "github.token",
+        leaf: "token",
+        acquire: crate::Acquisition::Static,
+        place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+    },
+];
 
 #[rustfmt::skip]
 static OPERATIONS: &[crate::Operation] = &[

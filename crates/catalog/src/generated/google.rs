@@ -9,9 +9,21 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "google",
     vendor: "Google Workspace",
     description: "Google Workspace: read and send Gmail messages, read and create Calendar events, read and rename Drive files",
+    authority: None,
     base_url: "https://www.googleapis.com",
+    auth: AUTH,
     operations: OPERATIONS,
 };
+
+#[rustfmt::skip]
+static AUTH: &[crate::Credential] = &[
+    crate::Credential {
+        name: "google.access_token",
+        leaf: "access_token",
+        acquire: crate::Acquisition::Static,
+        place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+    },
+];
 
 #[rustfmt::skip]
 static OPERATIONS: &[crate::Operation] = &[

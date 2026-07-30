@@ -9,9 +9,21 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "fly",
     vendor: "Fly.io",
     description: "Fly.io Machines: discover regions and inspect, create, start, stop, restart or delete Machines",
+    authority: Some("io.fly.api"),
     base_url: "https://api.machines.dev/v1",
+    auth: AUTH,
     operations: OPERATIONS,
 };
+
+#[rustfmt::skip]
+static AUTH: &[crate::Credential] = &[
+    crate::Credential {
+        name: "fly.api_token",
+        leaf: "api_token",
+        acquire: crate::Acquisition::Static,
+        place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+    },
+];
 
 #[rustfmt::skip]
 static OPERATIONS: &[crate::Operation] = &[

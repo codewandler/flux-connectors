@@ -11,7 +11,7 @@ use flux_spec::{
 use serde_json::Value;
 
 use crate::request::{self, Request};
-use crate::{spec, Error};
+use crate::{auth, spec, Credentials, Error};
 
 /// **The connector's egress**: the tool every projected operation hands its request to.
 ///
@@ -76,6 +76,9 @@ pub struct Operation {
     /// The catalogue entry this tool was projected from — the declared hosts the network gate names
     /// come from here.
     entry: &'static catalog::Operation,
+    /// The connector this operation belongs to: its authority, and the credentials it declares.
+    /// Resolved once at install rather than looked up per call, for the same reason the spec is.
+    provider: &'static catalog::Provider,
     /// The projected declaration, complete before the tool is ever registered.
     spec: ToolSpec,
     /// The operation's own emitted Flux, parsed. The request is **evaluated** from this rather than
@@ -85,6 +88,8 @@ pub struct Operation {
     /// **flux's egress, not ours.** Every byte this pack sends leaves through this tool, which a
     /// host supplies pre-configured. This repository still opens no socket. See [`Egress`].
     http: Egress,
+    /// **The credential port the host bound**, not a global. See [`Credentials`].
+    credentials: Credentials,
 }
 
 /// Hand-written because [`CompositeOpDecl`]'s `Debug` is the whole parsed body, which buries the
@@ -109,7 +114,11 @@ impl Operation {
     /// embedded Flux is not the single declaration a catalogue rendering is — plus
     /// [`Error::NoDeclaredHost`] for an entry that names no host, which is refused here so that
     /// [`Tool::permission_subjects`] can never return an empty answer.
-    pub fn project(entry: &'static catalog::Operation, http: Egress) -> Result<Self, Error> {
+    pub fn project(
+        entry: &'static catalog::Operation,
+        http: Egress,
+        credentials: Credentials,
+    ) -> Result<Self, Error> {
         // Refused at install rather than tolerated at dispatch. The gate below falls back to the
         // declared hosts when a request cannot be built, so an entry with no host would be a tool
         // whose subjects are empty exactly when they matter most — and "empty" is indistinguishable
@@ -120,12 +129,22 @@ impl Operation {
             });
         }
 
+        let provider =
+            catalog::provider(catalog::ProviderKey::id(entry.provider)).ok_or_else(|| {
+                Error::UnknownProvider {
+                    provider: entry.provider.to_owned(),
+                    available: catalog::providers().len(),
+                }
+            })?;
+
         let declaration = spec::declaration_of(entry.id, entry.flux)?;
         Ok(Self {
             spec: spec::project_declaration(entry.id, &declaration)?,
             declaration,
             entry,
+            provider,
             http,
+            credentials,
         })
     }
 
@@ -146,8 +165,10 @@ impl Operation {
     /// — a body flattened out of its wire nesting, a query string missing its `?`/`&` — are visible
     /// here and nowhere else, because a vendor answers both with `200`.
     ///
-    /// No credential is applied. That is C-116, and a placeholder here would be a second thing to
-    /// migrate.
+    /// **No credential is applied** — this is the request the operation's own module describes, and
+    /// nothing more. [`Operation::build_authenticated_request`] is the one that authenticates, and
+    /// keeping the two apart is what lets [`Operation::permission_subjects`] name a URL that carries
+    /// no secret.
     ///
     /// # Errors
     ///
@@ -158,6 +179,42 @@ impl Operation {
         request::build(self.entry.id, &self.declaration, params)
     }
 
+    /// **The request as it goes out**: built, then authenticated with the bound credential port.
+    ///
+    /// The order is the safety property, and it is the reverse of the obvious one. Every credential
+    /// is resolved and **registered with `ctx.redactor` first**, before a request exists at all —
+    /// `flux-web`'s `http.rs:248` is the precedent — so a failure anywhere between here and dispatch
+    /// cannot surface a value the redactor has not been told about. Registering after building would
+    /// leave exactly one window uncovered, and it is the window in which things go wrong.
+    ///
+    /// Public because it is the honest thing to assert on: a test that reached for a real call would
+    /// be testing flux's transport and a vendor's uptime, while the mistakes that actually ship — a
+    /// credential in the wrong half of the request, a prefix that is not there, a header the module
+    /// already set — are visible here and nowhere else.
+    ///
+    /// # Errors
+    ///
+    /// Whatever [`Operation::build_request`] refuses, plus every credential refusal: no value
+    /// stored, a store that could not answer, a connector with no address to look at, an inbound
+    /// signing secret. **None of them sends the request**, which is the point — an unauthenticated
+    /// call is a `401` that says nothing about what is missing.
+    pub async fn build_authenticated_request(
+        &self,
+        ctx: &ToolContext,
+        params: &Value,
+    ) -> Result<Request, Error> {
+        let credentials = self
+            .credentials
+            .resolve(ctx, self.entry, self.provider)
+            .await?;
+
+        let mut request = self.build_request(params)?;
+        for credential in &credentials {
+            auth::place(self.entry.id, credential, &mut request)?;
+        }
+        Ok(request)
+    }
+
     /// Where this call would go, for the host's network policy to judge.
     ///
     /// The request URL when the request can be built, and the operation's **declared hosts** when it
@@ -165,6 +222,13 @@ impl Operation {
     /// and cannot fail, so without it the one call most likely to be malformed would also be the one
     /// call nobody gates. The hosts are the manifest's `http_hosts` (C-10) — declared data, read
     /// rather than re-derived by parsing a URL template a second time.
+    ///
+    /// **The URL here is the unauthenticated one**, deliberately. A permission subject is quoted in
+    /// approval prompts, policy rules and the evidence log, and a query-placed credential would put
+    /// a secret in all three — in the one place `Tool::permission_subjects` cannot fail and
+    /// therefore cannot consult a redactor either. The named consequence is that a host writing an
+    /// allow-list against a *full* URL sees the request without its `?api_key=…`; matching on host
+    /// and path, which is what an egress policy is written against, is unaffected.
     fn subjects(&self, params: &Value) -> Vec<String> {
         match self.build_request(params) {
             Ok(request) => vec![request.url],
@@ -212,15 +276,16 @@ impl Tool for Operation {
         set
     }
 
-    /// Build the request and hand it to flux.
+    /// Authenticate the request, build it, and hand it to flux.
     ///
     /// The **same** `ctx` travels through, so the redactor, the evidence log and the cancellation
-    /// token the host bound are the ones the request is made under. The response comes back as
-    /// `http.request` produced it — one flat string, `HTTP {status}\n{headers}\n{body}` — and is
-    /// returned unshaped: it is a *result*, a 404 included, and field-selecting it needs
-    /// `http.request` to return a record. That is a seam story on flux, filed rather than faked.
+    /// token the host bound are the ones the request is made under — and the redactor is the one the
+    /// credential was registered with a moment earlier. The response comes back as `http.request`
+    /// produced it — one flat string, `HTTP {status}\n{headers}\n{body}` — and is returned unshaped:
+    /// it is a *result*, a 404 included, and field-selecting it needs `http.request` to return a
+    /// record. That is a seam story on flux, filed rather than faked.
     async fn execute(&self, ctx: &ToolContext, params: Value) -> flux_core::Result<ToolResult> {
-        let request = self.build_request(&params)?;
+        let request = self.build_authenticated_request(ctx, &params).await?;
         self.http.tool().execute(ctx, request.to_params()).await
     }
 }
@@ -228,14 +293,14 @@ impl Tool for Operation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::recording_http;
+    use crate::tests::{empty_credentials, recording_http};
     use catalog::OperationKey;
     use serde_json::json;
 
     fn projected(id: &str) -> Operation {
         let entry = catalog::operation(OperationKey::id(id))
             .unwrap_or_else(|| panic!("the shipped catalogue carries `{id}`"));
-        Operation::project(entry, recording_http())
+        Operation::project(entry, recording_http(), empty_credentials())
             .unwrap_or_else(|error| panic!("`{id}`: {error}"))
     }
 
@@ -317,7 +382,7 @@ mod tests {
         let entry: &'static catalog::Operation = Box::leak(Box::new(entry));
 
         assert!(matches!(
-            Operation::project(entry, recording_http()),
+            Operation::project(entry, recording_http(), empty_credentials()),
             Err(Error::NoDeclaredHost { .. })
         ));
     }

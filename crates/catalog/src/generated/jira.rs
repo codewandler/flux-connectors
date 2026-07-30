@@ -9,9 +9,21 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "jira",
     vendor: "Jira",
     description: "Jira Cloud issue tracking: read and create issues, comment on them, and drive workflow transitions",
+    authority: None,
     base_url: "https://{site}.atlassian.net",
+    auth: AUTH,
     operations: OPERATIONS,
 };
+
+#[rustfmt::skip]
+static AUTH: &[crate::Credential] = &[
+    crate::Credential {
+        name: "jira.api_token",
+        leaf: "api_token",
+        acquire: crate::Acquisition::BasicJoin { user_env: &["JIRA_USER"], user_suffix: "" },
+        place: crate::Placement::Header { name: "Authorization", prefix: "Basic " },
+    },
+];
 
 #[rustfmt::skip]
 static OPERATIONS: &[crate::Operation] = &[
