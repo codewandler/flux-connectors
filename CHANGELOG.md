@@ -9,6 +9,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A test that reported `ok` when it skipped (C-149).** The live Vault leg printed `ok / 1 passed`
+  when no Vault was offered, with the reason captured and invisible — while its own module doc claimed
+  *"there is no third path where it reports success without having talked to anything."* A reader of a
+  green run could not tell whether the HTTP transport had been exercised.
+
+  It is now reported as `ignored` with a message naming what is **UNEXERCISED**, and the claim is held
+  by a guard test that re-execs the binary and reads libtest's own report — because the claim is about
+  what a reader sees, so nothing short of the real output can prove it.
+
+  Three smaller gaps from the same review closed beside it: `Secret::into_inner` became
+  `expose_secret_owned` so the type's "one search for `expose_secret`" audit is *true*, and is now
+  asserted by reading the source rather than promised in a comment; `StoreError::Layout` was wired to a
+  caller instead of being a typed error nothing could raise; and a KV v1 test was renamed to what it
+  actually proves, with the real 404 case added beside it.
+
+
+### Fixed
+
 - **The artifact tests leaked their fixtures into a shared tmpfs, and went flaky under load (C-143).**
   They wrote to `std::env::temp_dir()`, keyed on a label and a process id; `/tmp` here is a 32 GB
   tmpfs, and 55 leaked fixture directories were sitting in it. Under a wave of concurrent builds,

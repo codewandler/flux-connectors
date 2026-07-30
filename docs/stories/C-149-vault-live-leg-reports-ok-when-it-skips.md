@@ -2,8 +2,7 @@
 id: C-149
 title: "The Vault live leg reports ok when it skips, and three smaller gaps beside it"
 pillar: Core
-status: in-progress
-priority: 3
+status: done
 areas: [connector-secrets]
 note: "found by C-91's review. The test's own module doc says 'there is no third path where it reports success without having talked to anything' — and that is exactly what it does today. A skipped leg that prints ok is the failure mode the whole no-simulated-success rule exists to prevent"
 ---
@@ -106,3 +105,28 @@ dependency and no manifest changed.
 - The recorded transcript is a scripted in-process `VaultTransport`, not a captured wire dump. It
   proves the store's URL construction, envelope parsing and status mapping — **nothing about Vault**.
   That is a fair scope and is stated; do not let a later change quietly present it as vendor evidence.
+
+### Coordinator notes at integration
+
+- **My fence was over-broad, and it cost the cleaner fix.** I fenced `Cargo.toml` to stop this story
+  colliding with C-116, which owned the manifests that wave — but C-116's edits were the *root*
+  manifest and `connector-pack/Cargo.toml`, so three lines of `[[test]] harness = false` in
+  `connector-secrets/Cargo.toml` would not have collided at all. The implementor asked rather than
+  treating the fence as advisory, which was right; the error was mine.
+
+  `build.rs` is accepted as landed. It carries one risk the manifest route would not have: **which
+  tests exist now depends on build-time environment**, so a CI cache keyed on source alone could serve
+  a binary built under the other environment. `rerun-if-env-changed` covers the ordinary case and the
+  flip was verified live. If that risk ever bites, the manifest fix is three lines.
+
+- **`expose_secret_owned` is a breaking public API change, and it breaks nothing.** Checked at
+  integration: **no crate from this workspace is on crates.io.** `cargo publish` has been handed over
+  unrun every release, so `connector-secrets` has no published version and no consumer. No semver note
+  is owed.
+
+- **Left open, and worth a story:** `HttpTransport` still has no *committed* test. The leg is now
+  honestly `ignored` rather than falsely green, which is what this story asked for — but a green CI run
+  still exercises none of it. The implementor demonstrated it against a throwaway stub that is
+  deliberately not in the repo. A loopback `TcpListener` stub would close it with no new dependency.
+  Related: the leg works only because feature unification hands `tokio` the `net` feature via
+  `reqwest`; the dev-dependency declares only `rt` + `macros`. That is load-bearing and undeclared.
