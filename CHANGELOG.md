@@ -7,6 +7,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The explorer set a floor under its own width (C-100, follow-up).** Three symptoms — 193px of
+  horizontal overflow on a phone, a filter bar that always wrapped to two rows, and a provider grid
+  stuck at three columns — turned out to be one cause: a flex or grid item's automatic minimum size
+  is its `min-content`, so a `<select>` (as wide as its widest option), a row (as wide as its longest
+  request path) and a card header (274px) each refused to shrink and pushed their container instead.
+  Measured after: overflow 193px → 0, filter bar 2 rows → 1 from 1280px up, provider grid 3 → 4
+  columns from 1440px up.
+
+  The earlier reasoning that 320px was "the smallest round number above the 314px floor" is kept in
+  the story as the thing that was wrong rather than deleted: it identified the cause correctly and
+  drew the wrong conclusion, because the floor was never a fact about the card — it was one missing
+  declaration.
+
 ### Changed
 
 - **flux-lang 0.37 → 0.39, and every generated module is rewritten in the new canonical syntax.**
