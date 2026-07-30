@@ -1,5 +1,6 @@
-//! `site/catalog.json` is a **checked** artifact, and it is the one a website is written against
-//! (C-42).
+//! `web/public/catalog.json` is a **checked** artifact, and it is the one a website is written
+//! against (C-42). It sits in VitePress's `public/` directory, which is served verbatim at the site
+//! root, so the explorer reads it with no copy step (C-44).
 //!
 //! The site's whole reason for existing is that catalogue data must never be hand-maintained — that
 //! is the action-proxy failure this repository exists to correct, re-enacted in JavaScript. So the
@@ -29,9 +30,10 @@ use common::Fixture;
 /// The three providers this repository ships, in the order C-17 names them.
 const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce"];
 
-/// The document's path, relative to the repository root. Chosen by C-42 and named here so a change
-/// to it is a change to a test rather than a silent break of whatever reads it.
-const CATALOG_JSON: &str = "site/catalog.json";
+/// The document's path, relative to the repository root. Chosen by C-42, moved into the site's own
+/// `public/` tree by C-44, and named here so a change to it is a change to a test rather than a
+/// silent break of whatever reads it.
+const CATALOG_JSON: &str = "web/public/catalog.json";
 
 /// The repository root, derived from this crate's manifest directory so the test is independent of
 /// the working directory a runner happens to use.
