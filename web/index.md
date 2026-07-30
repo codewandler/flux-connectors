@@ -84,8 +84,10 @@ it doesn't:
   binding yet.
 - **OpenAPI ingest is not wired.** All three providers are hand-authored; the loader refuses a
   `[spec]`-backed provider rather than emitting an empty module.
-- **This site does not browse the catalogue yet.** The
-  [provider & operation explorer](/explorer) is not implemented — see that page for what is missing.
+Each of those is recorded per operation in the
+[provider & operation explorer](/explorer), which reads them from the generated catalogue rather
+than from this page — an operation with a defect of its own carries it wherever it appears, and the
+conditions above are shown once, as what they are: catalogue- and provider-wide.
 
 ## Where to read more
 

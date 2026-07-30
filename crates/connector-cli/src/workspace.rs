@@ -32,13 +32,16 @@ pub const CATALOG_DIR: &str = "crates/catalog";
 /// The public site's data directory (C-42), holding the generated `catalog.json`.
 ///
 /// Outside `connectors/` deliberately: that directory holds what a user *installs* into
-/// `~/.flux/flows`, and a JSON document a website fetches is not that. It is a sibling of the site
-/// itself rather than a directory inside it, so the site's own build tooling owns its tree and this
-/// pipeline owns the data — the boundary that keeps a Node build from having to be run before a
-/// Rust one.
-pub const SITE_DIR: &str = "site";
+/// `~/.flux/flows`, and a JSON document a website fetches is not that.
+///
+/// It is VitePress's `public/` directory (C-44), which is served verbatim at the site root — so the
+/// explorer fetches `/flux-connectors/catalog.json` with no copy step and no build plumbing between
+/// the Rust pipeline and the Node one. A sibling directory at the repository root was the original
+/// choice; it meant two top-level directories for one website, and a copy step that could ship a
+/// stale document. This pipeline still owns the file; the site merely reads it.
+pub const SITE_DIR: &str = "web/public";
 
-/// The site's generated catalogue: `site/catalog.json`.
+/// The site's generated catalogue: `web/public/catalog.json`.
 pub const SITE_CATALOG: &str = "catalog.json";
 
 /// A repository root plus the layout convention applied to it.
@@ -119,7 +122,7 @@ impl Workspace {
             .join(format!("{provider}.rs"))
     }
 
-    /// `<root>/site/catalog.json` — the whole catalogue as one JSON document (C-42).
+    /// `<root>/web/public/catalog.json` — the whole catalogue as one JSON document (C-42).
     ///
     /// One file for every provider, not one per provider: a website wants one fetch, and the
     /// explorer's filters are queries across the whole catalogue. The cost is that it is not a
