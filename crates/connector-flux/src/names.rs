@@ -29,13 +29,38 @@ const RESERVED: &[&str] = &["base", "url", "sep", "content_type", "payload", "re
 /// Hands out a unique Flux symbol name for each vendor parameter name, in declaration order.
 pub(crate) struct Symbols {
     taken: BTreeSet<String>,
+    /// An extra veto, consulted like [`taken`](Self::taken). See [`Symbols::guarded`].
+    forbidden: fn(&str) -> bool,
+}
+
+fn nothing_forbidden(_: &str) -> bool {
+    false
 }
 
 impl Symbols {
     /// A fresh allocator, pre-seeded with the emitter's own [`RESERVED`] symbols.
     pub(crate) fn new() -> Self {
         Self {
-            taken: RESERVED.iter().map(|s| s.to_string()).collect(),
+            taken: RESERVED.iter().map(|s| (*s).to_string()).collect(),
+            forbidden: nothing_forbidden,
+        }
+    }
+
+    /// A fresh allocator that additionally refuses any name `forbidden` vetoes.
+    ///
+    /// The operation emitter binds a fixed set of its own symbols and reserves exactly those. The
+    /// graph lowering binds none of them and instead has to dodge **flux's own reserved words**,
+    /// because a graph's symbols are generated from author-chosen node ids and port names.
+    ///
+    /// That veto is a *predicate*, deliberately, so it can be `flux_lang::ast::is_reserved_word`
+    /// itself rather than a list transcribed from flux's parser. A transcribed list is wrong the
+    /// moment flux adds a word — and under flux-lang 0.39, where a local binding is spelled without
+    /// the `$` sigil unless it collides with a keyword, being wrong means emitting a name that
+    /// reads as a statement keyword.
+    pub(crate) fn guarded(forbidden: fn(&str) -> bool) -> Self {
+        Self {
+            taken: BTreeSet::new(),
+            forbidden,
         }
     }
 
@@ -78,10 +103,10 @@ impl Symbols {
             symbol.insert_str(0, "p_");
         }
 
-        if self.taken.contains(&symbol) {
+        if self.is_unavailable(&symbol) {
             let base = symbol.clone();
             let mut n = 2;
-            while self.taken.contains(&symbol) {
+            while self.is_unavailable(&symbol) {
                 symbol = format!("{base}_{n}");
                 n += 1;
             }
@@ -89,6 +114,11 @@ impl Symbols {
 
         self.taken.insert(symbol.clone());
         Ok(symbol)
+    }
+
+    /// Whether `symbol` is already handed out or vetoed by the guard.
+    fn is_unavailable(&self, symbol: &str) -> bool {
+        self.taken.contains(symbol) || (self.forbidden)(symbol)
     }
 }
 
