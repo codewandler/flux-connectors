@@ -23,7 +23,14 @@ use connector_spec::Connector;
 
 /// Every provider this repository ships: C-17's original three, then each connector added
 /// since — `github` (C-52), `openai` (C-51), `slack` (C-53).
-const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce", "github", "openai", "slack"];
+const SHIPPED: &[&str] = &[
+    "zendesk",
+    "freshdesk",
+    "babelforce",
+    "github",
+    "openai",
+    "slack",
+];
 
 /// The repository root, derived from this crate's manifest directory so the test is independent of
 /// the working directory a runner happens to use.
