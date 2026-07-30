@@ -29,6 +29,18 @@ pub const MANIFEST_SUFFIX: &str = "connector.toml";
 /// would not carry — a catalog that compiled here and nowhere else.
 pub const CATALOG_DIR: &str = "crates/catalog";
 
+/// The public site's data directory (C-42), holding the generated `catalog.json`.
+///
+/// Outside `connectors/` deliberately: that directory holds what a user *installs* into
+/// `~/.flux/flows`, and a JSON document a website fetches is not that. It is a sibling of the site
+/// itself rather than a directory inside it, so the site's own build tooling owns its tree and this
+/// pipeline owns the data — the boundary that keeps a Node build from having to be run before a
+/// Rust one.
+pub const SITE_DIR: &str = "site";
+
+/// The site's generated catalogue: `site/catalog.json`.
+pub const SITE_CATALOG: &str = "catalog.json";
+
 /// A repository root plus the layout convention applied to it.
 #[derive(Debug, Clone)]
 pub struct Workspace {
@@ -105,6 +117,16 @@ impl Workspace {
             .join("src")
             .join("generated")
             .join(format!("{provider}.rs"))
+    }
+
+    /// `<root>/site/catalog.json` — the whole catalogue as one JSON document (C-42).
+    ///
+    /// One file for every provider, not one per provider: a website wants one fetch, and the
+    /// explorer's filters are queries across the whole catalogue. The cost is that it is not a
+    /// function of a `--provider` run, which is why [`crate::pipeline::plan`] emits it only for a
+    /// full build. See [`crate::site`].
+    pub fn site_catalog_path(&self) -> PathBuf {
+        self.root.join(SITE_DIR).join(SITE_CATALOG)
     }
 
     /// `path` relative to the root when it is below it, for stable, machine-independent output.

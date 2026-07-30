@@ -9,7 +9,12 @@
 //! providers/<name>.toml ──┐
 //!                         ├─► seam::load ─► Connector ─► seam::emit ─► connectors/<name>.flux
 //! specs/<name>/<ver>.json ┘                                           connectors/<name>.connector.toml
+//!                                                                     crates/catalog/…      (C-38)
+//!                                                                     site/catalog.json     (C-42)
 //! ```
+//!
+//! Four backends, one IR. [`catalog`] renders the Rust one and [`site`] the JSON one; both read the
+//! *same* per-operation Flux, emitted once, so no two of them can describe different requests.
 //!
 //! [`discovery`] finds the inputs, [`seam`] compiles them, [`pipeline`] compares the result against
 //! the committed tree, and only then does [`artifact`] write. `diff` stops one step earlier and
@@ -32,6 +37,8 @@ pub mod discovery;
 pub mod net;
 pub mod pipeline;
 pub mod seam;
+pub mod site;
+pub mod status;
 pub mod workspace;
 
 use std::io::Write;
