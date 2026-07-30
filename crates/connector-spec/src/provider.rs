@@ -33,8 +33,8 @@
 //! is `connector-cli`'s job — see the crate docs.
 
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
+use crate::lock::sha256_hex;
 use crate::{
     AuthMethod, AuthRequirement, AuthScheme, Connector, Idempotency, JsonSchema, Operation, Param,
     ParamSet, Provenance, Quirks, Risk,
@@ -297,17 +297,6 @@ fn assemble(file: ProviderFile, source: &str) -> LoadedProvider {
         spec,
         patch: file.patch,
     }
-}
-
-/// Lowercase hex SHA-256, the form `connectors.lock` records.
-fn sha256_hex(bytes: &[u8]) -> String {
-    use std::fmt::Write as _;
-
-    let mut hex = String::with_capacity(64);
-    for byte in Sha256::digest(bytes) {
-        let _ = write!(hex, "{byte:02x}");
-    }
-    hex
 }
 
 /// Everything wrong with the file, in the order an author would read it: the connector itself, then
