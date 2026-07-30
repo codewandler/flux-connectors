@@ -3040,6 +3040,530 @@
       ]
     },
     {
+      "id": "google",
+      "authority": null,
+      "vendor": "Google Workspace",
+      "description": "Google Workspace: read and send Gmail messages, read and create Calendar events, read and rename Drive files",
+      "base_url": "https://www.googleapis.com",
+      "api_version": null,
+      "hosts": [
+        "gmail.googleapis.com",
+        "www.googleapis.com"
+      ],
+      "services": [
+        {
+          "name": "gmail",
+          "description": "Gmail: read a message, send a message, list a mailbox's labels",
+          "base_url": "https://gmail.googleapis.com",
+          "hosts": [
+            "gmail.googleapis.com"
+          ],
+          "api_version": "v1",
+          "gid": null,
+          "operation_count": 3
+        },
+        {
+          "name": "calendar",
+          "description": "Google Calendar: read a calendar and its events, create an event",
+          "base_url": "https://www.googleapis.com",
+          "hosts": [
+            "www.googleapis.com"
+          ],
+          "api_version": "v3",
+          "gid": null,
+          "operation_count": 3
+        },
+        {
+          "name": "drive",
+          "description": "Google Drive: read and rename a file's metadata",
+          "base_url": "https://www.googleapis.com",
+          "hosts": [
+            "www.googleapis.com"
+          ],
+          "api_version": "v3",
+          "gid": null,
+          "operation_count": 2
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "google.access_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "Google OAuth2 access token sent as a bearer; short-lived, and refreshed by the host rather than by generated Flux",
+            "env": [
+              "GOOGLE_ACCESS_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "google.access_token"
+          ]
+        ]
+      },
+      "operation_count": 8,
+      "operations": [
+        {
+          "id": "google-gmail-message-get",
+          "provider": "google",
+          "service": "gmail",
+          "description": "Get one Gmail message by id, in Gmail's default `full` format: headers plus the parsed MIME structure, whose body parts are base64url-encoded. Needs the `gmail.readonly` scope (or `gmail.modify`)",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/gmail/v1/users/{userId}/messages/{id}",
+          "parameters": [
+            {
+              "name": "user_id",
+              "in": "path",
+              "wire": "userId",
+              "description": "The mailbox to read: the literal `me` for the token's own mailbox, or the user's email address. `me` is what a flow should use — an address here must be one the token is authorized for, and domain-wide delegation is the only way that happens",
+              "required": true,
+              "schema": {
+                "minLength": 2,
+                "pattern": "^(me|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "message_id",
+              "in": "path",
+              "wire": "id",
+              "description": "The message's id, the hex string Gmail's own listings and its `X-GM-MSGID` header report. It is not the RFC 2822 `Message-ID`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "google.access_token"
+            ]
+          ],
+          "hosts": [
+            "gmail.googleapis.com"
+          ],
+          "flux": "op google-gmail-message-get(user_id: String, message_id: String) -> Any\n  description \"Get one Gmail message by id, in Gmail's default `full` format: headers plus the parsed MIME structure, whose body parts are base64url-encoded. Needs the `gmail.readonly` scope (or `gmail.modify`). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://gmail.googleapis.com\"\n  $url = fmt(\"{base}/gmail/v1/users/{user_id}/messages/{message_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "google-gmail-message-send",
+          "provider": "google",
+          "service": "gmail",
+          "description": "Send a Gmail message, supplied as a complete base64url-encoded RFC 2822 message. It is delivered immediately from the token owner's mailbox and cannot be recalled. Needs the `gmail.send` scope",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/gmail/v1/users/{userId}/messages/send",
+          "parameters": [
+            {
+              "name": "user_id",
+              "in": "path",
+              "wire": "userId",
+              "description": "The sending mailbox: the literal `me` for the token's own mailbox, or an email address the token is authorized to send as",
+              "required": true,
+              "schema": {
+                "minLength": 2,
+                "pattern": "^(me|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "raw",
+              "in": "body",
+              "wire": null,
+              "description": "The complete RFC 2822 message, base64url-encoded (`-` and `_` rather than `+` and `/`). Must include at least a `To` header and a body",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+={0,2}$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "google.access_token"
+            ]
+          ],
+          "hosts": [
+            "gmail.googleapis.com"
+          ],
+          "flux": "op google-gmail-message-send(user_id: String, raw: String) -> Any\n  description \"Send a Gmail message, supplied as a complete base64url-encoded RFC 2822 message. It is delivered immediately from the token owner's mailbox and cannot be recalled. Needs the `gmail.send` scope. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://gmail.googleapis.com\"\n  $url = fmt(\"{base}/gmail/v1/users/{user_id}/messages/send\")\n  $content_type = \"application/json\"\n  $payload = { raw: $raw }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "google-gmail-labels-list",
+          "provider": "google",
+          "service": "gmail",
+          "description": "List every label in a mailbox — the system labels (`INBOX`, `SENT`, `SPAM`) and the user's own — as `{\"labels\": [...]}`. Needs the `gmail.readonly` scope (or `gmail.labels`)",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/gmail/v1/users/{userId}/labels",
+          "parameters": [
+            {
+              "name": "user_id",
+              "in": "path",
+              "wire": "userId",
+              "description": "The mailbox whose labels to list: the literal `me` for the token's own mailbox, or an authorized email address",
+              "required": true,
+              "schema": {
+                "minLength": 2,
+                "pattern": "^(me|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "google.access_token"
+            ]
+          ],
+          "hosts": [
+            "gmail.googleapis.com"
+          ],
+          "flux": "op google-gmail-labels-list(user_id: String) -> Any\n  description \"List every label in a mailbox — the system labels (`INBOX`, `SENT`, `SPAM`) and the user's own — as `{\\\"labels\\\": [...]}`. Needs the `gmail.readonly` scope (or `gmail.labels`). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://gmail.googleapis.com\"\n  $url = fmt(\"{base}/gmail/v1/users/{user_id}/labels\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "google-calendar-event-get",
+          "provider": "google",
+          "service": "calendar",
+          "description": "Get one calendar event: its summary, start and end, organizer, attendee list and status. Needs the `calendar.events.readonly` scope (or `calendar.readonly`)",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/calendar/v3/calendars/{calendarId}/events/{eventId}",
+          "parameters": [
+            {
+              "name": "calendar_id",
+              "in": "path",
+              "wire": "calendarId",
+              "description": "The calendar the event is on: the literal `primary` for the token owner's own calendar, or a calendar address such as `team@group.calendar.google.com`",
+              "required": true,
+              "schema": {
+                "minLength": 3,
+                "pattern": "^(primary|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "event_id",
+              "in": "path",
+              "wire": "eventId",
+              "description": "The event's id, as Calendar's own listings report it. A recurring event's single instance carries a `_`-suffixed id (`abc123_20260130T090000Z`)",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "google.access_token"
+            ]
+          ],
+          "hosts": [
+            "www.googleapis.com"
+          ],
+          "flux": "op google-calendar-event-get(calendar_id: String, event_id: String) -> Any\n  description \"Get one calendar event: its summary, start and end, organizer, attendee list and status. Needs the `calendar.events.readonly` scope (or `calendar.readonly`). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://www.googleapis.com\"\n  $url = fmt(\"{base}/calendar/v3/calendars/{calendar_id}/events/{event_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "google-calendar-event-insert",
+          "provider": "google",
+          "service": "calendar",
+          "description": "Create a timed event on a calendar. No attendees can be declared yet, so nobody is invited and no notification is sent; invite people in Calendar afterwards. Needs the `calendar.events` scope",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/calendar/v3/calendars/{calendarId}/events",
+          "parameters": [
+            {
+              "name": "calendar_id",
+              "in": "path",
+              "wire": "calendarId",
+              "description": "The calendar to create the event on: the literal `primary` for the token owner's own calendar, or a calendar address the token can write to",
+              "required": true,
+              "schema": {
+                "minLength": 3,
+                "pattern": "^(primary|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "summary",
+              "in": "body",
+              "wire": null,
+              "description": "The event's title, as it appears in the calendar grid",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "start_time",
+              "in": "body",
+              "wire": "start.dateTime",
+              "description": "When the event starts, RFC 3339 **with a UTC offset** — `2026-01-30T09:00:00+01:00` or `2026-01-30T08:00:00Z`. An offset-less value is rejected, because the `timeZone` field that would resolve it is not declarable yet",
+              "required": true,
+              "schema": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            {
+              "name": "end_time",
+              "in": "body",
+              "wire": "end.dateTime",
+              "description": "When the event ends, RFC 3339 with a UTC offset. Must be after `start_time`; Calendar rejects an end that precedes its start",
+              "required": true,
+              "schema": {
+                "format": "date-time",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "google.access_token"
+            ]
+          ],
+          "hosts": [
+            "www.googleapis.com"
+          ],
+          "flux": "op google-calendar-event-insert(calendar_id: String, summary: String, start_time: String, end_time: String) -> Any\n  description \"Create a timed event on a calendar. No attendees can be declared yet, so nobody is invited and no notification is sent; invite people in Calendar afterwards. Needs the `calendar.events` scope. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://www.googleapis.com\"\n  $url = fmt(\"{base}/calendar/v3/calendars/{calendar_id}/events\")\n  $content_type = \"application/json\"\n  $payload = { end: { dateTime: $end_time }, start: { dateTime: $start_time }, summary: $summary }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "google-calendar-calendar-get",
+          "provider": "google",
+          "service": "calendar",
+          "description": "Get one calendar's own metadata — its summary, description, location and time zone. This is the calendar, not its events: use `google-calendar-event-get` for one of those. Needs the `calendar.readonly` scope",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/calendar/v3/calendars/{calendarId}",
+          "parameters": [
+            {
+              "name": "calendar_id",
+              "in": "path",
+              "wire": "calendarId",
+              "description": "The calendar to read: the literal `primary` for the token owner's own calendar, or a calendar address",
+              "required": true,
+              "schema": {
+                "minLength": 3,
+                "pattern": "^(primary|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "google.access_token"
+            ]
+          ],
+          "hosts": [
+            "www.googleapis.com"
+          ],
+          "flux": "op google-calendar-calendar-get(calendar_id: String) -> Any\n  description \"Get one calendar's own metadata — its summary, description, location and time zone. This is the calendar, not its events: use `google-calendar-event-get` for one of those. Needs the `calendar.readonly` scope. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://www.googleapis.com\"\n  $url = fmt(\"{base}/calendar/v3/calendars/{calendar_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "google-drive-file-get",
+          "provider": "google",
+          "service": "drive",
+          "description": "Get one Drive file's metadata — its id, name and MIME type. This never returns file content: downloading needs `alt=media`, which is a query parameter and therefore unavailable (C-30). Needs the `drive.metadata.readonly` scope (or `drive.readonly`)",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/drive/v3/files/{fileId}",
+          "parameters": [
+            {
+              "name": "file_id",
+              "in": "path",
+              "wire": "fileId",
+              "description": "The file's id — the base64url-ish string in its Drive URL after `/d/`. A folder is a file too, with the folder MIME type",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "google.access_token"
+            ]
+          ],
+          "hosts": [
+            "www.googleapis.com"
+          ],
+          "flux": "op google-drive-file-get(file_id: String) -> Any\n  description \"Get one Drive file's metadata — its id, name and MIME type. This never returns file content: downloading needs `alt=media`, which is a query parameter and therefore unavailable (C-30). Needs the `drive.metadata.readonly` scope (or `drive.readonly`). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://www.googleapis.com\"\n  $url = fmt(\"{base}/drive/v3/files/{file_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "google-drive-file-update",
+          "provider": "google",
+          "service": "drive",
+          "description": "Rename a Drive file: sets its name and changes nothing else. It does not move, share, trash or replace the file's content. Needs the `drive.file` scope for files this token created, or `drive` for any other",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "PATCH",
+          "path": "/drive/v3/files/{fileId}",
+          "parameters": [
+            {
+              "name": "file_id",
+              "in": "path",
+              "wire": "fileId",
+              "description": "The file to rename",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "name",
+              "in": "body",
+              "wire": null,
+              "description": "The file's new name. Drive does not require names to be unique within a folder, so this can collide with a sibling",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "google.access_token"
+            ]
+          ],
+          "hosts": [
+            "www.googleapis.com"
+          ],
+          "flux": "op google-drive-file-update(file_id: String, name: String) -> Any\n  description \"Rename a Drive file: sets its name and changes nothing else. It does not move, share, trash or replace the file's content. Needs the `drive.file` scope for files this token created, or `drive` for any other. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://www.googleapis.com\"\n  $url = fmt(\"{base}/drive/v3/files/{file_id}\")\n  $content_type = \"application/json\"\n  $payload = { name: $name }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PATCH\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "hubspot",
       "authority": null,
       "vendor": "HubSpot",

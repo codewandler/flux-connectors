@@ -90,7 +90,16 @@ pub struct ProviderEntry {
     base_url: String,
     /// The vendor's API version, as the default for this provider's services. `null` when unstated.
     api_version: Option<String>,
-    /// The hosts this connector reaches, as the base URL spells them.
+    /// Every host this connector reaches, as its base URLs spell them: the union of its services'
+    /// (C-49), in declaration order and deduplicated.
+    ///
+    /// The union rather than `base_url`'s own host, because a multi-service provider reaches a host
+    /// per service — Google's Gmail is on `gmail.googleapis.com` while its Calendar and Drive are on
+    /// `www.googleapis.com` — and a list built from the connector-level value alone would tell a
+    /// reader this provider never calls a host it calls on three of its eight operations. Widening
+    /// happens the other way and is what must not: a *service's* [`ServiceEntry::hosts`] stays its own
+    /// and is never the union, because that one is an egress claim rather than a description.
+    /// Identical to the old value for a single-surface provider, whose union is its one host.
     hosts: Vec<String>,
     /// The provider's API surfaces (C-49). Always at least one: a provider with a single surface
     /// publishes the reserved `default` service, so a consumer can group by service unconditionally
@@ -252,8 +261,6 @@ pub fn provider_entry(
     connector: &Connector,
     renderings: &[OperationRendering],
 ) -> Result<ProviderEntry> {
-    let host = catalog::host_of(&connector.base_url)?.to_string();
-
     let mut operations = Vec::with_capacity(renderings.len());
     for rendering in renderings {
         let operation = connector.operation(&rendering.id).ok_or_else(|| {
@@ -270,8 +277,15 @@ pub fn provider_entry(
     }
 
     let mut services = Vec::new();
+    // The provider's own host list is assembled here rather than from `connector.base_url`, so that it
+    // is the union of what its services reach — see [`ProviderEntry::hosts`].
+    let mut hosts: Vec<String> = Vec::new();
     for name in connector.service_names() {
         let base_url = connector.base_url_of(name);
+        let host = catalog::host_of(base_url)?.to_string();
+        if !hosts.contains(&host) {
+            hosts.push(host);
+        }
         services.push(ServiceEntry {
             name: name.to_owned(),
             description: connector
@@ -279,6 +293,8 @@ pub fn provider_entry(
                 .map(|service| service.description.clone())
                 .unwrap_or_default(),
             base_url: base_url.to_owned(),
+            // This one is the service's own and is deliberately *not* the union above: it is an
+            // egress claim about one installable unit.
             hosts: vec![catalog::host_of(base_url)?.to_string()],
             api_version: connector.api_version_of(name).map(str::to_owned),
             gid: connector.gid_of(name).map(|gid| gid.to_string()),
@@ -293,7 +309,7 @@ pub fn provider_entry(
         description: connector.description.clone(),
         base_url: connector.base_url.clone(),
         api_version: connector.api_version.clone(),
-        hosts: vec![host],
+        hosts,
         services,
         auth: provider_auth(connector),
         operation_count: operations.len(),
@@ -624,6 +640,65 @@ mod tests {
             document["providers"][0]["operations"][0]["hosts"],
             json!(["{tenant}.acme.example"])
         );
+    }
+
+    /// **A provider's published host list is the union of its services'** (C-49), while each service's
+    /// stays its own.
+    ///
+    /// Google is the shipped case: Gmail on `gmail.googleapis.com`, Calendar and Drive on
+    /// `www.googleapis.com`. Publishing only the connector-level host would tell a reader the provider
+    /// never calls a host three of its operations call, and publishing the union *per service* would
+    /// widen an egress claim — so the two fields differ on purpose and both directions are asserted
+    /// here.
+    #[test]
+    fn a_multi_service_provider_publishes_the_union_of_its_services_hosts() {
+        let mut connector = connector();
+        connector.base_url = "https://www.acme.example".to_string();
+        connector.services = vec![
+            connector_spec::Service {
+                name: "mail".to_string(),
+                description: "Mail.".to_string(),
+                base_url: Some("https://mail.acme.example".to_string()),
+                api_version: Some("v1".to_string()),
+            },
+            connector_spec::Service {
+                name: "calendar".to_string(),
+                description: "Calendar.".to_string(),
+                base_url: None,
+                api_version: Some("v3".to_string()),
+            },
+        ];
+        connector.operations[0].service = "mail".to_string();
+
+        let entry = provider_entry(&connector, &renderings()).expect("the connector describes");
+        let document = serde_json::to_value(&entry).expect("the entry serializes");
+
+        assert_eq!(
+            document["hosts"],
+            json!(["mail.acme.example", "www.acme.example"]),
+            "the provider must publish every host it reaches, in service declaration order"
+        );
+        assert_eq!(
+            document["services"][0]["hosts"],
+            json!(["mail.acme.example"])
+        );
+        assert_eq!(
+            document["services"][1]["hosts"],
+            json!(["www.acme.example"])
+        );
+        assert_eq!(
+            document["operations"][0]["hosts"],
+            json!(["mail.acme.example"]),
+            "an operation reaches its own service's host"
+        );
+    }
+
+    /// And a single-surface provider publishes exactly the one host it always did — the union of one.
+    #[test]
+    fn a_single_service_provider_publishes_exactly_its_own_host() {
+        let entry = provider_entry(&connector(), &renderings()).expect("the connector describes");
+        let document = serde_json::to_value(&entry).expect("the entry serializes");
+        assert_eq!(document["hosts"], json!(["{tenant}.acme.example"]));
     }
 
     #[test]

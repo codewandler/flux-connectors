@@ -224,25 +224,36 @@ fn every_generated_catalog_module_matches_its_provider() {
 /// The story settles this explicitly: `connectors/<name>.flux` is unchanged in role, and it is what
 /// a user installs. This is the assertion that keeps a later refactor from quietly making the
 /// per-operation files the real artifact and the module a summary of them.
+///
+/// **The module is the one belonging to the operation's own service** (C-49). The catalog's unit is
+/// the provider — one `ops/<provider>/` directory, one generated table — while the installable unit is
+/// the service, so a multi-service provider's renderings are spread across `<provider>-<service>.flux`
+/// files. Checking a rendering against *any* of the provider's modules would be weaker in the way that
+/// matters: an operation emitted into the wrong service's module would still be found.
 #[test]
 fn every_rendering_is_the_text_the_shipped_module_carries() {
+    let workspace = Workspace::new(repo_root());
+
     for provider in shipped() {
         let provider = provider.as_str();
-        let module_path = repo_root()
-            .join("connectors")
-            .join(format!("{provider}.flux"));
-        let module = std::fs::read_to_string(&module_path)
-            .unwrap_or_else(|error| panic!("cannot read {}: {error}", rel(&module_path)));
+        let connector = load(provider);
 
-        for name in committed_renderings(provider) {
-            let path = ops_dir(provider).join(&name);
+        for operation in &connector.operations {
+            let path = ops_dir(provider).join(format!("{}.flux", operation.id));
             let rendering = std::fs::read_to_string(&path)
                 .unwrap_or_else(|error| panic!("cannot read {}: {error}", rel(&path)));
+
+            let module_path = workspace.service_module_path(provider, &operation.service);
+            let module = std::fs::read_to_string(&module_path)
+                .unwrap_or_else(|error| panic!("cannot read {}: {error}", rel(&module_path)));
+
             assert!(
                 module.contains(&rendering),
-                "{} is not the declaration connectors/{provider}.flux carries — the module that \
-                 ships and the catalog have diverged",
-                rel(&path)
+                "{} is not the declaration {} carries — the module that ships and the catalog have \
+                 diverged, or `{}` was emitted into another service's module",
+                rel(&path),
+                rel(&module_path),
+                operation.id
             );
         }
     }
