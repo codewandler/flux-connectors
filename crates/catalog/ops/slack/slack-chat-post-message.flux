@@ -5,9 +5,9 @@ op slack-chat-post-message(channel: String, text: String, thread_ts: String) -> 
   effects ["network"]
   expose true
 
-  $base = "https://slack.com"
-  $url = fmt("{base}/api/chat.postMessage")
-  $content_type = "application/json"
-  $payload = { channel: $channel, text: $text, thread_ts: $thread_ts }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://slack.com"
+  url = fmt("{base}/api/chat.postMessage")
+  content_type = "application/json"
+  payload = { channel: $channel, text, thread_ts }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

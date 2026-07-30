@@ -5,9 +5,9 @@ op asana-task-update(task_gid: String, completed: Bool) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://app.asana.com"
-  $url = fmt("{base}/api/1.0/tasks/{task_gid}")
-  $content_type = "application/json"
-  $payload = { data: { completed: $completed } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "PUT", url: $url })
-  return $response
+  base = "https://app.asana.com"
+  url = fmt("{base}/api/1.0/tasks/{task_gid}")
+  content_type = "application/json"
+  payload = { data: { completed } }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
+  return response

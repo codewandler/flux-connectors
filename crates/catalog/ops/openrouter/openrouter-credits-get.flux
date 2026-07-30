@@ -5,7 +5,7 @@ op openrouter-credits-get -> Any
   effects ["network"]
   expose true
 
-  $base = "https://openrouter.ai"
-  $url = fmt("{base}/api/v1/credits")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://openrouter.ai"
+  url = fmt("{base}/api/v1/credits")
+  response = http.request(method: "GET", url)
+  return response

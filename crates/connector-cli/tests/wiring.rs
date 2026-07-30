@@ -83,11 +83,14 @@ fn build_emits_the_operations_a_provider_declares() {
         r#"risk "low""#,
         r#"idempotency "idempotent""#,
         "expose true",
-        r#"$base = "https://api.acme.example""#,
-        r#"$url = fmt("{base}/v2/tickets/{ticket_id}")"#,
+        r#"base = "https://api.acme.example""#,
+        r#"url = fmt("{base}/v2/tickets/{ticket_id}")"#,
+        // `$include` keeps its sigil where the bare locals above lost theirs: flux-lang 0.39 elides
+        // `$` only where the name cannot collide, and `include` is a keyword. Asserting the sigil
+        // here pins that rule rather than the general spelling.
         "when $include",
-        r#"$response = http.request({ method: "GET", url: $url })"#,
-        "return $response",
+        r#"response = http.request(method: "GET", url)"#,
+        "return response",
     ] {
         assert!(
             module.contains(expected),

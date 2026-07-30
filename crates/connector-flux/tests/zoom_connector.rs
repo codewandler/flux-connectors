@@ -234,8 +234,8 @@ fn the_meeting_settings_object_is_declared_through_wire_paths() {
          and not more"
     );
 
-    // The emitted half. `$payload = { …, settings: { waiting_room: $waiting_room }, … }` is what a
-    // nested body looks like; a flattened one would bind `$payload = { …, waiting_room: …, … }`,
+    // The emitted half. `payload = { …, settings: { waiting_room: $waiting_room }, … }` is what a
+    // nested body looks like; a flattened one would bind `payload = { …, waiting_room: …, … }`,
     // which parses, analyzes and is canonical, so nothing but this assertion would fail.
     let create = connector
         .operations
@@ -245,7 +245,7 @@ fn the_meeting_settings_object_is_declared_through_wire_paths() {
     let emitted = emit_operation(&connector, create)
         .unwrap_or_else(|error| panic!("`{}` does not emit: {error}", create.id));
     assert!(
-        emitted.contains(&format!("{SETTINGS}: {{ {SETTING_FIELD}: $")),
+        emitted.contains(&format!("{SETTINGS}: {{ {SETTING_FIELD}")),
         "`{}` does not nest `{SETTING_FIELD}` inside `{SETTINGS}`:\n{emitted}",
         create.id
     );
@@ -316,16 +316,16 @@ fn no_zoom_operation_declares_a_query_parameter() {
 
 /// The same claim over the **emitted text**, which is what flux actually loads.
 ///
-/// **Every `$url = ` line is checked, not just the first, and that is the substance of this test.**
+/// **Every `url = ` line is checked, not just the first, and that is the substance of this test.**
 /// The emitter binds `$url` once for the path and the required query parameters, then re-binds it once
-/// more per *optional* query parameter inside a `when` guard, with the `?` on a separate `$sep`
+/// more per *optional* query parameter inside a `when` guard, with the `?` on a separate `sep`
 /// binding — `connectors/zendesk.flux` shows the shape:
 ///
 /// ```flux
-/// $url = fmt("{base}/api/v2/tickets/{ticket_id}/comments.json")
-/// $sep = "?"
+/// url = fmt("{base}/api/v2/tickets/{ticket_id}/comments.json")
+/// sep = "?"
 /// when $page
-///   $url = fmt("{url}{sep}page={page}")
+///   url = fmt("{url}{sep}page={page}")
 /// ```
 ///
 /// So inspecting only the first binding would pass while an operation quietly appended optional
@@ -341,7 +341,7 @@ fn no_zoom_module_assembles_a_query_string() {
         let url_lines: Vec<&str> = emitted
             .lines()
             .map(str::trim_start)
-            .filter(|line| line.starts_with("$url = "))
+            .filter(|line| line.starts_with("url = "))
             .collect();
         assert_eq!(
             url_lines.len(),
@@ -359,8 +359,8 @@ fn no_zoom_module_assembles_a_query_string() {
             );
         }
         assert!(
-            !emitted.contains("$sep"),
-            "`{}` emits the `$sep` query separator, which exists only to join query parameters:\n\
+            !emitted.contains("sep = "),
+            "`{}` emits the `sep` query separator, which exists only to join query parameters:\n\
              {emitted}",
             operation.id
         );
@@ -562,7 +562,7 @@ fn every_zoom_request_targets_one_host_and_carries_no_credential() {
         let emitted = emit_operation(&connector, operation)
             .unwrap_or_else(|error| panic!("`{}` does not emit: {error}", operation.id));
         assert!(
-            emitted.contains(&format!(r#"$base = "{BASE_URL}""#)),
+            emitted.contains(&format!(r#"base = "{BASE_URL}""#)),
             "`{}` does not bind the Zoom base URL:\n{emitted}",
             operation.id
         );

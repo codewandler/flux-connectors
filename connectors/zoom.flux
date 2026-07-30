@@ -9,10 +9,10 @@ op zoom-meeting-get(meeting_id: Number) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.zoom.us"
-  $url = fmt("{base}/v2/meetings/{meeting_id}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.zoom.us"
+  url = fmt("{base}/v2/meetings/{meeting_id}")
+  response = http.request(method: "GET", url)
+  return response
 
 op zoom-meeting-create(user_id: String, topic: String, start_time: String, duration: Number, waiting_room: Bool) -> Any
   description "Schedule a one-off meeting for a user at a fixed time. Nobody is invited and nobody is notified — the meeting appears on the host's own Zoom schedule and the returned `join_url` is how anyone else learns of it. The response also carries `start_url`, which starts the meeting as its host for anyone holding it. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body."
@@ -21,13 +21,13 @@ op zoom-meeting-create(user_id: String, topic: String, start_time: String, durat
   effects ["network"]
   expose true
 
-  $base = "https://api.zoom.us"
-  $url = fmt("{base}/v2/users/{user_id}/meetings")
-  $content_type = "application/json"
-  $type = 2
-  $payload = { duration: $duration, settings: { waiting_room: $waiting_room }, start_time: $start_time, topic: $topic, type: $type }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.zoom.us"
+  url = fmt("{base}/v2/users/{user_id}/meetings")
+  content_type = "application/json"
+  type = 2
+  payload = { duration, settings: { waiting_room }, start_time, topic, type }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response
 
 op zoom-meeting-delete(meeting_id: Number) -> Any
   description "Cancel a meeting. It is gone — Zoom offers no undelete, and the meeting id, its join URL and any registrations go with it. Whether Zoom emails the host or the registrants about the cancellation is left to Zoom's own default; this operation cannot ask for either. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body."
@@ -36,10 +36,10 @@ op zoom-meeting-delete(meeting_id: Number) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.zoom.us"
-  $url = fmt("{base}/v2/meetings/{meeting_id}")
-  $response = http.request({ method: "DELETE", url: $url })
-  return $response
+  base = "https://api.zoom.us"
+  url = fmt("{base}/v2/meetings/{meeting_id}")
+  response = http.request(method: "DELETE", url)
+  return response
 
 op zoom-user-get(user_id: String) -> Any
   description "Get one user — their id, email, name, timezone, licence type and personal meeting id. This is how `me` is resolved to the id a meeting is created under. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body."
@@ -48,7 +48,7 @@ op zoom-user-get(user_id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.zoom.us"
-  $url = fmt("{base}/v2/users/{user_id}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.zoom.us"
+  url = fmt("{base}/v2/users/{user_id}")
+  response = http.request(method: "GET", url)
+  return response

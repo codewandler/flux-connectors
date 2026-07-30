@@ -5,7 +5,7 @@ op google-gmail-labels-list(user_id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://gmail.googleapis.com"
-  $url = fmt("{base}/gmail/v1/users/{user_id}/labels")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://gmail.googleapis.com"
+  url = fmt("{base}/gmail/v1/users/{user_id}/labels")
+  response = http.request(method: "GET", url)
+  return response

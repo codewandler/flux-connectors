@@ -5,9 +5,9 @@ op jira-issue-transition(issue_key: String, transition_id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://{site}.atlassian.net"
-  $url = fmt("{base}/rest/api/2/issue/{issue_key}/transitions")
-  $content_type = "application/json"
-  $payload = { transition: { id: $transition_id } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://{site}.atlassian.net"
+  url = fmt("{base}/rest/api/2/issue/{issue_key}/transitions")
+  content_type = "application/json"
+  payload = { transition: { id: transition_id } }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

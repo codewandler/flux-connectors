@@ -247,7 +247,7 @@ fn every_request_targets_api_openai_com_and_nothing_wider() {
     for operation in &connector.operations {
         let emitted = emit_operation(&connector, operation).expect("openai operations emit");
         assert!(
-            emitted.contains(&format!(r#"$base = "{BASE_URL}""#)),
+            emitted.contains(&format!(r#"base = "{BASE_URL}""#)),
             "`{}` does not bind the OpenAI base URL:\n{emitted}",
             operation.id
         );

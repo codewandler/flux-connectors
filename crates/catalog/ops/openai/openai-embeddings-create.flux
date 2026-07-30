@@ -5,9 +5,9 @@ op openai-embeddings-create(model: String, input: Any) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.openai.com"
-  $url = fmt("{base}/v1/embeddings")
-  $content_type = "application/json"
-  $payload = { input: $input, model: $model }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.openai.com"
+  url = fmt("{base}/v1/embeddings")
+  content_type = "application/json"
+  payload = { input, model }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

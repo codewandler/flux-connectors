@@ -10,10 +10,10 @@ op google-calendar-event-get(calendar_id: String, event_id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://www.googleapis.com"
-  $url = fmt("{base}/calendar/v3/calendars/{calendar_id}/events/{event_id}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://www.googleapis.com"
+  url = fmt("{base}/calendar/v3/calendars/{calendar_id}/events/{event_id}")
+  response = http.request(method: "GET", url)
+  return response
 
 op google-calendar-event-insert(calendar_id: String, summary: String, start_time: String, end_time: String) -> Any
   description "Create a timed event on a calendar. No attendees can be declared yet, so nobody is invited and no notification is sent; invite people in Calendar afterwards. Needs the `calendar.events` scope. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body."
@@ -22,12 +22,12 @@ op google-calendar-event-insert(calendar_id: String, summary: String, start_time
   effects ["network"]
   expose true
 
-  $base = "https://www.googleapis.com"
-  $url = fmt("{base}/calendar/v3/calendars/{calendar_id}/events")
-  $content_type = "application/json"
-  $payload = { end: { dateTime: $end_time }, start: { dateTime: $start_time }, summary: $summary }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://www.googleapis.com"
+  url = fmt("{base}/calendar/v3/calendars/{calendar_id}/events")
+  content_type = "application/json"
+  payload = { end: { dateTime: end_time }, start: { dateTime: start_time }, summary }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response
 
 op google-calendar-calendar-get(calendar_id: String) -> Any
   description "Get one calendar's own metadata — its summary, description, location and time zone. This is the calendar, not its events: use `google-calendar-event-get` for one of those. Needs the `calendar.readonly` scope. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body."
@@ -36,7 +36,7 @@ op google-calendar-calendar-get(calendar_id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://www.googleapis.com"
-  $url = fmt("{base}/calendar/v3/calendars/{calendar_id}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://www.googleapis.com"
+  url = fmt("{base}/calendar/v3/calendars/{calendar_id}")
+  response = http.request(method: "GET", url)
+  return response

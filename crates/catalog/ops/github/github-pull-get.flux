@@ -5,7 +5,7 @@ op github-pull-get(owner: String, repo: String, pull_number: Number) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.github.com"
-  $url = fmt("{base}/repos/{owner}/{repo}/pulls/{pull_number}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.github.com"
+  url = fmt("{base}/repos/{owner}/{repo}/pulls/{pull_number}")
+  response = http.request(method: "GET", url)
+  return response

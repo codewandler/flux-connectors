@@ -5,9 +5,9 @@ op google-gmail-message-send(user_id: String, raw: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://gmail.googleapis.com"
-  $url = fmt("{base}/gmail/v1/users/{user_id}/messages/send")
-  $content_type = "application/json"
-  $payload = { raw: $raw }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://gmail.googleapis.com"
+  url = fmt("{base}/gmail/v1/users/{user_id}/messages/send")
+  content_type = "application/json"
+  payload = { raw }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

@@ -5,9 +5,9 @@ op freshdesk-ticket-create(phone: String, name: String, requester_id: Number, su
   effects ["network"]
   expose true
 
-  $base = "https://{domain}/api/v2"
-  $url = fmt("{base}/tickets")
-  $content_type = "application/json"
-  $payload = { cc_emails: $cc_emails, custom_fields: $custom_fields, description: $description, email_config_id: $email_config_id, group_id: $group_id, name: $name, phone: $phone, priority: $priority, product_id: $product_id, requester_id: $requester_id, responder_id: $responder_id, source: $source, status: $status, subject: $subject, tags: $tags, type: $type }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://{domain}/api/v2"
+  url = fmt("{base}/tickets")
+  content_type = "application/json"
+  payload = { cc_emails, custom_fields, description, email_config_id, group_id, name, phone, priority, product_id, requester_id, responder_id, source, status, subject, tags, type }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

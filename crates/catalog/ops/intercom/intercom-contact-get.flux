@@ -5,7 +5,7 @@ op intercom-contact-get(contact_id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.intercom.io"
-  $url = fmt("{base}/contacts/{contact_id}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.intercom.io"
+  url = fmt("{base}/contacts/{contact_id}")
+  response = http.request(method: "GET", url)
+  return response

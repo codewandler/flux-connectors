@@ -5,7 +5,7 @@ op shopify-order-get(order_id: Number) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://{shop}.myshopify.com"
-  $url = fmt("{base}/admin/api/2024-10/orders/{order_id}.json")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://{shop}.myshopify.com"
+  url = fmt("{base}/admin/api/2024-10/orders/{order_id}.json")
+  response = http.request(method: "GET", url)
+  return response

@@ -62,19 +62,19 @@ const ISSUE_UPDATE: &str = "sentry-issue-update";
 const URLS: &[(&str, &str)] = &[
     (
         "sentry-issue-get",
-        r#"$url = fmt("{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/")"#,
+        r#"url = fmt("{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/")"#,
     ),
     (
         ISSUE_UPDATE,
-        r#"$url = fmt("{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/")"#,
+        r#"url = fmt("{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/")"#,
     ),
     (
         "sentry-project-get",
-        r#"$url = fmt("{base}/api/0/projects/{organization_id_or_slug}/{project_id_or_slug}/")"#,
+        r#"url = fmt("{base}/api/0/projects/{organization_id_or_slug}/{project_id_or_slug}/")"#,
     ),
     (
         "sentry-issue-event-latest",
-        r#"$url = fmt("{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/events/latest/")"#,
+        r#"url = fmt("{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/events/latest/")"#,
     ),
 ];
 
@@ -204,7 +204,7 @@ fn the_emitted_url_of_every_operation_is_pinned_including_its_trailing_slash() {
         let url_lines: Vec<&str> = emitted
             .lines()
             .map(str::trim_start)
-            .filter(|line| line.starts_with("$url = "))
+            .filter(|line| line.starts_with("url = "))
             .collect();
         assert_eq!(
             url_lines,
@@ -270,16 +270,16 @@ fn no_sentry_operation_declares_a_query_parameter() {
 
 /// The same claim over the **emitted text**, which is what flux actually loads.
 ///
-/// **Every `$url = ` line is checked, not just the first, and so is the `$sep` binding.** The emitter
+/// **Every `url = ` line is checked, not just the first, and so is the `sep` binding.** The emitter
 /// binds `$url` once for the path and the required query parameters, then re-binds it once more per
-/// *optional* query parameter inside a `when` guard, with the `?` on a separate `$sep` binding —
+/// *optional* query parameter inside a `when` guard, with the `?` on a separate `sep` binding —
 /// `connectors/zendesk.flux` shows the shape:
 ///
 /// ```flux
-/// $url = fmt("{base}/api/v2/tickets/{ticket_id}/comments.json")
-/// $sep = "?"
+/// url = fmt("{base}/api/v2/tickets/{ticket_id}/comments.json")
+/// sep = "?"
 /// when $page
-///   $url = fmt("{url}{sep}page={page}")
+///   url = fmt("{url}{sep}page={page}")
 /// ```
 ///
 /// So inspecting only the first binding would pass while an operation quietly appended optional
@@ -294,7 +294,7 @@ fn no_sentry_module_assembles_a_query_string() {
         let url_lines: Vec<&str> = emitted
             .lines()
             .map(str::trim_start)
-            .filter(|line| line.starts_with("$url = "))
+            .filter(|line| line.starts_with("url = "))
             .collect();
         assert_eq!(
             url_lines.len(),
@@ -312,8 +312,8 @@ fn no_sentry_module_assembles_a_query_string() {
             );
         }
         assert!(
-            !emitted.contains("$sep"),
-            "`{}` emits the `$sep` query separator, which exists only to join query parameters:\n\
+            !emitted.contains("sep = "),
+            "`{}` emits the `sep` query separator, which exists only to join query parameters:\n\
              {emitted}",
             operation.id
         );
@@ -505,7 +505,7 @@ fn every_sentry_request_targets_one_host_and_carries_no_credential() {
     for operation in &connector.operations {
         let emitted = emit(&connector, &operation.id);
         assert!(
-            emitted.contains(&format!(r#"$base = "{BASE_URL}""#)),
+            emitted.contains(&format!(r#"base = "{BASE_URL}""#)),
             "`{}` does not bind the Sentry base URL:\n{emitted}",
             operation.id
         );

@@ -157,7 +157,7 @@ fn create_has_only_the_required_nested_image_and_other_writes_are_bodyless() {
     assert_eq!(image.schema["type"], "string");
     assert_eq!(image.schema["minLength"], 1);
     let emitted = emit_operation(&connector, create).expect("create emits");
-    assert!(emitted.contains("$payload = { config: { image: $image } }"));
+    assert!(emitted.contains("payload = { config: { image } }"));
 
     for operation in connector.operations.iter().filter(|operation| {
         matches!(

@@ -5,7 +5,7 @@ op babelforce-call-get(id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://services.babelforce.com"
-  $url = fmt("{base}/api/v2/calls/{id}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://services.babelforce.com"
+  url = fmt("{base}/api/v2/calls/{id}")
+  response = http.request(method: "GET", url)
+  return response

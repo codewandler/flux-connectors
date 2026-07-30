@@ -105,6 +105,13 @@ _A connector's operations are currently legible only by reading `providers/<name
 - [C-109 — Ship the Twilio connector](C-109-provider-twilio.md) · Spec · third basic-join vendor, and the one whose username half is an account identifier rather than an email — so it tests whether the config model generalises past the zendesk/jira shape
 - [C-110 — Ship the Linear connector — or record why a GraphQL vendor cannot be one](C-110-provider-linear.md) · Spec · GraphQL-only. The pipeline is REST-shaped; this either proves it stretches or produces a documented refusal. Either outcome is worth more than another REST connector
 
+### Tool Pack
+- [C-113 — The connector Tool pack — the flux interop layer (epic)](C-113-tool-pack-epic.md) · Bridge · EPIC — flux REMOVED flux-plugin-zendesk pending 'a flux-connectors interop layer'; D-200/D-201/D-202 are blocked on this and examples/zendesk.triage.flux is the written acceptance target. A Tool pack delegates to flux's own http.request, so flux keeps every byte of egress
+- [C-114 — The connector-pack crate and the ToolSpec projection](C-114-tool-spec-projection.md) · Bridge · the foundation the rest of the epic builds on — a catalogue entry becomes a flux ToolSpec, dotted name and all
+- [C-115 — Request construction, delegation to http.request, and the mirrored network gate](C-115-request-delegation.md) · Bridge · SAFETY — delegating to HttpRequestTool::execute bypasses Executor::dispatch, so a Tool that fails to declare its own permission_subjects is an un-gated hole through the host's network policy
+- [C-116 — The CredentialStore port, in-Rust auth assembly, and redaction](C-116-credential-store-port.md) · Bridge · finally wires C-90's Layout/CredentialRef to a consumer — and removes the $auth seam from milestone 1's critical path, because a Tool builds `Bearer <token>` itself
+- [C-117 — Generate the pack from the IR and hold it to the drift gate](C-117-pack-codegen.md) · Codegen · two surfaces from one IR can disagree about the same operation — the differential test is the honest guard, and it belongs here rather than in a later postmortem
+
 ### unified auth — one model for every provider's credentials
 _Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._
 - [C-47 — Design a db.open seam so connectors can reach databases](C-47-db-open-seam.md) · Bridge · the $auth argument applied to a second transport · unblocks mysql-class connectors
@@ -146,6 +153,9 @@ _A connector today compiles a vendor spec into **outbound** ops: flux calls Zend
 ### rendered provider documentation
 _A connector's operations are currently legible only by reading `providers/<name>.toml` or the_
 - [C-33 — Treat generated docs as a checked artifact](C-33-docs-are-a-checked-artifact.md) · Build
+
+### Tool Pack
+- [C-118 — A connector-backed flux-channels adapter](C-118-connector-channel-adapter.md) · Bridge · the second surface — flux's channel dispatch is a closed match with one arm per vendor, and its slack arm hand-builds a chat.postMessage this repo already compiles. Blocked on C-83's binding codegen
 
 ### unified auth — one model for every provider's credentials
 _Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._

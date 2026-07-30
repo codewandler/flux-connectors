@@ -171,19 +171,19 @@ fn no_intercom_operation_declares_a_query_parameter() {
 /// The same claim over the **emitted text**, which is what flux actually loads — so an emitter that
 /// synthesised a query parameter from somewhere other than `params.query` could not slip past.
 ///
-/// **Every `$url = ` line is checked, not just the first, and that is the substance of this test.**
+/// **Every `url = ` line is checked, not just the first, and that is the substance of this test.**
 /// The emitter binds `$url` once for the path and required query parameters, then re-binds it once
 /// more per *optional* query parameter inside a `when` guard (`op.rs`, the `optional` loop);
 /// `connectors/zendesk.flux` shows the shape:
 ///
 /// ```flux
-/// $url = fmt("{base}/api/v2/tickets/{ticket_id}/comments.json")
-/// $sep = "?"
+/// url = fmt("{base}/api/v2/tickets/{ticket_id}/comments.json")
+/// sep = "?"
 /// when $page
-///   $url = fmt("{url}{sep}page={page}")
+///   url = fmt("{url}{sep}page={page}")
 /// ```
 ///
-/// The `?` lives on `$sep` and the parameter name lands on a *later* `$url` line than the first, so
+/// The `?` lives on `sep` and the parameter name lands on a *later* `$url` line than the first, so
 /// inspecting only the first binding would pass while an operation quietly appended optional filters.
 #[test]
 fn no_intercom_module_assembles_a_query_string() {
@@ -196,7 +196,7 @@ fn no_intercom_module_assembles_a_query_string() {
         let url_lines: Vec<&str> = emitted
             .lines()
             .map(str::trim_start)
-            .filter(|line| line.starts_with("$url = "))
+            .filter(|line| line.starts_with("url = "))
             .collect();
         assert!(
             !url_lines.is_empty(),
@@ -219,13 +219,13 @@ fn no_intercom_module_assembles_a_query_string() {
                 operation.id
             );
         }
-        // `$sep` exists only to carry the `?`/`&` between query parameters, so an operation that
+        // `sep` exists only to carry the `?`/`&` between query parameters, so an operation that
         // binds it is building a query string even if no single line spells the `?`.
         assert!(
             !emitted
                 .lines()
-                .any(|line| line.trim_start().starts_with("$sep = ")),
-            "`{}` binds $sep, which the emitter emits only to separate query parameters:\n{emitted}",
+                .any(|line| line.trim_start().starts_with("sep = ")),
+            "`{}` binds `sep`, which the emitter emits only to separate query parameters:\n{emitted}",
             operation.id
         );
     }

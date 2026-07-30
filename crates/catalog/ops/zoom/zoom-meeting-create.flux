@@ -5,10 +5,10 @@ op zoom-meeting-create(user_id: String, topic: String, start_time: String, durat
   effects ["network"]
   expose true
 
-  $base = "https://api.zoom.us"
-  $url = fmt("{base}/v2/users/{user_id}/meetings")
-  $content_type = "application/json"
-  $type = 2
-  $payload = { duration: $duration, settings: { waiting_room: $waiting_room }, start_time: $start_time, topic: $topic, type: $type }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.zoom.us"
+  url = fmt("{base}/v2/users/{user_id}/meetings")
+  content_type = "application/json"
+  type = 2
+  payload = { duration, settings: { waiting_room }, start_time, topic, type }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

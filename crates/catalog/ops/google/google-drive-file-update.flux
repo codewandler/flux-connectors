@@ -5,9 +5,9 @@ op google-drive-file-update(file_id: String, name: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://www.googleapis.com"
-  $url = fmt("{base}/drive/v3/files/{file_id}")
-  $content_type = "application/json"
-  $payload = { name: $name }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "PATCH", url: $url })
-  return $response
+  base = "https://www.googleapis.com"
+  url = fmt("{base}/drive/v3/files/{file_id}")
+  content_type = "application/json"
+  payload = { name }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PATCH", url)
+  return response

@@ -9,10 +9,10 @@ op shopify-order-get(order_id: Number) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://{shop}.myshopify.com"
-  $url = fmt("{base}/admin/api/2024-10/orders/{order_id}.json")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://{shop}.myshopify.com"
+  url = fmt("{base}/admin/api/2024-10/orders/{order_id}.json")
+  response = http.request(method: "GET", url)
+  return response
 
 op shopify-product-get(product_id: Number) -> Any
   description "Get one product by id, with its title, description, status, vendor, options, variants and images. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body."
@@ -21,10 +21,10 @@ op shopify-product-get(product_id: Number) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://{shop}.myshopify.com"
-  $url = fmt("{base}/admin/api/2024-10/products/{product_id}.json")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://{shop}.myshopify.com"
+  url = fmt("{base}/admin/api/2024-10/products/{product_id}.json")
+  response = http.request(method: "GET", url)
+  return response
 
 op shopify-product-update(product_id: Number, title: String) -> Any
   description "Rename a product. The new title is live on the public storefront as soon as this returns, on every sales channel the product is published to. Shopify applies only the fields sent, so nothing else about the product changes. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body."
@@ -33,12 +33,12 @@ op shopify-product-update(product_id: Number, title: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://{shop}.myshopify.com"
-  $url = fmt("{base}/admin/api/2024-10/products/{product_id}.json")
-  $content_type = "application/json"
-  $payload = { product: { title: $title } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "PUT", url: $url })
-  return $response
+  base = "https://{shop}.myshopify.com"
+  url = fmt("{base}/admin/api/2024-10/products/{product_id}.json")
+  content_type = "application/json"
+  payload = { product: { title } }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
+  return response
 
 op shopify-customer-get(customer_id: Number) -> Any
   description "Get one customer by id: name, email, phone, default address, marketing consent state and order count. This is personal data about a named individual — read it only when the task needs it, and do not repeat it further than the task requires. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body."
@@ -47,10 +47,10 @@ op shopify-customer-get(customer_id: Number) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://{shop}.myshopify.com"
-  $url = fmt("{base}/admin/api/2024-10/customers/{customer_id}.json")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://{shop}.myshopify.com"
+  url = fmt("{base}/admin/api/2024-10/customers/{customer_id}.json")
+  response = http.request(method: "GET", url)
+  return response
 
 op shopify-inventory-level-list(location_id: Number) -> Any
   description "List the inventory levels held at one location — the available quantity per inventory item. Returns the first page only, so a location stocking more items than one page holds is reported incompletely. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body."
@@ -59,7 +59,7 @@ op shopify-inventory-level-list(location_id: Number) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://{shop}.myshopify.com"
-  $url = fmt("{base}/admin/api/2024-10/locations/{location_id}/inventory_levels.json")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://{shop}.myshopify.com"
+  url = fmt("{base}/admin/api/2024-10/locations/{location_id}/inventory_levels.json")
+  response = http.request(method: "GET", url)
+  return response

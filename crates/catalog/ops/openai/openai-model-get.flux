@@ -5,7 +5,7 @@ op openai-model-get(model: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.openai.com"
-  $url = fmt("{base}/v1/models/{model}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.openai.com"
+  url = fmt("{base}/v1/models/{model}")
+  response = http.request(method: "GET", url)
+  return response

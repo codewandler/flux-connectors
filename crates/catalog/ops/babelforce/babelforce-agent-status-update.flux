@@ -5,9 +5,9 @@ op babelforce-agent-status-update(id: String, enabled: Bool, presence_name: Stri
   effects ["network"]
   expose true
 
-  $base = "https://services.babelforce.com"
-  $url = fmt("{base}/api/v2/agents/{id}/status")
-  $content_type = "application/json"
-  $payload = { enabled: $enabled, presence: { name: $presence_name } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "PUT", url: $url })
-  return $response
+  base = "https://services.babelforce.com"
+  url = fmt("{base}/api/v2/agents/{id}/status")
+  content_type = "application/json"
+  payload = { enabled, presence: { name: presence_name } }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
+  return response

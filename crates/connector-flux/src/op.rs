@@ -1067,7 +1067,7 @@ mod tests {
         let emitted = emit_operation(&connector("https://api.example.com/", op.clone()), &op)
             .expect("a bare GET is inside the slice");
         assert!(
-            emitted.contains(r#"$base = "https://api.example.com""#),
+            emitted.contains(r#"base = "https://api.example.com""#),
             "{emitted}"
         );
     }
@@ -1095,7 +1095,7 @@ mod tests {
 
         let emitted = emit_operation(&connector, &op).expect("a bare GET is inside the slice");
         assert!(
-            emitted.contains(r#"$base = "https://gmail.googleapis.com""#),
+            emitted.contains(r#"base = "https://gmail.googleapis.com""#),
             "the op must request its own service's host, trailing slash trimmed:\n{emitted}"
         );
         assert!(
