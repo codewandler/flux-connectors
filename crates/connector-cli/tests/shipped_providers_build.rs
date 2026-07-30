@@ -245,6 +245,58 @@ fn slack_sends_its_arguments_in_the_body_and_nothing_in_the_url() {
     );
 }
 
+/// **Intercom's egress host is exactly `api.intercom.io`, and its credential never leaves the
+/// manifest as anything but a name** (C-73).
+///
+/// Two claims that the IR-level test in `crates/connector-flux/tests/intercom_connector.rs` cannot
+/// make, because both are properties of what the *pipeline* derives rather than of what the provider
+/// file declares:
+///
+/// - `http_hosts` is derived from `base_url` by `catalog::host_of` and is published to consumers in
+///   `web/public/catalog.json`. A widened entry — a second host, or a `*` — would enlarge the egress
+///   allow-list of every operation at once, and nothing else in the tree would notice. Intercom's
+///   regional hosts (`api.eu.intercom.io`, `api.au.intercom.io`) are exactly the tempting second
+///   entry, and `providers/intercom.toml` records why they are a separate connector instead.
+/// - **The generated module names no credential at all.** Not the value, which does not exist in this
+///   repository, and not even the environment variable: the bearer is applied by the host at the
+///   `$auth` seam (`docs/designs/auth-seam.md`), so `INTERCOM_ACCESS_TOKEN` belongs in the manifest's
+///   credential *reference* and must never appear in Flux a model can read. Asserting the name is
+///   present in the manifest is what keeps the absence check from passing vacuously.
+#[test]
+fn intercom_publishes_one_host_and_no_credential_in_its_module() {
+    const TOKEN_ENV: &str = "INTERCOM_ACCESS_TOKEN";
+
+    let connector = load("intercom");
+    let module = planned("intercom", "intercom.flux");
+    let manifest = planned("intercom", "intercom.connector.toml");
+
+    assert_eq!(
+        connector.base_url, "https://api.intercom.io",
+        "the base URL is what the host is derived from, so widening it widens the allow-list"
+    );
+    assert!(
+        module.contains(r#"$base = "https://api.intercom.io""#),
+        "every Intercom request must address `api.intercom.io`:\n{module}"
+    );
+    assert!(
+        !module.contains('*') && !manifest.contains('*'),
+        "no Intercom artifact may carry a wildcard host:\n{module}\n{manifest}"
+    );
+
+    assert!(
+        !module.contains(TOKEN_ENV) && !module.contains("access_token"),
+        "connectors/intercom.flux names a credential; the bearer is applied by the host at the \
+         `$auth` seam and generated Flux must name nothing:\n{module}"
+    );
+    assert!(
+        connector
+            .auth_method("intercom.access_token")
+            .is_some_and(|method| method.env == [TOKEN_ENV]),
+        "the connector must reference `{TOKEN_ENV}` by name, or the absence check above passes \
+         vacuously"
+    );
+}
+
 /// **No test hand-maintains the shipped-provider set** (C-54). The set lives in `providers/`, and
 /// every per-provider gate derives it from that directory; a constant repeating it is a second
 /// source of truth that nothing keeps in step.

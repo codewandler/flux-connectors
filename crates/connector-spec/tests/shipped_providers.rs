@@ -104,6 +104,11 @@ fn operation_selection_stays_curated() {
         // `providers/openai.toml`.
         ("openai", 4),
         ("slack", 4),
+        // C-73 curates 5: contact get and create, conversation get and reply, contact note. The cut
+        // is the same query-encoding gap — every listing endpoint pages with an opaque
+        // `starting_after` cursor — plus C-56, which is why every declared body field is required.
+        // See the header comment in `providers/intercom.toml`.
+        ("intercom", 5),
         // C-74 curates 5 of the Admin REST API, all addressed by an integer id in the path. The cut
         // is the query-encoding gap again — every Shopify collection endpoint filters on merchant
         // text or pages with an opaque `page_info` cursor — plus C-56 for the body of the one write.

@@ -12,6 +12,14 @@ handful of patches — and the build emits a `<name>.flux` module of typed `op` 
 `<name>.connector.toml` manifest. [flux](../../flux) loads the module from `~/.flux/flows` and every
 `op` becomes a first-class operation, exposed to the model as an LLM tool.
 
+A connector describes **both call directions**. Outbound is the operations flux invokes. Inbound is the
+events the vendor sends *us* — a ticket updated, a call ended, a payment settled — declared in the same
+provider TOML, with the signature scheme that authenticates them compiled rather than hand-written, and
+the subscription that registers them emitted as an ordinary op. An integration that only knows how to
+make calls is an API client; the reverse direction is the half real automations are built on. See
+[designs/inbound-events.md](designs/inbound-events.md). Note what this does *not* change: inbound is
+still **compiled, not hosted** — no endpoint, no relay, no daemon (see the non-goals below).
+
 The defining idea is **one abstraction level up from a plugin**. Integrating Zendesk into flux today
 means writing a stdio plugin — a large hand-written artifact for roughly seven operations.
 (The specific `plugins/zendesk/src/main.rs` this originally cited turned out to be uncommitted

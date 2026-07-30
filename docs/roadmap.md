@@ -40,6 +40,34 @@ the host and never present in any artifact. Design:
 `zendesk.ticket.show` and `anthropic.messages.create` among its ops and calls one successfully
 against the live API.
 
+### Inbound events — the reverse call direction
+
+A connector today compiles **outbound** ops: flux calls the vendor. The other half is the vendor calling
+**us** — a ticket updated, a call ended, a payment settled — and without it every connector-driven
+automation has to poll, which is slower, costs quota, and cannot express "react when this happens." This
+epic adds a declared `[inbound]` section: transport, verification, event identity, payload schemas, plus
+generated subscription ops and a polling fallback for vendors with no webhook at all. Design:
+[designs/inbound-events.md](designs/inbound-events.md).
+
+Two findings shape it. First, **verification is a declarable matrix, not per-vendor code**: GitHub,
+Stripe, Slack and Zendesk look bespoke but vary only over digest, encoding, the signed-string template,
+and a tolerance window — one parameterized HMAC, which is what lets it be compiled rather than
+interpreted. It is also the same request-dependent problem [C-50](stories/C-50-aws-services.md) hit from
+the outbound side with SigV4, so one notion should cover signing and verifying rather than two.
+
+Second, **inbound emits nothing into the `.flux` module.** flux lifts `op` declarations only from
+`~/.flux/flows`, while `channel` and `trigger` are Program members an operator declares — so events land
+in the manifest and the catalogue, and the emitter must refuse to dress an event up as a pollable op.
+What crosses into flux is *parameters*, not code, and the blocking cross-repo fact is that flux's
+`channel webhook` authenticates with an optional **static bearer token** and has **no signature path at
+all** — so a vendor that signs but cannot send an `Authorization` header currently has no authenticated
+route in. That seam is designed as [C-64](stories/C-64-design-verified-webhook-seam.md) and handed off as
+paste-ready flux stories, following the C-16 precedent.
+
+**Done looks like:** a real GitHub delivery and a real timestamped delivery (Stripe or Slack) verified and
+routed to distinct triggers on a live flux — and a tampered body plus a stale timestamp each rejected with
+**zero** deliveries, demonstrated rather than asserted.
+
 ### Unified auth
 
 Every connector differs from its neighbours mostly in **how it authenticates**. Endpoints are
