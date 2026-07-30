@@ -1,7 +1,7 @@
 # Design: a public docs site with a provider & operation explorer
 
-**Status:** proposed — **awaiting approval before stories are created** · **Pillar:** Surfaces ·
-**Stories:** none yet
+**Status:** accepted — **option A (VitePress)** · **Pillar:** Surfaces ·
+**Stories:** C-42 … C-45
 
 ## Why
 
@@ -134,8 +134,8 @@ existing gate, so a broken site fails CI rather than silently publishing.
 - An operation that does not currently work says so, prominently, wherever it appears.
 - The site build is part of the gate, so it cannot silently break.
 
-## Decision needed before stories
+## Decision taken
 
-**Framework: A (VitePress, Vue throughout — recommended), B (Docusaurus + React), or C (Docusaurus +
-Vue island).** The epic's story breakdown differs materially between them, which is why this doc
-stops here.
+**Option A — VitePress.** Docusaurus is React and the explorer is to be Vue; VitePress is the
+Vue-native equivalent, so the site avoids shipping two SPA frameworks to render 25 operations, and
+the docs half needs nothing Docusaurus offers that VitePress lacks.

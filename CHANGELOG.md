@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **C-43** — a VitePress site under `web/` and a GitHub Actions workflow deploying it to GitHub
+  Pages. The landing page carries the README's *Known limits* verbatim: a docs site that oversells is
+  worse than none. CI builds the site on push and PR, so a broken site cannot publish.
+
 ## [0.0.1] — 2026-07-30
 
 ### Added

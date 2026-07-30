@@ -51,7 +51,6 @@ _A connector's operations are currently legible only by reading `providers/<name
 ### a public docs site with a provider & operation explorer
 _`codewandler/flux-connectors` is public as of v0.0.1, and right now the only way to find out what a_
 - [C-42 — Emit catalog.json for the public site](C-42-catalog-json.md) · Codegen · the site's data must be generated, never hand-maintained
-- [C-43 — Scaffold the VitePress site and deploy to GitHub Pages](C-43-vitepress-pages.md) · Surfaces · first Node toolchain in a Rust repo — keep it contained
 - [C-45 — Render Flux to SVG and PNG using flux's own highlighter](C-45-use-flux-highlighter.md) · Codegen · replaces a regex script that duplicates grammar flux already owns
 
 ### unified auth — one model for every provider's credentials
@@ -108,6 +107,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-27 — Wire the CLI seams to the loader and the emitter](C-27-wire-cli-seams.md) · Build · two functions · mechanical once C-3 and C-8 land
 - [C-28 — Resolve percent-encoding for query values](C-28-query-percent-encoding.md) · Codegen · blocks zendesk ticket search · flux has no urlencode op at all
 - [C-38 — Render Flux per operation and embed it in a catalog crate](C-38-operation-catalog-crate.md) · Build · **the goal** · one .flux per expanded op, consumable as a Rust crate
+- [C-43 — Scaffold the VitePress site and deploy to GitHub Pages](C-43-vitepress-pages.md) · Surfaces · first Node toolchain in a Rust repo — keep it contained
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->
