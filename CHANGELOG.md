@@ -14,12 +14,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **C-52** — the **GitHub** connector: repository, issue and pull-request reads plus issue creation
   and commenting, addressed entirely by path parameters. Both writes are `risk = "high"`: a created
   issue or comment is world-visible and attributed to the token owner.
-- Both connectors are curated to a **path-and-body surface only**. Every listing and search
+- **C-53** — the **Slack** connector: post a message, read conversation history, look up a user, add
+  a reaction. Every operation is a POST with a JSON body *including the reads*, which is what keeps
+  opaque channel and user ids out of a query string; Slack documents `application/json` for all four.
+- All three connectors are curated to a **path-and-body surface only**. Every listing and search
   operation is deliberately excluded until C-30 lands, because the emitter still emits a string
   query value unencoded — the defect that makes `zendesk-ticket-search` non-functional. A test per
   connector asserts it declares no query parameter of any type.
 
 ### Known gaps found while shipping them
+- **Nothing expresses "the failure is in the body of a 200."** Slack answers `{"ok": false}` with
+  HTTP 200, and `ErrorEnvelope` has no success predicate, so the quirk survives only in each
+  operation's prose description. Cursor pagination is unexpressible for a POST+JSON API for the same
+  reason: `Pagination::Cursor` defines its cursor as a *query* parameter.
 - A **constant, non-credential request header cannot be declared** at all: there is no `headers`
   table, and `connector-flux`'s `constant()` filter applies to the body chain only, so a
   `const`-pinned header emits as a caller-overridable argument. GitHub's

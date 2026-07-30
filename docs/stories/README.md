@@ -36,11 +36,14 @@ _Every credential problem in this repo has the same shape: **the caller must not
 
 ### Connectors v1 — spec to Flux
 _Prove the whole thesis on two real providers, end to end against a live flux._
-- [C-53 — Ship the Slack connector](C-53-provider-slack.md) · Spec · bearer · POST+JSON throughout, which is what avoids the query gap
 - [C-49 — Model a provider's services as the middle addressing level](C-49-provider-services.md) · Spec · provider → service → operations · one service per operation · unset means `default`
+- [C-54 — Derive the shipped-provider lists instead of hand-maintaining seven of them](C-54-derive-shipped-lists.md) · Build · caused a REWORK in the C-51/52/53 wave; five lists and two counts in four crates
 - [C-37 — Give providers and operations stable global addresses](C-37-global-addressing.md) · Spec · pid / gid / oip · the global half; C-23 stays the local half
+- [C-56 — Omit an optional body field instead of sending an explicit null](C-56-omit-optional-body-fields.md) · Codegen · query params get a `when` guard; body fields do not
 - [C-30 — Refuse query values the emitter cannot encode safely](C-30-refuse-unencodable-query.md) · Codegen · **security** · a model-supplied query value can inject request parameters today
+- [C-55 — Let a provider declare a constant request header](C-55-constant-request-headers.md) · Codegen · GitHub's Accept header is undeclarable today; `const` on a header silently does nothing
 - [C-10 — Emit the $auth marker and the connector manifest](C-10-auth-injection-and-manifest.md) · Codegen · pairs with C-16 · the second generated artifact
+- [C-57 — Let the quirk model describe a success predicate and a body-carried cursor](C-57-quirks-beyond-http-shape.md) · Spec · Slack answers `{"ok": false}` with HTTP 200; its cursor is a body field
 - [C-11 — Prove every generated module parses and analyzes](C-11-parse-and-analyze-gate.md) · Codegen · **load-bearing** · without it invalid Flux can be committed
 - [C-17 — Author provider configs for zendesk, freshdesk and babelforce](C-17-provider-configs.md) · Spec · **the goal** · three configs that compile to executable .flux
 
@@ -110,6 +113,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-48 — Make the root documentation current and audience-specific](C-48-audience-specific-root-docs.md) · Surfaces · README for humans · AGENTS for agents
 - [C-51 — Ship the OpenAI connector](C-51-provider-openai.md) · Spec · bearer · JSON in and out · no query strings
 - [C-52 — Ship the GitHub connector](C-52-provider-github.md) · Spec · bearer · path-and-body surface only · listing ops wait on C-30
+- [C-53 — Ship the Slack connector](C-53-provider-slack.md) · Spec · bearer · POST+JSON throughout, which is what avoids the query gap
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

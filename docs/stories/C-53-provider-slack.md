@@ -2,7 +2,7 @@
 id: C-53
 title: Ship the Slack connector
 pillar: Spec
-status: in-progress
+status: done
 priority: 3
 design: docs/designs/provider-operation-inventory.md
 epic: connectors-v1
