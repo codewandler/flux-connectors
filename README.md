@@ -8,13 +8,15 @@ Compile SaaS API descriptions into typed [Flux-Lang](https://github.com/codewand
 operations, capability manifests, and a queryable Rust catalogue.
 
 > [!WARNING]
-> **v0.2.0 is a compiler and catalogue preview, not a live connector runtime.** The build works end
+> **v0.3.0 is a compiler and catalogue preview, not a live connector runtime.** The build works end
 > to end, but none of the generated providers can authenticate and make a live API call yet. See
 > [Current limitations](#current-limitations).
 
-The repository currently contains 38 curated operations for **Zendesk** (7), **Freshdesk** (9),
-**babelforce** (9), **GitHub** (5), **OpenAI** (4), and **Slack** (4). A full build compiles the six
-provider definitions into 59 committed, reviewable artifacts without contacting a vendor.
+The repository currently contains 88 curated operations across 16 providers — **Zendesk** (7),
+**Freshdesk** (9), **babelforce** (9), **Google Workspace** (8, across three services), **Jira** (6),
+**GitHub** (5), **HubSpot** (5), **Intercom** (5), **Shopify** (5), **Asana** (5), **OpenAI** (4),
+**OpenRouter** (4), **Slack** (4), **Airtable** (4), **Sentry** (4) and **Zoom** (4). A full build
+compiles them into 143 committed, reviewable artifacts without contacting a vendor.
 
 ## Why this exists
 
@@ -58,7 +60,7 @@ cargo run -p connector-cli -- build
 On a clean checkout, `diff` reports:
 
 ```text
-59 artifacts up to date (6 providers checked)
+143 artifacts up to date (16 providers checked)
 ```
 
 Then inspect [`connectors/zendesk.flux`](connectors/zendesk.flux), browse the
@@ -151,7 +153,7 @@ fails closed:
   [docs/designs/query-encoding.md](docs/designs/query-encoding.md).
 - **Base URLs can contain unbound template variables**, such as
   `https://{subdomain}.zendesk.com`; environment binding has not landed.
-- **OpenAPI ingest is not wired.** All six providers are hand-authored. A `[spec]`-backed provider
+- **OpenAPI ingest is not wired.** All 16 providers are hand-authored. A `[spec]`-backed provider
   is rejected rather than compiled into a plausible but empty module.
 - **`check`, `fetch`, and `install` are not implemented.** Their CLI entries fail explicitly and
   point to their owning stories.

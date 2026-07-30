@@ -32,8 +32,8 @@ change to a story's `status`, `priority`, `title`, `epic`, or `note`, run `/trac
 
 ## Current project boundary
 
-**Snapshot: v0.2.0.** `cargo run -p connector-cli -- build` compiles six providers and 38 curated
-operations into 59 artifacts. The compiler, embedded Rust catalogue, JSON catalogue, and public
+**Snapshot: v0.3.0.** `cargo run -p connector-cli -- build` compiles 16 providers and 88 curated
+operations into 143 artifacts. The compiler, embedded Rust catalogue, JSON catalogue, and public
 explorer work. **No generated provider can make a live API call yet.** Read
 [Intentional gaps](#intentional-gaps) before changing code that appears broken.
 
@@ -74,7 +74,7 @@ cargo run -p connector-cli -- build
 cargo run -p connector-cli -- diff
 ```
 
-`diff` must finish with `59 artifacts up to date (6 providers checked)` for the current catalogue.
+`diff` must finish with `143 artifacts up to date (16 providers checked)` for the current catalogue.
 The artifact count may legitimately change when providers or operations change; do not encode it as
 a permanent invariant.
 

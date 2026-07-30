@@ -23,6 +23,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   transitions list and transition. v2 rather than v3 because v3's comment body is Atlassian Document
   Format — an array of block nodes — and `wire` paths address nested records only, so ADF is
   inexpressible rather than merely awkward. Pinned by a test, so a bulk upgrade to v3 fails loudly.
+- **C-69** — the **Google Workspace** connector: `gmail`, `calendar` and `drive` as three services
+  under one provider, each with its own API version and its own host, emitting one installable
+  module-and-manifest pair per service. The first genuinely multi-service connector, and the proof
+  C-49's service level works on a real vendor.
+  - **Fixed, and only a multi-service provider could have exposed it:** the emitter bound the
+    *connector's* base URL rather than the operation's *service* base URL, so a Gmail operation would
+    have requested `www.googleapis.com` while the manifest installed beside it — the value C-10's
+    `http_hosts` allowlist derives from — named `gmail.googleapis.com`. The two halves of one
+    installable unit disagreeing about where traffic goes. Latent because for a single-service
+    provider the two expressions resolve to the same string, which is exactly what C-49's
+    byte-identity requirement asserted.
+  - `catalog.json` now publishes a provider's `hosts` as the union of its services' hosts; before, a
+    multi-service provider omitted a host some of its operations reach.
 - **C-76** — the **OpenRouter** connector: chat completion, models list, model endpoints, credits.
   A transfer of the OpenAI connector's shape, with `max_completion_tokens` required so no
   LLM-callable spend is unbounded — the vendor deprecates `max_tokens`, and a test asserts it is

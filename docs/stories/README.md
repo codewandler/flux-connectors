@@ -36,8 +36,11 @@ _Every credential problem in this repo has the same shape: **the caller must not
 
 ### Connectors v1 — spec to Flux
 _Prove the whole thesis on two real providers, end to end against a live flux._
+- [C-79 — Declare that a response field is a credential](C-79-sensitive-response-fields.md) · Spec · Zoom's start_url carries a host-privileged token · the redactor cannot see it
+- [C-80 — Let a connector declare more than one error shape](C-80-error-envelope-alternatives.md) · Spec · five providers declared pointers that resolve to nothing against the vendor's other shape
 - [C-37 — Give providers and operations stable global addresses](C-37-global-addressing.md) · Spec · pid / gid / oip · the global half; C-23 stays the local half
 - [C-56 — Omit an optional body field instead of sending an explicit null](C-56-omit-optional-body-fields.md) · Codegen · query params get a `when` guard; body fields do not
+- [C-81 — Make the documented provider and artifact counts a checked claim](C-81-declared-counts-are-checked.md) · Build · drifted five times in one session; every agent noticed and none could fix it
 - [C-30 — Refuse query values the emitter cannot encode safely](C-30-refuse-unencodable-query.md) · Codegen · **security** · a model-supplied query value can inject request parameters today
 - [C-55 — Let a provider declare a constant request header](C-55-constant-request-headers.md) · Codegen · GitHub's Accept header is undeclarable today; `const` on a header silently does nothing
 - [C-67 — Declare the scopes an operation requires](C-67-required-scopes.md) · Spec · least privilege, and mechanical 403 diagnosis
@@ -59,9 +62,6 @@ _A connector today compiles a vendor spec into **outbound** ops: flux calls Zend
 _A connector's operations are currently legible only by reading `providers/<name>.toml` or the_
 - [C-31 — Render a provider markdown page from the IR](C-31-render-provider-page.md) · Codegen · also decides the tab dialect — hard to reverse once pages are committed
 - [C-32 — Emit a curl form for each operation](C-32-curl-tab.md) · Codegen
-
-### Provider Fleet
-- [C-69 — Ship the Google Workspace connector](C-69-provider-google.md) · Spec · the multi-service showcase: gmail · calendar · drive under one provider
 
 ### unified auth — one model for every provider's credentials
 _Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._
@@ -134,6 +134,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-52 — Ship the GitHub connector](C-52-provider-github.md) · Spec · bearer · path-and-body surface only · listing ops wait on C-30
 - [C-53 — Ship the Slack connector](C-53-provider-slack.md) · Spec · bearer · POST+JSON throughout, which is what avoids the query gap
 - [C-54 — Derive the shipped-provider lists instead of hand-maintaining seven of them](C-54-derive-shipped-lists.md) · Build · caused a REWORK in the C-51/52/53 wave; five lists and two counts in four crates
+- [C-69 — Ship the Google Workspace connector](C-69-provider-google.md) · Spec · the multi-service showcase: gmail · calendar · drive under one provider
 - [C-70 — Ship the Jira connector](C-70-provider-jira.md) · Spec · basic email+token · tenant URL, like zendesk
 - [C-71 — Ship the Asana connector](C-71-provider-asana.md) · Spec · bearer · every body and response wrapped in `data`
 - [C-72 — Ship the HubSpot connector](C-72-provider-hubspot.md) · Spec · bearer private-app token · `properties` envelope
