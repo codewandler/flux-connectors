@@ -2,7 +2,7 @@
 id: C-45
 title: Render Flux to SVG and PNG using flux's own highlighter
 pillar: Codegen
-status: in-progress
+status: done
 priority:
 design: docs/designs/public-docs.md
 epic: public-docs

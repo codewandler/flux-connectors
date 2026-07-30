@@ -59,4 +59,9 @@ consumer can reference an operation by address rather than by a local symbol.
   (C-35) address by path segments rather than embedding a raw oip in a URL.
 - **Sequencing: lands after C-29.** C-29 is the last blocker on any `.flux` being generated at all;
   this is additive metadata and generation working is worth more.
+- **Read [C-49](C-49-provider-services.md) before starting.** It promotes this design's middle level
+  from anonymous `path` segments to a named `Service` that owns the version and the base URL, so
+  `Operation.path: Vec<String>` and `Connector.api_version` are the fields it reshapes. Landing this
+  story first publishes an address scheme that C-49 then changes — against this story's own stability
+  contract. Either take C-49 first or land the two together.
 - The oip is what C-31's docs pages use as each operation's canonical heading and anchor.
