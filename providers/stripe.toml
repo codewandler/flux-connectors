@@ -1,0 +1,646 @@
+# Stripe API (`/v1`) — hand-authored, no vendor spec vendored.
+#
+# WHY THIS IS NOT A `[spec]` POINTER, even though Stripe publishes the best OpenAPI document of any
+# vendor in this fleet. `stripe/openapi` ships `spec3.json` — a machine-generated OpenAPI 3.0
+# description of the entire API, regenerated on every release, and it is what powers Stripe's own
+# reference site and every official client library. Nothing is vendored under `specs/` because ingest
+# (C-4) and the overlay (C-6) do not exist yet, and the document describes some **450 endpoints**
+# across every product Stripe sells. `vision.md` is explicit that mechanically emitting all 400
+# endpoints of a large spec produces an unusable tool catalog, and Stripe is the vendor that makes
+# that concrete. When C-14's fetch and C-4's ingest land, this file becomes `[spec]` plus a
+# `[[patch.operations]]` selection, and **the eight operations below are the selection to
+# reproduce**, by path and method:
+#
+#   GET    /v1/balance
+#   GET    /v1/customers/{customer}
+#   GET    /v1/charges/{charge}
+#   GET    /v1/payment_intents/{payment_intent}
+#   GET    /v1/refunds/{refund}
+#   POST   /v1/payment_intents/{payment_intent}/capture
+#   POST   /v1/payment_intents/{payment_intent}/cancel
+#   POST   /v1/charges/{charge}/refunds
+#
+# Until then drift is undetectable by machine, exactly as for zendesk, freshdesk, github, openai and
+# slack (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# THE CONSTRAINT THAT SHAPED THE WHOLE SELECTION: STRIPE READS FORM-ENCODED BODIES.
+# ---------------------------------------------------------------------------------------------
+#
+# Stripe's API takes `application/x-www-form-urlencoded` request bodies — that is the first thing its
+# API reference says about how requests are made, and it is why every official library serializes
+# nested parameters as `metadata[order_id]=6735` rather than as JSON. It does not parse a JSON body.
+#
+# This pipeline sends exactly one media type, and it is a constant:
+#
+#   crates/connector-flux/src/op.rs:144   const JSON_MEDIA_TYPE: &str = "application/json";
+#   crates/connector-flux/src/op.rs:553   body.push(bind_string(CONTENT_TYPE, JSON_MEDIA_TYPE));
+#
+# The second line runs unconditionally whenever an operation declares any body, flux registers no form
+# encoder, and there is no spelling of "encode this body as a form" anywhere in the IR — the whole
+# accepted key set is
+#
+#   provider  → id, vendor, base_url, description, auth, default_auth, operations, services, events,
+#               channels, config, graphs, verify, authority, api_version, spec, patch
+#   operation → id, service, method, path, description, risk, idempotency, auth, params,
+#               response_schema, quirks
+#   paramSet  → path, query, header, body, body_schema
+#
+# There is no `content_type`, no `encoding`, no `body_format`. **A Stripe operation that declared a
+# body field would therefore send Stripe a document it does not parse**, and Stripe would answer
+# `400 Missing required param: <field>` — a loud failure rather than a silent one, which is better
+# than zendesk's 200-and-ignore, but still a connector that cannot write.
+#
+# **This gap is not about Stripe.** It will hit every form-encoded vendor — the OAuth2 token endpoints
+# every provider publishes, Twilio, Mailgun, PayPal's classic API, and anything else that predates or
+# ignores JSON. Stripe is merely the first one this repository tried to ship, and it is the vendor
+# that makes the constraint expensive rather than theoretical, because the surface it costs is
+# "create anything". Filed with C-106 as a finding for its own story.
+#
+# So the selection rule for this connector is: **an operation ships only if it addresses everything
+# it needs in the path.** That is a real restriction and it is what excludes, among others:
+#
+# - `POST /v1/customers` and `POST /v1/charges` — creating anything needs a body;
+# - `POST /v1/refunds`, the *current* canonical refund endpoint, whose `charge` /`payment_intent`
+#   selector is a body parameter. The charge-nested `POST /v1/charges/{charge}/refunds` below is the
+#   same operation with its subject in the path, which is why the connector refunds by charge;
+# - every partial amount. A capture and a refund both default to the full amount when `amount` is
+#   omitted, so this connector captures in full and refunds in full, and nothing here can do less.
+#   That is stated on each operation's `description`, because a model must not assume otherwise.
+#
+# `crates/connector-flux/tests/stripe_connector.rs::no_stripe_operation_sends_a_request_body` asserts
+# the absence on the IR *and* on the emitted text, so it stays a property of the connector rather than
+# of this comment. Closing the gap needs a request-encoding axis on the IR plus a form encoder in
+# flux; it is additive rather than a reshape, and it is what unlocks the rest of the Stripe surface.
+#
+# ---------------------------------------------------------------------------------------------
+# WHY THERE IS NOT A SINGLE QUERY PARAMETER, and which Stripe operations are therefore missing.
+#
+# Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim into a
+# `fmt` template and flux registers no URL-encoding op (C-30 is unimplemented). `zendesk-ticket-search`
+# is the standing demonstration and AGENTS.md lists it under *Intentional gaps*.
+#
+# Stripe's collection surface is worse than most for this, because its filters are **bracketed nested
+# keys**: `GET /v1/charges?created[gte]=1700000000&customer=cus_…`, `GET /v1/events?types[]=…`. A `[`
+# is not a query-safe character, so those endpoints cannot be expressed even approximately — and
+# Stripe's `starting_after` cursor is an opaque object id, the same shape as a Slack cursor and just
+# as unencodable. Every `list` endpoint is therefore excluded, and with it every "find the charge for
+# this customer" flow. A caller that has an id can use this connector; a caller that has to search
+# cannot, and that is C-30's to fix.
+#
+# The path surface, by contrast, is genuinely safe rather than merely untested: a Stripe object id is
+# `<prefix>_<base62>` — `ch_3Ov…`, `cus_Q1…`, `pi_3Ov…` — and carries no character that changes the
+# shape of a request. Each path parameter declares that as a `pattern`, which is a contract a model
+# reads and a future validator can check; the emitted Flux does not enforce it.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: the rate limit varies by key mode, and nothing here knows which mode a key is in.
+#
+# Stripe publishes 100 read operations and 100 write operations per second in live mode, and 25 of
+# each in test mode. `Quirks.rate_limit` carries one `requests`/`per_seconds` pair with no way to say
+# "whichever mode this key belongs to", and the *same* connector serves both — the mode is a property
+# of the secret key an operator supplies, which is a value this repository never sees. Declaring the
+# live figure would permit four times the test-mode allowance, and declaring the test figure would
+# throttle every live account to a quarter of its own. So no `rate_limit` is declared and the numbers
+# live in this comment, the same resolution asana's per-tier limit and shopify's leaky bucket reached.
+#
+# SCHEMA GAP, narrower: Stripe's 402 is a *business* outcome, not a transport failure. A declined card
+# answers `402` with `{"error": {"type": "card_error", "code": "card_declined", ...}}`, which is the
+# most important response any of the write operations below can produce and is indistinguishable, to
+# everything in this pipeline, from a 500. `http.request` hands a non-2xx back as data, `ErrorEnvelope`
+# says only *where* the message is, and no success predicate exists (the same gap slack's `ok: false`
+# records). The error envelope is declared anyway so the location is machine-readable for C-12, and
+# each write's `description` states the decline case in prose, which is the text that actually reaches
+# the model.
+
+id = "stripe"
+vendor = "Stripe"
+
+# One host for every account, both key modes and every API version. There is no tenant subdomain, so
+# `base_url` carries no `{placeholder}` for an operator to bind, `status.rs` reports no
+# `unbound-base-url-template` issue, and the connector already has a valid destination URL.
+#
+# `http_hosts` derives from this single value (`crates/connector-cli/src/catalog.rs`, `host_of`) and
+# is therefore exactly `api.stripe.com`, never widened. Stripe's uploads host (`files.stripe.com`),
+# its JS host (`js.stripe.com`) and its dashboard are unreachable from the operations below, and
+# adding one would widen the egress allow-list for nothing.
+base_url = "https://api.stripe.com"
+
+description = "Stripe payments: read a balance, customer, charge, payment intent or refund; capture, cancel and refund a payment"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["stripe.secret_key"] }]
+
+# The "Test connection" button. `GET /v1/balance` takes no parameters at all, so pressing it cannot do
+# anything except prove the key resolves — and it is also the read that tells an operator which mode
+# the key is in, because a test-mode key returns the test balance. A `verify` operation runs unattended
+# whenever someone opens a settings page, so it must be a read; the loader refuses a `high` or
+# `destructive` one.
+verify = "stripe-balance-get"
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "stripe.secret_key"
+scheme = "bearer"
+# The sole outbound secret. Gated and registered with flux's redactor by the host; its value is never
+# read here and never reaches a generated artifact.
+#
+# Stripe's secret key travels as `Authorization: Bearer sk_…`. (Stripe also accepts it in the Basic
+# *username* position with an empty password, which is what `curl -u sk_test_…:` does — that spelling
+# is what freshdesk's credential gap is about, and it is deliberately not used: the bearer form is
+# documented, is what every official library sends, and keeps the whole value inside the secret axis.)
+#
+# A **restricted** key (`rk_…`) presents identically on the wire and is the better credential for this
+# connector: nothing below needs write access to anything but payments. Which key type an operator
+# supplies is configuration rather than connector shape, so it is said in `[[config]]` help rather
+# than modelled here.
+env = ["STRIPE_SECRET_KEY"]
+description = "Stripe secret key sent as a bearer. A live key moves real money; a test key does not. A restricted key limited to Charges, PaymentIntents, Refunds, Customers and Balance is sufficient"
+
+[[auth]]
+name = "stripe.webhook_signing_secret"
+# `signing` — the one scheme that never reaches an outgoing request. It exists so that a webhook
+# secret is a credential like any other and appears in the manifest's credential list, rather than
+# living in a second namespace an operator would have to know about separately.
+#
+# **Declared even though nothing references it**, exactly as `slack.signing_secret` is. The reason is
+# not symmetry: it is that an operator terminating Stripe webhooks needs precisely this value, the
+# credential list is the one place a manifest names everything a connector requires, and the day
+# C-141 makes `Stripe-Signature` expressible the binding will name this credential rather than
+# introduce it. See the `[[events]]` section for why the binding is absent.
+scheme = "signing"
+env = ["STRIPE_WEBHOOK_SIGNING_SECRET"]
+description = "Stripe webhook endpoint signing secret, used to verify inbound events. Never sent to Stripe"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 8 of some 450 endpoints
+#
+# Curated to what a payments support flow executes at runtime: check the account balance, look up the
+# customer, look up the payment they are asking about in either of the two shapes Stripe stores it
+# (`Charge` and `PaymentIntent`), look up a refund — and then the three writes that resolve a support
+# case: take the money, release the hold, give the money back.
+#
+# Everything else is excluded, and the categories are worth naming because they are large: the whole
+# Billing surface (subscriptions, invoices, prices, products), Connect (accounts, transfers, payouts),
+# Issuing, Terminal, Radar, Tax, Identity, Checkout and Payment Links, every `list` endpoint (see the
+# header comment on C-30), and every `create` and `update` (see the header comment on form encoding).
+# `DELETE` is excluded outright: nothing in a support flow needs to destroy a merchant's records.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only, so `op stripe.charges.get` is undeclarable (C-8, C-23). The *path*
+# keeps Stripe's own snake_case resource names, because that is what the vendor routes on.
+#
+# `/v1` is Stripe's only version prefix and has been since the API was published. Stripe versions
+# *behaviour* by date instead, through the `Stripe-Version` header or the account's pinned version —
+# and that header is a **constant** this connector cannot send: `params.header` is documented as
+# "request headers the caller supplies" and a `const`-pinned header emits as a caller-overridable
+# argument with the `const` dropped (C-52's finding, recorded at length in `providers/github.toml`).
+# So every response below is shaped by whatever version the operator's account is pinned to, which is
+# a real incompleteness; C-55 is the story that closes it.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "stripe-balance-get"
+method = "GET"
+path = "/v1/balance"
+description = "Get the account's current balance — what is available to pay out and what is still pending, per currency. Takes no parameters, and reports the balance of whichever mode the key belongs to: a test key returns the test balance"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["object", "available", "pending"]
+properties = { object = { const = "balance" }, livemode = { type = "boolean", description = "False for a test-mode key. The clearest signal available of which mode this connection is in" }, available = { type = "array", description = "Funds available to pay out now, one entry per currency, each `{amount, currency}` with `amount` in the currency's smallest unit", items = { type = "object" } }, pending = { type = "array", description = "Funds not yet available, same shape as `available`", items = { type = "object" } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/code"
+
+# ---------------------------------------------------------------------------------------------
+# The four object reads. Each addresses one object by its id, and every id is a path parameter, which
+# is what makes them expressible at all — see the header comment.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "stripe-customer-get"
+method = "GET"
+path = "/v1/customers/{customer}"
+# Said on the contract a model reads, because `risk` cannot say it: this response is personal data.
+# `Risk` grades what a call *changes*, so it has no axis for what a read *discloses*, and a read of a
+# named individual's email, phone and billing address grades `low` on the same scale as reading a
+# balance. The same gap `providers/shopify.toml` records for its customer read.
+description = "Get one customer by id: name, email, phone, billing address, default payment method and account balance. This is personal data about a named individual — read it only when the task needs it, and do not repeat it further than the task requires. A deleted customer is returned with `deleted: true` and almost no other fields"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "customer"
+description = "The customer's id, `cus_` followed by an opaque identifier — not their email address and not a merchant-side reference"
+required = true
+schema = { type = "string", pattern = "^cus_[A-Za-z0-9]+$", minLength = 5 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "object"]
+properties = { id = { type = "string" }, object = { const = "customer" }, email = { type = "string" }, name = { type = "string" }, currency = { type = "string" }, deleted = { type = "boolean", description = "Present and true only for a deleted customer, which is returned rather than 404'd" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "stripe-charge-get"
+method = "GET"
+path = "/v1/charges/{charge}"
+description = "Get one charge by id: amount, currency, whether it was captured, whether it was refunded and how much of it, the card's last four digits and brand, and the failure or decline reason if it did not succeed. `amount` is in the currency's smallest unit — 1000 is ten dollars, and also ten thousand yen"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "charge"
+description = "The charge's id, `ch_` followed by an opaque identifier. A payment intent id (`pi_…`) does not address this endpoint — read it with `stripe-payment-intent-get` instead"
+required = true
+schema = { type = "string", pattern = "^ch_[A-Za-z0-9]+$", minLength = 4 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "object", "amount", "currency", "status"]
+properties = { id = { type = "string" }, object = { const = "charge" }, amount = { type = "integer", description = "In the currency's smallest unit" }, amount_refunded = { type = "integer", description = "How much of `amount` has already been refunded, in the same unit. A full refund makes this equal `amount`" }, amount_captured = { type = "integer" }, currency = { type = "string", description = "Three-letter ISO code, lowercase" }, captured = { type = "boolean" }, refunded = { type = "boolean" }, status = { type = "string", enum = [
+  "succeeded",
+  "pending",
+  "failed",
+] }, failure_message = { type = "string", description = "Why the charge failed, in prose a human can read. Absent on a successful charge" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "stripe-payment-intent-get"
+method = "GET"
+path = "/v1/payment_intents/{payment_intent}"
+description = "Get one payment intent by id — the modern shape of a payment, covering the whole lifecycle from creation to capture. Its `status` is what says where the payment stands; `requires_capture` means the money is authorized but not yet taken"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "payment_intent"
+description = "The payment intent's id, `pi_` followed by an opaque identifier. The client secret (`pi_…_secret_…`) is a different value and must never be sent here"
+required = true
+schema = { type = "string", pattern = "^pi_[A-Za-z0-9]+$", minLength = 4 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "object", "amount", "currency", "status"]
+properties = { id = { type = "string" }, object = { const = "payment_intent" }, amount = { type = "integer", description = "In the currency's smallest unit" }, amount_received = { type = "integer" }, currency = { type = "string" }, status = { type = "string", enum = [
+  "requires_payment_method",
+  "requires_confirmation",
+  "requires_action",
+  "processing",
+  "requires_capture",
+  "canceled",
+  "succeeded",
+], description = "`requires_capture` is the state `stripe-payment-intent-capture` acts on; `succeeded` means the money has been taken" }, capture_method = { type = "string", enum = [
+  "automatic",
+  "automatic_async",
+  "manual",
+] }, latest_charge = { type = "string", description = "The id of the charge this intent produced, which is what `stripe-charge-refund-create` refunds" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "stripe-refund-get"
+method = "GET"
+path = "/v1/refunds/{refund}"
+description = "Get one refund by id: its amount, the charge it belongs to, its reason and its status. A refund that reports `pending` has not reached the customer's bank yet, and one that reports `failed` means the money came back — the customer was not paid"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "refund"
+description = "The refund's id, `re_` followed by an opaque identifier"
+required = true
+schema = { type = "string", pattern = "^re_[A-Za-z0-9]+$", minLength = 4 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "object", "amount", "currency", "status"]
+properties = { id = { type = "string" }, object = { const = "refund" }, amount = { type = "integer" }, currency = { type = "string" }, charge = { type = "string" }, reason = { type = "string" }, status = { type = "string", enum = [
+  "pending",
+  "requires_action",
+  "succeeded",
+  "failed",
+  "canceled",
+] } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/code"
+
+# ---------------------------------------------------------------------------------------------
+# The three writes. **This is the part of the connector that moves money, and the metadata below is
+# the whole reason C-106 is a story rather than a template fill.**
+#
+# RISK is graded from what each call does to money and whether it can be taken back, never from the
+# HTTP verb:
+#
+# - `stripe-charge-refund-create` is `destructive` — "deletes or otherwise irreversible". Money leaves
+#   the merchant's account, the customer's bank is told, the Stripe fee on the original charge is not
+#   returned, and Stripe publishes no un-refund. It is the only shipped operation outside a `DELETE`
+#   that earns the tier, and it is graded there so that flux's approval gate stops it in front of a
+#   human every time.
+# - `stripe-payment-intent-capture` is `high`. It turns an authorization into a real charge on a real
+#   card: the customer is billed, their statement changes, and undoing it means the refund above with
+#   the fee already spent. `medium` — "writes with limited blast radius" — would wave that past a
+#   reviewer, which is the failure this field exists to prevent.
+# - `stripe-payment-intent-cancel` is `high`. It moves no money — the authorization is released and
+#   the hold on the customer's card drops off — but it is irreversible in the sense that matters: a
+#   canceled payment intent cannot be revived, and the customer has to pay again through a new one.
+#   It is not `destructive` because nothing was taken and no record is destroyed.
+#
+# IDEMPOTENCY is `conditional` on all three, and that word is earned rather than asserted.
+# `Idempotency::Conditional` is documented as "idempotent only under a condition the caller supplies
+# (e.g. an idempotency key)" — Stripe's idempotency keys are exactly that mechanism: a `POST` carrying
+# `Idempotency-Key: <string>` is replayed from Stripe's cache for 24 hours rather than re-executed, so
+# a retried capture captures once.
+#
+# **The header is declared `required`, which is stricter than Stripe.** Stripe treats the key as
+# optional; this connector does not, because the whole value of `conditional` collapses if the
+# condition is one no caller has to meet. A connector that declared `conditional` and left the key
+# optional would tell flux a retry is sound while permitting the request that makes it unsound —
+# and the cost of that error is a customer charged twice. The cost of this choice is that a caller
+# must generate a key (any unique string, a UUID is the convention) for every write; that is a
+# parameter on the tool contract, which is a price worth paying here and nowhere else.
+#
+# It is also the first `params.header` in the shipped fleet. Every earlier candidate was a *constant*
+# the connector wanted to send (github's `Accept`, openrouter's attribution headers), which
+# `params.header` cannot express because it emits a caller-overridable argument — C-52's finding. An
+# idempotency key is genuinely caller-supplied, so it is the case the field was documented for.
+#
+# One consequence worth stating: nothing here validates the *value*. flux's `http.request` builds a
+# `HeaderValue` from it and errors on a control character, so a key carrying a newline fails the
+# request rather than injecting a header; the `schema` below records Stripe's own 255-character bound
+# for the model, and the emitted Flux does not enforce it.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "stripe-payment-intent-capture"
+method = "POST"
+path = "/v1/payment_intents/{payment_intent}/capture"
+description = "Capture an authorized payment intent, charging the customer the **full** authorized amount. Only a payment intent in `requires_capture` can be captured; a partial capture needs an `amount` this connector cannot send. Stripe answers 402 with an `error.code` such as `card_declined` when the capture is refused, and that arrives as data rather than as a failure"
+risk = "high"
+idempotency = "conditional"
+
+[[operations.params.path]]
+name = "payment_intent"
+description = "The id of the payment intent to capture, `pi_` followed by an opaque identifier. It must be in `requires_capture` — check with `stripe-payment-intent-get` first"
+required = true
+schema = { type = "string", pattern = "^pi_[A-Za-z0-9]+$", minLength = 4 }
+
+[[operations.params.header]]
+name = "idempotency_key"
+wire = "Idempotency-Key"
+description = "A unique string — a UUID is the convention — identifying this capture attempt. Stripe replays the first result for 24 hours rather than capturing again, so a retry with the same key is safe and a retry with a new key charges the customer twice. Generate it once per intent you mean to capture, and reuse it across retries"
+required = true
+schema = { type = "string", minLength = 1, maxLength = 255 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "object", "status"]
+properties = { id = { type = "string" }, object = { const = "payment_intent" }, amount = { type = "integer" }, amount_received = { type = "integer", description = "What was actually taken. Equals `amount` after a full capture" }, currency = { type = "string" }, status = { type = "string", description = "`succeeded` after a successful capture" }, latest_charge = { type = "string" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "stripe-payment-intent-cancel"
+method = "POST"
+path = "/v1/payment_intents/{payment_intent}/cancel"
+description = "Cancel a payment intent, releasing any authorization hold on the customer's card. This cannot be undone — a canceled intent is final, and collecting the payment afterwards means creating a new one. An intent that has already succeeded cannot be canceled; refund it instead"
+risk = "high"
+idempotency = "conditional"
+
+[[operations.params.path]]
+name = "payment_intent"
+description = "The id of the payment intent to cancel, `pi_` followed by an opaque identifier"
+required = true
+schema = { type = "string", pattern = "^pi_[A-Za-z0-9]+$", minLength = 4 }
+
+# `cancellation_reason` — `duplicate`, `fraudulent`, `requested_by_customer`, `abandoned` — is a body
+# parameter and is therefore not declarable here (see the header comment). What is lost is the label
+# on Stripe's own reporting, not the cancellation.
+[[operations.params.header]]
+name = "idempotency_key"
+wire = "Idempotency-Key"
+description = "A unique string — a UUID is the convention — identifying this cancellation attempt. Stripe replays the first result for 24 hours rather than acting again. Reuse it across retries of the same cancellation"
+required = true
+schema = { type = "string", minLength = 1, maxLength = 255 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "object", "status"]
+properties = { id = { type = "string" }, object = { const = "payment_intent" }, status = { const = "canceled" }, cancellation_reason = { type = "string" }, canceled_at = { type = "integer", description = "Unix timestamp" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/code"
+
+# ---------------------------------------------------------------------------------------------
+# The refund. `destructive`, and the reason is in the comment above the three writes.
+#
+# WHY THE CHARGE-NESTED ENDPOINT AND NOT `POST /v1/refunds`. The current canonical spelling takes the
+# thing being refunded as a *body* parameter — `charge` or `payment_intent` — and this connector
+# cannot send a body at all (see the header comment). `POST /v1/charges/{charge}/refunds` is the same
+# operation with its subject in the path, and it is the only route by which this pipeline can refund
+# anything today. When a request-encoding axis lands, `POST /v1/refunds` is the endpoint to move to,
+# and it is what unlocks refunding a payment intent directly and refunding a partial amount.
+#
+# WHAT A CALLER GETS, EXACTLY: a **full** refund of the charge. Stripe refunds the entire remaining
+# un-refunded amount when `amount` is omitted, and `amount` is a body parameter. A caller who wants to
+# refund part of a charge cannot use this operation, and the description says so rather than leaving a
+# model to discover it by refunding everything.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "stripe-charge-refund-create"
+method = "POST"
+path = "/v1/charges/{charge}/refunds"
+description = "Refund a charge **in full** and irreversibly: the entire un-refunded amount goes back to the customer's original payment method, usually within five to ten business days. A partial refund needs an `amount` this connector cannot send. Stripe's fee on the original charge is not returned. There is no way to undo a refund — collecting the money again means charging the customer again"
+risk = "destructive"
+idempotency = "conditional"
+
+[[operations.params.path]]
+name = "charge"
+description = "The id of the charge to refund, `ch_` followed by an opaque identifier. A payment intent's charge is its `latest_charge`, which `stripe-payment-intent-get` reports"
+required = true
+schema = { type = "string", pattern = "^ch_[A-Za-z0-9]+$", minLength = 4 }
+
+[[operations.params.header]]
+name = "idempotency_key"
+wire = "Idempotency-Key"
+description = "A unique string — a UUID is the convention — identifying this refund. Stripe replays the first result for 24 hours rather than refunding again, so a retry with the same key is safe and a retry with a new key refunds the customer twice. Generate it once per refund you intend and reuse it across every retry"
+required = true
+schema = { type = "string", minLength = 1, maxLength = 255 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "object", "amount", "currency", "status"]
+properties = { id = { type = "string" }, object = { const = "refund" }, amount = { type = "integer", description = "What was refunded, in the currency's smallest unit" }, currency = { type = "string" }, charge = { type = "string" }, status = { type = "string", description = "`pending` is the normal answer — the money has not reached the customer's bank yet. `failed` means it came back and the customer was not paid" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/code"
+
+# ---------------------------------------------------------------------------------------------
+# Inbound — the events Stripe sends us
+#
+# Names are Stripe's own (`payment_intent.succeeded`, not `payment-intent-succeeded`). An event keeps
+# its vendor spelling for the same reason an operation keeps its vendor path: respelling it would be
+# this repository renaming someone else's API, and the name is what an operator writes in
+# `trigger on "…"` and what Stripe puts in the envelope's `type`.
+#
+# Four of some 250 event types Stripe publishes. The selection principle is the one the operation set
+# follows: each of these corresponds to something the connector can then *do* — a succeeded or failed
+# payment is read with `stripe-payment-intent-get`, a refund with `stripe-refund-get`, and a dispute
+# is the case where a human has to look. An event nobody triggers on is a schema to maintain and a
+# drift check to satisfy for nothing.
+#
+# Each schema describes the **Event envelope**, which is what Stripe POSTs, rather than the resource
+# alone: the resource is at `data.object` and the discriminator is `type` at the top level. That is
+# the shape a payload map would address when a binding becomes possible.
+#
+# ---------------------------------------------------------------------------------------------
+# THERE IS NO `[[channels]]` BINDING, AND THAT IS THE FINDING RATHER THAN AN OMISSION.
+# ---------------------------------------------------------------------------------------------
+#
+# `docs/designs/inbound-events.md` §58 tabulates Stripe's row — `Stripe-Signature`, HMAC-SHA256, hex,
+# `{timestamp}.{body}` signed, with a tolerance — and every one of those four values is expressible by
+# `HmacSpec`. **The header is not.** Stripe sends
+#
+#   Stripe-Signature: t=1614556800,v1=5257a869e7…,v0=6ffbb59b23…
+#
+# — a comma-separated key/value list carrying the timestamp and one digest per scheme version.
+# `HmacSpec.header` names a whole header and `HmacSpec.prefix` is a single literal, so the digest
+# cannot be taken out of that list; `HmacSpec.timestamp` is a `Selector` addressing a whole header, so
+# the `t=` component cannot be reached either; and Stripe sends **more than one `v1` during a secret
+# rotation**, of which a verifier must accept any, which no single-digest comparison expresses at all.
+#
+# C-60 already reached this conclusion and recorded it honestly:
+# `crates/connector-spec/tests/verification_conformance.rs` declares Stripe `cannot verify` rather
+# than pretending, and `docs/stories/C-141-hmac-spec-gaps.md` owns the extraction axis that closes it.
+#
+# Both available shortcuts are refused, and it is worth writing down why, because each would build,
+# ship and pass every artifact check in this repository:
+#
+#  1. **`verification = "none"`** would declare a public HTTP endpoint that accepts payment events
+#     from anyone who finds the URL, and would say so in a field whose whole purpose is to be
+#     believed. AGENTS.md's rule — "never present an unverified event as trusted" — is not a style
+#     preference on a payments webhook; anyone could POST a `charge.refunded` at it.
+#  2. **An `hmac` block naming `Stripe-Signature` whole** would be worse, because it would *read* as
+#     verification. It would compare a digest against `t=…,v1=…`, which is not a digest, so it would
+#     reject every genuine delivery — and the day someone "fixed" the mismatch by relaxing the
+#     comparison, it would accept forgeries. A mislabelled verification scheme is a security claim
+#     that is wrong.
+#
+# So the events ship — they are correct today, they are what a trigger matches on, and they are what
+# `[[channels]]` will carry — and the binding waits for C-141. `stripe.webhook_signing_secret` is
+# declared above so that the credential an operator must provision is named now rather than
+# introduced later. `crates/connector-flux/tests/stripe_connector.rs` asserts the absence, so a
+# binding added without revisiting this comment fails the build.
+# ---------------------------------------------------------------------------------------------
+
+[[events]]
+name = "payment_intent.succeeded"
+description = "A payment intent completed and the money was taken. The customer has been charged"
+group = "Payments"
+schema = { type = "object", properties = { id = { type = "string", description = "The event's own id, `evt_…`, which is what deduplicates a redelivery" }, object = { const = "event" }, type = { const = "payment_intent.succeeded" }, created = { type = "integer", description = "Unix timestamp" }, livemode = { type = "boolean" }, data = { type = "object", description = "The payload envelope; the payment intent itself is at `data.object`", properties = { object = { type = "object", description = "The payment intent, in the API version the endpoint is pinned to" } }, required = [
+  "object",
+] } }, required = [
+  "id",
+  "type",
+  "data",
+] }
+
+[[events]]
+name = "payment_intent.payment_failed"
+description = "A payment intent failed — the card was declined, the authentication was abandoned, or the bank refused it. No money was taken"
+group = "Payments"
+schema = { type = "object", properties = { id = { type = "string" }, object = { const = "event" }, type = { const = "payment_intent.payment_failed" }, created = { type = "integer" }, livemode = { type = "boolean" }, data = { type = "object", description = "The payment intent is at `data.object`; the decline reason is on its `last_payment_error`", properties = { object = { type = "object" } }, required = [
+  "object",
+] } }, required = [
+  "id",
+  "type",
+  "data",
+] }
+
+[[events]]
+name = "charge.refunded"
+description = "A charge was refunded, in whole or in part. Fires for a refund made through this connector as well as one made by a human in the Stripe dashboard, so a flow that triggers on it must not assume it caused the refund"
+group = "Payments"
+schema = { type = "object", properties = { id = { type = "string" }, object = { const = "event" }, type = { const = "charge.refunded" }, created = { type = "integer" }, livemode = { type = "boolean" }, data = { type = "object", description = "The charge is at `data.object`; `amount_refunded` says how much of it has now been returned", properties = { object = { type = "object" } }, required = [
+  "object",
+] } }, required = [
+  "id",
+  "type",
+  "data",
+] }
+
+[[events]]
+name = "charge.dispute.created"
+# Off by default. A dispute is not a routine notification: it starts a clock, it costs a fee whatever
+# the outcome, and responding to it wrongly loses the money. A product that defaulted this on would
+# put an agent in front of a legal-ish deadline nobody chose.
+default = false
+description = "A customer disputed a charge with their bank. Money and a dispute fee are withheld immediately, and there is a deadline to submit evidence — this is a case for a human, not for an automated reply"
+group = "Disputes"
+schema = { type = "object", properties = { id = { type = "string" }, object = { const = "event" }, type = { const = "charge.dispute.created" }, created = { type = "integer" }, livemode = { type = "boolean" }, data = { type = "object", description = "The dispute is at `data.object`; `evidence_details.due_by` is the deadline and `charge` is the charge it contests", properties = { object = { type = "object" } }, required = [
+  "object",
+] } }, required = [
+  "id",
+  "type",
+  "data",
+] }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a human supplies before any of the above runs
+#
+# One field, because one value is all this connector needs: there is no subdomain to bind and no
+# OAuth app to register. The signing secret above is deliberately **not** a config field — it is a
+# credential nothing can use until C-141 lands, and asking an operator for a value that does nothing
+# is how a settings page teaches people to paste secrets carelessly. It becomes a `[[config]]` entry
+# in the same change that adds the channel binding.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "secret_key"
+label = "Secret key"
+# THE MISTAKE THIS CONNECTOR WILL ACTUALLY CAUSE, said in the place a human reads before pasting.
+# Stripe issues two keys per account and they are interchangeable in every way except the one that
+# matters: a test key acts on test data and moves nothing, a live key moves real money out of a real
+# bank account. They look alike, they sit next to each other in the dashboard, and the only difference
+# on the wire is four characters. Everything else in this file grades risk on the assumption that the
+# operator knew which one they pasted.
+help = "From the Stripe dashboard under Developers → API keys. **A test key and a live key are different values.** The test key begins `sk_test` and acts only on test data; the live key begins `sk_live` and moves real money out of your account — a refund made with it is a real refund. Check the Test mode toggle in the dashboard before you copy. A restricted key (`rk_live` / `rk_test`) with write access to Charges, PaymentIntents and Refunds and read access to Customers and Balance is safer and is enough for this connector"
+# No `example`, deliberately. A placeholder for a *secret* field has to be recognisable as fake, and a
+# Stripe key is the most heavily scanned secret there is: an `sk_test_` prefix followed by anything
+# base62-shaped matches GitHub's push protection and blocks the push, which is the correct behaviour.
+# `providers/shopify.toml` records the release this repository actually lost that way. The shape
+# belongs in `help`, where it cannot be mistaken for a value or copied into a form.
+format = "token"
+secret = true
+docs_url = "https://docs.stripe.com/keys"
+binds = "credential.stripe.secret_key"
