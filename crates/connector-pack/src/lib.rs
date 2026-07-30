@@ -3,7 +3,7 @@
 //! ```no_run
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! # use std::sync::Arc;
-//! # use connector_pack::Egress;
+//! # use connector_pack::{Credentials, Egress, SecretStore};
 //! # use flux_runtime::{Tool, ToolRegistry};
 //! # let configured_http_request_tool: Arc<dyn Tool> = flux_runtime::tool_fn(
 //! #     flux_spec::ToolSpec { name: "http.request".into(), description: String::new(),
@@ -11,24 +11,29 @@
 //! #         risk: flux_spec::Risk::Medium, idempotency: flux_spec::Idempotency::NonIdempotent,
 //! #         access: Vec::new(), group: None },
 //! #     |params| async move { Ok(params) });
+//! # let host_secret_store: Arc<dyn SecretStore> =
+//! #     Arc::new(connector_pack::MemoryStore::new());
 //! // flux's own `http.request`, already configured by the host — in a host that uses flux-web,
 //! // `Arc::new(flux_web::http::HttpRequestTool::new(&options))`.
 //! let http = Egress::new(configured_http_request_tool);
+//! // Where this tenant's credentials live. Bound here, never looked up globally.
+//! let credentials = Credentials::new(host_secret_store, "9f3a4b2c")?;
 //!
 //! let mut registry = ToolRegistry::new();
-//! connector_pack::pack(&["zendesk"], http)(&mut registry)?;
+//! connector_pack::pack(&["zendesk"], http, credentials)(&mut registry)?;
 //!
 //! assert!(registry.get("zendesk.ticket.show").is_some());
 //! # Ok(())
 //! # }
 //! ```
 //!
-//! or, from a host that uses flux's SDK, the same value straight into the builder:
+//! or, from a host that uses flux's SDK, the same values straight into the builder:
 //!
 //! ```ignore
 //! let http = Egress::new(Arc::new(flux_web::http::HttpRequestTool::new(&web_options)));
+//! let credentials = Credentials::new(Arc::new(VaultStore::new(&vault)?), &tenant)?;
 //! let client = flux_sdk::Client::builder()
-//!     .try_register_pack(connector_pack::pack(&["zendesk", "slack"], http))
+//!     .try_register_pack(connector_pack::pack(&["zendesk", "slack"], http, credentials))
 //!     .build()?;
 //! ```
 //!
@@ -67,22 +72,53 @@
 //! network policy consulted. [`Operation`] declares both itself and `tests/network_gate.rs` holds
 //! every shipped operation to it.
 //!
+//! # The credential never reaches a surface
+//!
+//! A credential is resolved here, assembled here — the `Bearer ` prefix, the basic-auth base64, the
+//! query placement — and placed on a request here, which is what dissolves the `$auth` blocker:
+//! flux's whole-value `{"$secret"}` marker never has to grow any of those capabilities. See
+//! [`crate::auth`] for the three axes and [`Credentials`] for the port.
+//!
+//! The order is the safety property. Every value is registered with `ctx.redactor` **before the
+//! request is constructed**, so a failure between construction and dispatch cannot surface it —
+//! `flux-web`'s `http.rs:248` is the precedent, and `tests/credentials.rs` holds it against all four
+//! surfaces `Executor::dispatch` scrubs.
+//!
 //! # What is not here yet
 //!
-//! **No credential is applied.** The credential port is **C-116**, and until it lands a call
-//! reaches the vendor unauthenticated — a fail-closed 401 rather than a silent wrong answer.
-//! Response shaping is likewise absent: `http.request` returns one flat string
+//! **Not every connector can be authenticated.** A credential's address is
+//! `tenants/<tenant>/<authority>/<credential>`, and only two of the eighteen shipped connectors
+//! declare an `authority` (C-37). The rest refuse with [`Error::NoCredentialAddress`] rather than
+//! sending an unauthenticated request — fail-closed, and with a diagnostic naming the missing fact
+//! instead of a vendor's `401`.
+//!
+//! **No response shaping.** `http.request` returns one flat string
 //! (`HTTP {status}\n{headers}\n{body}`), which is returned whole.
+//!
+//! **No config resolution**, so a templated base URL still carries `{subdomain}` verbatim: five of
+//! the eighteen connectors cannot reach a vendor at all until C-10's base-URL configuration lands,
+//! and a credential does not change that.
 
+mod auth;
+mod credentials;
 mod name;
 mod request;
 mod spec;
 mod tool;
 
+pub use credentials::Credentials;
 pub use name::{dotted_name, NameError};
 pub use request::Request;
 pub use spec::project;
 pub use tool::{Egress, Operation};
+
+// The credential vocabulary, re-exported rather than redefined — the same posture
+// `connector-secrets` takes towards `connector-spec`'s addressing. A host binding this pack's
+// credential port should not have to name three crates to spell one address.
+pub use connector_secrets::{
+    CredentialRef, Layout, MemoryStore, Secret, SecretStore, StoreError, TenantLayout,
+    DEFAULT_SERVICE,
+};
 
 use catalog::ProviderKey;
 use flux_runtime::{Tool, ToolRegistry};
@@ -225,6 +261,164 @@ pub enum Error {
         /// What the evaluator refused.
         message: String,
     },
+
+    /// A tenant id that cannot be part of an address.
+    ///
+    /// Refused when the port is bound rather than at the first call: a tenant id is untrusted input
+    /// that ends up in a store path, and the cautionary precedent is close to home — action-proxy
+    /// puts two client-supplied headers straight into a Vault path with no validation at all.
+    #[error("`{tenant}` cannot address a tenant's credentials: {reason}")]
+    Tenant {
+        /// The tenant id that was refused.
+        tenant: String,
+        /// `connector_spec::credential::validate_tenant`'s own explanation.
+        reason: String,
+    },
+
+    /// **No credential is stored where the operation's credential lives.**
+    ///
+    /// The request is not sent. That is the whole point of the variant: an unauthenticated call is
+    /// a fail-closed `401`, and a host treating `401` as retryable will loop against the vendor
+    /// forever without ever being told what is actually missing.
+    #[error(
+        "`{operation}` needs a credential and none is stored at `{path}` — the request was not \
+         sent ({alternatives} address(es) tried)"
+    )]
+    MissingCredential {
+        /// The operation id.
+        operation: String,
+        /// The path the store looked at, **as the store's own layout renders it** — the place an
+        /// operator has to go and put the value.
+        path: String,
+        /// How many alternative mechanisms were tried before giving up.
+        alternatives: usize,
+    },
+
+    /// The secret store answered, and not with a value.
+    ///
+    /// Kept apart from [`MissingCredential`](Self::MissingCredential) deliberately: "unreachable"
+    /// and "not configured" want opposite responses, and collapsing them is the gap C-91's error
+    /// type exists to close. `StoreError` never carries a value, so this is safe to log.
+    #[error("`{operation}` could not resolve `{credential}`: {source}")]
+    CredentialStore {
+        /// The operation id.
+        operation: String,
+        /// The credential that could not be resolved.
+        credential: String,
+        /// What the store said.
+        #[source]
+        source: connector_secrets::StoreError,
+    },
+
+    /// The connector declares no `authority`, so its credential has no address.
+    ///
+    /// C-37's `pid` is the second segment of every credential path, and a connector without one
+    /// cannot say *where* its secrets live — so there is nothing to look up. Refused rather than
+    /// defaulted: any invented authority would render a plausible path pointing at a value nobody
+    /// ever stored, and the resulting `NotFound` would send an operator to the wrong place.
+    #[error(
+        "`{operation}` needs `{credential}`, but connector `{provider}` declares no `authority`, so \
+         no credential address renders for it (C-37); the request was not sent"
+    )]
+    NoCredentialAddress {
+        /// The operation id.
+        operation: String,
+        /// The connector that declares no authority.
+        provider: String,
+        /// The credential that therefore cannot be addressed.
+        credential: String,
+    },
+
+    /// The address components do not compose into a valid [`CredentialRef`].
+    ///
+    /// Unreachable for a catalogue this repository generated — every component is validated at the
+    /// loader — and reported as the corrupt-input case it would be rather than unwrapped.
+    #[error("`{operation}` cannot address `{credential}`: {reason}")]
+    CredentialAddress {
+        /// The operation id.
+        operation: String,
+        /// The credential in question.
+        credential: String,
+        /// `CredentialRef::new`'s own explanation.
+        reason: String,
+    },
+
+    /// An operation requiring a credential its connector does not declare.
+    ///
+    /// The loader refuses this, so it is a disagreement between the catalogue's operation table and
+    /// its credential table rather than an authoring error — the same class of drift
+    /// [`Mismatched`](Self::Mismatched) covers for renderings.
+    #[error(
+        "`{operation}` requires `{credential}`, which connector `{provider}` does not declare; the \
+         catalogue's operations and its credentials disagree"
+    )]
+    UndeclaredCredential {
+        /// The operation id.
+        operation: String,
+        /// The credential named by the operation.
+        credential: String,
+        /// The connector that does not declare it.
+        provider: String,
+    },
+
+    /// An operation authenticating with a **signing** secret.
+    ///
+    /// Every other credential answers "where does this go on the way out"; a webhook signing secret
+    /// has no answer, because it never goes out — it verifies bytes that arrived. Placing one on a
+    /// request would hand the vendor the value that authenticates *their* calls inbound. The loader
+    /// already refuses it (`AGENTS.md`'s authentication contract); this is the second lock.
+    #[error("`{operation}` authenticates with `{credential}`, which is an inbound signing secret \
+             and never leaves")]
+    InboundCredential {
+        /// The operation id.
+        operation: String,
+        /// The signing credential.
+        credential: String,
+    },
+
+    /// A credential whose header the operation's own emitted Flux already sets.
+    ///
+    /// Refused rather than overwritten: a silent replacement would send a request that neither the
+    /// module nor the pack describes, and the two surfaces would still look identical in isolation.
+    #[error(
+        "`{operation}` would place `{credential}` in `{header}`, which its own module already sets"
+    )]
+    CredentialCollision {
+        /// The operation id.
+        operation: String,
+        /// The credential that could not be placed.
+        credential: String,
+        /// The header, as the module spells it.
+        header: String,
+    },
+
+    /// A Basic credential whose **non-secret** user half is not configured.
+    ///
+    /// The user half is config — an email address, an account name — so it resolves from the
+    /// declared environment variables rather than from the store. Refused rather than composed as
+    /// `base64(":<secret>")`, which is a header the vendor answers with a `401` that says nothing
+    /// about the missing variable.
+    #[error(
+        "`{operation}` needs the non-secret user half of `{credential}`, and none of `{env}` is set"
+    )]
+    MissingCredentialConfig {
+        /// The operation id.
+        operation: String,
+        /// The credential whose user half is missing.
+        credential: String,
+        /// The environment-variable keys that were tried, in order.
+        env: String,
+    },
+
+    /// A mechanism naming no credentials at all.
+    ///
+    /// It would authenticate nothing while looking satisfied, which is the one failure shape that
+    /// resembles success. The loader refuses a degenerate empty mechanism; this is the second lock.
+    #[error("`{operation}` offers a mechanism that names no credentials, so it authenticates nothing")]
+    EmptyMechanism {
+        /// The operation id.
+        operation: String,
+    },
 }
 
 impl From<Error> for flux_core::Error {
@@ -258,6 +452,14 @@ impl From<Error> for flux_core::Error {
 /// here would silently give connectors a *different* network policy from the rest of the host. See
 /// [`Egress`] for what a substitute must honour, and for the one thing its type cannot enforce.
 ///
+/// # So is the credential port, and it is not optional
+///
+/// [`Credentials`] is the other bound port, and it is a required argument rather than an
+/// `Option`. A pack that could be built without one would let a host install connectors that send
+/// every request unauthenticated — a fail-closed `401` from the vendor, but one a host treating
+/// `401` as retryable will loop on forever. Requiring it makes "I forgot to bind a store" a
+/// compile error instead of a production symptom.
+///
 /// # Errors
 ///
 /// The closure returns an error when a named provider is not in the catalogue, when an operation
@@ -267,19 +469,25 @@ impl From<Error> for flux_core::Error {
 pub fn pack(
     providers: &[&str],
     http: Egress,
+    credentials: Credentials,
 ) -> impl FnOnce(&mut ToolRegistry) -> flux_core::Result<()> {
     let requested: Vec<String> = providers.iter().map(|name| (*name).to_string()).collect();
 
     move |registry: &mut ToolRegistry| {
         for provider in &requested {
-            install(registry, provider, &http)?;
+            install(registry, provider, &http, &credentials)?;
         }
         Ok(())
     }
 }
 
 /// Install one provider's operations under one source label.
-fn install(registry: &mut ToolRegistry, provider: &str, http: &Egress) -> flux_core::Result<()> {
+fn install(
+    registry: &mut ToolRegistry,
+    provider: &str,
+    http: &Egress,
+    credentials: &Credentials,
+) -> flux_core::Result<()> {
     let entry =
         catalog::provider(ProviderKey::id(provider)).ok_or_else(|| Error::UnknownProvider {
             provider: provider.to_owned(),
@@ -289,9 +497,13 @@ fn install(registry: &mut ToolRegistry, provider: &str, http: &Egress) -> flux_c
     let tools = entry
         .operations
         .iter()
-        .map(
-            |operation| Ok(Arc::new(Operation::project(operation, http.clone())?) as Arc<dyn Tool>),
-        )
+        .map(|operation| {
+            Ok(Arc::new(Operation::project(
+                operation,
+                http.clone(),
+                credentials.clone(),
+            )?) as Arc<dyn Tool>)
+        })
         .collect::<Result<Vec<_>, Error>>()?;
 
     registry.try_register_all_from(source_label(entry.id), tools)
@@ -315,6 +527,20 @@ pub(crate) mod tests {
     /// root, so `execute` itself is not reachable from this crate's tests at all. What is asserted
     /// instead is [`Operation::build_request`] — the request *before* it is sent, which is where the
     /// two mistakes that matter live, and which a live call would prove nothing extra about.
+    /// A bound credential port over an **empty** store.
+    ///
+    /// Every test in this crate that does not itself care about credentials wants exactly this: the
+    /// port is bound, because the pack requires one, and it holds nothing, because a test asserting
+    /// a *request shape* must not depend on a value being present. The tests that do care live in
+    /// `tests/credentials.rs` and put a sentinel in a store of their own.
+    pub(crate) fn empty_credentials() -> Credentials {
+        Credentials::new(
+            Arc::new(connector_secrets::MemoryStore::new()),
+            "t-connector-pack",
+        )
+        .expect("a valid tenant id")
+    }
+
     pub(crate) fn recording_http() -> Egress {
         Egress::new(flux_runtime::tool_fn(
             flux_spec::ToolSpec {
@@ -335,7 +561,7 @@ pub(crate) mod tests {
     #[test]
     fn a_providers_operations_are_labelled_with_the_provider() {
         let mut registry = ToolRegistry::new();
-        pack(&["zendesk"], recording_http())(&mut registry).expect("zendesk installs");
+        pack(&["zendesk"], recording_http(), empty_credentials())(&mut registry).expect("zendesk installs");
 
         assert_eq!(
             registry.source("zendesk.ticket.show"),
@@ -349,7 +575,7 @@ pub(crate) mod tests {
     fn the_pack_outlives_the_names_it_was_built_from() {
         let install = {
             let names = vec!["zendesk"];
-            pack(&names, recording_http())
+            pack(&names, recording_http(), empty_credentials())
         };
 
         let mut registry = ToolRegistry::new();
@@ -361,7 +587,7 @@ pub(crate) mod tests {
     #[test]
     fn several_providers_install_together() {
         let mut registry = ToolRegistry::new();
-        pack(&["zendesk", "slack"], recording_http())(&mut registry).expect("both install");
+        pack(&["zendesk", "slack"], recording_http(), empty_credentials())(&mut registry).expect("both install");
 
         assert!(registry.get("zendesk.ticket.show").is_some());
         assert!(registry.get("slack.chat.post.message").is_some());
@@ -375,7 +601,7 @@ pub(crate) mod tests {
     fn an_unknown_provider_names_itself() {
         let mut registry = ToolRegistry::new();
         let error =
-            pack(&["salesforce"], recording_http())(&mut registry).expect_err("no such connector");
+            pack(&["salesforce"], recording_http(), empty_credentials())(&mut registry).expect_err("no such connector");
 
         assert!(error.to_string().contains("salesforce"), "{error}");
         assert!(registry.names().is_empty());
@@ -391,7 +617,7 @@ pub(crate) mod tests {
         assert!(!entries.is_empty(), "zendesk carries operations");
 
         for entry in entries {
-            let operation = Operation::project(entry, http.clone()).expect("the entry projects");
+            let operation = Operation::project(entry, http.clone(), empty_credentials()).expect("the entry projects");
             assert!(
                 Arc::ptr_eq(http.tool(), operation.egress().tool()),
                 "`{}` holds a transport the host did not supply",

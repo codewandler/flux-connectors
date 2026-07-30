@@ -347,9 +347,12 @@ dependencies = [
  "codewandler-flux-lang",
  "codewandler-flux-runtime",
  "codewandler-flux-spec",
+ "codewandler-flux-system",
  "connector-catalog",
+ "connector-secrets",
  "serde_json",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

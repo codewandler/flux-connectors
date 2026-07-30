@@ -60,6 +60,13 @@ flux-lang = { package = "codewandler-flux-lang", version = "0.39" }
 flux-core = { package = "codewandler-flux-core", version = "0.39" }
 flux-runtime = { package = "codewandler-flux-runtime", version = "0.39" }
 flux-spec = { package = "codewandler-flux-spec", version = "1.2" }
+# A **dev-dependency of `connector-pack` only** (C-116). `ToolContext::new` takes an `Arc<System>`,
+# and a `ToolContext` is the only way to reach the redactor — so without this, the one property this
+# repository must prove about credentials (they never reach a surface) could not be driven through
+# `Tool::execute` at all, and C-115 had to record `execute` as untested for exactly that reason. It
+# is already in the lock as a transitive dependency of `flux-runtime`, so naming it here resolves
+# nothing new; no non-test code links it.
+flux-system = { package = "codewandler-flux-system", version = "0.39" }
 
 # Shared third-party.
 anyhow = "1"

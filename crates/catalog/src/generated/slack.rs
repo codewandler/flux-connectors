@@ -9,9 +9,27 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "slack",
     vendor: "Slack",
     description: "Slack messaging: post messages, read conversation history, look up users, react",
+    authority: Some("com.slack.api"),
     base_url: "https://slack.com",
+    auth: AUTH,
     operations: OPERATIONS,
 };
+
+#[rustfmt::skip]
+static AUTH: &[crate::Credential] = &[
+    crate::Credential {
+        name: "slack.bot_token",
+        leaf: "bot_token",
+        acquire: crate::Acquisition::Static,
+        place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+    },
+    crate::Credential {
+        name: "slack.signing_secret",
+        leaf: "signing_secret",
+        acquire: crate::Acquisition::Static,
+        place: crate::Placement::Inbound,
+    },
+];
 
 #[rustfmt::skip]
 static OPERATIONS: &[crate::Operation] = &[

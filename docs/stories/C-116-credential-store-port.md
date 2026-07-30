@@ -2,7 +2,7 @@
 id: C-116
 title: "The CredentialStore port, in-Rust auth assembly, and redaction"
 pillar: Bridge
-status: ready
+status: in-progress
 priority: 3
 design: docs/designs/connector-tool-pack.md
 epic: tool-pack

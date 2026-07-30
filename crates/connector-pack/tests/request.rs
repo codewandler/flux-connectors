@@ -39,7 +39,7 @@ fn http() -> Egress {
 fn projected(id: &str) -> Operation {
     let entry = catalog::operation(OperationKey::id(id))
         .unwrap_or_else(|| panic!("the shipped catalogue carries `{id}`"));
-    Operation::project(entry, http()).unwrap_or_else(|error| panic!("`{id}`: {error}"))
+    Operation::project(entry, http(), credentials()).unwrap_or_else(|error| panic!("`{id}`: {error}"))
 }
 
 /// The request `id` makes when called with `params`.
@@ -242,7 +242,7 @@ fn the_request_becomes_the_params_http_request_declares() {
 fn every_shipped_operation_builds_an_absolute_request() {
     let mut built = 0usize;
     for entry in catalog::operations() {
-        let operation = Operation::project(entry, http())
+        let operation = Operation::project(entry, http(), credentials())
             .unwrap_or_else(|error| panic!("`{}`: {error}", entry.id));
 
         let params = params_from_schema(&operation);

@@ -46,7 +46,7 @@ fn every_provider() -> Vec<&'static str> {
 fn whole_catalogue() -> ToolRegistry {
     let providers = every_provider();
     let mut registry = ToolRegistry::new();
-    connector_pack::pack(&providers, http())(&mut registry)
+    connector_pack::pack(&providers, http(), credentials())(&mut registry)
         .expect("the shipped catalogue installs");
     registry
 }

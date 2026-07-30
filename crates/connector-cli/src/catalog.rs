@@ -37,8 +37,8 @@
 //! held to flux-lang's formatter instead, by the emitter, and that fixed point *is* asserted
 //! (`connector-flux`'s `shipped_modules.rs`).
 
-use anyhow::{bail, Result};
-use connector_spec::{Connector, Idempotency, Operation, Risk};
+use anyhow::{bail, Context, Result};
+use connector_spec::{AuthScheme, Connector, Idempotency, Operation, Risk};
 
 /// One operation's `.flux` rendering, on its way to `crates/catalog/ops/<provider>/<id>.flux`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,9 +76,16 @@ pub fn render(connector: &Connector, renderings: &[OperationRendering]) -> Resul
         "    description: {},\n",
         string(&connector.description)
     ));
+    out.push_str(&format!(
+        "    authority: {},\n",
+        option_string(connector.authority.as_deref())
+    ));
     out.push_str(&format!("    base_url: {},\n", string(&connector.base_url)));
+    out.push_str("    auth: AUTH,\n");
     out.push_str("    operations: OPERATIONS,\n");
     out.push_str("};\n\n");
+
+    out.push_str(&render_auth(connector)?);
 
     out.push_str("#[rustfmt::skip]\n");
     out.push_str("static OPERATIONS: &[crate::Operation] = &[\n");
@@ -371,6 +378,97 @@ pub(crate) fn host_of(base_url: &str) -> Result<&str> {
         bail!("base URL `{base_url}` names no host, so nothing can say which host it reaches");
     }
     Ok(host)
+}
+
+/// The connector's `AUTH` table: one `crate::Credential` per declared credential (C-116).
+///
+/// **This is a declaration, never a value.** [`string`] quotes a credential *name*, a path leaf, a
+/// header name, a prefix and environment-variable *keys*; `AuthMethod` carries no value to quote in
+/// the first place, and `crates/connector-cli/tests/no_secrets.rs` is what keeps that checked rather
+/// than asserted.
+///
+/// It exists because the Tool pack assembles auth in Rust — the `Bearer` prefix, the basic-auth
+/// base64, the query placement — and it cannot assemble what it has not been told. Until this, the
+/// catalogue named the credentials an operation required and said nothing about how any of them
+/// reached the wire, so the only thing a consumer could do with a credential name was ignore it.
+fn render_auth(connector: &Connector) -> Result<String> {
+    let mut out = String::from("#[rustfmt::skip]\n");
+    out.push_str("static AUTH: &[crate::Credential] = &[\n");
+    for method in &connector.auth {
+        // The leaf of the credential's address. Derived by the type that owns the rule rather than
+        // by stripping a prefix here: a name whose prefix disagrees with the connector id would
+        // otherwise render a plausible path under the wrong vendor.
+        let leaf = connector
+            .local_credential_name(&method.name)
+            .with_context(|| format!("connector `{}`: credential `{}`", connector.id, method.name))?;
+        out.push_str("    crate::Credential {\n");
+        out.push_str(&format!("        name: {},\n", string(&method.name)));
+        out.push_str(&format!("        leaf: {},\n", string(leaf)));
+        out.push_str(&format!("        acquire: {},\n", acquisition(method)));
+        out.push_str(&format!("        place: {},\n", placement(&method.scheme)));
+        out.push_str("    },\n");
+    }
+    out.push_str("];\n\n");
+    Ok(out)
+}
+
+/// The acquisition axis: how stored material becomes the value that is placed.
+///
+/// `Basic` is the only scheme that composes anything, and it composes the **user** half — which is
+/// config rather than a gated secret, so it resolves from declared environment variables and never
+/// from the secret store.
+fn acquisition(method: &connector_spec::AuthMethod) -> String {
+    match method.scheme {
+        AuthScheme::Basic => format!(
+            "crate::Acquisition::BasicJoin {{ user_env: &[{}], user_suffix: {} }}",
+            method
+                .user_env
+                .iter()
+                .map(|key| string(key))
+                .collect::<Vec<_>>()
+                .join(", "),
+            string(method.user_suffix.as_deref().unwrap_or_default())
+        ),
+        _ => "crate::Acquisition::Static".to_string(),
+    }
+}
+
+/// The placement axis: where the value goes on the request.
+///
+/// An exhaustive match, for the reason [`risk`] is one — and with more at stake. A scheme this did
+/// not recognise would have to become *some* placement, and every wrong answer either sends a
+/// credential where the vendor does not read it or sends it somewhere it should never go at all.
+///
+/// The `prefix` is what makes this a mapping rather than a translation table: `Bearer` and `Basic`
+/// differ from a raw-value header only by the literal text in front of the value.
+fn placement(scheme: &AuthScheme) -> String {
+    match scheme {
+        AuthScheme::Bearer => {
+            "crate::Placement::Header { name: \"Authorization\", prefix: \"Bearer \" }".to_string()
+        }
+        AuthScheme::Basic => {
+            "crate::Placement::Header { name: \"Authorization\", prefix: \"Basic \" }".to_string()
+        }
+        AuthScheme::Header { name } => format!(
+            "crate::Placement::Header {{ name: {}, prefix: \"\" }}",
+            string(name)
+        ),
+        AuthScheme::Query { name } => {
+            format!("crate::Placement::Query {{ name: {} }}", string(name))
+        }
+        // The one scheme with no outgoing answer: it verifies bytes that arrived. Carried into the
+        // catalogue rather than dropped, so that one namespace still covers both directions and a
+        // consumer can *refuse* to spend it on a request rather than never having heard of it.
+        AuthScheme::Signing => "crate::Placement::Inbound".to_string(),
+    }
+}
+
+/// A Rust `Option<&'static str>` literal for an optional declared value.
+fn option_string(value: Option<&str>) -> String {
+    match value {
+        Some(value) => format!("Some({})", string(value)),
+        None => "None".to_string(),
+    }
 }
 
 /// `connector_spec::Risk` as the catalog's own mirror of it.

@@ -12,6 +12,16 @@ rust-version.workspace = true
 # The input is the catalogue, not the loader: this crate never sees `providers/*.toml`.
 connector-catalog.workspace = true
 
+# The credential port (C-116). `SecretStore` is consumed, never redefined, and C-90's
+# `CredentialRef`/`Layout` come through it rather than from a second addressing scheme.
+#
+# **This edge is allowed here and forbidden from `connector-cli`.** The fence
+# (`crates/connector-cli/tests/dependency_fence.rs`) is about the *compiler* crates, whose offline
+# guarantee a Vault client would quietly end. The pack is the host-facing surface: it is where a
+# credential is supposed to be resolved. `default-features = false` keeps that honest — the `vault`
+# feature stays off, so this links no HTTP client and the pack still opens no socket.
+connector-secrets = { workspace = true, default-features = false }
+
 # The flux side of the seam. `flux-spec` owns `ToolSpec` and its vocabulary; `flux-runtime` owns
 # the `Tool` trait and the registry a host installs into. Deliberately *not* `flux-sdk`: the pack
 # must be usable from a bare `ToolRegistry`, and the SDK is the host's choice, not ours.
@@ -23,3 +33,11 @@ flux-spec.workspace = true
 async-trait.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+# Driving `Tool::execute` needs a `ToolContext`, and a `ToolContext` needs an `Arc<System>` over a
+# workspace root. Test-only: no shipped code here links `flux-system`, and the pack still reaches the
+# filesystem through nothing.
+flux-system.workspace = true
+# A runtime for the async `Tool::execute`. `rt` + `macros` only.
+tokio = { workspace = true, features = ["rt", "macros"] }

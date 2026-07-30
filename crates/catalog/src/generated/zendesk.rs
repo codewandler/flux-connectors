@@ -9,9 +9,21 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "zendesk",
     vendor: "Zendesk",
     description: "Zendesk Support ticketing: search, read, update tickets and their comments",
+    authority: None,
     base_url: "https://{subdomain}.zendesk.com",
+    auth: AUTH,
     operations: OPERATIONS,
 };
+
+#[rustfmt::skip]
+static AUTH: &[crate::Credential] = &[
+    crate::Credential {
+        name: "zendesk.api_token",
+        leaf: "api_token",
+        acquire: crate::Acquisition::BasicJoin { user_env: &["ZENDESK_USER"], user_suffix: "/token" },
+        place: crate::Placement::Header { name: "Authorization", prefix: "Basic " },
+    },
+];
 
 #[rustfmt::skip]
 static OPERATIONS: &[crate::Operation] = &[

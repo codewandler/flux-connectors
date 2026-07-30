@@ -49,7 +49,7 @@ fn every_shipped_operation_projects_to_a_registrable_spec() {
     let providers = every_provider();
     let mut registry = ToolRegistry::new();
 
-    connector_pack::pack(&providers, http())(&mut registry)
+    connector_pack::pack(&providers, http(), credentials())(&mut registry)
         .expect("the shipped catalogue installs into an empty registry");
 
     let mut projected = 0usize;
@@ -100,7 +100,7 @@ fn every_shipped_operation_projects_to_a_registrable_spec() {
 #[test]
 fn the_reference_flow_resolves_every_operation_it_calls() {
     let mut registry = ToolRegistry::new();
-    connector_pack::pack(&["zendesk"], http())(&mut registry).expect("zendesk installs");
+    connector_pack::pack(&["zendesk"], http(), credentials())(&mut registry).expect("zendesk installs");
 
     for name in [
         "zendesk.test",
@@ -120,7 +120,7 @@ fn the_reference_flow_resolves_every_operation_it_calls() {
 #[test]
 fn the_spec_carries_the_catalogue_entry_and_invents_nothing() {
     let mut registry = ToolRegistry::new();
-    connector_pack::pack(&["zendesk"], http())(&mut registry).expect("zendesk installs");
+    connector_pack::pack(&["zendesk"], http(), credentials())(&mut registry).expect("zendesk installs");
 
     let operation = catalog::operation(OperationKey::id("zendesk-ticket-comment-add"))
         .expect("the shipped catalogue carries zendesk-ticket-comment-add");
@@ -156,10 +156,10 @@ fn the_spec_carries_the_catalogue_entry_and_invents_nothing() {
 #[test]
 fn a_collision_surfaces_fluxs_duplicate_diagnostic_rather_than_panicking() {
     let mut registry = ToolRegistry::new();
-    connector_pack::pack(&["zendesk"], http())(&mut registry).expect("the first install succeeds");
+    connector_pack::pack(&["zendesk"], http(), credentials())(&mut registry).expect("the first install succeeds");
 
     // The same provider again: every one of its operations collides with itself.
-    let error = connector_pack::pack(&["zendesk"], http())(&mut registry)
+    let error = connector_pack::pack(&["zendesk"], http(), credentials())(&mut registry)
         .expect_err("installing the same provider twice must be refused, not silently merged");
     let rendered = error.to_string();
 
@@ -181,7 +181,7 @@ fn a_collision_surfaces_fluxs_duplicate_diagnostic_rather_than_panicking() {
 #[test]
 fn an_unknown_provider_is_refused_rather_than_installed_as_nothing() {
     let mut registry = ToolRegistry::new();
-    let error = connector_pack::pack(&["salesforce"], http())(&mut registry)
+    let error = connector_pack::pack(&["salesforce"], http(), credentials())(&mut registry)
         .expect_err("an unknown provider must be refused");
 
     assert!(error.to_string().contains("salesforce"), "{error}");
@@ -201,7 +201,7 @@ fn an_unknown_provider_is_refused_rather_than_installed_as_nothing() {
 fn a_call_that_cannot_be_built_is_refused_by_name_rather_than_panicking() {
     let entry = catalog::operation(OperationKey::id("zendesk-ticket-show"))
         .expect("the shipped catalogue carries zendesk-ticket-show");
-    let operation = connector_pack::Operation::project(entry, http()).expect("the entry projects");
+    let operation = connector_pack::Operation::project(entry, http(), credentials()).expect("the entry projects");
 
     let error = operation
         .build_request(&serde_json::json!({}))

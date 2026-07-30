@@ -164,6 +164,97 @@ pub struct Operation {
     pub flux: &'static str,
 }
 
+/// **Where a credential goes on the way out** — the *placement* axis of
+/// `docs/designs/unified-auth.md`.
+///
+/// The design's central claim is carried by one field: `prefix` on [`Header`](Self::Header) is what
+/// turns `Bearer` from an enum variant into data, so `Bearer `, `Basic `, `Token `, `GenieKey ` and
+/// the empty prefix are one code path rather than five variants. A flat scheme enum conflates
+/// *where* a secret goes with *what it is prefixed by*, and needs a new variant the moment a vendor
+/// wants `Token <t>` in `Authorization`.
+///
+/// Deliberately **not** `#[non_exhaustive]`, unlike [`Provider`] and [`Operation`]. A consumer
+/// placing a credential must match every variant, and a new placement must be a compile error at
+/// every such site rather than a silently skipped credential — a request that quietly went out
+/// without one is exactly the failure this type exists to prevent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Placement {
+    /// `<name>: <prefix><value>`. `Authorization: Bearer <t>` is
+    /// `Header { name: "Authorization", prefix: "Bearer " }`; a raw-value header such as
+    /// `X-Shopify-Access-Token` is the same variant with an empty prefix.
+    Header {
+        /// The header name.
+        name: &'static str,
+        /// The literal text the value is prefixed with, **trailing space included**. Empty for a
+        /// raw-value header.
+        prefix: &'static str,
+    },
+    /// `?<name>=<value>` — a query-parameter key.
+    Query {
+        /// The parameter name.
+        name: &'static str,
+    },
+    /// **Never placed on an outgoing request.** A webhook signing secret verifies bytes that
+    /// arrived, so it has no answer to "where does this go on the way out" — the one deliberate
+    /// divergence from flux's vocabulary, recorded in `AGENTS.md`'s authentication contract. It is
+    /// here so that one credential namespace covers both directions.
+    Inbound,
+}
+
+/// **How stored material becomes the value that is placed** — the *acquisition* axis.
+///
+/// Only the two pure acquisitions the shipped catalogue needs are modelled. Effectful ones —
+/// `oauth2`, `session` — are the host's, by the line `docs/designs/unified-auth.md` draws: they need
+/// a network round trip, a token cache and refresh-on-401, and a connector that ran them would have
+/// to pass a raw token through a bound symbol.
+///
+/// Not `#[non_exhaustive]`, for the reason [`Placement`] is not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Acquisition {
+    /// The stored secret, unchanged.
+    Static,
+    /// `base64(<user><user_suffix>:<secret>)` — HTTP Basic, composed rather than pre-composed.
+    ///
+    /// The user half is **config, not a gated secret**: it is an email address or an account name,
+    /// and it resolves from the declared environment variables rather than from the secret store.
+    /// `user_suffix` is Zendesk's `/token` marker — public API syntax, and the reason a bare env
+    /// value is not enough (`docs/designs/auth-seam.md` §7.5).
+    ///
+    /// The secret occupies the **password** position. Freshdesk's shape, where the API key occupies
+    /// the *username* position, is not expressible here because the IR cannot yet say so either
+    /// (C-16 owns that decision); Freshdesk therefore declares no credential at all, which
+    /// `AGENTS.md` records as an intentional gap rather than an oversight.
+    BasicJoin {
+        /// Environment-variable **keys** holding the user half, tried in order. Never a value.
+        user_env: &'static [&'static str],
+        /// A literal appended to the resolved user half before the `user:secret` join.
+        user_suffix: &'static str,
+    },
+}
+
+/// One credential a connector declares: what it is called, where its value is kept, and how it
+/// reaches the wire.
+///
+/// **No value, ever.** [`Credential::leaf`] is the last segment of a *path*; [`Acquisition`] names
+/// environment variables. Nothing in this crate holds a secret, and
+/// `crates/connector-cli/tests/no_secrets.rs` is what keeps that a checked statement.
+///
+/// Not `#[non_exhaustive]`: a consumer constructs one in a test to prove its own placement code, and
+/// the type is small, declarative and complete.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Credential {
+    /// The flat-namespace name an operation references, e.g. `zendesk.api_token`. Vendor-prefixed,
+    /// because credentials share one namespace across the connector.
+    pub name: &'static str,
+    /// The last segment of the credential's address — `api_token`, not `zendesk.api_token`. The
+    /// path already carries the authority, so the vendor prefix would be said twice.
+    pub leaf: &'static str,
+    /// How stored material becomes the value that is placed.
+    pub acquire: Acquisition,
+    /// Where that value goes on the request.
+    pub place: Placement,
+}
+
 /// One connector, and every operation the catalog carries for it.
 ///
 /// `#[non_exhaustive]` for the same reason [`Operation`] is: C-37's `pid` lands here.
@@ -177,8 +268,22 @@ pub struct Provider {
     pub vendor: &'static str,
     /// What the connector is for, in one line.
     pub description: &'static str,
+    /// The reverse-DNS authority the connector publishes under (`com.slack.api`) — C-37's `pid`,
+    /// and the second segment of every credential address this connector's secrets live at.
+    ///
+    /// `None` for a connector that has not declared one yet. That is not cosmetic: without an
+    /// authority no credential address renders at all, so a consumer resolving credentials can only
+    /// refuse. Refusing is the correct answer — a request sent without the credential it declares is
+    /// the failure worth preventing — but the diagnostic must say *which* fact is missing.
+    pub authority: Option<&'static str>,
     /// The API base URL, templating included.
     pub base_url: &'static str,
+    /// Every credential the connector declares, in declaration order and keyed by
+    /// [`Credential::name`] — the vocabulary [`Operation::credentials`] references by name.
+    ///
+    /// Declared at **provider** level, exactly as the IR declares them: a credential belongs to the
+    /// connector, not to one of its services, which is why its address elides the service segment.
+    pub auth: &'static [Credential],
     /// Every operation, in the order the provider declares them — which is also the order they
     /// appear in `connectors/<id>.flux`.
     pub operations: &'static [Operation],
@@ -190,6 +295,15 @@ impl Provider {
         self.operations
             .iter()
             .find(|operation| key.matches(operation))
+    }
+
+    /// The credential this connector declares under `name`, or `None` when nothing declares it.
+    ///
+    /// A lookup rather than a map because the list is short, ordered and generated; the ordering is
+    /// the connector's own, and an alternative-selection rule that depends on declaration order
+    /// needs it preserved.
+    pub fn credential(&self, name: &str) -> Option<&'static Credential> {
+        self.auth.iter().find(|credential| credential.name == name)
     }
 }
 

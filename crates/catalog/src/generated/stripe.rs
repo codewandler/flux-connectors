@@ -9,9 +9,27 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "stripe",
     vendor: "Stripe",
     description: "Stripe payments: read a balance, customer, charge, payment intent or refund; capture, cancel and refund a payment",
+    authority: None,
     base_url: "https://api.stripe.com",
+    auth: AUTH,
     operations: OPERATIONS,
 };
+
+#[rustfmt::skip]
+static AUTH: &[crate::Credential] = &[
+    crate::Credential {
+        name: "stripe.secret_key",
+        leaf: "secret_key",
+        acquire: crate::Acquisition::Static,
+        place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+    },
+    crate::Credential {
+        name: "stripe.webhook_signing_secret",
+        leaf: "webhook_signing_secret",
+        acquire: crate::Acquisition::Static,
+        place: crate::Placement::Inbound,
+    },
+];
 
 #[rustfmt::skip]
 static OPERATIONS: &[crate::Operation] = &[
