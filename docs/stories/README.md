@@ -31,6 +31,7 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-16 — Design the $auth seam and file its stories on flux's board](C-16-design-auth-seam.md) · Bridge · **critical path** · ships in ../flux, longest lead time
 - [C-2 — Define the Connector IR](C-2-connector-ir.md) · Spec · the contract every other crate speaks
 - [C-3 — Load and validate provider TOML](C-3-provider-toml-loader.md) · Spec
+- [C-18 — Vendor provider specs and curate the operation inventory](C-18-vendor-specs-and-inventory.md) · Spec · prerequisite half of C-17 · pure research, no Rust
 - [C-8 — Emit a Flux op for a GET with path and query params](C-8-flux-op-emitter.md) · Codegen · first end-to-end slice of codegen
 - [C-9 — Emit request bodies, headers, and response handling](C-9-bodies-and-responses.md) · Codegen
 - [C-10 — Emit the $auth marker and the connector manifest](C-10-auth-injection-and-manifest.md) · Codegen · pairs with C-16 · the second generated artifact

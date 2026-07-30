@@ -53,6 +53,10 @@ on this shape, so it lands before the loaders.
   (`~/babelforce/projects/babelforce-api/babelforce-api/openapi/manager.openapi.json`) declares
   three schemes — `oauth2` (password flow), `accessId` (`X-Auth-Access-Id`) and `accessToken`
   (`X-Auth-Access-Token`) — where the two apiKey headers must be sent **together** (AND) and are an
-  **alternative** to OAuth2 (OR). Model it correctly here or C-10 cannot emit babelforce at all.
-- Do not collapse a requirement set to a single purpose "for now". The AND case is the first one we
-  ship, so a single-purpose shortcut would be wrong immediately.
+  **alternative** to OAuth2 (OR).
+- **The `X-Auth-*` pair is deprecated and must not be emitted** (see C-17). That does *not* remove
+  the need to model AND: the IR still has to represent what the spec declares in order to
+  deliberately exclude it, and "this requirement set is excluded" is a different statement from "this
+  scheme does not exist". A single-purpose shortcut cannot express either.
+- Babelforce ships **SSO-issued Bearer** today and plans **JWT**, so its own scheme list grows over
+  time — the OR/alternatives case is permanent, not transitional.
