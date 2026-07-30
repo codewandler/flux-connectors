@@ -39,9 +39,15 @@ which is what keeps a Node build from having to run before a Rust one.
 `cargo run -p connector-cli -- build` writes it. **`build --provider <name>` does not**: the document
 covers every provider at once and a scoped run compiles only one, so writing it from a scoped run
 would silently truncate the catalogue to the provider that happened to be built. A scoped run leaves
-the committed document alone and does not report it stale. (Same reasoning as
-`crates/catalog/src/generated.rs`, which keeps its provider index by hand for the mirror-image
-reason.)
+the committed document alone and does not report it stale.
+
+**C-104 generalised this rule.** It was stated here for one document and reached independently, from
+the other direction, by `crates/catalog/src/generated.rs` — which paid for it by keeping its provider
+index *by hand*, and so became the one file every provider story had to append to. C-104 made that
+index generated under this same full-run rule, and named the resulting class in `AGENTS.md`:
+**whole-catalogue artifacts**, written by a full build only and owned by the coordinator. That is
+what lets provider stories run in parallel, because it makes two implementors' write sets disjoint.
+`crates/connector-cli/tests/catalog_index.rs` asserts the rule for every member of the class.
 
 ## Guarantees
 

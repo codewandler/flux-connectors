@@ -33,7 +33,7 @@ change to a story's `status`, `priority`, `title`, `epic`, or `note`, run `/trac
 ## Current project boundary
 
 **Snapshot: v0.3.0.** `cargo run -p connector-cli -- build` compiles 17 providers and 97 curated
-connector operations plus 77 Flux core entries into 236 artifacts. The compiler, embedded Rust catalogue, JSON catalogue, and public
+connector operations plus 77 Flux core entries into 237 artifacts. The compiler, embedded Rust catalogue, JSON catalogue, and public
 explorer work. **No generated provider can make a live API call yet.** Read
 [Intentional gaps](#intentional-gaps) before changing code that appears broken.
 
@@ -74,7 +74,7 @@ cargo run -p connector-cli -- build
 cargo run -p connector-cli -- diff
 ```
 
-`diff` must finish with `236 artifacts up to date (17 providers checked)` for the current catalogue.
+`diff` must finish with `237 artifacts up to date (17 providers checked)` for the current catalogue.
 The artifact count may legitimately change when providers or operations change; do not encode it as
 a permanent invariant.
 
@@ -83,16 +83,56 @@ a permanent invariant.
 | `connectors/*.flux`, `connectors/*.connector.toml` | `providers/`, vendored `specs/`, compiler code |
 | `crates/catalog/ops/<provider>/*.flux` | Emitted provider operations |
 | `crates/catalog/src/generated/<provider>.rs` | Connector IR and catalogue emitter |
-| `web/public/catalog.json` | Connector IR, `specs/flux/core-v1.json`, and public-catalogue emitter |
-| `web/public/v1/**/*.json` | `specs/flux/core-v1.json` and core-catalogue publisher |
-| `assets/readme-snippet-{light,dark}.svg` | `assets/readme-snippet.flux` and flux highlighter |
+| `crates/catalog/src/generated.rs` | The provider set in `providers/` — **whole-catalogue** |
+| `web/public/catalog.json` | Connector IR, `specs/flux/core-v1.json`, and public-catalogue emitter — **whole-catalogue** |
+| `web/public/v1/**/*.json` | `specs/flux/core-v1.json` and core-catalogue publisher — **whole-catalogue** |
+| `assets/readme-snippet-{light,dark}.svg` | `assets/readme-snippet.flux` and flux highlighter — **whole-catalogue** |
 
-Two nearby files are intentionally hand-maintained:
+One nearby file is intentionally hand-maintained: `assets/readme-snippet.flux` is the checked source
+for the README image, and tests keep it identical to the operation shown in the generated Zendesk
+module.
 
-- `assets/readme-snippet.flux` is the checked source for the README image; tests keep it identical to
-  the operation shown in the generated Zendesk module.
-- `crates/catalog/src/generated.rs` is the provider module index. A provider-scoped build cannot
-  regenerate a complete global index, so tests keep this explicit list in sync.
+### Whole-catalogue artifacts are coordinator-owned
+
+The four artifacts marked **whole-catalogue** above describe the catalogue *as a whole*. A scoped run
+compiled a subset, so it cannot write one honestly — it would drop every provider it never looked at,
+and it would do so successfully. `build` therefore emits them **only on a full run**, and
+`--provider`/`--service` leave the committed files untouched rather than truncating them
+([docs/designs/catalog-json.md](docs/designs/catalog-json.md) records the rule; C-104 brought the
+provider index under it). `crates/connector-cli/tests/catalog_index.rs` asserts it.
+
+They have the same status the board and `CHANGELOG.md` already have: **a story implementor does not
+regenerate them, and the coordinator writes them at integration.** They are generated, so a conflict
+in one is resolved by **regenerating, never by merging hunks** — a merged index is a plausible file
+that describes no build.
+
+This is what lets provider stories run in parallel. A provider story writes `providers/<id>.toml`
+plus only per-provider artifacts, so two implementors' write sets are disjoint. **The gate a provider
+implementor runs is scoped and does not include a full build:**
+
+```bash
+cargo run -p connector-cli -- build --provider <id>   # per-provider artifacts only
+cargo run -p connector-cli -- diff  --provider <id>   # must report no drift
+cargo build --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all --check
+```
+
+**A story that adds a new provider leaves exactly three tests red, and that is the design working.**
+They are the whole-catalogue staleness checks, and they are red precisely because the implementor
+correctly did *not* write a whole-catalogue file:
+
+| red test | what it is reporting |
+|---|---|
+| `catalog::embedded_operations::the_provider_list_matches_the_repository` | the committed index does not yet name the new provider |
+| `catalog::embedded_operations::the_catalog_is_not_empty` | the provider and rendering counts disagree with `providers/` and `ops/` |
+| `connector-cli::catalog_artifacts::the_committed_tree_is_a_fixed_point_of_a_build` | a full build would write `crates/catalog/src/generated.rs` and `web/public/catalog.json` |
+
+Report them and stop; do **not** run a full build to silence them. The coordinator's full build at
+integration is what resolves all three, and it is the only build that can, because it is the only one
+that has every provider. A story that only *changes* an existing provider leaves the index correct
+and so trips the third alone.
 
 The public VitePress site is a consumer surface, not a publication of repository internals. Public
 pages may explain connectors, operation contracts, safety metadata, credentials, hosts, and current
