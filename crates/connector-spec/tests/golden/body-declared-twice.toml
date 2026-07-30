@@ -1,0 +1,26 @@
+# "The body is these named fields" and "the body *is* this schema" are two answers to one question.
+# Nothing states how they merge, so an operation declaring both has no derivable request body and no
+# derivable `input_schema` — it is refused here rather than resolved by guesswork (C-125).
+id = "babelforce"
+base_url = "https://api.babelforce.com"
+
+[[operations]]
+id = "babelforce.session.update"
+method = "PUT"
+path = "/v2/sessions/{id}"
+risk = "medium"
+idempotency = "idempotent"
+auth = []
+
+[[operations.params.path]]
+name = "id"
+required = true
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "presence"
+required = true
+schema = { type = "string" }
+
+[operations.params]
+body_schema = { type = "object" }

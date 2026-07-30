@@ -32,6 +32,7 @@ Gate: `cargo build --workspace && cargo test --workspace && cargo clippy --works
 - [C-144 — No connector can send a non-JSON request body](C-144-request-body-encoding.md) · Spec · found shipping Stripe: op.rs binds application/json unconditionally and the IR has no content_type key anywhere. Blocks every form-encoded vendor — and OAuth2 token endpoints are form-encoded BY SPEC, so C-135's oauth2.login needs this too
 - [C-143 — The artifact tests leak their fixtures and go flaky under load](C-143-artifact-tests-leak-fixtures.md) · Core · found twice during a 7-agent wave, both times attributed to the wrong diff before being measured. 55 stale fixture directories in /tmp, which is a 32G tmpfs — the tests write to env::temp_dir() and do not always clean up
 - [C-149 — The Vault live leg reports ok when it skips, and three smaller gaps beside it](C-149-vault-live-leg-reports-ok-when-it-skips.md) · Core · found by C-91's review. The test's own module doc says 'there is no third path where it reports success without having talked to anything' — and that is exactly what it does today. A skipped leg that prints ok is the failure mode the whole no-simulated-success rule exists to prevent
+- [C-133 — The brave connector — Brave Talk's room-token HTTP surface](C-133-provider-brave-talk-tokens.md) · Spec · ONLY the three HTTP calls. The XMPP MUC stream stays OUT — vision.md names protocol-rich technology adapters as a non-goal, and flux already has D-205/D-206 with feasibility proven live. Blocked on two real things; read Notes before starting
 
 ### authentication as a connector surface — a login that cannot leak
 _Authentication is currently something the **host** does *around* a connector: `OAuth2Spec` declares_
@@ -109,7 +110,6 @@ _A connector today compiles a vendor spec into **outbound** ops: flux calls Zend
 
 ### Member Io
 - [C-124 — Every member states what it receives and what it returns (epic)](C-124-member-io-schemas-epic.md) · Codegen · EPIC — measured, not assumed: 92/97 operations carry parameters but only 16/97 carry a response_schema, and events/channels/graphs reach no artifact at all. The trap: response_schema is the VENDOR's body, while an emitted op returns one flat string
-- [C-125 — Compose one input_schema per operation](C-125-composed-input-schema.md) · Codegen · mechanical, with a clear right answer, and an immediate consumer — ToolSpec.input_schema is REQUIRED, so C-114 must otherwise invent its own and disagree with the catalogue
 - [C-126 — Raise response_schema coverage and put a floor under it](C-126-response-schema-coverage.md) · Spec · 16 of 97 operations declare a response shape. The floor test matters more than the number — coverage that nothing watches only ever goes down
 - [C-127 — Separate what the vendor sends from what a caller receives](C-127-truthful-output-typing.md) · Codegen · the trap this epic exists for — publishing response_schema as an output_schema means a consumer writing `.data.id` gets null on every call, with no error. http.request returns ONE FLAT STRING
 - [C-128 — In and out shapes for events, channel bindings and graphs](C-128-inbound-io-schemas.md) · Codegen · the IR already carries the fields (inbound.rs, graph.rs) but nothing publishes them. A binding's 'out' is its reply operation's 'in' — the composition C-82 recorded, so reuse it rather than restating it
@@ -121,7 +121,6 @@ _A connector's operations are currently legible only by reading `providers/<name
 
 ### Provider Fleet 2
 - [C-105 — Provider fleet 2 — the next connectors, shipped in parallel (epic)](C-105-provider-fleet-2-epic.md) · Spec · EPIC — the first fleet (C-69..C-78) is fully drained. Each connector here is chosen to exercise something the model has not yet met, not just to add a row
-- [C-107 — Ship the Notion connector](C-107-provider-notion.md) · Spec · blocked on C-55, now measured rather than predicted — a const-pinned Notion-Version emits as a caller-overridable parameter with the const dropped, and Notion REJECTS every request without the header
 - [C-108 — Ship the Microsoft Graph connector](C-108-provider-microsoft-graph.md) · Spec · the second multi-service provider after Google — and the first where the services share a host, so it tests whether a service is a real level or just Google's URL problem
 - [C-109 — Ship the Twilio connector](C-109-provider-twilio.md) · Spec · third basic-join vendor, and the one whose username half is an account identifier rather than an email — so it tests whether the config model generalises past the zendesk/jira shape
 - [C-110 — Ship the Linear connector — or record why a GraphQL vendor cannot be one](C-110-provider-linear.md) · Spec · GraphQL-only. The pipeline is REST-shaped; this either proves it stretches or produces a documented refusal. Either outcome is worth more than another REST connector
@@ -135,7 +134,6 @@ _Seventeen connectors share structure that nothing currently names. `zendesk`, `
 
 ### Tool Pack
 - [C-113 — The connector Tool pack — the flux interop layer (epic)](C-113-tool-pack-epic.md) · Bridge · EPIC — flux REMOVED flux-plugin-zendesk pending 'a flux-connectors interop layer'; D-200/D-201/D-202 are blocked on this and examples/zendesk.triage.flux is the written acceptance target. A Tool pack delegates to flux's own http.request, so flux keeps every byte of egress
-- [C-116 — The CredentialStore port, in-Rust auth assembly, and redaction](C-116-credential-store-port.md) · Bridge · finally wires C-90's Layout/CredentialRef to a consumer — and removes the $auth seam from milestone 1's critical path, because a Tool builds `Bearer <token>` itself
 - [C-145 — A dry-run transport that cannot send](C-145-dry-run-transport.md) · Bridge · dry-run and 'intercept the calls for a demo' are ONE mechanism with two payloads — C-115 already takes its transport as a constructor argument, so neither forks the request path. Structurally unable to send, not a live client with a flag
 - [C-117 — Generate the pack from the IR and hold it to the drift gate](C-117-pack-codegen.md) · Codegen · two surfaces from one IR can disagree about the same operation — the differential test is the honest guard, and it belongs here rather than in a later postmortem
 - [C-146 — Recorded fixtures so the explorer can demonstrate an operation](C-146-demo-fixtures.md) · Bridge · the explorer is a PUBLIC site — the demo path must be structurally unable to hold a credential, which a recorded fixture gives for free. Offline, so it does not become a way to call a vendor from a web page
@@ -153,9 +151,9 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-26 — File the outbound $auth seam stories on flux's board](C-26-file-seam-stories-on-flux.md) · Bridge · **critical path** · 11 paste-ready drafts wait on a decision to write into ../flux
 - [C-35 — Specify the proxy request contract and its guardrails](C-35-proxy-request-contract.md) · Bridge · blocked on C-34
 - [C-36 — Prove the proxy and the Flux emitter build the same request](C-36-proxy-emitter-conformance.md) · Bridge · blocked on C-34 · two backends over one IR will drift without this
+- [C-116 — The CredentialStore port, in-Rust auth assembly, and redaction](C-116-credential-store-port.md) · Bridge · finally wires C-90's Layout/CredentialRef to a consumer — and removes the $auth seam from milestone 1's critical path, because a Tool builds `Bearer <token>` itself
 
 ## Backlog
-- [C-133 — The brave connector — Brave Talk's room-token HTTP surface](C-133-provider-brave-talk-tokens.md) · Spec · ONLY the three HTTP calls. The XMPP MUC stream stays OUT — vision.md names protocol-rich technology adapters as a non-goal, and flux already has D-205/D-206 with feasibility proven live. Blocked on two real things; read Notes before starting
 
 ### the connector bundle
 _A connector is more than a set of callable operations. It also has **schemas** (what goes in, what_
@@ -237,11 +235,13 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-102 — Make a filtered view shareable, and let the list be sorted](C-102-shareable-explorer-views.md) · Surfaces · the page promises 'every operation has a stable page you can share' — true of an operation, false of a view. 'Every destructive Shopify operation' cannot be sent to anyone
 - [C-104 — Make whole-catalogue artifacts coordinator-owned, so provider stories can run in parallel](C-104-parallel-provider-fanout.md) · Build · the fan-out cap is ONE file — crates/catalog/src/generated.rs carries two hand-maintained lists every provider story appends to, so any two collide and the wave size is 1
 - [C-106 — Ship the Stripe connector](C-106-provider-stripe.md) · Spec · the second vendor in C-60's HMAC matrix — inbound-events.md already tabulates Stripe-Signature with its t=/v1= pairs and tolerance, and nothing has ever exercised that row
+- [C-107 — Ship the Notion connector](C-107-provider-notion.md) · Spec · unblocked by C-55: Notion-Version is pinned in const_headers and emits as a literal, not as a caller-supplied argument
 - [C-111 — Ship the Fly.io Machines connector](C-111-ship-the-fly-machines-connector.md) · Spec · A deliberately narrow machine-lifecycle surface: nine typed operations, one named service, and no invented channel contract
 - [C-112 — Publish Flux core specifications in the connector explorer](C-112-publish-flux-core-specifications-in-the-explorer.md) · UX · Built-ins and language nodes become searchable beside connectors, with canonical JSON identities rather than fake providers
 - [C-114 — The connector-pack crate and the ToolSpec projection](C-114-tool-spec-projection.md) · Bridge · the foundation the rest of the epic builds on — a catalogue entry becomes a flux ToolSpec, dotted name and all
 - [C-115 — Request construction, delegation to http.request, and the mirrored network gate](C-115-request-delegation.md) · Bridge · SAFETY — delegating to HttpRequestTool::execute bypasses Executor::dispatch, so a Tool that fails to declare its own permission_subjects is an un-gated hole through the host's network policy
 - [C-120 — Declare roles on a service, with the closed set and its refusals](C-120-service-roles-declaration.md) · Spec · the mechanism — roles attach to a SERVICE and a provider's are derived; an unknown role name is a load error, because a typo'd capability that silently means 'no capability' is the whole failure mode
+- [C-125 — Compose one input_schema per operation](C-125-composed-input-schema.md) · Codegen · mechanical, with a clear right answer, and an immediate consumer — ToolSpec.input_schema is REQUIRED, so C-114 must otherwise invent its own and disagree with the catalogue
 - [C-142 — Detach the explorer components from VitePress: a link port and a tier boundary](C-142-reusable-explorer-components.md) · Codegen · measured, not guessed: 6 of 14 components import `vitepress`, and between them they use exactly two symbols. No `useData`, no `useRouter`, no theme internals — so this is a link port and a tier boundary, not a rewrite
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._

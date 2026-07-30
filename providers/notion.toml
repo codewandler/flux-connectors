@@ -1,0 +1,415 @@
+# Notion API — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Unlike github, asana and stripe, Notion publishes **no OpenAPI
+# document at all**: developers.notion.com is hand-written reference prose, and the community
+# conversions that exist are third-party and unversioned. So there is nothing to vendor under
+# `specs/` even once ingest (C-4) and the overlay (C-6) land, and this file stays hand-authored
+# rather than becoming `[spec]` plus a `[[patch.operations]]` selection. Drift is undetectable by
+# machine and will remain so — a stronger version of the caveat zendesk, freshdesk and github carry
+# (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# `Notion-Version: 2022-06-28` IS DECLARED BELOW IN `const_headers`, AND IT IS WHY THIS CONNECTOR
+# WAITED FOR C-55.
+# ---------------------------------------------------------------------------------------------
+#
+# Notion answers `400 validation_error` to **every** request that carries no `Notion-Version` header.
+# There is no default, no grace period and no unversioned alias. So unlike github's `Accept`, where
+# the vendor defaults the value and pinning it only protects against a future change to that default,
+# this header is the connector working at all.
+#
+# C-107's first attempt measured what the schema could express before C-55, and refused to ship the
+# result. The only header mechanism was `params.header`, documented as *"request headers the caller
+# supplies"*; pinning one with a JSON Schema `const` — the trick that works for a constant *body*
+# field, as `ticket.safe_update` does in `providers/zendesk.toml` — emitted
+#
+#   op notion-page-get(page_id: String, Notion_Version: String) -> Any
+#
+# with the `const` dropped entirely: a required argument a model must guess on every call and any
+# caller may set to anything. That connector compiled, formatted, round-tripped and passed every
+# shipped-provider gate, and would have answered 400 on its first real request. C-55 refuses that
+# spelling outright and adds `const_headers` as the honest one.
+#
+# `crates/connector-flux/tests/notion_connector.rs` asserts the literal reaches **every** emitted
+# operation and that no signature declares it, so this stays a property of the connector rather than
+# of this comment.
+#
+# `content-type: application/json` remains hard-coded in the emitter and is still not declarable;
+# C-144 tracks the related gap that no connector can send a non-JSON body at all.
+#
+# ---------------------------------------------------------------------------------------------
+# THE BLOCK MODEL IS OUT OF SCOPE, SO THIS CONNECTOR READS AND WRITES PAGE *PROPERTIES*, NEVER PAGE
+# *CONTENT*. THIS IS THE MOST IMPORTANT LIMITATION IN THE FILE.
+# ---------------------------------------------------------------------------------------------
+#
+# In Notion's model a page's text is not a field of the page. It is a tree of **blocks** hanging off
+# it, reached through `GET /v1/blocks/{block_id}/children` and written through
+# `PATCH /v1/blocks/{block_id}/children`. A block is a discriminated union of some thirty
+# type-specific bodies (`paragraph`, `heading_1..3`, `bulleted_list_item`, `to_do`, `code`, `table`,
+# `column_list`, `synced_block`, …) and the payloads are **recursive**: a block's children are
+# blocks, and a `column_list` contains `column`s that contain blocks.
+#
+# `JsonSchema` here has no `$ref` and no recursion, so that union is not expressible. `body_schema`
+# could take it as a free-form object, but that ships an untyped blob and hands the model a guess at
+# the one shape Notion is strictest about — precisely the "plausible but incorrect" output AGENTS.md
+# says to refuse. So both block endpoints are excluded, and **`notion-page-get` returns a page's
+# properties, its parent, its icon, cover and timestamps — not a word of its text.** Its `description`
+# says so, because a model told it "gets a page" would otherwise reasonably report the page as empty.
+#
+# ---------------------------------------------------------------------------------------------
+# TWO OF NOTION'S THREE READS ARE `POST`, SO THEY MUST PRESENT TO FLUX'S APPROVAL GATE AS WRITES.
+# ---------------------------------------------------------------------------------------------
+#
+# `check_write_metadata` (`crates/connector-flux/src/op.rs`) refuses `risk = "low"` on any
+# state-changing method and refuses `idempotency = "idempotent"` on `POST`/`PATCH`. It is right to:
+# it sees an HTTP method, and it cannot see that Notion routes a *query* through `POST` because the
+# filter payload is too big for a URL.
+#
+# The consequence is that `notion-database-query` and `notion-search` — both pure reads that change
+# nothing — are declared `risk = "medium"` and `idempotency = "non_idempotent"`, and flux's approval
+# gate will prompt for them as though they wrote something. **This is a real loss of fidelity and it
+# is recorded here rather than absorbed silently.** The direction is the safe one: it over-prompts,
+# never under-prompts, so no operation is waved through on a claim this file could not back. Do
+# **not** "fix" it by declaring `low` — the refusal is loud and correct, and the honest resolution
+# would be a spec-level way to say "this POST is a read", which no story has designed.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: no query parameter, so all pagination is excluded (C-30).
+# ---------------------------------------------------------------------------------------------
+#
+# Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim into a
+# `fmt` template and flux registers no encoding op (`crates/connector-flux/src/op.rs`).
+# `zendesk-ticket-search` is the standing demonstration and AGENTS.md lists it under *Intentional
+# gaps* — a value carrying `&` does not filter, it injects a parameter.
+#
+# Notion's `start_cursor` is an **opaque server-issued token** a caller must never construct, the
+# same shape as a Slack cursor and an Asana `offset`, and just as unencodable here. So every
+# collection operation below returns Notion's first page (100 items) and there is no way to ask for
+# the next one. Excluding pagination outright is what keeps this connector off AGENTS.md's
+# *Intentional gaps* list rather than adding a fourth entry to it: a first page is a correct answer
+# to a narrower question, whereas a broken cursor is a wrong answer to the right one.
+#
+# The path surface, by contrast, is genuinely safe rather than merely untested: every Notion id is a
+# UUID, and a UUID cannot carry a character that changes the shape of a request. Each path parameter
+# declares that as a `pattern`, which is a contract a model reads and a future validator can check —
+# the emitted Flux does not enforce it. That asymmetry is the whole selection principle here.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: no optional request-body field (C-56), and Notion's 400s are strict about `null`.
+# ---------------------------------------------------------------------------------------------
+#
+# The emitter binds every declared body field into the payload unconditionally, so a caller who
+# leaves an optional field alone sends an explicit `null`. Notion type-checks the members of a
+# request body and answers `400 validation_error` to `{"filter": null}` — the connector would fail
+# *because* the caller did nothing. Until C-56 teaches the emitter to omit an absent field, this file
+# declares required fields only, and what that costs is named at each operation.
+#
+# ---------------------------------------------------------------------------------------------
+# EXCLUDED, each for a stated reason
+# ---------------------------------------------------------------------------------------------
+#
+# - `GET /v1/blocks/{block_id}/children`, `PATCH /v1/blocks/{block_id}/children` — the block model
+#   above. This is the largest exclusion and the one a reader is most likely to want.
+# - `PATCH /v1/pages/{page_id}` (update properties). The `properties` object is keyed by
+#   **user-defined** property names whose value shape depends on that property's type in that
+#   specific database. Nothing static can describe it, and a `wire` path cannot address a key that
+#   does not exist until a tenant creates it. (The same reason `notion-page-create` below writes into
+#   a *page* parent, where the one property is `title` and is fixed, rather than into a database.)
+# - `filter` and `sorts` on `notion-database-query`. A recursive boolean DSL over those same
+#   tenant-defined property names — the same unexpressible shape as the block union.
+# - `start_cursor` / `page_size` everywhere — C-30, above.
+# - Comments, file uploads, `POST /v1/databases` and `PATCH /v1/databases`, `GET /v1/users`, and the
+#   OAuth token exchange (`POST /v1/oauth/token`). Out of scope for a first curated set, not blocked
+#   by anything.
+
+id = "notion"
+vendor = "Notion"
+
+# One host for every workspace. Notion has no tenant subdomain — a workspace is identified by the
+# integration token, not by the address — so `base_url` carries no `{placeholder}` for an operator to
+# bind, `status.rs` reports no `unbound-base-url-template` issue, and the connector already has a
+# valid destination URL.
+#
+# `http_hosts` derives from this single value (`crates/connector-cli/src/catalog.rs`, `host_of`) and
+# is therefore exactly `api.notion.com`, never widened. Notion's file attachments are served from an
+# S3 host on signed, expiring URLs; none is reachable from the operations below, and adding one would
+# widen the egress allow-list for nothing.
+base_url = "https://api.notion.com"
+
+# C-55: the vendor-constant header, emitted as a literal rather than a caller-supplied argument, and
+# distributed by the loader onto every operation below.
+#
+# An inline table deliberately — a `[const_headers]` section header would scope every provider scalar
+# after it into that table and the loader would reject the file. `providers/github.toml` records the
+# same note against the same trap.
+#
+# The date is Notion's API version, not a release date: Notion versions *behaviour* by date, and
+# `2022-06-28` is the version the request and response shapes below are written against. Changing it
+# is a deliberate migration of this whole file, not a refresh.
+const_headers = { "Notion-Version" = "2022-06-28" }
+
+description = "Notion workspace: read a page's properties, query a database, search shared content, and create a page"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["notion.token"] }]
+
+# The "Test connection" button. `GET /v1/users/me` takes no parameters at all, so pressing it cannot
+# do anything except prove the token resolves — and it answers with the integration's own bot user,
+# which is the clearest confirmation available that the token is a Notion integration token rather
+# than something else pasted into the field. A `verify` operation runs unattended whenever someone
+# opens a settings page, so it must be a read; the loader refuses a `high` or `destructive` one. It is
+# also a genuine `GET`, unlike Notion's two POST reads.
+verify = "notion-user-me"
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "notion.token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; its value is never read
+# here and never reaches a generated artifact.
+#
+# An internal integration token and an OAuth-issued access token are the same thing on the wire —
+# `Authorization: Bearer ntn_…` — so which one an operator supplies is configuration rather than
+# connector shape. That is why no `[auth.oauth2]` block appears: flux is handed an already-minted
+# token through the environment and runs no grant, the same provenance asana's and slack's bearers
+# have.
+#
+# WHAT DIFFERS FROM EVERY OTHER CONNECTOR HERE, and it is worth stating because it causes the most
+# common Notion failure: a Notion token carries no scopes that grant *content* access. An integration
+# sees only the pages and databases a workspace member has explicitly shared with it, through the
+# page's "Connections" menu. A perfectly valid token returns `404 object_not_found` for a page that
+# exists and that the operator can see in their browser. That is a sharing problem, not an auth
+# problem, and `[[config]]` help below says so where a human will read it.
+env = ["NOTION_TOKEN"]
+description = "Notion integration token sent as a bearer — an internal integration token or an OAuth-issued access token"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a human supplies before any of this runs
+#
+# One field. Notion is single-host with no tenant subdomain, so unlike zendesk's `{subdomain}` and
+# freshdesk's `{domain}` there is no address to bind and the token is the only thing an operator can
+# supply. `binds` makes this connection-level (per tenant) rather than operator-level; `Level` is
+# derived from that and is never authored.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "token"
+label = "Integration token"
+# The mistake this connector will actually cause, said in the place a human reads before pasting.
+# Creating the integration is the easy half; sharing the pages with it is the half everyone forgets,
+# and the symptom — a 404 for a page you are looking at — reads like a bug rather than a permission.
+help = "Create an integration at notion.so/my-integrations and copy its Internal Integration Secret. **Then share your pages with it**: in Notion, open each page or database, use the ••• menu → Connections → and add your integration. An integration can only see content that has been shared with it this way, so a token that is otherwise valid returns a 404 for a page you can see in your browser until you do. Sharing a parent page shares everything under it"
+# No `example`, deliberately. A placeholder for a *secret* field has to be recognisable as fake, and a
+# Notion token is `ntn_` followed by 46 base62 characters — a shape secret scanners match. An
+# `ntn_`-prefixed placeholder of the right length trips GitHub push protection and blocks the push,
+# which is the correct behaviour; `providers/shopify.toml` records the release this repository
+# actually lost that way. The shape belongs in prose, where it cannot be mistaken for a value or
+# copied into a form.
+format = "token"
+secret = true
+docs_url = "https://developers.notion.com/docs/authorization"
+binds = "credential.notion.token"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 5 of some 30 endpoints
+#
+# Curated to what a knowledge-base flow executes at runtime: find something (search), read a
+# structured table of things (database query), read one thing's properties (page get), record a new
+# thing (page create) — plus the connection check. Everything administrative and everything requiring
+# the block model is excluded; see the header comment for the list and the reasons.
+#
+# `/v1` is Notion's only path version prefix and has been since the API was published. Notion
+# versions behaviour through the `Notion-Version` header instead, which is why that header carries the
+# weight it does at the top of this file.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only, so `op notion.pages.get` is undeclarable (C-8, C-23).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "notion-user-me"
+method = "GET"
+path = "/v1/users/me"
+description = "Get the bot user this integration authenticates as, confirming the token resolves and naming the workspace it belongs to. Takes no parameters"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+properties = { object = { const = "user" }, id = { type = "string", description = "The bot user's id" }, name = { type = "string" }, type = { const = "bot" }, bot = { type = "object", description = "The integration's owner and workspace name" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "notion-page-get"
+method = "GET"
+path = "/v1/pages/{page_id}"
+# THE DESCRIPTION SAYS "PROPERTIES, NOT CONTENT" BECAUSE A MODEL WILL OTHERWISE REPORT THE PAGE AS
+# EMPTY. See the block-model section of the header comment: a page's text lives in a separate block
+# tree this connector cannot express, so "get a page" returns everything *about* the page and none of
+# what is written *on* it.
+description = "Get one page's properties, parent, icon, cover and timestamps. This does NOT return the page's text — in Notion a page's content is a separate tree of blocks, which this connector cannot read"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "page_id"
+description = "The page's id, a UUID. It is the last path segment of the page's URL, where it appears without hyphens — either spelling is accepted"
+required = true
+schema = { type = "string", pattern = "^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$", minLength = 32 }
+
+[operations.response_schema]
+type = "object"
+properties = { object = { const = "page" }, id = { type = "string" }, created_time = { type = "string", format = "date-time" }, last_edited_time = { type = "string", format = "date-time" }, archived = { type = "boolean" }, parent = { type = "object", description = "Where the page lives: `{type: \"database_id\", database_id}`, `{type: \"page_id\", page_id}` or `{type: \"workspace\"}`" }, properties = { type = "object", description = "The page's property values, keyed by property name. For a page in a database the keys are that database's own columns, so they are known only at runtime; for a page with a page parent there is exactly one, `title`" }, url = { type = "string" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/code"
+
+# ---------------------------------------------------------------------------------------------
+# The two POST reads. Both change nothing and both are declared as writes — see the header comment
+# for why `check_write_metadata` requires that and why it is the safe direction.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "notion-database-query"
+method = "POST"
+path = "/v1/databases/{database_id}/query"
+# WHY THIS OPERATION HAS NO BODY FIELDS AT ALL, and why it is still worth shipping.
+#
+# Everything a caller would put in the body — `filter`, `sorts`, `start_cursor`, `page_size` — is
+# excluded for a reason recorded in the header comment: the first two are a recursive DSL over
+# tenant-defined property names, the last two are pagination. What is left is the unfiltered first
+# page, which is a complete and correct answer to "what is in this database", and for the small
+# reference tables that make up most shared Notion databases it is the whole table.
+#
+# Sending no body at all is also what keeps this correct under C-56: an empty request body is exactly
+# what Notion expects for an unfiltered query, whereas `{"filter": null}` is a 400.
+description = "Query a database and return its first page of entries (up to 100), unfiltered and in the database's default order. Each entry is a page, and its `properties` are keyed by that database's own column names. Notion routes this read through POST, so it is declared as a write"
+# `medium`, not `low`, and not because this operation changes anything — it changes nothing at all.
+# `check_write_metadata` refuses `low` on a POST and cannot see that this one is a read. Over-prompting
+# is the safe direction; see the header comment.
+risk = "medium"
+# `non_idempotent` for the same reason: the emitter refuses `idempotent` on a POST. Repeating this
+# call is in fact perfectly safe.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "database_id"
+description = "The database's id, a UUID. Open the database as a full page in Notion and it is the last path segment of the URL — not the id of a page inside it"
+required = true
+schema = { type = "string", pattern = "^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$", minLength = 32 }
+
+[operations.response_schema]
+type = "object"
+properties = { object = { const = "list" }, results = { type = "array", description = "The matching pages, each with its own `properties` object keyed by the database's column names", items = { type = "object" } }, has_more = { type = "boolean", description = "True when the database holds more entries than this page returned. This connector cannot fetch them — the cursor is an opaque token and no query parameter is encodable (C-30)" }, next_cursor = { type = "string", description = "The cursor for the next page. Unusable here, for the reason given on `has_more`" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "notion-search"
+method = "POST"
+path = "/v1/search"
+description = "Search the pages and databases shared with this integration by title, returning the first page of matches (up to 100). Notion matches on title only — it does not search page text. Notion routes this read through POST, so it is declared as a write"
+# The same over-declaration as `notion-database-query`, for the same reason.
+risk = "medium"
+idempotency = "non_idempotent"
+
+# Required, though Notion itself treats it as optional — an absent `query` returns everything shared
+# with the integration. C-56 forbids an optional body field (an omitted one would be sent as an
+# explicit `null`, which Notion rejects), so the choice is between always sending a query and never
+# being able to send one. An operation that could not search is not a search operation; a caller who
+# genuinely wants everything sends `""`, which Notion treats as no filter.
+[[operations.params.body]]
+name = "query"
+description = "The text to match against page and database titles. An empty string returns everything shared with the integration"
+required = true
+schema = { type = "string" }
+
+[operations.response_schema]
+type = "object"
+properties = { object = { const = "list" }, results = { type = "array", description = "The matching pages and databases, newest first", items = { type = "object" } }, has_more = { type = "boolean", description = "True when more matches exist than this page returned. This connector cannot fetch them — see notion-database-query" }, next_cursor = { type = "string" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/code"
+
+# ---------------------------------------------------------------------------------------------
+# The one write.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "notion-page-create"
+method = "POST"
+path = "/v1/pages"
+# WHY THIS CREATES A PAGE UNDER A *PAGE*, NEVER UNDER A DATABASE.
+#
+# Notion's create takes `parent` in one of two shapes, and the `properties` it demands depends on
+# which. Under a **database** parent, `properties` must satisfy that database's own schema — keys are
+# the tenant's column names, and each value's shape depends on that column's type. Nothing static can
+# describe it and no `wire` path can address a key that does not exist until a tenant creates it, so
+# that half is excluded along with `PATCH /v1/pages/{page_id}` for the same reason.
+#
+# Under a **page** parent the shape is fixed: exactly one property, `title`, holding a rich-text
+# array. That is expressible, so it is what this operation ships. A page created this way is a normal
+# Notion subpage a human can then move or fill in.
+#
+# The created page is EMPTY of content — `children` (a block array) is excluded with the rest of the
+# block model, so this writes a titled page and nothing inside it. The description says so.
+description = "Create a new empty page as a child of an existing page. The page is created with a title and no content — this connector cannot write page body text, which in Notion is a separate tree of blocks. The parent page must be shared with this integration"
+# `medium`, not `high`. A new subpage is visible to everyone with access to its parent and is
+# attributed to the integration, but Notion notifies nobody on a page creation — there is no
+# subscriber email and no in-app notification, unlike `github-issue-create` (world-readable, emails
+# every subscriber) or `asana-task-story-add` (notifies every follower). It creates one object a human
+# can trivially archive, and it destroys nothing. `medium` — "writes with limited blast radius".
+#
+# WHEN THE BLOCK MODEL BECOMES EXPRESSIBLE AND `children` IS DECLARABLE, REVISIT THIS: a page arriving
+# with content in it is a different proposition from an empty placeholder.
+risk = "medium"
+# Posting twice creates two pages. Notion offers no idempotency key on this endpoint, so `conditional`
+# would be a claim with nothing behind it.
+idempotency = "non_idempotent"
+
+# `parent.page_id` — a two-segment `wire` path, so the emitter nests it rather than sending it at the
+# root, which Notion would reject as a missing `parent`.
+[[operations.params.body]]
+name = "parent_page_id"
+wire = "parent.page_id"
+description = "The id of the existing page to create this page inside, a UUID. It must be a page, not a database, and it must be shared with this integration"
+required = true
+schema = { type = "string", pattern = "^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$", minLength = 32 }
+
+# `List<Any>` in the emitted signature, and honestly so: a rich-text object is an object, Flux's type
+# surface has no record type, and `types.rs` maps an object to `Any` rather than guessing
+# (`crates/connector-flux/src/types.rs`). `Any` is the top type, so the op still accepts every
+# rich-text shape Notion accepts — including the link, mention and annotation forms — and the full
+# JSON Schema stays on the IR for C-10 and any later response work to read. The `description` carries
+# the concrete shape, because that is the text a model actually receives.
+#
+# The array is Notion's own representation of a title and is not a wrapper this file invented: a
+# Notion title is rich text, so it is a list of runs even when it is one unstyled string.
+[[operations.params.body]]
+name = "title"
+wire = "properties.title"
+description = "The page title as Notion rich text: a list of runs, each `{\"text\": {\"content\": \"...\"}}`. A plain title is one run — `[{\"text\": {\"content\": \"My page\"}}]`"
+required = true
+schema = { type = "array", minItems = 1, items = { type = "object", required = ["text"], properties = { text = { type = "object", required = ["content"], properties = { content = { type = "string", description = "The literal text of this run" }, link = { type = "object", description = "An optional link on this run, `{\"url\": \"...\"}`" } } } } } }
+
+[operations.response_schema]
+type = "object"
+properties = { object = { const = "page" }, id = { type = "string", description = "The created page's id, which is what later calls address it by" }, url = { type = "string", description = "The created page's Notion URL" }, created_time = { type = "string", format = "date-time" }, parent = { type = "object" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/code"

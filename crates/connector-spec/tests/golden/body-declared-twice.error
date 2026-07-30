@@ -1,0 +1,2 @@
+providers/body-declared-twice.toml is not a valid connector definition:
+  - operation "babelforce.session.update" declares both named `params.body` fields and a free-form `params.body_schema`. Those are two answers to one question — what the request body is — and there is no rule for merging them, so declare either the fields or the schema

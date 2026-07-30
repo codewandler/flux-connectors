@@ -2,7 +2,8 @@
 id: C-133
 title: "The brave connector — Brave Talk's room-token HTTP surface"
 pillar: Spec
-status: backlog
+status: ready
+priority: 5
 areas: [providers]
 note: "ONLY the three HTTP calls. The XMPP MUC stream stays OUT — vision.md names protocol-rich technology adapters as a non-goal, and flux already has D-205/D-206 with feasibility proven live. Blocked on two real things; read Notes before starting"
 ---
@@ -81,3 +82,24 @@ connector should say so where a user will see it, or not ship.
 and JWT signing. That is a paid SaaS product with a real credential — squarely what this repo is for,
 and free of all three problems above. **If a Brave/JaaS connector is wanted, that is probably the one
 to build.**
+
+## Progress
+
+- **Scheduled.** flux's meeting-rooms epic moved to the front of its board (`D-203` p3, `D-205` XMPP
+  p4, `D-206` Brave Talk p5), so this connector's counterpart is being built there. The XMPP stream
+  stays in flux; this story remains only the three HTTP calls.
+
+- **Two of the three blockers named above still stand**, and scheduling does not clear them:
+  1. **The CSRF token still cannot be extracted.** `http.request` returns one flat string, and while
+     the Tool pack (C-115) is Rust and *could* parse a response, nothing does yet —
+     [C-127](C-127-truthful-output-typing.md) owns that. A two-call handshake threading a value
+     between the calls is exactly the case that does not work.
+  2. **The acceptable-use question is unanswered.** flux's own design says to read Brave's ToS before
+     this is more than a spike, and publishing in a *public catalogue* is a different act from one
+     spike against your own room.
+
+  The third — "the auth model assumes a credential" — is now easier to check, since C-55 and C-91
+  both landed and the auth axes are better exercised.
+
+- **The alternative is still the better connector**: an own 8x8 JaaS tenant is a paid SaaS product
+  with a real credential, squarely in charter, and free of all three problems.

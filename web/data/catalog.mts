@@ -584,7 +584,7 @@ export const SORTS = ['catalog', 'id', 'risk']
  * Risk tiers from least to most consequential.
  *
  * The one ordering the catalogue cannot supply — JSON carries the tier of each operation and no
- * notion of which tier is worse. It has to be declared, and declaring it is the whole point:
+ * sense of which tier is worse. It has to be declared, and declaring it is the whole point:
  * alphabetically the most consequential tier sorts second of four, which is wrong without ever
  * looking wrong.
  */

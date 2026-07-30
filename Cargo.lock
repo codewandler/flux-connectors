@@ -308,14 +308,14 @@ dependencies = [
 
 [[package]]
 name = "connector-catalog"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "codewandler-flux-lang",
 ]
 
 [[package]]
 name = "connector-cli"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "connector-flux",
@@ -328,7 +328,7 @@ dependencies = [
 
 [[package]]
 name = "connector-flux"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "codewandler-flux-lang",
  "connector-spec",
@@ -340,7 +340,7 @@ dependencies = [
 
 [[package]]
 name = "connector-pack"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "codewandler-flux-core",
@@ -357,7 +357,7 @@ dependencies = [
 
 [[package]]
 name = "connector-secrets"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "connector-spec",
@@ -370,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "connector-spec"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "indexmap",
  "serde",
