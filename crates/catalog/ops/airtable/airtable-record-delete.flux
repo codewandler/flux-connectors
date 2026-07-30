@@ -5,7 +5,7 @@ op airtable-record-delete(base_id: String, table_id: String, record_id: String) 
   effects ["network"]
   expose true
 
-  $base = "https://api.airtable.com"
-  $url = fmt("{base}/v0/{base_id}/{table_id}/{record_id}")
-  $response = http.request({ method: "DELETE", url: $url })
-  return $response
+  base = "https://api.airtable.com"
+  url = fmt("{base}/v0/{base_id}/{table_id}/{record_id}")
+  response = http.request(method: "DELETE", url)
+  return response

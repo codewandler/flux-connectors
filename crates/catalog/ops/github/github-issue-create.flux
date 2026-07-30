@@ -5,9 +5,9 @@ op github-issue-create(owner: String, repo: String, title: String, body: String,
   effects ["network"]
   expose true
 
-  $base = "https://api.github.com"
-  $url = fmt("{base}/repos/{owner}/{repo}/issues")
-  $content_type = "application/json"
-  $payload = { assignees: $assignees, body: $body, labels: $labels, title: $title }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.github.com"
+  url = fmt("{base}/repos/{owner}/{repo}/issues")
+  content_type = "application/json"
+  payload = { assignees, body, labels, title }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

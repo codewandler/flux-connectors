@@ -31,7 +31,7 @@
 //!
 //! It is asserted twice, over the IR and over the emitted text, because those are different claims.
 //! The emitter re-binds `$url` once per *optional* query parameter inside a `when` guard and puts the
-//! `?` on a separate `$sep` binding, so checking only the first `$url` line would prove nothing —
+//! `?` on a separate `sep` binding, so checking only the first `$url` line would prove nothing —
 //! hence the assertion that each module binds `$url` exactly once.
 //!
 //! # Why the assertions are stated over the loaded IR and freshly emitted text
@@ -246,7 +246,7 @@ fn no_hubspot_operation_declares_a_query_parameter_of_any_type() {
 /// Not a restatement of the test above: the IR and the emitted request can disagree, and the emitter
 /// assembles a query string from `params.query` alone. A required query parameter lands in the first
 /// `$url` template; an *optional* one re-binds `$url` inside a `when` guard with the `?`/`&` carried
-/// on `$sep`. So the URL is pinned three ways — one `$url` binding, no `$sep`, no `?` anywhere.
+/// on `sep`. So the URL is pinned three ways — one `$url` binding, no `sep`, no `?` anywhere.
 #[test]
 fn no_hubspot_module_assembles_a_query_string() {
     let connector = load();
@@ -254,14 +254,17 @@ fn no_hubspot_module_assembles_a_query_string() {
     for operation in &connector.operations {
         let emitted = emit(&connector, &operation.id);
         assert_eq!(
-            emitted.matches("$url =").count(),
+            emitted
+                .lines()
+                .filter(|line| line.trim_start().starts_with("url = "))
+                .count(),
             1,
-            "`{}` binds `$url` more than once, which is how the emitter appends an optional query \
+            "`{}` binds `url` more than once, which is how the emitter appends an optional query \
              parameter inside a `when` guard:\n{emitted}",
             operation.id
         );
         assert!(
-            !emitted.contains("$sep"),
+            !emitted.contains("sep = "),
             "`{}` emits query-string separator machinery, so a value is reaching the URL \
              unencoded:\n{emitted}",
             operation.id
@@ -286,15 +289,14 @@ fn every_hubspot_write_wraps_its_fields_in_the_properties_envelope() {
 
     let create = emit(&connector, "hubspot-contact-create");
     assert!(
-        create.contains("$payload = { properties: { email: $email } }"),
+        create.contains("payload = { properties: { email } }"),
         "`hubspot-contact-create` must nest `email` under `properties`; a flat body is accepted, \
          ignored and answered 2xx:\n{create}"
     );
 
     let update = emit(&connector, "hubspot-contact-update");
     assert!(
-        update
-            .contains("$payload = { properties: { firstname: $firstname, lastname: $lastname } }"),
+        update.contains("payload = { properties: { firstname, lastname } }"),
         "`hubspot-contact-update` must nest its properties under `properties`:\n{update}"
     );
 
@@ -306,7 +308,7 @@ fn every_hubspot_write_wraps_its_fields_in_the_properties_envelope() {
         }
         let emitted = emit(&connector, &operation.id);
         assert!(
-            emitted.contains("$payload = { properties: {"),
+            emitted.contains("payload = { properties: {"),
             "`{}` writes something other than a `properties` envelope:\n{emitted}",
             operation.id
         );
@@ -422,7 +424,7 @@ fn every_request_targets_api_hubapi_com_and_nothing_wider() {
     for operation in &connector.operations {
         let emitted = emit(&connector, &operation.id);
         assert!(
-            emitted.contains(&format!(r#"$base = "{BASE_URL}""#)),
+            emitted.contains(&format!(r#"base = "{BASE_URL}""#)),
             "`{}` does not bind the HubSpot base URL:\n{emitted}",
             operation.id
         );

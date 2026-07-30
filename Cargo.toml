@@ -34,7 +34,7 @@ connector-catalog = { version = "0.4.0", path = "crates/catalog" }
 #     working tree rather than to a reviewed release.
 # flux publishes flux-lang to crates.io, so the registry pin is the only form that resolves
 # everywhere. The lib name stays `flux_lang`; only the *package* carries the vanity prefix.
-flux-lang = { package = "codewandler-flux-lang", version = "0.37" }
+flux-lang = { package = "codewandler-flux-lang", version = "0.39" }
 
 # Shared third-party.
 anyhow = "1"

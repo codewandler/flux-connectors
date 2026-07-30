@@ -14,7 +14,7 @@
 //! - So the strongest available statement of "this connector has no encoding gap" is not "its query
 //!   values are numeric" but **"it declares no query parameter at all"**, and that is what is
 //!   asserted here — over the IR *and* over the emitted text, since a query parameter that reached
-//!   the URL would show up as the emitter's `$sep` separator machinery.
+//!   the URL would show up as the emitter's `sep` separator machinery.
 //!
 //! Asserting it rather than trusting it is the point: nothing else in the repository would fail if
 //! someone converted a read to a GET, and the resulting connector would look tidier and be broken.
@@ -203,7 +203,7 @@ fn no_slack_operation_declares_a_query_parameter() {
 /// The same claim over the **emitted text**, which is what flux actually loads.
 ///
 /// The IR assertion above and this one are not the same check. The emitter assembles a query string
-/// from `params.query` alone, binding `$sep` to carry the `?`/`&` separator; if that machinery
+/// from `params.query` alone, binding `sep` to carry the `?`/`&` separator; if that machinery
 /// appears in a Slack module, something put a value in the URL regardless of what the IR looked like
 /// when the previous test ran.
 #[test]
@@ -214,7 +214,7 @@ fn no_slack_module_assembles_a_query_string() {
         let emitted = emit_operation(&connector, operation)
             .unwrap_or_else(|error| panic!("`{}` does not emit: {error}", operation.id));
         assert!(
-            !emitted.contains("$sep"),
+            !emitted.contains("sep = "),
             "`{}` emits query-string separator machinery, so a value is reaching the URL \
              unencoded:\n{emitted}",
             operation.id
@@ -227,7 +227,7 @@ fn no_slack_module_assembles_a_query_string() {
         // The positive half: the body really is sent as JSON, so the arguments the query string is
         // not carrying are carried somewhere.
         assert!(
-            emitted.contains(r#"$content_type = "application/json""#),
+            emitted.contains(r#"content_type = "application/json""#),
             "`{}` sends no JSON body:\n{emitted}",
             operation.id
         );

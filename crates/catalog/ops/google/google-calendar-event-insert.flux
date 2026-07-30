@@ -5,9 +5,9 @@ op google-calendar-event-insert(calendar_id: String, summary: String, start_time
   effects ["network"]
   expose true
 
-  $base = "https://www.googleapis.com"
-  $url = fmt("{base}/calendar/v3/calendars/{calendar_id}/events")
-  $content_type = "application/json"
-  $payload = { end: { dateTime: $end_time }, start: { dateTime: $start_time }, summary: $summary }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://www.googleapis.com"
+  url = fmt("{base}/calendar/v3/calendars/{calendar_id}/events")
+  content_type = "application/json"
+  payload = { end: { dateTime: end_time }, start: { dateTime: start_time }, summary }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

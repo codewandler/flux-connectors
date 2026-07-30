@@ -130,7 +130,7 @@
           "hosts": [
             "api.airtable.com"
           ],
-          "flux": "op airtable-record-get(base_id: String, table_id: String, record_id: String) -> Any\n  description \"Read one record from a table — its cell values are under `fields` in the response, keyed by column name. Returns every column the token can see, in Airtable's default JSON cell format: narrowing or reformatting them needs the `fields[]` and `cellFormat` query parameters this connector cannot encode. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.airtable.com\"\n  $url = fmt(\"{base}/v0/{base_id}/{table_id}/{record_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op airtable-record-get(base_id: String, table_id: String, record_id: String) -> Any\n  description \"Read one record from a table — its cell values are under `fields` in the response, keyed by column name. Returns every column the token can see, in Airtable's default JSON cell format: narrowing or reformatting them needs the `fields[]` and `cellFormat` query parameters this connector cannot encode. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.airtable.com\"\n  url = fmt(\"{base}/v0/{base_id}/{table_id}/{record_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -220,7 +220,7 @@
           "hosts": [
             "api.airtable.com"
           ],
-          "flux": "op airtable-record-create(base_id: String, table_id: String, cell_values: Any) -> Any\n  description \"Create one record in a table. Cell values are supplied under `fields`, keyed by column name, and must already be in the exact JSON form each column expects — Airtable's `typecast` coercion cannot be requested yet (see the connector's notes). The created record, with its `rec…` id, is in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.airtable.com\"\n  $url = fmt(\"{base}/v0/{base_id}/{table_id}\")\n  $content_type = \"application/json\"\n  $payload = { fields: $cell_values }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op airtable-record-create(base_id: String, table_id: String, cell_values: Any) -> Any\n  description \"Create one record in a table. Cell values are supplied under `fields`, keyed by column name, and must already be in the exact JSON form each column expects — Airtable's `typecast` coercion cannot be requested yet (see the connector's notes). The created record, with its `rec…` id, is in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.airtable.com\"\n  url = fmt(\"{base}/v0/{base_id}/{table_id}\")\n  content_type = \"application/json\"\n  payload = { fields: cell_values }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -321,7 +321,7 @@
           "hosts": [
             "api.airtable.com"
           ],
-          "flux": "op airtable-record-update(base_id: String, table_id: String, record_id: String, cell_values: Any) -> Any\n  description \"Update one record's cell values. The write is sparse: only the columns named in `fields` change and every other column of the record is left exactly as it was. Values must already be in the form each column expects — `typecast` coercion cannot be requested yet. The updated record is in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.airtable.com\"\n  $url = fmt(\"{base}/v0/{base_id}/{table_id}/{record_id}\")\n  $content_type = \"application/json\"\n  $payload = { fields: $cell_values }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PATCH\", url: $url })\n  return $response\n",
+          "flux": "op airtable-record-update(base_id: String, table_id: String, record_id: String, cell_values: Any) -> Any\n  description \"Update one record's cell values. The write is sparse: only the columns named in `fields` change and every other column of the record is left exactly as it was. Values must already be in the form each column expects — `typecast` coercion cannot be requested yet. The updated record is in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.airtable.com\"\n  url = fmt(\"{base}/v0/{base_id}/{table_id}/{record_id}\")\n  content_type = \"application/json\"\n  payload = { fields: cell_values }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PATCH\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -405,7 +405,7 @@
           "hosts": [
             "api.airtable.com"
           ],
-          "flux": "op airtable-record-delete(base_id: String, table_id: String, record_id: String) -> Any\n  description \"Delete one record and every cell value in it. There is no API route back: Airtable's trash and revision history are UI features on a retention window, not endpoints, so a flux run cannot undo this. Responds `{\\\"id\\\": …, \\\"deleted\\\": true}`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.airtable.com\"\n  $url = fmt(\"{base}/v0/{base_id}/{table_id}/{record_id}\")\n  $response = http.request({ method: \"DELETE\", url: $url })\n  return $response\n",
+          "flux": "op airtable-record-delete(base_id: String, table_id: String, record_id: String) -> Any\n  description \"Delete one record and every cell value in it. There is no API route back: Airtable's trash and revision history are UI features on a retention window, not endpoints, so a flux run cannot undo this. Responds `{\\\"id\\\": …, \\\"deleted\\\": true}`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.airtable.com\"\n  url = fmt(\"{base}/v0/{base_id}/{table_id}/{record_id}\")\n  response = http.request(method: \"DELETE\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -515,7 +515,7 @@
           "hosts": [
             "app.asana.com"
           ],
-          "flux": "op asana-task-get(task_gid: String) -> Any\n  description \"Get one task — its name, notes, assignee, due date, completion state and the projects it belongs to. The task is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://app.asana.com\"\n  $url = fmt(\"{base}/api/1.0/tasks/{task_gid}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op asana-task-get(task_gid: String) -> Any\n  description \"Get one task — its name, notes, assignee, due date, completion state and the projects it belongs to. The task is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://app.asana.com\"\n  url = fmt(\"{base}/api/1.0/tasks/{task_gid}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -583,7 +583,7 @@
           "hosts": [
             "app.asana.com"
           ],
-          "flux": "op asana-task-create(name: String, workspace: String) -> Any\n  description \"Create a task in a workspace. It is created unassigned and in no project, so nobody is notified; move it or assign it in Asana afterwards. The created task is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://app.asana.com\"\n  $url = fmt(\"{base}/api/1.0/tasks\")\n  $content_type = \"application/json\"\n  $payload = { data: { name: $name, workspace: $workspace } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op asana-task-create(name: String, workspace: String) -> Any\n  description \"Create a task in a workspace. It is created unassigned and in no project, so nobody is notified; move it or assign it in Asana afterwards. The created task is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://app.asana.com\"\n  url = fmt(\"{base}/api/1.0/tasks\")\n  content_type = \"application/json\"\n  payload = { data: { name, workspace } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -650,7 +650,7 @@
           "hosts": [
             "app.asana.com"
           ],
-          "flux": "op asana-task-update(task_gid: String, completed: Bool) -> Any\n  description \"Mark a task complete or incomplete. Asana's update is sparse: only completion changes, and every other field of the task is left as it was. The updated task is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://app.asana.com\"\n  $url = fmt(\"{base}/api/1.0/tasks/{task_gid}\")\n  $content_type = \"application/json\"\n  $payload = { data: { completed: $completed } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "flux": "op asana-task-update(task_gid: String, completed: Bool) -> Any\n  description \"Mark a task complete or incomplete. Asana's update is sparse: only completion changes, and every other field of the task is left as it was. The updated task is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://app.asana.com\"\n  url = fmt(\"{base}/api/1.0/tasks/{task_gid}\")\n  content_type = \"application/json\"\n  payload = { data: { completed } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -718,7 +718,7 @@
           "hosts": [
             "app.asana.com"
           ],
-          "flux": "op asana-task-story-add(task_gid: String, text: String) -> Any\n  description \"Add a comment to a task. Asana calls a comment a story. It is attributed to the token's owner, notifies every follower of the task by email and in-app, and cannot be un-sent. The created story is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://app.asana.com\"\n  $url = fmt(\"{base}/api/1.0/tasks/{task_gid}/stories\")\n  $content_type = \"application/json\"\n  $payload = { data: { text: $text } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op asana-task-story-add(task_gid: String, text: String) -> Any\n  description \"Add a comment to a task. Asana calls a comment a story. It is attributed to the token's owner, notifies every follower of the task by email and in-app, and cannot be un-sent. The created story is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://app.asana.com\"\n  url = fmt(\"{base}/api/1.0/tasks/{task_gid}/stories\")\n  content_type = \"application/json\"\n  payload = { data: { text } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -775,7 +775,7 @@
           "hosts": [
             "app.asana.com"
           ],
-          "flux": "op asana-project-get(project_gid: String) -> Any\n  description \"Get one project — its name, notes, owner, team, current status and whether it is archived. The project is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://app.asana.com\"\n  $url = fmt(\"{base}/api/1.0/projects/{project_gid}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op asana-project-get(project_gid: String) -> Any\n  description \"Get one project — its name, notes, owner, team, current status and whether it is archived. The project is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://app.asana.com\"\n  url = fmt(\"{base}/api/1.0/projects/{project_gid}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -1002,7 +1002,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-agent-list(page: Number, max: Number, q: String, enabled: Bool, name: String, number: String, sourceId: String, source: String, state: String, groupIds: Any, groups: Any) -> Any\n  description \"List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/agents\")\n  $sep = \"?\"\n  when $page\n    $url = fmt(\"{url}{sep}page={page}\")\n    $sep = \"&\"\n  when $max\n    $url = fmt(\"{url}{sep}max={max}\")\n    $sep = \"&\"\n  when $q\n    $url = fmt(\"{url}{sep}q={q}\")\n    $sep = \"&\"\n  when $enabled\n    $url = fmt(\"{url}{sep}enabled={enabled}\")\n    $sep = \"&\"\n  when $name\n    $url = fmt(\"{url}{sep}name={name}\")\n    $sep = \"&\"\n  when $number\n    $url = fmt(\"{url}{sep}number={number}\")\n    $sep = \"&\"\n  when $sourceId\n    $url = fmt(\"{url}{sep}sourceId={sourceId}\")\n    $sep = \"&\"\n  when $source\n    $url = fmt(\"{url}{sep}source={source}\")\n    $sep = \"&\"\n  when $state\n    $url = fmt(\"{url}{sep}state={state}\")\n    $sep = \"&\"\n  when $groupIds\n    $url = fmt(\"{url}{sep}groupIds={groupIds}\")\n    $sep = \"&\"\n  when $groups\n    $url = fmt(\"{url}{sep}groups={groups}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op babelforce-agent-list(page: Number, max: Number, q: String, enabled: Bool, name: String, number: String, sourceId: String, source: String, state: String, groupIds: Any, groups: Any) -> Any\n  description \"List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/agents\")\n  sep = \"?\"\n  when page\n    url = fmt(\"{url}{sep}page={page}\")\n    sep = \"&\"\n  when max\n    url = fmt(\"{url}{sep}max={max}\")\n    sep = \"&\"\n  when q\n    url = fmt(\"{url}{sep}q={q}\")\n    sep = \"&\"\n  when enabled\n    url = fmt(\"{url}{sep}enabled={enabled}\")\n    sep = \"&\"\n  when name\n    url = fmt(\"{url}{sep}name={name}\")\n    sep = \"&\"\n  when number\n    url = fmt(\"{url}{sep}number={number}\")\n    sep = \"&\"\n  when sourceId\n    url = fmt(\"{url}{sep}sourceId={sourceId}\")\n    sep = \"&\"\n  when source\n    url = fmt(\"{url}{sep}source={source}\")\n    sep = \"&\"\n  when state\n    url = fmt(\"{url}{sep}state={state}\")\n    sep = \"&\"\n  when groupIds\n    url = fmt(\"{url}{sep}groupIds={groupIds}\")\n    sep = \"&\"\n  when groups\n    url = fmt(\"{url}{sep}groups={groups}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -1061,7 +1061,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-agent-get(id: String) -> Any\n  description \"Get one agent\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/agents/{id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op babelforce-agent-get(id: String) -> Any\n  description \"Get one agent\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/agents/{id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -1125,7 +1125,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-agent-status-update(id: String, enabled: Bool, presence_name: String) -> Any\n  description \"Update an agent's status. Supply at least one of enabled or presence.name — the request body's properties are all optional, so an empty PUT is schema-valid and does nothing\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/agents/{id}/status\")\n  $content_type = \"application/json\"\n  $payload = { enabled: $enabled, presence: { name: $presence_name } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "flux": "op babelforce-agent-status-update(id: String, enabled: Bool, presence_name: String) -> Any\n  description \"Update an agent's status. Supply at least one of enabled or presence.name — the request body's properties are all optional, so an empty PUT is schema-valid and does nothing\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/agents/{id}/status\")\n  content_type = \"application/json\"\n  payload = { enabled, presence: { name: presence_name } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -1375,7 +1375,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-call-list(page: Number, max: Number, id: Any, sessionId: String, conversationId: String, agentId: Any, fromNumber: Any, toNumber: Any, type: String, state: String, finishReason: String, time_start: Number, time_end: Number, q: String) -> Any\n  description \"List and filter calls from the reporting view\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/calls/reporting\")\n  $sep = \"?\"\n  when $page\n    $url = fmt(\"{url}{sep}page={page}\")\n    $sep = \"&\"\n  when $max\n    $url = fmt(\"{url}{sep}max={max}\")\n    $sep = \"&\"\n  when $id\n    $url = fmt(\"{url}{sep}id={id}\")\n    $sep = \"&\"\n  when $sessionId\n    $url = fmt(\"{url}{sep}sessionId={sessionId}\")\n    $sep = \"&\"\n  when $conversationId\n    $url = fmt(\"{url}{sep}conversationId={conversationId}\")\n    $sep = \"&\"\n  when $agentId\n    $url = fmt(\"{url}{sep}agentId={agentId}\")\n    $sep = \"&\"\n  when $fromNumber\n    $url = fmt(\"{url}{sep}fromNumber={fromNumber}\")\n    $sep = \"&\"\n  when $toNumber\n    $url = fmt(\"{url}{sep}toNumber={toNumber}\")\n    $sep = \"&\"\n  when $type\n    $url = fmt(\"{url}{sep}type={type}\")\n    $sep = \"&\"\n  when $state\n    $url = fmt(\"{url}{sep}state={state}\")\n    $sep = \"&\"\n  when $finishReason\n    $url = fmt(\"{url}{sep}finishReason={finishReason}\")\n    $sep = \"&\"\n  when $time_start\n    $url = fmt(\"{url}{sep}time.start={time_start}\")\n    $sep = \"&\"\n  when $time_end\n    $url = fmt(\"{url}{sep}time.end={time_end}\")\n    $sep = \"&\"\n  when $q\n    $url = fmt(\"{url}{sep}q={q}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op babelforce-call-list(page: Number, max: Number, id: Any, sessionId: String, conversationId: String, agentId: Any, fromNumber: Any, toNumber: Any, type: String, state: String, finishReason: String, time_start: Number, time_end: Number, q: String) -> Any\n  description \"List and filter calls from the reporting view\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/calls/reporting\")\n  sep = \"?\"\n  when page\n    url = fmt(\"{url}{sep}page={page}\")\n    sep = \"&\"\n  when max\n    url = fmt(\"{url}{sep}max={max}\")\n    sep = \"&\"\n  when id\n    url = fmt(\"{url}{sep}id={id}\")\n    sep = \"&\"\n  when sessionId\n    url = fmt(\"{url}{sep}sessionId={sessionId}\")\n    sep = \"&\"\n  when conversationId\n    url = fmt(\"{url}{sep}conversationId={conversationId}\")\n    sep = \"&\"\n  when agentId\n    url = fmt(\"{url}{sep}agentId={agentId}\")\n    sep = \"&\"\n  when fromNumber\n    url = fmt(\"{url}{sep}fromNumber={fromNumber}\")\n    sep = \"&\"\n  when toNumber\n    url = fmt(\"{url}{sep}toNumber={toNumber}\")\n    sep = \"&\"\n  when type\n    url = fmt(\"{url}{sep}type={type}\")\n    sep = \"&\"\n  when state\n    url = fmt(\"{url}{sep}state={state}\")\n    sep = \"&\"\n  when finishReason\n    url = fmt(\"{url}{sep}finishReason={finishReason}\")\n    sep = \"&\"\n  when time_start\n    url = fmt(\"{url}{sep}time.start={time_start}\")\n    sep = \"&\"\n  when time_end\n    url = fmt(\"{url}{sep}time.end={time_end}\")\n    sep = \"&\"\n  when q\n    url = fmt(\"{url}{sep}q={q}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -1436,7 +1436,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-call-get(id: String) -> Any\n  description \"Get one call\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/calls/{id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op babelforce-call-get(id: String) -> Any\n  description \"Get one call\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/calls/{id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -1480,7 +1480,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-call-hangup(id: String) -> Any\n  description \"Hang up a live call\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/calls/{id}/hangup\")\n  $response = http.request({ method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op babelforce-call-hangup(id: String) -> Any\n  description \"Hang up a live call\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/calls/{id}/hangup\")\n  response = http.request(method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -1527,7 +1527,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-call-session-set(id: String, body: Any) -> Any\n  description \"Set session variables on a live call. Variable keys must start with `app` — babelforce rejects other keys, and states the rule only in prose\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/calls/{id}/session/set\")\n  $content_type = \"application/json\"\n  $payload = parse($body, as: \"json\")\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "flux": "op babelforce-call-session-set(id: String, body: Any) -> Any\n  description \"Set session variables on a live call. Variable keys must start with `app` — babelforce rejects other keys, and states the rule only in prose\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/calls/{id}/session/set\")\n  content_type = \"application/json\"\n  payload = parse(body, as: \"json\")\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -1571,7 +1571,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-session-get(id: String) -> Any\n  description \"Get the IVR variables for a session\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/sessions/{id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op babelforce-session-get(id: String) -> Any\n  description \"Get the IVR variables for a session\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/sessions/{id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -1618,7 +1618,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-session-update(id: String, body: Any) -> Any\n  description \"Update the user-scoped variables of a session\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/sessions/{id}\")\n  $content_type = \"application/json\"\n  $payload = parse($body, as: \"json\")\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "flux": "op babelforce-session-update(id: String, body: Any) -> Any\n  description \"Update the user-scoped variables of a session\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/sessions/{id}\")\n  content_type = \"application/json\"\n  payload = parse(body, as: \"json\")\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -1717,7 +1717,7 @@
           "hosts": [
             "api.machines.dev"
           ],
-          "flux": "op fly-regions-list -> Any\n  description \"List Fly's available regions and identify the nearest one; also verifies the configured access token. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.machines.dev/v1\"\n  $url = fmt(\"{base}/platform/regions\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op fly-regions-list -> Any\n  description \"List Fly's available regions and identify the nearest one; also verifies the configured access token. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.machines.dev/v1\"\n  url = fmt(\"{base}/platform/regions\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -1784,7 +1784,7 @@
           "hosts": [
             "api.machines.dev"
           ],
-          "flux": "op fly-machines-list(app_name: String) -> Any\n  description \"List every Machine in one Fly app, without optional state filters or lease details. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.machines.dev/v1\"\n  $url = fmt(\"{base}/apps/{app_name}/machines\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op fly-machines-list(app_name: String) -> Any\n  description \"List every Machine in one Fly app, without optional state filters or lease details. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.machines.dev/v1\"\n  url = fmt(\"{base}/apps/{app_name}/machines\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -1868,7 +1868,7 @@
           "hosts": [
             "api.machines.dev"
           ],
-          "flux": "op fly-machine-get(app_name: String, machine_id: String) -> Any\n  description \"Get one Fly Machine's current configuration, state, region, addresses and recent events. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.machines.dev/v1\"\n  $url = fmt(\"{base}/apps/{app_name}/machines/{machine_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op fly-machine-get(app_name: String, machine_id: String) -> Any\n  description \"Get one Fly Machine's current configuration, state, region, addresses and recent events. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.machines.dev/v1\"\n  url = fmt(\"{base}/apps/{app_name}/machines/{machine_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -1946,7 +1946,7 @@
           "hosts": [
             "api.machines.dev"
           ],
-          "flux": "op fly-machine-events-list(app_name: String, machine_id: String) -> Any\n  description \"List the recorded lifecycle events for one Fly Machine; this is history, not a durable event subscription. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.machines.dev/v1\"\n  $url = fmt(\"{base}/apps/{app_name}/machines/{machine_id}/events\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op fly-machine-events-list(app_name: String, machine_id: String) -> Any\n  description \"List the recorded lifecycle events for one Fly Machine; this is history, not a durable event subscription. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.machines.dev/v1\"\n  url = fmt(\"{base}/apps/{app_name}/machines/{machine_id}/events\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -2024,7 +2024,7 @@
           "hosts": [
             "api.machines.dev"
           ],
-          "flux": "op fly-machine-create(app_name: String, image: String) -> Any\n  description \"Create and launch a Fly Machine from one image using Fly's generated name and region placement; this begins billable compute. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.machines.dev/v1\"\n  $url = fmt(\"{base}/apps/{app_name}/machines\")\n  $content_type = \"application/json\"\n  $payload = { config: { image: $image } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op fly-machine-create(app_name: String, image: String) -> Any\n  description \"Create and launch a Fly Machine from one image using Fly's generated name and region placement; this begins billable compute. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.machines.dev/v1\"\n  url = fmt(\"{base}/apps/{app_name}/machines\")\n  content_type = \"application/json\"\n  payload = { config: { image } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -2080,7 +2080,7 @@
           "hosts": [
             "api.machines.dev"
           ],
-          "flux": "op fly-machine-start(app_name: String, machine_id: String) -> Any\n  description \"Start a stopped Fly Machine, restoring service and beginning billable compute. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.machines.dev/v1\"\n  $url = fmt(\"{base}/apps/{app_name}/machines/{machine_id}/start\")\n  $response = http.request({ method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op fly-machine-start(app_name: String, machine_id: String) -> Any\n  description \"Start a stopped Fly Machine, restoring service and beginning billable compute. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.machines.dev/v1\"\n  url = fmt(\"{base}/apps/{app_name}/machines/{machine_id}/start\")\n  response = http.request(method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -2136,7 +2136,7 @@
           "hosts": [
             "api.machines.dev"
           ],
-          "flux": "op fly-machine-stop(app_name: String, machine_id: String) -> Any\n  description \"Stop a running Fly Machine using the API's default signal and timeout, interrupting its service. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.machines.dev/v1\"\n  $url = fmt(\"{base}/apps/{app_name}/machines/{machine_id}/stop\")\n  $response = http.request({ method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op fly-machine-stop(app_name: String, machine_id: String) -> Any\n  description \"Stop a running Fly Machine using the API's default signal and timeout, interrupting its service. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.machines.dev/v1\"\n  url = fmt(\"{base}/apps/{app_name}/machines/{machine_id}/stop\")\n  response = http.request(method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -2192,7 +2192,7 @@
           "hosts": [
             "api.machines.dev"
           ],
-          "flux": "op fly-machine-restart(app_name: String, machine_id: String) -> Any\n  description \"Restart a Fly Machine using the API's default signal and timeout, causing a service interruption. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.machines.dev/v1\"\n  $url = fmt(\"{base}/apps/{app_name}/machines/{machine_id}/restart\")\n  $response = http.request({ method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op fly-machine-restart(app_name: String, machine_id: String) -> Any\n  description \"Restart a Fly Machine using the API's default signal and timeout, causing a service interruption. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.machines.dev/v1\"\n  url = fmt(\"{base}/apps/{app_name}/machines/{machine_id}/restart\")\n  response = http.request(method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -2248,7 +2248,7 @@
           "hosts": [
             "api.machines.dev"
           ],
-          "flux": "op fly-machine-delete(app_name: String, machine_id: String) -> Any\n  description \"Permanently delete a stopped Fly Machine. Forced deletion is intentionally unavailable, so a running Machine is refused instead of killed implicitly. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.machines.dev/v1\"\n  $url = fmt(\"{base}/apps/{app_name}/machines/{machine_id}\")\n  $response = http.request({ method: \"DELETE\", url: $url })\n  return $response\n",
+          "flux": "op fly-machine-delete(app_name: String, machine_id: String) -> Any\n  description \"Permanently delete a stopped Fly Machine. Forced deletion is intentionally unavailable, so a running Machine is refused instead of killed implicitly. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body.\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.machines.dev/v1\"\n  url = fmt(\"{base}/apps/{app_name}/machines/{machine_id}\")\n  response = http.request(method: \"DELETE\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -2322,7 +2322,7 @@
           "hosts": [
             "{domain}"
           ],
-          "flux": "op freshdesk-test(per_page: Number) -> Any\n  description \"Verify credentials with a bounded contact read\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/contacts\")\n  $sep = \"?\"\n  when $per_page\n    $url = fmt(\"{url}{sep}per_page={per_page}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op freshdesk-test(per_page: Number) -> Any\n  description \"Verify credentials with a bounded contact read\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{domain}/api/v2\"\n  url = fmt(\"{base}/contacts\")\n  sep = \"?\"\n  when per_page\n    url = fmt(\"{url}{sep}per_page={per_page}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -2402,7 +2402,7 @@
           "hosts": [
             "{domain}"
           ],
-          "flux": "op freshdesk-ticket-list(req_id: String, req_email: String, company_id: String, updated: String) -> Any\n  description \"List and filter tickets\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/tickets\")\n  $sep = \"?\"\n  when $req_id\n    $url = fmt(\"{url}{sep}requester_id={req_id}\")\n    $sep = \"&\"\n  when $req_email\n    $url = fmt(\"{url}{sep}email={req_email}\")\n    $sep = \"&\"\n  when $company_id\n    $url = fmt(\"{url}{sep}company_id={company_id}\")\n    $sep = \"&\"\n  when $updated\n    $url = fmt(\"{url}{sep}updated_since={updated}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op freshdesk-ticket-list(req_id: String, req_email: String, company_id: String, updated: String) -> Any\n  description \"List and filter tickets\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{domain}/api/v2\"\n  url = fmt(\"{base}/tickets\")\n  sep = \"?\"\n  when req_id\n    url = fmt(\"{url}{sep}requester_id={req_id}\")\n    sep = \"&\"\n  when req_email\n    url = fmt(\"{url}{sep}email={req_email}\")\n    sep = \"&\"\n  when company_id\n    url = fmt(\"{url}{sep}company_id={company_id}\")\n    sep = \"&\"\n  when updated\n    url = fmt(\"{url}{sep}updated_since={updated}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -2461,7 +2461,7 @@
           "hosts": [
             "{domain}"
           ],
-          "flux": "op freshdesk-ticket-get(id: String) -> Any\n  description \"View one ticket\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/tickets/{id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op freshdesk-ticket-get(id: String) -> Any\n  description \"View one ticket\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{domain}/api/v2\"\n  url = fmt(\"{base}/tickets/{id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -2696,7 +2696,7 @@
           "hosts": [
             "{domain}"
           ],
-          "flux": "op freshdesk-ticket-create(phone: String, name: String, requester_id: Number, subject: String, description: String, status: Number, priority: Number, source: Number, responder_id: Number, type: String, email_config_id: Number, group_id: Number, product_id: Number, tags: List<String>, cc_emails: List<String>, custom_fields: Any) -> Any\n  description \"Create a ticket. The requester must be identified either by requester_id, or by phone together with name — Freshdesk states this only in prose and its required flags do not capture it\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/tickets\")\n  $content_type = \"application/json\"\n  $payload = { cc_emails: $cc_emails, custom_fields: $custom_fields, description: $description, email_config_id: $email_config_id, group_id: $group_id, name: $name, phone: $phone, priority: $priority, product_id: $product_id, requester_id: $requester_id, responder_id: $responder_id, source: $source, status: $status, subject: $subject, tags: $tags, type: $type }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op freshdesk-ticket-create(phone: String, name: String, requester_id: Number, subject: String, description: String, status: Number, priority: Number, source: Number, responder_id: Number, type: String, email_config_id: Number, group_id: Number, product_id: Number, tags: List<String>, cc_emails: List<String>, custom_fields: Any) -> Any\n  description \"Create a ticket. The requester must be identified either by requester_id, or by phone together with name — Freshdesk states this only in prose and its required flags do not capture it\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{domain}/api/v2\"\n  url = fmt(\"{base}/tickets\")\n  content_type = \"application/json\"\n  payload = { cc_emails, custom_fields, description, email_config_id, group_id, name, phone, priority, product_id, requester_id, responder_id, source, status, subject, tags, type }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -2916,7 +2916,7 @@
           "hosts": [
             "{domain}"
           ],
-          "flux": "op freshdesk-ticket-update(id: Number, subject: String, description: String, status: Number, priority: Number, requester_id: Number, responder_id: Number, name: String, phone: String, email: String, type: String, email_config_id: Number, group_id: Number, product_id: Number, tags: List<String>, custom_fields: Any) -> Any\n  description \"Update a ticket's fields\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/tickets/{id}\")\n  $content_type = \"application/json\"\n  $payload = { custom_fields: $custom_fields, description: $description, email: $email, email_config_id: $email_config_id, group_id: $group_id, name: $name, phone: $phone, priority: $priority, product_id: $product_id, requester_id: $requester_id, responder_id: $responder_id, status: $status, subject: $subject, tags: $tags, type: $type }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "flux": "op freshdesk-ticket-update(id: Number, subject: String, description: String, status: Number, priority: Number, requester_id: Number, responder_id: Number, name: String, phone: String, email: String, type: String, email_config_id: Number, group_id: Number, product_id: Number, tags: List<String>, custom_fields: Any) -> Any\n  description \"Update a ticket's fields\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{domain}/api/v2\"\n  url = fmt(\"{base}/tickets/{id}\")\n  content_type = \"application/json\"\n  payload = { custom_fields, description, email, email_config_id, group_id, name, phone, priority, product_id, requester_id, responder_id, status, subject, tags, type }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3011,7 +3011,7 @@
           "hosts": [
             "{domain}"
           ],
-          "flux": "op freshdesk-ticket-note-add(id: Number, body: String, private: Bool, incoming: Bool, notify_emails: List<String>) -> Any\n  description \"Add a note to a ticket; the note is private unless explicitly made public\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/tickets/{id}/notes\")\n  $content_type = \"application/json\"\n  $payload = { body: $body, incoming: $incoming, notify_emails: $notify_emails, private: $private }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op freshdesk-ticket-note-add(id: Number, body: String, private: Bool, incoming: Bool, notify_emails: List<String>) -> Any\n  description \"Add a note to a ticket; the note is private unless explicitly made public\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{domain}/api/v2\"\n  url = fmt(\"{base}/tickets/{id}/notes\")\n  content_type = \"application/json\"\n  payload = { body, incoming, notify_emails, private }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3106,7 +3106,7 @@
           "hosts": [
             "{domain}"
           ],
-          "flux": "op freshdesk-contact-list(phone: String, email: String, mobile: String, company_id: String, state: String) -> Any\n  description \"List and filter contacts, e.g. to resolve a caller before filing a ticket\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/contacts\")\n  $sep = \"?\"\n  when $phone\n    $url = fmt(\"{url}{sep}phone={phone}\")\n    $sep = \"&\"\n  when $email\n    $url = fmt(\"{url}{sep}email={email}\")\n    $sep = \"&\"\n  when $mobile\n    $url = fmt(\"{url}{sep}mobile={mobile}\")\n    $sep = \"&\"\n  when $company_id\n    $url = fmt(\"{url}{sep}company_id={company_id}\")\n    $sep = \"&\"\n  when $state\n    $url = fmt(\"{url}{sep}state={state}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op freshdesk-contact-list(phone: String, email: String, mobile: String, company_id: String, state: String) -> Any\n  description \"List and filter contacts, e.g. to resolve a caller before filing a ticket\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{domain}/api/v2\"\n  url = fmt(\"{base}/contacts\")\n  sep = \"?\"\n  when phone\n    url = fmt(\"{url}{sep}phone={phone}\")\n    sep = \"&\"\n  when email\n    url = fmt(\"{url}{sep}email={email}\")\n    sep = \"&\"\n  when mobile\n    url = fmt(\"{url}{sep}mobile={mobile}\")\n    sep = \"&\"\n  when company_id\n    url = fmt(\"{url}{sep}company_id={company_id}\")\n    sep = \"&\"\n  when state\n    url = fmt(\"{url}{sep}state={state}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3166,7 +3166,7 @@
           "hosts": [
             "{domain}"
           ],
-          "flux": "op freshdesk-contact-get(id: String) -> Any\n  description \"Get one contact\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/contacts/{id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op freshdesk-contact-get(id: String) -> Any\n  description \"Get one contact\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{domain}/api/v2\"\n  url = fmt(\"{base}/contacts/{id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3235,7 +3235,7 @@
           "hosts": [
             "{domain}"
           ],
-          "flux": "op freshdesk-contact-create(name: String, email: String, phone: String) -> Any\n  description \"Create a contact\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/contacts\")\n  $content_type = \"application/json\"\n  $payload = { email: $email, name: $name, phone: $phone }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op freshdesk-contact-create(name: String, email: String, phone: String) -> Any\n  description \"Create a contact\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{domain}/api/v2\"\n  url = fmt(\"{base}/contacts\")\n  content_type = \"application/json\"\n  payload = { email, name, phone }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3352,7 +3352,7 @@
           "hosts": [
             "api.github.com"
           ],
-          "flux": "op github-repo-get(owner: String, repo: String) -> Any\n  description \"Get one repository's metadata, including its default branch, visibility and permissions\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.github.com\"\n  $url = fmt(\"{base}/repos/{owner}/{repo}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op github-repo-get(owner: String, repo: String) -> Any\n  description \"Get one repository's metadata, including its default branch, visibility and permissions\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/repos/{owner}/{repo}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3420,7 +3420,7 @@
           "hosts": [
             "api.github.com"
           ],
-          "flux": "op github-issue-get(owner: String, repo: String, issue_number: Number) -> Any\n  description \"Get one issue by number. GitHub treats a pull request as an issue, so a PR number returns that PR's issue view; use github-pull-get for its merge and review state\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.github.com\"\n  $url = fmt(\"{base}/repos/{owner}/{repo}/issues/{issue_number}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op github-issue-get(owner: String, repo: String, issue_number: Number) -> Any\n  description \"Get one issue by number. GitHub treats a pull request as an issue, so a PR number returns that PR's issue view; use github-pull-get for its merge and review state\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/repos/{owner}/{repo}/issues/{issue_number}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3488,7 +3488,7 @@
           "hosts": [
             "api.github.com"
           ],
-          "flux": "op github-pull-get(owner: String, repo: String, pull_number: Number) -> Any\n  description \"Get one pull request by number, with its merge state, head and base refs and review counts\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.github.com\"\n  $url = fmt(\"{base}/repos/{owner}/{repo}/pulls/{pull_number}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op github-pull-get(owner: String, repo: String, pull_number: Number) -> Any\n  description \"Get one pull request by number, with its merge state, head and base refs and review counts\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/repos/{owner}/{repo}/pulls/{pull_number}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3593,7 +3593,7 @@
           "hosts": [
             "api.github.com"
           ],
-          "flux": "op github-issue-create(owner: String, repo: String, title: String, body: String, labels: List<String>, assignees: List<String>) -> Any\n  description \"Open a new issue on a repository. The issue is immediately visible to everyone who can see the repository and notifies its subscribers\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.github.com\"\n  $url = fmt(\"{base}/repos/{owner}/{repo}/issues\")\n  $content_type = \"application/json\"\n  $payload = { assignees: $assignees, body: $body, labels: $labels, title: $title }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op github-issue-create(owner: String, repo: String, title: String, body: String, labels: List<String>, assignees: List<String>) -> Any\n  description \"Open a new issue on a repository. The issue is immediately visible to everyone who can see the repository and notifies its subscribers\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/repos/{owner}/{repo}/issues\")\n  content_type = \"application/json\"\n  payload = { assignees, body, labels, title }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3672,7 +3672,7 @@
           "hosts": [
             "api.github.com"
           ],
-          "flux": "op github-issue-comment-add(owner: String, repo: String, issue_number: Number, body: String) -> Any\n  description \"Add a comment to an issue or pull request. The comment is public to everyone who can see the repository and notifies its participants; GitHub has no private or internal comment here\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.github.com\"\n  $url = fmt(\"{base}/repos/{owner}/{repo}/issues/{issue_number}/comments\")\n  $content_type = \"application/json\"\n  $payload = { body: $body }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op github-issue-comment-add(owner: String, repo: String, issue_number: Number, body: String) -> Any\n  description \"Add a comment to an issue or pull request. The comment is public to everyone who can see the repository and notifies its participants; GitHub has no private or internal comment here\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/repos/{owner}/{repo}/issues/{issue_number}/comments\")\n  content_type = \"application/json\"\n  payload = { body }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3806,7 +3806,7 @@
           "hosts": [
             "gmail.googleapis.com"
           ],
-          "flux": "op google-gmail-message-get(user_id: String, message_id: String) -> Any\n  description \"Get one Gmail message by id, in Gmail's default `full` format: headers plus the parsed MIME structure, whose body parts are base64url-encoded. Needs the `gmail.readonly` scope (or `gmail.modify`). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://gmail.googleapis.com\"\n  $url = fmt(\"{base}/gmail/v1/users/{user_id}/messages/{message_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op google-gmail-message-get(user_id: String, message_id: String) -> Any\n  description \"Get one Gmail message by id, in Gmail's default `full` format: headers plus the parsed MIME structure, whose body parts are base64url-encoded. Needs the `gmail.readonly` scope (or `gmail.modify`). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://gmail.googleapis.com\"\n  url = fmt(\"{base}/gmail/v1/users/{user_id}/messages/{message_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3864,7 +3864,7 @@
           "hosts": [
             "gmail.googleapis.com"
           ],
-          "flux": "op google-gmail-message-send(user_id: String, raw: String) -> Any\n  description \"Send a Gmail message, supplied as a complete base64url-encoded RFC 2822 message. It is delivered immediately from the token owner's mailbox and cannot be recalled. Needs the `gmail.send` scope. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://gmail.googleapis.com\"\n  $url = fmt(\"{base}/gmail/v1/users/{user_id}/messages/send\")\n  $content_type = \"application/json\"\n  $payload = { raw: $raw }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op google-gmail-message-send(user_id: String, raw: String) -> Any\n  description \"Send a Gmail message, supplied as a complete base64url-encoded RFC 2822 message. It is delivered immediately from the token owner's mailbox and cannot be recalled. Needs the `gmail.send` scope. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://gmail.googleapis.com\"\n  url = fmt(\"{base}/gmail/v1/users/{user_id}/messages/send\")\n  content_type = \"application/json\"\n  payload = { raw }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3910,7 +3910,7 @@
           "hosts": [
             "gmail.googleapis.com"
           ],
-          "flux": "op google-gmail-labels-list(user_id: String) -> Any\n  description \"List every label in a mailbox — the system labels (`INBOX`, `SENT`, `SPAM`) and the user's own — as `{\\\"labels\\\": [...]}`. Needs the `gmail.readonly` scope (or `gmail.labels`). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://gmail.googleapis.com\"\n  $url = fmt(\"{base}/gmail/v1/users/{user_id}/labels\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op google-gmail-labels-list(user_id: String) -> Any\n  description \"List every label in a mailbox — the system labels (`INBOX`, `SENT`, `SPAM`) and the user's own — as `{\\\"labels\\\": [...]}`. Needs the `gmail.readonly` scope (or `gmail.labels`). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://gmail.googleapis.com\"\n  url = fmt(\"{base}/gmail/v1/users/{user_id}/labels\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3968,7 +3968,7 @@
           "hosts": [
             "www.googleapis.com"
           ],
-          "flux": "op google-calendar-event-get(calendar_id: String, event_id: String) -> Any\n  description \"Get one calendar event: its summary, start and end, organizer, attendee list and status. Needs the `calendar.events.readonly` scope (or `calendar.readonly`). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://www.googleapis.com\"\n  $url = fmt(\"{base}/calendar/v3/calendars/{calendar_id}/events/{event_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op google-calendar-event-get(calendar_id: String, event_id: String) -> Any\n  description \"Get one calendar event: its summary, start and end, organizer, attendee list and status. Needs the `calendar.events.readonly` scope (or `calendar.readonly`). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://www.googleapis.com\"\n  url = fmt(\"{base}/calendar/v3/calendars/{calendar_id}/events/{event_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -4047,7 +4047,7 @@
           "hosts": [
             "www.googleapis.com"
           ],
-          "flux": "op google-calendar-event-insert(calendar_id: String, summary: String, start_time: String, end_time: String) -> Any\n  description \"Create a timed event on a calendar. No attendees can be declared yet, so nobody is invited and no notification is sent; invite people in Calendar afterwards. Needs the `calendar.events` scope. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://www.googleapis.com\"\n  $url = fmt(\"{base}/calendar/v3/calendars/{calendar_id}/events\")\n  $content_type = \"application/json\"\n  $payload = { end: { dateTime: $end_time }, start: { dateTime: $start_time }, summary: $summary }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op google-calendar-event-insert(calendar_id: String, summary: String, start_time: String, end_time: String) -> Any\n  description \"Create a timed event on a calendar. No attendees can be declared yet, so nobody is invited and no notification is sent; invite people in Calendar afterwards. Needs the `calendar.events` scope. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://www.googleapis.com\"\n  url = fmt(\"{base}/calendar/v3/calendars/{calendar_id}/events\")\n  content_type = \"application/json\"\n  payload = { end: { dateTime: end_time }, start: { dateTime: start_time }, summary }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -4093,7 +4093,7 @@
           "hosts": [
             "www.googleapis.com"
           ],
-          "flux": "op google-calendar-calendar-get(calendar_id: String) -> Any\n  description \"Get one calendar's own metadata — its summary, description, location and time zone. This is the calendar, not its events: use `google-calendar-event-get` for one of those. Needs the `calendar.readonly` scope. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://www.googleapis.com\"\n  $url = fmt(\"{base}/calendar/v3/calendars/{calendar_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op google-calendar-calendar-get(calendar_id: String) -> Any\n  description \"Get one calendar's own metadata — its summary, description, location and time zone. This is the calendar, not its events: use `google-calendar-event-get` for one of those. Needs the `calendar.readonly` scope. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://www.googleapis.com\"\n  url = fmt(\"{base}/calendar/v3/calendars/{calendar_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -4139,7 +4139,7 @@
           "hosts": [
             "www.googleapis.com"
           ],
-          "flux": "op google-drive-file-get(file_id: String) -> Any\n  description \"Get one Drive file's metadata — its id, name and MIME type. This never returns file content: downloading needs `alt=media`, which is a query parameter and therefore unavailable (C-30). Needs the `drive.metadata.readonly` scope (or `drive.readonly`). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://www.googleapis.com\"\n  $url = fmt(\"{base}/drive/v3/files/{file_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op google-drive-file-get(file_id: String) -> Any\n  description \"Get one Drive file's metadata — its id, name and MIME type. This never returns file content: downloading needs `alt=media`, which is a query parameter and therefore unavailable (C-30). Needs the `drive.metadata.readonly` scope (or `drive.readonly`). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://www.googleapis.com\"\n  url = fmt(\"{base}/drive/v3/files/{file_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -4196,7 +4196,7 @@
           "hosts": [
             "www.googleapis.com"
           ],
-          "flux": "op google-drive-file-update(file_id: String, name: String) -> Any\n  description \"Rename a Drive file: sets its name and changes nothing else. It does not move, share, trash or replace the file's content. Needs the `drive.file` scope for files this token created, or `drive` for any other. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://www.googleapis.com\"\n  $url = fmt(\"{base}/drive/v3/files/{file_id}\")\n  $content_type = \"application/json\"\n  $payload = { name: $name }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PATCH\", url: $url })\n  return $response\n",
+          "flux": "op google-drive-file-update(file_id: String, name: String) -> Any\n  description \"Rename a Drive file: sets its name and changes nothing else. It does not move, share, trash or replace the file's content. Needs the `drive.file` scope for files this token created, or `drive` for any other. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://www.googleapis.com\"\n  url = fmt(\"{base}/drive/v3/files/{file_id}\")\n  content_type = \"application/json\"\n  payload = { name }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PATCH\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -4295,7 +4295,7 @@
           "hosts": [
             "api.hubapi.com"
           ],
-          "flux": "op hubspot-contact-get(contact_id: Number) -> Any\n  description \"Read one contact by record id. Returns only HubSpot's default contact properties — name, email and record timestamps; a custom property needs a `properties` projection this connector cannot express yet. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.hubapi.com\"\n  $url = fmt(\"{base}/crm/v3/objects/contacts/{contact_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op hubspot-contact-get(contact_id: Number) -> Any\n  description \"Read one contact by record id. Returns only HubSpot's default contact properties — name, email and record timestamps; a custom property needs a `properties` projection this connector cannot express yet. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.hubapi.com\"\n  url = fmt(\"{base}/crm/v3/objects/contacts/{contact_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -4340,7 +4340,7 @@
           "hosts": [
             "api.hubapi.com"
           ],
-          "flux": "op hubspot-contact-create(email: String) -> Any\n  description \"Create a contact from an email address. HubSpot treats email as the contact's unique identifier and rejects a duplicate with 409. The new record is visible to everyone in the portal and can be enrolled by a workflow, which may send it marketing email. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.hubapi.com\"\n  $url = fmt(\"{base}/crm/v3/objects/contacts\")\n  $content_type = \"application/json\"\n  $payload = { properties: { email: $email } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op hubspot-contact-create(email: String) -> Any\n  description \"Create a contact from an email address. HubSpot treats email as the contact's unique identifier and rejects a duplicate with 409. The new record is visible to everyone in the portal and can be enrolled by a workflow, which may send it marketing email. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.hubapi.com\"\n  url = fmt(\"{base}/crm/v3/objects/contacts\")\n  content_type = \"application/json\"\n  payload = { properties: { email } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -4406,7 +4406,7 @@
           "hosts": [
             "api.hubapi.com"
           ],
-          "flux": "op hubspot-contact-update(contact_id: Number, firstname: String, lastname: String) -> Any\n  description \"Overwrite a contact's first and last name. Both are written on every call — this operation replaces them rather than merging, so re-send the one you are not changing (read it first with hubspot-contact-get). The change is visible to everyone in the portal and can trigger a workflow. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.hubapi.com\"\n  $url = fmt(\"{base}/crm/v3/objects/contacts/{contact_id}\")\n  $content_type = \"application/json\"\n  $payload = { properties: { firstname: $firstname, lastname: $lastname } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PATCH\", url: $url })\n  return $response\n",
+          "flux": "op hubspot-contact-update(contact_id: Number, firstname: String, lastname: String) -> Any\n  description \"Overwrite a contact's first and last name. Both are written on every call — this operation replaces them rather than merging, so re-send the one you are not changing (read it first with hubspot-contact-get). The change is visible to everyone in the portal and can trigger a workflow. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.hubapi.com\"\n  url = fmt(\"{base}/crm/v3/objects/contacts/{contact_id}\")\n  content_type = \"application/json\"\n  payload = { properties: { firstname, lastname } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PATCH\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -4452,7 +4452,7 @@
           "hosts": [
             "api.hubapi.com"
           ],
-          "flux": "op hubspot-company-get(company_id: Number) -> Any\n  description \"Read one company by record id. Returns only HubSpot's default company properties — name, domain and record timestamps. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.hubapi.com\"\n  $url = fmt(\"{base}/crm/v3/objects/companies/{company_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op hubspot-company-get(company_id: Number) -> Any\n  description \"Read one company by record id. Returns only HubSpot's default company properties — name, domain and record timestamps. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.hubapi.com\"\n  url = fmt(\"{base}/crm/v3/objects/companies/{company_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -4498,7 +4498,7 @@
           "hosts": [
             "api.hubapi.com"
           ],
-          "flux": "op hubspot-deal-get(deal_id: Number) -> Any\n  description \"Read one deal by record id. Returns only HubSpot's default deal properties — name, amount, stage, pipeline and close date. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.hubapi.com\"\n  $url = fmt(\"{base}/crm/v3/objects/deals/{deal_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op hubspot-deal-get(deal_id: Number) -> Any\n  description \"Read one deal by record id. Returns only HubSpot's default deal properties — name, amount, stage, pipeline and close date. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.hubapi.com\"\n  url = fmt(\"{base}/crm/v3/objects/deals/{deal_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -4596,7 +4596,7 @@
           "hosts": [
             "api.intercom.io"
           ],
-          "flux": "op intercom-contact-get(contact_id: String) -> Any\n  description \"Get one Intercom contact by id — its role, email, name, custom attributes, tags and the companies it belongs to. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.intercom.io\"\n  $url = fmt(\"{base}/contacts/{contact_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op intercom-contact-get(contact_id: String) -> Any\n  description \"Get one Intercom contact by id — its role, email, name, custom attributes, tags and the companies it belongs to. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.intercom.io\"\n  url = fmt(\"{base}/contacts/{contact_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -4656,7 +4656,7 @@
           "hosts": [
             "api.intercom.io"
           ],
-          "flux": "op intercom-contact-create(role: String, email: String) -> Any\n  description \"Create an email-identified Intercom contact. A contact created here is visible to every teammate in the workspace and is counted against its contact quota; creating one twice creates two contacts unless the workspace deduplicates on email. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.intercom.io\"\n  $url = fmt(\"{base}/contacts\")\n  $content_type = \"application/json\"\n  $payload = { email: $email, role: $role }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op intercom-contact-create(role: String, email: String) -> Any\n  description \"Create an email-identified Intercom contact. A contact created here is visible to every teammate in the workspace and is counted against its contact quota; creating one twice creates two contacts unless the workspace deduplicates on email. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.intercom.io\"\n  url = fmt(\"{base}/contacts\")\n  content_type = \"application/json\"\n  payload = { email, role }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -4701,7 +4701,7 @@
           "hosts": [
             "api.intercom.io"
           ],
-          "flux": "op intercom-conversation-get(conversation_id: String) -> Any\n  description \"Get one conversation by id, with its state, the contacts on it and its message parts in Intercom's default rendering. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.intercom.io\"\n  $url = fmt(\"{base}/conversations/{conversation_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op intercom-conversation-get(conversation_id: String) -> Any\n  description \"Get one conversation by id, with its state, the contacts on it and its message parts in Intercom's default rendering. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.intercom.io\"\n  url = fmt(\"{base}/conversations/{conversation_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -4793,7 +4793,7 @@
           "hosts": [
             "api.intercom.io"
           ],
-          "flux": "op intercom-conversation-reply(conversation_id: String, message_type: String, admin_id: String, body: String) -> Any\n  description \"Reply to a conversation as an admin. With message_type `comment` the reply is delivered to the end user by email or in-app message and cannot be un-sent; with `note` it is an internal comment only teammates see. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.intercom.io\"\n  $url = fmt(\"{base}/conversations/{conversation_id}/reply\")\n  $content_type = \"application/json\"\n  $type = \"admin\"\n  $payload = { admin_id: $admin_id, body: $body, message_type: $message_type, type: $type }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op intercom-conversation-reply(conversation_id: String, message_type: String, admin_id: String, body: String) -> Any\n  description \"Reply to a conversation as an admin. With message_type `comment` the reply is delivered to the end user by email or in-app message and cannot be un-sent; with `note` it is an internal comment only teammates see. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.intercom.io\"\n  url = fmt(\"{base}/conversations/{conversation_id}/reply\")\n  content_type = \"application/json\"\n  type = \"admin\"\n  payload = { admin_id, body, message_type, type }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -4860,7 +4860,7 @@
           "hosts": [
             "api.intercom.io"
           ],
-          "flux": "op intercom-contact-note-create(contact_id: String, body: String, admin_id: String) -> Any\n  description \"Add an internal note to a contact, visible to teammates in the workspace and never to the contact. Adding the same note twice adds two notes. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.intercom.io\"\n  $url = fmt(\"{base}/contacts/{contact_id}/notes\")\n  $content_type = \"application/json\"\n  $payload = { admin_id: $admin_id, body: $body }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op intercom-contact-note-create(contact_id: String, body: String, admin_id: String) -> Any\n  description \"Add an internal note to a contact, visible to teammates in the workspace and never to the contact. Adding the same note twice adds two notes. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.intercom.io\"\n  url = fmt(\"{base}/contacts/{contact_id}/notes\")\n  content_type = \"application/json\"\n  payload = { admin_id, body }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -4960,7 +4960,7 @@
           "hosts": [
             "{site}.atlassian.net"
           ],
-          "flux": "op jira-issue-get(issue_key: String) -> Any\n  description \"Read one Jira issue by key (`PROJ-123`) or numeric id — summary, description, status, assignee, reporter and every other configured field. Returns Jira's full default field set, including custom fields, because narrowing it needs the `fields` query parameter this connector cannot encode. Text fields are wiki markup, not rich content\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{site}.atlassian.net\"\n  $url = fmt(\"{base}/rest/api/2/issue/{issue_key}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op jira-issue-get(issue_key: String) -> Any\n  description \"Read one Jira issue by key (`PROJ-123`) or numeric id — summary, description, status, assignee, reporter and every other configured field. Returns Jira's full default field set, including custom fields, because narrowing it needs the `fields` query parameter this connector cannot encode. Text fields are wiki markup, not rich content\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{site}.atlassian.net\"\n  url = fmt(\"{base}/rest/api/2/issue/{issue_key}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5035,7 +5035,7 @@
           "hosts": [
             "{site}.atlassian.net"
           ],
-          "flux": "op jira-issue-create(project_key: String, summary: String, issue_type: String) -> Any\n  description \"Create a Jira issue in a project. Visible to everyone with access to the project and notifies its watchers. Only project, summary and issue type are set: a description cannot be sent yet (see the connector's notes), so file the detail as a comment afterwards. Returns the new issue's id, key and self URL\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{site}.atlassian.net\"\n  $url = fmt(\"{base}/rest/api/2/issue\")\n  $content_type = \"application/json\"\n  $payload = { fields: { issuetype: { name: $issue_type }, project: { key: $project_key }, summary: $summary } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op jira-issue-create(project_key: String, summary: String, issue_type: String) -> Any\n  description \"Create a Jira issue in a project. Visible to everyone with access to the project and notifies its watchers. Only project, summary and issue type are set: a description cannot be sent yet (see the connector's notes), so file the detail as a comment afterwards. Returns the new issue's id, key and self URL\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{site}.atlassian.net\"\n  url = fmt(\"{base}/rest/api/2/issue\")\n  content_type = \"application/json\"\n  payload = { fields: { issuetype: { name: issue_type }, project: { key: project_key }, summary } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5088,7 +5088,7 @@
           "hosts": [
             "{site}.atlassian.net"
           ],
-          "flux": "op jira-issue-comment-list(issue_key: String) -> Any\n  description \"Read the comments on a Jira issue, oldest first. Returns Jira's first default-sized page only: paging needs the `startAt` and `maxResults` query parameters this connector cannot encode, so an issue with a long discussion is truncated. Comment bodies are wiki markup\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{site}.atlassian.net\"\n  $url = fmt(\"{base}/rest/api/2/issue/{issue_key}/comment\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op jira-issue-comment-list(issue_key: String) -> Any\n  description \"Read the comments on a Jira issue, oldest first. Returns Jira's first default-sized page only: paging needs the `startAt` and `maxResults` query parameters this connector cannot encode, so an issue with a long discussion is truncated. Comment bodies are wiki markup\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{site}.atlassian.net\"\n  url = fmt(\"{base}/rest/api/2/issue/{issue_key}/comment\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5152,7 +5152,7 @@
           "hosts": [
             "{site}.atlassian.net"
           ],
-          "flux": "op jira-issue-comment-add(issue_key: String, body: String) -> Any\n  description \"Add a comment to a Jira issue. The comment is visible to everyone who can see the issue — including customers on a service-management portal — and notifies its watchers; restricting it to a project role or group is not supported yet. The body is Jira wiki markup (`*bold*`, `{code}`), not Markdown and not rich content\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{site}.atlassian.net\"\n  $url = fmt(\"{base}/rest/api/2/issue/{issue_key}/comment\")\n  $content_type = \"application/json\"\n  $payload = { body: $body }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op jira-issue-comment-add(issue_key: String, body: String) -> Any\n  description \"Add a comment to a Jira issue. The comment is visible to everyone who can see the issue — including customers on a service-management portal — and notifies its watchers; restricting it to a project role or group is not supported yet. The body is Jira wiki markup (`*bold*`, `{code}`), not Markdown and not rich content\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{site}.atlassian.net\"\n  url = fmt(\"{base}/rest/api/2/issue/{issue_key}/comment\")\n  content_type = \"application/json\"\n  payload = { body }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5205,7 +5205,7 @@
           "hosts": [
             "{site}.atlassian.net"
           ],
-          "flux": "op jira-issue-transitions-list(issue_key: String) -> Any\n  description \"List the workflow transitions available on a Jira issue right now, with the id and target status of each. Call this before `jira-issue-transition`: transition ids are per-workflow, not global, and only the transitions valid from the issue's current status are returned\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{site}.atlassian.net\"\n  $url = fmt(\"{base}/rest/api/2/issue/{issue_key}/transitions\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op jira-issue-transitions-list(issue_key: String) -> Any\n  description \"List the workflow transitions available on a Jira issue right now, with the id and target status of each. Call this before `jira-issue-transition`: transition ids are per-workflow, not global, and only the transitions valid from the issue's current status are returned\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{site}.atlassian.net\"\n  url = fmt(\"{base}/rest/api/2/issue/{issue_key}/transitions\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5269,7 +5269,7 @@
           "hosts": [
             "{site}.atlassian.net"
           ],
-          "flux": "op jira-issue-transition(issue_key: String, transition_id: String) -> Any\n  description \"Move a Jira issue through a workflow transition — the way an issue is closed, reopened or advanced. Get the transition id from `jira-issue-transitions-list` first; ids are per-workflow and only transitions valid from the current status are accepted. The status change is visible on every board showing the issue, notifies watchers, and may fire project automation. Answers `204` with an empty body on success\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{site}.atlassian.net\"\n  $url = fmt(\"{base}/rest/api/2/issue/{issue_key}/transitions\")\n  $content_type = \"application/json\"\n  $payload = { transition: { id: $transition_id } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op jira-issue-transition(issue_key: String, transition_id: String) -> Any\n  description \"Move a Jira issue through a workflow transition — the way an issue is closed, reopened or advanced. Get the transition id from `jira-issue-transitions-list` first; ids are per-workflow and only transitions valid from the current status are accepted. The status change is visible on every board showing the issue, notifies watchers, and may fire project automation. Answers `204` with an empty body on success\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{site}.atlassian.net\"\n  url = fmt(\"{base}/rest/api/2/issue/{issue_key}/transitions\")\n  content_type = \"application/json\"\n  payload = { transition: { id: transition_id } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5363,7 +5363,7 @@
           "hosts": [
             "api.openai.com"
           ],
-          "flux": "op openai-models-list -> Any\n  description \"List the models available to this API key, with their ids and owners\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.openai.com\"\n  $url = fmt(\"{base}/v1/models\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op openai-models-list -> Any\n  description \"List the models available to this API key, with their ids and owners\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.openai.com\"\n  url = fmt(\"{base}/v1/models\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5408,7 +5408,7 @@
           "hosts": [
             "api.openai.com"
           ],
-          "flux": "op openai-model-get(model: String) -> Any\n  description \"Retrieve one model by id, with its ownership and permissions\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.openai.com\"\n  $url = fmt(\"{base}/v1/models/{model}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op openai-model-get(model: String) -> Any\n  description \"Retrieve one model by id, with its ownership and permissions\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.openai.com\"\n  url = fmt(\"{base}/v1/models/{model}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5478,7 +5478,7 @@
           "hosts": [
             "api.openai.com"
           ],
-          "flux": "op openai-chat-completion(model: String, messages: List<Any>, max_completion_tokens: Number) -> Any\n  description \"Create a chat completion. Billed per input and output token, so the caller must state a token budget via max_completion_tokens\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.openai.com\"\n  $url = fmt(\"{base}/v1/chat/completions\")\n  $content_type = \"application/json\"\n  $payload = { max_completion_tokens: $max_completion_tokens, messages: $messages, model: $model }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op openai-chat-completion(model: String, messages: List<Any>, max_completion_tokens: Number) -> Any\n  description \"Create a chat completion. Billed per input and output token, so the caller must state a token budget via max_completion_tokens\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.openai.com\"\n  url = fmt(\"{base}/v1/chat/completions\")\n  content_type = \"application/json\"\n  payload = { max_completion_tokens, messages, model }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5545,7 +5545,7 @@
           "hosts": [
             "api.openai.com"
           ],
-          "flux": "op openai-embeddings-create(model: String, input: Any) -> Any\n  description \"Create embedding vectors for one or more input texts. Billed per input token\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.openai.com\"\n  $url = fmt(\"{base}/v1/embeddings\")\n  $content_type = \"application/json\"\n  $payload = { input: $input, model: $model }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op openai-embeddings-create(model: String, input: Any) -> Any\n  description \"Create embedding vectors for one or more input texts. Billed per input token\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.openai.com\"\n  url = fmt(\"{base}/v1/embeddings\")\n  content_type = \"application/json\"\n  payload = { input, model }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5631,7 +5631,7 @@
           "hosts": [
             "openrouter.ai"
           ],
-          "flux": "op openrouter-models-list -> Any\n  description \"List every model OpenRouter routes to, with its context length, modalities and per-token pricing\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://openrouter.ai\"\n  $url = fmt(\"{base}/api/v1/models\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op openrouter-models-list -> Any\n  description \"List every model OpenRouter routes to, with its context length, modalities and per-token pricing\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://openrouter.ai\"\n  url = fmt(\"{base}/api/v1/models\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5687,7 +5687,7 @@
           "hosts": [
             "openrouter.ai"
           ],
-          "flux": "op openrouter-model-endpoints-list(author: String, slug: String) -> Any\n  description \"List the upstream provider endpoints serving one model, with each one's pricing, context length and quantization\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://openrouter.ai\"\n  $url = fmt(\"{base}/api/v1/models/{author}/{slug}/endpoints\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op openrouter-model-endpoints-list(author: String, slug: String) -> Any\n  description \"List the upstream provider endpoints serving one model, with each one's pricing, context length and quantization\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://openrouter.ai\"\n  url = fmt(\"{base}/api/v1/models/{author}/{slug}/endpoints\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5757,7 +5757,7 @@
           "hosts": [
             "openrouter.ai"
           ],
-          "flux": "op openrouter-chat-completion(model: String, messages: List<Any>, max_completion_tokens: Number) -> Any\n  description \"Create a chat completion through OpenRouter, routed to the named model. Billed per input and output token, so the caller must state a token budget via max_completion_tokens\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://openrouter.ai\"\n  $url = fmt(\"{base}/api/v1/chat/completions\")\n  $content_type = \"application/json\"\n  $payload = { max_completion_tokens: $max_completion_tokens, messages: $messages, model: $model }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op openrouter-chat-completion(model: String, messages: List<Any>, max_completion_tokens: Number) -> Any\n  description \"Create a chat completion through OpenRouter, routed to the named model. Billed per input and output token, so the caller must state a token budget via max_completion_tokens\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://openrouter.ai\"\n  url = fmt(\"{base}/api/v1/chat/completions\")\n  content_type = \"application/json\"\n  payload = { max_completion_tokens, messages, model }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5790,7 +5790,7 @@
           "hosts": [
             "openrouter.ai"
           ],
-          "flux": "op openrouter-credits-get -> Any\n  description \"Read the account's total purchased credits and total usage, in credit units\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://openrouter.ai\"\n  $url = fmt(\"{base}/api/v1/credits\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op openrouter-credits-get -> Any\n  description \"Read the account's total purchased credits and total usage, in credit units\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://openrouter.ai\"\n  url = fmt(\"{base}/api/v1/credits\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5901,7 +5901,7 @@
           "hosts": [
             "sentry.io"
           ],
-          "flux": "op sentry-issue-get(organization_id_or_slug: String, issue_id: String) -> Any\n  description \"Get one issue — its title, culprit, level, status, assignee, first and last seen timestamps and event counts. An issue is Sentry's group of like events, not a single occurrence; use `sentry-issue-event-latest` for the stack trace. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://sentry.io\"\n  $url = fmt(\"{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op sentry-issue-get(organization_id_or_slug: String, issue_id: String) -> Any\n  description \"Get one issue — its title, culprit, level, status, assignee, first and last seen timestamps and event counts. An issue is Sentry's group of like events, not a single occurrence; use `sentry-issue-event-latest` for the stack trace. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://sentry.io\"\n  url = fmt(\"{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5974,7 +5974,7 @@
           "hosts": [
             "sentry.io"
           ],
-          "flux": "op sentry-issue-update(organization_id_or_slug: String, issue_id: String, status: String) -> Any\n  description \"Change an issue's triage state: resolve it, ignore it, or return it to unresolved. This is the state the whole organization triages against — a resolved issue leaves the unresolved queue, and an ignored one stops alerting until it recurs on Sentry's terms. Recorded in the issue's activity feed under the token's owner. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://sentry.io\"\n  $url = fmt(\"{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/\")\n  $content_type = \"application/json\"\n  $payload = { status: $status }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "flux": "op sentry-issue-update(organization_id_or_slug: String, issue_id: String, status: String) -> Any\n  description \"Change an issue's triage state: resolve it, ignore it, or return it to unresolved. This is the state the whole organization triages against — a resolved issue leaves the unresolved queue, and an ignored one stops alerting until it recurs on Sentry's terms. Recorded in the issue's activity feed under the token's owner. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://sentry.io\"\n  url = fmt(\"{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/\")\n  content_type = \"application/json\"\n  payload = { status }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -6032,7 +6032,7 @@
           "hosts": [
             "sentry.io"
           ],
-          "flux": "op sentry-project-get(organization_id_or_slug: String, project_id_or_slug: String) -> Any\n  description \"Get one project — its name, slug, platform, teams, DSN-bearing client keys' status and whether it is currently accepting events. This is the project an issue belongs to, so it is how a triage flow finds out which service is broken. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://sentry.io\"\n  $url = fmt(\"{base}/api/0/projects/{organization_id_or_slug}/{project_id_or_slug}/\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op sentry-project-get(organization_id_or_slug: String, project_id_or_slug: String) -> Any\n  description \"Get one project — its name, slug, platform, teams, DSN-bearing client keys' status and whether it is currently accepting events. This is the project an issue belongs to, so it is how a triage flow finds out which service is broken. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://sentry.io\"\n  url = fmt(\"{base}/api/0/projects/{organization_id_or_slug}/{project_id_or_slug}/\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -6090,7 +6090,7 @@
           "hosts": [
             "sentry.io"
           ],
-          "flux": "op sentry-issue-event-latest(organization_id_or_slug: String, issue_id: String) -> Any\n  description \"Get the most recent event of an issue — the actual occurrence, with its stack trace, breadcrumbs, request context and tags. This is what makes an issue diagnosable rather than merely countable; the event list itself is excluded because it pages with an opaque cursor. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://sentry.io\"\n  $url = fmt(\"{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/events/latest/\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op sentry-issue-event-latest(organization_id_or_slug: String, issue_id: String) -> Any\n  description \"Get the most recent event of an issue — the actual occurrence, with its stack trace, breadcrumbs, request context and tags. This is what makes an issue diagnosable rather than merely countable; the event list itself is excluded because it pages with an opaque cursor. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://sentry.io\"\n  url = fmt(\"{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/events/latest/\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -6189,7 +6189,7 @@
           "hosts": [
             "{shop}.myshopify.com"
           ],
-          "flux": "op shopify-order-get(order_id: Number) -> Any\n  description \"Get one order by id, with its line items, totals, fulfilment and financial status, and the customer and addresses attached to it. The response carries personal data: the customer's name, email, phone and shipping address. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{shop}.myshopify.com\"\n  $url = fmt(\"{base}/admin/api/2024-10/orders/{order_id}.json\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op shopify-order-get(order_id: Number) -> Any\n  description \"Get one order by id, with its line items, totals, fulfilment and financial status, and the customer and addresses attached to it. The response carries personal data: the customer's name, email, phone and shipping address. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{shop}.myshopify.com\"\n  url = fmt(\"{base}/admin/api/2024-10/orders/{order_id}.json\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -6243,7 +6243,7 @@
           "hosts": [
             "{shop}.myshopify.com"
           ],
-          "flux": "op shopify-product-get(product_id: Number) -> Any\n  description \"Get one product by id, with its title, description, status, vendor, options, variants and images. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{shop}.myshopify.com\"\n  $url = fmt(\"{base}/admin/api/2024-10/products/{product_id}.json\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op shopify-product-get(product_id: Number) -> Any\n  description \"Get one product by id, with its title, description, status, vendor, options, variants and images. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{shop}.myshopify.com\"\n  url = fmt(\"{base}/admin/api/2024-10/products/{product_id}.json\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -6308,7 +6308,7 @@
           "hosts": [
             "{shop}.myshopify.com"
           ],
-          "flux": "op shopify-product-update(product_id: Number, title: String) -> Any\n  description \"Rename a product. The new title is live on the public storefront as soon as this returns, on every sales channel the product is published to. Shopify applies only the fields sent, so nothing else about the product changes. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{shop}.myshopify.com\"\n  $url = fmt(\"{base}/admin/api/2024-10/products/{product_id}.json\")\n  $content_type = \"application/json\"\n  $payload = { product: { title: $title } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "flux": "op shopify-product-update(product_id: Number, title: String) -> Any\n  description \"Rename a product. The new title is live on the public storefront as soon as this returns, on every sales channel the product is published to. Shopify applies only the fields sent, so nothing else about the product changes. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{shop}.myshopify.com\"\n  url = fmt(\"{base}/admin/api/2024-10/products/{product_id}.json\")\n  content_type = \"application/json\"\n  payload = { product: { title } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -6362,7 +6362,7 @@
           "hosts": [
             "{shop}.myshopify.com"
           ],
-          "flux": "op shopify-customer-get(customer_id: Number) -> Any\n  description \"Get one customer by id: name, email, phone, default address, marketing consent state and order count. This is personal data about a named individual — read it only when the task needs it, and do not repeat it further than the task requires. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{shop}.myshopify.com\"\n  $url = fmt(\"{base}/admin/api/2024-10/customers/{customer_id}.json\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op shopify-customer-get(customer_id: Number) -> Any\n  description \"Get one customer by id: name, email, phone, default address, marketing consent state and order count. This is personal data about a named individual — read it only when the task needs it, and do not repeat it further than the task requires. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{shop}.myshopify.com\"\n  url = fmt(\"{base}/admin/api/2024-10/customers/{customer_id}.json\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -6416,7 +6416,7 @@
           "hosts": [
             "{shop}.myshopify.com"
           ],
-          "flux": "op shopify-inventory-level-list(location_id: Number) -> Any\n  description \"List the inventory levels held at one location — the available quantity per inventory item. Returns the first page only, so a location stocking more items than one page holds is reported incompletely. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{shop}.myshopify.com\"\n  $url = fmt(\"{base}/admin/api/2024-10/locations/{location_id}/inventory_levels.json\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op shopify-inventory-level-list(location_id: Number) -> Any\n  description \"List the inventory levels held at one location — the available quantity per inventory item. Returns the first page only, so a location stocking more items than one page holds is reported incompletely. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{shop}.myshopify.com\"\n  url = fmt(\"{base}/admin/api/2024-10/locations/{location_id}/inventory_levels.json\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -6558,7 +6558,7 @@
           "hosts": [
             "slack.com"
           ],
-          "flux": "op slack-chat-post-message(channel: String, text: String, thread_ts: String) -> Any\n  description \"Post a message to a Slack channel, visible to everyone in it. Slack answers HTTP 200 even on failure: check `ok` in the response body before treating the message as sent. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://slack.com\"\n  $url = fmt(\"{base}/api/chat.postMessage\")\n  $content_type = \"application/json\"\n  $payload = { channel: $channel, text: $text, thread_ts: $thread_ts }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op slack-chat-post-message(channel: String, text: String, thread_ts: String) -> Any\n  description \"Post a message to a Slack channel, visible to everyone in it. Slack answers HTTP 200 even on failure: check `ok` in the response body before treating the message as sent. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://slack.com\"\n  url = fmt(\"{base}/api/chat.postMessage\")\n  content_type = \"application/json\"\n  payload = { channel: $channel, text, thread_ts }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -6636,7 +6636,7 @@
           "hosts": [
             "slack.com"
           ],
-          "flux": "op slack-conversations-history(channel: String, limit: Number, oldest: String, latest: String) -> Any\n  description \"Read recent messages from a Slack channel, newest first. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `channel_not_found` appears at `error`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://slack.com\"\n  $url = fmt(\"{base}/api/conversations.history\")\n  $content_type = \"application/json\"\n  $payload = { channel: $channel, latest: $latest, limit: $limit, oldest: $oldest }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op slack-conversations-history(channel: String, limit: Number, oldest: String, latest: String) -> Any\n  description \"Read recent messages from a Slack channel, newest first. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `channel_not_found` appears at `error`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://slack.com\"\n  url = fmt(\"{base}/api/conversations.history\")\n  content_type = \"application/json\"\n  payload = { channel: $channel, latest, limit, oldest }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -6692,7 +6692,7 @@
           "hosts": [
             "slack.com"
           ],
-          "flux": "op slack-users-info(user: String, include_locale: Bool) -> Any\n  description \"Look up one Slack user by id — display name, real name, time zone and whether they are a bot. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `user_not_found` appears at `error`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://slack.com\"\n  $url = fmt(\"{base}/api/users.info\")\n  $content_type = \"application/json\"\n  $payload = { include_locale: $include_locale, user: $user }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op slack-users-info(user: String, include_locale: Bool) -> Any\n  description \"Look up one Slack user by id — display name, real name, time zone and whether they are a bot. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `user_not_found` appears at `error`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://slack.com\"\n  url = fmt(\"{base}/api/users.info\")\n  content_type = \"application/json\"\n  payload = { include_locale, user }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -6759,7 +6759,7 @@
           "hosts": [
             "slack.com"
           ],
-          "flux": "op slack-reactions-add(channel: String, timestamp: String, name: String) -> Any\n  description \"Add an emoji reaction to a message, visible to everyone in the channel. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `already_reacted` appears at `error`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://slack.com\"\n  $url = fmt(\"{base}/api/reactions.add\")\n  $content_type = \"application/json\"\n  $payload = { channel: $channel, name: $name, timestamp: $timestamp }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op slack-reactions-add(channel: String, timestamp: String, name: String) -> Any\n  description \"Add an emoji reaction to a message, visible to everyone in the channel. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `already_reacted` appears at `error`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://slack.com\"\n  url = fmt(\"{base}/api/reactions.add\")\n  content_type = \"application/json\"\n  payload = { channel: $channel, name, timestamp }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -6847,7 +6847,7 @@
           "hosts": [
             "{subdomain}.zendesk.com"
           ],
-          "flux": "op zendesk-test -> Any\n  description \"Verify credentials by fetching the authenticated Zendesk user\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{subdomain}.zendesk.com\"\n  $url = fmt(\"{base}/api/v2/users/me.json\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op zendesk-test -> Any\n  description \"Verify credentials by fetching the authenticated Zendesk user\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{subdomain}.zendesk.com\"\n  url = fmt(\"{base}/api/v2/users/me.json\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -6924,7 +6924,7 @@
           "hosts": [
             "{subdomain}.zendesk.com"
           ],
-          "flux": "op zendesk-ticket-search(query: String, page: Number, per_page: Number) -> Any\n  description \"Search tickets with Zendesk search syntax, e.g. `type:ticket status:new`\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{subdomain}.zendesk.com\"\n  $url = fmt(\"{base}/api/v2/search.json?query={query}\")\n  $sep = \"&\"\n  when $page\n    $url = fmt(\"{url}{sep}page={page}\")\n    $sep = \"&\"\n  when $per_page\n    $url = fmt(\"{url}{sep}per_page={per_page}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op zendesk-ticket-search(query: String, page: Number, per_page: Number) -> Any\n  description \"Search tickets with Zendesk search syntax, e.g. `type:ticket status:new`\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{subdomain}.zendesk.com\"\n  url = fmt(\"{base}/api/v2/search.json?query={query}\")\n  sep = \"&\"\n  when page\n    url = fmt(\"{url}{sep}page={page}\")\n    sep = \"&\"\n  when per_page\n    url = fmt(\"{url}{sep}per_page={per_page}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -6986,7 +6986,7 @@
           "hosts": [
             "{subdomain}.zendesk.com"
           ],
-          "flux": "op zendesk-ticket-show(ticket_id: Number) -> Any\n  description \"Show one ticket\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{subdomain}.zendesk.com\"\n  $url = fmt(\"{base}/api/v2/tickets/{ticket_id}.json\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op zendesk-ticket-show(ticket_id: Number) -> Any\n  description \"Show one ticket\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{subdomain}.zendesk.com\"\n  url = fmt(\"{base}/api/v2/tickets/{ticket_id}.json\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -7065,7 +7065,7 @@
           "hosts": [
             "{subdomain}.zendesk.com"
           ],
-          "flux": "op zendesk-ticket-comment-list(ticket_id: Number, page: Number, per_page: Number) -> Any\n  description \"List a ticket's comments\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{subdomain}.zendesk.com\"\n  $url = fmt(\"{base}/api/v2/tickets/{ticket_id}/comments.json\")\n  $sep = \"?\"\n  when $page\n    $url = fmt(\"{url}{sep}page={page}\")\n    $sep = \"&\"\n  when $per_page\n    $url = fmt(\"{url}{sep}per_page={per_page}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op zendesk-ticket-comment-list(ticket_id: Number, page: Number, per_page: Number) -> Any\n  description \"List a ticket's comments\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{subdomain}.zendesk.com\"\n  url = fmt(\"{base}/api/v2/tickets/{ticket_id}/comments.json\")\n  sep = \"?\"\n  when page\n    url = fmt(\"{url}{sep}page={page}\")\n    sep = \"&\"\n  when per_page\n    url = fmt(\"{url}{sep}per_page={per_page}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -7192,7 +7192,7 @@
           "hosts": [
             "{subdomain}.zendesk.com"
           ],
-          "flux": "op zendesk-ticket-update(ticket_id: Number, updated_stamp: String, status: String, priority: String, assignee_id: Number, group_id: Number, type: String) -> Any\n  description \"Safe-update selected ticket fields against the caller's updated_stamp; at least one of status, priority, assignee_id, group_id or type must be supplied\"\n  risk \"medium\"\n  idempotency \"conditional\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{subdomain}.zendesk.com\"\n  $url = fmt(\"{base}/api/v2/tickets/{ticket_id}.json\")\n  $content_type = \"application/json\"\n  $safe_update = true\n  $payload = { ticket: { assignee_id: $assignee_id, group_id: $group_id, priority: $priority, safe_update: $safe_update, status: $status, type: $type, updated_stamp: $updated_stamp } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "flux": "op zendesk-ticket-update(ticket_id: Number, updated_stamp: String, status: String, priority: String, assignee_id: Number, group_id: Number, type: String) -> Any\n  description \"Safe-update selected ticket fields against the caller's updated_stamp; at least one of status, priority, assignee_id, group_id or type must be supplied\"\n  risk \"medium\"\n  idempotency \"conditional\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{subdomain}.zendesk.com\"\n  url = fmt(\"{base}/api/v2/tickets/{ticket_id}.json\")\n  content_type = \"application/json\"\n  safe_update = true\n  payload = { ticket: { assignee_id, group_id, priority, safe_update, status, type, updated_stamp } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -7289,7 +7289,7 @@
           "hosts": [
             "{subdomain}.zendesk.com"
           ],
-          "flux": "op zendesk-ticket-comment-add(ticket_id: Number, updated_stamp: String, body: String, public: Bool) -> Any\n  description \"Add a comment to a ticket; the comment is an internal note unless public is explicitly true\"\n  risk \"medium\"\n  idempotency \"conditional\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{subdomain}.zendesk.com\"\n  $url = fmt(\"{base}/api/v2/tickets/{ticket_id}.json\")\n  $content_type = \"application/json\"\n  $safe_update = true\n  $payload = { ticket: { comment: { body: $body, public: $public }, safe_update: $safe_update, updated_stamp: $updated_stamp } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "flux": "op zendesk-ticket-comment-add(ticket_id: Number, updated_stamp: String, body: String, public: Bool) -> Any\n  description \"Add a comment to a ticket; the comment is an internal note unless public is explicitly true\"\n  risk \"medium\"\n  idempotency \"conditional\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{subdomain}.zendesk.com\"\n  url = fmt(\"{base}/api/v2/tickets/{ticket_id}.json\")\n  content_type = \"application/json\"\n  safe_update = true\n  payload = { ticket: { comment: { body, public }, safe_update, updated_stamp } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -7379,7 +7379,7 @@
           "hosts": [
             "{subdomain}.zendesk.com"
           ],
-          "flux": "op zendesk-ticket-tag-add(ticket_id: Number, updated_stamp: String, tags: List<String>) -> Any\n  description \"Add tags to a ticket without replacing the tags it already has\"\n  risk \"medium\"\n  idempotency \"conditional\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{subdomain}.zendesk.com\"\n  $url = fmt(\"{base}/api/v2/tickets/{ticket_id}.json\")\n  $content_type = \"application/json\"\n  $safe_update = true\n  $payload = { ticket: { additional_tags: $tags, safe_update: $safe_update, updated_stamp: $updated_stamp } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "flux": "op zendesk-ticket-tag-add(ticket_id: Number, updated_stamp: String, tags: List<String>) -> Any\n  description \"Add tags to a ticket without replacing the tags it already has\"\n  risk \"medium\"\n  idempotency \"conditional\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{subdomain}.zendesk.com\"\n  url = fmt(\"{base}/api/v2/tickets/{ticket_id}.json\")\n  content_type = \"application/json\"\n  safe_update = true\n  payload = { ticket: { additional_tags: tags, safe_update, updated_stamp } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -7507,7 +7507,7 @@
           "hosts": [
             "api.zoom.us"
           ],
-          "flux": "op zoom-meeting-get(meeting_id: Number) -> Any\n  description \"Get one meeting — its topic, start time, duration, timezone, join URL and settings. The response also carries `start_url`, which starts the meeting as its host for anyone holding it. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.zoom.us\"\n  $url = fmt(\"{base}/v2/meetings/{meeting_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op zoom-meeting-get(meeting_id: Number) -> Any\n  description \"Get one meeting — its topic, start time, duration, timezone, join URL and settings. The response also carries `start_url`, which starts the meeting as its host for anyone holding it. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.zoom.us\"\n  url = fmt(\"{base}/v2/meetings/{meeting_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -7631,7 +7631,7 @@
           "hosts": [
             "api.zoom.us"
           ],
-          "flux": "op zoom-meeting-create(user_id: String, topic: String, start_time: String, duration: Number, waiting_room: Bool) -> Any\n  description \"Schedule a one-off meeting for a user at a fixed time. Nobody is invited and nobody is notified — the meeting appears on the host's own Zoom schedule and the returned `join_url` is how anyone else learns of it. The response also carries `start_url`, which starts the meeting as its host for anyone holding it. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.zoom.us\"\n  $url = fmt(\"{base}/v2/users/{user_id}/meetings\")\n  $content_type = \"application/json\"\n  $type = 2\n  $payload = { duration: $duration, settings: { waiting_room: $waiting_room }, start_time: $start_time, topic: $topic, type: $type }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "flux": "op zoom-meeting-create(user_id: String, topic: String, start_time: String, duration: Number, waiting_room: Bool) -> Any\n  description \"Schedule a one-off meeting for a user at a fixed time. Nobody is invited and nobody is notified — the meeting appears on the host's own Zoom schedule and the returned `join_url` is how anyone else learns of it. The response also carries `start_url`, which starts the meeting as its host for anyone holding it. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.zoom.us\"\n  url = fmt(\"{base}/v2/users/{user_id}/meetings\")\n  content_type = \"application/json\"\n  type = 2\n  payload = { duration, settings: { waiting_room }, start_time, topic, type }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -7677,7 +7677,7 @@
           "hosts": [
             "api.zoom.us"
           ],
-          "flux": "op zoom-meeting-delete(meeting_id: Number) -> Any\n  description \"Cancel a meeting. It is gone — Zoom offers no undelete, and the meeting id, its join URL and any registrations go with it. Whether Zoom emails the host or the registrants about the cancellation is left to Zoom's own default; this operation cannot ask for either. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.zoom.us\"\n  $url = fmt(\"{base}/v2/meetings/{meeting_id}\")\n  $response = http.request({ method: \"DELETE\", url: $url })\n  return $response\n",
+          "flux": "op zoom-meeting-delete(meeting_id: Number) -> Any\n  description \"Cancel a meeting. It is gone — Zoom offers no undelete, and the meeting id, its join URL and any registrations go with it. Whether Zoom emails the host or the registrants about the cancellation is left to Zoom's own default; this operation cannot ask for either. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.zoom.us\"\n  url = fmt(\"{base}/v2/meetings/{meeting_id}\")\n  response = http.request(method: \"DELETE\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -7723,7 +7723,7 @@
           "hosts": [
             "api.zoom.us"
           ],
-          "flux": "op zoom-user-get(user_id: String) -> Any\n  description \"Get one user — their id, email, name, timezone, licence type and personal meeting id. This is how `me` is resolved to the id a meeting is created under. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.zoom.us\"\n  $url = fmt(\"{base}/v2/users/{user_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "flux": "op zoom-user-get(user_id: String) -> Any\n  description \"Get one user — their id, email, name, timezone, licence type and personal meeting id. This is how `me` is resolved to the id a meeting is created under. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.zoom.us\"\n  url = fmt(\"{base}/v2/users/{user_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [

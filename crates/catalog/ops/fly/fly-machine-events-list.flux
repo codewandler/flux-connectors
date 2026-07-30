@@ -5,7 +5,7 @@ op fly-machine-events-list(app_name: String, machine_id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.machines.dev/v1"
-  $url = fmt("{base}/apps/{app_name}/machines/{machine_id}/events")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.machines.dev/v1"
+  url = fmt("{base}/apps/{app_name}/machines/{machine_id}/events")
+  response = http.request(method: "GET", url)
+  return response

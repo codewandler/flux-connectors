@@ -5,10 +5,10 @@ op intercom-conversation-reply(conversation_id: String, message_type: String, ad
   effects ["network"]
   expose true
 
-  $base = "https://api.intercom.io"
-  $url = fmt("{base}/conversations/{conversation_id}/reply")
-  $content_type = "application/json"
-  $type = "admin"
-  $payload = { admin_id: $admin_id, body: $body, message_type: $message_type, type: $type }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.intercom.io"
+  url = fmt("{base}/conversations/{conversation_id}/reply")
+  content_type = "application/json"
+  type = "admin"
+  payload = { admin_id, body, message_type, type }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

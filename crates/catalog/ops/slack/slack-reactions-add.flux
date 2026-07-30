@@ -5,9 +5,9 @@ op slack-reactions-add(channel: String, timestamp: String, name: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://slack.com"
-  $url = fmt("{base}/api/reactions.add")
-  $content_type = "application/json"
-  $payload = { channel: $channel, name: $name, timestamp: $timestamp }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://slack.com"
+  url = fmt("{base}/api/reactions.add")
+  content_type = "application/json"
+  payload = { channel: $channel, name, timestamp }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

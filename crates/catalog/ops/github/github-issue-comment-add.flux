@@ -5,9 +5,9 @@ op github-issue-comment-add(owner: String, repo: String, issue_number: Number, b
   effects ["network"]
   expose true
 
-  $base = "https://api.github.com"
-  $url = fmt("{base}/repos/{owner}/{repo}/issues/{issue_number}/comments")
-  $content_type = "application/json"
-  $payload = { body: $body }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.github.com"
+  url = fmt("{base}/repos/{owner}/{repo}/issues/{issue_number}/comments")
+  content_type = "application/json"
+  payload = { body }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

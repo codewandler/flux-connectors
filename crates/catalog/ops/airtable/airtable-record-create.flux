@@ -5,9 +5,9 @@ op airtable-record-create(base_id: String, table_id: String, cell_values: Any) -
   effects ["network"]
   expose true
 
-  $base = "https://api.airtable.com"
-  $url = fmt("{base}/v0/{base_id}/{table_id}")
-  $content_type = "application/json"
-  $payload = { fields: $cell_values }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.airtable.com"
+  url = fmt("{base}/v0/{base_id}/{table_id}")
+  content_type = "application/json"
+  payload = { fields: cell_values }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

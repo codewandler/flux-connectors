@@ -5,9 +5,9 @@ op sentry-issue-update(organization_id_or_slug: String, issue_id: String, status
   effects ["network"]
   expose true
 
-  $base = "https://sentry.io"
-  $url = fmt("{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/")
-  $content_type = "application/json"
-  $payload = { status: $status }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "PUT", url: $url })
-  return $response
+  base = "https://sentry.io"
+  url = fmt("{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/")
+  content_type = "application/json"
+  payload = { status }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
+  return response

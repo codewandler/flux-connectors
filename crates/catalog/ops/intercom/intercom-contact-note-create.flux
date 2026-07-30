@@ -5,9 +5,9 @@ op intercom-contact-note-create(contact_id: String, body: String, admin_id: Stri
   effects ["network"]
   expose true
 
-  $base = "https://api.intercom.io"
-  $url = fmt("{base}/contacts/{contact_id}/notes")
-  $content_type = "application/json"
-  $payload = { admin_id: $admin_id, body: $body }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.intercom.io"
+  url = fmt("{base}/contacts/{contact_id}/notes")
+  content_type = "application/json"
+  payload = { admin_id, body }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

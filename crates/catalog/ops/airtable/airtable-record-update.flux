@@ -5,9 +5,9 @@ op airtable-record-update(base_id: String, table_id: String, record_id: String, 
   effects ["network"]
   expose true
 
-  $base = "https://api.airtable.com"
-  $url = fmt("{base}/v0/{base_id}/{table_id}/{record_id}")
-  $content_type = "application/json"
-  $payload = { fields: $cell_values }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "PATCH", url: $url })
-  return $response
+  base = "https://api.airtable.com"
+  url = fmt("{base}/v0/{base_id}/{table_id}/{record_id}")
+  content_type = "application/json"
+  payload = { fields: cell_values }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PATCH", url)
+  return response

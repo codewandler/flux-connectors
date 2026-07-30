@@ -5,9 +5,9 @@ op freshdesk-ticket-note-add(id: Number, body: String, private: Bool, incoming: 
   effects ["network"]
   expose true
 
-  $base = "https://{domain}/api/v2"
-  $url = fmt("{base}/tickets/{id}/notes")
-  $content_type = "application/json"
-  $payload = { body: $body, incoming: $incoming, notify_emails: $notify_emails, private: $private }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://{domain}/api/v2"
+  url = fmt("{base}/tickets/{id}/notes")
+  content_type = "application/json"
+  payload = { body, incoming, notify_emails, private }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

@@ -5,7 +5,7 @@ op sentry-issue-get(organization_id_or_slug: String, issue_id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://sentry.io"
-  $url = fmt("{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://sentry.io"
+  url = fmt("{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/")
+  response = http.request(method: "GET", url)
+  return response

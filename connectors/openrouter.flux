@@ -9,10 +9,10 @@ op openrouter-models-list -> Any
   effects ["network"]
   expose true
 
-  $base = "https://openrouter.ai"
-  $url = fmt("{base}/api/v1/models")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://openrouter.ai"
+  url = fmt("{base}/api/v1/models")
+  response = http.request(method: "GET", url)
+  return response
 
 op openrouter-model-endpoints-list(author: String, slug: String) -> Any
   description "List the upstream provider endpoints serving one model, with each one's pricing, context length and quantization"
@@ -21,10 +21,10 @@ op openrouter-model-endpoints-list(author: String, slug: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://openrouter.ai"
-  $url = fmt("{base}/api/v1/models/{author}/{slug}/endpoints")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://openrouter.ai"
+  url = fmt("{base}/api/v1/models/{author}/{slug}/endpoints")
+  response = http.request(method: "GET", url)
+  return response
 
 op openrouter-chat-completion(model: String, messages: List<Any>, max_completion_tokens: Number) -> Any
   description "Create a chat completion through OpenRouter, routed to the named model. Billed per input and output token, so the caller must state a token budget via max_completion_tokens"
@@ -33,12 +33,12 @@ op openrouter-chat-completion(model: String, messages: List<Any>, max_completion
   effects ["network"]
   expose true
 
-  $base = "https://openrouter.ai"
-  $url = fmt("{base}/api/v1/chat/completions")
-  $content_type = "application/json"
-  $payload = { max_completion_tokens: $max_completion_tokens, messages: $messages, model: $model }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://openrouter.ai"
+  url = fmt("{base}/api/v1/chat/completions")
+  content_type = "application/json"
+  payload = { max_completion_tokens, messages, model }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response
 
 op openrouter-credits-get -> Any
   description "Read the account's total purchased credits and total usage, in credit units"
@@ -47,7 +47,7 @@ op openrouter-credits-get -> Any
   effects ["network"]
   expose true
 
-  $base = "https://openrouter.ai"
-  $url = fmt("{base}/api/v1/credits")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://openrouter.ai"
+  url = fmt("{base}/api/v1/credits")
+  response = http.request(method: "GET", url)
+  return response

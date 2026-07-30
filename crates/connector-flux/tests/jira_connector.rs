@@ -242,7 +242,7 @@ fn no_jira_operation_declares_a_query_parameter() {
 /// The same claim over the **emitted text**, which is what flux actually loads.
 ///
 /// The IR assertion above and this one are not the same check. The emitter assembles a query string
-/// from `params.query` alone, binding `$sep` to carry the `?`/`&` separator; if that machinery
+/// from `params.query` alone, binding `sep` to carry the `?`/`&` separator; if that machinery
 /// appears in a Jira module, something put a value in the URL regardless of what the IR looked like
 /// when the previous test ran.
 ///
@@ -255,7 +255,7 @@ fn no_jira_module_assembles_a_query_string() {
 
     for (id, text) in emitted(&connector) {
         assert!(
-            !text.contains("$sep"),
+            !text.contains("sep = "),
             "`{id}` emits query-string separator machinery, so a value is reaching the URL \
              unencoded:\n{text}"
         );
@@ -266,7 +266,7 @@ fn no_jira_module_assembles_a_query_string() {
         // The guard the emitter wraps an optional query parameter in. Its absence is the second
         // half of the proof: no re-bound `$url` survives anywhere in the module.
         assert_eq!(
-            text.matches("$url = ").count(),
+            text.matches("url = ").count(),
             1,
             "`{id}` binds `$url` more than once, which is how the emitter re-binds it per optional \
              query parameter inside a `when` guard:\n{text}"
@@ -464,7 +464,7 @@ fn the_tenant_template_is_unbound_and_the_host_is_never_a_wildcard() {
     // site, and a build must not silently substitute one.
     for (id, text) in emitted(&connector) {
         assert!(
-            text.contains(r#"$base = "https://{site}.atlassian.net""#),
+            text.contains(r#"base = "https://{site}.atlassian.net""#),
             "`{id}` does not carry the unbound tenant template:\n{text}"
         );
     }

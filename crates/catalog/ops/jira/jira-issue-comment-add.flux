@@ -5,9 +5,9 @@ op jira-issue-comment-add(issue_key: String, body: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://{site}.atlassian.net"
-  $url = fmt("{base}/rest/api/2/issue/{issue_key}/comment")
-  $content_type = "application/json"
-  $payload = { body: $body }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://{site}.atlassian.net"
+  url = fmt("{base}/rest/api/2/issue/{issue_key}/comment")
+  content_type = "application/json"
+  payload = { body }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

@@ -5,9 +5,9 @@ op jira-issue-create(project_key: String, summary: String, issue_type: String) -
   effects ["network"]
   expose true
 
-  $base = "https://{site}.atlassian.net"
-  $url = fmt("{base}/rest/api/2/issue")
-  $content_type = "application/json"
-  $payload = { fields: { issuetype: { name: $issue_type }, project: { key: $project_key }, summary: $summary } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://{site}.atlassian.net"
+  url = fmt("{base}/rest/api/2/issue")
+  content_type = "application/json"
+  payload = { fields: { issuetype: { name: issue_type }, project: { key: project_key }, summary } }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

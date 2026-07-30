@@ -5,7 +5,7 @@ op hubspot-company-get(company_id: Number) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.hubapi.com"
-  $url = fmt("{base}/crm/v3/objects/companies/{company_id}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.hubapi.com"
+  url = fmt("{base}/crm/v3/objects/companies/{company_id}")
+  response = http.request(method: "GET", url)
+  return response
