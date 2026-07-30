@@ -571,7 +571,7 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "The service name, e.g. `s3`. Lowercase letters, digits and `-`. Names the emitted `<provider>-<name>.flux`, is the middle segment of the service address, and is what an operation's `service` references. `default` is reserved and may not be declared."
+          "description": "The service name, e.g. `s3`. Lowercase letters, digits and `-`. Names the emitted `<provider>-<name>.flux`, is the middle segment of the service address, and is what an operation's `service` references. `default` is reserved: an entry may name it only to carry `roles`, which a single-surface provider has nowhere else to put."
         },
         "description": {
           "type": "string",
@@ -584,8 +584,25 @@
         "api_version": {
           "type": "string",
           "description": "The vendor's API version for THIS service, overriding the connector-level default. `s3` is `2006-03-01`; `bedrock-runtime` is `2023-09-30`."
+        },
+        "roles": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/role" },
+          "description": "The capability shapes this service claims to implement, each checked at load: a service declaring a role whose required members it does not have is refused, naming the missing one.\n\nRoles attach HERE and not to the provider. `openai`'s model-listing surface and its chat surface are different capabilities of one vendor, and a provider-level role would smear them together — so a provider's roles are derived as the union of its services', and a provider-level `roles` key is an error."
         }
       }
+    },
+
+    "role": {
+      "title": "A checked capability shape a service claims",
+      "description": "A closed set defined by this repository, never a free-form tag: an open string set cannot be checked, and a typo'd capability that silently means `no capability` is the failure mode this exists to prevent. A role names the members it requires by their name WITHIN the service — the trailing segments of the member name — so `openai-models-list` and `openrouter-models-list` fill one slot and the shape stays vendor-independent.",
+      "oneOf": [
+        {
+          "const": "llm_catalogue",
+          "description": "A live list of the models a vendor serves. Requires a `list` member. Connectors inform the pool of (provider, model) tuples; flux keeps serving inference, which is a stated non-goal here."
+        }
+      ]
     },
 
     "spec": {

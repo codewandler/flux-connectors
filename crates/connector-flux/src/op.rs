@@ -1091,6 +1091,7 @@ mod tests {
             description: String::new(),
             base_url: Some("https://gmail.googleapis.com/".to_string()),
             api_version: Some("v1".to_string()),
+            roles: Vec::new(),
         }];
 
         let emitted = emit_operation(&connector, &op).expect("a bare GET is inside the slice");

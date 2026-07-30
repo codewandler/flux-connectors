@@ -11,7 +11,7 @@
 //!
 //! ```text
 //! Connector { id, authority, api_version, vendor, base_url,
-//!             services: [Service { name, description, base_url, api_version }],
+//!             services: [Service { name, description, base_url, api_version, roles }],
 //!             auth: [AuthMethod], default_auth: [AuthRequirement],
 //!             operations: [Operation { id, service, method, path, params, response_schema,
 //!                                      risk, idempotency, description,
@@ -28,8 +28,10 @@
 //! - **A service is a level, not a label.** Every member belongs to exactly one [`Service`], the
 //!   services partition the member set, and one that names none belongs to the reserved
 //!   [`DEFAULT_SERVICE`] — which is elided from every rendered [`address`]. A service owns its base
-//!   URL and its API version, because AWS versions `s3` and `bedrock-runtime` separately. See
-//!   [`Connector::service_names`] and `docs/designs/provider-services.md`.
+//!   URL and its API version, because AWS versions `s3` and `bedrock-runtime` separately. It is also
+//!   what claims a [`Role`] — a checked capability shape, with the provider's set *derived* as the
+//!   union of its services'. See [`Connector::service_names`], [`Connector::roles`],
+//!   `docs/designs/provider-services.md` and `docs/designs/provider-roles.md`.
 //! - **A service has three member kinds, sharing one namespace.** An [`Operation`] is the outbound
 //!   direction, an [`EventDecl`] the inbound one, and a [`ChannelBinding`] the composition of the two
 //!   — it names the events it carries *and* the operation that replies to them. All three project
@@ -83,7 +85,7 @@ pub use inbound::{
 };
 pub use ir::{
     Connector, ErrorEnvelope, HttpMethod, Idempotency, JsonSchema, Operation, Pagination, Param,
-    ParamSet, Provenance, Quirks, RateLimit, Risk, Service, DEFAULT_SERVICE,
+    ParamSet, Provenance, Quirks, RateLimit, Risk, Role, Service, DEFAULT_SERVICE,
 };
 pub use lock::{sha256_hex, LockEntry, Lockfile, LOCKFILE_NAME, LOCKFILE_VERSION};
 pub use provider::{

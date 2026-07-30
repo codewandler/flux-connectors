@@ -1,0 +1,33 @@
+# C-120: a `[[services]]` entry may name the reserved `default` only when it is the provider's *only*
+# API surface, and only to carry roles. Beside a named service it would hand back the implicit
+# `default` that C-49 refuses a multi-service provider — and then an operation omitting `service`
+# would become legal and be emitted into a `<provider>-default.flux` nobody asked for.
+id = "acme"
+vendor = "Acme"
+base_url = "https://api.acme.example"
+
+[[services]]
+name = "default"
+roles = ["llm_catalogue"]
+
+[[services]]
+name = "chat"
+description = "Completions."
+
+[[operations]]
+id = "acme-models-list"
+service = "default"
+method = "GET"
+path = "/v1/models"
+description = "List the models."
+risk = "low"
+idempotency = "idempotent"
+
+[[operations]]
+id = "acme-chat-completion"
+service = "chat"
+method = "POST"
+path = "/v1/chat/completions"
+description = "Run a completion."
+risk = "low"
+idempotency = "non_idempotent"

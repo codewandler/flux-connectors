@@ -1,0 +1,5 @@
+providers/unknown-service-role.toml: TOML parse error at line 12, column 10
+   |
+12 | roles = ["llm_catalog"]
+   |          ^^^^^^^^^^^^^
+unknown variant `llm_catalog`, expected `llm_catalogue`
