@@ -56,6 +56,22 @@ impl<L: Layout> MemoryStore<L> {
         self.layout.render(reference)
     }
 
+    /// The address a path resolves back to — the inverse of [`path`](Self::path).
+    ///
+    /// The question [`paths`](Self::paths) leaves open: it answers *where* a value went, and this
+    /// answers *whose* credential is at a path an operator is holding.
+    ///
+    /// # Errors
+    ///
+    /// [`StoreError::Layout`], carrying the layout's own explanation, when the path is not one this
+    /// layout writes. A layout is entitled to refuse rather than guess, and this is how that refusal
+    /// reaches a caller.
+    pub fn reference(&self, path: &str) -> Result<CredentialRef, StoreError> {
+        self.layout
+            .parse(path)
+            .map_err(|reason| StoreError::Layout { reason })
+    }
+
     /// Every path currently holding a value, in order.
     ///
     /// Values are deliberately not exposed: this answers "where did it go", which is the question a

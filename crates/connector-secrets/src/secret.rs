@@ -27,7 +27,12 @@ use std::fmt;
 ///   ```
 ///
 /// Reading the value out is [`expose_secret`](Self::expose_secret) — a name chosen to be greppable,
-/// so an audit of "where does a credential become a plain `&str`" is one search.
+/// so an audit of "where does a credential become a plain `&str`" is one search. The owned exit is
+/// [`expose_secret_owned`](Self::expose_secret_owned), named to be found by that *same* search:
+/// there are exactly two ways the value leaves, and one `grep expose_secret` finds both. That is
+/// asserted rather than asked for — see `every_exit_from_the_wrapper_is_named_expose_secret`, which
+/// reads this file's own source, because a doc promising an audit is worth nothing if a later method
+/// can quietly fall outside it.
 ///
 /// # What this is not
 ///
@@ -53,7 +58,14 @@ impl Secret {
     }
 
     /// Consume the wrapper and take the value.
-    pub fn into_inner(self) -> String {
+    ///
+    /// The owned counterpart of [`expose_secret`](Self::expose_secret), and named after it rather
+    /// than `into_inner` for the reason given above: the audit is *one* search, so a second exit
+    /// under an unrelated name would quietly make the type's own documentation false. Prefer
+    /// [`expose_secret`](Self::expose_secret) — this one exists for the caller that must hand the
+    /// value to an API taking `String`, and cloning to do it would only make a second copy nothing
+    /// tracks.
+    pub fn expose_secret_owned(self) -> String {
         self.0
     }
 
@@ -137,9 +149,41 @@ mod tests {
     #[test]
     fn the_value_is_readable_through_one_conspicuous_call() {
         assert_eq!(Secret::new(SENTINEL).expose_secret(), SENTINEL);
-        assert_eq!(Secret::new(SENTINEL).into_inner(), SENTINEL);
+        assert_eq!(Secret::new(SENTINEL).expose_secret_owned(), SENTINEL);
         assert!(Secret::new("").is_empty());
         assert!(!Secret::new(SENTINEL).is_empty());
+    }
+
+    /// The audit this type's own documentation promises: **one search for `expose_secret` finds
+    /// every exit.**
+    ///
+    /// A second name for "give me the value" is exactly how that instruction stops being true, and
+    /// it stops being true silently — the doc still says it. So the rule is asserted over this
+    /// file's own source rather than left to review, the same way `connector-cli`'s no-network fence
+    /// audits source rather than trusting a convention. `into_inner` was such a name until C-149
+    /// folded it into [`Secret::expose_secret_owned`].
+    #[test]
+    fn every_exit_from_the_wrapper_is_named_expose_secret() {
+        let exits: Vec<&str> = include_str!("secret.rs")
+            .lines()
+            .map(str::trim)
+            .filter(|line| line.starts_with("pub fn"))
+            // The two ways the value itself can leave: borrowed, or owned.
+            .filter(|line| line.contains("-> &str") || line.contains("-> String"))
+            .collect();
+
+        assert!(
+            !exits.is_empty(),
+            "the audit matched no exits at all, so it is asserting nothing — has the signature \
+             style or the file name changed?"
+        );
+        for exit in &exits {
+            assert!(
+                exit.contains("expose_secret"),
+                "{exit:?} hands out the value under a name that a search for `expose_secret` does \
+                 not find, which is the audit this type documents"
+            );
+        }
     }
 
     #[test]

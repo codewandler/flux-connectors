@@ -23,8 +23,10 @@
 //! reqwest-backed [`HttpTransport`] is the small commodity remainder.
 //!
 //! There is also a live leg, `tests/vault_live.rs`, which runs against a real dev server when
-//! `CONNECTOR_SECRETS_VAULT_ADDR` and `CONNECTOR_SECRETS_VAULT_TOKEN` are set and **skips loudly**
-//! when they are not. It never simulates success.
+//! `CONNECTOR_SECRETS_VAULT_ADDR` and `CONNECTOR_SECRETS_VAULT_TOKEN` are set, and when they are not
+//! is compiled `#[ignore]`d with the reason attached — so a run without a server reports
+//! `0 passed; 1 ignored` and prints why, rather than the `ok` it used to print (C-149). It never
+//! simulates success, and now the output says which of the two happened.
 //!
 //! # No session handling
 //!
@@ -191,6 +193,22 @@ impl<T: VaultTransport, L: Layout> VaultStore<T, L> {
     /// sees, without the `/v1/<mount>/data/` machinery.
     pub fn path(&self, reference: &CredentialRef) -> String {
         self.layout.render(reference)
+    }
+
+    /// The address a logical path resolves back to — the inverse of [`path`](Self::path).
+    ///
+    /// The caller this is for is an operator holding a path they read out of Vault, asking whose
+    /// credential is at it. It talks to nothing: a path is not a lookup.
+    ///
+    /// # Errors
+    ///
+    /// [`StoreError::Layout`], carrying the layout's own explanation, when the path is not one this
+    /// layout writes. A layout is entitled to refuse rather than guess, and this is how that refusal
+    /// reaches a caller.
+    pub fn reference(&self, path: &str) -> Result<CredentialRef, StoreError> {
+        self.layout
+            .parse(path)
+            .map_err(|reason| StoreError::Layout { reason })
     }
 
     /// The layout this store renders through.
@@ -690,20 +708,46 @@ mod tests {
         assert!(error.is_not_found(), "got {error:?}");
     }
 
-    /// A KV **v1** mount answers a flat `{"data": {…}}`, so `data.data` is absent. Say so, rather
-    /// than reporting the vendor's data as a missing credential: action-proxy's existing paths are
-    /// v1, and pointing this store at them is a migration.
+    /// A `200` whose envelope has no `data.data` is **named**, not reported as a missing credential.
+    ///
+    /// The flat `{"data": {…}}` fed here is a KV **v1** body, but naming this after v1 claimed more
+    /// than it proved (C-149): it is reachable from a v1 mount only in the sub-case where a literal
+    /// key called `data/<path>` happens to exist there, because v1 has no `data/` indirection and
+    /// this store's URL therefore addresses that name. The *ordinary* v1 outcome is the 404 in the
+    /// test below. Both are worth keeping, and worth keeping apart — the difference between them is
+    /// whether a migration gets a message or a shrug.
     #[tokio::test]
-    async fn a_kv_v1_response_is_named_rather_than_read_as_missing() {
+    async fn a_two_hundred_without_data_data_is_named_rather_than_read_as_missing() {
         let body = json!({ "data": { "value": SENTINEL } }).to_string();
 
         let error = store(Recorded::new().reply(Method::Get, DATA_URL, 200, &body))
             .get(&reference())
             .await
-            .expect_err("a v1 envelope is not readable here");
+            .expect_err("an envelope with no `data.data` is not readable here");
         assert!(
             matches!(error, StoreError::Backend { ref reason, .. } if reason.contains("KV v1")),
             "got {error:?}"
+        );
+    }
+
+    /// Pointing this store at a **real** KV v1 mount reads as `NotFound`, not as the message above.
+    ///
+    /// v1 serves `/v1/<mount>/<path>` with no `data/` segment, so the URL this store builds asks a
+    /// v1 mount for a literal key named `data/tenants/…`, which is not there, and Vault answers 404.
+    /// action-proxy's credentials live on v1, so this — not the envelope message — is what a
+    /// migration actually meets: every tenant reads as "has not connected that integration". The
+    /// store is not wrong to say it, and the recorded reason it *is* worth asserting is that nobody
+    /// debugging that should be looking for a transport fault.
+    #[tokio::test]
+    async fn a_real_kv_v1_mount_reads_as_not_found_because_the_data_prefix_is_a_literal_key() {
+        let error = store(Recorded::new().reply(Method::Get, DATA_URL, 404, r#"{"errors":[]}"#))
+            .get(&reference())
+            .await
+            .expect_err("a v1 mount has no `data/<path>` key");
+
+        assert!(
+            error.is_not_found(),
+            "a v1 mount's 404 is indistinguishable from an unwritten address, got {error:?}"
         );
     }
 
