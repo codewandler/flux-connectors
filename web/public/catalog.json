@@ -2184,6 +2184,255 @@
       ]
     },
     {
+      "id": "openai",
+      "vendor": "OpenAI",
+      "description": "OpenAI platform: list models, and create chat completions and embeddings",
+      "base_url": "https://api.openai.com",
+      "hosts": [
+        "api.openai.com"
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "openai.api_key",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "OpenAI API key, sent as a bearer token",
+            "env": [
+              "OPENAI_API_KEY"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "openai.api_key"
+          ]
+        ]
+      },
+      "operation_count": 4,
+      "operations": [
+        {
+          "id": "openai-models-list",
+          "provider": "openai",
+          "description": "List the models available to this API key, with their ids and owners",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/models",
+          "parameters": [],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "openai.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.openai.com"
+          ],
+          "flux": "op openai-models-list -> Any\n  description \"List the models available to this API key, with their ids and owners\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.openai.com\"\n  $url = fmt(\"{base}/v1/models\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "openai-model-get",
+          "provider": "openai",
+          "description": "Retrieve one model by id, with its ownership and permissions",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/models/{model}",
+          "parameters": [
+            {
+              "name": "model",
+              "in": "path",
+              "wire": null,
+              "description": "The model id, e.g. `gpt-4o` or `text-embedding-3-small`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "openai.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.openai.com"
+          ],
+          "flux": "op openai-model-get(model: String) -> Any\n  description \"Retrieve one model by id, with its ownership and permissions\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.openai.com\"\n  $url = fmt(\"{base}/v1/models/{model}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "openai-chat-completion",
+          "provider": "openai",
+          "description": "Create a chat completion. Billed per input and output token, so the caller must state a token budget via max_completion_tokens",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/v1/chat/completions",
+          "parameters": [
+            {
+              "name": "model",
+              "in": "body",
+              "wire": null,
+              "description": "The model to run, e.g. `gpt-4o`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "messages",
+              "in": "body",
+              "wire": null,
+              "description": "The conversation so far: a list of `{role, content}` objects, where role is one of system, developer, user, assistant or tool",
+              "required": true,
+              "schema": {
+                "items": {
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            {
+              "name": "max_completion_tokens",
+              "in": "body",
+              "wire": null,
+              "description": "Upper bound on generated tokens, including reasoning tokens. Required by this connector so that every call states its cost bound",
+              "required": true,
+              "schema": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "openai.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.openai.com"
+          ],
+          "flux": "op openai-chat-completion(model: String, messages: List<Any>, max_completion_tokens: Number) -> Any\n  description \"Create a chat completion. Billed per input and output token, so the caller must state a token budget via max_completion_tokens\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.openai.com\"\n  $url = fmt(\"{base}/v1/chat/completions\")\n  $content_type = \"application/json\"\n  $payload = { max_completion_tokens: $max_completion_tokens, messages: $messages, model: $model }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "openai-embeddings-create",
+          "provider": "openai",
+          "description": "Create embedding vectors for one or more input texts. Billed per input token",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/v1/embeddings",
+          "parameters": [
+            {
+              "name": "model",
+              "in": "body",
+              "wire": null,
+              "description": "The embedding model to use, e.g. `text-embedding-3-small`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "input",
+              "in": "body",
+              "wire": null,
+              "description": "The text to embed: a string, or an array of strings to embed as a batch",
+              "required": true,
+              "schema": {
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                ]
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "openai.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.openai.com"
+          ],
+          "flux": "op openai-embeddings-create(model: String, input: Any) -> Any\n  description \"Create embedding vectors for one or more input texts. Billed per input token\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.openai.com\"\n  $url = fmt(\"{base}/v1/embeddings\")\n  $content_type = \"application/json\"\n  $payload = { input: $input, model: $model }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "zendesk",
       "vendor": "Zendesk",
       "description": "Zendesk Support ticketing: search, read, update tickets and their comments",

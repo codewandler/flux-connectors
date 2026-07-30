@@ -13,8 +13,9 @@ use std::path::{Path, PathBuf};
 
 use connector_spec::{provider, AuthScheme};
 
-/// Every provider this repository ships: the three C-17 names, then one per connector story.
-const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce", "github"];
+/// The providers this repository ships: the three C-17 names, in its order, then each one
+/// added since — `github` by C-52, `openai` by C-51.
+const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce", "github", "openai"];
 
 /// `<repo root>/providers`, derived from this crate's manifest directory so the test is independent
 /// of the working directory a runner happens to use.
@@ -64,6 +65,10 @@ fn operation_selection_stays_curated() {
         // cut is the query-encoding gap rather than taste: every listing and search endpoint is
         // excluded pending C-30. See the header comment in `providers/github.toml`.
         ("github", 5),
+        // C-51 curates 4: the models pair, chat completions and embeddings. The cut is the same
+        // gap — every listing parameter OpenAI documents is a query value. See
+        // `providers/openai.toml`.
+        ("openai", 4),
     ];
     for (name, count) in expected {
         let loaded = load(name);
