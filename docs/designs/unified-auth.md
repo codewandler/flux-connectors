@@ -63,7 +63,7 @@ Never a literal value, in any artifact, ever.
 | Acquisition | Produces | Effectful? |
 |---|---|---|
 | `static` | the secret unchanged | no |
-| `basic_join { user_source }` | `base64(user + ":" + secret)` | no |
+| `basic_join { user_source, secret_position }` | `base64(user + ":" + secret)` | no |
 | `jwt { key_source, alg, claims, ttl }` | a locally-signed JWT | no |
 | `oauth2 { grant, token_url, scopes }` | an access token | **yes** — network, cache, refresh |
 | `session { login_op, extract }` | a token from a login endpoint | **yes** |
@@ -75,6 +75,28 @@ Never a literal value, in any artifact, ever.
 **`prefix` on header placement is the single highest-value element of this whole design.** It is what
 turns "Bearer" from an enum variant into data. With it, `Bearer `, `Basic `, `Token `, `GenieKey ` and
 the empty prefix are all one code path.
+
+#### `basic_join` must say *which position holds the secret*
+
+Discovered while curating Freshdesk, and it is a security bug rather than a modelling nicety.
+
+Basic auth does not agree with itself about which half is sensitive:
+
+| Provider | Composed as | Where the secret sits |
+|---|---|---|
+| zendesk | `base64("<email>/token" + ":" + <api_token>)` | password |
+| freshdesk | `base64(<api_key> + ":" + "X")` | **username** |
+
+flux's `AuthMethod::basic` composes `base64(<user_env>:<env>)` and documents `user_env` as *config,
+not a gated secret* (`../flux/crates/flux-plugin-protocol/src/lib.rs:433-434`) — a correct assumption
+for Zendesk, where the user half is an email address. Applied to Freshdesk it is **wrong in a way
+that matters**: the API key would be resolved through the non-secret path, escaping secret gating and
+never being registered with the redactor. The token would then be free to appear in logs and
+model-visible output.
+
+So `basic_join` carries `secret_position`, and the credential's `source` is bound to whichever half
+actually holds it. This is precisely the kind of failure a flat `Basic` variant cannot express, and
+it is the strongest evidence so far that the axes are the right cut.
 
 ### It is a strict superset of flux's vocabulary, not a rival to it
 

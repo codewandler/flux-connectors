@@ -25,9 +25,14 @@ one value on one axis rather than a new variant crossing all of them.
 - [ ] `Source` covers env-var names (tried in order), the flux token store, and a key file. **No
       variant can hold a literal credential value** — proven by a test that no serialization of any
       `AuthMethod` contains a secret.
-- [ ] `Acquisition` has at least `static`, `basic_join { user_source }`, and `oauth2 { grant,
-      token_url, scopes }`; `jwt`, `session` and `hmac` are **accepted by the schema** even if
-      unimplemented, so adding one later does not reshape the model.
+- [ ] `Acquisition` has at least `static`, `basic_join { user_source, secret_position }`, and
+      `oauth2 { grant, token_url, scopes }`; `jwt`, `session` and `hmac` are **accepted by the
+      schema** even if unimplemented, so adding one later does not reshape the model.
+- [ ] **`basic_join` declares which half holds the secret**, and a test covers both: zendesk puts the
+      API token in the *password* half, freshdesk puts the API key in the *username* half. Binding
+      the secret source to the wrong half routes a live credential through flux's non-secret
+      `user_env` path, escaping secret gating and redactor registration — a security regression, not
+      a cosmetic mismatch.
 - [ ] `Placement` has `header { name, prefix }`, `query { name }`, and `cookie { name }`. The
       `prefix` field is what makes `Bearer `/`Basic `/`Token `/empty one code path.
 - [ ] Each acquisition declares whether it is **effectful** (needs network/cache/refresh), and a test

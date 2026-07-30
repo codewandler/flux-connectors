@@ -21,9 +21,12 @@ plugin's are.
 - [ ] Auth headers emit `{"$auth": {credential: "<name>"}}` — a reference, never a value.
 - [ ] `<provider>.connector.toml` is generated with `http_hosts`, the endpoint env spec, and one
       `[[auth]]` entry per method (credential name, scheme, env, user_env).
-- [ ] **An operation requiring several credentials together emits one marker each.** Babelforce
-      sends `X-Auth-Access-Id` *and* `X-Auth-Access-Token` on the same request, so the emitter must
-      handle an AND-set, not just a single credential.
+- [ ] **An operation requiring several credentials together emits one marker each** — the emitter
+      must handle an AND-set, not just a single credential.
+      **Use a synthetic fixture, not babelforce.** Babelforce's `X-Auth-Access-Id` +
+      `X-Auth-Access-Token` pair was this story's motivating example and is now deprecated (C-17), so
+      no in-scope provider exercises the AND case. The capability is still required — OpenAPI models
+      it and providers use it — but it needs a fixture of its own.
 - [ ] When an operation offers **alternative** requirement sets, codegen picks one deterministically
       (documented rule — e.g. the first satisfiable set in declared order) and records the choice, so
       regeneration is stable and a reader can see why that scheme was chosen.
