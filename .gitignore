@@ -13,3 +13,6 @@
 /.env
 /scratch/
 *.local.toml
+
+# Agent worktrees (harness-owned, never tracked)
+.claude/
