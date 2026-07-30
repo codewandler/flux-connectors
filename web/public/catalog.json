@@ -2184,6 +2184,348 @@
       ]
     },
     {
+      "id": "intercom",
+      "vendor": "Intercom",
+      "description": "Intercom contacts and conversations: read and create contacts, read a conversation, reply to it, and note it",
+      "base_url": "https://api.intercom.io",
+      "hosts": [
+        "api.intercom.io"
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "intercom.access_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "Intercom access token sent as a bearer — an OAuth app token or a workspace access token",
+            "env": [
+              "INTERCOM_ACCESS_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "intercom.access_token"
+          ]
+        ]
+      },
+      "operation_count": 5,
+      "operations": [
+        {
+          "id": "intercom-contact-get",
+          "provider": "intercom",
+          "description": "Get one Intercom contact by id — its role, email, name, custom attributes, tags and the companies it belongs to",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/contacts/{contact_id}",
+          "parameters": [
+            {
+              "name": "contact_id",
+              "in": "path",
+              "wire": null,
+              "description": "The contact's Intercom id — a 24-character lowercase hexadecimal string such as `63a0979a5eeebeb3d8ba5be3`, not its email or your own external id",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "intercom.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.intercom.io"
+          ],
+          "flux": "op intercom-contact-get(contact_id: String) -> Any\n  description \"Get one Intercom contact by id — its role, email, name, custom attributes, tags and the companies it belongs to. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.intercom.io\"\n  $url = fmt(\"{base}/contacts/{contact_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "intercom-contact-create",
+          "provider": "intercom",
+          "description": "Create an email-identified Intercom contact. A contact created here is visible to every teammate in the workspace and is counted against its contact quota; creating one twice creates two contacts unless the workspace deduplicates on email",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/contacts",
+          "parameters": [
+            {
+              "name": "role",
+              "in": "body",
+              "wire": null,
+              "description": "`user` for an identified person or `lead` for an unidentified visitor. A lead is merged into a user if that person later signs up",
+              "required": true,
+              "schema": {
+                "enum": [
+                  "user",
+                  "lead"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "email",
+              "in": "body",
+              "wire": null,
+              "description": "The contact's email address, which is how this operation identifies them. Intercom does not verify it",
+              "required": true,
+              "schema": {
+                "format": "email",
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "intercom.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.intercom.io"
+          ],
+          "flux": "op intercom-contact-create(role: String, email: String) -> Any\n  description \"Create an email-identified Intercom contact. A contact created here is visible to every teammate in the workspace and is counted against its contact quota; creating one twice creates two contacts unless the workspace deduplicates on email. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.intercom.io\"\n  $url = fmt(\"{base}/contacts\")\n  $content_type = \"application/json\"\n  $payload = { email: $email, role: $role }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "intercom-conversation-get",
+          "provider": "intercom",
+          "description": "Get one conversation by id, with its state, the contacts on it and its message parts in Intercom's default rendering",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/conversations/{conversation_id}",
+          "parameters": [
+            {
+              "name": "conversation_id",
+              "in": "path",
+              "wire": null,
+              "description": "The conversation's Intercom id — a decimal string such as `123`, as it appears in the inbox URL",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "intercom.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.intercom.io"
+          ],
+          "flux": "op intercom-conversation-get(conversation_id: String) -> Any\n  description \"Get one conversation by id, with its state, the contacts on it and its message parts in Intercom's default rendering. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.intercom.io\"\n  $url = fmt(\"{base}/conversations/{conversation_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "intercom-conversation-reply",
+          "provider": "intercom",
+          "description": "Reply to a conversation as an admin. With message_type `comment` the reply is delivered to the end user by email or in-app message and cannot be un-sent; with `note` it is an internal comment only teammates see",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/conversations/{conversation_id}/reply",
+          "parameters": [
+            {
+              "name": "conversation_id",
+              "in": "path",
+              "wire": null,
+              "description": "The conversation to reply to",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "message_type",
+              "in": "body",
+              "wire": null,
+              "description": "`comment` to reply to the end user, who receives it by email or in-app message, or `note` for an internal comment only teammates see. There is no default: state which audience you mean",
+              "required": true,
+              "schema": {
+                "enum": [
+                  "comment",
+                  "note"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "type",
+              "in": "body",
+              "wire": null,
+              "description": "Constant `admin` — not caller-supplied. It is what makes admin_id the required author field; a user reply needs a different identifier and is not this operation",
+              "required": true,
+              "schema": {
+                "const": "admin",
+                "type": "string"
+              }
+            },
+            {
+              "name": "admin_id",
+              "in": "body",
+              "wire": null,
+              "description": "The id of the admin the reply is attributed to. The customer sees this teammate's name and avatar, so it must be an admin the operator is entitled to write as",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "body",
+              "in": "body",
+              "wire": null,
+              "description": "The reply text as HTML; must not be blank. Intercom renders it in the customer's inbox or messenger",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "intercom.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.intercom.io"
+          ],
+          "flux": "op intercom-conversation-reply(conversation_id: String, message_type: String, admin_id: String, body: String) -> Any\n  description \"Reply to a conversation as an admin. With message_type `comment` the reply is delivered to the end user by email or in-app message and cannot be un-sent; with `note` it is an internal comment only teammates see. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.intercom.io\"\n  $url = fmt(\"{base}/conversations/{conversation_id}/reply\")\n  $content_type = \"application/json\"\n  $type = \"admin\"\n  $payload = { admin_id: $admin_id, body: $body, message_type: $message_type, type: $type }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "intercom-contact-note-create",
+          "provider": "intercom",
+          "description": "Add an internal note to a contact, visible to teammates in the workspace and never to the contact. Adding the same note twice adds two notes",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/contacts/{contact_id}/notes",
+          "parameters": [
+            {
+              "name": "contact_id",
+              "in": "path",
+              "wire": null,
+              "description": "The contact to note",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "body",
+              "in": "body",
+              "wire": null,
+              "description": "The note text as HTML; must not be blank",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "admin_id",
+              "in": "body",
+              "wire": null,
+              "description": "The id of the admin the note is attributed to. Intercom treats this as optional; this operation requires it so every note has an author",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "intercom.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.intercom.io"
+          ],
+          "flux": "op intercom-contact-note-create(contact_id: String, body: String, admin_id: String) -> Any\n  description \"Add an internal note to a contact, visible to teammates in the workspace and never to the contact. Adding the same note twice adds two notes. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.intercom.io\"\n  $url = fmt(\"{base}/contacts/{contact_id}/notes\")\n  $content_type = \"application/json\"\n  $payload = { admin_id: $admin_id, body: $body }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "openai",
       "vendor": "OpenAI",
       "description": "OpenAI platform: list models, and create chat completions and embeddings",
