@@ -32,12 +32,55 @@ of interpreting config.
       to `null` on every response. Splitting it needs an `expr` escape that is not a fixed point of
       flux's formatter. This is a refusal, not a degradation — emitting a selector that always yields
       null is precisely the plausible-but-wrong output `AGENTS.md` forbids.
-- [x] Golden `.flux` files for the worked example and one region-per-kind.
+- [x] Golden `.flux` files for the worked example and one region-per-kind — *three* of the four
+      kinds; `throttle` cannot be spelled by flux-lang 0.39 (see Progress) and is pinned as a
+      refusal instead.
 - [ ] **Shares C-12's lowering.** C-12 turns a declared quirk into `retry`/`throttle`/a bounded loop;
       a `Retry` or `Throttle` node needs the identical construction. Two code paths emitting different
       Flux for the same intent is the failure to avoid.
 
 ## Progress
+
+### Round 2 — migrated to flux-lang 0.39
+
+The first merge was reverted: the branch was cut before the 0.39 upgrade and 8 of 21 tests went red
+on `main`. Merged `main` in (`--no-ff`), reverted `main`'s revert to bring the work back, and worked
+the failures. **Seven of the eight had one root cause**, not eight: `nightly-sweep` stopped lowering
+at all, so every test using it failed — the structural assertions were fine, they just never ran.
+
+Three things changed, and only one was spelling:
+
+1. **Goldens re-recorded** for 0.39's canonical source (a local binding drops the `$` sigil; a call
+   takes direct named arguments). Re-recorded **only after** every structural test was green, so no
+   broken emit is locked in.
+2. **The reserved-word list is gone.** `Symbols::guarded` now takes a predicate and the lowering
+   passes `flux_lang::ast::is_reserved_word`. Under 0.39 a bare `retry = …` reads as a statement
+   keyword, so a transcribed list is not a style question — the tests now also assert
+   `is_bare_symbol_name` on every generated name.
+3. **A new refusal, and it is upstream.** flux-lang 0.39's two formatters disagree about how to
+   spell a duration: `flux_lang::format` (the AST printer this crate emits through) writes
+   `delay 500ms` / `per 1m`, while `flux_lang::format_cst::format_module` — the formatter a human
+   editing the generated file runs — accepts only bare milliseconds (`delay 500`, `per 60000`) and
+   returns `None` rather than re-printing the suffixed form. Both spellings parse to the *same* AST,
+   so this is a defect upstream, not an ambiguity here. Proven at the merge base with flux-lang
+   alone, no connector code involved.
+
+   It bites **every `throttle`** (no window value avoids a suffix — `fmt_duration` never emits a
+   bare number) and **every `retry` carrying a delay**. A `retry` without one is unaffected.
+   `Error::UnspellableDuration` refuses both, because the alternatives were to ship a generated
+   module flux's own formatter cannot format, or to rewrite the token after formatting — the string
+   surgery on generated Flux that AGENTS.md exists to prevent. `check_canonical` had already caught
+   it; the refusal just names the cause instead of reporting "not canonical".
+
+   **This is the one thing to re-check when the flux-lang pin moves.** Delete
+   `Lowering::check_durations` and `Error::UnspellableDuration`, put the throttle back into the
+   region-per-kind fixture, and re-record. `throttled_sweep` in the tests is the fixture waiting for
+   that day.
+
+Consequence: the region-per-kind golden covers `retry`, `approval` and `gate` — three of four.
+`throttle` is exercised only as a refusal.
+
+### Round 1 — the lowering
 
 Landed as `crates/connector-flux/src/graph.rs` — `emit_graph(&Connector, &Graph) -> Result<String>`,
 built from `flux_lang::ast` nodes and formatted by `flux_lang::format::format_composite_op`. Nothing
