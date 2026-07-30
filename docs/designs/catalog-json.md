@@ -39,9 +39,20 @@ which is what keeps a Node build from having to run before a Rust one.
 `cargo run -p connector-cli -- build` writes it. **`build --provider <name>` does not**: the document
 covers every provider at once and a scoped run compiles only one, so writing it from a scoped run
 would silently truncate the catalogue to the provider that happened to be built. A scoped run leaves
-the committed document alone and does not report it stale. (Same reasoning as
-`crates/catalog/src/generated.rs`, which keeps its provider index by hand for the mirror-image
-reason.)
+the committed document alone and does not report it stale.
+
+**C-104 generalised this rule.** It was stated here for one document and reached independently, from
+the other direction, by `crates/catalog/src/generated.rs` — which paid for it by keeping its provider
+index *by hand*, and so became the one file every provider story had to append to. C-104 made that
+index generated under this same full-run rule, and named the resulting class in `AGENTS.md`:
+**whole-catalogue artifacts**, written by a full build only and owned by the coordinator. That is
+what lets provider stories run in parallel, because it makes two implementors' write sets disjoint.
+
+`crates/connector-cli/tests/catalog_index.rs` asserts the rule by comparing **whole-tree snapshots**
+either side of a scoped build, rather than by checking a list of paths. The distinction is the point:
+an enumerated list covers the members someone remembered to add, and stops covering the class the
+moment the pipeline grows a fifth artifact. A snapshot comparison covers every member — the index,
+this document, `web/public/v1/**` and the README SVGs — and covers a future one for free.
 
 ## Guarantees
 

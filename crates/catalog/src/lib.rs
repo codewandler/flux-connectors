@@ -24,19 +24,26 @@
 //!
 //! # What is generated and what is not
 //!
-//! `flux-connectors build` writes two kinds of file into this crate, both committed and reviewed
-//! like every other generated artifact in the repository:
+//! `flux-connectors build` writes three kinds of file into this crate, all committed and reviewed
+//! like every other generated artifact in the repository. **Nothing here is hand-written.**
 //!
 //! - `ops/<provider>/<operation>.flux` — one rendering per operation, byte for byte the same text
 //!   the provider's module carries for it;
 //! - `src/generated/<provider>.rs` — the table that embeds those renderings alongside their
-//!   metadata.
+//!   metadata;
+//! - `src/generated.rs` — [`generated`], the index naming every provider's module.
 //!
-//! [`generated`] — the one-line-per-provider module list — is **hand-written**, and deliberately:
-//! `flux-connectors build --provider zendesk` regenerates one provider, and a generated index would
-//! have to drop the other two to stay a function of the run. A test
-//! (`tests/embedded_operations.rs`) fails when the list and `providers/` disagree, so forgetting
-//! the line is loud rather than silent.
+//! The first two are **per provider**, so `flux-connectors build --provider zendesk` regenerates
+//! exactly what it compiled. The index is not: it names every provider at once, so it is written by
+//! a **full** build only and a scoped run leaves the committed file untouched rather than rendering
+//! an index that drops the providers the run never looked at. `web/public/catalog.json` follows the
+//! same rule for the same reason.
+//!
+//! It was hand-written until C-104 on exactly that reasoning, and the cost was structural: two lines
+//! per provider, appended by hand, made this the one file every provider story touched — so any two
+//! provider stories conflicted and connectors shipped one at a time. `tests/embedded_operations.rs`
+//! still holds the list against `providers/`, which is now a staleness check on a committed artifact
+//! rather than a reminder to add a line.
 //!
 //! `crates/connector-cli/tests/catalog_artifacts.rs` is what makes the embedded data a *checked*
 //! artifact: it recomputes everything here from `providers/*.toml` and compares byte for byte, so a
