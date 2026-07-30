@@ -64,7 +64,6 @@ _A connector's operations are currently legible only by reading `providers/<name
 - [C-69 — Ship the Google Workspace connector](C-69-provider-google.md) · Spec · the multi-service showcase: gmail · calendar · drive under one provider
 - [C-75 — Ship the Airtable connector](C-75-provider-airtable.md) · Spec · bearer · `fields` envelope · base and table in the path
 - [C-76 — Ship the OpenRouter connector](C-76-provider-openrouter.md) · Spec · bearer · OpenAI-compatible · charter-named
-- [C-77 — Ship the Sentry connector](C-77-provider-sentry.md) · Spec · bearer · trailing slashes are load-bearing
 - [C-78 — Ship the Zoom connector](C-78-provider-zoom.md) · Spec · bearer · nested meeting settings
 
 ### unified auth — one model for every provider's credentials
@@ -143,6 +142,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-72 — Ship the HubSpot connector](C-72-provider-hubspot.md) · Spec · bearer private-app token · `properties` envelope
 - [C-73 — Ship the Intercom connector](C-73-provider-intercom.md) · Spec · bearer · charter-named · version header is optional
 - [C-74 — Ship the Shopify connector](C-74-provider-shopify.md) · Spec · custom header credential · API version lives in the path
+- [C-77 — Ship the Sentry connector](C-77-provider-sentry.md) · Spec · bearer · trailing slashes are load-bearing
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

@@ -23,6 +23,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   transitions list and transition. v2 rather than v3 because v3's comment body is Atlassian Document
   Format — an array of block nodes — and `wire` paths address nested records only, so ADF is
   inexpressible rather than merely awkward. Pinned by a test, so a bulk upgrade to v3 fails loudly.
+- **C-77** — the **Sentry** connector: issue get and update, project get, latest event. Every
+  operation's emitted URL is pinned character-for-character *including its trailing slash*, because
+  Sentry redirects or 404s without one and that is exactly what a later tidy-up removes silently.
 - **C-71** — the **Asana** connector: task get, create, update, a story (comment) and project get.
   Every request body is wrapped in `{"data": {…}}` and every response records its payload at `/data`,
   declared through `wire` paths — the first real-vendor exercise of nested bodies, and it needed no
