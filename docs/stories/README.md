@@ -29,6 +29,7 @@ Gate: `cargo build --workspace && cargo test --workspace && cargo clippy --works
 - [C-94 — The flow graph — connector members composed into one Flux op (epic)](C-94-flow-graph-epic.md) · Spec · EPIC — four waves built the vocabulary (Operation=call node, EventDecl=source, oip=node id, wire paths=edges); this is the graph. NOT a second language: every past rejection was an EXPRESSION language, every acceptance was declarative structure. IR landed
 
 ## Next (ready — take the top one unless the user named a story)
+- [C-143 — The artifact tests leak their fixtures and go flaky under load](C-143-artifact-tests-leak-fixtures.md) · Core · found twice during a 7-agent wave, both times attributed to the wrong diff before being measured. 55 stale fixture directories in /tmp, which is a 32G tmpfs — the tests write to env::temp_dir() and do not always clean up
 
 ### authentication as a connector surface — a login that cannot leak
 _Authentication is currently something the **host** does *around* a connector: `OAuth2Spec` declares_
@@ -69,13 +70,13 @@ _Every credential problem in this repo has the same shape: **the caller must not
 
 ### Connectors v1 — spec to Flux
 _Prove the whole thesis on two real providers, end to end against a live flux._
+- [C-55 — Let a provider declare a constant request header](C-55-constant-request-headers.md) · Codegen · GitHub's Accept header is undeclarable today; `const` on a header silently does nothing
 - [C-79 — Declare that a response field is a credential](C-79-sensitive-response-fields.md) · Spec · Zoom's start_url carries a host-privileged token · the redactor cannot see it
 - [C-80 — Let a connector declare more than one error shape](C-80-error-envelope-alternatives.md) · Spec · five providers declared pointers that resolve to nothing against the vendor's other shape
 - [C-37 — Give providers and operations stable global addresses](C-37-global-addressing.md) · Spec · pid / gid / oip · the global half; C-23 stays the local half
 - [C-56 — Omit an optional body field instead of sending an explicit null](C-56-omit-optional-body-fields.md) · Codegen · query params get a `when` guard; body fields do not
 - [C-81 — Make the documented provider and artifact counts a checked claim](C-81-declared-counts-are-checked.md) · Build · drifted five times in one session; every agent noticed and none could fix it
 - [C-30 — Refuse query values the emitter cannot encode safely](C-30-refuse-unencodable-query.md) · Codegen · **security** · a model-supplied query value can inject request parameters today
-- [C-55 — Let a provider declare a constant request header](C-55-constant-request-headers.md) · Codegen · GitHub's Accept header is undeclarable today; `const` on a header silently does nothing
 - [C-67 — Declare the scopes an operation requires](C-67-required-scopes.md) · Spec · least privilege, and mechanical 403 diagnosis
 - [C-68 — Bind a service's endpoint to operator configuration](C-68-endpoint-binding.md) · Spec · closes the SCHEMA GAP every shipped provider records in a comment
 - [C-10 — Emit the $auth marker and the connector manifest](C-10-auth-injection-and-manifest.md) · Codegen · pairs with C-16 · the second generated artifact
@@ -122,7 +123,6 @@ _A connector's operations are currently legible only by reading `providers/<name
 ### Provider Fleet 2
 - [C-105 — Provider fleet 2 — the next connectors, shipped in parallel (epic)](C-105-provider-fleet-2-epic.md) · Spec · EPIC — the first fleet (C-69..C-78) is fully drained. Each connector here is chosen to exercise something the model has not yet met, not just to add a row
 - [C-106 — Ship the Stripe connector](C-106-provider-stripe.md) · Spec · the second vendor in C-60's HMAC matrix — inbound-events.md already tabulates Stripe-Signature with its t=/v1= pairs and tolerance, and nothing has ever exercised that row
-- [C-107 — Ship the Notion connector](C-107-provider-notion.md) · Spec · forces C-55 — Notion REJECTS a request without a Notion-Version header, so this connector cannot ship until a provider can declare a constant request header
 - [C-108 — Ship the Microsoft Graph connector](C-108-provider-microsoft-graph.md) · Spec · the second multi-service provider after Google — and the first where the services share a host, so it tests whether a service is a real level or just Google's URL problem
 - [C-109 — Ship the Twilio connector](C-109-provider-twilio.md) · Spec · third basic-join vendor, and the one whose username half is an account identifier rather than an email — so it tests whether the config model generalises past the zendesk/jira shape
 - [C-110 — Ship the Linear connector — or record why a GraphQL vendor cannot be one](C-110-provider-linear.md) · Spec · GraphQL-only. The pipeline is REST-shaped; this either proves it stretches or produces a documented refusal. Either outcome is worth more than another REST connector
@@ -151,7 +151,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-26 — File the outbound $auth seam stories on flux's board](C-26-file-seam-stories-on-flux.md) · Bridge · **critical path** · 11 paste-ready drafts wait on a decision to write into ../flux
 - [C-35 — Specify the proxy request contract and its guardrails](C-35-proxy-request-contract.md) · Bridge · blocked on C-34
 - [C-36 — Prove the proxy and the Flux emitter build the same request](C-36-proxy-emitter-conformance.md) · Bridge · blocked on C-34 · two backends over one IR will drift without this
-- [C-95 — Lower a flow graph to a composite Flux op](C-95-graph-lowering.md) · Codegen · owns symbol generation and region nesting. MUST refuse a Select wired to an Operation output until http.request returns a record — today the response is one flat string
+- [C-107 — Ship the Notion connector](C-107-provider-notion.md) · Spec · blocked on C-55, now measured rather than predicted — a const-pinned Notion-Version emits as a caller-overridable parameter with the const dropped, and Notion REJECTS every request without the header
 
 ## Backlog
 - [C-133 — The brave connector — Brave Talk's room-token HTTP surface](C-133-provider-brave-talk-tokens.md) · Spec · ONLY the three HTTP calls. The XMPP MUC stream stays OUT — vision.md names protocol-rich technology adapters as a non-goal, and flux already has D-205/D-206 with feasibility proven live. Blocked on two real things; read Notes before starting
@@ -227,6 +227,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-77 — Ship the Sentry connector](C-77-provider-sentry.md) · Spec · bearer · trailing slashes are load-bearing
 - [C-78 — Ship the Zoom connector](C-78-provider-zoom.md) · Spec · bearer · nested meeting settings
 - [C-84 — Design the flux-side generic connector channel kind and file its flux stories](C-84-flux-connector-channel-seam.md) · Bridge · this is what retires adapters/slack.rs — one generic `connector` arm in build_channels instead of one arm per vendor. Cross-repo handoff, per the C-16/C-64 precedent
+- [C-95 — Lower a flow graph to a composite Flux op](C-95-graph-lowering.md) · Codegen · owns symbol generation and region nesting. MUST refuse a Select wired to an Operation output until http.request returns a record — today the response is one flat string
 - [C-100 — Render the explorer full-width](C-100-explorer-full-width.md) · Surfaces · the largest visible gain for the smallest diff — VPDoc.vue:191 caps content at 688px, so 16 provider cards render in two columns on a page allowed to be 1440px
 - [C-101 — Make services a visible, filterable dimension](C-101-services-in-the-explorer.md) · Surfaces · 18 services are published with base_url, api_version, gid and operation counts — the explorer mentions none of them, so Google's three read as one
 - [C-102 — Make a filtered view shareable, and let the list be sorted](C-102-shareable-explorer-views.md) · Surfaces · the page promises 'every operation has a stable page you can share' — true of an operation, false of a view. 'Every destructive Shopify operation' cannot be sent to anyone
@@ -235,6 +236,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-112 — Publish Flux core specifications in the connector explorer](C-112-publish-flux-core-specifications-in-the-explorer.md) · UX · Built-ins and language nodes become searchable beside connectors, with canonical JSON identities rather than fake providers
 - [C-114 — The connector-pack crate and the ToolSpec projection](C-114-tool-spec-projection.md) · Bridge · the foundation the rest of the epic builds on — a catalogue entry becomes a flux ToolSpec, dotted name and all
 - [C-120 — Declare roles on a service, with the closed set and its refusals](C-120-service-roles-declaration.md) · Spec · the mechanism — roles attach to a SERVICE and a provider's are derived; an unknown role name is a load error, because a typo'd capability that silently means 'no capability' is the whole failure mode
+- [C-142 — Detach the explorer components from VitePress: a link port and a tier boundary](C-142-reusable-explorer-components.md) · Codegen · measured, not guessed: 6 of 14 components import `vitepress`, and between them they use exactly two symbols. No `useData`, no `useRouter`, no theme internals — so this is a link port and a tier boundary, not a rewrite
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

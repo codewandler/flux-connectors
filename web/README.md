@@ -37,7 +37,7 @@ link, so a broken site fails the workflow instead of publishing silently.
 | Path | What it is |
 |---|---|
 | `.vitepress/config.mts` | Site config — title, nav, sidebar, and the Pages **base path**. |
-| `.vitepress/theme/` | The default theme plus the explorer's Vue components, registered globally. |
+| `.vitepress/theme/` | The default theme plus the explorer's Vue components, registered globally. `index.mts` is the one file that knows VitePress; [`theme/components/README.md`](.vitepress/theme/components/README.md) records the three component tiers. |
 | `index.md` | Landing page: what the project is, and what does not work yet. |
 | `explorer.md` | The provider & operation explorer. |
 | `operations/[operation].md` | One pre-rendered page per operation, enumerated from the catalogue. |
@@ -59,9 +59,18 @@ cannot drift.
 
 ## Two things to keep right
 
-**The base path.** The committed `public/CNAME` serves the site from `flux.codewandler.org`, so
-`.vitepress/config.mts` sets `base: '/'`. Switching back to a project Pages URL requires changing
-the base and deployment URL together.
+**The base path.** `.vitepress/config.mts` sets `base: '/flux-connectors/'`, because that is where
+GitHub actually serves the site.
+
+`public/CNAME` names `flux.codewandler.org`, and the base was once set to `'/'` on the strength of
+it. That shipped an unstyled site: a committed CNAME is a *request* for a custom domain, not evidence
+one is serving, and GitHub never accepted it — the Pages API still reports `"cname": null`, so every
+bundled asset resolved a level too high and 404'd.
+
+Flip the base to `'/'` **only** once `gh api repos/codewandler/flux-connectors/pages --jq .cname`
+reports the domain — not when the CNAME file lands, which is what went wrong.
+`test/explorer.test.mjs` asserts the built HTML's own asset URLs sit under the deployed base, and was
+verified to fail when the base is wrong.
 
 **No hand-written catalogue data.** Everything the site says about providers, connector operations,
 and Flux core entries must come from generated files, not from markdown or a `.vue` component. A

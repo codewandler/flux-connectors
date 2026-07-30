@@ -13,9 +13,10 @@
 //     down, worded as context. Every operation in the catalogue carries at least one of those today,
 //     and none of them is a fault of the operation.
 
-import { computed } from 'vue'
-import { withBase } from 'vitepress'
+import { computed, inject } from 'vue'
 import {
+  PATH_RESOLVER,
+  identityPath,
   inheritedIssues,
   ownIssues,
   ownsDefect,
@@ -23,6 +24,7 @@ import {
   type Catalog,
   type Credential,
   type Operation,
+  type PathResolver,
   type Provider,
 } from '../../../data/catalog.mts'
 import FluxSource from './FluxSource.vue'
@@ -31,6 +33,8 @@ import ParameterTable from './ParameterTable.vue'
 import StatusBadge from './StatusBadge.vue'
 
 const props = defineProps<{ catalog: Catalog; id: string }>()
+
+const resolvePath = inject<PathResolver>(PATH_RESOLVER, identityPath)
 
 const provider = computed<Provider | undefined>(() =>
   props.catalog.providers.find((candidate) =>
@@ -71,7 +75,7 @@ const inherited = computed(() => (operation.value ? inheritedIssues(operation.va
       <code class="chip chip--path">{{ operation.path }}</code>
       <span class="chip">risk: {{ operation.risk }}</span>
       <span class="chip">{{ operation.idempotency }}</span>
-      <a class="chip chip--link" :href="withBase(`/explorer#${provider!.id}`)">
+      <a class="chip chip--link" :href="resolvePath(`/explorer#${provider!.id}`)">
         {{ provider!.vendor }}
       </a>
     </p>

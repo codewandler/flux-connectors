@@ -3,7 +3,7 @@ id: C-55
 title: Let a provider declare a constant request header
 pillar: Codegen
 status: ready
-priority: 6
+priority: 2
 design:
 epic: connectors-v1
 areas: [connector-spec, connector-flux]

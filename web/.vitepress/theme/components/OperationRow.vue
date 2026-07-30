@@ -6,9 +6,16 @@
 // provider-wide. A row never claims an operation works — nothing does yet — and never marks one
 // broken for a condition it merely inherits.
 
-import { computed } from 'vue'
-import { withBase } from 'vitepress'
-import { operationHref, ownIssues, ownsDefect, type Operation } from '../../../data/catalog.mts'
+import { computed, inject } from 'vue'
+import {
+  PATH_RESOLVER,
+  identityPath,
+  operationHref,
+  ownIssues,
+  ownsDefect,
+  type Operation,
+  type PathResolver,
+} from '../../../data/catalog.mts'
 import StatusBadge from './StatusBadge.vue'
 
 const props = defineProps<{
@@ -22,6 +29,8 @@ const props = defineProps<{
   service?: string | null
 }>()
 
+const resolvePath = inject<PathResolver>(PATH_RESOLVER, identityPath)
+
 const own = computed(() => ownIssues(props.operation))
 </script>
 
@@ -34,7 +43,7 @@ const own = computed(() => ownIssues(props.operation))
     :data-defect="ownsDefect(operation) ? 'own' : 'none'"
   >
     <div class="row__head">
-      <a class="row__id" :href="withBase(operationHref(operation))">{{ operation.id }}</a>
+      <a class="row__id" :href="resolvePath(operationHref(operation))">{{ operation.id }}</a>
       <StatusBadge :operation="operation" />
     </div>
 
