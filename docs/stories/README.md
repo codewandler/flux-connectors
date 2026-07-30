@@ -29,6 +29,7 @@ Gate: `cargo build --workspace && cargo test --workspace && cargo clippy --works
 - [C-94 — The flow graph — connector members composed into one Flux op (epic)](C-94-flow-graph-epic.md) · Spec · EPIC — four waves built the vocabulary (Operation=call node, EventDecl=source, oip=node id, wire paths=edges); this is the graph. NOT a second language: every past rejection was an EXPRESSION language, every acceptance was declarative structure. IR landed
 
 ## Next (ready — take the top one unless the user named a story)
+- [C-142 — Make the explorer components attachable, without extracting a package yet](C-142-reusable-explorer-components.md) · Codegen · measured: the ENTIRE VitePress coupling is two functions — withBase in 5 components and inBrowser in 1 — and data/catalog.mts has zero imports. So this is a link port and a tier boundary, not a rewrite. The package boundary waits for a second consumer
 
 ### authentication as a connector surface — a login that cannot leak
 _Authentication is currently something the **host** does *around* a connector: `OAuth2Spec` declares_
