@@ -98,6 +98,13 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
 
+The documentation site is a separate, self-contained Node build under [`web/`](web/README.md) — it
+does not participate in the cargo workspace:
+
+```bash
+cd web && npm ci && npm run build   # requires Node 22+
+```
+
 ## Known limits
 
 Stated plainly, because a connector that looks like it works and doesn't is worse than one that says
@@ -129,6 +136,7 @@ it doesn't:
 | How a provider becomes a `.flux` module | [docs/designs/connector-pipeline.md](docs/designs/connector-pipeline.md) |
 | One credential model for every provider | [docs/designs/unified-auth.md](docs/designs/unified-auth.md) |
 | The status board | [docs/stories/README.md](docs/stories/README.md) |
+| How the docs site is built and deployed | [web/README.md](web/README.md) |
 
 ## Licence
 
