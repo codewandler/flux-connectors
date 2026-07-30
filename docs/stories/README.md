@@ -62,6 +62,18 @@ _A connector's operations are currently legible only by reading `providers/<name
 - [C-31 — Render a provider markdown page from the IR](C-31-render-provider-page.md) · Codegen · also decides the tab dialect — hard to reverse once pages are committed
 - [C-32 — Emit a curl form for each operation](C-32-curl-tab.md) · Codegen
 
+### Provider Fleet
+- [C-69 — Ship the Google Workspace connector](C-69-provider-google.md) · Spec · the multi-service showcase: gmail · calendar · drive under one provider
+- [C-70 — Ship the Jira connector](C-70-provider-jira.md) · Spec · basic email+token · tenant URL, like zendesk
+- [C-71 — Ship the Asana connector](C-71-provider-asana.md) · Spec · bearer · every body and response wrapped in `data`
+- [C-72 — Ship the HubSpot connector](C-72-provider-hubspot.md) · Spec · bearer private-app token · `properties` envelope
+- [C-73 — Ship the Intercom connector](C-73-provider-intercom.md) · Spec · bearer · charter-named · version header is optional
+- [C-74 — Ship the Shopify connector](C-74-provider-shopify.md) · Spec · custom header credential · API version lives in the path
+- [C-75 — Ship the Airtable connector](C-75-provider-airtable.md) · Spec · bearer · `fields` envelope · base and table in the path
+- [C-76 — Ship the OpenRouter connector](C-76-provider-openrouter.md) · Spec · bearer · OpenAI-compatible · charter-named
+- [C-77 — Ship the Sentry connector](C-77-provider-sentry.md) · Spec · bearer · trailing slashes are load-bearing
+- [C-78 — Ship the Zoom connector](C-78-provider-zoom.md) · Spec · bearer · nested meeting settings
+
 ### unified auth — one model for every provider's credentials
 _Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._
 - [C-47 — Design a db.open seam so connectors can reach databases](C-47-db-open-seam.md) · Bridge · the $auth argument applied to a second transport · unblocks mysql-class connectors
@@ -95,9 +107,9 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 
 ### inbound events — the reverse call direction
 _A connector today compiles a vendor spec into **outbound** ops: flux calls Zendesk, GitHub, Slack._
-- [C-61 — Codegen — event declarations and the manifest `[inbound]` block](C-61-codegen-event-declarations.md) · Codegen · emits into the EXISTING <name>.flux + <name>.connector.toml — no new artifact kind; the manifest declares what the host must route and which credential verification needs, and does not self-install
+- [C-61 — Codegen — inbound events into the manifest and catalogue, nothing into the module](C-61-codegen-inbound-manifest.md) · Codegen · a connector module carries `op` declarations ONLY (flux lifts nothing else from ~/.flux/flows), so an event emits into the manifest + catalogue and the emitter REFUSES to fake one as a pollable op — the correction C-66 forced on this story
 - [C-62 — Codegen — webhook subscription ops from the vendor spec](C-62-codegen-subscription-ops.md) · Codegen · registering a webhook is an ordinary outbound op, so it needs no new machinery — and it correctly inherits the authorization → approval → guarded-IO envelope instead of being a build-time side effect
-- [C-63 — A `poll` transport — inbound for vendors with no webhook, no flux blocker](C-63-poll-transport.md) · Codegen · compiles to a journey flux's existing `schedule` channel drives, presenting the SAME event surface — proves inbound is an abstraction over transports rather than a synonym for webhook, and ships with zero cross-repo dependency
+- [C-63 — A `poll` transport — inbound for vendors with no webhook, no flux blocker](C-63-poll-transport.md) · Codegen · a cursor `op` (emitted) plus a documented `schedule`-channel program pattern (not emitted) — proves inbound is an abstraction over transports rather than a synonym for webhook, and ships with zero cross-repo dependency
 - [C-65 — Prove inbound end to end on two vendors against a live flux](C-65-inbound-two-vendors-live.md) · Build · the epic's closing proof, mirroring C-15: two vendors chosen to exercise different halves — one spec-published webhook API with a simple scheme, one whose scheme carries a timestamp window
 
 ### rendered provider documentation
