@@ -6775,6 +6775,751 @@
       ]
     },
     {
+      "id": "stripe",
+      "authority": null,
+      "vendor": "Stripe",
+      "description": "Stripe payments: read a balance, customer, charge, payment intent or refund; capture, cancel and refund a payment",
+      "base_url": "https://api.stripe.com",
+      "api_version": null,
+      "hosts": [
+        "api.stripe.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.stripe.com",
+          "hosts": [
+            "api.stripe.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 8
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer",
+          "signing"
+        ],
+        "credentials": [
+          {
+            "name": "stripe.secret_key",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "Stripe secret key sent as a bearer. A live key moves real money; a test key does not. A restricted key limited to Charges, PaymentIntents, Refunds, Customers and Balance is sufficient",
+            "env": [
+              "STRIPE_SECRET_KEY"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          },
+          {
+            "name": "stripe.webhook_signing_secret",
+            "scheme": {
+              "kind": "signing",
+              "name": null
+            },
+            "description": "Stripe webhook endpoint signing secret, used to verify inbound events. Never sent to Stripe",
+            "env": [
+              "STRIPE_WEBHOOK_SIGNING_SECRET"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "stripe.secret_key"
+          ]
+        ]
+      },
+      "operation_count": 8,
+      "operations": [
+        {
+          "id": "stripe-balance-get",
+          "provider": "stripe",
+          "service": "default",
+          "description": "Get the account's current balance — what is available to pay out and what is still pending, per currency. Takes no parameters, and reports the balance of whichever mode the key belongs to: a test key returns the test balance",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/balance",
+          "parameters": [],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "available": {
+                "description": "Funds available to pay out now, one entry per currency, each `{amount, currency}` with `amount` in the currency's smallest unit",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "livemode": {
+                "description": "False for a test-mode key. The clearest signal available of which mode this connection is in",
+                "type": "boolean"
+              },
+              "object": {
+                "const": "balance"
+              },
+              "pending": {
+                "description": "Funds not yet available, same shape as `available`",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "object",
+              "available",
+              "pending"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "stripe.secret_key"
+            ]
+          ],
+          "hosts": [
+            "api.stripe.com"
+          ],
+          "flux": "op stripe-balance-get -> Any\n  description \"Get the account's current balance — what is available to pay out and what is still pending, per currency. Takes no parameters, and reports the balance of whichever mode the key belongs to: a test key returns the test balance. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.stripe.com\"\n  url = fmt(\"{base}/v1/balance\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "stripe-customer-get",
+          "provider": "stripe",
+          "service": "default",
+          "description": "Get one customer by id: name, email, phone, billing address, default payment method and account balance. This is personal data about a named individual — read it only when the task needs it, and do not repeat it further than the task requires. A deleted customer is returned with `deleted: true` and almost no other fields",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/customers/{customer}",
+          "parameters": [
+            {
+              "name": "customer",
+              "in": "path",
+              "wire": null,
+              "description": "The customer's id, `cus_` followed by an opaque identifier — not their email address and not a merchant-side reference",
+              "required": true,
+              "schema": {
+                "minLength": 5,
+                "pattern": "^cus_[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "currency": {
+                "type": "string"
+              },
+              "deleted": {
+                "description": "Present and true only for a deleted customer, which is returned rather than 404'd",
+                "type": "boolean"
+              },
+              "email": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "object": {
+                "const": "customer"
+              }
+            },
+            "required": [
+              "id",
+              "object"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "stripe.secret_key"
+            ]
+          ],
+          "hosts": [
+            "api.stripe.com"
+          ],
+          "flux": "op stripe-customer-get(customer: String) -> Any\n  description \"Get one customer by id: name, email, phone, billing address, default payment method and account balance. This is personal data about a named individual — read it only when the task needs it, and do not repeat it further than the task requires. A deleted customer is returned with `deleted: true` and almost no other fields. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.stripe.com\"\n  url = fmt(\"{base}/v1/customers/{customer}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "stripe-charge-get",
+          "provider": "stripe",
+          "service": "default",
+          "description": "Get one charge by id: amount, currency, whether it was captured, whether it was refunded and how much of it, the card's last four digits and brand, and the failure or decline reason if it did not succeed. `amount` is in the currency's smallest unit — 1000 is ten dollars, and also ten thousand yen",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/charges/{charge}",
+          "parameters": [
+            {
+              "name": "charge",
+              "in": "path",
+              "wire": null,
+              "description": "The charge's id, `ch_` followed by an opaque identifier. A payment intent id (`pi_…`) does not address this endpoint — read it with `stripe-payment-intent-get` instead",
+              "required": true,
+              "schema": {
+                "minLength": 4,
+                "pattern": "^ch_[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "amount": {
+                "description": "In the currency's smallest unit",
+                "type": "integer"
+              },
+              "amount_captured": {
+                "type": "integer"
+              },
+              "amount_refunded": {
+                "description": "How much of `amount` has already been refunded, in the same unit. A full refund makes this equal `amount`",
+                "type": "integer"
+              },
+              "captured": {
+                "type": "boolean"
+              },
+              "currency": {
+                "description": "Three-letter ISO code, lowercase",
+                "type": "string"
+              },
+              "failure_message": {
+                "description": "Why the charge failed, in prose a human can read. Absent on a successful charge",
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "object": {
+                "const": "charge"
+              },
+              "refunded": {
+                "type": "boolean"
+              },
+              "status": {
+                "enum": [
+                  "succeeded",
+                  "pending",
+                  "failed"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "object",
+              "amount",
+              "currency",
+              "status"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "stripe.secret_key"
+            ]
+          ],
+          "hosts": [
+            "api.stripe.com"
+          ],
+          "flux": "op stripe-charge-get(charge: String) -> Any\n  description \"Get one charge by id: amount, currency, whether it was captured, whether it was refunded and how much of it, the card's last four digits and brand, and the failure or decline reason if it did not succeed. `amount` is in the currency's smallest unit — 1000 is ten dollars, and also ten thousand yen. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.stripe.com\"\n  url = fmt(\"{base}/v1/charges/{charge}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "stripe-payment-intent-get",
+          "provider": "stripe",
+          "service": "default",
+          "description": "Get one payment intent by id — the modern shape of a payment, covering the whole lifecycle from creation to capture. Its `status` is what says where the payment stands; `requires_capture` means the money is authorized but not yet taken",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/payment_intents/{payment_intent}",
+          "parameters": [
+            {
+              "name": "payment_intent",
+              "in": "path",
+              "wire": null,
+              "description": "The payment intent's id, `pi_` followed by an opaque identifier. The client secret (`pi_…_secret_…`) is a different value and must never be sent here",
+              "required": true,
+              "schema": {
+                "minLength": 4,
+                "pattern": "^pi_[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "amount": {
+                "description": "In the currency's smallest unit",
+                "type": "integer"
+              },
+              "amount_received": {
+                "type": "integer"
+              },
+              "capture_method": {
+                "enum": [
+                  "automatic",
+                  "automatic_async",
+                  "manual"
+                ],
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "latest_charge": {
+                "description": "The id of the charge this intent produced, which is what `stripe-charge-refund-create` refunds",
+                "type": "string"
+              },
+              "object": {
+                "const": "payment_intent"
+              },
+              "status": {
+                "description": "`requires_capture` is the state `stripe-payment-intent-capture` acts on; `succeeded` means the money has been taken",
+                "enum": [
+                  "requires_payment_method",
+                  "requires_confirmation",
+                  "requires_action",
+                  "processing",
+                  "requires_capture",
+                  "canceled",
+                  "succeeded"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "object",
+              "amount",
+              "currency",
+              "status"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "stripe.secret_key"
+            ]
+          ],
+          "hosts": [
+            "api.stripe.com"
+          ],
+          "flux": "op stripe-payment-intent-get(payment_intent: String) -> Any\n  description \"Get one payment intent by id — the modern shape of a payment, covering the whole lifecycle from creation to capture. Its `status` is what says where the payment stands; `requires_capture` means the money is authorized but not yet taken. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.stripe.com\"\n  url = fmt(\"{base}/v1/payment_intents/{payment_intent}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "stripe-refund-get",
+          "provider": "stripe",
+          "service": "default",
+          "description": "Get one refund by id: its amount, the charge it belongs to, its reason and its status. A refund that reports `pending` has not reached the customer's bank yet, and one that reports `failed` means the money came back — the customer was not paid",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/refunds/{refund}",
+          "parameters": [
+            {
+              "name": "refund",
+              "in": "path",
+              "wire": null,
+              "description": "The refund's id, `re_` followed by an opaque identifier",
+              "required": true,
+              "schema": {
+                "minLength": 4,
+                "pattern": "^re_[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "amount": {
+                "type": "integer"
+              },
+              "charge": {
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "object": {
+                "const": "refund"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "pending",
+                  "requires_action",
+                  "succeeded",
+                  "failed",
+                  "canceled"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "object",
+              "amount",
+              "currency",
+              "status"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "stripe.secret_key"
+            ]
+          ],
+          "hosts": [
+            "api.stripe.com"
+          ],
+          "flux": "op stripe-refund-get(refund: String) -> Any\n  description \"Get one refund by id: its amount, the charge it belongs to, its reason and its status. A refund that reports `pending` has not reached the customer's bank yet, and one that reports `failed` means the money came back — the customer was not paid. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.stripe.com\"\n  url = fmt(\"{base}/v1/refunds/{refund}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "stripe-payment-intent-capture",
+          "provider": "stripe",
+          "service": "default",
+          "description": "Capture an authorized payment intent, charging the customer the **full** authorized amount. Only a payment intent in `requires_capture` can be captured; a partial capture needs an `amount` this connector cannot send. Stripe answers 402 with an `error.code` such as `card_declined` when the capture is refused, and that arrives as data rather than as a failure",
+          "risk": "high",
+          "idempotency": "conditional",
+          "method": "POST",
+          "path": "/v1/payment_intents/{payment_intent}/capture",
+          "parameters": [
+            {
+              "name": "payment_intent",
+              "in": "path",
+              "wire": null,
+              "description": "The id of the payment intent to capture, `pi_` followed by an opaque identifier. It must be in `requires_capture` — check with `stripe-payment-intent-get` first",
+              "required": true,
+              "schema": {
+                "minLength": 4,
+                "pattern": "^pi_[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "idempotency_key",
+              "in": "header",
+              "wire": "Idempotency-Key",
+              "description": "A unique string — a UUID is the convention — identifying this capture attempt. Stripe replays the first result for 24 hours rather than capturing again, so a retry with the same key is safe and a retry with a new key charges the customer twice. Generate it once per intent you mean to capture, and reuse it across retries",
+              "required": true,
+              "schema": {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "amount": {
+                "type": "integer"
+              },
+              "amount_received": {
+                "description": "What was actually taken. Equals `amount` after a full capture",
+                "type": "integer"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "latest_charge": {
+                "type": "string"
+              },
+              "object": {
+                "const": "payment_intent"
+              },
+              "status": {
+                "description": "`succeeded` after a successful capture",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "object",
+              "status"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "stripe.secret_key"
+            ]
+          ],
+          "hosts": [
+            "api.stripe.com"
+          ],
+          "flux": "op stripe-payment-intent-capture(payment_intent: String, idempotency_key: String) -> Any\n  description \"Capture an authorized payment intent, charging the customer the **full** authorized amount. Only a payment intent in `requires_capture` can be captured; a partial capture needs an `amount` this connector cannot send. Stripe answers 402 with an `error.code` such as `card_declined` when the capture is refused, and that arrives as data rather than as a failure. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body.\"\n  risk \"high\"\n  idempotency \"conditional\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.stripe.com\"\n  url = fmt(\"{base}/v1/payment_intents/{payment_intent}/capture\")\n  response = http.request(headers: { \"Idempotency-Key\": idempotency_key }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "stripe-payment-intent-cancel",
+          "provider": "stripe",
+          "service": "default",
+          "description": "Cancel a payment intent, releasing any authorization hold on the customer's card. This cannot be undone — a canceled intent is final, and collecting the payment afterwards means creating a new one. An intent that has already succeeded cannot be canceled; refund it instead",
+          "risk": "high",
+          "idempotency": "conditional",
+          "method": "POST",
+          "path": "/v1/payment_intents/{payment_intent}/cancel",
+          "parameters": [
+            {
+              "name": "payment_intent",
+              "in": "path",
+              "wire": null,
+              "description": "The id of the payment intent to cancel, `pi_` followed by an opaque identifier",
+              "required": true,
+              "schema": {
+                "minLength": 4,
+                "pattern": "^pi_[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "idempotency_key",
+              "in": "header",
+              "wire": "Idempotency-Key",
+              "description": "A unique string — a UUID is the convention — identifying this cancellation attempt. Stripe replays the first result for 24 hours rather than acting again. Reuse it across retries of the same cancellation",
+              "required": true,
+              "schema": {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "canceled_at": {
+                "description": "Unix timestamp",
+                "type": "integer"
+              },
+              "cancellation_reason": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "object": {
+                "const": "payment_intent"
+              },
+              "status": {
+                "const": "canceled"
+              }
+            },
+            "required": [
+              "id",
+              "object",
+              "status"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "stripe.secret_key"
+            ]
+          ],
+          "hosts": [
+            "api.stripe.com"
+          ],
+          "flux": "op stripe-payment-intent-cancel(payment_intent: String, idempotency_key: String) -> Any\n  description \"Cancel a payment intent, releasing any authorization hold on the customer's card. This cannot be undone — a canceled intent is final, and collecting the payment afterwards means creating a new one. An intent that has already succeeded cannot be canceled; refund it instead. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body.\"\n  risk \"high\"\n  idempotency \"conditional\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.stripe.com\"\n  url = fmt(\"{base}/v1/payment_intents/{payment_intent}/cancel\")\n  response = http.request(headers: { \"Idempotency-Key\": idempotency_key }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "stripe-charge-refund-create",
+          "provider": "stripe",
+          "service": "default",
+          "description": "Refund a charge **in full** and irreversibly: the entire un-refunded amount goes back to the customer's original payment method, usually within five to ten business days. A partial refund needs an `amount` this connector cannot send. Stripe's fee on the original charge is not returned. There is no way to undo a refund — collecting the money again means charging the customer again",
+          "risk": "destructive",
+          "idempotency": "conditional",
+          "method": "POST",
+          "path": "/v1/charges/{charge}/refunds",
+          "parameters": [
+            {
+              "name": "charge",
+              "in": "path",
+              "wire": null,
+              "description": "The id of the charge to refund, `ch_` followed by an opaque identifier. A payment intent's charge is its `latest_charge`, which `stripe-payment-intent-get` reports",
+              "required": true,
+              "schema": {
+                "minLength": 4,
+                "pattern": "^ch_[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "idempotency_key",
+              "in": "header",
+              "wire": "Idempotency-Key",
+              "description": "A unique string — a UUID is the convention — identifying this refund. Stripe replays the first result for 24 hours rather than refunding again, so a retry with the same key is safe and a retry with a new key refunds the customer twice. Generate it once per refund you intend and reuse it across every retry",
+              "required": true,
+              "schema": {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "amount": {
+                "description": "What was refunded, in the currency's smallest unit",
+                "type": "integer"
+              },
+              "charge": {
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "object": {
+                "const": "refund"
+              },
+              "status": {
+                "description": "`pending` is the normal answer — the money has not reached the customer's bank yet. `failed` means it came back and the customer was not paid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "object",
+              "amount",
+              "currency",
+              "status"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "stripe.secret_key"
+            ]
+          ],
+          "hosts": [
+            "api.stripe.com"
+          ],
+          "flux": "op stripe-charge-refund-create(charge: String, idempotency_key: String) -> Any\n  description \"Refund a charge **in full** and irreversibly: the entire un-refunded amount goes back to the customer's original payment method, usually within five to ten business days. A partial refund needs an `amount` this connector cannot send. Stripe's fee on the original charge is not returned. There is no way to undo a refund — collecting the money again means charging the customer again. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body.\"\n  risk \"destructive\"\n  idempotency \"conditional\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.stripe.com\"\n  url = fmt(\"{base}/v1/charges/{charge}/refunds\")\n  response = http.request(headers: { \"Idempotency-Key\": idempotency_key }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "zendesk",
       "authority": null,
       "vendor": "Zendesk",

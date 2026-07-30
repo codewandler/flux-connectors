@@ -7,6 +7,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The Stripe connector (C-106)** — the eighteenth provider. Eight operations selected from roughly
+  450, graded by what they do to money: the refund is `destructive`, capture and cancel are `high`,
+  and all three are `conditional` **earned rather than asserted** — each declares a *required*
+  `Idempotency-Key` header, stricter than Stripe itself, because leaving it optional would tell flux a
+  retry is sound while permitting the request that makes it unsound.
+
+  The webhook binding is **deliberately unshipped**. Stripe's `Stripe-Signature` is a `t=…,v1=…` list
+  that `HmacSpec` cannot address, so `verification = "none"` would present an unverified payments
+  endpoint as trusted, and an `hmac` block naming the header whole would *read* as verification while
+  comparing a digest to a key/value list. The four `[[events]]` ship; a test fails the moment a
+  binding appears without C-141.
+
+  It also shipped **without** the canonical `POST /v1/refunds`, using the legacy charge-nested form
+  instead, and with capture and refund restricted to full amounts — all three because of C-144.
+
+
 ### Changed
 
 - **The explorer components are no longer welded to VitePress (C-142).** Six of fourteen imported
