@@ -39,8 +39,9 @@ use serde::{Deserialize, Serialize};
 use crate::config::{parse_binding, template_variables, Binding, ConfigField};
 use crate::graph::{Graph, GraphNode, NodeKind, PortRef};
 use crate::inbound::{
-    signed_placeholders, validate_path, validate_symbol, ChannelBinding, EventDecl, HmacSpec,
-    ManualSetup, Reply, Selector, Subscription, Transport, VerificationScheme, SIGNED_PLACEHOLDERS,
+    parse_tolerance, signed_placeholders, validate_path, validate_symbol, ChannelBinding,
+    EventDecl, FieldSource, HmacSpec, ManualSetup, Reply, Selector, Subscription, Transport,
+    VerificationScheme, SIGNED_PLACEHOLDERS,
 };
 use crate::lock::sha256_hex;
 use crate::{
@@ -876,14 +877,6 @@ fn validate_hmac(
     }
 
     let placeholders = signed_placeholders(&hmac.signed);
-    if placeholders.is_empty() {
-        problems.push(format!(
-            "channel binding {channel:?} has `signed = {:?}`, which interpolates nothing. The signed \
-             string is a template over {{body}} and {{timestamp}}; a constant template signs the \
-             same bytes for every request",
-            hmac.signed
-        ));
-    }
     for placeholder in &placeholders {
         if !SIGNED_PLACEHOLDERS.contains(&placeholder.as_str()) {
             problems.push(format!(
@@ -892,6 +885,22 @@ fn validate_hmac(
                 hmac.signed
             ));
         }
+    }
+
+    // **The rule this whole struct rests on.** A template that never interpolates {body} signs a
+    // string the payload never enters, so a signature captured from one delivery verifies *any*
+    // forged payload — bounded only by the tolerance, and by nothing at all without one. It is the
+    // same defect as the unterminated brace `signed_placeholders` reports, except that reaching it
+    // needs no typo: `signed = "{timestamp}"` is well formed, and every other check here passes on
+    // it. Refusing an empty template is not enough, because the hole is not emptiness.
+    if !placeholders.iter().any(|p| p == "body") {
+        problems.push(format!(
+            "channel binding {channel:?} has `signed = {:?}`, which never interpolates {{body}}. \
+             The signed string must cover the request body, or a signature captured from one \
+             delivery verifies every forged payload that follows it — the signature would prove \
+             only that somebody, once, held the secret",
+            hmac.signed
+        ));
     }
 
     let timestamped = placeholders.iter().any(|p| p == "timestamp");
@@ -907,23 +916,57 @@ fn validate_hmac(
             "channel binding {channel:?} declares a `timestamp` selector, but its `signed` template \
              does not interpolate {{timestamp}} — the value would be read and never used"
         )),
-        (Some(selector), true) => validate_selector(channel, "verification timestamp", selector, problems),
+        (Some(selector), true) => {
+            validate_selector(channel, "verification timestamp", selector, problems);
+            // Reading the timestamp out of the body inverts the order that makes verification mean
+            // anything: the body would have to be parsed to find the value that decides whether the
+            // body is trustworthy, which exposes a parser to any anonymous caller. flux refuses it
+            // in its own request path; refusing it here puts the failure in a build instead.
+            if selector.source == FieldSource::Body {
+                problems.push(format!(
+                    "channel binding {channel:?} reads its verification timestamp from the body \
+                     ({:?}). A body-sourced timestamp has to be parsed *before* the bytes carrying \
+                     it are verified, which inverts the order verification depends on; a signed \
+                     timestamp is read from a header",
+                    selector.name
+                ));
+            }
+        }
         (None, false) => {}
     }
 
     // A timestamped scheme with no window is a signature that replays forever — strictly worse than
     // not timestamping at all, because it reads as though replay had been handled.
-    if timestamped && hmac.tolerance.is_none() {
-        problems.push(format!(
+    match (&hmac.tolerance, timestamped) {
+        (None, true) => problems.push(format!(
             "channel binding {channel:?} signs over {{timestamp}} but declares no `tolerance`. A \
              timestamped signature with no window replays forever; state how old a request may be, \
              as in `tolerance = \"5m\"`"
-        ));
-    }
-    if !timestamped && hmac.tolerance.is_some() {
-        problems.push(format!(
+        )),
+        (Some(_), false) => problems.push(format!(
             "channel binding {channel:?} declares a `tolerance`, but its `signed` template does not \
              interpolate {{timestamp}} — there is no timestamp to bound"
+        )),
+        // Requiring a window is not the same as having one. An unparseable spelling leaves the real
+        // window to whatever each host decides at runtime, while reading exactly as though replay
+        // had been handled.
+        (Some(tolerance), true) => {
+            if let Err(reason) = parse_tolerance(tolerance) {
+                problems.push(format!(
+                    "channel binding {channel:?} declares `tolerance = {tolerance:?}`, which is not \
+                     a window a host can apply: {reason}"
+                ));
+            }
+        }
+        (None, false) => {}
+    }
+
+    // The spelling of a value nothing reads describes nothing — the same objection as an unused
+    // selector or an unused window.
+    if !timestamped && hmac.timestamp_format.is_some() {
+        problems.push(format!(
+            "channel binding {channel:?} declares a `timestamp_format`, but its `signed` template \
+             does not interpolate {{timestamp}} — there is no timestamp to spell"
         ));
     }
 

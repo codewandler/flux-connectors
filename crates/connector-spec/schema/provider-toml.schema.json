@@ -488,11 +488,15 @@
         },
         "signed": {
           "type": "string",
-          "description": "The string that is signed, as a template over `{body}` and `{timestamp}`. Any other placeholder is an error: a template the host cannot fill would fail open or fail confusingly, and neither is acceptable on an authentication path."
+          "description": "The string that is signed, as a template over `{body}` and `{timestamp}`. Any other placeholder is an error: a template the host cannot fill would fail open or fail confusingly, and neither is acceptable on an authentication path.\n\n`{body}` is mandatory. A template that omits it signs a string the payload never enters, so one captured signature verifies every forged payload for as long as the window lasts — `signed = \"{timestamp}\"` is a well-formed template that does exactly that."
         },
         "timestamp": {
           "$ref": "#/$defs/selector",
-          "description": "Where the `{timestamp}` in `signed` is read from — Slack's `X-Slack-Request-Timestamp`, Stripe's `t=` component. Required exactly when `signed` interpolates `{timestamp}`: the template says the value is signed but cannot say where it comes from, and a host left to guess would fall back to its own clock, which verifies nothing."
+          "description": "Where the `{timestamp}` in `signed` is read from — Slack's `X-Slack-Request-Timestamp`. Required exactly when `signed` interpolates `{timestamp}`: the template says the value is signed but cannot say where it comes from, and a host left to guess would fall back to its own clock, which verifies nothing.\n\n`source = \"body\"` is refused: a timestamp read from the body has to be parsed before the bytes carrying it are verified, which inverts the order that makes verification mean anything."
+        },
+        "timestamp_format": {
+          "$ref": "#/$defs/timestampFormat",
+          "description": "How the selected timestamp is spelled. Omitted means `unix_seconds`. Refused when `signed` does not interpolate `{timestamp}`, because it would describe the spelling of a value nothing reads."
         },
         "secret": {
           "type": "string",
@@ -500,7 +504,8 @@
         },
         "tolerance": {
           "type": "string",
-          "description": "How old a signed request may be (`5m`). Mandatory when `signed` interpolates `{timestamp}`, and refused when it does not: a timestamped signature with no window replays forever, which reads as though replay had been handled."
+          "pattern": "^[0-9]+[smh]$",
+          "description": "How old a signed request may be (`5m`, `300s`, `1h`). Mandatory when `signed` interpolates `{timestamp}`, and refused when it does not: a timestamped signature with no window replays forever, which reads as though replay had been handled.\n\nParsed, not merely required — a whole number and one of `s`, `m`, `h`, at most one hour and never zero. `tolerance = \"banana\"` is a declared window nobody can apply, and it reads as though replay had been handled just as convincingly."
         }
       }
     },
@@ -564,6 +569,15 @@
       "oneOf": [
         { "const": "hex", "description": "Lowercase hex — GitHub, Stripe, Slack." },
         { "const": "base64", "description": "Base64 — Zendesk." }
+      ]
+    },
+
+    "timestampFormat": {
+      "title": "How the timestamp an HMAC scheme signs is spelled",
+      "description": "A separate axis from the selector, which says only where the timestamp is read from. Without it a host has to sniff the spelling, and sniffing is exactly the guessing the selector was added to stop.",
+      "oneOf": [
+        { "const": "unix_seconds", "description": "Whole seconds since the unix epoch, as a decimal integer — Slack, Stripe, GitHub. The default." },
+        { "const": "rfc3339", "description": "RFC 3339, as `2022-05-05T18:32:28Z` — Zendesk." }
       ]
     },
 
