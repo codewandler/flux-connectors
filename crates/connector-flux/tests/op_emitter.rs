@@ -1,6 +1,6 @@
-//! The C-8 emitter contract: one IR [`Operation`] becomes one formatted Flux `op` declaration.
+//! The emitter contract: one IR [`Operation`] becomes one formatted Flux `op` declaration.
 //!
-//! Three properties are pinned here, and they are the ones every later codegen story inherits:
+//! Five properties are pinned here, and they are the ones every later codegen story inherits:
 //!
 //! 1. **Golden files.** `tests/golden/*.flux` pin the exact generated text for real operations drawn
 //!    from `docs/designs/provider-operation-inventory.md`. A codegen change therefore surfaces as a
@@ -12,6 +12,12 @@
 //! 3. **Name safety.** A vendor parameter name that is not a Flux identifier (babelforce's
 //!    `time.start`) travels as an explicit wire-name/symbol-name pair — the symbol is spellable, the
 //!    query string still carries the vendor's spelling.
+//! 4. **A non-2xx is data.** `http.request` returns a 404 with its status and *succeeds*, so nothing
+//!    generated here asserts on the response — see
+//!    [`a_non_2xx_response_is_data_not_an_op_failure`]. The response is bound and returned whole.
+//! 5. **A write may not carry a read's metadata.** flux's approval gate reads `risk` and
+//!    `idempotency`, so the emitter refuses a state-changing method that declares `risk = "low"`, or
+//!    a `POST`/`PATCH` that claims to be idempotent.
 //!
 //! # A note on the fixture ids
 //!
@@ -29,7 +35,8 @@
 
 use connector_flux::emit_operation;
 use connector_spec::{
-    Connector, HttpMethod, Idempotency, Operation, Param, ParamSet, Provenance, Risk,
+    Connector, ErrorEnvelope, HttpMethod, Idempotency, Operation, Param, ParamSet, Provenance,
+    Quirks, Risk,
 };
 use serde_json::json;
 
@@ -222,6 +229,104 @@ fn zendesk_test() -> Connector {
     )
 }
 
+/// `freshdesk-ticket-note-add` — the **write** fixture: a POST whose payload travels in a JSON
+/// body, alongside a path parameter. Transcribed from `providers/freshdesk.toml` so the golden is
+/// the text a real build emits. Freshdesk sends `content-type: application/json` on every request
+/// (inventory §4.3, `yml:37-50`), which is where the emitter's one static header comes from.
+/// Inventory §4.2 op 6 (`yml:307-348`).
+fn freshdesk_note_add() -> Connector {
+    connector(
+        "freshdesk",
+        "https://example.freshdesk.com/api/v2",
+        Operation {
+            id: "freshdesk-ticket-note-add".to_string(),
+            method: HttpMethod::Post,
+            path: "/tickets/{id}/notes".to_string(),
+            description:
+                "Add a note to a ticket; the note is private unless explicitly made public"
+                    .to_string(),
+            risk: Risk::Medium,
+            idempotency: Idempotency::NonIdempotent,
+            auth: None,
+            params: ParamSet {
+                path: vec![param(
+                    "id",
+                    "Id of the ticket",
+                    true,
+                    json!({"type": "integer"}),
+                )],
+                query: Vec::new(),
+                header: Vec::new(),
+                body: vec![
+                    param(
+                        "body",
+                        "Note body",
+                        true,
+                        json!({"type": "string", "minLength": 1}),
+                    ),
+                    param(
+                        "private",
+                        "Whether the note is hidden from end users",
+                        false,
+                        json!({"type": "boolean", "default": true}),
+                    ),
+                    param(
+                        "incoming",
+                        "Set true when the note originates from an external system",
+                        false,
+                        json!({"type": "boolean", "default": true}),
+                    ),
+                    param(
+                        "notify_emails",
+                        "Addresses to notify about the note",
+                        false,
+                        json!({"type": "array", "items": {"type": "string", "format": "email"}}),
+                    ),
+                ],
+            },
+            response_schema: None,
+            quirks: Default::default(),
+        },
+    )
+}
+
+/// `zendesk-ticket-show` — the **error-envelope** fixture. Zendesk answers a missing ticket with
+/// `404` and a body of `{"error": "RecordNotFound", "description": "Not found"}`; `http.request`
+/// hands that back as a *result*, so the op contract has to say where the vendor hid the message.
+/// Inventory §3.2 op 3 (`../flux/plugins/zendesk/src/main.rs:35-38`).
+fn zendesk_ticket_show() -> Connector {
+    connector(
+        "zendesk",
+        "https://example.zendesk.com",
+        Operation {
+            id: "zendesk-ticket-show".to_string(),
+            method: HttpMethod::Get,
+            path: "/api/v2/tickets/{ticket_id}.json".to_string(),
+            description: "Show one ticket".to_string(),
+            risk: Risk::Low,
+            idempotency: Idempotency::Idempotent,
+            auth: None,
+            params: ParamSet {
+                path: vec![param(
+                    "ticket_id",
+                    "The ticket id",
+                    true,
+                    json!({"type": "integer", "format": "uint64", "minimum": 1}),
+                )],
+                ..ParamSet::default()
+            },
+            response_schema: None,
+            quirks: Quirks {
+                error_envelope: Some(ErrorEnvelope {
+                    message_pointer: "/description".to_string(),
+                    code_pointer: Some("/error".to_string()),
+                }),
+                ..Quirks::default()
+            },
+        },
+    )
+}
+
 fn emit_only_operation(connector: &Connector) -> String {
     emit_operation(connector, &connector.operations[0])
         .expect("every fixture operation is inside the emitter's slice")
@@ -287,6 +392,24 @@ fn golden_babelforce_call_list() {
     );
 }
 
+/// A POST carrying a JSON request body — C-9's headline shape.
+#[test]
+fn golden_freshdesk_ticket_note_add() {
+    assert_golden(
+        "freshdesk-ticket-note-add.flux",
+        &emit_only_operation(&freshdesk_note_add()),
+    );
+}
+
+/// An operation whose vendor hides its errors inside a non-2xx body.
+#[test]
+fn golden_zendesk_ticket_show() {
+    assert_golden(
+        "zendesk-ticket-show.flux",
+        &emit_only_operation(&zendesk_ticket_show()),
+    );
+}
+
 // ---------------------------------------------------------------------------
 // The load-bearing properties
 // ---------------------------------------------------------------------------
@@ -303,6 +426,10 @@ fn emitted_text_is_a_fixed_point_of_the_flux_formatter() {
         zendesk_comment_list(),
         zendesk_ticket_search(),
         babelforce_call_list(),
+        freshdesk_note_add(),
+        zendesk_ticket_show(),
+        headered_operation(),
+        constant_body_operation(),
     ] {
         let emitted = emit_only_operation(&connector);
         let parsed = flux_lang::parser::parse_cst(&emitted);
@@ -448,22 +575,290 @@ fn an_id_flux_cannot_declare_is_refused() {
     );
 }
 
-/// Request bodies and caller-supplied headers are C-9 and C-10. The emitter refuses them loudly
-/// rather than emitting a request that quietly drops them.
+// ---------------------------------------------------------------------------
+// C-9 — bodies, headers, and the response
+// ---------------------------------------------------------------------------
+
+/// A synthetic operation carrying a **caller-supplied header** parameter. The launch inventory has
+/// none — every provider's headers are either the fixed `content-type` or the credential the host
+/// injects — so this fixture is constructed rather than cited, and says so.
+fn headered_operation() -> Connector {
+    connector(
+        "vendor",
+        "https://api.example.com",
+        Operation {
+            id: "vendor-thing-create".to_string(),
+            method: HttpMethod::Post,
+            path: "/v1/things".to_string(),
+            description: "Create a thing.".to_string(),
+            risk: Risk::High,
+            idempotency: Idempotency::NonIdempotent,
+            auth: None,
+            params: ParamSet {
+                path: Vec::new(),
+                query: Vec::new(),
+                header: vec![param(
+                    "Idempotency-Key",
+                    "A caller-chosen key that makes a retry safe.",
+                    true,
+                    json!({"type": "string"}),
+                )],
+                body: vec![param(
+                    "label",
+                    "What to call the thing.",
+                    true,
+                    json!({"type": "string"}),
+                )],
+            },
+            response_schema: None,
+            quirks: Default::default(),
+        },
+    )
+}
+
+/// The body is assembled as a Flux record and handed to `http.request` **by symbol**. That is not a
+/// style choice: `http.request` reads its `body` argument with `Value::as_str`
+/// (`../flux/crates/flux-web/src/http.rs:183-186`), so an inline record would be silently dropped,
+/// while a bound record is stored as canonical JSON text and arrives intact.
 #[test]
-fn out_of_slice_operations_are_refused_rather_than_half_emitted() {
-    let mut connector = zendesk_comment_list();
+fn a_post_assembles_its_json_body_from_the_ir_body_params() {
+    let emitted = emit_only_operation(&freshdesk_note_add());
+    assert!(
+        emitted.contains(
+            r#"$payload = { body: $body, incoming: $incoming, notify_emails: $notify_emails, private: $private }"#
+        ),
+        "the body params must assemble into one record:\n{emitted}"
+    );
+    assert!(
+        emitted.contains("body: $payload"),
+        "the record must reach the request by symbol, not inline:\n{emitted}"
+    );
+    assert!(
+        emitted.contains(r#"method: "POST""#),
+        "the IR's method must travel:\n{emitted}"
+    );
+}
+
+/// A request that carries a body carries the media type that describes it, and the static value is
+/// bound rather than inlined — an all-literal record is not a fixed point of flux's formatter.
+#[test]
+fn a_body_bearing_request_declares_its_content_type() {
+    let emitted = emit_only_operation(&freshdesk_note_add());
+    assert!(
+        emitted.contains(r#"$content_type = "application/json""#),
+        "the static media type must be bound:\n{emitted}"
+    );
+    assert!(
+        emitted.contains(r#"headers: { "content-type": $content_type }"#),
+        "the media type must travel as a request header:\n{emitted}"
+    );
+}
+
+/// A GET has nothing to describe, so it grows neither a payload nor a `content-type`.
+#[test]
+fn a_request_without_a_body_carries_no_content_type() {
+    let emitted = emit_only_operation(&zendesk_comment_list());
+    assert!(
+        !emitted.contains("content_type") && !emitted.contains("$payload"),
+        "a bodiless GET must stay bare:\n{emitted}"
+    );
+}
+
+/// A caller-supplied header travels under the vendor's own header name, valued by the op's symbol —
+/// the same wire-name/symbol-name split query parameters already use.
+#[test]
+fn parameterized_headers_travel_under_their_wire_name() {
+    let emitted = emit_only_operation(&headered_operation());
+    assert!(
+        emitted.contains("Idempotency_Key: String"),
+        "the declared param must be a spellable Flux symbol:\n{emitted}"
+    );
+    assert!(
+        emitted.contains(r#""Idempotency-Key": $Idempotency_Key"#),
+        "the header must keep the vendor's spelling:\n{emitted}"
+    );
+    assert!(
+        emitted.contains(r#""content-type": $content_type"#),
+        "a static and a parameterized header must coexist:\n{emitted}"
+    );
+}
+
+/// C-8 ended every op in a bare `do http.request`, which discards the statement result. The response
+/// is now bound and returned explicitly, so what the op yields is stated rather than inherited from
+/// the runtime's fall-through.
+#[test]
+fn the_response_is_bound_and_returned_explicitly() {
+    for connector in [zendesk_test(), freshdesk_note_add(), zendesk_ticket_show()] {
+        let emitted = emit_only_operation(&connector);
+        assert!(
+            emitted.contains("$response = http.request({"),
+            "the response must be bound:\n{emitted}"
+        );
+        assert!(
+            emitted.trim_end().ends_with("return $response"),
+            "the op must end by returning it:\n{emitted}"
+        );
+        assert!(
+            !emitted.contains("do http.request"),
+            "no statement may discard the response:\n{emitted}"
+        );
+    }
+}
+
+/// **The safety property of this story's response half.** `http.request` treats a non-2xx as data —
+/// a 404 comes back with its status and the op *succeeds*
+/// (`../flux/crates/flux-web/src/http.rs:219-225`). Generated Flux must not undo that by asserting
+/// on the response, because a 404 that a caller can read and branch on is strictly more useful than
+/// an aborted flow.
+#[test]
+fn a_non_2xx_response_is_data_not_an_op_failure() {
+    for connector in [zendesk_ticket_show(), freshdesk_note_add()] {
+        let emitted = emit_only_operation(&connector);
+        for aborting in ["assert", "verify", "confirm"] {
+            assert!(
+                !emitted.contains(aborting),
+                "`{aborting}` would turn a non-2xx result into a failure:\n{emitted}"
+            );
+        }
+    }
+}
+
+/// The vendor's error envelope reaches the caller through the op's **tool contract**: the whole
+/// response — status line, headers, body — is what the op returns, and the description says where
+/// inside it the vendor hid the message and the code.
+#[test]
+fn a_declared_error_envelope_is_surfaced_on_the_op_contract() {
+    let emitted = emit_only_operation(&zendesk_ticket_show());
+    let module = flux_lang::program::Module::parse_str(&emitted).expect("emitted Flux must parse");
+    let program = module.program().expect("an `op` declaration is a program");
+    let description = &program.ops[0].meta.description;
+
+    assert!(
+        description.starts_with("Show one ticket."),
+        "the vendor's own description must come first: {description}"
+    );
+    assert!(
+        description.contains("/description") && description.contains("/error"),
+        "both envelope pointers must be named: {description}"
+    );
+    assert!(
+        description.contains("non-2xx"),
+        "the contract must say a non-2xx is a result: {description}"
+    );
+}
+
+/// An operation with no declared envelope says nothing about one — silence is not a claim.
+#[test]
+fn an_operation_without_an_envelope_keeps_its_description() {
+    let emitted = emit_only_operation(&zendesk_comment_list());
+    let module = flux_lang::program::Module::parse_str(&emitted).expect("emitted Flux must parse");
+    let program = module.program().expect("an `op` declaration is a program");
+    assert_eq!(
+        program.ops[0].meta.description,
+        "List one Zendesk ticket's comments."
+    );
+}
+
+/// **The safety property of this story's metadata half.** flux's approval gate reads `risk` and
+/// `idempotency`; a POST that inherited a GET's `low`/`idempotent` would be waved through. The
+/// emitter refuses such a declaration rather than emitting it or silently correcting it — a silent
+/// correction would hide the authoring bug that produced it.
+#[test]
+fn a_write_may_not_claim_a_reads_risk() {
+    for method in [
+        HttpMethod::Post,
+        HttpMethod::Put,
+        HttpMethod::Patch,
+        HttpMethod::Delete,
+    ] {
+        let mut connector = freshdesk_note_add();
+        connector.operations[0].method = method;
+        connector.operations[0].risk = Risk::Low;
+
+        let err = emit_operation(&connector, &connector.operations[0])
+            .expect_err("a write declared `low` must be refused");
+        assert!(
+            err.to_string().contains("low"),
+            "the refusal must name the field, got: {err}"
+        );
+    }
+}
+
+/// POST and PATCH are not idempotent methods, so an op that claims they are would make a `retry`
+/// around the call unsound — one charge becomes three.
+#[test]
+fn a_post_may_not_claim_to_be_idempotent() {
+    for method in [HttpMethod::Post, HttpMethod::Patch] {
+        let mut connector = freshdesk_note_add();
+        connector.operations[0].method = method;
+        connector.operations[0].idempotency = Idempotency::Idempotent;
+
+        let err = emit_operation(&connector, &connector.operations[0])
+            .expect_err("an idempotent POST/PATCH must be refused");
+        assert!(
+            err.to_string().contains("idempoten"),
+            "the refusal must name the field, got: {err}"
+        );
+    }
+}
+
+/// `providers/zendesk.toml` pins `ticket.safe_update` to `true` with a JSON Schema `const`, because
+/// the IR has no "always emitted, never caller-supplied" field. `const` already *means* exactly
+/// that, so the emitter reads it: the field is sent, and it does not become a parameter a model has
+/// to guess. Dropping `safe_update` turns every Zendesk write into a last-write-wins race, so this
+/// is a safety property rather than a signature tidy-up.
+#[test]
+fn a_constant_body_field_is_sent_but_not_declared() {
+    let emitted = emit_only_operation(&constant_body_operation());
+    assert!(
+        emitted.contains("$safe_update = true"),
+        "the constant must be bound:\n{emitted}"
+    );
+    assert!(
+        emitted.contains("safe_update: $safe_update"),
+        "the constant must reach the payload:\n{emitted}"
+    );
+    let signature = emitted.lines().next().expect("a declaration line");
+    assert!(
+        !signature.contains("safe_update"),
+        "a constant is not a caller parameter: {signature}"
+    );
+    assert!(
+        signature.contains("body: String"),
+        "a caller-supplied field still is: {signature}"
+    );
+}
+
+/// `freshdesk-ticket-note-add` with a pinned constant field — the Zendesk `safe_update` shape,
+/// exercised on a fixture whose body the emitter can actually spell.
+fn constant_body_operation() -> Connector {
+    let mut connector = freshdesk_note_add();
+    connector.operations[0].params.body.push(param(
+        "safe_update",
+        "Constant `true`; not caller-supplied.",
+        true,
+        json!({"type": "boolean", "const": true}),
+    ));
+    connector
+}
+
+/// A nested JSON body — Zendesk's `ticket.comment.body` (inventory §3.2 op 6) — has no IR
+/// representation: `ParamSet::body` is a flat field list. Emitting the dotted name as a literal key
+/// would produce a request Zendesk silently ignores, so it is refused instead.
+#[test]
+fn a_body_field_the_ir_cannot_nest_is_refused() {
+    let mut connector = freshdesk_note_add();
     connector.operations[0].params.body = vec![param(
-        "comment",
-        "The comment body.",
+        "ticket.comment.body",
+        "The comment text.",
         true,
         json!({"type": "string"}),
     )];
 
     let err = emit_operation(&connector, &connector.operations[0])
-        .expect_err("a body parameter is outside the C-8 slice");
+        .expect_err("a nested body field is not representable");
     assert!(
-        err.to_string().contains("body"),
-        "the refusal must name what it cannot emit, got: {err}"
+        err.to_string().contains("ticket.comment.body"),
+        "the refusal must name the field, got: {err}"
     );
 }
