@@ -19,9 +19,9 @@ use std::path::{Path, PathBuf};
 use connector_flux::emit_operation;
 use connector_spec::{provider, Connector};
 
-/// The providers this repository ships: the three C-17 names, in its order, then each one
-/// added since — `github` by C-52, `openai` by C-51.
-const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce", "github", "openai"];
+/// Every provider this repository ships: C-17's original three, then each connector added
+/// since — `github` (C-52), `openai` (C-51), `slack` (C-53).
+const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce", "github", "openai", "slack"];
 
 fn providers_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

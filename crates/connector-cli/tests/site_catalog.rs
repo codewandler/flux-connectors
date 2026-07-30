@@ -27,9 +27,9 @@ mod common;
 
 use common::Fixture;
 
-/// The providers this repository ships: the three C-17 names, in its order, then each one
-/// added since — `github` by C-52, `openai` by C-51.
-const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce", "github", "openai"];
+/// Every provider this repository ships: C-17's original three, then each connector added
+/// since — `github` (C-52), `openai` (C-51), `slack` (C-53).
+const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce", "github", "openai", "slack"];
 
 /// The document's path, relative to the repository root. Chosen by C-42, moved into the site's own
 /// `public/` tree by C-44, and named here so a change to it is a change to a test rather than a

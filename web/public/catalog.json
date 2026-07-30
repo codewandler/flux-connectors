@@ -2433,6 +2433,307 @@
       ]
     },
     {
+      "id": "slack",
+      "vendor": "Slack",
+      "description": "Slack messaging: post messages, read conversation history, look up users, react",
+      "base_url": "https://slack.com",
+      "hosts": [
+        "slack.com"
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "slack.bot_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "Slack bot user OAuth token (xoxb-…) with chat:write, channels:history, users:read and reactions:write",
+            "env": [
+              "SLACK_BOT_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "slack.bot_token"
+          ]
+        ]
+      },
+      "operation_count": 4,
+      "operations": [
+        {
+          "id": "slack-chat-post-message",
+          "provider": "slack",
+          "description": "Post a message to a Slack channel, visible to everyone in it. Slack answers HTTP 200 even on failure: check `ok` in the response body before treating the message as sent",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/api/chat.postMessage",
+          "parameters": [
+            {
+              "name": "channel",
+              "in": "body",
+              "wire": null,
+              "description": "Channel id (`C0123ABCDEF`) or name to post to. An id is preferred; a name resolves only for public channels",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "text",
+              "in": "body",
+              "wire": null,
+              "description": "Message text, in Slack's mrkdwn syntax",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "thread_ts",
+              "in": "body",
+              "wire": null,
+              "description": "The `ts` of a parent message to reply to, threading the reply under it. Omit to post at channel level",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "slack.bot_token"
+            ]
+          ],
+          "hosts": [
+            "slack.com"
+          ],
+          "flux": "op slack-chat-post-message(channel: String, text: String, thread_ts: String) -> Any\n  description \"Post a message to a Slack channel, visible to everyone in it. Slack answers HTTP 200 even on failure: check `ok` in the response body before treating the message as sent. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://slack.com\"\n  $url = fmt(\"{base}/api/chat.postMessage\")\n  $content_type = \"application/json\"\n  $payload = { channel: $channel, text: $text, thread_ts: $thread_ts }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "slack-conversations-history",
+          "provider": "slack",
+          "description": "Read recent messages from a Slack channel, newest first. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `channel_not_found` appears at `error`",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/api/conversations.history",
+          "parameters": [
+            {
+              "name": "channel",
+              "in": "body",
+              "wire": null,
+              "description": "Channel id to read (`C0123ABCDEF`)",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "limit",
+              "in": "body",
+              "wire": null,
+              "description": "Maximum messages to return in one call, newest first. Slack's documented maximum is 999 and it advises far less",
+              "required": false,
+              "schema": {
+                "default": 100,
+                "maximum": 999,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "oldest",
+              "in": "body",
+              "wire": null,
+              "description": "Only messages after this `ts`, e.g. `1728394857.123456`. Omit for no lower bound",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "latest",
+              "in": "body",
+              "wire": null,
+              "description": "Only messages up to this `ts`. Omit for no upper bound",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "slack.bot_token"
+            ]
+          ],
+          "hosts": [
+            "slack.com"
+          ],
+          "flux": "op slack-conversations-history(channel: String, limit: Number, oldest: String, latest: String) -> Any\n  description \"Read recent messages from a Slack channel, newest first. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `channel_not_found` appears at `error`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://slack.com\"\n  $url = fmt(\"{base}/api/conversations.history\")\n  $content_type = \"application/json\"\n  $payload = { channel: $channel, latest: $latest, limit: $limit, oldest: $oldest }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "slack-users-info",
+          "provider": "slack",
+          "description": "Look up one Slack user by id — display name, real name, time zone and whether they are a bot. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `user_not_found` appears at `error`",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/api/users.info",
+          "parameters": [
+            {
+              "name": "user",
+              "in": "body",
+              "wire": null,
+              "description": "User id to look up (`U0123ABCDEF`)",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "include_locale",
+              "in": "body",
+              "wire": null,
+              "description": "Also return the user's locale",
+              "required": false,
+              "schema": {
+                "default": false,
+                "type": "boolean"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "slack.bot_token"
+            ]
+          ],
+          "hosts": [
+            "slack.com"
+          ],
+          "flux": "op slack-users-info(user: String, include_locale: Bool) -> Any\n  description \"Look up one Slack user by id — display name, real name, time zone and whether they are a bot. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `user_not_found` appears at `error`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://slack.com\"\n  $url = fmt(\"{base}/api/users.info\")\n  $content_type = \"application/json\"\n  $payload = { include_locale: $include_locale, user: $user }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "slack-reactions-add",
+          "provider": "slack",
+          "description": "Add an emoji reaction to a message, visible to everyone in the channel. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `already_reacted` appears at `error`",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/api/reactions.add",
+          "parameters": [
+            {
+              "name": "channel",
+              "in": "body",
+              "wire": null,
+              "description": "Channel id containing the message (`C0123ABCDEF`)",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "timestamp",
+              "in": "body",
+              "wire": null,
+              "description": "The `ts` of the message to react to, e.g. `1728394857.123456`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "name",
+              "in": "body",
+              "wire": null,
+              "description": "Emoji name without colons, e.g. `thumbsup` or `white_check_mark`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "slack.bot_token"
+            ]
+          ],
+          "hosts": [
+            "slack.com"
+          ],
+          "flux": "op slack-reactions-add(channel: String, timestamp: String, name: String) -> Any\n  description \"Add an emoji reaction to a message, visible to everyone in the channel. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `already_reacted` appears at `error`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://slack.com\"\n  $url = fmt(\"{base}/api/reactions.add\")\n  $content_type = \"application/json\"\n  $payload = { channel: $channel, name: $name, timestamp: $timestamp }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "zendesk",
       "vendor": "Zendesk",
       "description": "Zendesk Support ticketing: search, read, update tickets and their comments",

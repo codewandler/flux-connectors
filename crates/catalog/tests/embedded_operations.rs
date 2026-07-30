@@ -32,14 +32,14 @@ fn all() -> Vec<&'static Operation> {
 fn the_catalog_is_not_empty() {
     assert_eq!(
         catalog::providers().len(),
-        5,
-        "the three C-17 providers, plus github (C-52) and openai (C-51)"
+        6,
+        "C-17's three providers, plus github (C-52), openai (C-51) and slack (C-53)"
     );
     assert_eq!(
         all().len(),
-        34,
-        "34 operations ship today — C-17's 25, github's 5 and openai's 4; if this changed \
-         deliberately, change the number"
+        38,
+        "38 operations ship today — C-17's 25, github's 5, openai's 4 and slack's 4; if \
+         this changed deliberately, change the number"
     );
 }
 
