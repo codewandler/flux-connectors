@@ -10,6 +10,7 @@
 //! Forgetting the line is not silent: `tests/embedded_operations.rs` compares this list against
 //! `providers/` and fails when they disagree.
 
+pub(crate) mod asana;
 pub(crate) mod babelforce;
 pub(crate) mod freshdesk;
 pub(crate) mod github;
@@ -22,6 +23,7 @@ use crate::Provider;
 /// Every provider, ordered by id — the order [`crate::providers`] publishes and the order the
 /// catalog's flat listing walks.
 pub(crate) static PROVIDERS: &[&Provider] = &[
+    &asana::PROVIDER,
     &babelforce::PROVIDER,
     &freshdesk::PROVIDER,
     &github::PROVIDER,
