@@ -15,12 +15,35 @@
 // separates the five with a problem of their own from the twenty waiting on the same seam as
 // everything else.
 //
-// Filtering is plain component state. It narrows a list that is already fully rendered, so with
-// JavaScript switched off every operation is still on the page.
+// Filtering narrows a list that is already fully rendered, so with JavaScript switched off every
+// operation is still on the page, in the catalogue's own order — the state below only ever removes
+// rows and reorders them, and the server renders it unset.
+//
+// That state lives in the query string (C-102), because a *view* is worth sharing and had no address
+// at all: "every destructive operation of one connector" could not be sent to anyone. The pair that
+// does it is pure and lives in `data/catalog.mts`; what is left here is the wiring, and the wiring
+// has two rules.
+//
+//   - **Read the URL on mount, not during setup.** There is no `location` while the page is being
+//     rendered, and reading one during setup would also make the server's markup disagree with the
+//     client's first render. So the list renders unfiltered and unsorted, and the URL is applied once
+//     the browser has it.
+//   - **Replace, never push.** A pushed entry per change means the back button walks back through
+//     every keystroke of a search instead of leaving the explorer. VitePress ships its own router
+//     (there is no Vue Router here) and it offers `go`, which pushes; the honest equivalent is
+//     `history.replaceState`, carrying the router's own state object through untouched so the two
+//     stay in agreement.
 
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { inBrowser } from 'vitepress'
 import {
+  SORTS,
+  compareOperations,
+  decodeView,
+  emptyView,
+  encodeView,
   facet,
+  narrowView,
   operationService,
   ownsDefect,
   serviceFacet,
@@ -33,12 +56,14 @@ const props = defineProps<{ providers: Provider[] }>()
 
 const ANY = ''
 
-const query = ref('')
-const provider = ref(ANY)
-const service = ref(ANY)
-const risk = ref(ANY)
-const idempotency = ref(ANY)
-const defect = ref(ANY)
+/** What each sort is called on the control. The values are the URL's vocabulary; these are prose. */
+const SORT_LABELS: Record<string, string> = {
+  catalog: 'Catalogue order',
+  id: 'Operation id',
+  risk: 'Risk',
+}
+
+const view = ref(emptyView())
 
 /** Every operation with the vendor that owns it, flattened in catalogue order. */
 const entries = computed(() =>
@@ -61,24 +86,19 @@ const idempotencies = computed(() =>
  * control is disabled rather than removed: a filter that disappeared under the cursor would move
  * every control beside it.
  */
-const services = computed(() => serviceFacet(props.providers, provider.value))
+const services = computed(() => serviceFacet(props.providers, view.value.provider))
 
-// A chosen service that the chosen connector does not publish would filter every operation away and
-// read as an empty catalogue. Narrowing the options narrows the choice with them.
-watch(services, (options) => {
-  if (service.value !== ANY && !options.includes(service.value)) service.value = ANY
-})
-
-const shown = computed(() =>
+const matching = computed(() =>
   entries.value.filter(({ operation, owner }) => {
-    if (provider.value !== ANY && owner.id !== provider.value) return false
-    if (service.value !== ANY && operation.service !== service.value) return false
-    if (risk.value !== ANY && operation.risk !== risk.value) return false
-    if (idempotency.value !== ANY && operation.idempotency !== idempotency.value) return false
-    if (defect.value === 'own' && !ownsDefect(operation)) return false
-    if (defect.value === 'none' && ownsDefect(operation)) return false
+    const { query, provider, service, risk, idempotency, defect } = view.value
+    if (provider !== ANY && owner.id !== provider) return false
+    if (service !== ANY && operation.service !== service) return false
+    if (risk !== ANY && operation.risk !== risk) return false
+    if (idempotency !== ANY && operation.idempotency !== idempotency) return false
+    if (defect === 'own' && !ownsDefect(operation)) return false
+    if (defect === 'none' && ownsDefect(operation)) return false
 
-    const needle = query.value.trim().toLowerCase()
+    const needle = query.trim().toLowerCase()
     if (!needle) return true
     return (
       operation.id.toLowerCase().includes(needle) ||
@@ -88,13 +108,53 @@ const shown = computed(() =>
   })
 )
 
+// Sorting is over the whole row, and the comparator is over the operation: the vendor travels with
+// the operation only so the row can name it, and never decides where the row goes.
+const shown = computed(() => {
+  const compare = compareOperations(view.value.sort)
+  return [...matching.value].sort((a, b) => compare(a.operation, b.operation))
+})
+
+/**
+ * State the view in the address bar, replacing the current entry.
+ *
+ * `history.state` is carried through rather than cleared, because it is VitePress's router's and not
+ * ours — it holds the scroll position the router restores.
+ */
+function publish(search: string) {
+  if (!inBrowser) return
+  const url = new URL(window.location.href)
+  url.search = search
+  window.history.replaceState(window.history.state, '', url)
+}
+
+// One watcher does both halves. A value the catalogue no longer offers is dropped first — a chosen
+// service that the chosen connector does not publish would filter every operation away and read as
+// an empty catalogue — and the write back re-enters here with the narrowed view, which is already
+// narrow and so falls through to the URL. Comparing the encodings rather than the objects is what
+// makes that terminate: the encoding is canonical, so `narrowView` reaches a fixed point in one step.
+watch(
+  view,
+  (current) => {
+    const narrowed = narrowView(current, props.providers)
+    const search = encodeView(narrowed)
+    if (search !== encodeView(current)) {
+      view.value = narrowed
+      return
+    }
+    publish(search)
+  },
+  { deep: true }
+)
+
+// Restoring a shared link, once — and only in the browser, so the server still renders every
+// operation unfiltered.
+onMounted(() => {
+  view.value = narrowView(decodeView(window.location.search), props.providers)
+})
+
 function reset() {
-  query.value = ''
-  provider.value = ANY
-  service.value = ANY
-  risk.value = ANY
-  idempotency.value = ANY
-  defect.value = ANY
+  view.value = emptyView()
 }
 </script>
 
@@ -102,12 +162,12 @@ function reset() {
   <div class="filters">
     <label class="filters__field filters__field--wide">
       <span>Search</span>
-      <input v-model="query" type="search" placeholder="id, description or path" />
+      <input v-model="view.query" type="search" placeholder="id, description or path" />
     </label>
 
     <label class="filters__field">
       <span>Connector</span>
-      <select v-model="provider">
+      <select v-model="view.provider">
         <option :value="ANY">Any</option>
         <option v-for="owner in providers" :key="owner.id" :value="owner.id">
           {{ owner.vendor }}
@@ -117,7 +177,7 @@ function reset() {
 
     <label class="filters__field">
       <span>Service</span>
-      <select v-model="service" :disabled="!services.length">
+      <select v-model="view.service" :disabled="!services.length">
         <option :value="ANY">Any</option>
         <option v-for="value in services" :key="value" :value="value">{{ value }}</option>
       </select>
@@ -125,7 +185,7 @@ function reset() {
 
     <label class="filters__field">
       <span>Risk</span>
-      <select v-model="risk">
+      <select v-model="view.risk">
         <option :value="ANY">Any</option>
         <option v-for="value in risks" :key="value" :value="value">{{ value }}</option>
       </select>
@@ -133,7 +193,7 @@ function reset() {
 
     <label class="filters__field">
       <span>Idempotency</span>
-      <select v-model="idempotency">
+      <select v-model="view.idempotency">
         <option :value="ANY">Any</option>
         <option v-for="value in idempotencies" :key="value" :value="value">{{ value }}</option>
       </select>
@@ -141,10 +201,17 @@ function reset() {
 
     <label class="filters__field">
       <span>Operation issues</span>
-      <select v-model="defect">
+      <select v-model="view.defect">
         <option :value="ANY">Any</option>
         <option value="own">Has a known limitation</option>
         <option value="none">No operation-specific issue</option>
+      </select>
+    </label>
+
+    <label class="filters__field">
+      <span>Sort</span>
+      <select v-model="view.sort">
+        <option v-for="value in SORTS" :key="value" :value="value">{{ SORT_LABELS[value] }}</option>
       </select>
     </label>
 

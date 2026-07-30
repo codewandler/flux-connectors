@@ -461,6 +461,201 @@ test('the service filter is a facet of the catalogue and narrows to the chosen c
   }
 })
 
+test('a filtered view round-trips through the query string, and an unfiltered one is clean', () => {
+  // C-102. The page promises "every operation has a stable page you can share" — true of an
+  // operation, false of a *view*. The encode/decode pair is what makes it true of a view, so it is a
+  // pure function in `data/catalog.mts` and asserted here rather than left as component state.
+  //
+  // Every value that is catalogue data is read out of the catalogue. The only vocabularies named
+  // literally are the ones the site owns and the catalogue cannot supply: the parameter keys, the
+  // defect filter's two choices, and the sort orders.
+  const providers = catalog().providers
+  const multi = providers.find((provider) => namedServices(provider).length > 1)
+  assert.ok(multi, 'no connector publishes several services; this would not exercise the pair')
+  const sample = multi.operations[0]
+
+  const empty = selectors.emptyView()
+
+  // An empty filter contributes no parameter, so the unfiltered URL is clean.
+  assert.equal(selectors.encodeView(empty), '', 'the unfiltered view still writes a parameter')
+  assert.deepEqual(selectors.decodeView(''), empty)
+  assert.deepEqual(selectors.decodeView('?'), empty)
+
+  const views = [
+    empty,
+    { ...empty, query: 'list' },
+    { ...empty, query: sample.path },
+    { ...empty, provider: multi.id },
+    { ...empty, provider: multi.id, service: sample.service },
+    { ...empty, risk: sample.risk },
+    { ...empty, idempotency: sample.idempotency },
+    { ...empty, defect: 'own' },
+    { ...empty, defect: 'none' },
+    { ...empty, sort: 'id' },
+    { ...empty, sort: 'risk' },
+    {
+      query: sample.path,
+      provider: multi.id,
+      service: sample.service,
+      risk: sample.risk,
+      idempotency: sample.idempotency,
+      defect: 'own',
+      sort: 'risk',
+    },
+  ]
+
+  for (const view of views) {
+    const encoded = selectors.encodeView(view)
+    assert.deepEqual(
+      selectors.decodeView(encoded),
+      view,
+      `the view does not survive the round trip through \`?${encoded}\``
+    )
+    // One view, one string: re-encoding what was parsed cannot drift.
+    assert.equal(selectors.encodeView(selectors.decodeView(encoded)), encoded)
+  }
+
+  // Only the fields that are set appear at all.
+  assert.deepEqual(
+    [...new URLSearchParams(selectors.encodeView({ ...empty, risk: sample.risk })).keys()],
+    ['risk'],
+    'a view with one filter set writes more than one parameter'
+  )
+
+  // Two routes to the same view produce the same string: the key order a caller happens to build
+  // the object in is not part of the URL.
+  assert.equal(
+    selectors.encodeView({ ...empty, provider: multi.id, sort: 'id' }),
+    selectors.encodeView({
+      sort: 'id',
+      defect: '',
+      idempotency: '',
+      risk: '',
+      service: '',
+      provider: multi.id,
+      query: '',
+    }),
+    'the same view encodes to two different strings'
+  )
+
+  // Unknown or stale parameters are ignored, not fatal — a shared link outliving a rename degrades
+  // to a wider view rather than to an error page.
+  const full = views.at(-1)
+  const encoded = selectors.encodeView(full)
+  assert.deepEqual(selectors.decodeView(`${encoded}&nonesuch=1`), full)
+  assert.deepEqual(selectors.decodeView('nonesuch=1'), empty)
+  assert.deepEqual(
+    selectors.decodeView('sort=nonesuch'),
+    empty,
+    'an unrecognised sort order survives parsing, so a stale link sorts by nothing'
+  )
+  assert.deepEqual(
+    selectors.decodeView('defect=nonesuch'),
+    empty,
+    'an unrecognised defect filter survives parsing, so a stale link hides every operation'
+  )
+
+  // A filter value the catalogue no longer offers is dropped against the catalogue itself, which is
+  // the half of "ignored, not fatal" that a pure parse cannot decide: a renamed connector must widen
+  // the view, not empty it.
+  const stale = { ...empty, provider: 'nonesuch', service: 'nonesuch', risk: 'nonesuch' }
+  assert.deepEqual(
+    selectors.narrowView(stale, providers),
+    empty,
+    'a link naming a connector, service or risk the catalogue no longer publishes filters everything away'
+  )
+
+  // A service its connector does not publish is dropped, and the connector is kept.
+  const single = providers.find((provider) => namedServices(provider).length === 0)
+  assert.ok(single, 'every connector publishes a named service; this case is untested')
+  assert.deepEqual(
+    selectors.narrowView({ ...empty, provider: single.id, service: sample.service }, providers),
+    { ...empty, provider: single.id },
+    'a service the chosen connector does not publish survives and empties the list'
+  )
+
+  // What the catalogue does publish is left exactly alone.
+  assert.deepEqual(selectors.narrowView(full, providers), full)
+})
+
+test('the operation list sorts by catalogue order, by id, and by declared risk', () => {
+  const ops = operations(catalog())
+  const ids = ops.map((operation) => operation.id)
+
+  // Catalogue order is the default and it is meaningful — it is the order the module emits.
+  assert.deepEqual(
+    selectors.sortOperations(ops, 'catalog').map((operation) => operation.id),
+    ids,
+    'the default sort reorders the catalogue'
+  )
+  assert.deepEqual(ops.map((operation) => operation.id), ids, 'sorting mutated its input')
+
+  assert.deepEqual(
+    selectors.sortOperations(ops, 'id').map((operation) => operation.id),
+    [...ids].sort(),
+    'sorting by id does not order by id'
+  )
+
+  // The one ordering the catalogue cannot supply. JSON carries no notion of which tier is worse, and
+  // alphabetical would put the worst tier in the middle, which is wrong without ever looking wrong.
+  assert.deepEqual(selectors.RISK_ORDER, ['low', 'medium', 'high', 'destructive'])
+
+  const tiers = [...new Set(ops.map((operation) => operation.risk))]
+  for (const tier of tiers) {
+    assert.ok(
+      selectors.RISK_ORDER.includes(tier),
+      `the catalogue publishes the risk tier \`${tier}\` and the declared order does not rank it`
+    )
+  }
+
+  const byRisk = selectors.sortOperations(ops, 'risk')
+  assert.equal(byRisk.length, ops.length, 'sorting by risk drops or duplicates operations')
+
+  const ranks = byRisk.map((operation) => selectors.RISK_ORDER.indexOf(operation.risk))
+  assert.deepEqual(ranks, [...ranks].sort((a, b) => a - b), 'sorting by risk is not in rank order')
+
+  // Catalogue order is the tiebreaker inside a tier, so the default sort is never thrown away — it
+  // is only grouped.
+  for (const tier of tiers) {
+    const same = (operation) => operation.risk === tier
+    assert.deepEqual(
+      byRisk.filter(same).map((operation) => operation.id),
+      ops.filter(same).map((operation) => operation.id),
+      `sorting by risk reorders within \`${tier}\`, losing catalogue order as the tiebreaker`
+    )
+  }
+
+  // Every sort the URL can name is one the comparator answers.
+  for (const sort of selectors.SORTS) {
+    assert.equal(
+      selectors.sortOperations(ops, sort).length,
+      ops.length,
+      `the sort \`${sort}\` is offered in the URL and not implemented`
+    )
+  }
+})
+
+test('changing a filter replaces the URL rather than pushing a history entry', () => {
+  // C-102, and the reason it is asserted on the source: the failure is invisible on the page. A
+  // pushed entry per keystroke means the back button walks back through a search instead of leaving
+  // the explorer, and nothing about the rendered HTML shows it.
+  const list = readFileSync(
+    path.join(webRoot, '.vitepress', 'theme', 'components', 'OperationList.vue'),
+    'utf-8'
+  )
+
+  assert.match(
+    list,
+    /replaceState/,
+    'the operation list no longer replaces the URL when a filter changes'
+  )
+  assert.doesNotMatch(
+    list,
+    /pushState|router\.go\(/,
+    'the operation list pushes a history entry for a filter change, so the back button walks back through every keystroke of a search'
+  )
+})
+
 test('the explorer shows the services a connector publishes, and never the reserved one', () => {
   const document = catalog()
   const explorer = page('explorer.html')
