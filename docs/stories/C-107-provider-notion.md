@@ -2,12 +2,12 @@
 id: C-107
 title: Ship the Notion connector
 pillar: Spec
-status: ready
+status: in-progress
 priority: 4
 design:
 epic: provider-fleet-2
 areas: [providers]
-note: "blocked on C-55, now measured rather than predicted — a const-pinned Notion-Version emits as a caller-overridable parameter with the const dropped, and Notion REJECTS every request without the header"
+note: "unblocked by C-55: Notion-Version is pinned in const_headers and emits as a literal, not as a caller-supplied argument"
 ---
 
 # Ship the Notion connector
@@ -16,12 +16,12 @@ note: "blocked on C-55, now measured rather than predicted — a const-pinned No
 Pages, databases and search — and the connector that makes a `ready` story unavoidable.
 
 ## Acceptance
-- [ ] A curated operation set: retrieve a page, query a database, create a page, search.
-- [ ] **`Notion-Version` is sent on every request.** Notion rejects a request without it, so this is
+- [x] A curated operation set: retrieve a page, query a database, create a page, search.
+- [x] **`Notion-Version` is sent on every request.** Notion rejects a request without it, so this is
       not a nicety — it is the connector working at all.
-- [ ] Auth: a bearer integration token.
-- [ ] A `[[config]]` surface and a `verify` operation.
-- [ ] A per-provider contract test asserting the version header reaches every emitted operation.
+- [x] Auth: a bearer integration token.
+- [x] A `[[config]]` surface and a `verify` operation.
+- [x] A per-provider contract test asserting the version header reaches every emitted operation.
 
 ## Progress
 - **2026-07-30 — attempted, blocked on C-55 at the emitter. Nothing shipped, deliberately.** The
@@ -146,3 +146,43 @@ repo before. Use a self-evidently fake `help` string and no `example`.
 - **Unblocked.** C-55 landed `const_headers`, so `Notion-Version` is declarable as a literal.
   GitHub is the worked example in `providers/github.toml`. The curation recorded above is unchanged,
   so the re-dispatch is transcription rather than re-derivation.
+
+- **2026-07-30 — shipped.** `providers/notion.toml` plus its four per-provider artifact sets, and
+  `crates/connector-flux/tests/notion_connector.rs` (9 tests). The curation table above was applied
+  unchanged: 5 operations, `verify = "notion-user-me"`, one `[[config]]` field, no `example` on it.
+- **The version header emits as a literal in all five operations**, which was the whole reason this
+  story waited. `const_headers = { "Notion-Version" = "2022-06-28" }` as an *inline* table at
+  provider level; the loader distributes it onto every operation. Measured in `connectors/notion.flux`:
+
+  ```flux
+  op notion-page-get(page_id: String) -> Any
+    …
+    Notion_Version = "2022-06-28"
+    response = http.request(headers: { "Notion-Version": Notion_Version }, method: "GET", url)
+  ```
+
+  The signature carries no version argument, which is the half the first attempt could not achieve.
+  `the_version_header_reaches_every_emitted_operation` asserts both halves against the emitted text,
+  and `every_operation_carries_the_version_in_const_headers` asserts the IR side so a dropped table
+  fails with a message naming the mechanism.
+- **`notion-page-create` writes into a *page* parent, not a database parent.** The curation excluded
+  the tenant-keyed `properties` object; under a page parent the one property is `title` and its shape
+  is fixed, so that is the expressible half. Body is `parent.page_id` (a `wire` path, emitting
+  `payload = { parent: { page_id: parent_page_id }, properties: { title } }`) and `title` as a
+  rich-text array — `List<Any>` in the signature, the same honest projection `openai.messages` uses.
+  The created page has a title and no content, since `children` is part of the excluded block model.
+- **`notion-database-query` ships with no body fields at all** — `filter`, `sorts`, `start_cursor`
+  and `page_size` are all excluded, so it emits a bodiless POST. That is also what keeps it correct
+  under C-56: an empty body is what Notion expects for an unfiltered query, whereas `{"filter": null}`
+  is a 400.
+- The two POST reads are declared `medium`/`non_idempotent` as recorded, and **the fidelity loss is in
+  the connector's header comment** rather than absorbed silently, per the instruction above.
+- Gate: `build --provider notion` wrote 8 artifacts; `diff --provider notion` reports
+  `8 artifacts up to date (1 provider checked)`; `cargo build --workspace`, `clippy -D warnings` and
+  `fmt --all --check` are clean. `cargo test --workspace --no-fail-fast` leaves **exactly the eight
+  whole-catalogue tests red** that AGENTS.md tabulates for a new provider, across the same five
+  binaries, and nothing else. Not silenced — the coordinator's full build resolves them.
+- **Board not regenerated** and no whole-catalogue artifact touched — both coordinator-owned.
+  `status` is `in-progress` here and needs `/track:done` plus `/track:board` at integration.
+- Branch is **`impl/C-107-v2`**, not `impl/C-107`: the latter already existed from the parked attempt
+  and is fully merged into `main`. It was left untouched rather than deleted or repointed.
