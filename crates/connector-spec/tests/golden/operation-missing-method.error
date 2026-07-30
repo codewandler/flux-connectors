@@ -1,0 +1,5 @@
+providers/operation-missing-method.toml: TOML parse error at line 6, column 1
+  |
+6 | [[operations]]
+  | ^^^^^^^^^^^^^^
+missing field `method`

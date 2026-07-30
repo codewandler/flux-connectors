@@ -1,0 +1,2 @@
+providers/duplicate-operation-id.toml is not a valid connector definition:
+  - operation "zendesk.ticket.update" is declared more than once; the op id is the public name callers and models use, so it must be unique

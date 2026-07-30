@@ -1,0 +1,4 @@
+# Neither a spec to ingest nor operations to emit.
+id = "zendesk"
+vendor = "Zendesk"
+base_url = "https://acme.zendesk.com"

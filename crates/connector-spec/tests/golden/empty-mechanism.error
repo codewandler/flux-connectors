@@ -1,0 +1,2 @@
+providers/empty-mechanism.toml is not a valid connector definition:
+  - operation "zendesk.test": auth mechanism 0 names no credentials. "No auth" is written as an empty alternatives list (`auth = []`), never as a list holding an empty mechanism — an empty mechanism is always satisfiable, so it would disable auth for every alternative beside it

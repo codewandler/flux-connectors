@@ -1,0 +1,16 @@
+# `basic` sends base64(<user>:<secret>). With no user half the request authenticates as nobody.
+id = "zendesk"
+base_url = "https://acme.zendesk.com"
+
+[[auth]]
+name = "zendesk.api_token"
+scheme = "basic"
+env = ["ZENDESK_API_TOKEN"]
+
+[[operations]]
+id = "zendesk.test"
+method = "GET"
+path = "/api/v2/users/me.json"
+risk = "low"
+idempotency = "idempotent"
+auth = [{ credentials = ["zendesk.api_token"] }]
