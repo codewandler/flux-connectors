@@ -7,6 +7,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The published site rendered unstyled.** `web/.vitepress/config.mts` had been set to
+  `base = '/'` on the strength of the committed `web/public/CNAME`, but GitHub never accepted that
+  custom domain — the Pages API still reports `"cname": null` and serves
+  `https://codewandler.github.io/flux-connectors/`, so every bundled asset resolved a level too high
+  and 404'd. Restored the project-pages prefix.
+
+  The test that was supposed to guard this asserted the aspiration (`base === '/'`, CNAME contents)
+  rather than anything falsifiable, so it locked the breakage in instead of catching it. It now
+  asserts the built HTML's own asset URLs sit under the deployed base, and was checked to fail when
+  the base is wrong.
+
 ## [0.4.0] — 2026-07-30
 
 ### Added

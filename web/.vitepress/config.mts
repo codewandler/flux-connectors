@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitepress'
 
 const repo = 'https://github.com/codewandler/flux-connectors'
-const base = '/'
+const base = '/flux-connectors/'
 
 export default defineConfig({
   lang: 'en-US',
@@ -10,8 +10,17 @@ export default defineConfig({
 
   head: [['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}brand/icon.svg` }]],
 
-  // The committed CNAME publishes this site at flux.codewandler.org, so assets and specification
-  // URLs resolve from the origin root rather than from a GitHub project-pages prefix.
+  // This must match where GitHub actually serves the site, which is
+  // https://codewandler.github.io/flux-connectors/ — every asset URL and root-relative link resolves
+  // against it, so a wrong prefix 404s the stylesheet and the page renders unstyled.
+  //
+  // `web/public/CNAME` names flux.codewandler.org and this was briefly set to '/' to match. That was
+  // premature: the Pages API still reports `"cname": null` and serves the project-pages URL, and
+  // flux.codewandler.org resolves to 35.159.24.21, which is not one of GitHub's Pages addresses
+  // (185.199.108-111.153). So the custom domain is not live, and '/' 404s every asset.
+  //
+  // Flip this to '/' **only** once `gh api repos/codewandler/flux-connectors/pages` reports the
+  // cname — not when the CNAME file lands, which is what went wrong.
   base,
 
   cleanUrls: true,
@@ -35,7 +44,7 @@ export default defineConfig({
     logo: { src: '/brand/icon.svg', alt: '' },
     nav: [
       { text: 'Connectors', link: '/explorer' },
-      { text: 'v0.1.0', link: `${repo}/releases` },
+      { text: 'v0.4.0', link: `${repo}/releases` },
     ],
 
     sidebar: [

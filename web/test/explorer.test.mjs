@@ -271,11 +271,30 @@ test('planned network capabilities are clearly non-callable everywhere they appe
   }
 })
 
-test('the custom domain serves the catalogue and versioned specs from the origin root', () => {
-  assert.equal(readFileSync(path.join(webRoot, 'public', 'CNAME'), 'utf-8').trim(), 'flux.codewandler.org')
+// A previous version of this test asserted `base === '/'` because `public/CNAME` names a custom
+// domain. That is exactly the reasoning that shipped an unstyled site: a committed CNAME is a
+// *request* for a custom domain, not evidence one is serving. GitHub never accepted it — the Pages
+// API reports `"cname": null` and still serves the project-pages URL — so every asset 404'd.
+//
+// So this asserts the one thing a file can actually prove: that the base the site is built with and
+// the base its own emitted HTML uses are the same string, and that it is the project-pages prefix
+// the deployment is known to serve from. Whoever moves the site to the custom domain flips both
+// halves here, and should confirm the move first with
+// `gh api repos/codewandler/flux-connectors/pages --jq .cname`.
+test('the site is built for the path GitHub Pages actually serves it from', () => {
   const config = readFileSync(path.join(webRoot, '.vitepress', 'config.mts'), 'utf-8')
-  assert.match(config, /const base = '\/'/)
-  assert.doesNotMatch(config, /const base = '\/flux-connectors\/'/)
+  assert.match(config, /const base = '\/flux-connectors\/'/)
+
+  // The built HTML is the artifact that gets deployed, so it is what must carry the prefix.
+  const home = page('index.html')
+  const assets = [...home.matchAll(/(?:href|src)="(\/[^"]*\/assets\/[^"]+)"/g)].map((m) => m[1])
+  assert.ok(assets.length > 0, 'the built home page links no bundled assets; this would pass vacuously')
+  for (const url of assets) {
+    assert.ok(
+      url.startsWith('/flux-connectors/assets/'),
+      `\`${url}\` is not under the deployed base, so it 404s and the page renders unstyled`
+    )
+  }
 })
 
 test('an operation that owns a defect says so wherever it appears', () => {
