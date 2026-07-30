@@ -1,0 +1,17 @@
+[package]
+name = "connector-spec"
+description = "The connector IR and its two front-ends: provider TOML and OpenAPI ingest. Performs no network IO."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+sha2.workspace = true
+indexmap.workspace = true

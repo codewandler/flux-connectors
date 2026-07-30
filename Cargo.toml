@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/connector-spec",
+    "crates/connector-flux",
+    "crates/connector-cli",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/codewandler/flux-connectors"
+homepage = "https://github.com/codewandler/flux-connectors"
+rust-version = "1.87"
+
+[workspace.dependencies]
+# Internal crates.
+connector-spec = { version = "0.1.0", path = "crates/connector-spec" }
+connector-flux = { version = "0.1.0", path = "crates/connector-flux" }
+
+# Flux-Lang: the emit target. Pinned deliberately — bumping this is a reviewed change, and
+# `flux-connectors check` verifies generated artifacts still match the pin (C-14).
+flux-lang = { package = "codewandler-flux-lang", version = "0.37" }
+
+# Shared third-party.
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+sha2 = "0.10"
+indexmap = { version = "2", features = ["serde"] }

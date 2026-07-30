@@ -1,0 +1,21 @@
+[package]
+name = "connector-cli"
+description = "The `flux-connectors` binary: fetch, check, build, diff, install."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "flux-connectors"
+path = "src/main.rs"
+
+[dependencies]
+connector-spec.workspace = true
+connector-flux.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
