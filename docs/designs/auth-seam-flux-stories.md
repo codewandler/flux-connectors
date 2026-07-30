@@ -26,7 +26,10 @@
   **flux's own `AuthMethod.purpose` field is NOT renamed** — our `credential` name resolves to it.
   Every flux identifier (`AuthMethod.purpose`, `auth_purpose`, `resolve_purpose`, the
   `plugin:<name>:<purpose>` store key) is quoted verbatim below and must stay that way.
-- **Layer facts these stories rely on** (verified in flux at `bcfab0ad` + working tree):
+- **Line numbers describe flux at `v0.38.0`.** The review began at `bcfab0ad` + working tree; flux
+  cut `v0.38.0` mid-review, and every anchor was re-verified against the released tree afterwards.
+  Re-grep by symbol if a number does not land.
+- **Layer facts these stories rely on** (verified in flux at `v0.38.0`):
   `flux-plugin-protocol` is L0 and `flux-web` is L5 (`crates/flux-codegate/src/lib.rs:36`, `:51`);
   flux-web already reaches `AuthScheme`/`AuthMethod` today via its existing `flux-plugin` dep, since
   `crates/flux-plugin/src/lib.rs:35` is `pub use flux_plugin_protocol::*;`.
@@ -89,7 +92,7 @@ note: "prerequisite for the outbound $auth marker — today the Basic base64 com
 Turn credential composition into one shared, pure, public function so a second consumer (flux-web's
 outbound `$auth` marker) cannot fork a second base64 implementation. Today the logic is private and
 welded to the plugin host: `AuthInjection` is a private enum (`crates/flux-plugin/src/host.rs:755`),
-`resolve_auth` is a private method on `SystemHostCaps` (`:644`), and the actual composition is inline
+`resolve_auth` is a private method on `SystemHostCaps` (`:645`), and the actual composition is inline
 inside one arm of `HostCapabilities::handle` — Bearer at `:1248-1252`, the Basic base64 at
 `:1253-1261`, custom Header at `:1262-1264`, and the `Query` URL mutation earlier at `:1229-1231`.
 
@@ -259,7 +262,7 @@ before any credential value is read from the environment or the credential store
 - Precedent story: `docs/stories/C-76-http-request-secret-exfil.md`.
 - The plugin host's analogous refusal is
   `format!("no auth method declared for purpose `{p}`")` at
-  `crates/flux-plugin/src/host.rs:657` — that is flux's existing string and stays verbatim on the
+  `crates/flux-plugin/src/host.rs:656` — that is flux's existing string and stays verbatim on the
   plugin path. The `$auth` path should say **credential**, since that is the word its caller used.
 - An empty resolved credential must be treated as *absent*, not as a valid empty token.
 ```
@@ -345,7 +348,7 @@ happily allows any public host.
 - [ ] Each declared credential carries an `http_hosts` allowlist; a request whose guarded URL host
       matches none of them is refused **before dispatch and before the credential is resolved**.
 - [ ] The check uses **one shared matcher**, not a third copy. `host_matches` exists twice today and
-      is private both times — `crates/flux-plugin/src/host.rs:1840` and
+      is private both times — `crates/flux-plugin/src/host.rs:1898` and
       `crates/flux-system/src/net.rs:409`. Make the **flux-system** one public (flux-web already
       depends on flux-system) and have `flux-plugin` call it; delete its private copy.
 - [ ] Wildcard semantics match the plugin path exactly, including `*` and leading-label wildcards
@@ -512,7 +515,7 @@ default.
 ## Why it is not a small change
 - **flux has no file-based capability manifest today.** A `PluginManifest` is obtained by spawning
   the plugin binary and sending a `manifest` request frame
-  (`crates/flux-plugin/src/host/loading.rs:186-188`). Capabilities are Rust literals inside the
+  (`crates/flux-plugin/src/host/loading.rs:187-189`). Capabilities are Rust literals inside the
   binary — e.g. `plugins/zendesk/src/main.rs:131`, `:135`.
 - **What is on disk carries no capabilities.** `~/.flux/plugins`
   (`crates/flux-cli/src/execution.rs:544-546`) holds a `PluginDescriptor`
@@ -602,7 +605,7 @@ the thing it is named after, and nothing can validate it. It is explicitly rejec
 - [ ] **A Basic half can be declared secret-bearing, and is then redactor-registered.** Today
       `user_env` is documented as "config (not a gated secret)"
       (`crates/flux-plugin-protocol/src/lib.rs:433-435`) and `resolve_user`
-      (`crates/flux-plugin/src/host.rs:630-640`) accordingly **never calls `register_secret`**. For
+      (`crates/flux-plugin/src/host.rs:631-641`) accordingly **never calls `register_secret`**. For
       **freshdesk the user half *is* the API key**, so mapping it onto today's model routes a secret
       through the non-secret config path and leaves it unregistered with the redactor.
 - [ ] Test: `secret_bearing_basic_user_half_is_registered_with_the_redactor` — a method declaring

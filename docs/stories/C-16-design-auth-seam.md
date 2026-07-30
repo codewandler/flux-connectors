@@ -33,16 +33,19 @@ and blocks milestone 1's finish.
       → Every draft names one (F-8/C-273 excepted and explicitly justified: a decision story with no
       behavioral change). Not tickable until the stories are actually filed.
 - [x] This repo records which flux release the seam is expected in, so `C-15` knows what to wait for.
-      → See Notes: **unscheduled** as of flux `v0.37.0`.
+      → See Notes: **unscheduled** as of flux `v0.38.0`.
 
 ## Progress
 - **2026-07-30 — design hardened against flux source; handoff drafts written. Filing on flux's board
   is still outstanding.**
-- Verified every claim in the design against `/home/timo/projects/flux` at commit `bcfab0ad` plus
-  that checkout's uncommitted working-tree changes (read-only; nothing written there). Four cited
-  files were dirty at read time — `flux-cli/src/execution.rs`, `flux-codegate/src/lib.rs`,
-  `flux-plugin-protocol/src/lib.rs`, `flux-plugin/src/host.rs` — so their line numbers track the
-  working tree. Re-grep by symbol if a line number does not land.
+- Verified every claim in the design against `/home/timo/projects/flux`, read-only; nothing was
+  written there. The reading began at `bcfab0ad` + that checkout's uncommitted changes; **flux then
+  cut `v0.38.0` mid-review**, committing exactly those changes. Every anchor was re-verified against
+  the released tree afterwards, so **all cited line numbers describe flux `v0.38.0`**. Five moved and
+  were corrected: `resolve_user` `:630`→`:631`, `resolve_auth` `:644`→`:645`, the "no auth method
+  declared for purpose" error `:657`→`:656`, `host_matches` `:1840`→`:1898` (all
+  `flux-plugin/src/host.rs`), and `PluginHost::manifest` `:186`→`:187`
+  (`flux-plugin/src/host/loading.rs`). Re-grep by symbol if a number does not land.
 - **Confirmed as drafted:** the `$secret` marker is whole-value, headers-only, no
   prefix/encode (`flux-web/src/http.rs:234`, `:275`, sole call site `:171`); the four `AuthScheme`
   variants and `AuthMethod`'s `purpose`/`env`/`user_env`/`scheme`/`oauth2`
@@ -52,7 +55,7 @@ and blocks milestone 1's finish.
   (`flux-web/src/lib.rs:75`, `allowed_secrets` at `:97`).
 - **Corrected — three things the draft got wrong or oversold:**
   1. *"Reuse the plugin host's injection logic."* Only the **types** are reusable. `AuthInjection`
-     is private (`flux-plugin/src/host.rs:755`), `resolve_auth` is a private method (`:644`), and
+     is private (`flux-plugin/src/host.rs:755`), `resolve_auth` is a private method (`:645`), and
      the Basic base64 is inline inside a `match` arm (`:1253-1261`). Reuse requires extracting a
      pure L0 function first — now draft **F-1 / C-266**.
   2. *"flux-web may depend on flux-plugin-protocol."* True but beside the point: flux-web **already
@@ -62,7 +65,7 @@ and blocks milestone 1's finish.
      design no longer depends on them; credentials travel in flux's operator config instead.
 - **Open question resolved with evidence.** flux has **no file-based capability manifest of any
   kind**: a `PluginManifest` is fetched by spawning the binary and sending a `manifest` frame
-  (`flux-plugin/src/host/loading.rs:186-188`), and what is on disk in `~/.flux/plugins`
+  (`flux-plugin/src/host/loading.rs:187-189`), and what is on disk in `~/.flux/plugins`
   (`flux-cli/src/execution.rs:544-546`) is a `PluginDescriptor` (`loading.rs:693-726`) carrying
   transport + `sha256` only, never capabilities. So `~/.flux/connectors/` would be flux's first
   capability grant with no binary-hash anchor — `spawn_verified`'s drift refusal
@@ -117,7 +120,7 @@ and blocks milestone 1's finish.
   - **Three of the four presets do not round-trip exactly — the headline finding.**
     `Bearer` and `Header{name}` are exact (`flux-plugin/src/host.rs:1248-1252`, `:1262-1264`).
     **`Basic` fails twice:** flux's user half is `user_env` resolved **verbatim** (`resolve_user`,
-    `flux-plugin/src/host.rs:630-640`), so it is a join of *a bare env value* and a secret, not a
+    `flux-plugin/src/host.rs:631-641`), so it is a join of *a bare env value* and a secret, not a
     general `basic_join` — zendesk's `{EMAIL}/token` and freshdesk's literal `X` are inexpressible;
     and flux **assumes the user half is not a secret**
     (`flux-plugin-protocol/src/lib.rs:433-435`, and `resolve_user` never calls `register_secret`),
@@ -183,10 +186,11 @@ and blocks milestone 1's finish.
 
 ### Which flux release is the seam expected in? — **UNSCHEDULED** (for `C-15`)
 
-- **Answer: unscheduled.** As of flux **`v0.37.0`** (`../flux/Cargo.toml:49`) there is **no story on
-  flux's board** for the outbound `$auth` marker, **no roadmap entry**, and nothing in flux's
-  `[Unreleased]` CHANGELOG section. `grep -rn '\$auth' ../flux/docs/` returns only the *plugin*
-  `auth_purpose` mechanism, which is a different path.
+- **Answer: unscheduled.** flux cut **`v0.38.0`** during this session (`../flux/Cargo.toml:49`, tag
+  `v0.38.0`) and there is still **no story on flux's board** for the outbound `$auth` marker, **no
+  roadmap entry**, and nothing in flux's `[Unreleased]` CHANGELOG section.
+  `grep -rn '\$auth' ../flux/docs/` returns only the *plugin* `auth_purpose` mechanism, which is a
+  different path. So the seam did not make 0.38.0 and nothing schedules it for 0.39.0.
 - **`C-15` must not plan against a date.** flux's `docs/roadmap.md` "Next" section carries roughly
   ten epics that are already in-progress or designed and filed ahead of this. Treat the live
   end-to-end run as gated on an event (the seam merging in flux), not on a version number.

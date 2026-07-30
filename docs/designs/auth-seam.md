@@ -12,12 +12,18 @@ see §9, which reports **three preset round-trip failures**)
 
 ### Provenance of the citations in this document
 
-Every `path:line` below was read in `/home/timo/projects/flux` at commit **`bcfab0ad`** *plus that
-checkout's uncommitted working-tree changes*. Four of the cited files were dirty at read time —
-`crates/flux-cli/src/execution.rs`, `crates/flux-codegate/src/lib.rs`,
-`crates/flux-plugin-protocol/src/lib.rs`, `crates/flux-plugin/src/host.rs` — so their line numbers
-track the working tree, not `bcfab0ad`. Symbol names are stable; re-grep rather than trusting a line
-number if it does not land.
+Every `path:line` below was read in `/home/timo/projects/flux`. The reading began at commit
+`bcfab0ad` plus that checkout's uncommitted working-tree changes; **flux then cut `v0.38.0` mid-review**,
+committing exactly those changes. **Every anchor was therefore re-verified afterwards against
+`v0.38.0`, and the line numbers below describe that tree.** Five moved in the cut and are corrected
+here: `resolve_user` `:630`→`:631`, `resolve_auth` `:644`→`:645`, the
+"no auth method declared for purpose" error `:657`→`:656`, `host_matches` `:1840`→`:1898` (all
+`crates/flux-plugin/src/host.rs`), and `PluginHost::manifest` `:186`→`:187`
+(`crates/flux-plugin/src/host/loading.rs`). Every other citation was unchanged.
+
+Symbol names are stable and line numbers are not; re-grep by symbol rather than trusting a number if
+it does not land. The seam is still unfiled on flux's board after the cut — see the C-16 story's
+Notes.
 
 ### Naming — do not reuse "auth seam" on flux's board
 
@@ -166,7 +172,7 @@ header form (`:467`) already exist.
 connector path could use "the same injection logic the plugin host uses". It cannot, as written:
 
 - `AuthInjection` is a **private** enum — `crates/flux-plugin/src/host.rs:755`, no `pub`.
-- `resolve_auth` is a private method on `SystemHostCaps` (`crates/flux-plugin/src/host.rs:644`),
+- `resolve_auth` is a private method on `SystemHostCaps` (`crates/flux-plugin/src/host.rs:645`),
   reached through the plugin's own manifest state (`self.auth`, `self.grants`).
 - The actual composition is inline inside one arm of a very large `match command` in
   `HostCapabilities::handle`: Bearer at `crates/flux-plugin/src/host.rs:1248-1252`, the Basic
@@ -243,7 +249,7 @@ Both behaviors have precedent in the `$secret` path and must be matched exactly:
   the single most important control in this design.
 
   **New constraint found:** flux-web has **no public host-pattern matcher**. `host_matches` exists
-  twice and is private both times — `crates/flux-plugin/src/host.rs:1840` and
+  twice and is private both times — `crates/flux-plugin/src/host.rs:1898` and
   `crates/flux-system/src/net.rs:409`. Writing a third copy inside flux-web is precisely the
   "second URL guard" flux's invariants forbid. The `http_hosts` story must therefore **make the
   flux-system copy public and have flux-plugin call it**, then use it from flux-web. flux-web
@@ -484,7 +490,7 @@ Checked one preset at a time against the code that actually composes the value.
 **Failure 1 (major) — `basic_join`'s user half is env-verbatim, so it cannot express a *join*.**
 The unified model's `basic_join { user_source }` treats the user half as a value produced by a
 source. flux's is `user_env` (`crates/flux-plugin-protocol/src/lib.rs:436`), resolved by
-`resolve_user` (`crates/flux-plugin/src/host.rs:630-640`), which returns the **first set env var
+`resolve_user` (`crates/flux-plugin/src/host.rs:631-641`), which returns the **first set env var
 verbatim** — no composition, no template. So the preset round-trips **only when the user half is a
 bare env value**, which is true for neither provider that needs Basic: zendesk needs
 `{EMAIL}/token`, freshdesk needs a literal `X` password. This is the same gap as §7.5, and stating
@@ -494,7 +500,7 @@ it as a round-trip failure is the sharper framing: **the `Basic` preset is not a
 **Failure 2 (security-relevant) — flux's Basic model assumes the user half is *not* a secret.**
 `user_env` is documented as "config (not a gated secret), so they resolve directly from declared env
 like an endpoint" (`crates/flux-plugin-protocol/src/lib.rs:433-435`), and `resolve_user`
-(`crates/flux-plugin/src/host.rs:630-640`) accordingly **never calls `register_secret`**. The
+(`crates/flux-plugin/src/host.rs:631-641`) accordingly **never calls `register_secret`**. The
 unified model's `basic_join { user_source }` carries no such assumption. For **freshdesk the user
 half *is* the API key** — so mapping freshdesk onto the preset as it stands puts the secret through
 the non-secret config path and leaves it unregistered with the redactor. F-9 / C-274 must therefore
@@ -652,7 +658,7 @@ depends on the answer.
 
 2. **The sharper fact the draft missed: flux has no file-based *capability manifest* at all.** A
    `PluginManifest` is obtained by **spawning the plugin binary and sending a `manifest` request
-   frame** — `PluginHost::manifest`, `crates/flux-plugin/src/host/loading.rs:186-188`. What lives on
+   frame** — `PluginHost::manifest`, `crates/flux-plugin/src/host/loading.rs:187-189`. What lives on
    disk in `~/.flux/plugins` (`crates/flux-cli/src/execution.rs:544-546`) is a `PluginDescriptor`
    (`crates/flux-plugin/src/host/loading.rs:693-726`): `program`, `args`, `pinned`, `version`,
    `sha256`, `source`, `previous`, `git_url`, `git_commit` — **transport and integrity only, never
@@ -685,7 +691,7 @@ flux story (**F-8 / C-273** in the handoff) and this repo does not wait on it.
   repo's work (spec crate, codegen, golden tests) fully unblocked — none of it needs the seam until
   the live end-to-end run in C-15.
 - **No flux release is scheduled for this.** See the C-16 story's `## Notes`; the seam is
-  **unscheduled** as of flux `v0.37.0`.
+  **unscheduled** as of flux `v0.38.0`.
 - **Manifest trust.** If manifests are ever adopted, installing one is a trust decision equal to
   installing a plugin, and it needs the integrity anchor described above.
 - **Token refresh for OAuth2 connectors** is out of scope for the first cut; the schema can name
