@@ -62,7 +62,6 @@ _A connector's operations are currently legible only by reading `providers/<name
 
 ### Provider Fleet
 - [C-69 — Ship the Google Workspace connector](C-69-provider-google.md) · Spec · the multi-service showcase: gmail · calendar · drive under one provider
-- [C-71 — Ship the Asana connector](C-71-provider-asana.md) · Spec · bearer · every body and response wrapped in `data`
 - [C-75 — Ship the Airtable connector](C-75-provider-airtable.md) · Spec · bearer · `fields` envelope · base and table in the path
 - [C-76 — Ship the OpenRouter connector](C-76-provider-openrouter.md) · Spec · bearer · OpenAI-compatible · charter-named
 - [C-77 — Ship the Sentry connector](C-77-provider-sentry.md) · Spec · bearer · trailing slashes are load-bearing
@@ -140,6 +139,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-53 — Ship the Slack connector](C-53-provider-slack.md) · Spec · bearer · POST+JSON throughout, which is what avoids the query gap
 - [C-54 — Derive the shipped-provider lists instead of hand-maintaining seven of them](C-54-derive-shipped-lists.md) · Build · caused a REWORK in the C-51/52/53 wave; five lists and two counts in four crates
 - [C-70 — Ship the Jira connector](C-70-provider-jira.md) · Spec · basic email+token · tenant URL, like zendesk
+- [C-71 — Ship the Asana connector](C-71-provider-asana.md) · Spec · bearer · every body and response wrapped in `data`
 - [C-72 — Ship the HubSpot connector](C-72-provider-hubspot.md) · Spec · bearer private-app token · `properties` envelope
 - [C-73 — Ship the Intercom connector](C-73-provider-intercom.md) · Spec · bearer · charter-named · version header is optional
 - [C-74 — Ship the Shopify connector](C-74-provider-shopify.md) · Spec · custom header credential · API version lives in the path

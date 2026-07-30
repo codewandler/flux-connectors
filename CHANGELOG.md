@@ -23,6 +23,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   transitions list and transition. v2 rather than v3 because v3's comment body is Atlassian Document
   Format — an array of block nodes — and `wire` paths address nested records only, so ADF is
   inexpressible rather than merely awkward. Pinned by a test, so a bulk upgrade to v3 fails loudly.
+- **C-71** — the **Asana** connector: task get, create, update, a story (comment) and project get.
+  Every request body is wrapped in `{"data": {…}}` and every response records its payload at `/data`,
+  declared through `wire` paths — the first real-vendor exercise of nested bodies, and it needed no
+  emitter change.
 - **C-72** — the **HubSpot** connector: contact, company and deal reads plus contact create and
   update, with the `properties` envelope declared through `wire` paths. HubSpot accepts a flat body
   with a 2xx and stores nothing, so this is a silent failure mode rather than a loud one.
