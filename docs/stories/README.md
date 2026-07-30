@@ -48,6 +48,12 @@ _A connector's operations are currently legible only by reading `providers/<name
 - [C-31 — Render a provider markdown page from the IR](C-31-render-provider-page.md) · Codegen · also decides the tab dialect — hard to reverse once pages are committed
 - [C-32 — Emit a curl form for each operation](C-32-curl-tab.md) · Codegen
 
+### a public docs site with a provider & operation explorer
+_`codewandler/flux-connectors` is public as of v0.0.1, and right now the only way to find out what a_
+- [C-42 — Emit catalog.json for the public site](C-42-catalog-json.md) · Codegen · the site's data must be generated, never hand-maintained
+- [C-43 — Scaffold the VitePress site and deploy to GitHub Pages](C-43-vitepress-pages.md) · Surfaces · first Node toolchain in a Rust repo — keep it contained
+- [C-45 — Render Flux to SVG and PNG using flux's own highlighter](C-45-use-flux-highlighter.md) · Codegen · replaces a regex script that duplicates grammar flux already owns
+
 ### unified auth — one model for every provider's credentials
 _Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._
 - [C-19 — Model credentials as source x acquisition x placement](C-19-unified-credential-model.md) · Bridge · extends C-2's AuthMethod · the axis split that keeps auth from going combinatorial
@@ -79,6 +85,10 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 ### rendered provider documentation
 _A connector's operations are currently legible only by reading `providers/<name>.toml` or the_
 - [C-33 — Treat generated docs as a checked artifact](C-33-docs-are-a-checked-artifact.md) · Build
+
+### a public docs site with a provider & operation explorer
+_`codewandler/flux-connectors` is public as of v0.0.1, and right now the only way to find out what a_
+- [C-44 — Build the provider and operation explorer](C-44-operation-explorer.md) · Surfaces · the reason the site exists · needs C-42 and C-43
 
 ### unified auth — one model for every provider's credentials
 _Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._
