@@ -374,7 +374,10 @@ These failures are recorded decisions. Do not “fix” one without reading its 
   no form encoder and no percent-encoder a Flux *program* can call, so the emitter assembles the pairs
   with `fmt` and each value is interpolated verbatim. Half-encoding in emitted Flux would look correct
   and be wrong, and hand-rolling it out of `replace` chains is the connector-specific DSL this
-  repository refuses — so the fix is a flux-side encoder, alongside the structured-`query` handoff in
+  repository refuses — so the fix is a flux-side encoder. **The body half now exists in flux as L-101**
+  (`parse($record, as: "form")`), and it reaches this repository only when flux-lang publishes it,
+  because the pin is a crates.io version and must stay one. The *query* half is still open and is the
+  structured-`query` handoff in
   [docs/designs/query-encoding-flux-stories.md](docs/designs/query-encoding-flux-stories.md).
 - **Some operations are refused during emission.** Examples include a nested body path without a
   `wire` field, a dotted operation id, and an ambiguous free-form body — and, under
