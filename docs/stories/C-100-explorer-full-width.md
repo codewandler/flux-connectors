@@ -19,17 +19,18 @@ list are scannable instead of columnar.
 ## Acceptance
 - [x] `/explorer` renders across the full layout width. The prose pages are **unchanged** — the doc
       layout is right for paragraphs, and widening the overview would make it harder to read.
-- [~] The provider grid yields **three** columns at a desktop viewport, not two. **Four moved to
-      [C-103](C-103-explorer-information-density.md) by coordinator decision**, not dropped: a fourth
-      track at 1025px needs a minimum of 244px, and `.card__head` measures 273px min-content because
-      it does not wrap — measured independently at 273px by the reviewer and 274px by the
-      implementor. Reaching four therefore requires restructuring the card header, which is C-103's
-      work and was fenced away from this story. Requiring it here was a scoping error in the
-      dispatch, not a shortfall in the implementation. `minmax(320px, 1fr)` is retained; the
-      arithmetic is recorded in `CatalogExplorer.vue`.
+- [x] The provider grid yields **four** columns at a desktop viewport, not two. It was moved to
+      C-103 as unreachable, then reached here after the user lifted the card fence: the blocker was
+      never the grid but the 273–274px min-content of an unwrapping `.card__head`, which put a 314px
+      floor under a card. One `flex-wrap: wrap` removes the floor — the badge drops to its own line
+      on a narrow card instead of escaping the border — and the track minimum is **re-tuned from
+      320px to 240px**, which is the stated minimum. Measured: four 244px columns from 1440px up,
+      three from 1180, two from 768, one on a phone.
 - [x] The filter bar sits on **one row** at a desktop viewport rather than wrapping to two or three.
-- [~] Responsive down to a phone: the grid collapses to one column and the filter bar wraps, both
-      verified. Horizontal overflow splits into two distinct defects and they must not be conflated:
+- [x] Responsive down to a phone: the grid collapses to one column, the filter bar wraps, and
+      **nothing overflows horizontally** — 0px at every width measured from 390 to 2560. Getting
+      there meant two distinct defects, and the distinction is kept because it is the reason one of
+      them was nearly shipped:
       - **1280 and 1366px — introduced by this story, and fixed in it.** Widening to two ~424px
         columns pushed the hosts cell's unbreakable inline run off the page: 29px at 1280 and 8px at
         1366, against **0px at the merge base**, measured independently by the implementor and the
@@ -39,12 +40,13 @@ list are scannable instead of columnar.
         at every width from 768 up**, 1280 and 1366 included, and the hosts `<code>` no longer
         appears among the offenders at any width. The mechanism is pinned independently of the
         pixels by `a card fact holding several values can break between them`.
-      - **Phone — pre-existing and untouched.** Base and branch overflow *identically* (193px at
-        390px per the implementor; 83px at Chrome's ~485px headless floor per the reviewer — the
-        equality is the load-bearing part). Cause is `<ul class="list">` being a grid, so each
-        `OperationRow` needs `min-width: 0`. That file is C-103's. The post-fix sweep confirms the
-        attribution: every offender left at 390px is an `OperationRow` element — `li.row`,
-        `.row__head`, the status badge — and not one is a card fact.
+      - **Phone — pre-existing, and now fixed here too.** This one predates the story: base and
+        branch overflowed *identically* (193px at 390px per the implementor; 83px at Chrome's ~485px
+        headless floor per the reviewer — the equality is what proved it was not ours). It was
+        deferred to C-103 on that basis, then fixed here once the user lifted the fence.
+        `<ul class="list">` is a grid, so every `OperationRow` was held open at its longest request
+        path; `min-width: 0` on `.row` lets the track shrink and `overflow-wrap` lets the path
+        break. **193px → 0px at 390px.**
 - [x] The page still has a usable in-page structure. `outline: [2, 2]` currently drives the right-hand
       outline; if the chosen layout drops it, the story says what replaces it — the two `<h2>` anchors
       (`#providers`, `#operations`) are linked from elsewhere and must keep working.
@@ -100,25 +102,55 @@ counts elements whose right edge sits outside `documentElement.clientWidth`.
 | 1920 | 1025 | 3 | 331 | 1 | **0** | – |
 | 2560 | 1025 | 3 | 331 | 1 | **0** | – |
 
+**Final sweep**, after the three min-content fixes, same rig. The `filter rows` column in the sweep
+above was measuring the wrong thing — it counted distinct bottom edges across *both* `.filters` bars
+on the page, the Flux core one included, so it never read below 2; scoped to the operation list's own
+bar, the numbers are:
+
+| viewport | content | cols | card | filter rows | overflow |
+|---|---|---|---|---|---|
+| 390 | 327 | 1 | 327 | 3 | **0** (was 193) |
+| 768 | 689 | 2 | 336.5 | 2 | 0 |
+| 960 | 545 | 2 | 264.5 | 2 | 0 |
+| 1180 | 765 | 3 | 244.3 | 2 | 0 |
+| 1280 | 865 | 3 | 277.7 | **1** (was 2) | 0 |
+| 1366 | 951 | 3 | 306.3 | **1** (was 2) | 0 |
+| 1440 | 1025 | **4** (was 3) | 244.3 | **1** (was 2) | 0 |
+| 1920 | 1025 | **4** (was 3) | 244.3 | **1** (was 2) | 0 |
+| 2560 | 1025 | **4** (was 3) | 244.3 | **1** (was 2) | 0 |
+
 Two things the sweep settles beyond the fix itself. The content column tops out at 1025px and does
 not grow past 1440 — the explorer is bounded by `--vp-layout-max-width`, not by the viewport, so
 three columns is the ceiling on any monitor and the four-column question really is a card question.
 And the filter bar reaches one row only at 1440 and above; at 1280 and 1366 it still takes two.
 
-**The grid minimum is kept at 320px, and that is why the four-column item is unticked.** `auto-fit`
-fits `floor((width + gap) / (min + gap))` tracks, so a fourth column on 1025px needs a minimum of
-244px or less. A card is `min` less 40px of padding, and the widest card header — vendor name, id
-and status badge on one unwrapped flex line — has a min-content width of **274px**, so a card needs
-**314px** before the badge escapes its own border. At a 240px minimum, twelve of the sixteen cards
-overflow, visibly, into their neighbour. Four columns is therefore a **card** change and not a grid
-change: one `flex-wrap: wrap` on `.card__head` in `ProviderCard.vue` unlocks it, and that file is
-C-103's. 320px is the smallest round number above the 314px floor.
+**Three items were deferred, then finished here, and they were all the same defect.** Four columns,
+the phone overflow and the filter bar were each handed to C-103 as somebody else's problem. They were
+not three problems. A flex or grid item's automatic minimum size is its **min-content**, so an
+element refuses to be narrower than its longest unbreakable run and pushes its container instead:
 
-**The phone item is unticked for a defect this story did not introduce.** At 390px the page
-overflows horizontally by 193px, identically before and after — `<ul class="list">` is a grid, so
-each `OperationRow` gets `min-width: auto` and a long unbreakable `<code>` request path (for example
-`/v0/{baseId}/{tableIdOrName}/{recordId}`) pushes the track past the viewport. The fix is
-`min-width: 0` on `.row`, in `OperationRow.vue` — also C-103's.
+| symptom | the run that set the floor | release |
+|---|---|---|
+| eight filters never shared a row, at any width | a `<select>`'s min-content is its **widest option** — "No operation-specific issue" is ~190px alone | `min-width: 0` + a flex basis |
+| a phone scrolled sideways by 193px | a grid item held every row open at its longest request path | `min-width: 0` on `.row`, `overflow-wrap` on the path |
+| the grid stuck at three columns however wide the page got | the card header's 274px min-content put a **314px floor** under a card | `flex-wrap: wrap` on `.card__head` |
+
+That is why the earlier reasoning here — "four columns is a card change and not a grid change, so
+320px is the smallest round number above the 314px floor" — was correct about the cause and wrong
+about the conclusion. The floor was not a fact about the card; it was a fact about one missing
+declaration. Once `.card__head` wraps, the floor is gone and the grid minimum re-tunes **320px →
+240px** to spend the width it releases. The badge drops to its own line on a narrow card rather than
+escaping the border.
+
+**Recorded trade: the filter `<select>`s truncate.** At an 88px basis the long option strings clip —
+"No operation-specific issue" is the worst of them. That is accepted, by coordinator decision, as the
+price of a single-row bar: each control's own label sits directly above it, and the selected value is
+short in the common case ("Any"). If the bar grows a ninth control this is the thing that breaks
+first, and the honest fix then is shorter option text rather than a narrower basis.
+
+**Fence.** Four columns, the `OperationRow` fix and the card header were C-103's by an earlier
+scoping decision; the user lifted that fence and the coordinator confirmed the re-scope, so C-103
+keeps only the density work genuinely left. Nothing here was taken without that.
 
 ## Notes
 - Two routes, and the choice is the story's real content: **`layout: page`** in `explorer.md`

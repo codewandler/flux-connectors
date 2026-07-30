@@ -244,16 +244,32 @@ function reset() {
   margin: 16px 0;
 }
 
+/*
+ * The bar has grown from five controls to eight (a service filter from C-101, a sort from C-102),
+ * and it was wrapping to three rows at *every* width, 2560px included. The cause is that a flex
+ * item's automatic minimum size is `min-content`, and a `<select>`'s min-content is its **widest
+ * option** — "No operation-specific issue" is ~190px on its own. So the controls could never shrink,
+ * whatever basis they were given, and eight of them do not fit anywhere.
+ *
+ * `min-width: 0` releases that floor, which is what lets the bases below actually govern. Flex
+ * decides where to break on the *bases*, not on the grown widths, so the bases are sized to leave
+ * the Reset button room on the same line: 160 + 6x88 + a ~62px button + 7x12px gaps = 834px, inside
+ * both the 1025px the explorer gets at full width and the 865px it gets at 1280. The controls then
+ * grow to fill. A truncated `<select>` still reads correctly because its own label sits directly
+ * above it and the selected value is short in the common case ("Any").
+ */
 .filters__field {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1 1 88px;
+  min-width: 0;
   font-size: 12px;
   color: var(--vp-c-text-2);
 }
 
 .filters__field--wide {
-  flex: 1 1 220px;
+  flex: 2 1 160px;
 }
 
 .filters__field input,
@@ -265,9 +281,14 @@ function reset() {
   color: var(--vp-c-text-1);
   background-color: var(--vp-c-bg);
   width: 100%;
+  /* Same reason as the field above: without this the control refuses to go below its widest
+     option and pushes the whole bar to another row. */
+  min-width: 0;
 }
 
 .filters__reset {
+  /* Never grow, never shrink: it is the one control whose width means nothing. */
+  flex: 0 0 auto;
   border: 1px solid var(--vp-c-divider);
   border-radius: 6px;
   padding: 6px 12px;
