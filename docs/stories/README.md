@@ -80,6 +80,7 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-15 — Install into flux and prove milestone 1 end to end](C-15-install-and-live-e2e.md) · Build · milestone 1 · needs the $auth seam released in ../flux
 - [C-23 — Make operation names a stable public contract](C-23-operation-naming-contract.md) · Codegen · op names are what users and models call — renaming one silently breaks callers
 - [C-24 — Verify generated connectors against recorded HTTP fixtures](C-24-fixture-verification.md) · Build · proves a connector *works*, not merely that it parses — without live credentials
+- [C-46 — Generic connectors — http, a2a, mcp and friends](C-46-generic-connectors.md) · Spec · extends the charter — a provider need not be a vendor · **not** mysql, see Notes
 
 ### rendered provider documentation
 _A connector's operations are currently legible only by reading `providers/<name>.toml` or the_
