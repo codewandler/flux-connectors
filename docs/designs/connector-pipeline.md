@@ -69,6 +69,10 @@ plus a Flux module.** Each provider generates two artifacts:
 > instead. See [auth-seam.md](auth-seam.md) for the resolved design and
 > [unified-auth.md](unified-auth.md) for the credential model.
 
+Committed build artifacts live in `connectors/` at the repo root (`connectors/<name>.flux`,
+`connectors/<name>.connector.toml`) — chosen in C-13, since the table above names only the *install*
+destinations and said nothing about where the reviewed artifacts are kept.
+
 The manifest's shape still mirrors the plugin protocol's `EndpointSpec` / `AuthMethod` / `Caps`
 (`../flux/crates/flux-plugin-protocol/src/lib.rs:422`), because agreeing with flux's vocabulary is
 what makes the operator config mechanical to produce.

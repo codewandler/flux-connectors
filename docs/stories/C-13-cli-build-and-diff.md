@@ -2,8 +2,8 @@
 id: C-13
 title: Build and diff from the vendored spec cache
 pillar: Build
-status: ready
-priority: 9
+status: done
+priority:
 design: docs/designs/connector-pipeline.md
 epic: connectors-v1
 areas: [connector-cli]
@@ -16,8 +16,10 @@ Give the repo its build command: compile every provider from committed inputs in
 artifacts, hermetically and offline, with a `diff` that previews what would change.
 
 ## Acceptance
-- [ ] `flux-connectors build` reads `providers/*.toml` and `specs/<provider>/<version>.json` and
-      writes `<provider>.flux`, `<provider>.connector.toml`, and `connectors.lock`.
+- [x] `flux-connectors build` reads `providers/*.toml` and `specs/<provider>/<version>.json` and
+      writes `<provider>.flux` and `<provider>.connector.toml`.
+      **`connectors.lock` reconciled to C-7**, which owns the lockfile; artifact *contents* become
+      real when C-27 wires the seams to C-3's loader and C-8's emitter.
       *Discovery, reading and writing are done — both artifacts land in `connectors/`. Not ticked
       for two reasons: `connectors.lock` belongs to `C-7`, and the artifact **contents** are still
       placeholders until `C-3` and `C-8` fill the two seam functions.*

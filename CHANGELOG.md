@@ -36,6 +36,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   placement) so a new provider archetype costs one value on one axis, not a new variant crossing all
   of them. Stories C-19 … C-22.
 
+- **C-13** — the `flux-connectors` CLI: `build` and `diff` over provider discovery, atomic artifact
+  writing, `--provider` filtering, and a byte-identical no-op rebuild. Artifacts land in
+  `connectors/`.
+- **C-13** — the offline guarantee is proven three ways: an armed deny-counter asserting zero
+  network crossings, a source audit asserting no network primitive exists outside `src/net.rs`, and
+  the binary building under a network-less user namespace. The audit test was falsified-checked by
+  temporarily injecting a `TcpStream::connect` and confirming it failed.
+
 ### Changed
 - **C-1** — flux-lang is depended on from **crates.io** (`codewandler-flux-lang = "0.37"`) rather
   than as a git or path dependency. The flux git remote uses a developer-only SSH host alias that
