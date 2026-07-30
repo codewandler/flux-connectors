@@ -128,6 +128,11 @@ fn operation_selection_stays_curated() {
         // text or pages with an opaque `page_info` cursor — plus C-56 for the body of the one write.
         // See `providers/shopify.toml`.
         ("shopify", 5),
+        // C-77 curates 4 over `/api/0`: issue get, issue update, project get and the issue's latest
+        // event. The cut is the query-encoding gap once more — Sentry's issues *list* takes a `query`
+        // in its own search syntax, the most injectable value the API exposes — plus C-56, which is
+        // why the one write sets `status` and nothing else. See `providers/sentry.toml`.
+        ("sentry", 4),
     ];
     for (name, count) in expected {
         let loaded = load(name);
