@@ -275,6 +275,47 @@ description = "The message's id, the hex string Gmail's own listings and its `X-
 required = true
 schema = { type = "string", pattern = "^[A-Za-z0-9_-]+$", minLength = 1 }
 
+# ---------------------------------------------------------------------------------------------
+# RESPONSE SHAPES (C-126) — read from the three products' own REST references:
+#
+#   developers.google.com/gmail/api/reference/rest/v1/users.messages   (get, send)
+#   developers.google.com/gmail/api/reference/rest/v1/users.labels     (list)
+#   developers.google.com/workspace/calendar/api/v3/reference/events   (get, insert)
+#   developers.google.com/workspace/calendar/api/v3/reference/calendars
+#   developers.google.com/workspace/drive/api/reference/rest/v3/files  (get, update)
+#
+# Four things to know before reading them, and each one is a place Google's documentation is thinner
+# than it looks:
+#
+# 1. **Google documents no HTTP status code anywhere in these references** — every method says only "If
+#    successful, the response body contains an instance of X". Nothing below claims a code.
+# 2. **Google's own type vocabulary is not JSON's.** The references say `etag`, `datetime`, `list`,
+#    `nested object`; the schemas below map those to JSON Schema types, and where Google says a value
+#    is an int64-shaped **string** — `historyId`, `internalDate` — that is what is declared, because
+#    that is the trap.
+# 3. **`fields` changes what comes back, and this connector cannot send it** (C-30). Every response
+#    here is therefore the method's *default* projection. Where Google documents that default, it is
+#    declared; where Google does not, **no schema is declared at all** — see the two Drive operations
+#    at the end of this file, which are the honest-absence cases in this connector.
+# 4. Gmail's `format` parameter has the same effect on `messages.get`, and is likewise unavailable, so
+#    the shape declared is the documented `full` default.
+#
+# As everywhere: this is what Google *sends*, not what a caller of the emitted `op` receives —
+# `http.request` returns one flat string (C-127, `docs/designs/member-io-schemas.md` §2).
+# ---------------------------------------------------------------------------------------------
+
+# The Message resource, at the top level with no envelope.
+#
+# **The message text is not in this response in any readable form.** It is inside `payload`, split
+# across a tree of MIME parts whose bodies are base64url-encoded — so "read the email" means walking
+# `payload.parts` for a `text/plain` part and decoding its `body.data`. `snippet` is the only plain
+# text Gmail hands over directly, and it is a fragment. That is the single most important thing this
+# schema can tell a consumer, and no amount of field-name inspection would reveal it.
+[operations.response_schema]
+type = "object"
+required = ["id", "threadId"]
+properties = { id = { type = "string", description = "The message's id — what this operation takes" }, threadId = { type = "string", description = "The conversation it belongs to. Several messages share one" }, labelIds = { type = "array", description = "The labels applied, as ids: `INBOX`, `UNREAD`, `SENT`, `IMPORTANT`, `CATEGORY_PERSONAL`, plus any user label's opaque id. `UNREAD`'s presence is how read-state is expressed — there is no `read` boolean", items = { type = "string" } }, snippet = { type = "string", description = "A short plain-text extract of the body — the only text in this response that needs no decoding, and it is truncated" }, historyId = { type = "string", description = "The mailbox history id at which this message was last changed. **A string**, despite being an integer value" }, internalDate = { type = "string", description = "When Gmail received it, as **epoch milliseconds in a string** — not an ISO timestamp, and not seconds. The RFC 2822 `Date` header inside `payload` may differ from it" }, sizeEstimate = { type = "integer", description = "Approximate size in bytes" }, payload = { type = "object", description = "THE MESSAGE ITSELF, as a MIME tree: `{partId, mimeType, filename, headers, body, parts}`. `headers` is an **array** of `{name, value}` — so `Subject` and `From` are found by searching it, not by keying into it — and each `body.data` is **base64url-encoded**. A multipart message's text is in `parts`, not in the top-level `body`" } }
+
 [operations.quirks.error_envelope]
 message_pointer = "/error/message"
 code_pointer = "/error/status"
@@ -320,6 +361,18 @@ description = "The complete RFC 2822 message, base64url-encoded (`-` and `_` rat
 required = true
 schema = { type = "string", pattern = "^[A-Za-z0-9_-]+={0,2}$", minLength = 1 }
 
+# Gmail documents this response as exactly one sentence: "If successful, the response body contains an
+# instance of Message." **Which members are populated it does not say.** So this schema declares the
+# three that identify the sent mail and describes the uncertainty rather than papering over it — a
+# `payload` declared here would assert a projection the vendor never promised on a send.
+#
+# `id` is what makes the send auditable: it is the only handle on a message that has already left, and
+# `google-gmail-message-get` reads it back.
+[operations.response_schema]
+type = "object"
+required = ["id"]
+properties = { id = { type = "string", description = "The sent message's id — the only handle on a mail that cannot be recalled, and what `google-gmail-message-get` reads back" }, threadId = { type = "string", description = "The thread it landed in. Equal to `id` for a new conversation" }, labelIds = { type = "array", description = "Typically `[\"SENT\"]`. Google documents the response as \"an instance of Message\" without stating which members are populated on a send, so treat anything beyond `id` and `threadId` as possibly absent", items = { type = "string" } } }
+
 [operations.quirks.error_envelope]
 message_pointer = "/error/message"
 code_pointer = "/error/status"
@@ -341,6 +394,19 @@ wire = "userId"
 description = "The mailbox whose labels to list: the literal `me` for the token's own mailbox, or an authorized email address"
 required = true
 schema = { type = "string", pattern = "^(me|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$", minLength = 2 }
+
+# `{"labels": [...]}` — and Gmail documents the list as a **subset** of the Label resource: the
+# `users.labels.list` method states that each returned label carries only `id`, `name`,
+# `messageListVisibility`, `labelListVisibility` and `type`. The counts (`messagesTotal`,
+# `messagesUnread`, `threadsTotal`, `threadsUnread`) are members of the resource but are **not**
+# returned by the list; reading them here is the mistake this schema exists to prevent, and it is why
+# they are absent rather than declared-and-nullable.
+#
+# Unpaginated, which is unusual for a Google list method and worth stating: there is no `nextPageToken`.
+[operations.response_schema]
+type = "object"
+required = ["labels"]
+properties = { labels = { type = "array", description = "Every label in the mailbox, in one unpaginated response — there is no `nextPageToken` on this method. Only the five members below are returned by a *list*; the per-label message counts belong to a `labels.get`", items = { type = "object", required = ["id", "name"], properties = { id = { type = "string", description = "The label id — `INBOX`, `SENT`, `UNREAD` and the other system labels are ids in their own right; a user label's id is opaque (`Label_12`). This is what appears in a message's `labelIds`" }, name = { type = "string", description = "The display name. A nested label's name carries its path, e.g. `Clients/Acme`" }, type = { type = "string", enum = ["system", "user"], description = "`system` labels cannot be renamed or deleted" }, messageListVisibility = { type = "string", enum = ["show", "hide"] }, labelListVisibility = { type = "string", enum = ["labelShow", "labelShowIfUnread", "labelHide"] } } } } }
 
 [operations.quirks.error_envelope]
 message_pointer = "/error/message"
@@ -370,6 +436,24 @@ description = "The event's id, as Calendar's own listings report it. A recurring
 wire = "eventId"
 required = true
 schema = { type = "string", pattern = "^[A-Za-z0-9_-]+$", minLength = 1 }
+
+# The Event resource, no envelope.
+#
+# **`start` and `end` are objects, and which member they carry is the discriminator between a timed
+# event and an all-day one**: `dateTime` (RFC 3339) for a timed event, `date` (`yyyy-mm-dd`) for an
+# all-day event, never both. A consumer reading `start.dateTime` unconditionally gets nothing for every
+# all-day event in the calendar — a whole class of events, silently. `timeZone` may accompany either and
+# is what resolves an offset-less `dateTime`.
+#
+# The other documented fact worth publishing: `end` is **exclusive**, and for a recurring event `start`
+# and `end` describe the *first* instance rather than the one that was asked for.
+#
+# `status` matters for the same reason: a cancelled event is still returned by this endpoint, with
+# `status: "cancelled"`, so "the call succeeded" does not mean "the meeting is happening".
+[operations.response_schema]
+type = "object"
+required = ["id", "status"]
+properties = { kind = { const = "calendar#event" }, etag = { type = "string", description = "The resource's ETag, as a quoted string" }, id = { type = "string", description = "The event id — what this operation takes" }, status = { type = "string", enum = ["confirmed", "tentative", "cancelled"], description = "**A cancelled event is still returned here**, with `cancelled`. Check this before treating the event as live" }, htmlLink = { type = "string", format = "uri", description = "The event's page in Google Calendar — the link to give a human" }, created = { type = "string", format = "date-time" }, updated = { type = "string", format = "date-time" }, summary = { type = "string", description = "The title. Absent on an event created without one, which Calendar renders as \"(No title)\"" }, description = { type = "string" }, location = { type = "string", description = "Free text, not a structured address" }, start = { type = "object", description = "WHEN IT STARTS, as an object: `dateTime` (RFC 3339) for a timed event **or** `date` (`yyyy-mm-dd`) for an all-day event — never both — plus an optional IANA `timeZone`. Reading `start.dateTime` unconditionally misses every all-day event" }, end = { type = "object", description = "Same shape, and **exclusive**: an all-day event on the 30th has `end.date` of the 31st. For a recurring event this describes the first instance" }, recurringEventId = { type = "string", description = "Present on an instance of a recurring event: the id of the series it belongs to" }, organizer = { type = "object", description = "`{email, displayName, self}` — who owns the event. `self` is true when it is the token's own calendar" }, creator = { type = "object", description = "Same shape; the creator need not still be the organizer" }, attendees = { type = "array", description = "Each `{email, displayName, organizer, self, optional, responseStatus}`, where `responseStatus` is `needsAction`, `declined`, `tentative` or `accepted` — this is how attendance is read. Absent entirely on an event with no attendees, such as every event `google-calendar-event-insert` creates. Personal data: it is a list of named people's addresses", items = { type = "object" } }, hangoutLink = { type = "string", format = "uri", description = "The Google Meet join link, when the event has a conference. **Anyone holding it can join the meeting**, so treat it as sensitive rather than as an ordinary URL" }, conferenceData = { type = "object", description = "The conference in full: `entryPoints` with join URLs and dial-in numbers, plus a `conferenceId`. Contains the same joinable links as `hangoutLink`" } }
 
 [operations.quirks.error_envelope]
 message_pointer = "/error/message"
@@ -434,6 +518,18 @@ description = "When the event ends, RFC 3339 with a UTC offset. Must be after `s
 required = true
 schema = { type = "string", format = "date-time" }
 
+# The created Event — the same resource the get returns, and Google states no status code for an insert
+# any more than for a read.
+#
+# `id` and `htmlLink` are what this response is for: the id is how the event is addressed afterwards
+# (nothing else here identifies it) and `htmlLink` is the link a human is given. `attendees` will be
+# absent, because this operation cannot declare any (C-56) — which is the same thing as saying nobody
+# was invited and nobody was emailed.
+[operations.response_schema]
+type = "object"
+required = ["id", "status"]
+properties = { kind = { const = "calendar#event" }, etag = { type = "string" }, id = { type = "string", description = "The new event's id — the only handle on it, and what `google-calendar-event-get` reads back" }, status = { type = "string", enum = ["confirmed", "tentative", "cancelled"], description = "`confirmed` on a freshly created event" }, htmlLink = { type = "string", format = "uri", description = "The event's page in Google Calendar — the link to give a human" }, created = { type = "string", format = "date-time" }, updated = { type = "string", format = "date-time" }, summary = { type = "string", description = "Echoes the title that was sent" }, start = { type = "object", description = "`{dateTime, timeZone}` as created. Calendar resolves the offset that was sent into its own representation, so this may not be the literal string that was sent" }, end = { type = "object", description = "Same shape, and exclusive" }, organizer = { type = "object", description = "`{email, displayName, self}` — the calendar the event was created on" }, creator = { type = "object", description = "The token's own account" }, attendees = { type = "array", description = "ABSENT on every event this operation creates: no attendee can be declared yet (C-56), so nobody was invited and nobody was notified", items = { type = "object" } }, iCalUID = { type = "string", description = "The RFC 5545 UID, which is what identifies this event across calendars — distinct from `id`" }, sequence = { type = "integer", description = "The iCalendar revision number, `0` on creation" } }
+
 [operations.quirks.error_envelope]
 message_pointer = "/error/message"
 code_pointer = "/error/status"
@@ -456,6 +552,18 @@ description = "The calendar to read: the literal `primary` for the token owner's
 required = true
 schema = { type = "string", pattern = "^(primary|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$", minLength = 3 }
 
+# The Calendars resource — a small, fully documented object, and `timeZone` is the reason to read it.
+# Every event this connector creates must carry a UTC offset because `start.timeZone` is not declarable
+# (C-56); this operation is how a flow learns which zone the calendar actually keeps, so that a local
+# wall-clock time can be turned into the right offset rather than guessed at.
+#
+# `id` is resolved here too: asking for `primary` returns the calendar's real address, which is what a
+# multi-calendar flow should hold afterwards.
+[operations.response_schema]
+type = "object"
+required = ["id", "summary"]
+properties = { kind = { const = "calendar#calendar" }, etag = { type = "string" }, id = { type = "string", description = "The calendar's address, e.g. `you@example.com` or `team@group.calendar.google.com`. Asking for `primary` resolves to this" }, summary = { type = "string", description = "The calendar's title" }, description = { type = "string" }, location = { type = "string", description = "Free-text geographic location of the calendar" }, timeZone = { type = "string", description = "The calendar's own IANA time zone, e.g. `Europe/Berlin`. **This is what an event's offset should be computed from** — `google-calendar-event-insert` cannot send a `timeZone`, so the caller has to apply the right offset itself" }, conferenceProperties = { type = "object", description = "`{allowedConferenceSolutionTypes}` — which conferencing this calendar permits (`hangoutsMeet`, `eventHangout`, `eventNamedHangout`)" } }
+
 [operations.quirks.error_envelope]
 message_pointer = "/error/message"
 code_pointer = "/error/status"
@@ -477,6 +585,31 @@ wire = "fileId"
 description = "The file's id — the base64url-ish string in its Drive URL after `/d/`. A folder is a file too, with the folder MIME type"
 required = true
 schema = { type = "string", pattern = "^[A-Za-z0-9_-]+$", minLength = 1 }
+
+# NO `response_schema`, DELIBERATELY (C-126) — and this is the clearest honest-absence case in the
+# whole catalogue, so it is worth writing down in full.
+#
+# Drive v3 returns a *projection*: the `fields` parameter decides which members of the File resource
+# come back, and without it Google returns "a default set of fields specific to the method". This
+# connector cannot send `fields` (C-30, a query parameter), so what arrives is exactly that default —
+# and **Google does not document what the default is for `files.get`.**
+#
+# The temptation, and why it was refused. The fields guide states the default for `files.list` as
+# `kind`, `id`, `name`, `mimeType`, and this operation's own `description` above says "its id, name and
+# MIME type", so `{kind, id, name, mimeType}` looks like a safe four-field schema. Three problems:
+# the guide documents that set for `list`, not for `get`; it explicitly says the `permissions.get`
+# default differs, so per-method defaults are real rather than uniform; and Drive's search guide states
+# the `list` default as **five** fields including `resourceKey`, contradicting the fields guide on the
+# very endpoint both describe. Two vendor pages disagreeing about the one method whose default is
+# written down is not a foundation for asserting an *undocumented* one.
+#
+# So this operation publishes absence. `{}` or `{"type": "object"}` would count as coverage while saying
+# nothing, and a guessed four-field schema would be worse still: it would look authoritative, and a
+# consumer that trusted it would find `webViewLink` or `parents` missing and have no way to tell
+# whether the field was absent from the response or absent from the schema.
+#
+# Closing this properly means C-30 plus an explicit `fields` value on the operation, at which point the
+# response schema is derivable rather than guessed — because the caller states it.
 
 [operations.quirks.error_envelope]
 message_pointer = "/error/message"
@@ -520,6 +653,15 @@ name = "name"
 description = "The file's new name. Drive does not require names to be unique within a folder, so this can collide with a sibling"
 required = true
 schema = { type = "string", minLength = 1 }
+
+# NO `response_schema`, DELIBERATELY (C-126) — the same reason as `google-drive-file-get`, and if
+# anything a weaker footing: `files.update`'s reference says only "the response body contains an
+# instance of File" and its page makes **no statement at all** about a default field set. So a caller
+# cannot even confirm the rename from a documented member, and declaring `{name}` here would be
+# asserting exactly the thing the vendor declines to.
+#
+# Read the file back with `google-drive-file-get` — whose default projection is also undocumented,
+# which is the honest state of this service until C-30 makes `fields` sendable.
 
 [operations.quirks.error_envelope]
 message_pointer = "/error/message"

@@ -208,6 +208,22 @@ description = "The `ts` of a parent message to reply to, threading the reply und
 required = false
 schema = { type = "string" }
 
+# WHY THIS SCHEMA MODELS BOTH OUTCOMES IN ONE OBJECT.
+#
+# Every response shape in this file is taken from the "Example response" block of the method's own
+# reference page — here `docs.slack.dev/reference/methods/chat.postMessage`, which documents the
+# success body as `ok`/`channel`/`ts`/`message` and the failure body as `{"ok": false, "error": …}`.
+# Both arrive with HTTP 200, which is the whole reason `ok` is the only required member: a schema
+# describing the success case alone would tell a consumer that `ts` is there to read, and on a
+# `channel_not_found` it simply is not. `error` is declared next to it rather than left to the error
+# envelope because `ErrorEnvelope` says only *where* a message is, and has no way to say that the
+# document it points into came back with a success status (C-126; the missing success predicate is
+# recorded against `ErrorEnvelope` itself, not against this connector).
+[operations.response_schema]
+type = "object"
+required = ["ok"]
+properties = { ok = { type = "boolean", description = "False on failure, with HTTP still 200. Branch on this before reading anything else — it is the only member present in both outcomes" }, error = { type = "string", description = "Present only when `ok` is false: Slack's machine-readable failure code, such as `channel_not_found`, `not_in_channel` or `msg_too_long`" }, channel = { type = "string", description = "The channel the message landed in, always as an id (`C0123ABCDEF`) even when the request named it" }, ts = { type = "string", description = "The posted message's timestamp id, e.g. `1503435956.000247`. This is what addresses the message afterwards — `slack-reactions-add`'s `timestamp`, and `thread_ts` to reply under it" }, message = { type = "object", description = "The message as Slack stored it: `text`, `type`, `subtype`, `ts`, `bot_id`, `username`, and `attachments` when there are any" } }
+
 [operations.quirks.error_envelope]
 # See the header comment: this says *where* the error is, and cannot say that it arrives with a 200.
 message_pointer = "/error"
@@ -257,6 +273,18 @@ description = "Only messages up to this `ts`. Omit for no upper bound"
 required = false
 schema = { type = "string" }
 
+# `docs.slack.dev/reference/methods/conversations.history`, "Example response": `ok`, `messages`,
+# `has_more`, `pin_count` and `response_metadata.next_cursor`. `messages` is declared as an array of
+# objects rather than enumerated, because a Slack message is a union — a plain message, a
+# `subtype`-carrying join/leave/bot message, or a thread parent — and the discriminating field set is
+# per subtype. What a consumer cannot infer, and what is recorded here, is the *envelope*: that the
+# messages are under `messages` and not at the top level, and that `next_cursor` is nested one level
+# down.
+[operations.response_schema]
+type = "object"
+required = ["ok"]
+properties = { ok = { type = "boolean", description = "False on failure, with HTTP still 200. Branch on this first" }, error = { type = "string", description = "Present only when `ok` is false: `channel_not_found`, `not_in_channel` or `invalid_arguments`" }, messages = { type = "array", description = "The messages, newest first. Each carries at least `type`, `ts` and `text`; a user message also carries `user`, and a bot or system message carries a `subtype` instead", items = { type = "object" } }, has_more = { type = "boolean", description = "True when the channel holds older messages than this page returned. This connector cannot page — see the header comment on the missing cursor — so a true here means the caller is seeing a window, not the history" }, pin_count = { type = "integer" }, response_metadata = { type = "object", description = "Carries `next_cursor`, the cursor for the following page. It cannot be sent back by this connector (C-30)" } }
+
 [operations.quirks.error_envelope]
 message_pointer = "/error"
 
@@ -282,6 +310,19 @@ name = "include_locale"
 description = "Also return the user's locale"
 required = false
 schema = { type = "boolean", default = false }
+
+# `docs.slack.dev/reference/methods/users.info`, "Example response". `profile` is left as an object:
+# it is where the display name, status and **email** live, and its member set varies with the
+# workspace's own profile fields, so enumerating a subset would read as the whole of it.
+#
+# Said here because nothing else in this file can: `profile.email` is personal data, and it is
+# returned only when the token carries `users:read.email`. `Risk` grades what a call *changes*, so it
+# has no axis for what a read discloses — the same gap `providers/stripe.toml` records for its
+# customer read.
+[operations.response_schema]
+type = "object"
+required = ["ok"]
+properties = { ok = { type = "boolean", description = "False on failure, with HTTP still 200. Branch on this first" }, error = { type = "string", description = "Present only when `ok` is false: typically `user_not_found`" }, user = { type = "object", description = "The user: `id`, `team_id`, `name`, `real_name`, `deleted`, `tz`, `tz_label`, `tz_offset`, `is_bot`, `is_admin`, `is_owner`, `updated`, and `profile` — which holds the display name, status and, with `users:read.email`, the email address" } }
 
 [operations.quirks.error_envelope]
 message_pointer = "/error"
@@ -320,6 +361,16 @@ name = "name"
 description = "Emoji name without colons, e.g. `thumbsup` or `white_check_mark`"
 required = true
 schema = { type = "string", minLength = 1 }
+
+# `docs.slack.dev/reference/methods/reactions.add` documents the success body as exactly `{"ok":
+# true}` — nothing identifies the reaction afterwards — and the failure body as the same `ok`/`error`
+# pair, again with HTTP 200. So on this operation the response schema is not a convenience: it is the
+# only way a consumer learns that `ok` is *all* there is to check, and that `already_reacted` arrives
+# looking like a success.
+[operations.response_schema]
+type = "object"
+required = ["ok"]
+properties = { ok = { type = "boolean", description = "True when the reaction was added. There is no other member on success — Slack returns no id for a reaction" }, error = { type = "string", description = "Present only when `ok` is false, with HTTP still 200: `already_reacted`, `message_not_found`, `invalid_name`, `channel_not_found` or `thread_locked`" } }
 
 [operations.quirks.error_envelope]
 message_pointer = "/error"

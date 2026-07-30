@@ -207,6 +207,45 @@ description = "The order's numeric id — not its `#1001` order name"
 required = true
 schema = { type = "integer", format = "uint64", minimum = 1 }
 
+# ---------------------------------------------------------------------------------------------
+# RESPONSE SHAPES (C-126) — and a provenance caveat that belongs on the record.
+#
+# **shopify.dev no longer serves the `2024-10` REST reference.** Every versioned URL now redirects to
+# `/latest/`, and the served document self-declares a much later `api_version`. The REST Admin API is
+# additionally marked legacy as of October 2024. So these schemas are read from the **current** REST
+# reference for the same resources, and what is declared is deliberately restricted to the parts that
+# have been stable across REST versions: the envelope key, the identity, the money and status fields,
+# and the nested collections. The pinned `2024-10` in the paths above is unchanged and is still what
+# ships — nothing here silently re-versions the connector.
+#
+# Three vendor facts, each one a trap a consumer would otherwise fall into:
+#
+# 1. **Every resource is enveloped under its singular name** — `{"order": …}`, `{"product": …}`,
+#    `{"customer": …}` — and a collection under its plural. Nothing is at the top level.
+# 2. **Money is a string.** `total_price` arrives as `"409.94"`. Shopify's properties table gives it
+#    the semantic type "price" and states no JSON type at all, and its example shows a quoted value —
+#    so the declaration below says `string` and says where that comes from. A flow comparing
+#    `total_price > 100` compares text.
+# 3. **`tags` IS A COMMA-SEPARATED STRING, NOT AN ARRAY** — `"imported, vip"`, documented as "a string
+#    of comma-separated tags" on both the order and the product. This is the single most likely field
+#    in the connector to be read wrongly, because every other vendor in this repository returns tags as
+#    an array.
+#
+# And one deliberate omission: `orders_count` and `total_spent` on a customer. They appear in
+# Shopify's response *examples* and are absent from its properties table, and the deprecation notices
+# that mention them are scoped to GraphQL and to webhook payloads rather than to this resource. That is
+# precisely the "documented enough to be tempting, not documented enough to publish" case, so neither
+# is declared — see the customer read below.
+# ---------------------------------------------------------------------------------------------
+
+# The order, under `order`. `financial_status` and `fulfillment_status` are the two a support flow
+# branches on, and the second one's **null** is a real value with a meaning: unfulfilled. A gate
+# written as `fulfillment_status == "unfulfilled"` never fires.
+[operations.response_schema]
+type = "object"
+required = ["order"]
+properties = { order = { type = "object", required = ["id"], properties = { id = { type = "integer", description = "The order's numeric id — what this operation takes" }, name = { type = "string", description = "The merchant-facing order name, e.g. `#1001`. This is what a human recognises and it does NOT address this endpoint" }, order_number = { type = "integer", description = "The number inside that name, without the prefix" }, email = { type = "string", description = "The buyer's email — personal data" }, created_at = { type = "string", format = "date-time", description = "ISO 8601 with the shop's UTC offset, not a Unix timestamp" }, updated_at = { type = "string", format = "date-time" }, currency = { type = "string", description = "ISO 4217 code the amounts are in. Read it before rendering money — a shop may sell in several" }, total_price = { type = "string", description = "The order total **as a decimal string**, e.g. `\"409.94\"`. Shopify's properties table states no JSON type for it and its example shows a quoted value; convert before comparing" }, subtotal_price = { type = "string", description = "Decimal string, as above" }, total_tax = { type = "string", description = "Decimal string, as above" }, financial_status = { type = "string", description = "`pending`, `authorized`, `partially_paid`, `paid`, `partially_refunded`, `refunded` or `voided`" }, fulfillment_status = { type = "string", description = "`fulfilled`, `partial`, `restocked` — or **null**, which is Shopify's spelling for unfulfilled. Null is the common case on a new order, so test for it explicitly" }, line_items = { type = "array", description = "What was ordered: each entry carries `id`, `title`, `quantity`, `price` (a decimal string), `sku`, `variant_id` and `product_id`", items = { type = "object" } }, customer = { type = "object", description = "The buyer, or null on a guest checkout with no customer record. Personal data" }, shipping_address = { type = "object", description = "Where it ships: `{name, address1, address2, city, province, country, zip, phone}`. Personal data, and null for a digital order" }, billing_address = { type = "object", description = "Same shape. Personal data" }, note = { type = "string", description = "The merchant's own note on the order, or null" }, tags = { type = "string", description = "A COMMA-SEPARATED STRING, not an array — e.g. `\"imported, vip\"`. Split it yourself" }, cancelled_at = { type = "string", format = "date-time", description = "When the order was cancelled, or null. This, not a status value, is how a cancelled order is identified" }, closed_at = { type = "string", format = "date-time", description = "When the order was archived, or null" } } } }
+
 [operations.quirks.error_envelope]
 # See the header comment: this says *where* the error is, and cannot say that its shape varies with
 # the status code.
@@ -227,6 +266,14 @@ name = "product_id"
 description = "The product's numeric id — not its URL handle"
 required = true
 schema = { type = "integer", format = "uint64", minimum = 1 }
+
+# The product, under `product`. `status` is the field that decides whether shoppers can see it at all,
+# and `published_at` is the one that decides whether a given sales channel does — a product can be
+# `active` and unpublished, which reads as "live" to anything checking only `status`.
+[operations.response_schema]
+type = "object"
+required = ["product"]
+properties = { product = { type = "object", required = ["id"], properties = { id = { type = "integer", description = "The product's numeric id" }, title = { type = "string", description = "The storefront title — what `shopify-product-update` overwrites" }, body_html = { type = "string", description = "The description as HTML, or null" }, vendor = { type = "string" }, product_type = { type = "string" }, handle = { type = "string", description = "The URL slug on the storefront. Derived from the title, and it does NOT address this endpoint" }, status = { type = "string", description = "`active`, `draft` or `archived`. Only `active` can be sold, but see `published_at`" }, published_at = { type = "string", format = "date-time", description = "When it was published to the online store, or **null** for an active-but-unpublished product that no shopper can see" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, tags = { type = "string", description = "A COMMA-SEPARATED STRING, not an array" }, variants = { type = "array", description = "The purchasable variants, each with `id`, `title`, `price` (a decimal string), `sku`, `inventory_item_id` and `inventory_quantity`. `inventory_item_id` is what `shopify-inventory-level-list` reports stock against", items = { type = "object" } }, images = { type = "array", description = "Each `{id, src, alt, width, height, position, variant_ids}`", items = { type = "object" } }, options = { type = "array", description = "The variant axes, each `{id, name, position, values}`", items = { type = "object" } } } } }
 
 [operations.quirks.error_envelope]
 message_pointer = "/errors"
@@ -282,6 +329,18 @@ description = "The product's new title, as customers see it. Must not be blank"
 required = true
 schema = { type = "string", minLength = 1 }
 
+# The updated product, under `product` — the whole resource, not a diff. That makes this response the
+# check on the failure mode the `wire` comment above describes: Shopify accepts a body it does not
+# recognise, changes nothing, and answers `200`. Reading `product.title` back is what distinguishes a
+# rename that happened from one that was politely ignored.
+#
+# `handle` is worth reading too: it is derived from the title but is **not** re-derived on rename, so
+# after this call the storefront URL still carries the old title's slug.
+[operations.response_schema]
+type = "object"
+required = ["product"]
+properties = { product = { type = "object", required = ["id"], properties = { id = { type = "integer" }, title = { type = "string", description = "The title **after** the update. Compare it against what was sent — a 200 alone does not prove the change applied" }, handle = { type = "string", description = "The storefront slug, which is not re-derived by a rename and so still reflects the previous title" }, body_html = { type = "string" }, vendor = { type = "string" }, product_type = { type = "string" }, status = { type = "string", description = "`active`, `draft` or `archived` — unchanged by this call" }, published_at = { type = "string", format = "date-time" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time", description = "Moves on an accepted update" }, tags = { type = "string", description = "A comma-separated string, not an array" }, variants = { type = "array", description = "Unchanged by this call. Note that each variant's `title` is the variant's own, not the product's", items = { type = "object" } }, images = { type = "array", items = { type = "object" } }, options = { type = "array", items = { type = "object" } } } } }
+
 [operations.quirks.error_envelope]
 # The 422 case is the one that bites here: a rejected title answers
 # `{"errors": {"title": ["can't be blank"]}}`, and `http.request` returns that as data rather than as
@@ -309,6 +368,20 @@ name = "customer_id"
 description = "The customer's numeric id"
 required = true
 schema = { type = "integer", format = "uint64", minimum = 1 }
+
+# The customer, under `customer`, and **personal data throughout** — see this operation's own comment
+# above for why that has to be said on the contract rather than in `risk`.
+#
+# WHAT IS NOT HERE, AND WHY: `orders_count` and `total_spent`. This operation's `description` mentions
+# an order count, and Shopify's own response *example* does show both fields — but its properties table
+# does not document either, and the deprecations that name them are scoped to GraphQL and to webhook
+# payloads rather than to this resource. So they sit exactly on the line C-126 draws: present enough to
+# be tempting, documented too weakly to publish as a contract. A consumer that needs purchase history
+# should read the customer's orders rather than trust an undocumented aggregate.
+[operations.response_schema]
+type = "object"
+required = ["customer"]
+properties = { customer = { type = "object", required = ["id"], properties = { id = { type = "integer", description = "The customer's numeric id" }, email = { type = "string", description = "Personal data. Null for a customer created without one" }, first_name = { type = "string", description = "Personal data" }, last_name = { type = "string", description = "Personal data" }, phone = { type = "string", description = "E.164, or null. Personal data" }, verified_email = { type = "boolean", description = "Whether the address was confirmed. False does not mean invalid" }, state = { type = "string", description = "The customer's account state — `disabled`, `invited`, `enabled` or `declined`. It is about the storefront account, not about marketing consent" }, tags = { type = "string", description = "A COMMA-SEPARATED STRING, not an array" }, note = { type = "string", description = "The merchant's own note, or null" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, addresses = { type = "array", description = "Every saved address, each `{id, address1, city, province, country, zip, phone, default}`. Personal data", items = { type = "object" } }, default_address = { type = "object", description = "The one marked default, in the same shape. Null when the customer has none" }, email_marketing_consent = { type = "object", description = "`{state, opt_in_level, consent_updated_at}` — whether this person may be marketed to. `state` is `subscribed`, `not_subscribed`, `pending` or `unsubscribed`, and it is the field to check before any send" }, last_order_id = { type = "integer", description = "The id of their most recent order, or null. Documented, unlike the aggregate counts this schema omits" } } } }
 
 [operations.quirks.error_envelope]
 message_pointer = "/errors"
@@ -347,6 +420,22 @@ name = "location_id"
 description = "The numeric id of the location whose stock to list"
 required = true
 schema = { type = "integer", format = "uint64", minimum = 1 }
+
+# The levels, under `inventory_levels`.
+#
+# Provenance, stated because this operation's path is the substitution the comment above records: the
+# current reference documents only the query-parameterised `GET /inventory_levels.json`, not the
+# location-nested form used here, so the **shape** below is that endpoint's — same resource, same
+# envelope key, same member set. Nothing about the nesting changes the body.
+#
+# `available` is the only number here and it is per (item, location) pair. There is no product or
+# variant name in this response: `inventory_item_id` is the join key, and the names live on the
+# variants `shopify-product-get` returns. A flow reporting "we are out of X" has to make that join
+# itself.
+[operations.response_schema]
+type = "object"
+required = ["inventory_levels"]
+properties = { inventory_levels = { type = "array", description = "One entry per inventory item stocked at this location. First page only — a location with more items than one page holds is reported incompletely, and nothing in the body says so", items = { type = "object", properties = { inventory_item_id = { type = "integer", description = "The join key back to a product variant's `inventory_item_id`. This response carries no product or variant name" }, location_id = { type = "integer", description = "Echoes the location asked for" }, available = { type = "integer", description = "Units available to sell now. Can be negative when the shop oversold, and **null** for an item whose inventory is not tracked" }, updated_at = { type = "string", format = "date-time" } } } } }
 
 [operations.quirks.error_envelope]
 message_pointer = "/errors"

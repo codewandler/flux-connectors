@@ -90,6 +90,38 @@ description = "SSO-issued babelforce access token, minted outside flux and suppl
 # Op ids are hyphen-separated — flux-lang admits alphanumerics, `_` and `-` only (C-8).
 # ---------------------------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------------------------
+# NO OPERATION HERE DECLARES A `response_schema`, AND THAT IS THE HONEST ANSWER (C-126).
+#
+# C-126 raised response-shape coverage across the catalogue and put a floor under it
+# (`crates/connector-spec/tests/response_schema_coverage.rs`). All nine operations below are among the
+# eighteen it leaves absent, and babelforce is the largest single block — so the reason belongs in the
+# file rather than only in a story.
+#
+# **There is no offline source to derive one from.** The other eighteen connectors were written against
+# a vendor reference anyone can read: zendesk's and freshdesk's public developer sites, GitHub's and
+# Jira's machine-readable schemas, Google's per-method resource pages. Babelforce publishes no public
+# API reference. The one authoritative description is `manager.openapi.json`, which **is not vendored
+# here** for the reason the header records at length: §1.3 of the inventory found it embeds a
+# credential-shaped example block for a real test account, and this repository is public. Worse for
+# this particular purpose, that block *is* the response documentation — the response `example`s are
+# where those values live. So the document that would supply these schemas is precisely the document
+# that cannot be quoted from until it is cleared and rotated.
+#
+# The alternatives were considered and refused. Writing shapes from memory of the platform would be a
+# guess wearing the same syntax as the eighty-nine derived schemas beside it, and C-126's rule is that
+# a guessed schema is worse than none: it looks authoritative and is not. Declaring `{}` or
+# `{"type": "object"}` on all nine would move the coverage figure from 92/110 to 101/110 while telling
+# a consumer nothing whatsoever, which is the exact gaming the floor test's
+# `no_operation_publishes_a_permissive_response_schema` refuses.
+#
+# WHAT UNBLOCKS THIS, in order: clear and rotate the example credentials with the babelforce API
+# owners, vendor the document under `specs/babelforce/`, and then these schemas are *derived* from its
+# response objects rather than authored at all — the same `[spec]` + `[[patch.operations]]` route the
+# header describes. Until then the coverage table reads `babelforce 0 / 9`, which is a true statement
+# about what this repository knows.
+# ---------------------------------------------------------------------------------------------
+
 [[operations]]
 id = "babelforce-agent-list"
 method = "GET"
