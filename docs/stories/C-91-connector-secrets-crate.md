@@ -2,8 +2,7 @@
 id: C-91
 title: "`connector-secrets` — the store trait and a Vault implementation"
 pillar: Bridge
-status: in-progress
-priority: 3
+status: done
 design: docs/designs/credential-addressing.md
 epic: credential-addressing
 areas: [connector-secrets]

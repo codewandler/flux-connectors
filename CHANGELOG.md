@@ -9,6 +9,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`connector-secrets` — a secret store trait and a Vault KV v2 implementation (C-91).** A **host
+  library, outside the compile path**: `connector-cli` must not depend on it, and that is now asserted
+  rather than assumed.
+
+  The fence is the valuable part. It parses `Cargo.lock` rather than asking `cargo metadata`, because
+  the lock records **optional** dependencies — so the edge trips the test even when added behind a
+  feature flag, which is how the invariant would realistically be broken. An independent review
+  verified it four ways: at the merge base, through an optional dependency, through a
+  dev-dependency, and through a **real transitive edge** (`connector-cli → connector-flux →
+  connector-secrets`) rather than only a synthetic graph. A default `cargo test --workspace` produces
+  **zero** reqwest/hyper/rustls artifacts, so `no_network.rs` keeps meaning what it says.
+
+  `Secret` has no `Serialize`, `Display`, `Deref`, `AsRef` or `Hash`, and a `compile_fail` doctest
+  pins the first — confirmed by the reviewer to fail for the right reason rather than on a mistyped
+  path. Every Vault semantic is tested offline against a scripted transport, and the review recorded
+  plainly what that does and does not prove: the store's URL construction, envelope parsing and status
+  mapping — nothing about Vault itself.
+
+
+### Added
+
 - **The Stripe connector (C-106)** — the eighteenth provider. Eight operations selected from roughly
   450, graded by what they do to money: the refund is `destructive`, capture and cancel are `high`,
   and all three are `conditional` **earned rather than asserted** — each declares a *required*
