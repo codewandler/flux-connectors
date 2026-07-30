@@ -1,8 +1,13 @@
 <script setup lang="ts">
 // The filterable operation list.
 //
-// Every option in every select is read out of the catalogue — add a provider, a risk tier or an
-// idempotency class and the filters grow to cover it with no edit here.
+// Every option in every select is read out of the catalogue — add a provider, a service, a risk tier
+// or an idempotency class and the filters grow to cover it with no edit here.
+//
+// The service filter is the one that depends on another: choosing a connector narrows the services
+// to that connector's, because every other connector's service is an option that could not match a
+// single row. Choosing a service with no connector chosen stays valid, and is the useful direction —
+// it is how a visitor finds one surface of a large vendor without knowing which vendor publishes it.
 //
 // The last filter is the one that earns its place, and it is deliberately **not** "does it work".
 // `works` is false for all 25 operations today because no provider can make a live call yet, so
@@ -13,8 +18,15 @@
 // Filtering is plain component state. It narrows a list that is already fully rendered, so with
 // JavaScript switched off every operation is still on the page.
 
-import { computed, ref } from 'vue'
-import { facet, ownsDefect, type Operation, type Provider } from '../../../data/catalog.mts'
+import { computed, ref, watch } from 'vue'
+import {
+  facet,
+  operationService,
+  ownsDefect,
+  serviceFacet,
+  type Operation,
+  type Provider,
+} from '../../../data/catalog.mts'
 import OperationRow from './OperationRow.vue'
 
 const props = defineProps<{ providers: Provider[] }>()
@@ -23,6 +35,7 @@ const ANY = ''
 
 const query = ref('')
 const provider = ref(ANY)
+const service = ref(ANY)
 const risk = ref(ANY)
 const idempotency = ref(ANY)
 const defect = ref(ANY)
@@ -41,9 +54,25 @@ const idempotencies = computed(() =>
   facet(operations.value, (operation) => operation.idempotency)
 )
 
+/**
+ * The service options, narrowed to the chosen connector.
+ *
+ * The narrowing leaves nothing to choose for a connector that addresses a single surface, so the
+ * control is disabled rather than removed: a filter that disappeared under the cursor would move
+ * every control beside it.
+ */
+const services = computed(() => serviceFacet(props.providers, provider.value))
+
+// A chosen service that the chosen connector does not publish would filter every operation away and
+// read as an empty catalogue. Narrowing the options narrows the choice with them.
+watch(services, (options) => {
+  if (service.value !== ANY && !options.includes(service.value)) service.value = ANY
+})
+
 const shown = computed(() =>
   entries.value.filter(({ operation, owner }) => {
     if (provider.value !== ANY && owner.id !== provider.value) return false
+    if (service.value !== ANY && operation.service !== service.value) return false
     if (risk.value !== ANY && operation.risk !== risk.value) return false
     if (idempotency.value !== ANY && operation.idempotency !== idempotency.value) return false
     if (defect.value === 'own' && !ownsDefect(operation)) return false
@@ -62,6 +91,7 @@ const shown = computed(() =>
 function reset() {
   query.value = ''
   provider.value = ANY
+  service.value = ANY
   risk.value = ANY
   idempotency.value = ANY
   defect.value = ANY
@@ -82,6 +112,14 @@ function reset() {
         <option v-for="owner in providers" :key="owner.id" :value="owner.id">
           {{ owner.vendor }}
         </option>
+      </select>
+    </label>
+
+    <label class="filters__field">
+      <span>Service</span>
+      <select v-model="service" :disabled="!services.length">
+        <option :value="ANY">Any</option>
+        <option v-for="value in services" :key="value" :value="value">{{ value }}</option>
       </select>
     </label>
 
@@ -123,6 +161,7 @@ function reset() {
       :key="operation.id"
       :operation="operation"
       :vendor="owner.vendor"
+      :service="operationService(owner, operation)"
     />
   </ul>
 

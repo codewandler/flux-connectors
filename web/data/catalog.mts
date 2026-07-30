@@ -29,9 +29,28 @@ export interface Parameter {
   schema: Record<string, unknown>
 }
 
+/**
+ * One API surface of a provider — the unit that is addressed, versioned, selected and installed.
+ *
+ * A service owns its own `base_url` and `api_version`, defaulting to its provider's, and `gid` is the
+ * address a consumer copies. Both `api_version` and `gid` are `null` for a provider that declares
+ * neither, which is most of them.
+ */
+export interface Service {
+  name: string
+  description: string
+  base_url: string
+  hosts: string[]
+  api_version: string | null
+  gid: string | null
+  operation_count: number
+}
+
 export interface Operation {
   id: string
   provider: string
+  /** The service this operation belongs to — exactly one, and every operation has one. */
+  service: string
   description: string
   risk: string
   idempotency: string
@@ -64,10 +83,13 @@ export interface Auth {
 
 export interface Provider {
   id: string
+  authority: string | null
   vendor: string
   description: string
   base_url: string
+  api_version: string | null
   hosts: string[]
+  services: Service[]
   auth: Auth
   operation_count: number
   operations: Operation[]
@@ -179,4 +201,67 @@ export function schemaType(schema: Record<string, unknown>): string {
 /** The distinct values of one operation facet, in the order the catalogue declares them. */
 export function facet(operations: Operation[], pick: (operation: Operation) => string): string[] {
   return [...new Set(operations.map(pick))]
+}
+
+/**
+ * The reserved service name — the only name in this file that is not read out of the catalogue,
+ * because it is not catalogue data.
+ *
+ * It is vocabulary from the address grammar: an operation naming no service belongs to it, no
+ * provider may declare it, and it is elided from every published address and every file name. The
+ * consequence this site has to honour is that it is never rendered — a card listing it, or a filter
+ * offering it, would name something no address contains.
+ */
+const RESERVED_SERVICE = 'default'
+
+/** The services a provider publishes under a name of their own, in catalogue order. */
+export function namedServices(provider: Provider): Service[] {
+  return provider.services.filter((service) => service.name !== RESERVED_SERVICE)
+}
+
+/**
+ * The service options a visitor can choose from, narrowed to one connector when one is chosen.
+ *
+ * Dependent in one direction only, which is the obvious one: choosing a connector narrows the
+ * services to that connector's, and choosing a service with no connector chosen stays valid. A
+ * connector that addresses a single surface offers nothing here — its one service is the reserved
+ * one, and it names no address to filter on.
+ */
+export function serviceFacet(providers: Provider[], provider = ''): string[] {
+  const scope = provider ? providers.filter((owner) => owner.id === provider) : providers
+  return [...new Set(scope.flatMap((owner) => namedServices(owner).map((service) => service.name)))]
+}
+
+/**
+ * The service an operation should state, or `null` when its connector addresses a single surface.
+ *
+ * Naming the service of a connector that has only one would repeat what its card already says, and
+ * for the reserved one it would name something the address elides.
+ */
+export function operationService(provider: Provider, operation: Operation): string | null {
+  return namedServices(provider).length > 1 ? operation.service : null
+}
+
+/**
+ * The `api_version` worth showing for a service: `null` when it is its connector's own.
+ *
+ * A service inherits its connector's version unless it overrides it, so repeating the inherited
+ * value on every service would bury the one that actually differs.
+ */
+export function serviceApiVersion(provider: Provider, service: Service): string | null {
+  return service.api_version === provider.api_version ? null : service.api_version
+}
+
+/**
+ * The address a consumer copies for a connector that addresses a single surface, or `null`.
+ *
+ * `gid` is a property of a service, and for such a connector that service is the reserved one —
+ * whose name the address elides, which is exactly why the value reads as the connector's own rather
+ * than as a service's. It is `null` for every connector that declares no authority, and a null
+ * address renders as nothing at all: a placeholder would put a value on the page that the catalogue
+ * does not publish and no consumer could copy.
+ */
+export function providerAddress(provider: Provider): string | null {
+  const reserved = provider.services.find((service) => service.name === RESERVED_SERVICE)
+  return reserved?.gid ?? null
 }

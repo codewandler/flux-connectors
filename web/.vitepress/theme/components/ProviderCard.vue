@@ -5,15 +5,29 @@
 // The status line counts the operations that own a defect, not the ones that "work" — see
 // `data/catalog.mts`. Whatever holds the whole provider back is stated once, as a banner on the
 // card, because repeating it on each of its operations would say nothing about any of them.
+//
+// The services block appears only for a connector that publishes services of its own. A connector
+// that addresses a single surface publishes only the reserved service, which every address elides,
+// so its card is exactly what it was before services existed — a row naming a service the address
+// does not contain would be noise on most of the grid and wrong on all of it.
 
 import { computed } from 'vue'
-import { defectCount, providerIssues, type Provider } from '../../../data/catalog.mts'
+import {
+  defectCount,
+  namedServices,
+  providerAddress,
+  providerIssues,
+  serviceApiVersion,
+  type Provider,
+} from '../../../data/catalog.mts'
 import IssueNotice from './IssueNotice.vue'
 
 const props = defineProps<{ provider: Provider }>()
 
 const defects = computed(() => defectCount(props.provider.operations))
 const issues = computed(() => providerIssues(props.provider))
+const services = computed(() => namedServices(props.provider))
+const address = computed(() => providerAddress(props.provider))
 
 /**
  * The provider's headline status, derived so it flips on its own.
@@ -67,6 +81,10 @@ const headline = computed(() => {
           <code v-for="host in provider.hosts" :key="host">{{ host }}</code>
         </dd>
       </div>
+      <div v-if="address">
+        <dt>Address</dt>
+        <dd><code>{{ address }}</code></dd>
+      </div>
       <div>
         <dt>Operation-specific issues</dt>
         <dd :class="defects ? 'card__warn' : 'card__ok'">
@@ -74,6 +92,28 @@ const headline = computed(() => {
         </dd>
       </div>
     </dl>
+
+    <div v-if="services.length" class="card__services">
+      <h4 class="card__services-title">Services</h4>
+      <ul class="services">
+        <li
+          v-for="service in services"
+          :key="service.name"
+          class="service"
+          :data-service-of="provider.id"
+          :data-service="service.name"
+        >
+          <code class="service__name">{{ service.name }}</code>
+          <span class="service__count">
+            {{ service.operation_count }} operation{{ service.operation_count === 1 ? '' : 's' }}
+          </span>
+          <span v-if="serviceApiVersion(provider, service)" class="service__version">
+            {{ serviceApiVersion(provider, service) }}
+          </span>
+          <code v-if="service.gid" class="service__gid">{{ service.gid }}</code>
+        </li>
+      </ul>
+    </div>
 
     <IssueNotice
       title="Connector-wide availability limitation"
@@ -157,6 +197,53 @@ const headline = computed(() => {
 }
 
 .card__facts code {
+  font-size: 12px;
+}
+
+.card__services {
+  margin: 12px 0 0;
+}
+
+.card__services-title {
+  margin: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--vp-c-text-3);
+}
+
+.services {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.service {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--vp-c-text-2);
+}
+
+.service__name {
+  font-size: 12px;
+  color: var(--vp-c-text-1);
+}
+
+.service__version {
+  border-radius: 10px;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 18px;
+  background-color: var(--vp-c-default-soft);
+}
+
+.service__gid {
   font-size: 12px;
 }
 

@@ -24,6 +24,10 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+// The explorer's pure selectors, as a namespace: a selector that does not exist yet then fails the
+// test that asks for it, by name, instead of failing this file's import and taking the suite with it.
+import * as selectors from '../data/catalog.mts'
+
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = path.resolve(webRoot, '..')
 const catalogPath = path.join(webRoot, 'public', 'catalog.json')
@@ -46,6 +50,22 @@ function operations(document) {
 /** The issues an operation owns itself, as opposed to the ones it inherits. */
 function ownIssues(operation) {
   return operation.status.issues.filter((issue) => issue.scope === 'operation')
+}
+
+/**
+ * The reserved service name — the one name in this file that is not read out of the catalogue,
+ * because it is not catalogue data.
+ *
+ * It is vocabulary from the address grammar: an operation naming no service belongs to it, no
+ * provider may declare it, and it is elided from every published address. The consequence the
+ * explorer has to honour is that nothing renders it and no filter offers it — a card listing it, or
+ * an option selecting it, would name something no address contains.
+ */
+const RESERVED_SERVICE = 'default'
+
+/** The services a provider publishes under a name of their own, in catalogue order. */
+function namedServices(provider) {
+  return provider.services.filter((service) => service.name !== RESERVED_SERVICE)
 }
 
 /** One built page, as HTML. */
@@ -333,6 +353,154 @@ test('the explorer lists every provider and every operation without JavaScript',
   }
 })
 
+test('the service filter is a facet of the catalogue and narrows to the chosen connector', () => {
+  const providers = catalog().providers
+
+  const published = [
+    ...new Set(providers.flatMap((provider) => namedServices(provider).map((s) => s.name))),
+  ]
+  assert.ok(published.length > 0, 'no connector publishes a named service; this would pass vacuously')
+
+  // With no connector chosen, every service the catalogue publishes is on offer — and the reserved
+  // one never is, at any narrowing.
+  assert.deepEqual(selectors.serviceFacet(providers), published)
+  for (const provider of providers) {
+    assert.ok(
+      !selectors.serviceFacet(providers, provider.id).includes(RESERVED_SERVICE),
+      'the service filter offers the reserved service, which names no address'
+    )
+  }
+
+  // Choosing a connector narrows the options to that connector's own, in catalogue order.
+  for (const provider of providers) {
+    assert.deepEqual(
+      selectors.serviceFacet(providers, provider.id),
+      namedServices(provider).map((service) => service.name),
+      `choosing \`${provider.id}\` does not narrow the service options to its own`
+    )
+  }
+
+  // The narrowing is worth having only if the catalogue actually varies: at least one connector
+  // publishes several services and at least one publishes none of its own.
+  const several = providers.filter((provider) => namedServices(provider).length > 1)
+  const single = providers.filter((provider) => namedServices(provider).length === 0)
+  assert.ok(several.length > 0, 'no connector publishes more than one service')
+  assert.ok(single.length > 0, 'every connector publishes a named service')
+
+  // A chosen service never empties the list by construction: every operation of a multi-service
+  // connector belongs to one of the options that connector offers.
+  for (const provider of several) {
+    const options = selectors.serviceFacet(providers, provider.id)
+    for (const operation of provider.operations) {
+      assert.ok(
+        options.includes(operation.service),
+        `\`${operation.id}\` belongs to a service its connector does not offer as an option`
+      )
+    }
+  }
+})
+
+test('the explorer shows the services a connector publishes, and never the reserved one', () => {
+  const document = catalog()
+  const explorer = page('explorer.html')
+
+  for (const provider of document.providers) {
+    const services = namedServices(provider)
+
+    if (services.length === 0) {
+      // A connector with one surface says nothing about services at all. Fifteen cards growing a
+      // row reading `default` would contradict the address it is elided from.
+      assert.doesNotMatch(
+        explorer,
+        new RegExp(`data-service-of="${provider.id}"`),
+        `\`${provider.id}\` addresses one surface and its card still lists a service`
+      )
+      continue
+    }
+
+    for (const service of services) {
+      assert.match(
+        explorer,
+        new RegExp(`data-service-of="${provider.id}"[^>]*data-service="${service.name}"`),
+        `the card for \`${provider.id}\` does not list its service \`${service.name}\``
+      )
+      assert.equal(
+        selectors.serviceApiVersion(provider, service),
+        service.api_version === provider.api_version ? null : service.api_version,
+        `the version shown for \`${service.name}\` repeats or drops its connector's`
+      )
+    }
+
+    // The count each service carries, and the version where it differs from its connector's.
+    const start = explorer.indexOf(`id="${provider.id}"`)
+    const card = explorer.slice(start, explorer.indexOf('</section>', start))
+    for (const service of services) {
+      const entry = card.slice(card.indexOf(`data-service="${service.name}"`))
+      const rendered = text(entry.slice(0, entry.indexOf('</li>')))
+      assert.ok(
+        rendered.includes(String(service.operation_count)),
+        `the service \`${service.name}\` does not show its operation count`
+      )
+      const version = selectors.serviceApiVersion(provider, service)
+      if (version) {
+        assert.ok(
+          rendered.includes(version),
+          `the service \`${service.name}\` does not show the version that differs from its connector's`
+        )
+      }
+    }
+  }
+
+  // An operation states its service exactly when its connector addresses more than one surface.
+  for (const provider of document.providers) {
+    const labelled = namedServices(provider).length > 1
+    for (const operation of provider.operations) {
+      if (labelled) {
+        assert.match(
+          explorer,
+          new RegExp(
+            `data-operation="${operation.id}"[^>]*data-service="${operation.service}"|data-service="${operation.service}"[^>]*data-operation="${operation.id}"`
+          ),
+          `the row for \`${operation.id}\` does not say which service it belongs to`
+        )
+      } else {
+        assert.doesNotMatch(
+          explorer,
+          new RegExp(`data-operation="${operation.id}"[^>]*data-service=`),
+          `the row for \`${operation.id}\` names a service its connector does not publish`
+        )
+      }
+    }
+  }
+})
+
+test('a published service address is shown, and an absent one is shown as nothing', () => {
+  const document = catalog()
+  const explorer = page('explorer.html')
+
+  const addresses = document.providers
+    .flatMap((provider) => provider.services.map((service) => service.gid))
+    .filter((gid) => gid !== null)
+  assert.ok(addresses.length > 0, 'no service publishes an address; this would pass vacuously')
+
+  const body = text(explorer)
+  for (const address of addresses) {
+    assert.ok(body.includes(address), `the explorer does not show the address \`${address}\``)
+  }
+
+  // Most services declare no authority and so have no address. Rendering that as a placeholder
+  // would put a value on the page the catalogue does not publish.
+  const absent = document.providers
+    .flatMap((provider) => provider.services)
+    .filter((service) => service.gid === null)
+  assert.ok(absent.length > 0, 'every service publishes an address; the null case is untested')
+  assert.doesNotMatch(
+    body,
+    /\bnull\b/,
+    'the explorer renders a null the catalogue does not publish'
+  )
+})
+
 test('nothing about the catalogue is hand-maintained in the explorer sources', () => {
   const document = catalog()
 
@@ -343,6 +511,13 @@ test('nothing about the catalogue is hand-maintained in the explorer sources', (
     forbidden.add(provider.base_url)
     provider.hosts.forEach((host) => forbidden.add(host))
     provider.auth.credentials.forEach((credential) => forbidden.add(credential.name))
+    // A service name and a published address are catalogue data like any other. The reserved name
+    // is the one exception, and only because it is not data: it is grammar the site has to know
+    // about in order to render nothing for it.
+    for (const service of provider.services) {
+      if (service.name !== RESERVED_SERVICE) forbidden.add(service.name)
+      if (service.gid) forbidden.add(service.gid)
+    }
     for (const operation of provider.operations) {
       forbidden.add(operation.id)
       operation.status.issues.forEach((issue) => forbidden.add(issue.code))
