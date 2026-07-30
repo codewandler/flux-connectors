@@ -37,6 +37,7 @@ Gate: `cargo build --workspace && cargo test --workspace && cargo clippy --works
 _Authentication is currently something the **host** does *around* a connector: `OAuth2Spec` declares_
 - [C-134 — Authentication as a connector surface — a login that cannot leak (epic)](C-134-authentication-surface-epic.md) · Spec · EPIC — an operation's result becomes a session value the model can read, so a login that RETURNS its token hands a bearer credential to an LLM. The answer is structural: divert to the store, return a CredentialRef. Redaction cannot work here — C-79 already proves why
 - [C-136 — A credential-producing operation returns a handle, never the secret](C-136-credential-diversion.md) · Spec · THE safety story of its epic. An operation's result becomes a session value a model can read and a log can print, so a login that returns its token has already lost. Redaction cannot save it — a token minted BY THIS CALL is unknown to the redactor until after it arrives
+- [C-152 — The redaction guarantee has two holes and one vacuous assertion](C-152-redaction-guarantee-has-holes.md) · Bridge · found by C-116's review. flux's Redactor SILENTLY DROPS values under 6 trimmed characters, so a short credential travels unredacted through all four surfaces — and our docs state the guarantee unconditionally. Plus auth::Assembled derives Debug over the plaintext
 - [C-135 — The authentication role and its grant members](C-135-authentication-role.md) · Spec · reuses C-119's role mechanism rather than inventing a category beside it. OAuthGrant already exists with Password (babelforce's flow) and ClientCredentials — this gives OAuth2Spec its first real consumer
 
 ### Babelforce Ivr
@@ -151,7 +152,6 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-26 — File the outbound $auth seam stories on flux's board](C-26-file-seam-stories-on-flux.md) · Bridge · **critical path** · 11 paste-ready drafts wait on a decision to write into ../flux
 - [C-35 — Specify the proxy request contract and its guardrails](C-35-proxy-request-contract.md) · Bridge · blocked on C-34
 - [C-36 — Prove the proxy and the Flux emitter build the same request](C-36-proxy-emitter-conformance.md) · Bridge · blocked on C-34 · two backends over one IR will drift without this
-- [C-116 — The CredentialStore port, in-Rust auth assembly, and redaction](C-116-credential-store-port.md) · Bridge · finally wires C-90's Layout/CredentialRef to a consumer — and removes the $auth seam from milestone 1's critical path, because a Tool builds `Bearer <token>` itself
 
 ## Backlog
 
@@ -240,6 +240,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-112 — Publish Flux core specifications in the connector explorer](C-112-publish-flux-core-specifications-in-the-explorer.md) · UX · Built-ins and language nodes become searchable beside connectors, with canonical JSON identities rather than fake providers
 - [C-114 — The connector-pack crate and the ToolSpec projection](C-114-tool-spec-projection.md) · Bridge · the foundation the rest of the epic builds on — a catalogue entry becomes a flux ToolSpec, dotted name and all
 - [C-115 — Request construction, delegation to http.request, and the mirrored network gate](C-115-request-delegation.md) · Bridge · SAFETY — delegating to HttpRequestTool::execute bypasses Executor::dispatch, so a Tool that fails to declare its own permission_subjects is an un-gated hole through the host's network policy
+- [C-116 — The CredentialStore port, in-Rust auth assembly, and redaction](C-116-credential-store-port.md) · Bridge · finally wires C-90's Layout/CredentialRef to a consumer — and removes the $auth seam from milestone 1's critical path, because a Tool builds `Bearer <token>` itself
 - [C-120 — Declare roles on a service, with the closed set and its refusals](C-120-service-roles-declaration.md) · Spec · the mechanism — roles attach to a SERVICE and a provider's are derived; an unknown role name is a load error, because a typo'd capability that silently means 'no capability' is the whole failure mode
 - [C-125 — Compose one input_schema per operation](C-125-composed-input-schema.md) · Codegen · mechanical, with a clear right answer, and an immediate consumer — ToolSpec.input_schema is REQUIRED, so C-114 must otherwise invent its own and disagree with the catalogue
 - [C-142 — Detach the explorer components from VitePress: a link port and a tier boundary](C-142-reusable-explorer-components.md) · Codegen · measured, not guessed: 6 of 14 components import `vitepress`, and between them they use exactly two symbols. No `useData`, no `useRouter`, no theme internals — so this is a link port and a tier boundary, not a rewrite

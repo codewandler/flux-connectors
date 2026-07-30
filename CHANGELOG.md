@@ -7,6 +7,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A connector can now authenticate (C-116).** A `CredentialStore` port is bound when the pack is
+  constructed — never looked up globally — over C-91's `SecretStore` and C-90's `CredentialRef`
+  addressing, which had no consumer until now. Auth is assembled **in Rust**: the `Bearer` prefix, the
+  basic-auth base64, query placement, honouring the source × acquisition × placement axes.
+
+  That is what takes flux's `$auth` seam off the critical path. The whole-value `{"$secret"}` marker
+  never needs to grow prefix or encode support, because the pack builds the header value itself.
+
+  **The secret is registered with the redactor before the request is constructed**, so a failure
+  between construction and dispatch cannot surface it. An independent review reproduced the proof by
+  removing only that registration and watching the test go red, confirmed the four `ToolResult`
+  surfaces are the complete set, and established that `permission_subjects` returning the
+  *unauthenticated* URL is **necessary** rather than merely tidy: flux consults it before `execute`, so
+  the redactor is still empty at that moment.
+
+  A missing credential names the `CredentialRef` that was not found and sends nothing.
+
+  Follow-ups from the review are filed as C-152 — most importantly that flux's `Redactor` silently
+  drops values under six characters, so the guarantee as documented is stronger than the one that holds.
+
+
 ### Fixed
 
 - **A test that reported `ok` when it skipped (C-149).** The live Vault leg printed `ok / 1 passed`
