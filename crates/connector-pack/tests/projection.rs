@@ -6,7 +6,29 @@
 //! `google-calendar-calendar-get` is a projection that ships broken.
 
 use catalog::{OperationKey, ProviderKey};
+use connector_pack::Egress;
 use flux_runtime::ToolRegistry;
+
+/// A stand-in for flux's `http.request`, which every projected operation delegates its egress to.
+///
+/// A host supplies `flux_web::http::HttpRequestTool`; this file asserts the *projection*, so what
+/// the transport is does not matter here beyond it being one.
+fn http() -> Egress {
+    Egress::new(flux_runtime::tool_fn(
+        flux_spec::ToolSpec {
+            name: "http.request".into(),
+            description: "a stand-in".into(),
+            input_schema: serde_json::json!({"type": "object"}),
+            output_schema: None,
+            effects: vec![flux_spec::Effect::Network],
+            risk: flux_spec::Risk::Medium,
+            idempotency: flux_spec::Idempotency::NonIdempotent,
+            access: vec![flux_spec::AccessKind::Network],
+            group: None,
+        },
+        |params| async move { Ok(params) },
+    ))
+}
 
 /// Every provider the catalogue ships, in its own stable order.
 fn every_provider() -> Vec<&'static str> {
@@ -27,7 +49,7 @@ fn every_shipped_operation_projects_to_a_registrable_spec() {
     let providers = every_provider();
     let mut registry = ToolRegistry::new();
 
-    connector_pack::pack(&providers)(&mut registry)
+    connector_pack::pack(&providers, http())(&mut registry)
         .expect("the shipped catalogue installs into an empty registry");
 
     let mut projected = 0usize;
@@ -78,7 +100,7 @@ fn every_shipped_operation_projects_to_a_registrable_spec() {
 #[test]
 fn the_reference_flow_resolves_every_operation_it_calls() {
     let mut registry = ToolRegistry::new();
-    connector_pack::pack(&["zendesk"])(&mut registry).expect("zendesk installs");
+    connector_pack::pack(&["zendesk"], http())(&mut registry).expect("zendesk installs");
 
     for name in [
         "zendesk.test",
@@ -98,7 +120,7 @@ fn the_reference_flow_resolves_every_operation_it_calls() {
 #[test]
 fn the_spec_carries_the_catalogue_entry_and_invents_nothing() {
     let mut registry = ToolRegistry::new();
-    connector_pack::pack(&["zendesk"])(&mut registry).expect("zendesk installs");
+    connector_pack::pack(&["zendesk"], http())(&mut registry).expect("zendesk installs");
 
     let operation = catalog::operation(OperationKey::id("zendesk-ticket-comment-add"))
         .expect("the shipped catalogue carries zendesk-ticket-comment-add");
@@ -134,10 +156,10 @@ fn the_spec_carries_the_catalogue_entry_and_invents_nothing() {
 #[test]
 fn a_collision_surfaces_fluxs_duplicate_diagnostic_rather_than_panicking() {
     let mut registry = ToolRegistry::new();
-    connector_pack::pack(&["zendesk"])(&mut registry).expect("the first install succeeds");
+    connector_pack::pack(&["zendesk"], http())(&mut registry).expect("the first install succeeds");
 
     // The same provider again: every one of its operations collides with itself.
-    let error = connector_pack::pack(&["zendesk"])(&mut registry)
+    let error = connector_pack::pack(&["zendesk"], http())(&mut registry)
         .expect_err("installing the same provider twice must be refused, not silently merged");
     let rendered = error.to_string();
 
@@ -159,24 +181,33 @@ fn a_collision_surfaces_fluxs_duplicate_diagnostic_rather_than_panicking() {
 #[test]
 fn an_unknown_provider_is_refused_rather_than_installed_as_nothing() {
     let mut registry = ToolRegistry::new();
-    let error = connector_pack::pack(&["salesforce"])(&mut registry)
+    let error = connector_pack::pack(&["salesforce"], http())(&mut registry)
         .expect_err("an unknown provider must be refused");
 
     assert!(error.to_string().contains("salesforce"), "{error}");
     assert!(registry.names().is_empty());
 }
 
-/// `execute` is C-115. Until it lands, a host that reaches it must get an error naming the story —
-/// never a panic, which in a host process is strictly worse than a failed tool call.
+/// `execute` builds a request and delegates it (C-115), so a call it cannot build must be an error
+/// naming the operation and the parameter — never a panic, which in a host process is strictly
+/// worse than a failed tool call, and never a partly-assembled request, which the vendor answers.
 ///
 /// Constructing a real [`flux_runtime::ToolContext`] needs a `flux_system::System` over a real
 /// workspace root, which is a filesystem-and-environment dependency out of all proportion to what
-/// is being asserted. So `execute`'s whole body is `Err(self.not_wired_yet())` and the error it
-/// returns is asserted here, on a tool taken out of the registry the pack built.
+/// is being asserted — and `execute`'s whole body is `build_request` plus a delegation. So the
+/// refusal is asserted where it is decided. `tests/request.rs` covers what a *successful* build
+/// produces.
 #[test]
-fn execute_reports_that_it_is_not_wired_yet_rather_than_panicking() {
-    let error = connector_pack::not_wired_yet("zendesk.ticket.show").to_string();
+fn a_call_that_cannot_be_built_is_refused_by_name_rather_than_panicking() {
+    let entry = catalog::operation(OperationKey::id("zendesk-ticket-show"))
+        .expect("the shipped catalogue carries zendesk-ticket-show");
+    let operation = connector_pack::Operation::project(entry, http()).expect("the entry projects");
 
-    assert!(error.contains("C-115"), "{error}");
-    assert!(error.contains("zendesk.ticket.show"), "{error}");
+    let error = operation
+        .build_request(&serde_json::json!({}))
+        .expect_err("a call with no `ticket_id` is not a request")
+        .to_string();
+
+    assert!(error.contains("zendesk-ticket-show"), "{error}");
+    assert!(error.contains("ticket_id"), "{error}");
 }

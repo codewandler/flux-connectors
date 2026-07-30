@@ -2,9 +2,21 @@
 //!
 //! ```no_run
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! # use flux_runtime::ToolRegistry;
+//! # use std::sync::Arc;
+//! # use connector_pack::Egress;
+//! # use flux_runtime::{Tool, ToolRegistry};
+//! # let configured_http_request_tool: Arc<dyn Tool> = flux_runtime::tool_fn(
+//! #     flux_spec::ToolSpec { name: "http.request".into(), description: String::new(),
+//! #         input_schema: serde_json::json!({}), output_schema: None, effects: Vec::new(),
+//! #         risk: flux_spec::Risk::Medium, idempotency: flux_spec::Idempotency::NonIdempotent,
+//! #         access: Vec::new(), group: None },
+//! #     |params| async move { Ok(params) });
+//! // flux's own `http.request`, already configured by the host — in a host that uses flux-web,
+//! // `Arc::new(flux_web::http::HttpRequestTool::new(&options))`.
+//! let http = Egress::new(configured_http_request_tool);
+//!
 //! let mut registry = ToolRegistry::new();
-//! connector_pack::pack(&["zendesk"])(&mut registry)?;
+//! connector_pack::pack(&["zendesk"], http)(&mut registry)?;
 //!
 //! assert!(registry.get("zendesk.ticket.show").is_some());
 //! # Ok(())
@@ -14,8 +26,9 @@
 //! or, from a host that uses flux's SDK, the same value straight into the builder:
 //!
 //! ```ignore
+//! let http = Egress::new(Arc::new(flux_web::http::HttpRequestTool::new(&web_options)));
 //! let client = flux_sdk::Client::builder()
-//!     .try_register_pack(connector_pack::pack(&["zendesk", "slack"]))
+//!     .try_register_pack(connector_pack::pack(&["zendesk", "slack"], http))
 //!     .build()?;
 //! ```
 //!
@@ -40,21 +53,36 @@
 //! [`pack`] hands it declarations. The compiler crates — `connector-spec`, `connector-flux`,
 //! `connector-cli` — link none of this, and `connector-catalog` stays dependency-free.
 //!
+//! # flux keeps every byte of egress
+//!
+//! `Tool::execute` builds `{ method, url, headers, body }` and hands it to flux's own
+//! `http.request`, passing the **same** `ctx`. This crate opens no socket, holds no HTTP client and
+//! resolves no host: the transport is a constructor argument, so a host supplies the instance it has
+//! already configured with its SSRF guard, its private-network grant and its audit sink.
+//!
+//! That delegation calls `http.request`'s `execute` directly, which **bypasses
+//! `Executor::dispatch`** — so `http.request`'s own `permission_subjects` and `intents` are never
+//! consulted for the inner call. Both have default trait implementations returning empty, so a Tool
+//! that omitted them would compile, register, execute, reach the vendor, and never have the host's
+//! network policy consulted. [`Operation`] declares both itself and `tests/network_gate.rs` holds
+//! every shipped operation to it.
+//!
 //! # What is not here yet
 //!
-//! `Tool::execute` returns [`not_wired_yet`]. Building the request and delegating it to flux's own
-//! `HttpRequestTool` is **C-115**, and the credential port is **C-116**. Registering this pack today
-//! gives a host a complete, gated *catalogue* of what a connector offers and no way to call it —
-//! which is the honest state, and a better one than a call that reaches a vendor without the
-//! network gate C-115 must mirror.
+//! **No credential is applied.** The credential port is **C-116**, and until it lands a call
+//! reaches the vendor unauthenticated — a fail-closed 401 rather than a silent wrong answer.
+//! Response shaping is likewise absent: `http.request` returns one flat string
+//! (`HTTP {status}\n{headers}\n{body}`), which is returned whole.
 
 mod name;
+mod request;
 mod spec;
 mod tool;
 
 pub use name::{dotted_name, NameError};
+pub use request::Request;
 pub use spec::project;
-pub use tool::Operation;
+pub use tool::{Egress, Operation};
 
 use catalog::ProviderKey;
 use flux_runtime::{Tool, ToolRegistry};
@@ -150,26 +178,59 @@ pub enum Error {
         /// The operation the embedded Flux actually declares.
         declared: String,
     },
+
+    /// An entry naming no host, which therefore cannot be network-gated.
+    ///
+    /// [`Operation::permission_subjects`](flux_runtime::Tool::permission_subjects) falls back to
+    /// the declared hosts when a request cannot be built, so an entry with none would answer
+    /// *empty* exactly when the answer matters most — and empty is the default the trait hands out
+    /// for free, indistinguishable from a considered answer at every other layer. Unreachable for a
+    /// catalogue this repository generated: `http_hosts` derives from a service's `base_url`
+    /// (C-10), which is mandatory.
+    #[error(
+        "`{operation}` declares no host, so no permission subject could name where it goes; a \
+         connector that cannot be network-gated does not install"
+    )]
+    NoDeclaredHost {
+        /// The operation id.
+        operation: String,
+    },
+
+    /// A call that omitted a parameter the operation declares.
+    ///
+    /// Refused rather than defaulted, because the failure it prevents is silent: an absent path
+    /// parameter leaves its `{placeholder}` verbatim in the URL (flux's interpolator does not drop
+    /// an unbound name), and the vendor answers that request. This is the same contract flux's own
+    /// composite dispatch applies — every declared parameter is required, and an *optional* one is
+    /// a parameter a caller may pass `null` for.
+    #[error("`{operation}` was called without `{parameter}`, which it declares")]
+    MissingParameter {
+        /// The operation id.
+        operation: String,
+        /// The parameter that was not supplied.
+        parameter: String,
+    },
+
+    /// An operation whose emitted body this pack cannot evaluate into a request.
+    ///
+    /// The refusal is the point. `connector-flux` emits one closed shape and
+    /// [`crate::request`](crate) models exactly it; a body that grew a node beyond that — a quirk
+    /// compiled into control flow (C-12), a `retry` — must fail here, because the alternative is a
+    /// request assembled from *part* of an operation and sent anyway. A partly-evaluated request is
+    /// not a degraded request, it is a different call, and the vendor answers it.
+    #[error("`{operation}` cannot be built into a request: {message}")]
+    Unbuildable {
+        /// The operation id.
+        operation: String,
+        /// What the evaluator refused.
+        message: String,
+    },
 }
 
 impl From<Error> for flux_core::Error {
     fn from(error: Error) -> Self {
         flux_core::Error::Config(error.to_string())
     }
-}
-
-/// The error a host gets from an operation whose request path has not been built yet.
-///
-/// `execute` is **C-115**. Until it lands, reaching one of these tools has to produce something,
-/// and the choice is between a panic and an error. A panic is worse: it crosses into a host process
-/// that did nothing wrong, and `unimplemented!()` inside a `Tool` is reachable by any model that
-/// picks the operation out of the catalogue this pack just advertised.
-pub fn not_wired_yet(name: &str) -> flux_core::Error {
-    flux_core::Error::Config(format!(
-        "`{name}` is declared but not yet wired: this connector pack projects operations onto tool \
-         specs, and request execution lands in C-115. Call the operation through the connector's \
-         `.flux` module until then"
-    ))
 }
 
 /// **The pack.** Install every operation of each named provider into a host's registry.
@@ -189,25 +250,36 @@ pub fn not_wired_yet(name: &str) -> flux_core::Error {
 /// The provider names are copied at call time, so the returned closure is independent of the slice
 /// it was built from.
 ///
+/// # The transport is an argument
+///
+/// Every operation this pack installs delegates its egress to the one [`Egress`] handed in here.
+/// Taking it rather than constructing it is what lets a host supply the tool it has already
+/// configured — its egress allow-list, its private-network grant, its audit sink. Constructing one
+/// here would silently give connectors a *different* network policy from the rest of the host. See
+/// [`Egress`] for what a substitute must honour, and for the one thing its type cannot enforce.
+///
 /// # Errors
 ///
 /// The closure returns an error when a named provider is not in the catalogue, when an operation
 /// cannot be projected, or when flux refuses the registration. Nothing is installed for a provider
 /// whose install failed; providers listed before it are already in, because a partially-composed
 /// registry is the caller's to discard.
-pub fn pack(providers: &[&str]) -> impl FnOnce(&mut ToolRegistry) -> flux_core::Result<()> {
+pub fn pack(
+    providers: &[&str],
+    http: Egress,
+) -> impl FnOnce(&mut ToolRegistry) -> flux_core::Result<()> {
     let requested: Vec<String> = providers.iter().map(|name| (*name).to_string()).collect();
 
     move |registry: &mut ToolRegistry| {
         for provider in &requested {
-            install(registry, provider)?;
+            install(registry, provider, &http)?;
         }
         Ok(())
     }
 }
 
 /// Install one provider's operations under one source label.
-fn install(registry: &mut ToolRegistry, provider: &str) -> flux_core::Result<()> {
+fn install(registry: &mut ToolRegistry, provider: &str, http: &Egress) -> flux_core::Result<()> {
     let entry =
         catalog::provider(ProviderKey::id(provider)).ok_or_else(|| Error::UnknownProvider {
             provider: provider.to_owned(),
@@ -217,7 +289,9 @@ fn install(registry: &mut ToolRegistry, provider: &str) -> flux_core::Result<()>
     let tools = entry
         .operations
         .iter()
-        .map(|operation| Ok(Arc::new(Operation::project(operation)?) as Arc<dyn Tool>))
+        .map(
+            |operation| Ok(Arc::new(Operation::project(operation, http.clone())?) as Arc<dyn Tool>),
+        )
         .collect::<Result<Vec<_>, Error>>()?;
 
     registry.try_register_all_from(source_label(entry.id), tools)
@@ -232,13 +306,36 @@ fn source_label(provider: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    /// A stand-in for flux's `http.request`, for tests that need a transport but not a socket.
+    ///
+    /// A real [`flux_runtime::ToolContext`] needs a `flux_system::System` over a real workspace
+    /// root, so `execute` itself is not reachable from this crate's tests at all. What is asserted
+    /// instead is [`Operation::build_request`] — the request *before* it is sent, which is where the
+    /// two mistakes that matter live, and which a live call would prove nothing extra about.
+    pub(crate) fn recording_http() -> Egress {
+        Egress::new(flux_runtime::tool_fn(
+            flux_spec::ToolSpec {
+                name: "http.request".into(),
+                description: "a stand-in that echoes the request it was handed".into(),
+                input_schema: serde_json::json!({"type": "object"}),
+                output_schema: None,
+                effects: vec![flux_spec::Effect::Network],
+                risk: flux_spec::Risk::Medium,
+                idempotency: flux_spec::Idempotency::NonIdempotent,
+                access: vec![flux_spec::AccessKind::Network],
+                group: None,
+            },
+            |params| async move { Ok(params) },
+        ))
+    }
 
     #[test]
     fn a_providers_operations_are_labelled_with_the_provider() {
         let mut registry = ToolRegistry::new();
-        pack(&["zendesk"])(&mut registry).expect("zendesk installs");
+        pack(&["zendesk"], recording_http())(&mut registry).expect("zendesk installs");
 
         assert_eq!(
             registry.source("zendesk.ticket.show"),
@@ -252,7 +349,7 @@ mod tests {
     fn the_pack_outlives_the_names_it_was_built_from() {
         let install = {
             let names = vec!["zendesk"];
-            pack(&names)
+            pack(&names, recording_http())
         };
 
         let mut registry = ToolRegistry::new();
@@ -264,7 +361,7 @@ mod tests {
     #[test]
     fn several_providers_install_together() {
         let mut registry = ToolRegistry::new();
-        pack(&["zendesk", "slack"])(&mut registry).expect("both install");
+        pack(&["zendesk", "slack"], recording_http())(&mut registry).expect("both install");
 
         assert!(registry.get("zendesk.ticket.show").is_some());
         assert!(registry.get("slack.chat.post.message").is_some());
@@ -277,9 +374,29 @@ mod tests {
     #[test]
     fn an_unknown_provider_names_itself() {
         let mut registry = ToolRegistry::new();
-        let error = pack(&["salesforce"])(&mut registry).expect_err("no such connector");
+        let error =
+            pack(&["salesforce"], recording_http())(&mut registry).expect_err("no such connector");
 
         assert!(error.to_string().contains("salesforce"), "{error}");
         assert!(registry.names().is_empty());
+    }
+
+    /// **One transport for the whole pack.** Every operation delegates to the instance the host
+    /// supplied, so a host that configured one egress policy does not find connectors quietly using
+    /// another.
+    #[test]
+    fn every_operation_delegates_to_the_transport_the_host_supplied() {
+        let http = recording_http();
+        let entries = catalog::operations_of(ProviderKey::id("zendesk"));
+        assert!(!entries.is_empty(), "zendesk carries operations");
+
+        for entry in entries {
+            let operation = Operation::project(entry, http.clone()).expect("the entry projects");
+            assert!(
+                Arc::ptr_eq(http.tool(), operation.egress().tool()),
+                "`{}` holds a transport the host did not supply",
+                entry.id
+            );
+        }
     }
 }

@@ -59,16 +59,14 @@
 //! `Process` carrier that exists for tools which shell out to a program that reaches the network on
 //! their behalf.
 //!
-//! ## What this does *not* yet gate
+//! ## The gate is not in the spec, and that is worth saying here
 //!
-//! `Tool::permission_subjects` and `Tool::intents` are still the trait's empty defaults, and that is
-//! tolerable **only** because [`crate::not_wired_yet`] means nothing registered here reaches the
-//! network at all.
-//!
-//! **C-115 changes that.** The moment `execute` delegates to `HttpRequestTool`, the network gate
-//! must be mirrored onto both, because calling `HttpRequestTool::execute` directly bypasses
-//! `Executor::dispatch` and neither is otherwise consulted for the inner call. That is the single
-//! most dangerous way this design can be implemented wrongly while appearing to work.
+//! `access` and `effects` are what flux's *authority* checker reads. They are not the network gate:
+//! `Tool::permission_subjects` and `Tool::intents` are, and both live on [`crate::Operation`]
+//! because both depend on the **call's params**, which a spec never sees. Since C-115 `execute`
+//! delegates to `http.request` by calling its `execute` directly, which bypasses
+//! `Executor::dispatch` and so consults neither of `http.request`'s own — the projected Tool
+//! declares them itself, and `tests/network_gate.rs` holds it to that over every shipped operation.
 
 use flux_lang::ast::TypeRef;
 use flux_lang::opspec::{OpSpec, Param};
@@ -88,12 +86,23 @@ use crate::{dotted_name, Error};
 /// generated op declares `["network"]` alone — so they are reported as the corrupt-input cases they
 /// would be rather than unwrapped.
 pub fn project(operation: &catalog::Operation) -> Result<ToolSpec, Error> {
-    let name = dotted_name(operation.id).map_err(|source| Error::Name {
-        operation: operation.id.to_owned(),
+    let declaration = declaration_of(operation.id, operation.flux)?;
+    project_declaration(operation.id, &declaration)
+}
+
+/// [`project`], over a declaration already parsed.
+///
+/// The split exists because [`crate::Operation`] needs the declaration itself — C-115 builds the
+/// request by evaluating it — and parsing the same Flux twice to get two views of it is one parse
+/// that could disagree with the other.
+pub(crate) fn project_declaration(
+    id: &str,
+    declaration: &CompositeOpDecl,
+) -> Result<ToolSpec, Error> {
+    let name = dotted_name(id).map_err(|source| Error::Name {
+        operation: id.to_owned(),
         source,
     })?;
-
-    let declaration = declaration_of(operation.id, operation.flux)?;
 
     // Schema projection is flux's, not ours: `OpSpec::lower` is the function flux itself uses to
     // put a typed op contract in front of a model, including `type_ref_to_schema` and the
@@ -136,7 +145,7 @@ pub fn project(operation: &catalog::Operation) -> Result<ToolSpec, Error> {
     // flux while claiming a capability the connector does not have.
     flux_runtime::authority_requirements_from_declaration(&spec, &[], &[]).map_err(|error| {
         Error::Unregistrable {
-            operation: operation.id.to_owned(),
+            operation: id.to_owned(),
             message: error.to_string(),
         }
     })?;
@@ -178,7 +187,7 @@ fn access_for(effects: &[Effect]) -> Vec<AccessKind> {
 /// Takes the id and the Flux separately rather than the entry, so the corrupt-input paths can be
 /// tested without fabricating a `catalog::Operation` — the type is `#[non_exhaustive]`, and rightly
 /// so.
-fn declaration_of(id: &str, flux: &str) -> Result<CompositeOpDecl, Error> {
+pub(crate) fn declaration_of(id: &str, flux: &str) -> Result<CompositeOpDecl, Error> {
     let module =
         flux_lang::program::Module::parse_str(flux).map_err(|error| Error::Unparsable {
             operation: id.to_owned(),
