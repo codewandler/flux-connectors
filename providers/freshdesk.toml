@@ -1,0 +1,495 @@
+# Freshdesk — hand-authored, no vendor spec.
+#
+# Transcribed from `docs/designs/provider-operation-inventory.md` §4, which derives the operation
+# set from action-proxy's `freshdesk` collection (649 lines of YAML). action-proxy is mined for
+# endpoint facts only; it is the problem statement, not the template. Freshdesk publishes no
+# machine-readable description we know of (§1.2), so this file stays hand-authored and its drift is
+# undetectable by machine (§6.7).
+#
+# Source defects in the collection are corrected here rather than reproduced — each correction is
+# marked `§6.4` and is one of the rows in that table.
+
+id = "freshdesk"
+vendor = "Freshdesk"
+
+# Every Freshdesk account lives on its own domain, recorded by the inventory as operator config in
+# `FRESHDESK_DOMAIN`, e.g. `my-company.freshdesk.com` (§4.1). The `/api/v2` prefix is part of the
+# base URL, so operation paths below are collection-relative.
+#
+# SCHEMA GAP: as with zendesk, nothing binds `{domain}` to `FRESHDESK_DOMAIN`. Reported with C-17.
+base_url = "https://{domain}/api/v2"
+
+description = "Freshdesk ticketing: list, read, create and update tickets and the contacts they belong to"
+
+# ---------------------------------------------------------------------------------------------
+# Credentials — DELIBERATELY ABSENT. Read this before adding one.
+# ---------------------------------------------------------------------------------------------
+#
+# Freshdesk authenticates with `Authorization: Basic base64(<api_key>:X)` — the **secret occupies
+# the username position** and the password is the literal constant `X` (§4.1,
+# `freshdesk.yml:48-50`, `template.yml:15-20`). That shape is **not expressible** with today's
+# schema, and every way of forcing it is worse than leaving it out:
+#
+#   - `scheme = "basic"` composes `base64(<user_env><user_suffix>:<env>)`. Putting
+#     `FRESHDESK_API_KEY` in `user_env` would declare the API key as **non-secret config** —
+#     `AuthMethod::user_env` is documented as "config rather than a gated secret" — which removes it
+#     from flux's secret gating and from the redactor's `add_secret` registration. That is a
+#     security regression, not a cosmetic mismatch (§6.2).
+#   - `user_suffix` is the wrong half: it appends a literal to the *user*, and Freshdesk needs a
+#     literal in the *password*. There is no `password_literal`, and no field says which half is
+#     secret.
+#   - `scheme = "header"` with `name = "Authorization"` would send the raw key with no `Basic ` and
+#     no base64 — wrong on the wire, and it sends the credential anyway.
+#
+# So this connector declares **no credential and no `default_auth`**, which means its operations
+# inherit "unauthenticated". That is wrong, and it is wrong in the fail-closed direction: every
+# request 401s visibly instead of routing a live API key through a non-secret path. Nothing here is
+# executable until the gap closes.
+#
+# The fix is C-16's to make, and §6.2 recommends option (1): let a Basic method declare **which
+# position holds the secret**, the other position taking a literal constant. When that lands, add:
+#
+#     [[auth]]
+#     name = "freshdesk.api_key"
+#     scheme = "basic"
+#     env = ["FRESHDESK_API_KEY"]      # still the secret, still gated
+#     <the field that says the secret is the user half, password literal "X">
+#
+# and set `default_auth = [{ credentials = ["freshdesk.api_key"] }]`. The constant `X` is not a
+# credential and must never be stored in an environment variable pretending to be one.
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 9 of 16 (inventory §4.2). Selection is ticket-centric, plus the contact operations
+# that make ticket work possible and one verification op. Excluded: `tickets.outbound_email` (sends
+# mail as a side effect), the two agent-directory operations, and the four
+# `babelforce.integration.*` forwarders, which are action-proxy's own capability contract rather
+# than Freshdesk operations at all.
+#
+# Op ids are hyphen-separated — flux-lang admits alphanumerics, `_` and `-` only (C-8).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "freshdesk-test"
+method = "GET"
+path = "/contacts"
+description = "Verify credentials with a bounded contact read"
+risk = "low"
+idempotency = "idempotent"
+
+# Ours, not the source's: `yml:522-528` is an unbounded `GET /contacts`. Bounding a liveness check
+# to one record is a deliberate addition (§4.2).
+[[operations.params.query]]
+name = "per_page"
+description = "Records to fetch; one is enough to prove the credential works"
+required = false
+schema = { type = "integer", minimum = 1, default = 1 }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "freshdesk-ticket-list"
+method = "GET"
+path = "/tickets"
+description = "List and filter tickets"
+risk = "low"
+idempotency = "idempotent"
+
+# Parameter names are the **wire** names Freshdesk expects. The source collection renames every one
+# of them for its own UI (`req_id` -> `requester_id`, `req_email` -> `email`, `updated` ->
+# `updated_since`); those aliases are action-proxy's, not Freshdesk's, and the IR carries one name
+# per parameter, so the wire name is the one that survives.
+[[operations.params.query]]
+name = "requester_id"
+description = "Filter by requester"
+required = false
+schema = { type = "string" }
+
+[[operations.params.query]]
+name = "email"
+description = "Filter by requester email"
+required = false
+schema = { type = "string", format = "email" }
+
+[[operations.params.query]]
+name = "company_id"
+description = "Filter by company id"
+required = false
+schema = { type = "string" }
+
+# §6.4: the source marks this `required: true` (`yml:69-74`). That is an action-proxy UI constraint;
+# Freshdesk's `GET /tickets` does not require `updated_since`. Recorded optional.
+[[operations.params.query]]
+name = "updated_since"
+description = "Only tickets updated at or after this date"
+required = false
+schema = { type = "string", format = "date-time" }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "freshdesk-ticket-get"
+method = "GET"
+path = "/tickets/{id}"
+description = "View one ticket"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The ticket id"
+required = true
+schema = { type = "string" }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "freshdesk-ticket-create"
+method = "POST"
+path = "/tickets"
+description = "Create a ticket. The requester must be identified either by requester_id, or by phone together with name — Freshdesk states this only in prose and its required flags do not capture it"
+risk = "medium"
+idempotency = "non_idempotent"
+
+# SCHEMA GAP: that requester constraint is an OR precondition ((phone AND name) OR requester_id,
+# `yml:104-106`, §6.4). `Quirks` carries pagination, rate limits and error envelopes — there is no
+# precondition field — so it survives only in the description above. The source's `required: true`
+# on `phone` is *not* reproduced: it would refuse a perfectly legal create-by-requester_id.
+#
+# The source's defaults are action-proxy call-context interpolations (`{consumer.number}`,
+# `{call.from}`) — babelforce telephony variables that mean nothing outside action-proxy. They are
+# dropped (§4.2 note ²); a Flux flow supplies real values.
+[[operations.params.body]]
+name = "phone"
+description = "Requester phone number. Supply with name, or supply requester_id instead"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "name"
+description = "Requester name. Supply with phone, or supply requester_id instead"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "requester_id"
+description = "Requester id. Supply this, or supply phone together with name"
+required = false
+schema = { type = "integer" }
+
+[[operations.params.body]]
+name = "subject"
+description = "Ticket subject"
+required = true
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "description"
+description = "Ticket description; HTML or long text"
+required = true
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "status"
+description = "Ticket status: 2 open, 3 pending, 4 resolved, 5 closed"
+required = true
+schema = { type = "integer", enum = [2, 3, 4, 5], default = 2 }
+
+[[operations.params.body]]
+name = "priority"
+description = "Ticket priority: 1 low, 2 medium, 3 high, 4 urgent"
+required = true
+schema = { type = "integer", enum = [1, 2, 3, 4], default = 2 }
+
+[[operations.params.body]]
+name = "source"
+description = "Channel the ticket came in on"
+required = false
+schema = { type = "integer", enum = [1, 2, 3, 7, 8, 9, 10], default = 3 }
+
+[[operations.params.body]]
+name = "responder_id"
+description = "Responding agent id"
+required = false
+schema = { type = "integer" }
+
+[[operations.params.body]]
+name = "type"
+description = "Query type"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "email_config_id"
+description = "Email config used for this ticket"
+required = false
+schema = { type = "integer" }
+
+[[operations.params.body]]
+name = "group_id"
+description = "Group the ticket is assigned to"
+required = false
+schema = { type = "integer" }
+
+[[operations.params.body]]
+name = "product_id"
+description = "Associated product"
+required = false
+schema = { type = "integer" }
+
+[[operations.params.body]]
+name = "tags"
+description = "Ticket tags"
+required = false
+schema = { type = "array", items = { type = "string" } }
+
+[[operations.params.body]]
+name = "cc_emails"
+description = "Addresses to copy on the ticket"
+required = false
+schema = { type = "array", items = { type = "string", format = "email" } }
+
+[[operations.params.body]]
+name = "custom_fields"
+description = "Custom ticket field data"
+required = false
+schema = { type = "object", additionalProperties = { type = ["string", "integer"] } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "freshdesk-ticket-update"
+method = "PUT"
+path = "/tickets/{id}"
+description = "Update a ticket's fields"
+risk = "medium"
+idempotency = "idempotent"
+
+# §6.4: the source does **not** mark `id` required (`yml:218-223`), defaulting it to a call-context
+# variable instead. Omitted, that produces `PUT /tickets/` — a silent mis-request. Recorded
+# required.
+[[operations.params.path]]
+name = "id"
+description = "Id of the ticket to update"
+required = true
+schema = { type = "integer" }
+
+[[operations.params.body]]
+name = "subject"
+description = "Ticket subject"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "description"
+description = "Ticket description"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "status"
+description = "Ticket status: 2 open, 3 pending, 4 resolved, 5 closed"
+required = false
+schema = { type = "integer", enum = [2, 3, 4, 5] }
+
+[[operations.params.body]]
+name = "priority"
+description = "Ticket priority: 1 low, 2 medium, 3 high, 4 urgent"
+required = false
+schema = { type = "integer", enum = [1, 2, 3, 4] }
+
+[[operations.params.body]]
+name = "requester_id"
+description = "Requester id"
+required = false
+schema = { type = "integer" }
+
+[[operations.params.body]]
+name = "responder_id"
+description = "Responding agent id"
+required = false
+schema = { type = "integer" }
+
+[[operations.params.body]]
+name = "name"
+description = "Requester name"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "phone"
+description = "Requester phone"
+required = false
+schema = { type = "string" }
+
+# Updatable but not settable at create — an artifact of the source collection, not of the API
+# (§4.2). Recorded as found rather than invented on the create side.
+[[operations.params.body]]
+name = "email"
+description = "Requester email"
+required = false
+schema = { type = "string", format = "email" }
+
+[[operations.params.body]]
+name = "type"
+description = "Query type"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "email_config_id"
+description = "Email config used for this ticket"
+required = false
+schema = { type = "integer" }
+
+[[operations.params.body]]
+name = "group_id"
+description = "Group the ticket is assigned to"
+required = false
+schema = { type = "integer" }
+
+[[operations.params.body]]
+name = "product_id"
+description = "Associated product"
+required = false
+schema = { type = "integer" }
+
+[[operations.params.body]]
+name = "tags"
+description = "Ticket tags"
+required = false
+schema = { type = "array", items = { type = "string" } }
+
+[[operations.params.body]]
+name = "custom_fields"
+description = "Custom ticket field data"
+required = false
+schema = { type = "object", additionalProperties = { type = ["string", "integer"] } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "freshdesk-ticket-note-add"
+method = "POST"
+path = "/tickets/{id}/notes"
+description = "Add a note to a ticket; the note is private unless explicitly made public"
+risk = "medium"
+idempotency = "non_idempotent"
+
+# §6.4: not marked required by the source (`yml:312`), same silent mis-request as above.
+[[operations.params.path]]
+name = "id"
+description = "Id of the ticket"
+required = true
+schema = { type = "integer" }
+
+# The source describes this parameter as "Requester ID" — a copy-paste error (`yml:318`, §6.4).
+# Described correctly here.
+[[operations.params.body]]
+name = "body"
+description = "Note body"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# The same safety posture as Zendesk's `public: false`: a note defaults to hidden from end users,
+# and a generated op that inherited `false` would publish internal notes (§4.2).
+[[operations.params.body]]
+name = "private"
+description = "Whether the note is hidden from end users"
+required = false
+schema = { type = "boolean", default = true }
+
+[[operations.params.body]]
+name = "incoming"
+description = "Set true when the note originates from an external system"
+required = false
+schema = { type = "boolean", default = true }
+
+[[operations.params.body]]
+name = "notify_emails"
+description = "Addresses to notify about the note"
+required = false
+schema = { type = "array", items = { type = "string", format = "email" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "freshdesk-contact-list"
+method = "GET"
+path = "/contacts"
+description = "List and filter contacts, e.g. to resolve a caller before filing a ticket"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "phone"
+description = "Filter by phone"
+required = false
+schema = { type = "string" }
+
+[[operations.params.query]]
+name = "email"
+description = "Filter by email"
+required = false
+schema = { type = "string", format = "email" }
+
+[[operations.params.query]]
+name = "mobile"
+description = "Filter by mobile number"
+required = false
+schema = { type = "string" }
+
+[[operations.params.query]]
+name = "company_id"
+description = "Filter by company id"
+required = false
+schema = { type = "string" }
+
+[[operations.params.query]]
+name = "state"
+description = "Filter by contact state"
+required = false
+schema = { type = "string", enum = ["blocked", "deleted", "unverified", "verified"] }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "freshdesk-contact-get"
+method = "GET"
+path = "/contacts/{id}"
+description = "Get one contact"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The contact id"
+required = true
+schema = { type = "string" }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "freshdesk-contact-create"
+method = "POST"
+path = "/contacts"
+description = "Create a contact"
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "name"
+description = "Contact name"
+required = true
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "email"
+description = "Contact email"
+required = false
+schema = { type = "string", format = "email" }
+
+[[operations.params.body]]
+name = "phone"
+description = "Contact phone number"
+required = false
+schema = { type = "string" }

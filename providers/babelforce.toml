@@ -1,0 +1,467 @@
+# Babelforce manager API — hand-authored.
+#
+# Transcribed from `docs/designs/provider-operation-inventory.md` §5, which curates 9 operations out
+# of the 163 the manager document declares. 163 generated ops would be 163 LLM tools, most of them
+# destructive admin CRUD (§5.3).
+#
+# WHY THIS IS NOT A `[spec]` POINTER, even though a real OpenAPI 3.0.3 document exists.
+# `specs/babelforce/manager-0.7.0.openapi.json` is **not vendored in this repository**, and it is not
+# an oversight: inventory §1.3 records that the upstream document embeds a credential-shaped example
+# block (an accessId, an accessToken and a stream token for a `Testers Inc.` account) and that this
+# repository is public. Vendoring is blocked on confirm-and-rotate with the babelforce API owners
+# and then an explicit vendoring policy — neither of which an implementing agent may decide. Until
+# that is resolved the connector is written out inline, which is the same IR by a different
+# front-end. When the spec lands, this file becomes `[spec]` plus a `[[patch.operations]]` selection
+# and the operation set below is the selection to reproduce.
+#
+# SCHEMA GAP: provenance is only reachable through `[spec]`. There is no way to record "derived from
+# manager.openapi.json 0.7.0, sha256 6a79679…" for a hand-authored connector, so the upstream
+# identity survives only in this comment and in the inventory. Reported with C-17.
+
+id = "babelforce"
+vendor = "Babelforce"
+
+# Production, stated explicitly. The document's `servers[0]` is **staging**
+# (`https://latest.dev.babelforce.com`), so a positional "take servers[0]" ingest would silently
+# point the connector at the dev environment (§1.1, §6.5). Staging remains reachable through the
+# operator's `BABELFORCE_URL` override.
+#
+# SCHEMA GAP: as with the other two providers, nothing here declares that `BABELFORCE_URL` overrides
+# this value; `base_url` is a plain string.
+base_url = "https://services.babelforce.com"
+
+description = "Babelforce voice platform: agent availability, live and reported calls, and the session variables a flow reads and writes"
+
+# The document declares `security` once at the root and **zero of its 163 operations override it**,
+# so one connector-wide default is the whole auth model (§5.1.1).
+default_auth = [{ credentials = ["babelforce.access_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "babelforce.access_token"
+scheme = "bearer"
+env = ["BABELFORCE_ACCESS_TOKEN"]
+description = "SSO-issued babelforce access token, minted outside flux and supplied through the environment"
+
+# 🚫 EXCLUDED, DELIBERATELY: `X-Auth-Access-Id` / `X-Auth-Access-Token`.
+#
+# The vendored document's `securitySchemes` declares a second option — two `apiKey` headers that
+# travel together as an AND-set — and offers it in the root `security` array as an alternative to
+# oauth2. **It is deprecated and is being scrubbed from the API by the babelforce maintainers**
+# (§5.1.3). It is not modelled here and must not be emitted.
+#
+# To a future reader: its absence is not a bug and not a gap in ingest. Do not "fix" this connector
+# by adding it back, and do not treat a regenerated spec that still lists it as evidence it is
+# supported — the document carries **zero** `deprecated` markers in 17 281 lines, so the deprecation
+# is recorded only in the inventory and here. Beyond the maintainers' decision: it is a static,
+# long-lived credential pair with no expiry and no rotation story, and both halves are secrets sent
+# as raw headers, doubling the surface to gate and redact for no benefit over one bearer.
+#
+# When the spec is vendored, ingest must keep *seeing* the pair — otherwise drift-check (C-14) stops
+# reporting on it — and the exclusion becomes an overlay decision expressed as an explicit
+# `auth = [{ credentials = ["babelforce.access_token"] }]` on each selected operation.
+
+# JWT is planned, and lands here without reshaping. A minted JWT still reaches the wire as
+# `Authorization: Bearer <token>`, so `scheme` stays `bearer`; what changes is the token's
+# *provenance*, which is the sibling axis `AuthMethod` already carries as `oauth2` and where a
+# `jwt` block would go (§5.1.2, `crates/connector-spec/src/auth.rs:60-69`). Nothing in this file
+# would change.
+#
+# The spec models the bearer as OAuth2 with a **password grant** at `/oauth/token`. We do not
+# implement it: it would require flux to hold a babelforce user password in order to mint tokens,
+# which is strictly worse than holding the token (§5.1.4). Revisit only if babelforce publishes a
+# client-credentials flow.
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 9 of 163 (inventory §5.2).
+#
+# Selection principle: include only what a support flow executes at runtime, and exclude everything
+# that is account administration performed in the babelforce UI. What survives is agents (who is
+# available), calls (what is happening, and acting on it) and sessions (the variable bag a flow
+# reads and writes) — the three groups that pair naturally with a Zendesk or Freshdesk ticket.
+#
+# Op ids are hyphen-separated — flux-lang admits alphanumerics, `_` and `-` only (C-8).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "babelforce-agent-list"
+method = "GET"
+path = "/api/v2/agents"
+description = "List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "page"
+description = "Page number"
+required = false
+schema = { type = "integer" }
+
+[[operations.params.query]]
+name = "max"
+description = "Page size"
+required = false
+schema = { type = "integer" }
+
+[[operations.params.query]]
+name = "q"
+description = "Free-text search over agent name and group name"
+required = false
+schema = { type = "string" }
+
+[[operations.params.query]]
+name = "enabled"
+description = "Filter enabled or disabled agents"
+required = false
+schema = { type = "boolean" }
+
+[[operations.params.query]]
+name = "name"
+description = "Search by agent name"
+required = false
+schema = { type = "string" }
+
+[[operations.params.query]]
+name = "number"
+description = "Filter by the agent's number"
+required = false
+schema = { type = "string" }
+
+[[operations.params.query]]
+name = "sourceId"
+description = "Filter by integration source id"
+required = false
+schema = { type = "string" }
+
+[[operations.params.query]]
+name = "source"
+description = "Filter by source integration"
+required = false
+schema = { type = "string" }
+
+[[operations.params.query]]
+name = "state"
+description = "Filter by agent line status"
+required = false
+schema = { type = "string", enum = [
+  "available",
+  "busy",
+  "declined",
+  "unreachable",
+  "selected",
+  "ringing",
+  "in-call",
+  "wrap-up",
+] }
+
+# The document types these as `oneOf` scalar-or-array (§6.5). JSON Schema is carried verbatim in the
+# IR, so the vendor's own shape survives instead of collapsing to a string.
+[[operations.params.query]]
+name = "groupIds"
+description = "Filter by group id; a single id or a list"
+required = false
+schema = { oneOf = [
+  { type = "string" },
+  { type = "array", items = { type = "string" } },
+] }
+
+[[operations.params.query]]
+name = "groups"
+description = "Filter by group name; a single name or a list"
+required = false
+schema = { oneOf = [
+  { type = "string" },
+  { type = "array", items = { type = "string" } },
+] }
+
+[operations.quirks.pagination]
+page = { page_param = "page", size_param = "max", page_size = 100, max_pages = 20 }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "babelforce-agent-get"
+method = "GET"
+path = "/api/v2/agents/{id}"
+description = "Get one agent"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The agent id"
+required = true
+schema = { type = "string" }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "babelforce-agent-status-update"
+method = "PUT"
+path = "/api/v2/agents/{id}/status"
+description = "Update an agent's status. Supply at least one of enabled or presence.name — the request body's properties are all optional, so an empty PUT is schema-valid and does nothing"
+risk = "medium"
+idempotency = "idempotent"
+
+# SCHEMA GAP, twice over. `UpdateAgentStatusRequest` is declared `required: false` with every
+# property optional (§6.5), which is the same class of problem as Zendesk's empty update — and
+# `Quirks` has no precondition field to record it in, so the constraint lives in the description
+# above. And `presence.name` is a *nested* body field: `ParamSet.body` is a flat `Vec<Param>` with a
+# single `name`, so the JSON path a body parameter occupies has no representation.
+[[operations.params.path]]
+name = "id"
+description = "The agent id"
+required = true
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "enabled"
+description = "Enable or disable the agent"
+required = false
+schema = { type = "boolean" }
+
+[[operations.params.body]]
+name = "presence.name"
+description = "Presence label to set; wire path `presence.name`"
+required = false
+schema = { type = "string" }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "babelforce-call-list"
+method = "GET"
+path = "/api/v2/calls/reporting"
+description = "List and filter calls from the reporting view"
+risk = "low"
+idempotency = "idempotent"
+
+# The document declares **40** query parameters for this operation; 13 are selected (§5.2).
+# Dropped deliberately:
+#   - all 20 `filters.*` parameters. Every filter is declared twice, flat and `filters.`-prefixed,
+#     with identical schemas — almost certainly one serializer emitting both bindings. Generating
+#     both would double the tool surface with exact synonyms (§6.5). The flat form is kept.
+#   - `from` / `to`, which share `ReportingNumberFilter` with `fromNumber` / `toNumber` and appear
+#     to be legacy aliases. Which pair is canonical is stated nowhere in the document; the explicit
+#     pair is taken. **Unconfirmed — worth one question to the API owner.**
+#   - `agent.id`, a dotted alias of `agentId`.
+#   - `domain`, `source`, `anonymous`, `parentId` — real filters, but narrow. Add on demand.
+#
+# `time.start` and `time.end` keep their dotted wire names. That is deliberate and safe: C-8's
+# `Symbols` allocator maps a wire name onto a distinct Flux symbol (`time_start`), because a dotted
+# symbol would reparse as field access rather than fail.
+[[operations.params.query]]
+name = "page"
+description = "Page number"
+required = false
+schema = { type = "integer" }
+
+[[operations.params.query]]
+name = "max"
+description = "Page size"
+required = false
+schema = { type = "integer" }
+
+[[operations.params.query]]
+name = "id"
+description = "Filter by call id; a single id or a list"
+required = false
+schema = { oneOf = [
+  { type = "string", format = "uuid" },
+  { type = "array", items = { type = "string", format = "uuid" } },
+] }
+
+[[operations.params.query]]
+name = "sessionId"
+description = "Filter by session id"
+required = false
+schema = { type = "string", format = "uuid" }
+
+[[operations.params.query]]
+name = "conversationId"
+description = "Filter by conversation id"
+required = false
+schema = { type = "string", format = "uuid" }
+
+[[operations.params.query]]
+name = "agentId"
+description = "Filter by agent; a single id or a list"
+required = false
+schema = { oneOf = [
+  { type = "string", format = "uuid" },
+  { type = "array", items = { type = "string", format = "uuid" } },
+] }
+
+[[operations.params.query]]
+name = "fromNumber"
+description = "Filter by originating number"
+required = false
+schema = { oneOf = [
+  { type = "string" },
+  { type = "array", items = { type = "string" } },
+] }
+
+[[operations.params.query]]
+name = "toNumber"
+description = "Filter by destination number"
+required = false
+schema = { oneOf = [
+  { type = "string" },
+  { type = "array", items = { type = "string" } },
+] }
+
+[[operations.params.query]]
+name = "type"
+description = "Filter by call direction"
+required = false
+schema = { type = "string", enum = ["inbound", "outbound"] }
+
+[[operations.params.query]]
+name = "state"
+description = "Filter by call state"
+required = false
+schema = { type = "string", enum = [
+  "init",
+  "scheduled",
+  "ringing",
+  "in-progress",
+  "queued",
+  "bridged",
+  "canceled",
+  "busy",
+  "no-answer",
+  "purged",
+  "completed",
+  "failed",
+] }
+
+[[operations.params.query]]
+name = "finishReason"
+description = "Filter by why the call ended"
+required = false
+schema = { type = "string", enum = [
+  "unknown",
+  "passive-hangup",
+  "system-hangup",
+  "failed",
+  "timeout",
+  "unreachable",
+  "busy",
+  "declined",
+  "canceled",
+  "transferred",
+] }
+
+[[operations.params.query]]
+name = "time.start"
+description = "Window start, as a unix timestamp"
+required = false
+schema = { type = "integer" }
+
+[[operations.params.query]]
+name = "time.end"
+description = "Window end, as a unix timestamp"
+required = false
+schema = { type = "integer" }
+
+[[operations.params.query]]
+name = "q"
+description = "Free-text search"
+required = false
+schema = { type = "string" }
+
+[operations.quirks.pagination]
+page = { page_param = "page", size_param = "max", page_size = 100, max_pages = 20 }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "babelforce-call-get"
+method = "GET"
+path = "/api/v2/calls/{id}"
+description = "Get one call"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The call id"
+required = true
+schema = { type = "string" }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "babelforce-call-hangup"
+method = "POST"
+path = "/api/v2/calls/{id}/hangup"
+description = "Hang up a live call"
+# The only destructive operation in the selected set, and the only one that affects a live caller.
+# It must never be marked read-only.
+risk = "destructive"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The call id"
+required = true
+schema = { type = "string" }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "babelforce-call-session-set"
+method = "PUT"
+path = "/api/v2/calls/{id}/session/set"
+description = "Set session variables on a live call. Variable keys must start with `app` — babelforce rejects other keys, and states the rule only in prose"
+risk = "medium"
+idempotency = "idempotent"
+
+# SCHEMA GAP: `SetCallSessionVariablesRequest` is `{"type": "object"}` with **no properties** — a
+# free-form map. `ParamSet.body` is a list of named fields, so there is no way to say "the body is
+# this one schema". No body parameter is declared, and C-9 needs a free-form-object body
+# representation before this operation can be emitted at all (§6.5). The `app` key prefix rule is
+# unenforceable from the schema and is a C-12 quirk candidate; for now it is in the description.
+[[operations.params.path]]
+name = "id"
+description = "The call id"
+required = true
+schema = { type = "string" }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "babelforce-session-get"
+method = "GET"
+path = "/api/v2/sessions/{id}"
+description = "Get the IVR variables for a session"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The session id"
+required = true
+schema = { type = "string" }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "babelforce-session-update"
+method = "PUT"
+path = "/api/v2/sessions/{id}"
+description = "Update the user-scoped variables of a session"
+risk = "medium"
+idempotency = "idempotent"
+
+# Same free-form-body gap as `babelforce-call-session-set`: `UpdateSessionVariablesRequest` is
+# `{"type": "object"}` with no properties. Two of the nine selected operations have completely
+# untyped bodies.
+[[operations.params.path]]
+name = "id"
+description = "The session id"
+required = true
+schema = { type = "string" }
