@@ -1,0 +1,25 @@
+[package]
+name = "connector-pack"
+description = "Projects catalogue operations onto flux ToolSpecs and installs them as a Tool pack."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# The input is the catalogue, not the loader: this crate never sees `providers/*.toml`.
+connector-catalog.workspace = true
+
+# The flux side of the seam. `flux-spec` owns `ToolSpec` and its vocabulary; `flux-runtime` owns
+# the `Tool` trait and the registry a host installs into. Deliberately *not* `flux-sdk`: the pack
+# must be usable from a bare `ToolRegistry`, and the SDK is the host's choice, not ours.
+flux-core.workspace = true
+flux-lang.workspace = true
+flux-runtime.workspace = true
+flux-spec.workspace = true
+
+async-trait.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
