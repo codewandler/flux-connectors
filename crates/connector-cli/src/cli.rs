@@ -18,6 +18,8 @@ pub struct Invocation {
     pub root: Option<PathBuf>,
     /// Restrict the run to one provider.
     pub provider: Option<String>,
+    /// Also rasterize the README snippet to PNG (`build` only). See [`crate::png`].
+    pub png: bool,
 }
 
 /// A subcommand.
@@ -73,6 +75,10 @@ COMMANDS:
 OPTIONS:
     --provider <NAME>   Restrict the run to one connector
     --root <DIR>        Repository root (default: the current directory)
+    --png               `build` only: also rasterize the README snippet to
+                        assets/readme-snippet.png with the `flux` binary. Skipped
+                        with a message when flux is not installed; the README's
+                        SVGs are rendered by every build either way
     -h, --help          Print this message
     -V, --version       Print the version
 
@@ -88,12 +94,14 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation> {
             command: Command::Help,
             root: None,
             provider: None,
+            png: false,
         });
     };
     let command = Command::parse(&first)?;
 
     let mut root = None;
     let mut provider = None;
+    let mut png = false;
     while let Some(arg) = args.next() {
         match split_flag(&arg) {
             Some(("--root", value)) => {
@@ -102,12 +110,16 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation> {
             Some(("--provider" | "-p", value)) => {
                 provider = Some(value_of("--provider", value, &mut args)?);
             }
+            // Only `build` writes anything, so only `build` can be asked to write one more thing.
+            // Accepting it elsewhere would promise a raster that `diff` has no way to produce.
+            Some(("--png", _)) if command == Command::Build => png = true,
             Some(("--help" | "-h", _)) => return Ok(help()),
             Some(("--version" | "-V", _)) => {
                 return Ok(Invocation {
                     command: Command::Version,
                     root: None,
                     provider: None,
+                    png: false,
                 })
             }
             Some((flag, _)) => bail!("unknown option `{flag}` for `{first}`\n\n{USAGE}"),
@@ -119,6 +131,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation> {
         command,
         root,
         provider,
+        png,
     })
 }
 
@@ -127,6 +140,7 @@ fn help() -> Invocation {
         command: Command::Help,
         root: None,
         provider: None,
+        png: false,
     }
 }
 
@@ -216,6 +230,14 @@ mod tests {
     #[test]
     fn an_unknown_option_is_an_error() {
         assert!(parse_args(&["build", "--verbose"]).is_err());
+    }
+
+    #[test]
+    fn png_is_a_build_only_flag() {
+        assert!(parse_args(&["build", "--png"]).unwrap().png);
+        assert!(!parse_args(&["build"]).unwrap().png);
+        // Offering it on a command that writes nothing would promise a raster `diff` cannot make.
+        assert!(parse_args(&["diff", "--png"]).is_err());
     }
 
     #[test]

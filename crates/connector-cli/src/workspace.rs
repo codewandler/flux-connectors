@@ -44,6 +44,12 @@ pub const SITE_DIR: &str = "web/public";
 /// The site's generated catalogue: `web/public/catalog.json`.
 pub const SITE_CATALOG: &str = "catalog.json";
 
+/// The repository's documentation images: `assets/`.
+pub const ASSETS_DIR: &str = "assets";
+
+/// The stem shared by the README snippet and everything rendered from it (C-45).
+pub const SNIPPET_STEM: &str = "readme-snippet";
+
 /// A repository root plus the layout convention applied to it.
 #[derive(Debug, Clone)]
 pub struct Workspace {
@@ -130,6 +136,33 @@ impl Workspace {
     /// full build. See [`crate::site`].
     pub fn site_catalog_path(&self) -> PathBuf {
         self.root.join(SITE_DIR).join(SITE_CATALOG)
+    }
+
+    /// `<root>/assets/readme-snippet.flux` — the Flux the README shows (C-45).
+    ///
+    /// A committed input, not an artifact: it is one operation lifted verbatim out of
+    /// `connectors/zendesk.flux`, and `tests/readme_snippet.rs` holds it to that.
+    pub fn snippet_path(&self) -> PathBuf {
+        self.root
+            .join(ASSETS_DIR)
+            .join(format!("{SNIPPET_STEM}.{MODULE_EXT}"))
+    }
+
+    /// `<root>/assets/readme-snippet-<theme>.svg` — one palette's rendering of the snippet.
+    ///
+    /// The names are load-bearing: README.md selects between them with `<picture>` and
+    /// `prefers-color-scheme`, so renaming one silently breaks dark mode for every reader.
+    pub fn snippet_svg_path(&self, theme: &str) -> PathBuf {
+        self.root
+            .join(ASSETS_DIR)
+            .join(format!("{SNIPPET_STEM}-{theme}.svg"))
+    }
+
+    /// `<root>/assets/readme-snippet.png` — the convenience raster (C-45), written only on request.
+    pub fn snippet_png_path(&self) -> PathBuf {
+        self.root
+            .join(ASSETS_DIR)
+            .join(format!("{SNIPPET_STEM}.png"))
     }
 
     /// `path` relative to the root when it is below it, for stable, machine-independent output.
