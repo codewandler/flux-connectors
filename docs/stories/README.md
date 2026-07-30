@@ -29,6 +29,7 @@ Gate: `cargo build --workspace && cargo test --workspace && cargo clippy --works
 - [C-94 — The flow graph — connector members composed into one Flux op (epic)](C-94-flow-graph-epic.md) · Spec · EPIC — four waves built the vocabulary (Operation=call node, EventDecl=source, oip=node id, wire paths=edges); this is the graph. NOT a second language: every past rejection was an EXPRESSION language, every acceptance was declarative structure. IR landed
 
 ## Next (ready — take the top one unless the user named a story)
+- [C-144 — No connector can send a non-JSON request body](C-144-request-body-encoding.md) · Spec · found shipping Stripe: op.rs binds application/json unconditionally and the IR has no content_type key anywhere. Blocks every form-encoded vendor — and OAuth2 token endpoints are form-encoded BY SPEC, so C-135's oauth2.login needs this too
 - [C-143 — The artifact tests leak their fixtures and go flaky under load](C-143-artifact-tests-leak-fixtures.md) · Core · found twice during a 7-agent wave, both times attributed to the wrong diff before being measured. 55 stale fixture directories in /tmp, which is a 32G tmpfs — the tests write to env::temp_dir() and do not always clean up
 
 ### authentication as a connector surface — a login that cannot leak
@@ -122,7 +123,6 @@ _A connector's operations are currently legible only by reading `providers/<name
 
 ### Provider Fleet 2
 - [C-105 — Provider fleet 2 — the next connectors, shipped in parallel (epic)](C-105-provider-fleet-2-epic.md) · Spec · EPIC — the first fleet (C-69..C-78) is fully drained. Each connector here is chosen to exercise something the model has not yet met, not just to add a row
-- [C-106 — Ship the Stripe connector](C-106-provider-stripe.md) · Spec · the second vendor in C-60's HMAC matrix — inbound-events.md already tabulates Stripe-Signature with its t=/v1= pairs and tolerance, and nothing has ever exercised that row
 - [C-108 — Ship the Microsoft Graph connector](C-108-provider-microsoft-graph.md) · Spec · the second multi-service provider after Google — and the first where the services share a host, so it tests whether a service is a real level or just Google's URL problem
 - [C-109 — Ship the Twilio connector](C-109-provider-twilio.md) · Spec · third basic-join vendor, and the one whose username half is an account identifier rather than an email — so it tests whether the config model generalises past the zendesk/jira shape
 - [C-110 — Ship the Linear connector — or record why a GraphQL vendor cannot be one](C-110-provider-linear.md) · Spec · GraphQL-only. The pipeline is REST-shaped; this either proves it stretches or produces a documented refusal. Either outcome is worth more than another REST connector
@@ -232,6 +232,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-101 — Make services a visible, filterable dimension](C-101-services-in-the-explorer.md) · Surfaces · 18 services are published with base_url, api_version, gid and operation counts — the explorer mentions none of them, so Google's three read as one
 - [C-102 — Make a filtered view shareable, and let the list be sorted](C-102-shareable-explorer-views.md) · Surfaces · the page promises 'every operation has a stable page you can share' — true of an operation, false of a view. 'Every destructive Shopify operation' cannot be sent to anyone
 - [C-104 — Make whole-catalogue artifacts coordinator-owned, so provider stories can run in parallel](C-104-parallel-provider-fanout.md) · Build · the fan-out cap is ONE file — crates/catalog/src/generated.rs carries two hand-maintained lists every provider story appends to, so any two collide and the wave size is 1
+- [C-106 — Ship the Stripe connector](C-106-provider-stripe.md) · Spec · the second vendor in C-60's HMAC matrix — inbound-events.md already tabulates Stripe-Signature with its t=/v1= pairs and tolerance, and nothing has ever exercised that row
 - [C-111 — Ship the Fly.io Machines connector](C-111-ship-the-fly-machines-connector.md) · Spec · A deliberately narrow machine-lifecycle surface: nine typed operations, one named service, and no invented channel contract
 - [C-112 — Publish Flux core specifications in the connector explorer](C-112-publish-flux-core-specifications-in-the-explorer.md) · UX · Built-ins and language nodes become searchable beside connectors, with canonical JSON identities rather than fake providers
 - [C-114 — The connector-pack crate and the ToolSpec projection](C-114-tool-spec-projection.md) · Bridge · the foundation the rest of the epic builds on — a catalogue entry becomes a flux ToolSpec, dotted name and all

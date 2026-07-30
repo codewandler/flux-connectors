@@ -39,6 +39,11 @@ so "which providers can mint a token, and how?" becomes a catalogue query.
 
 ## Notes
 
+- **Blocked on [C-144](C-144-request-body-encoding.md).** OAuth2 token endpoints are
+  `application/x-www-form-urlencoded` **by specification**, and no connector can send a non-JSON body
+  today — `op.rs` binds `application/json` unconditionally. `oauth2.login` cannot be emitted at all
+  until that lands. Found while shipping Stripe.
+
 - **Depends on [C-120](C-120-service-roles-declaration.md)** for the role mechanism, and on whatever
   matching rule that story settled on — it resolved "member name within the service" as a trailing
   segment match, which is worth re-reading before assuming an exact-name contract.
