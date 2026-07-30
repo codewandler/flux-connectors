@@ -68,7 +68,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 /// parameter — request-body or signature-based auth (AWS SigV4, HMAC over the payload) — and none
 /// of the target providers use one.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum AuthScheme {
     /// `Authorization: Bearer <secret>`.
     #[default]
@@ -105,6 +105,7 @@ pub enum OAuthGrant {
 /// The loopback redirect an `authorization_code` login binds. Mirrors
 /// `flux_plugin_protocol::OAuthRedirect`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct OAuthRedirect {
     /// The loopback port to bind.
     pub port: u16,
@@ -119,6 +120,7 @@ pub struct OAuthRedirect {
 /// a credential with no `oauth2` block is a plain env-to-secret credential and must round-trip
 /// unchanged.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct OAuth2Spec {
     /// The declared endpoint name whose base URL the paths below resolve against — its host
     /// allow-list is what admits the token exchange through flux's egress gate.
@@ -154,14 +156,23 @@ pub struct OAuth2Spec {
 ///
 /// **No credential value ever appears in this type**, in a provider TOML, in a generated `.flux`
 /// file, or in the lockfile; `env` and `user_env` name environment variables, never their contents.
+/// [`user_suffix`](Self::user_suffix) is the one literal string the type carries, and it is
+/// deliberately not a credential — it is Zendesk's `/token` marker, which is public API syntax.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AuthMethod {
     /// The credential name an [`AuthRequirement`] references, e.g. `"babelforce.access_id"`. It
     /// says what the credential *is*. Resolves to flux's `AuthMethod.purpose` at the manifest
     /// boundary.
     pub name: String,
     /// How the resolved secret is injected into the request.
-    #[serde(default)]
+    ///
+    /// **Mandatory on deserialization, deliberately.** [`AuthScheme`] still has a `Default` of
+    /// `Bearer` — flux's does too, and the mirror has to hold — but a *provider TOML* that omits
+    /// `scheme` must be rejected rather than quietly given one. This is the same reasoning
+    /// [`Risk`](crate::Risk) and [`Idempotency`](crate::Idempotency) carry: how a secret reaches the
+    /// wire is not a decision to make by silence, and the silent answer here is "send it as a
+    /// bearer token", which is a request going out with the wrong credential shape.
     pub scheme: AuthScheme,
     /// Env-var **keys** to resolve the secret from, tried in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -170,6 +181,26 @@ pub struct AuthMethod {
     /// config rather than a gated secret, so they resolve directly from declared env.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub user_env: Vec<String>,
+    /// For [`AuthScheme::Basic`]: a literal string appended to the resolved
+    /// [`user_env`](Self::user_env) value before the `user:secret` join.
+    ///
+    /// Zendesk is why. Its user half is `<email>/token` — an env value **plus a literal suffix** —
+    /// where the trailing `/token` is what tells Zendesk the password is an API token rather than a
+    /// password (`docs/designs/auth-seam.md:74`, `docs/designs/provider-operation-inventory.md:163`).
+    /// Without this field the only way to author Zendesk is to tell the operator to paste
+    /// `me@corp.com/token` into `ZENDESK_USER`, which stores a value that is not the thing it is
+    /// named after and that nothing can validate — the pre-composed-credential mistake
+    /// [`auth-seam.md §7.5`](../../../docs/designs/auth-seam.md) rejects explicitly.
+    ///
+    /// **Scope.** This is the *authoring* half only, and it is deliberately the narrower of the two
+    /// gaps §7.5 records. The sibling gap — Freshdesk's `base64(<api_key>:X)`, where the **secret
+    /// occupies the user position** and the password is a literal — is a security question about
+    /// which half is gated and redacted, and `provider-operation-inventory.md §6.2` reserves it for
+    /// C-16 to decide. Nothing here pre-empts that. Composing the half host-side is flux's F-9 /
+    /// C-274; until it lands, a connector can *say* what Zendesk needs even though flux cannot yet
+    /// apply it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_suffix: Option<String>,
     /// Human-readable description, surfaced when a user is asked to supply the credential.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
@@ -186,6 +217,27 @@ impl AuthMethod {
             name: name.into(),
             scheme: AuthScheme::Bearer,
             env,
+            ..Self::default()
+        }
+    }
+
+    /// A Basic credential: `Authorization: Basic base64(<user_env><user_suffix>:<env>)`.
+    ///
+    /// The suffix is separate from `user_env` on purpose — see
+    /// [`user_suffix`](Self::user_suffix). Pass `None` for a vendor whose user half is a bare env
+    /// value, `Some("/token")` for Zendesk.
+    pub fn basic(
+        name: impl Into<String>,
+        user_env: Vec<String>,
+        user_suffix: Option<String>,
+        env: Vec<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            scheme: AuthScheme::Basic,
+            env,
+            user_env,
+            user_suffix,
             ..Self::default()
         }
     }
@@ -221,6 +273,7 @@ impl AuthMethod {
 /// Order carries no meaning within a mechanism — all its credentials are sent on one request — so
 /// sorting loses nothing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AuthRequirement {
     #[serde(deserialize_with = "deserialize_canonical_credentials")]
     credentials: IndexSet<String>,

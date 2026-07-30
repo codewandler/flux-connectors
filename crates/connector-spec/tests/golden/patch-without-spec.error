@@ -1,0 +1,2 @@
+providers/patch-without-spec.toml is not a valid connector definition:
+  - declares `[[patch.operations]]` but no `[spec]`; there is nothing for the patches to apply to

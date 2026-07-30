@@ -1,0 +1,29 @@
+# The op id is the public name callers and models use, so two operations cannot share one.
+id = "zendesk"
+base_url = "https://acme.zendesk.com"
+
+[[operations]]
+id = "zendesk.ticket.update"
+method = "PUT"
+path = "/api/v2/tickets/{ticket_id}.json"
+risk = "medium"
+idempotency = "conditional"
+auth = []
+
+[[operations.params.path]]
+name = "ticket_id"
+required = true
+schema = { type = "integer" }
+
+[[operations]]
+id = "zendesk.ticket.update"
+method = "PUT"
+path = "/api/v2/tickets/{ticket_id}.json"
+risk = "medium"
+idempotency = "conditional"
+auth = []
+
+[[operations.params.path]]
+name = "ticket_id"
+required = true
+schema = { type = "integer" }

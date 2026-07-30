@@ -1,0 +1,27 @@
+# Every problem is reported in one pass. Fixing a provider file one error per run is the authoring
+# experience this loader exists to avoid.
+id = "zendesk"
+base_url = ""
+
+[[auth]]
+name = "zendesk.api_token"
+scheme = "basic"
+env = ["ZENDESK_API_TOKEN"]
+
+[[auth]]
+name = "zendesk.api_token"
+scheme = "bearer"
+env = []
+
+[[operations]]
+id = "zendesk.ticket.show"
+method = "GET"
+path = "api/v2/tickets/{ticket_id}.json"
+risk = "low"
+idempotency = "idempotent"
+auth = [{ credentials = [] }, { credentials = ["zendesk.nope"] }]
+
+[[operations.params.path]]
+name = "id"
+required = true
+schema = { type = "integer" }

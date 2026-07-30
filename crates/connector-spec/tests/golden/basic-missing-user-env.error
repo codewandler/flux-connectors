@@ -1,0 +1,2 @@
+providers/basic-missing-user-env.toml is not a valid connector definition:
+  - credential "zendesk.api_token" uses the `basic` scheme but declares no `user_env`. Basic sends `base64(<user>:<secret>)`, and the user half comes from `user_env`; for zendesk that is `user_env = ["ZENDESK_USER"]` with `user_suffix = "/token"`

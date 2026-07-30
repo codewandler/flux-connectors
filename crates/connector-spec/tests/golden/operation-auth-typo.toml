@@ -1,0 +1,19 @@
+# C-2's review, reproduced. `authh` used to deserialize to `auth: None`, and None means "inherit
+# the connector default" — so this operation would have gone out carrying zendesk.api_token even
+# though its author was trying to say it needs no credential at all.
+id = "zendesk"
+base_url = "https://acme.zendesk.com"
+default_auth = [{ credentials = ["zendesk.api_token"] }]
+
+[[auth]]
+name = "zendesk.api_token"
+scheme = "bearer"
+env = ["ZENDESK_API_TOKEN"]
+
+[[operations]]
+id = "zendesk.status"
+method = "GET"
+path = "/status.json"
+risk = "low"
+idempotency = "idempotent"
+authh = []

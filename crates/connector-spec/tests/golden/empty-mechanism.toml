@@ -1,0 +1,18 @@
+# A degenerate second spelling of "no auth": an empty mechanism inside a non-empty alternatives
+# list. It is trivially satisfiable, so C-10 would pick it and the operation would go out
+# unauthenticated even though an alternative naming a real credential sits right beside it.
+id = "zendesk"
+base_url = "https://acme.zendesk.com"
+
+[[auth]]
+name = "zendesk.api_token"
+scheme = "bearer"
+env = ["ZENDESK_API_TOKEN"]
+
+[[operations]]
+id = "zendesk.test"
+method = "GET"
+path = "/api/v2/users/me.json"
+risk = "low"
+idempotency = "idempotent"
+auth = [{ credentials = [] }, { credentials = ["zendesk.api_token"] }]

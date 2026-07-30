@@ -1,0 +1,2 @@
+providers/nothing-to-generate.toml is not a valid connector definition:
+  - declares neither `[spec]` nor any `[[operations]]`, so it describes no operations at all. Write the operations inline for a hand-authored connector, or point `[spec]` at a vendored spec and select operations with `[[patch.operations]]`

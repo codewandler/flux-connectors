@@ -1,0 +1,9 @@
+providers/several-problems.toml is not a valid connector definition:
+  - `base_url` must not be empty. It is stated explicitly even when a spec is present: the babelforce document declares staging as `servers[0]`, so a positional default would silently target the dev environment
+  - credential "zendesk.api_token" uses the `basic` scheme but declares no `user_env`. Basic sends `base64(<user>:<secret>)`, and the user half comes from `user_env`; for zendesk that is `user_env = ["ZENDESK_USER"]` with `user_suffix = "/token"`
+  - credential "zendesk.api_token" is declared more than once; a requirement naming it could not say which declaration it meant
+  - credential "zendesk.api_token" names no `env` keys, so nothing can resolve it to a value
+  - operation "zendesk.ticket.show" has path "api/v2/tickets/{ticket_id}.json", which must start with `/` — it is joined onto the connector's `base_url`
+  - operation "zendesk.ticket.show" declares path parameter "id", but its path "api/v2/tickets/{ticket_id}.json" has no `{id}` to interpolate it into
+  - operation "zendesk.ticket.show": auth mechanism 0 names no credentials. "No auth" is written as an empty alternatives list (`auth = []`), never as a list holding an empty mechanism — an empty mechanism is always satisfiable, so it would disable auth for every alternative beside it
+  - operation "zendesk.ticket.show": auth mechanism 1 names credential "zendesk.nope", which no `[[auth]]` block declares
