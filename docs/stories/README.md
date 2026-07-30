@@ -27,6 +27,10 @@ Gate: `cargo build --workspace && cargo test --workspace && cargo clippy --works
 
 ## Next (ready — take the top one unless the user named a story)
 
+### the connector bundle
+_A connector is more than a set of callable operations. It also has **schemas** (what goes in, what_
+- [C-39 — Emit synthetic describe and schema operations](C-39-synthetic-introspection-ops.md) · Codegen · metadata reachable from inside a flux session, via the mechanism that already exists
+
 ### the connectors proxy — server-side credential injection
 _Every credential problem in this repo has the same shape: **the caller must not hold the secret, but_
 - [C-34 — Decide whether a connectors proxy belongs in this project](C-34-proxy-charter-decision.md) · Bridge · **decision, not code** · blocks the whole epic · contradicts a stated non-goal
@@ -56,6 +60,11 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-36 — Prove the proxy and the Flux emitter build the same request](C-36-proxy-emitter-conformance.md) · Bridge · blocked on C-34 · two backends over one IR will drift without this
 
 ## Backlog
+
+### the connector bundle
+_A connector is more than a set of callable operations. It also has **schemas** (what goes in, what_
+- [C-40 — Ship provider icons as bundle assets](C-40-provider-icons.md) · Build · alongside the .flux, never inside it
+- [C-41 — Move build output to a per-provider bundle directory](C-41-bundle-layout.md) · Build · breaking layout change — C-13, C-27 and C-33 all assume the flat shape
 
 ### Connectors v1 — spec to Flux
 _Prove the whole thesis on two real providers, end to end against a live flux._

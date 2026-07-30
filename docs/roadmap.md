@@ -57,6 +57,21 @@ is what keeps the `$auth` seam acceptable to flux instead of proposing a rival a
 header, prefixed header, basic join, query key, AND, OR, unauthenticated, OAuth2, JWT — with no
 provider-specific code, and the four flux presets round-trip exactly.
 
+### Connector bundle
+
+A connector is more than callable operations: it has schemas, metadata, branding and documentation.
+This epic decides **where each piece lives** — and specifically how much belongs *inside* the `.flux`
+file. Design: [designs/connector-bundle.md](designs/connector-bundle.md).
+
+The constraint that decides it: `connectors/<name>.flux` is source that flux parses at session start,
+so every byte in it is paid for by every session. Metadata therefore rides **synthetic pure
+operations** (`describe`, `schema`) that ride the mechanism already there; icons ship as files beside
+the module rather than base64 inside it.
+
+**Done looks like:** a connector answers "what can you do, and with what shapes?" from inside a flux
+session, and the bundle directory is produced deterministically and drift-checked like every other
+artifact.
+
 ### The two milestone-1 providers
 
 They are chosen to exercise different halves of the pipeline:
