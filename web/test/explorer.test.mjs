@@ -80,6 +80,23 @@ function defectMarkers(html, id) {
   return [...html.matchAll(marker)].map((match) => match[1] ?? match[2])
 }
 
+/** The classes on a built page's doc-layout container, or `null` if it is not a doc page. */
+function docLayout(html) {
+  const match = html.match(/class="(VPDoc(?: [\w-]+)*)"/)
+  return match ? match[1].split(' ') : null
+}
+
+/** The theme rule that caps the doc layout's content column, read out of the built stylesheet. */
+function contentColumnCap() {
+  const assets = path.join(distDir, 'assets')
+  assert.ok(existsSync(assets), 'the site was not built — run `npm run build` before `npm test`')
+  const css = readdirSync(assets)
+    .filter((entry) => entry.endsWith('.css'))
+    .map((entry) => readFileSync(path.join(assets, entry), 'utf-8'))
+    .join('\n')
+  return css.match(/\.VPDoc\.has-aside\s+\.content-container[^{]*\{[^}]*max-width:\s*([^;}]+)/)
+}
+
 /** Every file under the explorer's own sources — where hand-maintained data would have to live. */
 function explorerSources() {
   const roots = [
@@ -314,6 +331,50 @@ test('an operation page carries its signature, parameters, Flux, credentials and
         assert.ok(body.includes(host), `\`${operation.id}\` does not name the host \`${host}\``)
       }
     }
+  }
+})
+
+test('the explorer is outside the content column that constrains the prose pages', () => {
+  // C-100. The doc layout caps its content column at a fixed width, and that cap is not a variable
+  // a page can raise — it is a rule keyed on `has-aside`. So the page that must be wide is the page
+  // that must not carry an aside, and the assertion is on that class rather than on a screenshot.
+  //
+  // Widening *every* page would be the regression: the doc column is right for paragraphs, so each
+  // prose page is checked to be still inside it.
+  const cap = contentColumnCap()
+  assert.ok(
+    cap,
+    'the theme no longer caps `.VPDoc.has-aside .content-container` — the reasoning behind C-100 has to be re-derived against the current VitePress'
+  )
+
+  const explorer = docLayout(page('explorer.html'))
+  assert.ok(explorer, 'the explorer is not rendered by the doc layout at all')
+  assert.ok(
+    !explorer.includes('has-aside'),
+    `the explorer still renders inside the ${cap[1].trim()} content column (VPDoc classes: ${explorer.join(' ')}) — 16 provider cards and 88 operations do not fit there`
+  )
+  assert.doesNotMatch(
+    page('explorer.html'),
+    /VPDocAside/,
+    'the explorer still renders the outline aside, which reimposes the capped content column'
+  )
+
+  // Dropping the outline is only acceptable because the section headings remain link targets; they
+  // are linked from elsewhere.
+  for (const anchor of ['providers', 'operations']) {
+    assert.match(
+      page('explorer.html'),
+      new RegExp(`id="${anchor}"`),
+      `the explorer no longer offers the \`#${anchor}\` anchor, which is linked from elsewhere`
+    )
+  }
+
+  for (const operation of operations(catalog())) {
+    const detail = docLayout(page('operations', `${operation.id}.html`))
+    assert.ok(
+      detail?.includes('has-aside'),
+      `the page for \`${operation.id}\` left the ${cap[1].trim()} content column — the doc layout is right for prose and only the explorer was meant to leave it`
+    )
   }
 })
 
