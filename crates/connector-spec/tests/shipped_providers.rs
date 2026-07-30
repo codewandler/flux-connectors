@@ -104,6 +104,10 @@ fn operation_selection_stays_curated() {
         // `providers/openai.toml`.
         ("openai", 4),
         ("slack", 4),
+        // C-71 curates 5 of some 300 operations in `Asana/openapi`: task get, create, update, a
+        // comment, and project get. The cut is the same query-encoding gap — `opt_fields`,
+        // `limit`/`offset` paging and task search are all query values. See `providers/asana.toml`.
+        ("asana", 5),
         // C-72 curates 5 over `/crm/v3/objects`: contact get, create and update, company get and
         // deal get. The cut is the query-encoding gap again — HubSpot's search endpoints and every
         // `properties=` projection are excluded. See `providers/hubspot.toml`.
