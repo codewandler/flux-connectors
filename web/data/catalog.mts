@@ -81,6 +81,102 @@ export interface Auth {
   default: string[][]
 }
 
+/** Where on an inbound request one named value is read from. */
+export interface FieldSelector {
+  source: string
+  name: string
+}
+
+/**
+ * The parameters of one HMAC webhook signature, in the vendor's own terms.
+ *
+ * `secret` is a **credential name** — resolve it against `provider.auth.credentials[].name`, where
+ * it is declared with `scheme: 'signing'`. No value for it is anywhere in this document.
+ */
+export interface Hmac {
+  algorithm: string
+  encoding: string
+  header: string
+  prefix: string | null
+  signed: string
+  timestamp: FieldSelector | null
+  secret: string
+  tolerance: string | null
+}
+
+/**
+ * How a delivery on one binding proves it came from the vendor.
+ *
+ * `kind` is always present and `verified` is `kind !== 'none'` restated, which is the pair that
+ * matters: a consumer tells a deliberately-unverifiable surface from a verified one by reading a
+ * value, never by noticing that a key is missing.
+ */
+export interface Verification {
+  kind: string
+  verified: boolean
+  hmac: Hmac | null
+}
+
+/** Which operation answers an event on a binding, and how its parameters are filled. */
+export interface Reply {
+  operation: string
+  oip: string | null
+  result: string | null
+  bind: Record<string, string>
+}
+
+/** How a webhook is registered with the vendor through its own API. */
+export interface Subscription {
+  subscribe: string
+  unsubscribe: string | null
+  list: string | null
+  callback_param: string
+}
+
+/** What a human does in the vendor's dashboard, for vendors with no subscription API. */
+export interface ManualSetup {
+  docs_url: string | null
+  steps: string[]
+}
+
+/** One event a vendor sends, in the vendor's own spelling. */
+export interface InboundEvent {
+  name: string
+  service: string
+  oip: string | null
+  description: string
+  default: boolean
+  group: string
+  when: Record<string, unknown>
+  schema: Record<string, unknown> | null
+}
+
+/**
+ * One ingress surface a connector describes: a transport, the events it carries, how a delivery is
+ * proven, and what answers it.
+ *
+ * Note what is *not* here, and cannot be: no URL, no secret, no schedule. The endpoint is the
+ * operator's deployment detail, the secret is a credential name a host resolves, and the loop a poll
+ * runs on belongs to an operator's own program.
+ */
+export interface Channel {
+  name: string
+  service: string
+  oip: string | null
+  description: string
+  transport: string
+  events: string[]
+  verification: Verification
+  discriminator: FieldSelector | null
+  delivery_id: FieldSelector | null
+  payload: Record<string, string>
+  reply: Reply | null
+  cursor: string | null
+  interval: string | null
+  subscription: Subscription | null
+  setup: ManualSetup | null
+}
+
 export interface Provider {
   id: string
   authority: string | null
@@ -93,6 +189,10 @@ export interface Provider {
   auth: Auth
   operation_count: number
   operations: Operation[]
+  /** The events this connector receives — the inbound half of its surface. `[]` for most. */
+  events: InboundEvent[]
+  /** The ingress surfaces it describes. `[]` for a connector that declares none. */
+  channels: Channel[]
 }
 
 export type CoreAvailability = 'available' | 'planned'
@@ -367,6 +467,82 @@ export function serviceApiVersion(provider: Provider, service: Service): string 
 export function providerAddress(provider: Provider): string | null {
   const reserved = provider.services.find((service) => service.name === RESERVED_SERVICE)
   return reserved?.gid ?? null
+}
+
+// ---------------------------------------------------------------------------------------------
+// The inbound surface (C-83).
+//
+// An operation is flux calling the vendor; an event is the vendor calling flux, and a channel
+// binding is the composition of the two. All three are members of a service, and until C-83 only the
+// first reached an artifact — so the site could describe half of what a connector does.
+//
+// A binding is not an operation and is deliberately not rendered as one. It declares and never
+// installs: it names no URL, no schedule and no secret, and it is emitted into no Flux module at all.
+// What a visitor needs from it is what it listens for, how a delivery is proven, and what answers.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * What each verification kind is called on the page.
+ *
+ * Site vocabulary rather than catalogue data, the same way `RISK_ORDER` and the defect filter's
+ * choices are: the catalogue publishes a stable machine token and has no opinion about the English
+ * for it. A kind this build has not heard of falls through to the token itself — showing the raw
+ * value is honest, whereas a generic label would present an unknown scheme as though it were
+ * understood.
+ */
+const VERIFICATION_LABELS: Record<string, string> = {
+  hmac: 'Signed',
+  none: 'Unverified',
+  connection: 'Authenticated by connection',
+}
+
+/** How this binding's verification reads on the page. */
+export function verificationLabel(channel: Channel): string {
+  return VERIFICATION_LABELS[channel.verification.kind] ?? channel.verification.kind
+}
+
+/** Whether this connector describes anything at all on the inbound side. */
+export function hasInboundSurface(provider: Provider): boolean {
+  return provider.events.length > 0 || provider.channels.length > 0
+}
+
+/**
+ * The declared events one binding carries, in the binding's own order.
+ *
+ * A binding names its events and the connector declares them, so this is the join — and it is here
+ * rather than in a component because resolving a name against a list is exactly the kind of thing a
+ * test should be able to pin. A name with no declaration is dropped rather than rendered as a stub:
+ * the loader refuses one, so its appearance would mean the document is malformed, and inventing a
+ * placeholder event would put a capability on the page that the connector does not have.
+ */
+export function channelEvents(provider: Provider, channel: Channel): InboundEvent[] {
+  return channel.events
+    .map((name) => provider.events.find((event) => event.name === name))
+    .filter((event): event is InboundEvent => event !== undefined)
+}
+
+/**
+ * The bindings a visitor has to be told about: the ones a delivery cannot be attributed on.
+ *
+ * Read off `verified`, which the catalogue publishes as a value on every binding — never off whether
+ * an `hmac` block happens to be absent. That distinction is the whole point of the field: a consumer
+ * that tested for absence would read "nothing arrives unsolicited over this socket" and "anyone can
+ * POST to this endpoint" as the same thing.
+ */
+export function unverifiedChannels(provider: Provider): Channel[] {
+  return provider.channels.filter((channel) => !channel.verification.verified)
+}
+
+/**
+ * How a binding's reply is worth showing: its rendered address when the connector publishes one,
+ * else the local operation id.
+ *
+ * The oip is the form that survives leaving the repository, so it is preferred; the id is what a host
+ * resolves against the connector's own operations and is the honest fallback for the connectors that
+ * declare no authority.
+ */
+export function replyAddress(channel: Channel): string | null {
+  return channel.reply ? (channel.reply.oip ?? channel.reply.operation) : null
 }
 
 // ---------------------------------------------------------------------------------------------

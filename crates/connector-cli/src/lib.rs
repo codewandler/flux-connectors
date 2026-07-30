@@ -35,6 +35,7 @@ pub mod cli;
 pub mod core_catalog;
 pub mod diff;
 pub mod discovery;
+mod inbound;
 pub mod net;
 pub mod pipeline;
 pub mod png;

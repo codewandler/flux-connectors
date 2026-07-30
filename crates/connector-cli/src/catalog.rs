@@ -83,13 +83,7 @@ pub fn render(connector: &Connector, renderings: &[OperationRendering]) -> Resul
     out.push_str("#[rustfmt::skip]\n");
     out.push_str("static OPERATIONS: &[crate::Operation] = &[\n");
     for rendering in renderings {
-        let operation = connector.operation(&rendering.id).ok_or_else(|| {
-            anyhow::anyhow!(
-                "connector `{}` has no operation `{}` to describe",
-                connector.id,
-                rendering.id
-            )
-        })?;
+        let operation = operation_for(connector, &rendering.id)?;
         // Per operation, through its service: a multi-service provider reaches a different host per
         // service, and the union would be a wider egress claim than any single call makes (C-49).
         let host = host_of(connector.base_url_of(&operation.service))?;
@@ -226,6 +220,58 @@ fn module_ident(provider: &str) -> Result<String> {
         return Ok(format!("r#{provider}"));
     }
     Ok(provider.to_string())
+}
+
+/// The operation a rendering describes — **and the refusal that keeps the third member kind out of
+/// every emitted artifact** (C-83).
+///
+/// Both catalogue backends resolve a rendering through this one function, the same way both share
+/// [`credential_mechanisms`] and [`host_of`], so neither can be talked into publishing something the
+/// other refuses.
+///
+/// # Why an event gets its own error
+///
+/// A rendering whose id names nothing is a bug. A rendering whose id names an **event or a channel
+/// binding** is a specific bug with a specific name, and it is the one `AGENTS.md` calls out: *"the
+/// tempting wrong output is an event dressed up as a pollable op."* Both kinds are emitted into no
+/// Flux module at all — flux lifts `op` declarations only, while `channel` and `trigger` are Program
+/// members an operator writes — so a rendering for one could only have been produced by an emitter
+/// that decided to synthesise a poll loop, which is this repository writing a runtime.
+///
+/// Reported separately because the two have opposite fixes. "No such operation" says a name is
+/// wrong; this says the name is *right* and the pipeline is wrong, and a generic message would send
+/// the reader looking for a typo that is not there.
+pub(crate) fn operation_for<'a>(connector: &'a Connector, id: &str) -> Result<&'a Operation> {
+    if let Some(operation) = connector.operation(id) {
+        return Ok(operation);
+    }
+    if let Some(kind) = inbound_member_kind(connector, id) {
+        bail!(
+            "connector `{}`: `{id}` is {kind}, not an operation, so there is no Flux to publish for \
+             it. A binding declares and never installs: it reaches the manifest and the catalogue \
+             and is emitted into no module, because flux lifts `op` declarations only. Emitting one \
+             would be an event dressed up as a pollable op, which this pipeline refuses rather than \
+             degrades to",
+            connector.id
+        );
+    }
+    bail!(
+        "connector `{}` has no operation `{id}` to describe",
+        connector.id
+    );
+}
+
+/// Which inbound member kind `name` denotes, or `None` when it denotes neither.
+///
+/// The three member kinds share one namespace per service, so at most one of these matches.
+fn inbound_member_kind(connector: &Connector, name: &str) -> Option<&'static str> {
+    if connector.event(name).is_some() {
+        return Some("an event");
+    }
+    if connector.channel(name).is_some() {
+        return Some("a channel binding");
+    }
+    None
 }
 
 /// One `crate::Operation { … }` literal.

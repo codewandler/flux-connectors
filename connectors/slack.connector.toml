@@ -9,3 +9,103 @@ base_url = "https://slack.com"
 api_version = "v1"
 module = "slack.flux"
 operations = ["slack-chat-post-message", "slack-conversations-history", "slack-users-info", "slack-reactions-add"]
+
+[[events]]
+name = "app_mention"
+oip = "com.slack.api:v1#app_mention"
+description = "Someone @-mentioned the app in a channel it is a member of"
+group = "Messages"
+
+[[events]]
+name = "message"
+oip = "com.slack.api:v1#message"
+description = "A message was posted in a channel the app is a member of. Fires for every human message, so a program that triggers on it should expect volume"
+default = false
+group = "Messages"
+
+[[channels]]
+name = "socket"
+oip = "com.slack.api:v1#socket"
+description = "Socket Mode — flux opens an outbound WebSocket and Slack pushes events down it. No public URL, and no signature: the connection is authenticated by the app-level token that opened it"
+transport = "socket"
+events = ["app_mention", "message"]
+
+[channels.verification]
+kind = "connection"
+verified = true
+
+[channels.discriminator]
+source = "body"
+name = "event.type"
+
+[channels.delivery_id]
+source = "body"
+name = "event_id"
+
+[channels.payload]
+channel = "event.channel"
+conversation = "event.thread_ts"
+text = "event.text"
+thread = "event.thread_ts"
+user = "event.user"
+
+[channels.reply]
+operation = "slack-chat-post-message"
+oip = "com.slack.api:v1#slack-chat-post-message"
+result = "text"
+
+[channels.reply.bind]
+channel = "channel"
+thread_ts = "thread"
+
+[[channels]]
+name = "events-api"
+oip = "com.slack.api:v1#events-api"
+description = "The Events API — Slack POSTs to an endpoint the operator exposes, signing each request. Use it when an outbound WebSocket is not an option; it needs a public URL and the signing secret"
+transport = "webhook"
+events = ["app_mention", "message"]
+
+[channels.verification]
+kind = "hmac"
+verified = true
+
+[channels.verification.hmac]
+algorithm = "sha256"
+encoding = "hex"
+header = "X-Slack-Signature"
+prefix = "v0="
+signed = "v0:{timestamp}:{body}"
+secret = "slack.signing_secret"
+tolerance = "5m"
+
+[channels.verification.hmac.timestamp]
+source = "header"
+name = "X-Slack-Request-Timestamp"
+
+[channels.discriminator]
+source = "body"
+name = "event.type"
+
+[channels.delivery_id]
+source = "body"
+name = "event_id"
+
+[channels.payload]
+channel = "event.channel"
+conversation = "event.thread_ts"
+text = "event.text"
+thread = "event.thread_ts"
+user = "event.user"
+
+[channels.reply]
+operation = "slack-chat-post-message"
+oip = "com.slack.api:v1#slack-chat-post-message"
+result = "text"
+
+[channels.reply.bind]
+channel = "channel"
+thread_ts = "thread"
+
+[channels.setup]
+docs_url = "https://docs.slack.dev/apis/events-api/"
+steps = ["Open your app at api.slack.com/apps, or create one for this workspace", "Under Event Subscriptions, turn on Enable Events", "Paste the Request URL shown above and wait for Slack's `url_verification` challenge to pass", "Under Subscribe to bot events, add the events you selected here", "Copy the Signing Secret from Basic Information into this connection's signing secret field", "Reinstall the app to the workspace so the new event scopes take effect"]

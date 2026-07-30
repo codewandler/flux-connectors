@@ -14,12 +14,14 @@
 import { computed } from 'vue'
 import {
   defectCount,
+  hasInboundSurface,
   namedServices,
   providerAddress,
   providerIssues,
   serviceApiVersion,
   type Provider,
 } from '../../../data/catalog.mts'
+import InboundSurface from './InboundSurface.vue'
 import IssueNotice from './IssueNotice.vue'
 
 const props = defineProps<{ provider: Provider }>()
@@ -114,6 +116,11 @@ const headline = computed(() => {
         </li>
       </ul>
     </div>
+
+    <!-- Only for a connector that describes one: a heading over an empty list would tell a visitor
+         that sixteen connectors have an inbound surface they have not filled in, when in fact they
+         declare none. -->
+    <InboundSurface v-if="hasInboundSurface(provider)" :provider="provider" />
 
     <IssueNotice
       title="Connector-wide availability limitation"

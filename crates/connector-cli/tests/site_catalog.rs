@@ -277,53 +277,35 @@ fn the_status_of_every_operation_is_derived_from_the_ir() {
     }
 }
 
-/// **No credential value, anywhere — env var names only.**
+/// **No credential value, anywhere — env var names only, in both call directions.**
 ///
-/// The check is a real build of a fixture connector, run as a subprocess with the credential's
-/// environment variable set to a sentinel. If any future edit resolves a credential while
-/// generating the document, the sentinel lands in the JSON and this fails. Asserting the *name* is
-/// present as well is what keeps the test from passing because nothing about auth is emitted at all.
+/// The check is a real build of a fixture connector, run as a subprocess with **two** credential
+/// variables set to sentinels: the outbound bearer token, and the inbound HMAC signing secret a
+/// channel binding verifies with (C-83). If any future edit resolves a credential while generating
+/// the document, the sentinel lands in the JSON and this fails. Asserting the *names* are present as
+/// well is what keeps the test from passing because nothing about auth is emitted at all.
+///
+/// The signing half is the one worth being explicit about. A verification block is the one place in
+/// the document where a secret is *near* the thing that uses it, so it is the one place a plausible
+/// edit would inline a value instead of a reference. The assertion is therefore positive as well as
+/// negative: the published block must name `acme.signing_secret`, which is a credential of
+/// `auth.credentials`, and it must reach the reader through the binding rather than only through the
+/// credential list.
 #[test]
 fn no_credential_value_reaches_the_document() {
     const ENV_NAME: &str = "FLUX_CONNECTORS_C42_SENTINEL";
     const ENV_VALUE: &str = "sentinel-credential-value-must-never-be-emitted";
+    const SIGNING_ENV_NAME: &str = "FLUX_CONNECTORS_C83_SIGNING_SENTINEL";
+    const SIGNING_ENV_VALUE: &str = "sentinel-signing-secret-must-never-be-emitted";
 
     let fixture = Fixture::new("c42-credential");
-    fixture.write_provider(
-        "acme",
-        &format!(
-            r#"id = "acme"
-vendor = "Acme"
-base_url = "https://api.acme.example"
-description = "A hand-authored fixture connector."
-default_auth = [{{ credentials = ["acme.token"] }}]
-
-[[auth]]
-name = "acme.token"
-scheme = "bearer"
-env = ["{ENV_NAME}"]
-description = "The fixture credential."
-
-[[operations]]
-id = "acme-thing-get"
-method = "GET"
-path = "/v1/things/{{thing_id}}"
-description = "Fetch one thing."
-risk = "low"
-idempotency = "idempotent"
-
-[[operations.params.path]]
-name = "thing_id"
-required = true
-schema = {{ type = "integer" }}
-"#
-        ),
-    );
+    fixture.write_provider("acme", &inbound_fixture(ENV_NAME, SIGNING_ENV_NAME));
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_flux-connectors"))
         .args(["build", "--root"])
         .arg(fixture.root())
         .env(ENV_NAME, ENV_VALUE)
+        .env(SIGNING_ENV_NAME, SIGNING_ENV_VALUE)
         .output()
         .expect("the flux-connectors binary runs");
     assert!(
@@ -338,16 +320,402 @@ schema = {{ type = "integer" }}
     );
     let document = fixture.read(CATALOG_JSON);
 
-    assert!(
-        !document.contains(ENV_VALUE),
-        "{CATALOG_JSON} carries a resolved credential value — env var names only"
+    for (name, value) in [(ENV_NAME, ENV_VALUE), (SIGNING_ENV_NAME, SIGNING_ENV_VALUE)] {
+        assert!(
+            !document.contains(value),
+            "{CATALOG_JSON} carries a resolved value for `{name}` — env var names only"
+        );
+        assert!(
+            document.contains(name),
+            "{CATALOG_JSON} does not name the environment variable `{name}`, so the check above \
+             passes vacuously"
+        );
+    }
+
+    // The positive half: the binding's verification block names the **credential**, and that name
+    // resolves against the connector's own credential list.
+    let parsed: Value = serde_json::from_str(&document)
+        .unwrap_or_else(|error| panic!("{CATALOG_JSON} is not valid JSON: {error}"));
+    let provider = &parsed["providers"][0];
+    let secret = &provider["channels"][0]["verification"]["hmac"]["secret"];
+    assert_eq!(
+        secret,
+        &Value::String("acme.signing_secret".to_string()),
+        "the published binding does not name the credential its signature is verified with; \
+         verification block was {}",
+        provider["channels"][0]["verification"]
     );
+    let declared: Vec<&Value> = provider["auth"]["credentials"]
+        .as_array()
+        .expect("a credentials array")
+        .iter()
+        .map(|credential| &credential["name"])
+        .collect();
     assert!(
-        document.contains(ENV_NAME),
-        "{CATALOG_JSON} does not name the credential's environment variable, so the test above \
-         passes vacuously"
+        declared.contains(&secret),
+        "the verification secret `{secret}` is not one of the connector's declared credentials \
+         {declared:?} — a binding must reference the one namespace, never introduce a second"
     );
 }
+
+/// A fixture connector with an inbound surface: one event, one verified webhook binding, and the
+/// reply operation that answers it.
+///
+/// Shared by the credential and the loud-verification checks below so that both are made against a
+/// connector of the same shape — the shape `providers/slack.toml` ships.
+fn inbound_fixture(token_env: &str, signing_env: &str) -> String {
+    format!(
+        r#"id = "acme"
+vendor = "Acme"
+authority = "com.acme.api"
+api_version = "v1"
+base_url = "https://api.acme.example"
+description = "A hand-authored fixture connector."
+default_auth = [{{ credentials = ["acme.token"] }}]
+
+[[auth]]
+name = "acme.token"
+scheme = "bearer"
+env = ["{token_env}"]
+description = "The fixture credential."
+
+[[auth]]
+name = "acme.signing_secret"
+scheme = "signing"
+env = ["{signing_env}"]
+description = "The fixture webhook signing secret."
+
+[[operations]]
+id = "acme-thing-get"
+method = "GET"
+path = "/v1/things/{{thing_id}}"
+description = "Fetch one thing."
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "thing_id"
+required = true
+schema = {{ type = "integer" }}
+
+[[operations]]
+id = "acme-reply"
+method = "POST"
+path = "/v1/reply"
+description = "Answer a delivery."
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "room"
+required = true
+schema = {{ type = "string" }}
+
+[[operations.params.body]]
+name = "text"
+required = true
+schema = {{ type = "string" }}
+
+[[events]]
+name = "thing.created"
+description = "A thing was created."
+group = "Things"
+
+[[channels]]
+name = "hook"
+transport = "webhook"
+description = "The fixture webhook."
+events = ["thing.created"]
+discriminator = {{ source = "body", name = "event.type" }}
+delivery_id = {{ source = "header", name = "X-Acme-Delivery" }}
+
+[channels.verification.hmac]
+algorithm = "sha256"
+encoding = "hex"
+header = "X-Acme-Signature"
+prefix = "sha256="
+signed = "{{timestamp}}.{{body}}"
+timestamp = {{ source = "header", name = "X-Acme-Timestamp" }}
+secret = "acme.signing_secret"
+tolerance = "5m"
+
+[channels.payload]
+room = "event.room"
+body = "event.body"
+
+[channels.reply]
+operation = "acme-reply"
+result = "text"
+
+[channels.reply.bind]
+room = "room"
+
+[channels.setup]
+docs_url = "https://docs.acme.example/webhooks"
+steps = ["Open the Acme dashboard.", "Paste the callback URL."]
+"#
+    )
+}
+
+/// The document a full build **would** write, recomputed from `providers/*.toml`.
+///
+/// `catalog.json` is a whole-catalogue artifact and therefore coordinator-owned: it is written by a
+/// full build only, and a story implementor does not regenerate it (`AGENTS.md`). The staleness
+/// checks above are the ones that hold the committed bytes to it; the shape assertions below are
+/// claims about the *emitter*, so they read what it produces rather than what is on disk.
+fn recomputed() -> Value {
+    let workspace = Workspace::new(repo_root());
+    let plan = pipeline::plan(&workspace, None).expect("every shipped provider compiles");
+    let document = plan
+        .artifacts
+        .iter()
+        .find(|artifact| {
+            workspace
+                .display_path(&artifact.path)
+                .display()
+                .to_string()
+                .replace('\\', "/")
+                == CATALOG_JSON
+        })
+        .unwrap_or_else(|| panic!("a build plans no {CATALOG_JSON}"));
+    serde_json::from_str(&document.contents).expect("the planned document is valid JSON")
+}
+
+/// **The inbound surface is published too** (C-83): every declared event and every channel binding
+/// reaches `catalog.json`, in IR order, with the fields the design specifies.
+///
+/// Driven off `providers/*.toml`, so it covers whatever the repository ships. The vacuity guard at
+/// the end is the load-bearing line: a connector with no inbound surface contributes nothing, so
+/// without it a future edit that dropped every binding would make this pass rather than fail.
+#[test]
+fn every_shipped_event_and_binding_reaches_the_document() {
+    let document = recomputed();
+    let mut published = 0;
+
+    for name in shipped() {
+        let path = repo_root().join("providers").join(format!("{name}.toml"));
+        let source = std::fs::read_to_string(&path).expect("a shipped provider definition");
+        let connector = connector_spec::provider::load(&format!("providers/{name}.toml"), &source)
+            .expect("a shipped provider loads")
+            .connector;
+
+        let entry = document["providers"]
+            .as_array()
+            .expect("a providers array")
+            .iter()
+            .find(|provider| provider["id"] == Value::String(name.clone()))
+            .unwrap_or_else(|| panic!("{CATALOG_JSON} carries the provider `{name}`"));
+
+        let events = entry["events"]
+            .as_array()
+            .unwrap_or_else(|| panic!("`{name}` carries an `events` array, `[]` when it has none"));
+        assert_eq!(events.len(), connector.events.len());
+        for (published_event, declared) in events.iter().zip(&connector.events) {
+            assert_eq!(
+                published_event["name"],
+                Value::String(declared.name.clone())
+            );
+            assert_eq!(
+                published_event["service"],
+                Value::String(declared.service.clone())
+            );
+            // Every key always present: an absent schema is `null`, never a missing key.
+            for key in ["oip", "description", "default", "group", "when", "schema"] {
+                assert!(
+                    published_event.get(key).is_some(),
+                    "`{name}` event `{}` is missing the key `{key}`",
+                    declared.name
+                );
+            }
+        }
+
+        let channels = entry["channels"]
+            .as_array()
+            .unwrap_or_else(|| panic!("`{name}` carries a `channels` array"));
+        assert_eq!(channels.len(), connector.channels.len());
+        for (published_channel, declared) in channels.iter().zip(&connector.channels) {
+            published += 1;
+            assert_eq!(
+                published_channel["name"],
+                Value::String(declared.name.clone())
+            );
+            for key in [
+                "oip",
+                "description",
+                "transport",
+                "events",
+                "verification",
+                "discriminator",
+                "delivery_id",
+                "payload",
+                "reply",
+                "cursor",
+                "interval",
+                "subscription",
+                "setup",
+            ] {
+                assert!(
+                    published_channel.get(key).is_some(),
+                    "`{name}` binding `{}` is missing the key `{key}` — an absent value is `null`, \
+                     never an absent key",
+                    declared.name
+                );
+            }
+
+            if let Some(reply) = &declared.reply {
+                let published_reply = &published_channel["reply"];
+                assert_eq!(
+                    published_reply["operation"],
+                    Value::String(reply.operation.clone())
+                );
+                let oip = connector
+                    .oip_of_member(&declared.service, &reply.operation)
+                    .map(|oip| oip.to_string());
+                assert_eq!(
+                    published_reply["oip"].as_str(),
+                    oip.as_deref(),
+                    "`{name}` binding `{}` does not carry its reply as a rendered oip",
+                    declared.name
+                );
+                assert!(oip.is_some(), "the comparison above compared two nulls");
+            }
+        }
+    }
+
+    assert!(
+        published > 0,
+        "no shipped connector declares a channel binding, so every assertion above passed vacuously"
+    );
+}
+
+/// **A deliberately-unverifiable binding is published loudly.**
+///
+/// The C-82 invariant is that silence is never a verification answer, and the way to break it in an
+/// artifact is subtle: publish the HMAC parameters when there are any and nothing when there are
+/// not. A consumer would then be telling "signed" from "anyone can POST here" by testing whether a
+/// key exists — which is exactly how an unverified event comes to be presented as a trusted one, in
+/// the one consumer that forgot to test.
+///
+/// So the assertion is not merely that the two differ. It is that they carry the **same key set** and
+/// differ in a *value*, which is what makes the distinction impossible to miss by omission.
+#[test]
+fn a_deliberately_unverifiable_binding_is_published_loudly() {
+    let fixture = Fixture::new("c83-loud");
+    fixture.write_provider("acme", UNVERIFIABLE);
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_flux-connectors"))
+        .args(["build", "--root"])
+        .arg(fixture.root())
+        .output()
+        .expect("the flux-connectors binary runs");
+    assert!(
+        output.status.success(),
+        "build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let document: Value = serde_json::from_str(&fixture.read(CATALOG_JSON))
+        .expect("the published document is valid JSON");
+    let channels = document["providers"][0]["channels"]
+        .as_array()
+        .expect("the fixture publishes its bindings");
+    assert_eq!(channels.len(), 2, "the fixture declares two bindings");
+
+    let signed = &channels[0]["verification"];
+    let open = &channels[1]["verification"];
+
+    let keys = |value: &Value| -> Vec<String> {
+        value
+            .as_object()
+            .expect("a verification object")
+            .keys()
+            .cloned()
+            .collect()
+    };
+    assert_eq!(
+        keys(signed),
+        keys(open),
+        "the two verification blocks differ in which keys they carry, so a consumer would have to \
+         test for existence to tell a signed surface from an open one"
+    );
+
+    assert_eq!(signed["kind"], Value::String("hmac".to_string()));
+    assert_eq!(signed["verified"], Value::Bool(true));
+    assert_eq!(open["kind"], Value::String("none".to_string()));
+    assert_eq!(
+        open["verified"],
+        Value::Bool(false),
+        "a binding whose vendor publishes no signature must say so in the one boolean a consumer \
+         filters on: {open}"
+    );
+
+    // The same statement reaches the manifest, so a host that reads only the installable pair is
+    // told the same thing.
+    let manifest = fixture.read("connectors/acme.connector.toml");
+    assert!(
+        manifest.contains("kind = \"none\"") && manifest.contains("verified = false"),
+        "the manifest does not state the unverifiable binding loudly:\n{manifest}"
+    );
+}
+
+/// Two webhook bindings over the same event: one signed, one whose vendor publishes no signature at
+/// all and says so.
+const UNVERIFIABLE: &str = r#"id = "acme"
+vendor = "Acme"
+authority = "com.acme.api"
+api_version = "v1"
+base_url = "https://api.acme.example"
+description = "A hand-authored fixture connector."
+
+[[auth]]
+name = "acme.signing_secret"
+scheme = "signing"
+env = ["ACME_SIGNING_SECRET"]
+description = "The fixture webhook signing secret."
+
+[[operations]]
+id = "acme-thing-get"
+method = "GET"
+path = "/v1/things/{thing_id}"
+description = "Fetch one thing."
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "thing_id"
+required = true
+schema = { type = "integer" }
+
+[[events]]
+name = "thing.created"
+description = "A thing was created."
+
+[[channels]]
+name = "signed"
+transport = "webhook"
+description = "The signed surface."
+events = ["thing.created"]
+
+[channels.verification.hmac]
+algorithm = "sha256"
+encoding = "hex"
+header = "X-Acme-Signature"
+signed = "{body}"
+secret = "acme.signing_secret"
+
+[channels.setup]
+steps = ["Paste the callback URL into the Acme dashboard."]
+
+[[channels]]
+name = "open"
+transport = "webhook"
+description = "The surface Acme publishes no signature for."
+events = ["thing.created"]
+verification = "none"
+
+[channels.setup]
+steps = ["Paste the callback URL into the Acme dashboard."]
+"#;
 
 /// **Rebuilding from unchanged inputs is byte-identical.** The document travels through
 /// `pipeline::plan` like every other artifact, so an unchanged input writes nothing at all.
