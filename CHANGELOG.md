@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-07-30
+
+The catalogue becomes public and browsable. **No provider can make a live API call yet** — see the
+README's *Known limits*.
+
 ### Added
 - **C-44** — the provider and operation explorer: every provider and operation browsable and
   filterable, one deep-linkable pre-rendered page per operation, and the whole thing working without
