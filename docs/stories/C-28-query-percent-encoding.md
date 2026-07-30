@@ -2,8 +2,8 @@
 id: C-28
 title: Resolve percent-encoding for query values
 pillar: Codegen
-status: ready
-priority: 6
+status: done
+priority:
 design: docs/designs/query-encoding.md
 epic: connectors-v1
 areas: [connector-flux, flux-bridge]

@@ -13,8 +13,11 @@ handful of patches — and the build emits a `<name>.flux` module of typed `op` 
 `op` becomes a first-class operation, exposed to the model as an LLM tool.
 
 The defining idea is **one abstraction level up from a plugin**. Integrating Zendesk into flux today
-means writing a stdio plugin: `plugins/zendesk/src/main.rs` is 687 lines of hand-written Rust for
-roughly seven operations. Almost everything those lines encode — base URL, auth kind, endpoint,
+means writing a stdio plugin — a large hand-written artifact for roughly seven operations.
+(The specific `plugins/zendesk/src/main.rs` this originally cited turned out to be uncommitted
+working-tree material in the flux checkout and is now gone; see
+[designs/zendesk-plugin-citation.md](designs/zendesk-plugin-citation.md). The argument stands; the
+number is no longer checkable.) Almost everything those lines encode — base URL, auth kind, endpoint,
 parameters, response shape — the vendor already publishes as a spec. A connector is what remains once
 you stop hand-writing the part a machine can derive: **auth + operations + quirks**.
 

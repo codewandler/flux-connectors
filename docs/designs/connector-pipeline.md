@@ -4,8 +4,10 @@
 
 ## Why
 
-Integrating a SaaS product into flux today means writing a stdio plugin. `plugins/zendesk/src/main.rs`
-in `../flux` is 687 lines of hand-written Rust for roughly seven operations. Nearly everything in it
+Integrating a SaaS product into flux today means writing a stdio plugin — a large hand-written
+artifact for roughly seven operations. (This originally cited `plugins/zendesk/src/main.rs` at 687
+lines; that file was uncommitted working-tree material in the flux checkout and no longer exists —
+see [zendesk-plugin-citation.md](zendesk-plugin-citation.md).) Nearly everything in it
 — base URL, auth kind, endpoint paths, parameter names and types, response shapes — is already
 published by Zendesk as an OpenAPI document. That approach does not scale to Freshdesk, Salesforce,
 Intercom, OpenAI, OpenRouter, and the long tail of services.

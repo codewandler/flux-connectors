@@ -1,5 +1,12 @@
 # Design: provider operation inventory — zendesk, freshdesk, babelforce
 
+> **Citation notice.** The `../flux/plugins/zendesk/src/main.rs:*` references below **cannot be
+> re-checked**: that file was uncommitted working-tree material in the flux checkout and is absent at
+> flux `v0.38.0`. The Zendesk operation set itself is unaffected — it describes Zendesk's real public
+> API and is independently checkable against Zendesk's documentation. Treat the line numbers as a
+> record of what was read, not as live references. See
+> [zendesk-plugin-citation.md](zendesk-plugin-citation.md).
+
 **Status:** accepted (research) · **Pillar:** Spec · **Stories:** [C-18](../stories/C-18-vendor-specs-and-inventory.md) → feeds [C-17](../stories/C-17-provider-configs.md)
 
 > This document is **raw material, not a schema.** It records what each of the three launch providers

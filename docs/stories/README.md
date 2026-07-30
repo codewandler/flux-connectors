@@ -29,12 +29,11 @@ _None._
 ### Connectors v1 — spec to Flux
 _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-9 — Emit request bodies, headers, and response handling](C-9-bodies-and-responses.md) · Codegen
-- [C-28 — Resolve percent-encoding for query values](C-28-query-percent-encoding.md) · Codegen · blocks zendesk ticket search · flux has no urlencode op at all
+- [C-30 — Refuse query values the emitter cannot encode safely](C-30-refuse-unencodable-query.md) · Codegen · **security** · a model-supplied query value can inject request parameters today
 - [C-10 — Emit the $auth marker and the connector manifest](C-10-auth-injection-and-manifest.md) · Codegen · pairs with C-16 · the second generated artifact
 - [C-29 — Close the request-body modelling gaps in the IR](C-29-body-modelling-gaps.md) · Spec · found by C-17 transcribing real providers · blocks correct write operations
 - [C-11 — Prove every generated module parses and analyzes](C-11-parse-and-analyze-gate.md) · Codegen · **load-bearing** · without it invalid Flux can be committed
 - [C-17 — Author provider configs for zendesk, freshdesk and babelforce](C-17-provider-configs.md) · Spec · **the goal** · three configs that compile to executable .flux
-- [C-7 — Record provenance and write connectors.lock](C-7-provenance-lockfile.md) · Spec
 
 ### unified auth — one model for every provider's credentials
 _Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._
@@ -67,11 +66,13 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-1 — Scaffold the Cargo workspace and the gate](C-1-scaffold-workspace.md) · Foundation · everything else builds on this
 - [C-2 — Define the Connector IR](C-2-connector-ir.md) · Spec · the contract every other crate speaks
 - [C-3 — Load and validate provider TOML](C-3-provider-toml-loader.md) · Spec
+- [C-7 — Record provenance and write connectors.lock](C-7-provenance-lockfile.md) · Spec
 - [C-8 — Emit a Flux op for a GET with path and query params](C-8-flux-op-emitter.md) · Codegen · first end-to-end slice of codegen
 - [C-13 — Build and diff from the vendored spec cache](C-13-cli-build-and-diff.md) · Build
 - [C-16 — Design the $auth seam and file its stories on flux's board](C-16-design-auth-seam.md) · Bridge · design settled + verified against flux v0.38.0 · filing split to C-26
 - [C-18 — Vendor the babelforce spec and curate the provider operation inventory](C-18-vendor-specs-and-inventory.md) · Spec · inventory delivered · spec vendoring split to C-25 (credential literals)
 - [C-27 — Wire the CLI seams to the loader and the emitter](C-27-wire-cli-seams.md) · Build · two functions · mechanical once C-3 and C-8 land
+- [C-28 — Resolve percent-encoding for query values](C-28-query-percent-encoding.md) · Codegen · blocks zendesk ticket search · flux has no urlencode op at all
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

@@ -61,6 +61,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   operations (from 163 available for babelforce), each loading through `connector_spec::provider::load`
   and pinned by `shipped_providers.rs`.
 
+- **C-7** — `connectors.lock` with an explicitly defined hash domain. The domain covers the compiled
+  meaning of a connector and excludes **all** provenance, so a re-fetch or a comment-only TOML edit
+  cannot move the IR hash. `HashDomain::of` destructures `Connector` exhaustively, making a
+  later-added field a compile error until someone places it.
+- **C-28** — `docs/designs/query-encoding.md` and two paste-ready flux story drafts. Establishes that
+  generated query values are injectable, recommends a structured `query` map on `http.request` over a
+  pure `urlencode` op, and specifies the interim refusal.
+
 ### Changed
 - **C-1** — flux-lang is depended on from **crates.io** (`codewandler-flux-lang = "0.37"`) rather
   than as a git or path dependency. The flux git remote uses a developer-only SSH host alias that
