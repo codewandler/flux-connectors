@@ -2,7 +2,7 @@
 id: C-95
 title: Lower a flow graph to a composite Flux op
 pillar: Codegen
-status: ready
+status: blocked
 priority: 3
 design: docs/designs/flow-graph.md
 epic: flow-graph
@@ -46,3 +46,9 @@ of interpreting config.
 - Constraints found while reading flux: a call argument takes values, never a bare `fmt` (bind first,
   then pass `$name`); `Obj`/`List` leaves must be pure value nodes; `await` and `checkpoint` are
   top-level only; a composite op may not recurse.
+
+## Progress
+
+- **Integration attempt reverted (coordinator).** The branch was cut before the flux-lang 0.37 → 0.39 upgrade landed on `main`. Merged, gate went red with **8 of 21** `graph_emitter` tests failing, and `UPDATE_GOLDEN=1` did not clear them — only `graph-message-autoreply.flux` moved, and `graph-nightly-sweep.flux` did not re-record, which suggests its emit now fails rather than merely differs. Three failures are structural rather than textual, so this is not a spelling migration.
+
+  The merge was reverted with `git revert -m 1`; `impl/C-95` is intact. Sent back to the implementor to merge `main`, work the failures, and re-take its base proof. Prime suspect, which the implementor itself named: `retry … -> $bind` plus a trailing bare symbol reference may no longer be a formatter fixed point under 0.39, in which case `check_canonical` is correctly refusing and the region-output lowering needs a different shape.

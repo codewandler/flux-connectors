@@ -96,7 +96,6 @@ _The explorer was designed against **6 providers and 25 operations** (C-42–C-4
 
 ### the flow graph — connector members composed into one Flux op
 _Four waves built this vocabulary without naming it:_
-- [C-95 — Lower a flow graph to a composite Flux op](C-95-graph-lowering.md) · Codegen · owns symbol generation and region nesting. MUST refuse a Select wired to an Operation output until http.request returns a record — today the response is one flat string
 - [C-96 — Map graph node ids to Flux AST paths, so a diagnostic lands on a canvas node](C-96-graph-node-path-map.md) · Bridge · flux ALREADY shipped this seam — D-139 added Diagnostic.node_path because a downstream graph canvas was parsing message text. Reuse it rather than reinventing
 - [C-97 — The boundary program pattern — what an operator writes around a generated flow](C-97-graph-boundary-program.md) · Bridge · flux lifts only `op`; channel and trigger are Program members an operator writes. So a boundary node is DOCUMENTED, never emitted — the same split C-63 uses for poll
 - [C-98 — The node kinds flux-lang already has — parallel, match, each, saga, fallback](C-98-richer-node-kinds.md) · Spec · exposure, not invention — all of these are existing flux_lang::ast::Node variants this repo has never constructed. Match is what finally lets a value escape a conditional
@@ -153,6 +152,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-26 — File the outbound $auth seam stories on flux's board](C-26-file-seam-stories-on-flux.md) · Bridge · **critical path** · 11 paste-ready drafts wait on a decision to write into ../flux
 - [C-35 — Specify the proxy request contract and its guardrails](C-35-proxy-request-contract.md) · Bridge · blocked on C-34
 - [C-36 — Prove the proxy and the Flux emitter build the same request](C-36-proxy-emitter-conformance.md) · Bridge · blocked on C-34 · two backends over one IR will drift without this
+- [C-95 — Lower a flow graph to a composite Flux op](C-95-graph-lowering.md) · Codegen · owns symbol generation and region nesting. MUST refuse a Select wired to an Operation output until http.request returns a record — today the response is one flat string
 
 ## Backlog
 - [C-133 — The brave connector — Brave Talk's room-token HTTP surface](C-133-provider-brave-talk-tokens.md) · Spec · ONLY the three HTTP calls. The XMPP MUC stream stays OUT — vision.md names protocol-rich technology adapters as a non-goal, and flux already has D-205/D-206 with feasibility proven live. Blocked on two real things; read Notes before starting
