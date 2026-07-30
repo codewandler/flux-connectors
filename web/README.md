@@ -37,7 +37,7 @@ link, so a broken site fails the workflow instead of publishing silently.
 | Path | What it is |
 |---|---|
 | `.vitepress/config.mts` | Site config — title, nav, sidebar, and the Pages **base path**. |
-| `.vitepress/theme/` | The default theme plus the explorer's Vue components, registered globally. |
+| `.vitepress/theme/` | The default theme plus the explorer's Vue components, registered globally. `index.mts` is the one file that knows VitePress; [`theme/components/README.md`](.vitepress/theme/components/README.md) records the three component tiers. |
 | `index.md` | Landing page: what the project is, and what does not work yet. |
 | `explorer.md` | The provider & operation explorer. |
 | `operations/[operation].md` | One pre-rendered page per operation, enumerated from the catalogue. |

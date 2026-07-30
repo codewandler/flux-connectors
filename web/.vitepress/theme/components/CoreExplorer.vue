@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { withBase } from 'vitepress'
+import { computed, inject, ref } from 'vue'
 import {
+  PATH_RESOLVER,
   allCoreEntries,
   coreEntryHref,
+  identityPath,
   type CoreCatalog,
   type CoreEntry,
+  type PathResolver,
 } from '../../../data/catalog.mts'
 
 const props = defineProps<{ core: CoreCatalog }>()
+
+const resolvePath = inject<PathResolver>(PATH_RESOLVER, identityPath)
 const query = ref('')
 const kind = ref('')
 const availability = ref('')
@@ -77,7 +81,7 @@ function callable(entry: CoreEntry): boolean {
       :data-callable="callable(entry)"
     >
       <div class="entry__head">
-        <a :href="withBase(coreEntryHref(entry))"><code>{{ entry.name }}</code></a>
+        <a :href="resolvePath(coreEntryHref(entry))"><code>{{ entry.name }}</code></a>
         <span class="badge">{{ entry.kind }}</span>
         <span class="badge" :class="`badge--${entry.availability}`">
           {{ entry.availability }}

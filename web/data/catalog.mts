@@ -252,6 +252,33 @@ export function operationHref(operation: Operation): string {
   return `/operations/${operation.id}`
 }
 
+// ---------------------------------------------------------------------------------------------
+// Where a path becomes an href.
+//
+// The two functions above answer *which page*, and that answer is the catalogue's — it is the same
+// wherever these components are mounted. Turning `/operations/<id>` into an href a browser can follow
+// is the **host's** answer, and it differs: this site is served under a base path, so VitePress has
+// `withBase`; another host has its own router, or none.
+//
+// Importing `withBase` made five components answer a question they do not own, and it is the whole of
+// what tied them to VitePress (C-142). So it is a port: injected, with an identity default, because
+// the honest behaviour for a host that says nothing is to leave the path alone.
+//
+// The key is a plain string rather than a Vue `InjectionKey`, deliberately. This file has no imports
+// and that is a property worth keeping — it is what makes the data contract portable, and it is what
+// lets the build-time `paths.mts` loaders read it under plain Node. Callers type the injection at the
+// `inject` site instead.
+// ---------------------------------------------------------------------------------------------
+
+/** How a host turns a site-root-relative path into an href. */
+export type PathResolver = (path: string) => string
+
+/** The injection key a host provides its own {@link PathResolver} under. */
+export const PATH_RESOLVER = 'flux-connectors:path-resolver'
+
+/** The default resolver: a host that says nothing leaves the path exactly as the catalogue gave it. */
+export const identityPath: PathResolver = (path) => path
+
 /**
  * A short label for a parameter's type, from the vendor's JSON Schema.
  *

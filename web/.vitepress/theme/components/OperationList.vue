@@ -35,7 +35,6 @@
 //     stay in agreement.
 
 import { computed, onMounted, ref, watch } from 'vue'
-import { inBrowser } from 'vitepress'
 import {
   SORTS,
   compareOperations,
@@ -55,6 +54,16 @@ import OperationRow from './OperationRow.vue'
 const props = defineProps<{ providers: Provider[] }>()
 
 const ANY = ''
+
+/**
+ * Whether there is a browser to write a URL into.
+ *
+ * VitePress exports this as `inBrowser` and it is exactly this expression (C-142). Importing it was
+ * the only thing tying this component to the framework, for a guard the component can state itself —
+ * and it has to be a guard rather than an `onMounted`, because the watcher below fires during the
+ * server render too.
+ */
+const inBrowser = typeof window !== 'undefined'
 
 /** What each sort is called on the control. The values are the URL's vocabulary; these are prose. */
 const SORT_LABELS: Record<string, string> = {
