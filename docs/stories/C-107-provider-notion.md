@@ -2,8 +2,7 @@
 id: C-107
 title: Ship the Notion connector
 pillar: Spec
-status: in-progress
-priority: 4
+status: done
 design:
 epic: provider-fleet-2
 areas: [providers]

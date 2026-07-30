@@ -5313,6 +5313,429 @@
       "channels": []
     },
     {
+      "id": "notion",
+      "authority": null,
+      "vendor": "Notion",
+      "description": "Notion workspace: read a page's properties, query a database, search shared content, and create a page",
+      "base_url": "https://api.notion.com",
+      "api_version": null,
+      "hosts": [
+        "api.notion.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.notion.com",
+          "hosts": [
+            "api.notion.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 5
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "notion.token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "Notion integration token sent as a bearer — an internal integration token or an OAuth-issued access token",
+            "env": [
+              "NOTION_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "notion.token"
+          ]
+        ]
+      },
+      "operation_count": 5,
+      "operations": [
+        {
+          "id": "notion-user-me",
+          "provider": "notion",
+          "service": "default",
+          "description": "Get the bot user this integration authenticates as, confirming the token resolves and naming the workspace it belongs to. Takes no parameters",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/users/me",
+          "parameters": [],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "bot": {
+                "description": "The integration's owner and workspace name",
+                "type": "object"
+              },
+              "id": {
+                "description": "The bot user's id",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "object": {
+                "const": "user"
+              },
+              "type": {
+                "const": "bot"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "notion.token"
+            ]
+          ],
+          "hosts": [
+            "api.notion.com"
+          ],
+          "flux": "op notion-user-me -> Any\n  description \"Get the bot user this integration authenticates as, confirming the token resolves and naming the workspace it belongs to. Takes no parameters. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.notion.com\"\n  url = fmt(\"{base}/v1/users/me\")\n  Notion_Version = \"2022-06-28\"\n  response = http.request(headers: { \"Notion-Version\": Notion_Version }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "notion-page-get",
+          "provider": "notion",
+          "service": "default",
+          "description": "Get one page's properties, parent, icon, cover and timestamps. This does NOT return the page's text — in Notion a page's content is a separate tree of blocks, which this connector cannot read",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/pages/{page_id}",
+          "parameters": [
+            {
+              "name": "page_id",
+              "in": "path",
+              "wire": null,
+              "description": "The page's id, a UUID. It is the last path segment of the page's URL, where it appears without hyphens — either spelling is accepted",
+              "required": true,
+              "schema": {
+                "minLength": 32,
+                "pattern": "^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "created_time": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "last_edited_time": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "object": {
+                "const": "page"
+              },
+              "parent": {
+                "description": "Where the page lives: `{type: \"database_id\", database_id}`, `{type: \"page_id\", page_id}` or `{type: \"workspace\"}`",
+                "type": "object"
+              },
+              "properties": {
+                "description": "The page's property values, keyed by property name. For a page in a database the keys are that database's own columns, so they are known only at runtime; for a page with a page parent there is exactly one, `title`",
+                "type": "object"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "notion.token"
+            ]
+          ],
+          "hosts": [
+            "api.notion.com"
+          ],
+          "flux": "op notion-page-get(page_id: String) -> Any\n  description \"Get one page's properties, parent, icon, cover and timestamps. This does NOT return the page's text — in Notion a page's content is a separate tree of blocks, which this connector cannot read. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.notion.com\"\n  url = fmt(\"{base}/v1/pages/{page_id}\")\n  Notion_Version = \"2022-06-28\"\n  response = http.request(headers: { \"Notion-Version\": Notion_Version }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "notion-database-query",
+          "provider": "notion",
+          "service": "default",
+          "description": "Query a database and return its first page of entries (up to 100), unfiltered and in the database's default order. Each entry is a page, and its `properties` are keyed by that database's own column names. Notion routes this read through POST, so it is declared as a write",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/v1/databases/{database_id}/query",
+          "parameters": [
+            {
+              "name": "database_id",
+              "in": "path",
+              "wire": null,
+              "description": "The database's id, a UUID. Open the database as a full page in Notion and it is the last path segment of the URL — not the id of a page inside it",
+              "required": true,
+              "schema": {
+                "minLength": 32,
+                "pattern": "^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "has_more": {
+                "description": "True when the database holds more entries than this page returned. This connector cannot fetch them — the cursor is an opaque token and no query parameter is encodable (C-30)",
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "description": "The cursor for the next page. Unusable here, for the reason given on `has_more`",
+                "type": "string"
+              },
+              "object": {
+                "const": "list"
+              },
+              "results": {
+                "description": "The matching pages, each with its own `properties` object keyed by the database's column names",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "notion.token"
+            ]
+          ],
+          "hosts": [
+            "api.notion.com"
+          ],
+          "flux": "op notion-database-query(database_id: String) -> Any\n  description \"Query a database and return its first page of entries (up to 100), unfiltered and in the database's default order. Each entry is a page, and its `properties` are keyed by that database's own column names. Notion routes this read through POST, so it is declared as a write. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.notion.com\"\n  url = fmt(\"{base}/v1/databases/{database_id}/query\")\n  Notion_Version = \"2022-06-28\"\n  response = http.request(headers: { \"Notion-Version\": Notion_Version }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "notion-search",
+          "provider": "notion",
+          "service": "default",
+          "description": "Search the pages and databases shared with this integration by title, returning the first page of matches (up to 100). Notion matches on title only — it does not search page text. Notion routes this read through POST, so it is declared as a write",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/v1/search",
+          "parameters": [
+            {
+              "name": "query",
+              "in": "body",
+              "wire": null,
+              "description": "The text to match against page and database titles. An empty string returns everything shared with the integration",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "has_more": {
+                "description": "True when more matches exist than this page returned. This connector cannot fetch them — see notion-database-query",
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": "string"
+              },
+              "object": {
+                "const": "list"
+              },
+              "results": {
+                "description": "The matching pages and databases, newest first",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "notion.token"
+            ]
+          ],
+          "hosts": [
+            "api.notion.com"
+          ],
+          "flux": "op notion-search(query: String) -> Any\n  description \"Search the pages and databases shared with this integration by title, returning the first page of matches (up to 100). Notion matches on title only — it does not search page text. Notion routes this read through POST, so it is declared as a write. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.notion.com\"\n  url = fmt(\"{base}/v1/search\")\n  content_type = \"application/json\"\n  Notion_Version = \"2022-06-28\"\n  payload = { query }\n  response = http.request(body: payload, headers: { \"Notion-Version\": Notion_Version, \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "notion-page-create",
+          "provider": "notion",
+          "service": "default",
+          "description": "Create a new empty page as a child of an existing page. The page is created with a title and no content — this connector cannot write page body text, which in Notion is a separate tree of blocks. The parent page must be shared with this integration",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/v1/pages",
+          "parameters": [
+            {
+              "name": "parent_page_id",
+              "in": "body",
+              "wire": "parent.page_id",
+              "description": "The id of the existing page to create this page inside, a UUID. It must be a page, not a database, and it must be shared with this integration",
+              "required": true,
+              "schema": {
+                "minLength": 32,
+                "pattern": "^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "title",
+              "in": "body",
+              "wire": "properties.title",
+              "description": "The page title as Notion rich text: a list of runs, each `{\"text\": {\"content\": \"...\"}}`. A plain title is one run — `[{\"text\": {\"content\": \"My page\"}}]`",
+              "required": true,
+              "schema": {
+                "items": {
+                  "properties": {
+                    "text": {
+                      "properties": {
+                        "content": {
+                          "description": "The literal text of this run",
+                          "type": "string"
+                        },
+                        "link": {
+                          "description": "An optional link on this run, `{\"url\": \"...\"}`",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "content"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ],
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "created_time": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "description": "The created page's id, which is what later calls address it by",
+                "type": "string"
+              },
+              "object": {
+                "const": "page"
+              },
+              "parent": {
+                "type": "object"
+              },
+              "url": {
+                "description": "The created page's Notion URL",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "notion.token"
+            ]
+          ],
+          "hosts": [
+            "api.notion.com"
+          ],
+          "flux": "op notion-page-create(parent_page_id: String, title: List<Any>) -> Any\n  description \"Create a new empty page as a child of an existing page. The page is created with a title and no content — this connector cannot write page body text, which in Notion is a separate tree of blocks. The parent page must be shared with this integration. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.notion.com\"\n  url = fmt(\"{base}/v1/pages\")\n  content_type = \"application/json\"\n  Notion_Version = \"2022-06-28\"\n  payload = { parent: { page_id: parent_page_id }, properties: { title } }\n  response = http.request(body: payload, headers: { \"Notion-Version\": Notion_Version, \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "openai",
       "authority": null,
       "vendor": "OpenAI",

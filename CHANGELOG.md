@@ -9,6 +9,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Notion connector (C-107)** — the nineteenth provider, 256 artifacts. Five operations, with
+  `Notion-Version: 2022-06-28` emitted as a **literal** on every request.
+
+  That header is why the first attempt refused to ship. The emitter used to chain every header
+  parameter in unfiltered, so a required constant emitted as a caller-supplied argument and the
+  connector would have returned 400 on every call — while `every_shipped_provider_compiles` stayed
+  green, because the module parsed, formatted and round-tripped perfectly. The gate could not see it.
+  C-55 fixed the emitter and this is the connector that proves it.
+
+  Scoped honestly: a Notion block is a ~30-way *recursive* discriminated union and this repo's
+  `JsonSchema` has no `$ref`, so page **content** is out of scope and `notion-page-get` says it
+  returns properties rather than text. The filter/sort DSL and the property `PATCH` are excluded for
+  the same reason — their keys are tenant-defined.
+
+
+### Added
+
 - **A connector operation can now reach a vendor, with the network gate mirrored (C-115).** Each Tool
   builds `{method, url, headers, body}` and delegates to flux's own `http.request`, so flux keeps
   every byte of egress.
