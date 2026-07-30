@@ -47,14 +47,18 @@ duplication is not merely tedious, it silently drops coverage.
   and now shares it with `the_catalog_is_not_empty`, whose two totals (`6`, `38`) became comparisons
   against `providers/` and `crates/catalog/ops/`.
 - The derivation is repeated per file rather than shared, deliberately: the four crates share no test
-  crate, and creating one would mean a new workspace member plus a dev-dependency — both fenced for
-  this story, and a runtime dependency `catalog` is contractually not allowed to take (AGENTS.md).
-  What the story asked to remove is the duplicated *data*; the set of shipped providers now has one
-  source of truth, the directory.
+  support crate, and creating one means a new workspace member plus a `dev-dependencies` entry in four
+  manifests — both fenced for this run, which is the whole of the argument. (An earlier version of this
+  note also claimed `catalog` may take no such dependency; that was wrong. AGENTS.md forbids
+  `connector-catalog` *runtime* dependencies, and a dev-dependency is not one. The conclusion stands on
+  the fencing alone, and a shared helper is a legitimate follow-up.) What the story asked to remove is
+  the duplicated *data*; the set of shipped providers now has one source of truth, the directory.
 - New regression guard: `no_test_hand_maintains_a_shipped_provider_list`
-  (`crates/connector-cli/tests/shipped_providers_build.rs`) fails if any `const`/`static` under
-  `crates/*/tests` names two or more shipped providers. It is the failing-first test — at the merge
-  base it named all five constants.
+  (`crates/connector-cli/tests/shipped_providers_build.rs`) fails if any `const`/`static` item under
+  `crates/*/tests` — `pub`-qualified or not — names two or more shipped providers. It is the
+  failing-first test: at the merge base it named all five constants. Its doc comment lists what the
+  scan cannot reach (a `let`, an assembled id, two single-id constants, `#[cfg(test)]` under `src/`),
+  because a guard that reads as exhaustive and is not is worse than none.
 - **`crates/catalog/src/generated.rs` was deliberately left alone.** Its hand-written `mod` index is
   what keeps a provider-scoped `build --provider <id>` sound, and
   `the_provider_list_matches_the_repository` is the test that keeps it honest — the very pattern this

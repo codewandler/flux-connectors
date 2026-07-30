@@ -255,10 +255,26 @@ fn slack_sends_its_arguments_in_the_body_and_nothing_in_the_url() {
 /// the connector under review. A list that must be edited in five places to stay correct will be
 /// edited in four.
 ///
-/// The rule is deliberately about *constants*: a `const` or `static` naming two or more shipped
-/// providers is the duplicated inventory. A per-provider claim inside a test body — the curated
-/// operation counts in `connector-spec`'s `operation_selection_stays_curated`, for instance — is a
-/// deliberate assertion about each provider rather than a copy of the provider set, and stays.
+/// **What the scan reaches:** a `const` or `static` item beginning a line in any `*.rs` under
+/// `crates/*/tests`, under any visibility (`pub`, `pub(crate)`, `pub(super)`, `pub(in …)`, or none),
+/// whose text up to the `;` that ends the item quotes two or more ids from `providers/`.
+///
+/// **What it does not reach, by construction** — a list, so that nobody mistakes a green run for a
+/// proof of absence:
+///
+/// - a `let` binding or a `Vec` built inside a function body;
+/// - ids assembled rather than written — `include_str!`, `concat!`, a formatted string;
+/// - two constants that each name a single provider, since the threshold is two ids in one item;
+/// - `#[cfg(test)]` modules under `crates/*/src`, which this scan does not walk.
+///
+/// Those are accepted gaps, not oversights. This guard is aimed at the exact shape that regressed —
+/// one constant per test file, holding the whole inventory — and the coverage it protects comes from
+/// `shipped()` in each of those files, not from here. A determined author can still write a second
+/// source of truth; what they cannot do is reintroduce this one by accident.
+///
+/// One gap is deliberate rather than merely tolerated: a per-provider claim inside a test body — the
+/// curated operation counts in `connector-spec`'s `operation_selection_stays_curated`, for instance —
+/// is an assertion about each provider rather than a copy of the provider set, and stays.
 ///
 /// It lives in `connector-cli` because this is the crate whose tests already read the repository
 /// tree (see [`workspace`] above); no other crate should grow that reach for one check.
@@ -349,6 +365,11 @@ fn test_sources(root: &Path) -> Vec<PathBuf> {
 /// A textual scan rather than a parse, on purpose: this check has to run over sibling crates' test
 /// sources, and pulling a Rust parser into `connector-cli`'s dev-dependencies to read six lines
 /// would cost more than the duplication it guards against.
+///
+/// A declaration counts when the keyword opens a line or follows nothing but a visibility qualifier.
+/// The qualifier is the whole reason this is a function rather than one `find`: requiring an empty
+/// prefix skipped `pub const`, so a single word evaded the check — and evading it silently, which is
+/// worse than not having it.
 fn const_items(source: &str) -> Vec<&str> {
     let mut items = Vec::new();
 
@@ -358,21 +379,57 @@ fn const_items(source: &str) -> Vec<&str> {
             let start = cursor + offset;
             cursor = start + keyword.len();
 
-            // Only a declaration at the start of a line: `as const`, a doc comment mentioning the
-            // word, and `const fn` bodies are not inventories.
+            // Nothing but optional visibility before the keyword. This rejects `as const`, a doc
+            // comment mentioning the word, and a `const` inside a signature or a `let`, none of
+            // which is an inventory; it accepts `pub const` and `pub(crate) static`, which are.
             let line_start = source[..start].rfind('\n').map_or(0, |index| index + 1);
-            if !source[line_start..start].trim().is_empty() {
+            if !opens_an_item(source[line_start..start].trim()) {
                 continue;
             }
 
-            let end = source[start..]
-                .find(';')
-                .map_or(source.len(), |index| start + index);
-            items.push(&source[start..end]);
+            // From the line start, not the keyword, so a failure quotes `pub const …` as written.
+            items.push(source[line_start..item_end(source, start)].trim_start());
         }
     }
 
     items
+}
+
+/// The offset of the `;` that ends the item beginning at `start`, tracking bracket depth.
+///
+/// Not simply the next `;`: an array type spells its length after one, so `const SHIPPED: [&str; 6]`
+/// would otherwise be cut off at `[&str` — before a single id — and pass. Same evasion as `pub`,
+/// different spelling, so it is closed the same way rather than left to the next reviewer.
+fn item_end(source: &str, start: usize) -> usize {
+    let mut depth = 0usize;
+
+    for (offset, character) in source[start..].char_indices() {
+        match character {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            ';' if depth == 0 => return start + offset,
+            _ => {}
+        }
+    }
+
+    source.len()
+}
+
+/// Whether `prefix` — everything on the line before `const`/`static` — leaves it a declaration.
+///
+/// Empty, or a visibility qualifier: `pub`, `pub(crate)`, `pub(super)`, `pub(in some::path)`.
+fn opens_an_item(prefix: &str) -> bool {
+    if prefix.is_empty() {
+        return true;
+    }
+
+    match prefix.strip_prefix("pub") {
+        Some(rest) => {
+            let rest = rest.trim();
+            rest.is_empty() || (rest.starts_with('(') && rest.ends_with(')'))
+        }
+        None => false,
+    }
 }
 
 /// A parameter whose wire name differs from its caller-facing one travels under the **vendor's**

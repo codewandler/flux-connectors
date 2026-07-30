@@ -16,8 +16,9 @@
 //! future author cannot satisfy by picking a narrower type for an injectable value.
 //!
 //! The two structural claims deliberately duplicate what `shipped_modules.rs` asserts across every
-//! provider. That file's `SHIPPED` list is shared with the sibling connector stories; this one names
-//! only github, so C-52's gate does not depend on a line another story is editing.
+//! provider. That file iterates whatever `providers/` holds (C-54, which replaced the hand-listed set
+//! it used to share with the sibling connector stories); this one names only github, so C-52's gate
+//! stays a claim about github rather than one whose subject moves when the shipped set does.
 
 use std::path::{Path, PathBuf};
 
