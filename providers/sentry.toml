@@ -1,0 +1,323 @@
+# Sentry Web API — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER.
+# Sentry publishes an OpenAPI 3 description of its public API at
+# `https://docs.sentry.io/api/openapi.json` — the same document `docs.sentry.io/api/` renders, and the
+# upstream document this file is transcribed from. Nothing is vendored under `specs/` for it because
+# ingest (C-4) and the overlay (C-6) do not exist yet, and the document describes several hundred
+# operations across organizations, projects, teams, releases, monitors, alert rules and discover
+# queries: without a selection mechanism, pointing at it would be pointing at several hundred LLM
+# tools. When C-14's fetch and C-4's ingest land, this file becomes `[spec]` plus a
+# `[[patch.operations]]` selection, and **the four operations below are the selection to reproduce** —
+# by `operationId`: `Retrieve an Issue`, `Update an Issue`, `Retrieve a Project`, and
+# `Retrieve the Latest Event for an Issue`.
+#
+# Until then drift is undetectable by machine, exactly as for zendesk, freshdesk, github, openai,
+# slack and asana (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# THE TRAILING SLASH IS PART OF THE ADDRESS. DO NOT TIDY IT AWAY.
+# ---------------------------------------------------------------------------------------------
+#
+# Every path below ends in `/`, because Sentry's API is Django REST Framework with `APPEND_SLASH`
+# routing and the slashed form is the canonical URL. Dropping one does not fail cleanly, and it fails
+# differently per endpoint:
+#
+#   GET  /api/0/organizations/{org}/issues/{id}   -> 301 to the slashed form
+#   PUT  /api/0/organizations/{org}/issues/{id}   -> 404
+#
+# The `PUT` case is a write that silently does not happen. The `GET` case is worse in a different way:
+# `APPEND_SLASH` answers safe methods with a redirect, and a client that follows it may reissue the
+# request without the `Authorization` header, so the connector reports a 401 for a call that was
+# correct apart from one character.
+#
+# Nothing else in this repository notices. A path with the slash removed loads, validates, emits,
+# parses, analyzes, is a formatter fixed point, and produces a byte-identical second build. The only
+# thing that fails is `crates/connector-flux/tests/sentry_connector.rs`, which pins the whole emitted
+# `$url` line of every operation — a pinned line rather than an `ends_with('/')` property, because
+# `…/issues/` ends in a slash too and addresses the issue *list*.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: no query parameter, so the issues list — Sentry's search — is excluded (C-30).
+# ---------------------------------------------------------------------------------------------
+#
+# Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim into a
+# `fmt` template and flux registers no encoding op (`crates/connector-flux/src/op.rs`).
+# `zendesk-ticket-search` is the standing demonstration and AGENTS.md lists it under *Intentional
+# gaps* — a value carrying `&` does not filter, it injects a parameter. Excluded pending C-30:
+#
+# - `GET /api/0/organizations/{org}/issues/` and its `query` parameter, which is Sentry's own search
+#   syntax (`is:unresolved level:error firstSeen:-24h`). It is colon-heavy, space-separated and
+#   free-form, i.e. the most injectable value the whole API exposes, and it is the reason this
+#   connector reads an issue it was *told about* rather than searching for one. That is the story's
+#   scope, not a shortfall discovered late.
+# - `statsPeriod`, `environment` and `project` — the filter triple every organization-scoped endpoint
+#   accepts. `sentry-issue-get` and `sentry-issue-event-latest` therefore return Sentry's default
+#   window and every environment, which is what a triage read wants anyway.
+# - `cursor` paging, and with it every collection endpoint. A Sentry cursor is an opaque
+#   server-issued token read out of the `Link` header — the same shape as a Slack cursor and just as
+#   unencodable here. It is also why the *latest* event is the operation rather than the event list.
+#
+# The path surface, by contrast, is genuinely safe rather than merely untested. A Sentry issue id and
+# a Sentry event id are decimal or hex strings; an organization or project slug is drawn from ASCII
+# alphanumerics, `-` and `_` and is validated by Sentry on creation. None of them can carry a
+# character that changes the shape of the request. Each path parameter declares that as a `pattern`,
+# which is a contract a model reads and a future validator can check — the emitted Flux does not
+# enforce it. That asymmetry between path and query is the whole selection principle for this
+# connector.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: no optional request-body field, and on Sentry an omitted one *clears* a field (C-56).
+# ---------------------------------------------------------------------------------------------
+#
+# The emitter binds every declared body field into the payload record, so a caller who leaves an
+# optional field alone sends an explicit `null`. On most vendors that is a 400. On Sentry's issue
+# update it is worse, because the endpoint is a partial update whose serializer accepts `null` as a
+# value for some fields:
+#
+#   {"status": "resolved", "assignedTo": null}   # unassigns the issue nobody asked to unassign
+#
+# So `sentry-issue-update` declares exactly one field, `status`, and what that costs is:
+#
+# - `assignedTo` — reassigning an issue to a user or team. This is the field the gap bites hardest on
+#   and the reason it is not declared "just in case": a `null` here is accepted and *destroys* the
+#   assignment.
+# - `statusDetails`, and with it the `resolvedInNextRelease` / `inRelease` / `ignoreDuration` /
+#   `ignoreCount` transitions. Sentry requires the companion object for those, so the `status` enum
+#   below is restricted to the three values that stand on their own.
+# - `hasSeen`, `isBookmarked`, `isSubscribed`, `isPublic`, `merge` — per-user or per-issue flags none
+#   of which a triage flow needs.
+#
+# A second, narrower facet of the same gap: `required` is documented as *"Whether the vendor requires
+# the parameter"*, and Sentry requires no member of this body at all — `{}` is a legal no-op. `status`
+# is marked required because C-56 forbids an optional body field and an update with no settable field
+# is not an operation. It says so at its declaration.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: `ErrorEnvelope` addresses one location, and Sentry has two error shapes.
+# ---------------------------------------------------------------------------------------------
+#
+# A permission or lookup failure answers with DRF's `{"detail": "…"}`, which is what
+# `message_pointer` below names. A *validation* failure on the write answers with a field-keyed
+# object instead — `{"status": ["\"done\" is not a valid choice."]}` — whose key is whichever field
+# was wrong, so there is no fixed pointer to declare for it and `ErrorEnvelope` has nowhere to say a
+# second shape exists. `/detail` is declared anyway: the common location is then machine-readable for
+# C-12 rather than lost, and the emitter puts it on the tool contract a model reads. `code_pointer`
+# is left off because Sentry publishes no machine-readable error code — the HTTP status is the code.
+#
+# No `rate_limit` is declared for a related reason: Sentry's limits are per organization *and* per
+# endpoint category, are not published as a single number, and are communicated at runtime in
+# `X-Sentry-Rate-Limit-*` response headers. `RateLimit` carries one `requests`/`per_seconds` pair and
+# no way to say "whatever the response header last told us", so any value here would be invented.
+#
+# No `response_schema` is declared: unlike asana, Sentry returns the resource itself with no
+# envelope, so there is no shape a consumer could not infer and nothing this file could record that
+# the vendor reference does not already say.
+# ---------------------------------------------------------------------------------------------
+
+id = "sentry"
+vendor = "Sentry"
+
+# One host for Sentry's SaaS, for every organization and every region-routed account: `sentry.io`
+# accepts a request for any organization and routes it. Unlike zendesk's `{subdomain}` and
+# freshdesk's `{domain}` there is no tenant templating, so `base_url` is a bound literal, `status.rs`
+# reports no `unbound-base-url-template` issue, and the connector already has a valid destination URL.
+#
+# `http_hosts` derives from this single value (`crates/connector-cli/src/catalog.rs`, `host_of`) and
+# is therefore exactly `sentry.io`, never widened.
+#
+# SCHEMA GAP: a self-hosted Sentry serves the identical API on the operator's own host, and nothing
+# here can express "the same connector against a different endpoint" — `base_url` is one literal and
+# there is no field that binds it to operator config. That is C-68's subject
+# (`docs/stories/C-68-endpoint-binding.md`); this file records the limitation rather than inventing a
+# binding, so a self-hosted operator cannot use this connector at all yet. The alternative — a
+# `{host}` template like zendesk's — would trade a loud "this is SaaS only" for a silently unbound
+# URL, which is the worse of the two.
+base_url = "https://sentry.io"
+
+description = "Sentry error tracking: read an issue and its latest event, triage an issue, read a project"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["sentry.auth_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "sentry.auth_token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; its value is never read
+# here and never reaches a generated artifact.
+#
+# Sentry mints three kinds of token — an organization auth token, a user auth token, and an internal
+# integration token — and all three travel identically as `Authorization: Bearer <token>`. Which one
+# an operator supplies is configuration rather than connector shape, which is why no `[auth.oauth2]`
+# block appears: flux is handed an already-minted token through the environment and runs no grant,
+# the same provenance babelforce's, slack's and asana's bearers have. What differs between the token
+# kinds is the scopes they carry (`event:read` for the reads, `event:write` for the update), which is
+# C-67's subject and not something this file can assert.
+env = ["SENTRY_AUTH_TOKEN"]
+description = "Sentry auth token sent as a bearer — an organization, user or internal-integration token"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 4, all path-addressed by organization, project and issue id, all under `/api/0`
+#
+# Curated to what a triage flow executes at runtime: read the issue an alert pointed at, read the
+# latest event so the stack trace is available, read the project it belongs to, and move the issue's
+# status. Everything administrative — organizations, teams, members, releases, deploys, monitors,
+# alert rules, client keys — is excluded, and so is every delete: the same selection principle
+# babelforce's 9-of-163 follows (`docs/designs/provider-operation-inventory.md` §5.2).
+#
+# `/api/0` is Sentry's only version prefix and has been since the API was published. The `0` is not a
+# placeholder for a future `/api/1`; Sentry versions the API by deprecating endpoints in place.
+#
+# The issue endpoints are the **organization-scoped** forms. Sentry's older unscoped
+# `/api/0/issues/{issue_id}/` still resolves but is documented as deprecated, and it makes the
+# organization implicit — an id from one organization silently addressing another operator's is not a
+# failure mode worth keeping. The scoped form also matches what the story asks for: addressing by
+# organization, project and issue id.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only, so `op sentry.issues.get` is undeclarable (C-8, C-23).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "sentry-issue-get"
+method = "GET"
+path = "/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/"
+description = "Get one issue — its title, culprit, level, status, assignee, first and last seen timestamps and event counts. An issue is Sentry's group of like events, not a single occurrence; use `sentry-issue-event-latest` for the stack trace"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "organization_id_or_slug"
+description = "The organization's slug as it appears in a Sentry URL (`acme-inc`), or its numeric id"
+required = true
+schema = { type = "string", pattern = "^[a-zA-Z0-9_-]+$", minLength = 1 }
+
+[[operations.params.path]]
+name = "issue_id"
+description = "The issue's numeric id — the number in a Sentry issue URL, and the `issue_id` an alert payload carries. It is not the short id (`ACME-INC-7F`)"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$", minLength = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/detail"
+
+# ---------------------------------------------------------------------------------------------
+# The one write.
+#
+# `risk` is set from what it changes and who sees it, not from the HTTP method. Sentry's unresolved
+# queue *is* the team's inbox and its alerting is driven by issue status, so this operation changes
+# what every member of the organization sees next, and `ignored` stops the issue notifying anyone at
+# all. An agent that ignored a live production error would have silenced it for everybody with no
+# human in the loop. `high` — "writes a reviewer would want to see first" — is what flux's approval
+# gate reads; `medium` would let exactly that happen unattended. The change is also recorded in the
+# issue's activity feed, attributed to whoever owns the token.
+#
+# It is reversible — `status = "unresolved"` puts the issue back — which is why it is not
+# `destructive`.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "sentry-issue-update"
+method = "PUT"
+path = "/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/"
+description = "Change an issue's triage state: resolve it, ignore it, or return it to unresolved. This is the state the whole organization triages against — a resolved issue leaves the unresolved queue, and an ignored one stops alerting until it recurs on Sentry's terms. Recorded in the issue's activity feed under the token's owner"
+risk = "high"
+# `PUT` is idempotent under RFC 9110 §9.2.2 and setting the same status twice plainly lands the same
+# state, but Sentry documents no idempotency guarantee for the transition: each call is recorded as a
+# separate activity entry, and Sentry's own `resolvedInNextRelease` transition resolves against
+# whichever release is next *at the time of the call*, so "the same effect as making it once" is not a
+# property of this endpoint. C-77's Acceptance is explicit that no write is marked idempotent unless
+# the vendor documents it as such. The cost is a forgone retry; the cost of the other error is a
+# replayed write.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "organization_id_or_slug"
+description = "The organization's slug as it appears in a Sentry URL (`acme-inc`), or its numeric id"
+required = true
+schema = { type = "string", pattern = "^[a-zA-Z0-9_-]+$", minLength = 1 }
+
+[[operations.params.path]]
+name = "issue_id"
+description = "The issue's numeric id"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$", minLength = 1 }
+
+# Not vendor-required: Sentry accepts `{}` here as a legal no-op, and every member of this body is
+# optional to it. It is declared required because C-56 forbids an optional body field — an omitted
+# one travels as an explicit `null`, and on this endpoint a `null` is *applied* rather than rejected —
+# and because an update with no settable field is not an operation. See the header comment.
+#
+# The enum is the three transitions that stand on their own. `resolvedInNextRelease` and `inRelease`
+# need a `statusDetails` companion object, which C-56 makes undeclarable, so offering them would
+# offer a value Sentry answers 400 to.
+[[operations.params.body]]
+name = "status"
+description = "`resolved` closes the issue, `ignored` mutes it until Sentry's own recurrence conditions fire, `unresolved` reopens it and puts it back in the team's queue"
+required = true
+schema = { type = "string", enum = ["resolved", "ignored", "unresolved"] }
+
+[operations.quirks.error_envelope]
+message_pointer = "/detail"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "sentry-project-get"
+method = "GET"
+path = "/api/0/projects/{organization_id_or_slug}/{project_id_or_slug}/"
+description = "Get one project — its name, slug, platform, teams, DSN-bearing client keys' status and whether it is currently accepting events. This is the project an issue belongs to, so it is how a triage flow finds out which service is broken"
+risk = "low"
+idempotency = "idempotent"
+
+# The project endpoint is the one place Sentry addresses organization *and* project in the path, and
+# in that order. It is not organization-scoped under `/organizations/`, which is a Sentry quirk rather
+# than a transcription slip: `/api/0/organizations/{org}/projects/` is the project *list*, and the
+# single-project read lives under `/api/0/projects/`.
+[[operations.params.path]]
+name = "organization_id_or_slug"
+description = "The organization's slug as it appears in a Sentry URL (`acme-inc`), or its numeric id"
+required = true
+schema = { type = "string", pattern = "^[a-zA-Z0-9_-]+$", minLength = 1 }
+
+[[operations.params.path]]
+name = "project_id_or_slug"
+description = "The project's slug as it appears in a Sentry URL (`backend-api`), or its numeric id"
+required = true
+schema = { type = "string", pattern = "^[a-zA-Z0-9_-]+$", minLength = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/detail"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "sentry-issue-event-latest"
+method = "GET"
+path = "/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/events/latest/"
+# `latest` is a Sentry-defined path segment, not a parameter: the endpoint is
+# `…/events/latest/` and there is a sibling `…/events/oldest/`. Modelling it as a path parameter
+# would let a caller pass an arbitrary event id, which is a *different* endpoint with a different
+# response, so the segment stays a literal.
+description = "Get the most recent event of an issue — the actual occurrence, with its stack trace, breadcrumbs, request context and tags. This is what makes an issue diagnosable rather than merely countable; the event list itself is excluded because it pages with an opaque cursor"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "organization_id_or_slug"
+description = "The organization's slug as it appears in a Sentry URL (`acme-inc`), or its numeric id"
+required = true
+schema = { type = "string", pattern = "^[a-zA-Z0-9_-]+$", minLength = 1 }
+
+[[operations.params.path]]
+name = "issue_id"
+description = "The issue's numeric id"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$", minLength = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/detail"
