@@ -11,6 +11,39 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
+/// A complete hand-authored provider definition for `id`, of the shape the real loader accepts and
+/// the real emitter can compile: one GET with a path parameter.
+///
+/// The fixtures used to be `id = "acme"` and nothing more, which was all C-13's placeholder loader
+/// looked at. `connector-spec`'s loader validates for real (C-27), so a fixture now has to be a
+/// connector rather than a stand-in for one.
+///
+/// The operation id is kebab, not dotted: a dotted name cannot be a Flux `op` **declaration** name
+/// and the emitter refuses one rather than rewriting it (C-23 decides the public form).
+pub fn definition(id: &str) -> String {
+    format!(
+        r#"id = "{id}"
+vendor = "{id} Inc."
+base_url = "https://api.{id}.example"
+description = "A hand-authored fixture connector."
+
+[[operations]]
+id = "{id}-thing-get"
+method = "GET"
+path = "/v1/things/{{thing_id}}"
+description = "Fetch one thing."
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "thing_id"
+description = "The thing to fetch."
+required = true
+schema = {{ type = "integer" }}
+"#
+    )
+}
+
 /// A throwaway directory tree, removed when the value drops.
 pub struct Fixture {
     root: PathBuf,
@@ -34,7 +67,7 @@ impl Fixture {
     /// A fixture with one provider definition and one vendored spec, the shape a build expects.
     pub fn with_provider(label: &str, provider: &str) -> Self {
         let fixture = Self::new(label);
-        fixture.write_provider(provider, "id = \"acme\"\n");
+        fixture.write_provider(provider, &definition(provider));
         fixture.write_spec(provider, "v1", "{\"openapi\":\"3.0.3\"}\n");
         fixture
     }
