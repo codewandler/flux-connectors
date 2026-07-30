@@ -120,6 +120,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "connector-catalog"
+version = "0.1.0"
+dependencies = [
+ "codewandler-flux-lang",
+]
+
+[[package]]
 name = "connector-cli"
 version = "0.1.0"
 dependencies = [

@@ -43,6 +43,24 @@ fn plan_for(provider: &str) -> Vec<PlannedArtifact> {
         .artifacts
 }
 
+/// The shipped provider definition, loaded.
+fn load(provider: &str) -> connector_spec::Connector {
+    let source =
+        std::fs::read_to_string(workspace().providers_dir().join(format!("{provider}.toml")))
+            .expect("the shipped provider file is readable");
+    connector_spec::provider::load(&format!("providers/{provider}.toml"), &source)
+        .expect("the shipped provider file loads")
+        .connector
+}
+
+/// Whether the plan writes `path`, spelled relative to the repository root.
+fn plans(artifacts: &[PlannedArtifact], path: &str) -> bool {
+    let wanted = PathBuf::from(path);
+    artifacts
+        .iter()
+        .any(|artifact| artifact.path.ends_with(&wanted))
+}
+
 /// The planned contents of one artifact path.
 fn planned(provider: &str, file: &str) -> String {
     let artifacts = plan_for(provider);
@@ -63,18 +81,32 @@ fn planned(provider: &str, file: &str) -> String {
 fn every_shipped_provider_compiles() {
     for provider in SHIPPED {
         let artifacts = plan_for(provider);
-        assert_eq!(
-            artifacts.len(),
-            2,
-            "a connector is a module *plus* a manifest, never one of them; {provider} planned {} \
-             artifacts",
-            artifacts.len()
+        let operations = load(provider).operations.len();
+
+        // The two that ship. A connector is a module *plus* a manifest, never one of them.
+        assert!(
+            plans(&artifacts, &format!("connectors/{provider}.flux")),
+            "a build of {provider} must plan connectors/{provider}.flux"
         );
         assert!(
-            artifacts
-                .iter()
-                .any(|artifact| artifact.path.ends_with(format!("{provider}.flux"))),
-            "a build of {provider} must plan connectors/{provider}.flux"
+            plans(&artifacts, &format!("connectors/{provider}.connector.toml")),
+            "a build of {provider} must plan connectors/{provider}.connector.toml"
+        );
+
+        // The catalog's half (C-38): the generated table, plus one rendering per operation.
+        assert!(
+            plans(
+                &artifacts,
+                &format!("crates/catalog/src/generated/{provider}.rs")
+            ),
+            "a build of {provider} must plan its catalog table"
+        );
+        assert_eq!(
+            artifacts.len(),
+            3 + operations,
+            "{provider} publishes {operations} operations, so a build plans its module, its \
+             manifest, its catalog table and one rendering each; it planned {} artifacts",
+            artifacts.len()
         );
     }
 }

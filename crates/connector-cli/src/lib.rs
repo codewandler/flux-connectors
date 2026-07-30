@@ -25,6 +25,7 @@
 //! - **Explicit.** Generation is a command a human runs and reviews as a diff — never a `build.rs`.
 
 pub mod artifact;
+pub mod catalog;
 pub mod cli;
 pub mod diff;
 pub mod discovery;

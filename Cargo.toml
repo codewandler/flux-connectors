@@ -4,6 +4,7 @@ members = [
     "crates/connector-spec",
     "crates/connector-flux",
     "crates/connector-cli",
+    "crates/catalog",
 ]
 
 [workspace.package]
@@ -18,6 +19,10 @@ rust-version = "1.87"
 # Internal crates.
 connector-spec = { version = "0.1.0", path = "crates/connector-spec" }
 connector-flux = { version = "0.1.0", path = "crates/connector-flux" }
+# The catalog (C-38): generated data, and the crate a consumer adds to get it. Nothing in this
+# workspace depends on it — it is the leaf the pipeline writes into — but it is listed here so that
+# a consumer inside the workspace picks up the same pin as one outside it.
+connector-catalog = { version = "0.1.0", path = "crates/catalog" }
 
 # Flux-Lang: the emit target. Pinned deliberately — bumping this is a reviewed change, and
 # `flux-connectors check` verifies generated artifacts still match the pin (C-14).
