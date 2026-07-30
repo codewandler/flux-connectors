@@ -458,9 +458,21 @@ mod tests {
     #[derive(Default)]
     struct Recorded {
         replies: BTreeMap<(Method, String), VaultResponse>,
-        seen: Mutex<Vec<(Method, String, Option<String>, String)>>,
+        seen: Mutex<Vec<Exchange>>,
         /// When set, every request fails to complete — the "backend unreachable" leg.
         offline: Option<String>,
+    }
+
+    /// One request the transcript saw, as the assertions want to read it.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct Exchange {
+        method: Method,
+        url: String,
+        body: Option<String>,
+        /// The token the store handed the transport, which is what would become
+        /// `X-Vault-Token`. A `String` here rather than a `Secret` so a failing assertion can
+        /// actually show what went out — this is a sentinel, in a test.
+        token: String,
     }
 
     impl Recorded {
@@ -486,7 +498,7 @@ mod tests {
             self
         }
 
-        fn requests(&self) -> Vec<(Method, String, Option<String>, String)> {
+        fn requests(&self) -> Vec<Exchange> {
             self.seen.lock().expect("the transcript lock").clone()
         }
     }
@@ -494,12 +506,15 @@ mod tests {
     #[async_trait]
     impl VaultTransport for Recorded {
         async fn send(&self, request: VaultRequest<'_>) -> Result<VaultResponse, TransportError> {
-            self.seen.lock().expect("the transcript lock").push((
-                request.method,
-                request.url.clone(),
-                request.body.clone(),
-                request.token.expose_secret().to_owned(),
-            ));
+            self.seen
+                .lock()
+                .expect("the transcript lock")
+                .push(Exchange {
+                    method: request.method,
+                    url: request.url.clone(),
+                    body: request.body.clone(),
+                    token: request.token.expose_secret().to_owned(),
+                });
             if let Some(reason) = &self.offline {
                 return Err(TransportError::new(reason));
             }
@@ -556,10 +571,10 @@ mod tests {
         assert_eq!(secret.expose_secret(), SENTINEL);
         let requests = store.transport.requests();
         assert_eq!(requests.len(), 1);
-        assert_eq!(requests[0].0, Method::Get);
-        assert_eq!(requests[0].1, DATA_URL, "KV v2 reads go through `/data/`");
+        assert_eq!(requests[0].method, Method::Get);
+        assert_eq!(requests[0].url, DATA_URL, "KV v2 reads go through `/data/`");
         assert_eq!(
-            requests[0].3, SENTINEL_TOKEN,
+            requests[0].token, SENTINEL_TOKEN,
             "the token reaches the transport for `X-Vault-Token`"
         );
     }
@@ -574,9 +589,9 @@ mod tests {
             .expect("put");
 
         let requests = store.transport.requests();
-        assert_eq!(requests[0].0, Method::Post);
-        assert_eq!(requests[0].1, DATA_URL);
-        let body: Value = serde_json::from_str(requests[0].2.as_deref().expect("a body"))
+        assert_eq!(requests[0].method, Method::Post);
+        assert_eq!(requests[0].url, DATA_URL);
+        let body: Value = serde_json::from_str(requests[0].body.as_deref().expect("a body"))
             .expect("the body is JSON");
         assert_eq!(body, json!({ "data": { "value": SENTINEL } }));
     }
@@ -591,7 +606,7 @@ mod tests {
         let store = store(transport);
 
         store.delete(&reference()).await.expect("delete");
-        assert_eq!(store.transport.requests()[0].1, METADATA_URL);
+        assert_eq!(store.transport.requests()[0].url, METADATA_URL);
 
         // Vault answers 204 whether or not anything was there, so a second delete succeeds too.
         store.delete(&reference()).await.expect("second delete");
@@ -723,8 +738,8 @@ mod tests {
             .expect("put");
 
         let requests = store.transport.requests();
-        assert_eq!(requests[0].1, url);
-        let body: Value = serde_json::from_str(requests[0].2.as_deref().expect("a body"))
+        assert_eq!(requests[0].url, url);
+        let body: Value = serde_json::from_str(requests[0].body.as_deref().expect("a body"))
             .expect("the body is JSON");
         assert_eq!(body, json!({ "data": { "token": SENTINEL } }));
     }
@@ -769,9 +784,9 @@ mod tests {
         // Everything but the path is unchanged: same method, same envelope handling, same value.
         assert_eq!(secret.expose_secret(), SENTINEL);
         let requests = store.transport.requests();
-        assert_eq!(requests[0].0, Method::Get);
-        assert_eq!(requests[0].1, flat_url);
-        assert_eq!(requests[0].3, SENTINEL_TOKEN);
+        assert_eq!(requests[0].method, Method::Get);
+        assert_eq!(requests[0].url, flat_url);
+        assert_eq!(requests[0].token, SENTINEL_TOKEN);
         assert_eq!(
             store.path(&reference()),
             "flux/com.zendesk.api/9f3a4b2c/support/api_token"
