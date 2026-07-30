@@ -2,7 +2,8 @@
 id: C-118
 title: "A connector-backed flux-channels adapter"
 pillar: Bridge
-status: backlog
+status: ready
+priority: 5
 design: docs/designs/connector-tool-pack.md
 epic: tool-pack
 areas: [bridge, connector-spec]

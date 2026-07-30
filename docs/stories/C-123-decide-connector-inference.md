@@ -2,7 +2,8 @@
 id: C-123
 title: "Decide: may a connector ever serve LLM inference?"
 pillar: Spec
-status: backlog
+status: ready
+priority: 4
 design: docs/designs/provider-roles.md
 epic: provider-roles
 areas: [connector-spec, bridge]

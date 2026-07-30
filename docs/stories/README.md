@@ -96,6 +96,7 @@ _A connector today compiles a vendor spec into **outbound** ops: flux calls Zend
 - [C-125 — Compose one input_schema per operation](C-125-composed-input-schema.md) · Codegen · mechanical, with a clear right answer, and an immediate consumer — ToolSpec.input_schema is REQUIRED, so C-114 must otherwise invent its own and disagree with the catalogue
 - [C-126 — Raise response_schema coverage and put a floor under it](C-126-response-schema-coverage.md) · Spec · 16 of 97 operations declare a response shape. The floor test matters more than the number — coverage that nothing watches only ever goes down
 - [C-127 — Separate what the vendor sends from what a caller receives](C-127-truthful-output-typing.md) · Codegen · the trap this epic exists for — publishing response_schema as an output_schema means a consumer writing `.data.id` gets null on every call, with no error. http.request returns ONE FLAT STRING
+- [C-128 — In and out shapes for events, channel bindings and graphs](C-128-inbound-io-schemas.md) · Codegen · the IR already carries the fields (inbound.rs, graph.rs) but nothing publishes them. A binding's 'out' is its reply operation's 'in' — the composition C-82 recorded, so reuse it rather than restating it
 
 ### rendered provider documentation
 _A connector's operations are currently legible only by reading `providers/<name>.toml` or the_
@@ -117,6 +118,7 @@ _Seventeen connectors share structure that nothing currently names. `zendesk`, `
 - [C-120 — Declare roles on a service, with the closed set and its refusals](C-120-service-roles-declaration.md) · Spec · the mechanism — roles attach to a SERVICE and a provider's are derived; an unknown role name is a load error, because a typo'd capability that silently means 'no capability' is the whole failure mode
 - [C-121 — The llm_catalogue and ticketing roles, and the model pool they feed](C-121-llm-catalogue-role.md) · Spec · two roles, not one — a mechanism validated by a single role is designed around a single case. Connectors contribute a LIVE model list; flux's static pricing tables are explicitly 'the fallback'
 - [C-122 — Ship the Anthropic connector — management surface and model catalogue](C-122-provider-anthropic.md) · Spec · the third vendor to fill llm_catalogue, and the one that proves the role is vendor-independent rather than shaped around OpenAI. Management plane only — inference stays with flux's native anthropic provider
+- [C-123 — Decide: may a connector ever serve LLM inference?](C-123-decide-connector-inference.md) · Spec · DECISION, not a task — it contradicts a stated vision non-goal, so it needs an explicit answer before any code, exactly as C-34 gates the proxy. Nothing else in the epic depends on it
 
 ### Tool Pack
 - [C-113 — The connector Tool pack — the flux interop layer (epic)](C-113-tool-pack-epic.md) · Bridge · EPIC — flux REMOVED flux-plugin-zendesk pending 'a flux-connectors interop layer'; D-200/D-201/D-202 are blocked on this and examples/zendesk.triage.flux is the written acceptance target. A Tool pack delegates to flux's own http.request, so flux keeps every byte of egress
@@ -124,6 +126,7 @@ _Seventeen connectors share structure that nothing currently names. `zendesk`, `
 - [C-115 — Request construction, delegation to http.request, and the mirrored network gate](C-115-request-delegation.md) · Bridge · SAFETY — delegating to HttpRequestTool::execute bypasses Executor::dispatch, so a Tool that fails to declare its own permission_subjects is an un-gated hole through the host's network policy
 - [C-116 — The CredentialStore port, in-Rust auth assembly, and redaction](C-116-credential-store-port.md) · Bridge · finally wires C-90's Layout/CredentialRef to a consumer — and removes the $auth seam from milestone 1's critical path, because a Tool builds `Bearer <token>` itself
 - [C-117 — Generate the pack from the IR and hold it to the drift gate](C-117-pack-codegen.md) · Codegen · two surfaces from one IR can disagree about the same operation — the differential test is the honest guard, and it belongs here rather than in a later postmortem
+- [C-118 — A connector-backed flux-channels adapter](C-118-connector-channel-adapter.md) · Bridge · the second surface — flux's channel dispatch is a closed match with one arm per vendor, and its slack arm hand-builds a chat.postMessage this repo already compiles. Blocked on C-83's binding codegen
 
 ### unified auth — one model for every provider's credentials
 _Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._
@@ -163,19 +166,9 @@ _A connector today compiles a vendor spec into **outbound** ops: flux calls Zend
 - [C-63 — A `poll` transport — inbound for vendors with no webhook, no flux blocker](C-63-poll-transport.md) · Codegen · a cursor `op` (emitted) plus a documented `schedule`-channel program pattern (not emitted) — proves inbound is an abstraction over transports rather than a synonym for webhook, and ships with zero cross-repo dependency. AMENDED by C-82: the cursor is MANDATORY, because flux's cron drops ticks and replays none
 - [C-65 — Prove inbound end to end on two vendors against a live flux](C-65-inbound-two-vendors-live.md) · Build · the epic's closing proof, mirroring C-15: two vendors chosen to exercise different halves — one spec-published webhook API with a simple scheme, one whose scheme carries a timestamp window
 
-### Member Io
-- [C-128 — In and out shapes for events, channel bindings and graphs](C-128-inbound-io-schemas.md) · Codegen · the IR already carries the fields (inbound.rs, graph.rs) but nothing publishes them. A binding's 'out' is its reply operation's 'in' — the composition C-82 recorded, so reuse it rather than restating it
-
 ### rendered provider documentation
 _A connector's operations are currently legible only by reading `providers/<name>.toml` or the_
 - [C-33 — Treat generated docs as a checked artifact](C-33-docs-are-a-checked-artifact.md) · Build
-
-### provider roles — a declared, checkable capability shape
-_Seventeen connectors share structure that nothing currently names. `zendesk`, `freshdesk`,_
-- [C-123 — Decide: may a connector ever serve LLM inference?](C-123-decide-connector-inference.md) · Spec · DECISION, not a task — it contradicts a stated vision non-goal, so it needs an explicit answer before any code, exactly as C-34 gates the proxy. Nothing else in the epic depends on it
-
-### Tool Pack
-- [C-118 — A connector-backed flux-channels adapter](C-118-connector-channel-adapter.md) · Bridge · the second surface — flux's channel dispatch is a closed match with one arm per vendor, and its slack arm hand-builds a chat.postMessage this repo already compiles. Blocked on C-83's binding codegen
 
 ### unified auth — one model for every provider's credentials
 _Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._

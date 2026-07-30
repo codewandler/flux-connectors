@@ -2,7 +2,8 @@
 id: C-128
 title: "In and out shapes for events, channel bindings and graphs"
 pillar: Codegen
-status: backlog
+status: ready
+priority: 4
 design: docs/designs/member-io-schemas.md
 epic: member-io
 areas: [connector-spec, codegen]
