@@ -2,8 +2,7 @@
 id: C-114
 title: "The connector-pack crate and the ToolSpec projection"
 pillar: Bridge
-status: in-progress
-priority: 1
+status: done
 design: docs/designs/connector-tool-pack.md
 epic: tool-pack
 areas: [bridge]

@@ -2,8 +2,7 @@
 id: C-64
 title: Design the flux-side verified-webhook seam and file its flux stories
 pillar: Bridge
-status: in-progress
-priority: 4
+status: done
 design: docs/designs/verified-webhook-seam.md
 epic: inbound-events
 areas: [bridge]

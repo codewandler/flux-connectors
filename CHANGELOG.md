@@ -9,6 +9,54 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Tool pack's declaration half (C-114).** `crates/connector-pack` projects a catalogue
+  operation onto a flux `ToolSpec`, so a host can register a provider's operations into a
+  `ToolRegistry` and resolve them by dotted name (`zendesk.ticket.comment.add`) — the spelling flux's
+  reference flow uses and one a composite declaration cannot have. 97 operations across 17 providers
+  register and resolve.
+
+  Two findings the work turned up. `ToolSpec::access` cannot be left empty: flux **refuses the
+  registration** of a declared network effect with no carrying access kind, so the pack derives access
+  from effects and re-runs flux's own checker at projection time. An independent review reproduced
+  that refusal verbatim and confirmed the derivation picks the narrowest carrier rather than
+  over-granting. And the projection reads the *embedded Flux declaration* rather than the catalogue's
+  flat columns, which makes the pack's answer the module's answer by construction — removing the
+  drift C-117 exists to guard, for the declaration half, instead of testing for it.
+
+- **Verification conformance against real vendor vectors (C-60).** A parameterized matrix over
+  GitHub, Slack, Zendesk and Stripe, with the HMAC primitive pinned separately to RFC 4231 so the two
+  vendor-published triples count as independent evidence rather than the implementation agreeing with
+  itself.
+
+### Fixed
+
+- **A signature scheme that verified forgeries (C-60).** `signed_placeholders` silently swallowed an
+  unterminated brace, so `signed = "v0:{timestamp}:{body"` — one missing character, a plausible typo —
+  passed every loader check and produced a signed string **containing no body at all**. A signature
+  captured from one delivery would then verify any forged payload for the whole tolerance window. The
+  fragment now comes back as a placeholder no host can fill, so the loader's existing refusal catches
+  it.
+
+### Changed
+
+- **Whole-catalogue artifacts are coordinator-owned (C-104).** The provider index is generated on a
+  full build only, so provider stories no longer collide on a hand-maintained list. The real class is
+  **four** artifacts, not the two the story assumed — enumerated by differencing a full plan against a
+  scoped one.
+
+  The rework corrected two documented claims that were measurably wrong, and both mattered because
+  they are the instruction implementors follow: a new provider leaves **eight** tests red, not three,
+  and a changed provider three, not one. Both undercounts came from plain `cargo test --workspace`
+  stopping at the first failing binary — the trap `AGENTS.md` documents elsewhere. Both gates now say
+  `--no-fail-fast`.
+
+- **`AGENTS.md`'s "does not depend on the flux runtime" is now scoped to the compiler crates**, since
+  `connector-pack` links `flux-runtime`/`flux-spec` by necessity. This repository still constructs no
+  runtime.
+
+
+### Added
+
 - **A tool contract is now readable.** The core explorer rendered `Risk`, `Idempotency`, `Effects`,
   `Access` and `Group` as bare text and dumped the input schema through an unhighlighted
   `JSON.stringify`. The safety fields are now chips whose tone is **derived from the value** — so a

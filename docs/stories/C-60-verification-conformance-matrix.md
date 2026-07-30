@@ -2,8 +2,7 @@
 id: C-60
 title: Verification conformance — one parameterized HMAC against real vendor vectors
 pillar: Spec
-status: in-progress
-priority: 3
+status: done
 design: docs/designs/inbound-events.md
 epic: inbound-events
 areas: [connector-spec]

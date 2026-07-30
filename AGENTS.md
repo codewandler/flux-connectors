@@ -415,6 +415,6 @@ are not docs-only and require the relevant Rust tests plus formatting and clippy
 - flux-connectors depends on `codewandler-flux-lang` (library `flux_lang`) from crates.io, pinned in
   `[workspace.dependencies]`. Do not replace it with a git or `../flux` path dependency; those do not
   resolve in a fresh clone and couple the build to an unpublished tree.
-- flux-connectors does not depend on the flux runtime. It compiles; flux executes.
+- The **compiler** crates — `connector-spec`, `connector-flux`, `connector-cli` — depend on no part of the flux runtime, and `connector-catalog` stays dependency-free. `connector-pack` alone links `flux-runtime`/`flux-spec`, because a declaration handed to a host must be spelled in the host's own `ToolSpec`/`Tool` vocabulary. This repository still constructs no runtime: it compiles; flux executes.
 - The critical runtime change is flux's `$auth` support for `http.request`. Its design is recorded
   here; implementation stories belong to flux's own board.

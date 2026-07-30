@@ -2,8 +2,7 @@
 id: C-84
 title: Design the flux-side generic connector channel kind and file its flux stories
 pillar: Bridge
-status: in-progress
-priority: 4
+status: done
 design: docs/designs/connector-channel-seam.md
 epic: channel-bindings
 areas: [bridge, flux]

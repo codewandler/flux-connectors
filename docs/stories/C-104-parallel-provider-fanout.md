@@ -2,8 +2,7 @@
 id: C-104
 title: Make whole-catalogue artifacts coordinator-owned, so provider stories can run in parallel
 pillar: Build
-status: in-progress
-priority: 2
+status: done
 design:
 epic: provider-fleet-2
 areas: [connector-cli, catalog]
