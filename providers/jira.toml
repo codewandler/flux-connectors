@@ -1,0 +1,344 @@
+# Jira Cloud platform REST API — hand-authored, no vendor spec.
+#
+# Atlassian publishes an OpenAPI description of the Jira Cloud platform REST API
+# (`developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json`). It is not pointed at here for
+# the same reason zendesk's and github's are not: ingest (C-4) and the overlay (C-6) do not exist
+# yet, and the document describes several hundred operations — pointing at it without a selection
+# mechanism would be pointing at several hundred LLM tools. When C-14's fetch and C-4's ingest land,
+# this file becomes a `[spec]` pointer plus a `[[patch.operations]]` selection, and **the six
+# operations below are the selection to reproduce**: `getIssue`, `createIssue`, `getComments`,
+# `addComment`, `getTransitions`, `doTransition`.
+#
+# Until then drift is undetectable by machine, exactly as for zendesk, freshdesk and github
+# (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# WHY THIS FILE ADDRESSES `/rest/api/2/` AND NOT `/rest/api/3/`.
+# THE ANSWER IS ATLASSIAN DOCUMENT FORMAT. DO NOT BULK-UPGRADE THE PATHS TO v3.
+# ---------------------------------------------------------------------------------------------
+#
+# Atlassian ships two live versions of the same API. Its own documentation states that **"version 2
+# and version 3 of the API offer the same collection of operations"**, and that the difference is
+# that v3 "provides support for the Atlassian Document Format (ADF) in body in comments, including
+# where comments are used in issue, issue link, and transition resources". Neither is deprecated;
+# v3 is the ADF-aware twin of v2, not its replacement. The consequence that matters here is the
+# sharp one: **v2 does not accept ADF, and v3 does not accept `{"body": "plain text"}`.**
+#
+# An ADF comment body is a nested rich-text document:
+#
+#   {"body": {"type": "doc", "version": 1,
+#             "content": [{"type": "paragraph",
+#                          "content": [{"type": "text", "text": "the comment"}]}]}}
+#
+# **That shape cannot be declared in this schema.** C-29's `wire` field carries the dot-separated
+# JSON path a body field occupies, and `connector-flux` assembles those paths with `BodyNode`, which
+# is either a `Leaf` (a value) or a `Branch` (a `BTreeMap` of further paths) —
+# `crates/connector-flux/src/op.rs`. **There is no array variant.** ADF's `content` is an array of
+# block nodes, so there is no `wire` path that places the caller's text inside it: not
+# `body.content.0.content.0.text`, not any other spelling. The nesting is not merely awkward to
+# write here, it is inexpressible.
+#
+# That leaves exactly three ways to ship a comment operation, and C-70 takes the third:
+#
+#  1. **Declare `body` as a `string` against v3.** The schema accepts it, the emitter emits it, the
+#     catalogue publishes it, and Jira answers `400 Comment body is not valid!` on every call. A
+#     field typed `string` that the vendor rejects is worse than an excluded operation: it is a
+#     connector that looks complete and cannot work. Refused.
+#  2. **Declare a free-form `object` body (`body_schema`) against v3** and let the caller supply the
+#     whole ADF document. This compiles — babelforce's session writes use that mechanism — but it
+#     hands a model an argument whose schema it must invent correctly on every call, with no
+#     validation anywhere in the pipeline. That is the "ambiguous free-form body" AGENTS.md lists
+#     among the shapes to refuse rather than guess at. Refused.
+#  3. **Address v2, where the same operation takes a plain string.** The field is then honest: it is
+#     a `string` because the vendor documents a `string`. This is what the story means by
+#     "restrict the operation set to fields that are plain and say so", and this comment plus
+#     `crates/connector-flux/tests/jira_connector.rs` are the saying-so.
+#
+# What is given up by choosing v2 is stated plainly rather than glossed: comment text is **wiki
+# markup** (`h1.`, `*bold*`, `{code}`) instead of rich structured content, and the issue
+# `description` returned by `jira-issue-get` is wiki markup too. Nothing else — the operation
+# collection is the same in both versions. The cost is a text format; the cost of v3 would be a
+# non-functional write.
+#
+# Closing this properly needs an array-capable body path in C-29 (a `wire` spelling for an array
+# element, and a `BodyNode::List`), after which a v3 ADF body becomes declarable and this connector
+# can move. Until then, moving it is a regression, which is why the version is asserted by test.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: nothing binds `{site}` to an environment variable.
+# ---------------------------------------------------------------------------------------------
+#
+# Every Jira Cloud tenant lives on its own `*.atlassian.net` subdomain, so there is no
+# tenant-independent base URL. `base_url` is a plain string that `Connector` documents as "may carry
+# tenant templating", but no field declares where a template variable is resolved from — so the fact
+# that an operator supplies this from something like `JIRA_SITE` lives only in this comment, exactly
+# as zendesk's `{subdomain}`/`ZENDESK_URL` binding does. `crates/connector-cli/src/status.rs`
+# publishes the consequence as `unbound-base-url-template` for every operation, which is honest: as
+# it stands these operations have no resolvable destination. **C-68 is where the binding is
+# designed; do not invent one here.**
+#
+# ---------------------------------------------------------------------------------------------
+# EXCLUDED, AND WHY — every exclusion is a pipeline gap, not a judgement about the endpoint.
+# ---------------------------------------------------------------------------------------------
+#
+# **No query parameter of any type, anywhere (C-30).** The emitter interpolates a query value into
+# the URL with `fmt` and percent-encodes nothing, because flux registers no URL-encoding op
+# (`crates/connector-flux/src/op.rs`, C-28, C-30). That is the defect `zendesk-ticket-search`
+# carries. So every Jira query value is excluded:
+#
+# - **JQL search** (`GET /rest/api/2/search`, and its v3 successor `/search/jql`) is excluded
+#   outright. Its `jql` parameter is the most injectable query value in this whole fleet — a JQL
+#   expression is full of spaces, quotes, commas, `=` and `~`, and an unencoded one does not merely
+#   mis-query, it lets any `&` in a caller's string append a parameter of its own. This is the single
+#   largest capability this connector does not have, and it stays excluded until C-30 lands.
+# - **`fields` and `expand`** on `jira-issue-get`: both are query values. Their absence is why that
+#   operation returns Jira's *entire* default field set, including every configured custom field.
+#   That is a large response, and narrowing it is a C-30 follow-up.
+# - **`startAt` and `maxResults`** on `jira-issue-comment-list`: both are query values, so no
+#   pagination is declared and the operation returns Jira's first default-sized page. `Pagination`
+#   in `Quirks` cannot help — its `page_param`/`size_param` are defined as *query* parameters, so
+#   declaring the quirk would mean declaring the parameters. Same shape as the cursor gap
+#   `providers/slack.toml` records.
+#
+# **No optional request-body field (C-56).** `body_tree` places every declared body field into the
+# payload record unconditionally — there is no `when` guard on the body side, unlike the query side —
+# so a `required = false` body field the caller omits travels as an explicit `{"field": null}`. Jira
+# is not documented as treating null as "absent" on these endpoints, and AGENTS.md says to refuse
+# plausible-but-unverified behaviour rather than ship it. So every field below is one that is
+# **always** sent, and these are left out for that reason alone:
+#
+# - `fields.description` on `jira-issue-create`. A created issue therefore carries a summary and no
+#   description, which is a real loss. It is *not* promoted to `required = true` to dodge the gap:
+#   Jira does not require a description, and declaring it required would publish a contract the
+#   vendor does not have. It returns when a body field can be `when`-guarded.
+# - `fields.priority.name`, `fields.labels`, `fields.assignee.accountId`, `fields.parent.key` and
+#   `fields.duedate` on `jira-issue-create` — every optional create field.
+# - **`visibility` on `jira-issue-comment-add`, which is the one with a safety edge.** Jira can
+#   restrict a comment to a project role or group (`{"visibility": {"type": "role", "value":
+#   "Administrators"}}`). It is a two-field nested object, both fields optional, so C-56 excludes it
+#   — and the consequence is that **every comment this connector adds is visible to everyone who can
+#   see the issue**, including customers on a Jira Service Management portal. That is the safe
+#   direction only because it is the *documented default* and it is stated in the operation's own
+#   description, so a model is not misled; it is the opposite of zendesk's `public = false`, where
+#   the plugin's default was the private one. An internal-note capability needs C-56.
+#
+# **Issue update (`PUT /rest/api/2/issue/{issueIdOrKey}`) is excluded** for a different reason: every
+# field it edits is optional by nature — an update names the one or two fields it changes — so under
+# C-56 it would either send explicit nulls over the fields the caller left alone (which on Jira
+# *clears* a field rather than being ignored: a data-loss write) or be reduced to an operation that
+# demands every field on every call. Neither is shippable. Workflow state is still reachable through
+# the two transition operations below, which is what an agent actually needs.
+#
+# ---------------------------------------------------------------------------------------------
+# STILL CANNOT MAKE A LIVE CALL, for the same reason as every shipped connector: flux's
+# `http.request` takes `{"$secret": …}` as a whole-value replacement, so it cannot assemble a Basic
+# `Authorization` header from an email and a token (`docs/designs/auth-seam.md`). This connector is
+# the catalogue's proof, not a working client.
+# ---------------------------------------------------------------------------------------------
+
+id = "jira"
+vendor = "Jira"
+
+# See the `{site}` gap above. An operator's Jira Cloud site — `https://acme.atlassian.net` — is
+# tenant configuration, and `{site}` is the template a binding will resolve.
+base_url = "https://{site}.atlassian.net"
+
+description = "Jira Cloud issue tracking: read and create issues, comment on them, and drive workflow transitions"
+
+# Every operation authenticates the same way, so the requirement is declared once here rather than
+# repeated on all six.
+default_auth = [{ credentials = ["jira.api_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "jira.api_token"
+scheme = "basic"
+# The sole secret: an Atlassian API token, minted per account at id.atlassian.com. Gated and
+# registered with flux's redactor by the host; its value is never read here and never reaches a
+# generated artifact.
+env = ["JIRA_API_TOKEN"]
+# The non-secret identity half: the Atlassian account email, on its own.
+#
+# **The halves are not interchangeable.** Basic auth sends `<user>:<password>`, and Atlassian's
+# documented pairing is `<account email>:<API token>`. Declaring them the other way round would route
+# a live credential through `user_env` — the non-secret path, which is not gated and not registered
+# with the redactor — which is the security regression C-19's acceptance calls out by name.
+user_env = ["JIRA_USER"]
+# No `user_suffix`. Zendesk's user half is `<email>/token`, where the literal `/token` is Zendesk's
+# public syntax for "this password is an API token". Atlassian has no equivalent marker: the user
+# half is the bare email address, and inventing a suffix here would corrupt every request.
+description = "Atlassian API token; the user half is the account email that minted it"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 6, all on the v2 issue resource tree
+#
+# Curated to what an agent working an issue tracker actually does at runtime: read an issue, file
+# one, read the discussion, join it, and move the issue through its workflow. Everything
+# administrative is excluded — user and group management, project and workflow configuration, custom
+# field administration, permission schemes — on the same selection principle as babelforce's 9-of-163
+# (`docs/designs/provider-operation-inventory.md` §5.2). Everything search-shaped is excluded for the
+# encoding gap named above.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only, so `op jira.issue.get` is undeclarable (C-8, C-23).
+#
+# The path placeholder is Jira's own `{issueIdOrKey}` — the spelling the vendor routes on — while the
+# parameter a caller passes is `issue_key`. `wire` carries that mapping, which is exactly the "plain
+# alias" case `Param::wire` documents for a path parameter.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "jira-issue-get"
+method = "GET"
+path = "/rest/api/2/issue/{issueIdOrKey}"
+description = "Read one Jira issue by key (`PROJ-123`) or numeric id — summary, description, status, assignee, reporter and every other configured field. Returns Jira's full default field set, including custom fields, because narrowing it needs the `fields` query parameter this connector cannot encode. Text fields are wiki markup, not rich content"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "issue_key"
+wire = "issueIdOrKey"
+description = "The issue key, e.g. `PROJ-123`, or its numeric id"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "jira-issue-create"
+method = "POST"
+path = "/rest/api/2/issue"
+description = "Create a Jira issue in a project. Visible to everyone with access to the project and notifies its watchers. Only project, summary and issue type are set: a description cannot be sent yet (see the connector's notes), so file the detail as a comment afterwards. Returns the new issue's id, key and self URL"
+# A new issue appears on a shared board, notifies watchers, and can trigger project automation. It
+# cannot be un-seen, and deleting it needs a permission an integration usually lacks. Matches
+# `github-issue-create`.
+risk = "high"
+# Posting twice files two issues; Jira offers no idempotency key on this endpoint.
+idempotency = "non_idempotent"
+
+# Jira's create body nests everything under `fields`, and each field below declares the JSON path it
+# occupies with `wire` (C-29). Without those paths the fields would be emitted at the body root,
+# where Jira answers `400` naming them as unknown — the loud failure, unlike zendesk's flat body
+# which is accepted and ignored.
+[[operations.params.body]]
+name = "project_key"
+wire = "fields.project.key"
+description = "Key of the project to file the issue in, e.g. `PROJ`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "summary"
+wire = "fields.summary"
+description = "One-line issue summary; this is the issue's title"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# By name rather than by id: an id is per-site and opaque, and a model has no way to discover one
+# without the admin endpoints this connector excludes. The trade-off is that a name must match one
+# the project actually offers — Jira answers `400` naming the valid types if it does not.
+[[operations.params.body]]
+name = "issue_type"
+wire = "fields.issuetype.name"
+description = "Name of the issue type as the project defines it, e.g. `Task`, `Bug` or `Story`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "jira-issue-comment-list"
+method = "GET"
+path = "/rest/api/2/issue/{issueIdOrKey}/comment"
+description = "Read the comments on a Jira issue, oldest first. Returns Jira's first default-sized page only: paging needs the `startAt` and `maxResults` query parameters this connector cannot encode, so an issue with a long discussion is truncated. Comment bodies are wiki markup"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "issue_key"
+wire = "issueIdOrKey"
+description = "The issue key, e.g. `PROJ-123`, or its numeric id"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "jira-issue-comment-add"
+method = "POST"
+path = "/rest/api/2/issue/{issueIdOrKey}/comment"
+description = "Add a comment to a Jira issue. The comment is visible to everyone who can see the issue — including customers on a service-management portal — and notifies its watchers; restricting it to a project role or group is not supported yet. The body is Jira wiki markup (`*bold*`, `{code}`), not Markdown and not rich content"
+# A comment is read by people, notifies them, and cannot be un-seen. Matches
+# `github-issue-comment-add` and `slack-chat-post-message`.
+risk = "high"
+# Posting twice posts two comments.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "issue_key"
+wire = "issueIdOrKey"
+description = "The issue key, e.g. `PROJ-123`, or its numeric id"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# **A plain string at the body root, and this is the whole ADF decision in one field.** On v2 the
+# vendor documents `{"body": "<text>"}`; on v3 the same field is an ADF document, which no `wire`
+# path can express. No `wire` here on purpose: the field sits at the root, and a path would mean the
+# ADF nesting had crept back in.
+[[operations.params.body]]
+name = "body"
+description = "The comment text, in Jira wiki markup. Must not be blank"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "jira-issue-transitions-list"
+method = "GET"
+path = "/rest/api/2/issue/{issueIdOrKey}/transitions"
+description = "List the workflow transitions available on a Jira issue right now, with the id and target status of each. Call this before `jira-issue-transition`: transition ids are per-workflow, not global, and only the transitions valid from the issue's current status are returned"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "issue_key"
+wire = "issueIdOrKey"
+description = "The issue key, e.g. `PROJ-123`, or its numeric id"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "jira-issue-transition"
+method = "POST"
+path = "/rest/api/2/issue/{issueIdOrKey}/transitions"
+description = "Move a Jira issue through a workflow transition — the way an issue is closed, reopened or advanced. Get the transition id from `jira-issue-transitions-list` first; ids are per-workflow and only transitions valid from the current status are accepted. The status change is visible on every board showing the issue, notifies watchers, and may fire project automation. Answers `204` with an empty body on success"
+# A workflow change is the most visible edit here: it moves the issue on shared boards, notifies
+# watchers, can close a sprint item, and may trigger automation rules. The reverse transition is not
+# guaranteed to exist, so it is not reliably undoable.
+risk = "high"
+# Repeating the call does not re-apply the transition — Jira rejects it, because the transition is no
+# longer available from the new status — but that is the vendor refusing a duplicate rather than the
+# call being idempotent, and the emitter refuses `idempotent` on a `POST` regardless.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "issue_key"
+wire = "issueIdOrKey"
+description = "The issue key, e.g. `PROJ-123`, or its numeric id"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# `{"transition": {"id": "31"}}` — nested, so the path is declared with `wire` (C-29). A string
+# rather than an integer because that is how Jira publishes and accepts transition ids.
+[[operations.params.body]]
+name = "transition_id"
+wire = "transition.id"
+description = "Id of the transition to perform, as returned by `jira-issue-transitions-list`, e.g. `31`"
+required = true
+schema = { type = "string", minLength = 1 }

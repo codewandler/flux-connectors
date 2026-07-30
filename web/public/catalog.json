@@ -2526,6 +2526,390 @@
       ]
     },
     {
+      "id": "jira",
+      "vendor": "Jira",
+      "description": "Jira Cloud issue tracking: read and create issues, comment on them, and drive workflow transitions",
+      "base_url": "https://{site}.atlassian.net",
+      "hosts": [
+        "{site}.atlassian.net"
+      ],
+      "auth": {
+        "schemes": [
+          "basic"
+        ],
+        "credentials": [
+          {
+            "name": "jira.api_token",
+            "scheme": {
+              "kind": "basic",
+              "name": null
+            },
+            "description": "Atlassian API token; the user half is the account email that minted it",
+            "env": [
+              "JIRA_API_TOKEN"
+            ],
+            "user_env": [
+              "JIRA_USER"
+            ],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "jira.api_token"
+          ]
+        ]
+      },
+      "operation_count": 6,
+      "operations": [
+        {
+          "id": "jira-issue-get",
+          "provider": "jira",
+          "description": "Read one Jira issue by key (`PROJ-123`) or numeric id — summary, description, status, assignee, reporter and every other configured field. Returns Jira's full default field set, including custom fields, because narrowing it needs the `fields` query parameter this connector cannot encode. Text fields are wiki markup, not rich content",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/rest/api/2/issue/{issueIdOrKey}",
+          "parameters": [
+            {
+              "name": "issue_key",
+              "in": "path",
+              "wire": "issueIdOrKey",
+              "description": "The issue key, e.g. `PROJ-123`, or its numeric id",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "jira.api_token"
+            ]
+          ],
+          "hosts": [
+            "{site}.atlassian.net"
+          ],
+          "flux": "op jira-issue-get(issue_key: String) -> Any\n  description \"Read one Jira issue by key (`PROJ-123`) or numeric id — summary, description, status, assignee, reporter and every other configured field. Returns Jira's full default field set, including custom fields, because narrowing it needs the `fields` query parameter this connector cannot encode. Text fields are wiki markup, not rich content\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{site}.atlassian.net\"\n  $url = fmt(\"{base}/rest/api/2/issue/{issue_key}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {site} value before it has a valid destination URL.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "jira-issue-create",
+          "provider": "jira",
+          "description": "Create a Jira issue in a project. Visible to everyone with access to the project and notifies its watchers. Only project, summary and issue type are set: a description cannot be sent yet (see the connector's notes), so file the detail as a comment afterwards. Returns the new issue's id, key and self URL",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/rest/api/2/issue",
+          "parameters": [
+            {
+              "name": "project_key",
+              "in": "body",
+              "wire": "fields.project.key",
+              "description": "Key of the project to file the issue in, e.g. `PROJ`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "summary",
+              "in": "body",
+              "wire": "fields.summary",
+              "description": "One-line issue summary; this is the issue's title",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "issue_type",
+              "in": "body",
+              "wire": "fields.issuetype.name",
+              "description": "Name of the issue type as the project defines it, e.g. `Task`, `Bug` or `Story`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "jira.api_token"
+            ]
+          ],
+          "hosts": [
+            "{site}.atlassian.net"
+          ],
+          "flux": "op jira-issue-create(project_key: String, summary: String, issue_type: String) -> Any\n  description \"Create a Jira issue in a project. Visible to everyone with access to the project and notifies its watchers. Only project, summary and issue type are set: a description cannot be sent yet (see the connector's notes), so file the detail as a comment afterwards. Returns the new issue's id, key and self URL\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{site}.atlassian.net\"\n  $url = fmt(\"{base}/rest/api/2/issue\")\n  $content_type = \"application/json\"\n  $payload = { fields: { issuetype: { name: $issue_type }, project: { key: $project_key }, summary: $summary } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {site} value before it has a valid destination URL.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "jira-issue-comment-list",
+          "provider": "jira",
+          "description": "Read the comments on a Jira issue, oldest first. Returns Jira's first default-sized page only: paging needs the `startAt` and `maxResults` query parameters this connector cannot encode, so an issue with a long discussion is truncated. Comment bodies are wiki markup",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/rest/api/2/issue/{issueIdOrKey}/comment",
+          "parameters": [
+            {
+              "name": "issue_key",
+              "in": "path",
+              "wire": "issueIdOrKey",
+              "description": "The issue key, e.g. `PROJ-123`, or its numeric id",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "jira.api_token"
+            ]
+          ],
+          "hosts": [
+            "{site}.atlassian.net"
+          ],
+          "flux": "op jira-issue-comment-list(issue_key: String) -> Any\n  description \"Read the comments on a Jira issue, oldest first. Returns Jira's first default-sized page only: paging needs the `startAt` and `maxResults` query parameters this connector cannot encode, so an issue with a long discussion is truncated. Comment bodies are wiki markup\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{site}.atlassian.net\"\n  $url = fmt(\"{base}/rest/api/2/issue/{issue_key}/comment\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {site} value before it has a valid destination URL.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "jira-issue-comment-add",
+          "provider": "jira",
+          "description": "Add a comment to a Jira issue. The comment is visible to everyone who can see the issue — including customers on a service-management portal — and notifies its watchers; restricting it to a project role or group is not supported yet. The body is Jira wiki markup (`*bold*`, `{code}`), not Markdown and not rich content",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/rest/api/2/issue/{issueIdOrKey}/comment",
+          "parameters": [
+            {
+              "name": "issue_key",
+              "in": "path",
+              "wire": "issueIdOrKey",
+              "description": "The issue key, e.g. `PROJ-123`, or its numeric id",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "body",
+              "in": "body",
+              "wire": null,
+              "description": "The comment text, in Jira wiki markup. Must not be blank",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "jira.api_token"
+            ]
+          ],
+          "hosts": [
+            "{site}.atlassian.net"
+          ],
+          "flux": "op jira-issue-comment-add(issue_key: String, body: String) -> Any\n  description \"Add a comment to a Jira issue. The comment is visible to everyone who can see the issue — including customers on a service-management portal — and notifies its watchers; restricting it to a project role or group is not supported yet. The body is Jira wiki markup (`*bold*`, `{code}`), not Markdown and not rich content\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{site}.atlassian.net\"\n  $url = fmt(\"{base}/rest/api/2/issue/{issue_key}/comment\")\n  $content_type = \"application/json\"\n  $payload = { body: $body }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {site} value before it has a valid destination URL.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "jira-issue-transitions-list",
+          "provider": "jira",
+          "description": "List the workflow transitions available on a Jira issue right now, with the id and target status of each. Call this before `jira-issue-transition`: transition ids are per-workflow, not global, and only the transitions valid from the issue's current status are returned",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/rest/api/2/issue/{issueIdOrKey}/transitions",
+          "parameters": [
+            {
+              "name": "issue_key",
+              "in": "path",
+              "wire": "issueIdOrKey",
+              "description": "The issue key, e.g. `PROJ-123`, or its numeric id",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "jira.api_token"
+            ]
+          ],
+          "hosts": [
+            "{site}.atlassian.net"
+          ],
+          "flux": "op jira-issue-transitions-list(issue_key: String) -> Any\n  description \"List the workflow transitions available on a Jira issue right now, with the id and target status of each. Call this before `jira-issue-transition`: transition ids are per-workflow, not global, and only the transitions valid from the issue's current status are returned\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{site}.atlassian.net\"\n  $url = fmt(\"{base}/rest/api/2/issue/{issue_key}/transitions\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {site} value before it has a valid destination URL.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "jira-issue-transition",
+          "provider": "jira",
+          "description": "Move a Jira issue through a workflow transition — the way an issue is closed, reopened or advanced. Get the transition id from `jira-issue-transitions-list` first; ids are per-workflow and only transitions valid from the current status are accepted. The status change is visible on every board showing the issue, notifies watchers, and may fire project automation. Answers `204` with an empty body on success",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/rest/api/2/issue/{issueIdOrKey}/transitions",
+          "parameters": [
+            {
+              "name": "issue_key",
+              "in": "path",
+              "wire": "issueIdOrKey",
+              "description": "The issue key, e.g. `PROJ-123`, or its numeric id",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "transition_id",
+              "in": "body",
+              "wire": "transition.id",
+              "description": "Id of the transition to perform, as returned by `jira-issue-transitions-list`, e.g. `31`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "jira.api_token"
+            ]
+          ],
+          "hosts": [
+            "{site}.atlassian.net"
+          ],
+          "flux": "op jira-issue-transition(issue_key: String, transition_id: String) -> Any\n  description \"Move a Jira issue through a workflow transition — the way an issue is closed, reopened or advanced. Get the transition id from `jira-issue-transitions-list` first; ids are per-workflow and only transitions valid from the current status are accepted. The status change is visible on every board showing the issue, notifies watchers, and may fire project automation. Answers `204` with an empty body on success\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{site}.atlassian.net\"\n  $url = fmt(\"{base}/rest/api/2/issue/{issue_key}/transitions\")\n  $content_type = \"application/json\"\n  $payload = { transition: { id: $transition_id } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {site} value before it has a valid destination URL.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "openai",
       "vendor": "OpenAI",
       "description": "OpenAI platform: list models, and create chat completions and embeddings",
