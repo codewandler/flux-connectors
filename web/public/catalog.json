@@ -3,6 +3,424 @@
   "generator": "flux-connectors 0.2.0",
   "providers": [
     {
+      "id": "airtable",
+      "authority": null,
+      "vendor": "Airtable",
+      "description": "Airtable records: read, create, update and delete a record in a base's table",
+      "base_url": "https://api.airtable.com",
+      "api_version": null,
+      "hosts": [
+        "api.airtable.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.airtable.com",
+          "hosts": [
+            "api.airtable.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 4
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "airtable.access_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "Airtable access token sent as a bearer — a personal access token or an OAuth-issued one",
+            "env": [
+              "AIRTABLE_ACCESS_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "airtable.access_token"
+          ]
+        ]
+      },
+      "operation_count": 4,
+      "operations": [
+        {
+          "id": "airtable-record-get",
+          "provider": "airtable",
+          "service": "default",
+          "description": "Read one record from a table — its cell values are under `fields` in the response, keyed by column name. Returns every column the token can see, in Airtable's default JSON cell format: narrowing or reformatting them needs the `fields[]` and `cellFormat` query parameters this connector cannot encode",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v0/{baseId}/{tableIdOrName}/{recordId}",
+          "parameters": [
+            {
+              "name": "base_id",
+              "in": "path",
+              "wire": "baseId",
+              "description": "The base's id, the `app…` segment in the base's URL in Airtable",
+              "required": true,
+              "schema": {
+                "pattern": "^app[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "table_id",
+              "in": "path",
+              "wire": "tableIdOrName",
+              "description": "The table's id, the `tbl…` segment in the table's URL in Airtable. Airtable also routes this segment on a table *name*, which this connector does not accept: a name is interpolated into the URL unencoded, so one containing a space or a `/` would address the wrong route",
+              "required": true,
+              "schema": {
+                "pattern": "^tbl[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "record_id",
+              "in": "path",
+              "wire": "recordId",
+              "description": "The record's id, `rec…`. It is what a create returns and what the record's own URL ends with",
+              "required": true,
+              "schema": {
+                "pattern": "^rec[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "createdTime": {
+                "description": "When the record was created",
+                "format": "date-time",
+                "type": "string"
+              },
+              "fields": {
+                "description": "The record's cell values, keyed by column name. Individual columns are not enumerated: they are the base's own schema, which differs per base and changes at runtime — recording the envelope is what a consumer cannot infer",
+                "type": "object"
+              },
+              "id": {
+                "description": "The record's id",
+                "pattern": "^rec[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "createdTime",
+              "fields"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "airtable.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.airtable.com"
+          ],
+          "flux": "op airtable-record-get(base_id: String, table_id: String, record_id: String) -> Any\n  description \"Read one record from a table — its cell values are under `fields` in the response, keyed by column name. Returns every column the token can see, in Airtable's default JSON cell format: narrowing or reformatting them needs the `fields[]` and `cellFormat` query parameters this connector cannot encode. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.airtable.com\"\n  $url = fmt(\"{base}/v0/{base_id}/{table_id}/{record_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "airtable-record-create",
+          "provider": "airtable",
+          "service": "default",
+          "description": "Create one record in a table. Cell values are supplied under `fields`, keyed by column name, and must already be in the exact JSON form each column expects — Airtable's `typecast` coercion cannot be requested yet (see the connector's notes). The created record, with its `rec…` id, is in the response",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/v0/{baseId}/{tableIdOrName}",
+          "parameters": [
+            {
+              "name": "base_id",
+              "in": "path",
+              "wire": "baseId",
+              "description": "The base's id, the `app…` segment in the base's URL in Airtable",
+              "required": true,
+              "schema": {
+                "pattern": "^app[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "table_id",
+              "in": "path",
+              "wire": "tableIdOrName",
+              "description": "The table's id, the `tbl…` segment in the table's URL in Airtable. The name form is not accepted — see `airtable-record-get`",
+              "required": true,
+              "schema": {
+                "pattern": "^tbl[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "cell_values",
+              "in": "body",
+              "wire": "fields",
+              "description": "The record's cell values, as an object keyed by the table's column names — `{\"Name\": \"Acme\", \"Status\": \"Open\"}`. Each value must match its column's type: a single-select takes one of its configured option names, a linked-record column takes an array of `rec…` ids, a date takes an ISO 8601 string. An unknown column name is rejected, not ignored",
+              "required": true,
+              "schema": {
+                "description": "A map from column name to cell value. Untyped here because the columns are the base's own schema",
+                "type": "object"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "createdTime": {
+                "description": "When the record was created",
+                "format": "date-time",
+                "type": "string"
+              },
+              "fields": {
+                "description": "The created record's cell values as Airtable stored them, keyed by column name. Computed and formula columns appear here having been evaluated",
+                "type": "object"
+              },
+              "id": {
+                "description": "The created record's id — what later calls address it by",
+                "pattern": "^rec[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "createdTime",
+              "fields"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "airtable.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.airtable.com"
+          ],
+          "flux": "op airtable-record-create(base_id: String, table_id: String, cell_values: Any) -> Any\n  description \"Create one record in a table. Cell values are supplied under `fields`, keyed by column name, and must already be in the exact JSON form each column expects — Airtable's `typecast` coercion cannot be requested yet (see the connector's notes). The created record, with its `rec…` id, is in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.airtable.com\"\n  $url = fmt(\"{base}/v0/{base_id}/{table_id}\")\n  $content_type = \"application/json\"\n  $payload = { fields: $cell_values }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "airtable-record-update",
+          "provider": "airtable",
+          "service": "default",
+          "description": "Update one record's cell values. The write is sparse: only the columns named in `fields` change and every other column of the record is left exactly as it was. Values must already be in the form each column expects — `typecast` coercion cannot be requested yet. The updated record is in the response",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "PATCH",
+          "path": "/v0/{baseId}/{tableIdOrName}/{recordId}",
+          "parameters": [
+            {
+              "name": "base_id",
+              "in": "path",
+              "wire": "baseId",
+              "description": "The base's id, the `app…` segment in the base's URL in Airtable",
+              "required": true,
+              "schema": {
+                "pattern": "^app[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "table_id",
+              "in": "path",
+              "wire": "tableIdOrName",
+              "description": "The table's id, the `tbl…` segment in the table's URL in Airtable. The name form is not accepted — see `airtable-record-get`",
+              "required": true,
+              "schema": {
+                "pattern": "^tbl[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "record_id",
+              "in": "path",
+              "wire": "recordId",
+              "description": "The id of the record to update",
+              "required": true,
+              "schema": {
+                "pattern": "^rec[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "cell_values",
+              "in": "body",
+              "wire": "fields",
+              "description": "The columns to change, as an object keyed by the table's column names. Columns not named here keep their current values. Setting a column to `null` clears it, which is the only way to empty a cell through this operation",
+              "required": true,
+              "schema": {
+                "description": "A map from column name to cell value. Untyped here because the columns are the base's own schema",
+                "type": "object"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "createdTime": {
+                "description": "When the record was created — unchanged by an update",
+                "format": "date-time",
+                "type": "string"
+              },
+              "fields": {
+                "description": "The record's cell values after the update, keyed by column name. Every column is returned, not only the changed ones",
+                "type": "object"
+              },
+              "id": {
+                "description": "The record's id",
+                "pattern": "^rec[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "createdTime",
+              "fields"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "airtable.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.airtable.com"
+          ],
+          "flux": "op airtable-record-update(base_id: String, table_id: String, record_id: String, cell_values: Any) -> Any\n  description \"Update one record's cell values. The write is sparse: only the columns named in `fields` change and every other column of the record is left exactly as it was. Values must already be in the form each column expects — `typecast` coercion cannot be requested yet. The updated record is in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.airtable.com\"\n  $url = fmt(\"{base}/v0/{base_id}/{table_id}/{record_id}\")\n  $content_type = \"application/json\"\n  $payload = { fields: $cell_values }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PATCH\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "airtable-record-delete",
+          "provider": "airtable",
+          "service": "default",
+          "description": "Delete one record and every cell value in it. There is no API route back: Airtable's trash and revision history are UI features on a retention window, not endpoints, so a flux run cannot undo this. Responds `{\"id\": …, \"deleted\": true}`",
+          "risk": "destructive",
+          "idempotency": "non_idempotent",
+          "method": "DELETE",
+          "path": "/v0/{baseId}/{tableIdOrName}/{recordId}",
+          "parameters": [
+            {
+              "name": "base_id",
+              "in": "path",
+              "wire": "baseId",
+              "description": "The base's id, the `app…` segment in the base's URL in Airtable",
+              "required": true,
+              "schema": {
+                "pattern": "^app[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "table_id",
+              "in": "path",
+              "wire": "tableIdOrName",
+              "description": "The table's id, the `tbl…` segment in the table's URL in Airtable. The name form is not accepted — see `airtable-record-get`",
+              "required": true,
+              "schema": {
+                "pattern": "^tbl[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "record_id",
+              "in": "path",
+              "wire": "recordId",
+              "description": "The id of the record to delete",
+              "required": true,
+              "schema": {
+                "pattern": "^rec[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "deleted": {
+                "description": "Always `true` on a 2xx. Airtable reports a record that was already gone as a 404 rather than as `false`",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The id of the record that was deleted",
+                "pattern": "^rec[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "deleted"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "airtable.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.airtable.com"
+          ],
+          "flux": "op airtable-record-delete(base_id: String, table_id: String, record_id: String) -> Any\n  description \"Delete one record and every cell value in it. There is no API route back: Airtable's trash and revision history are UI features on a retention window, not endpoints, so a flux run cannot undo this. Responds `{\\\"id\\\": …, \\\"deleted\\\": true}`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.airtable.com\"\n  $url = fmt(\"{base}/v0/{base_id}/{table_id}/{record_id}\")\n  $response = http.request({ method: \"DELETE\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "asana",
       "authority": null,
       "vendor": "Asana",

@@ -498,3 +498,54 @@ fn freshdesk_query_aliases_travel_under_their_wire_name() {
         "the op must declare the caller-facing name:\n{module}"
     );
 }
+
+/// **Airtable's egress host is exactly `api.airtable.com`, and its credential never leaves the
+/// manifest as anything but a name** (C-75).
+///
+/// The same pair of claims `intercom_publishes_one_host_and_no_credential_in_its_module` makes, for
+/// the same reason it lives here rather than in `crates/connector-flux/tests/airtable_connector.rs`:
+/// both are properties of what the *pipeline* derives, not of what the provider file declares.
+/// `http_hosts` comes out of `catalog::host_of(base_url)`, so a widened entry — a second host, or a
+/// `*` — would enlarge the egress allow-list of all four operations at once and nothing else in the
+/// tree would notice. Airtable's attachment CDN is the tempting second entry; `providers/airtable.toml`
+/// records why it is not one.
+///
+/// The credential half is AGENTS.md's hard invariant. Not the value, which does not exist in this
+/// repository, and not even the variable's name: the bearer is applied by the host at the `$auth`
+/// seam (`docs/designs/auth-seam.md`), so `AIRTABLE_ACCESS_TOKEN` belongs in the manifest's credential
+/// *reference* and must never appear in Flux a model can read. Asserting the name is present on the
+/// connector is what keeps the absence check from passing vacuously.
+#[test]
+fn airtable_publishes_one_host_and_no_credential_in_its_module() {
+    const TOKEN_ENV: &str = "AIRTABLE_ACCESS_TOKEN";
+
+    let connector = load("airtable");
+    let module = planned("airtable", "airtable.flux");
+    let manifest = planned("airtable", "airtable.connector.toml");
+
+    assert_eq!(
+        connector.base_url, "https://api.airtable.com",
+        "the base URL is what the host is derived from, so widening it widens the allow-list"
+    );
+    assert!(
+        module.contains(r#"$base = "https://api.airtable.com""#),
+        "every Airtable request must address `api.airtable.com`:\n{module}"
+    );
+    assert!(
+        !module.contains('*') && !manifest.contains('*'),
+        "no Airtable artifact may carry a wildcard host:\n{module}\n{manifest}"
+    );
+
+    assert!(
+        !module.contains(TOKEN_ENV) && !module.contains("access_token"),
+        "connectors/airtable.flux names a credential; the bearer is applied by the host at the \
+         `$auth` seam and generated Flux must name nothing:\n{module}"
+    );
+    assert!(
+        connector
+            .auth_method("airtable.access_token")
+            .is_some_and(|method| method.env == [TOKEN_ENV]),
+        "the connector must reference `{TOKEN_ENV}` by name, or the absence check above passes \
+         vacuously"
+    );
+}

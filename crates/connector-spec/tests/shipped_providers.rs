@@ -128,6 +128,14 @@ fn operation_selection_stays_curated() {
         // text or pages with an opaque `page_info` cursor — plus C-56 for the body of the one write.
         // See `providers/shopify.toml`.
         ("shopify", 5),
+        // C-75 curates 4, all on the single-record surface at `/v0/{baseId}/{tableIdOrName}`: record
+        // get, create, update and delete. Two cuts shaped it. `listRecords` and every other
+        // collection read are excluded pending C-30 — `filterByFormula` is not merely a query string
+        // but a formula language whose ordinary syntax is made of the characters that corrupt an
+        // unencoded one — and `PUT` record replace is excluded because under C-56 every column the
+        // caller did not restate would travel as an explicit `null` and be cleared, which is why the
+        // shipped update is the sparse `PATCH`. See the header comment in `providers/airtable.toml`.
+        ("airtable", 4),
     ];
     for (name, count) in expected {
         let loaded = load(name);

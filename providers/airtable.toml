@@ -1,0 +1,446 @@
+# Airtable Web API — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER.
+# Airtable publishes no OpenAPI document. Its reference is the hand-written HTML at
+# `https://airtable.com/developers/web/api/introduction`, plus a per-base "API documentation" page
+# Airtable generates from *that base's own schema* — which is the interesting part: the vendor's own
+# machine-readable description of `fields` exists only per base, and describes one customer's columns.
+# There is therefore nothing to vendor under `specs/` even once C-4's ingest and C-14's fetch land, and
+# the conversion those stories enable for zendesk, github, openai and asana does not apply here. What
+# would change is the *selection* mechanism, not the source: **the four operations below are the
+# selection to reproduce** — `getRecord`, `createRecords`, `updateRecord`, `deleteRecord`, all on the
+# record resource at `/v0/{baseId}/{tableIdOrName}`.
+#
+# Until then drift is undetectable by machine, exactly as for every other hand-authored provider
+# (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# THE `fields` ENVELOPE IS THE FIRST OF THE TWO THINGS THIS CONNECTOR IS FOR. DO NOT FLATTEN IT.
+# ---------------------------------------------------------------------------------------------
+#
+# Airtable wraps a record's cell values in `{"fields": {…}}` — on every write, and in every record it
+# answers with. So every body field below declares a `wire` path beginning `fields`, exactly as
+# `providers/asana.toml` does for its `data` envelope, and that is a contract codegen compiles rather
+# than prose a reader has to notice:
+#
+#   $payload = { fields: $cell_values }      # what a wire path emits
+#   $payload = $cell_values                  # what a flat body would emit
+#
+# The second is a request Airtable answers `422 INVALID_REQUEST_UNKNOWN` to — *"Invalid request:
+# parameter validation failed"* — because a record body's top-level keys are a closed set and a column
+# name is not one of them. That is a better failure than zendesk's, which accepts a flat body, ignores
+# it and answers 200, and it is still a connector that cannot write.
+# `crates/connector-flux/tests/airtable_connector.rs` fails on the IR *and* on the emitted `$payload`
+# if either half stops being true.
+#
+# ONE OPAQUE OBJECT, NOT A LIST OF PREFIXED FIELDS — and this is where Airtable differs from Asana.
+# Asana's `data` envelope contains a documented, fixed set of members, so its file declares
+# `data.name`, `data.completed` and so on: real wire *paths*, two segments deep. The keys inside
+# Airtable's `fields` are the table's own column names, chosen by whoever built the base — `Name`,
+# `Status`, `Due date`, `Assigned to`, in whatever language and casing they picked. No provider file can
+# enumerate them, and a file that tried would hard-code one base's schema into a connector every base
+# shares. What this file declares instead is the one fact that *is* universal: the whole object goes
+# under `fields`. That is a single-segment wire path carrying an opaque `{"type": "object"}`, which maps
+# to Flux `Any` (`crates/connector-flux/src/types.rs`) — the same shape freshdesk's `custom_fields`
+# already has.
+#
+# SCHEMA GAP: the cell-value object is therefore untyped, and nothing here can narrow it. Airtable
+# *does* publish a machine-readable schema for a base — `GET /v0/meta/bases/{baseId}/tables` returns
+# every table's fields with their types — but a connector is compiled once and a base's schema changes
+# at runtime, so there is no build-time moment at which that document could be read. Even the response
+# side cannot say more than "an object of cell values". Closing this would need a per-call schema
+# lookup, which is a runtime concern and belongs to flux rather than to a compiler.
+#
+# SCHEMA GAP, shared with asana: the envelope has to be restated on every operation. It is a property
+# of the *connector* — every Airtable record request and response has it — but nothing at connector
+# level can say so, only a per-field `wire` and a per-operation `response_schema`. A fifth operation
+# added here without the `fields` wire path is silently wrong, and only this connector's own test
+# catches it.
+#
+# ---------------------------------------------------------------------------------------------
+# THE PATH CHARSET IS THE SECOND, AND IT IS THE FIRST TIME THIS REPOSITORY ANSWERS THE QUESTION.
+# ---------------------------------------------------------------------------------------------
+#
+# A path value is interpolated into the URL *as verbatim as a query value is*. C-30 is unimplemented,
+# and `status.rs` deliberately scopes its refusal to query parameters — widening it to paths would put
+# the catalogue and the emitter out of step
+# (`crates/connector-cli/src/status.rs`, `only_query_parameters_are_examined_for_encoding`). So
+# `/v0/{baseId}/{tableIdOrName}/{recordId}` is safe only if those three values cannot carry a character
+# that changes the shape of the request.
+#
+# For an **id** they cannot. Airtable ids are a three-letter kind prefix followed by alphanumerics —
+# `appXXXXXXXXXXXXXX`, `tblXXXXXXXXXXXXXX`, `recXXXXXXXXXXXXXX`, 17 characters as issued — and
+# percent-encoding is the identity function on `[A-Za-z0-9]`. Each path parameter declares that as a
+# `pattern`, and the connector's test does not merely check the string: it takes the pattern apart and
+# asserts the only character class in it is `[A-Za-z0-9]`, so the safety argument is machine-checked
+# rather than asserted in a comment. (`openai-model-get` is safe for the same reason but by luck —
+# OpenAI's model ids happen to be drawn from `[A-Za-z0-9._-]`. This is the first path surface in the
+# repository chosen *because* of its charset.)
+#
+# For a table **name** they can, and Airtable routes on either: the segment is documented
+# `{tableIdOrName}`. A base with a table called `Tasks Backlog` would put a raw space in the request
+# line; one called `A/B tests` would send `GET /v0/appX/A/B tests/recY`, addressing a route that does
+# not exist; one called `Q1?` would truncate the path and start a query string. **This connector
+# requires the id form and does not offer the name form.** The parameter is called `table_id`, not
+# `table_id_or_name`, so the signature a model reads says which one it wants, and the `^tbl[A-Za-z0-9]+$`
+# pattern is what refuses a name — no table name can satisfy it by accident.
+#
+# What happens if a caller passes a name anyway is worth stating plainly, because the pattern is a
+# declaration and not yet an enforcement: **nothing rejects it.** The emitted Flux does not validate
+# `pattern` — no story has built that — so `Tasks Backlog` would be interpolated verbatim and Airtable
+# would answer 404 for a route with an unencoded space, or, for a name that happened to contain `/`,
+# would be handed a different path than the caller meant. Both are failures rather than corruption of
+# someone else's data, which is why the id-only contract is shippable today; enforcing it is C-30's
+# encoding work or a future `pattern` check, and the declaration is what those will read.
+#
+# Finding a table's id is a one-off: it is the `tbl…` segment in the table's own URL in the Airtable
+# UI, and `GET /v0/meta/bases/{baseId}/tables` lists them. That endpoint is not selected here — see the
+# operation-set note below.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: no query parameter, so listing, filtering and every read option are excluded (C-30).
+# ---------------------------------------------------------------------------------------------
+#
+# Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim into a
+# `fmt` template and flux registers no encoding op (`crates/connector-flux/src/op.rs`).
+# `zendesk-ticket-search` is the standing demonstration and AGENTS.md lists it under *Intentional
+# gaps*. Excluded pending C-30:
+#
+# - **`listRecords` (`GET /v0/{baseId}/{tableIdOrName}`) and with it every read of more than one
+#   record.** Its `filterByFormula` is the worst query value in this fleet: not merely free-form text
+#   but a *formula language* — `AND({Status}='Open', FIND('&', {Notes}))` — whose ordinary syntax is
+#   made of the exact characters that corrupt an unencoded query string. `view`, `sort[0][field]`,
+#   `fields[]` and the `pageSize`/`offset` pair go with it; `offset` is an opaque server-issued token a
+#   caller must never construct, the same shape as a Slack cursor and just as unencodable here.
+# - **The read options on the single-record get**: `cellFormat`, `timeZone`, `userLocale` and
+#   `returnFieldsByFieldId`. All four are query parameters, so the operation below returns Airtable's
+#   default JSON cell format with columns keyed by name, which is the documented default.
+# - **The metadata API** (`/v0/meta/bases`, `/v0/meta/bases/{baseId}/tables`). It pages with the same
+#   `offset` token, and it is a different resource tree from the record surface this connector is for.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: no optional request-body field can be declared (C-56).
+# ---------------------------------------------------------------------------------------------
+#
+# The emitter binds every declared body field into the payload record unconditionally, so a caller who
+# leaves an optional field alone sends an explicit `null`. What that costs here:
+#
+# - `typecast` on create and update. It is the flag that lets Airtable coerce a string into a
+#   select option, a linked record or a date, and `{"typecast": null}` is a type error rather than an
+#   omission. Without it, a cell value must already be in the exact JSON form the column expects.
+# - `returnFieldsByFieldId` on create and update, which would key the response by `fld…` id instead of
+#   by column name.
+#
+# Neither absence is a data-loss risk, which is the reason this connector can ship a useful update
+# while jira's is excluded outright: Airtable's `PATCH` is a *sparse* write. Only the keys present in
+# `fields` change, so the one required field this connector sends is exactly the set the caller chose.
+# See `airtable-record-update`, and see the note there on why `PUT` is not offered.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: Airtable has two error shapes and `ErrorEnvelope` can point at one.
+# ---------------------------------------------------------------------------------------------
+#
+# The structured form is `{"error": {"type": "INVALID_REQUEST_UNKNOWN", "message": "…"}}`, and the
+# pointers declared per operation below name it. But Airtable also answers some 4xx with the *bare
+# string* form, `{"error": "NOT_FOUND"}` — a record get for an id that does not exist is the case a
+# caller here will actually hit — and against that body both pointers resolve to nothing.
+# `ErrorEnvelope` carries one `message_pointer` and one `code_pointer` with no way to declare an
+# alternative shape, so the choice is which of the two forms to describe. The structured one is
+# described because it is the one carrying a message worth surfacing; the bare form still has its HTTP
+# status, which is all it ever conveyed. Closing this means either a list of envelopes or a pointer
+# that may address a string.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: the rate limit is real and published, and its *scope* is not declarable.
+# ---------------------------------------------------------------------------------------------
+#
+# Airtable publishes a hard limit — 5 requests per second **per base**, with a 30-second lockout after
+# a 429 — which makes it the most concretely specified limit in this fleet. It is still not declared,
+# and the reason is the scope rather than the numbers: `RateLimit` carries `requests`, `per_seconds`
+# and a static `bucket` string, while the thing being limited is identified by `base_id` — a *runtime
+# path value*. A static bucket would either merge two bases into one throttle (correct but a tenth of
+# the available throughput when a flow touches ten bases) or, if left to codegen's per-operation
+# default, split one base's budget across four buckets and exceed the limit while each bucket believed
+# it was compliant. The second is the failure that matters, and it is the fail-open direction. Closing
+# this needs a bucket keyed by a request value; until then nothing consumes `quirks.rate_limit`
+# anyway — C-12 compiles it into `throttle` and is unimplemented.
+#
+# ---------------------------------------------------------------------------------------------
+# STILL CANNOT MAKE A LIVE CALL, for the same reason as every shipped connector: flux's
+# `http.request` takes `{"$secret": …}` as a whole-value replacement, so no `Bearer ` prefix is
+# produced (`docs/designs/auth-seam.md`). This connector is the catalogue's proof, not a working
+# client.
+# ---------------------------------------------------------------------------------------------
+
+id = "airtable"
+vendor = "Airtable"
+
+# One tenant-independent host for every base and every plan. Unlike zendesk's `{subdomain}` and
+# freshdesk's `{domain}` there is no tenant templating — a base is addressed by an id *in the path*,
+# not by a host — so `base_url` is a bound literal, `status.rs` reports no `unbound-base-url-template`
+# issue, and the connector already has a valid destination URL.
+#
+# `http_hosts` derives from this single value (`crates/connector-cli/src/catalog.rs`, `host_of`) and is
+# therefore exactly `api.airtable.com`, never widened. Airtable serves attachment downloads from
+# separate CDN hosts and its webhooks arrive from elsewhere again; neither is reachable from the
+# operations below, and adding one would widen the egress allow-list for nothing.
+base_url = "https://api.airtable.com"
+
+description = "Airtable records: read, create, update and delete a record in a base's table"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["airtable.access_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "airtable.access_token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; its value is never read here
+# and never reaches a generated artifact.
+#
+# A personal access token (`pat…`) and an OAuth-issued access token (`oaa…`) are the same thing on the
+# wire — `Authorization: Bearer <token>` — so which one an operator supplies is configuration rather
+# than connector shape. That is why no `[auth.oauth2]` block appears: flux is handed an already-minted
+# token through the environment and runs no grant, the same provenance asana's, babelforce's and
+# slack's bearers have. Airtable's older `key…` API keys are deprecated and removed; they were also
+# bearer-shaped, so nothing here changes if an operator is still holding one.
+#
+# What differs between the two token types is the scopes and the base access they carry — a PAT must be
+# granted `data.records:read` / `data.records:write` and access to the specific base — which is not
+# something this file can or should assert.
+env = ["AIRTABLE_ACCESS_TOKEN"]
+description = "Airtable access token sent as a bearer — a personal access token or an OAuth-issued one"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 4, all on the single-record surface at `/v0/{baseId}/{tableIdOrName}`
+#
+# Curated to what a record-shaped flow executes at runtime: read one record, create one, patch one,
+# delete one. Everything else Airtable exposes is excluded and for a stated reason: listing and search
+# by C-30 (see the query note above), the metadata and enterprise-admin APIs as a different resource
+# tree, webhooks as a runtime concern flux owns, comments and attachments as surfaces no flow here
+# needs, and the batch forms of create/update/delete because a `records` array of objects is the same
+# untyped shape as `fields` with an extra dimension and no way to say a batch caps at 10.
+#
+# The path placeholders are Airtable's own — `{baseId}`, `{tableIdOrName}`, `{recordId}` — because those
+# are the spellings the vendor's reference routes on, while the parameters a caller passes are
+# snake_case. `wire` carries that mapping, which is exactly the "plain alias" case `Param::wire`
+# documents for a path parameter and the form jira's `issue_key` → `issueIdOrKey` established.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only, so `op airtable.records.get` is undeclarable (C-8, C-23).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "airtable-record-get"
+method = "GET"
+path = "/v0/{baseId}/{tableIdOrName}/{recordId}"
+description = "Read one record from a table — its cell values are under `fields` in the response, keyed by column name. Returns every column the token can see, in Airtable's default JSON cell format: narrowing or reformatting them needs the `fields[]` and `cellFormat` query parameters this connector cannot encode"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "base_id"
+wire = "baseId"
+description = "The base's id, the `app…` segment in the base's URL in Airtable"
+required = true
+schema = { type = "string", pattern = "^app[A-Za-z0-9]+$" }
+
+# The id form only — see the path-charset section in the header comment. A table *name* is arbitrary
+# user text and would be interpolated into the URL unencoded.
+[[operations.params.path]]
+name = "table_id"
+wire = "tableIdOrName"
+description = "The table's id, the `tbl…` segment in the table's URL in Airtable. Airtable also routes this segment on a table *name*, which this connector does not accept: a name is interpolated into the URL unencoded, so one containing a space or a `/` would address the wrong route"
+required = true
+schema = { type = "string", pattern = "^tbl[A-Za-z0-9]+$" }
+
+[[operations.params.path]]
+name = "record_id"
+wire = "recordId"
+description = "The record's id, `rec…`. It is what a create returns and what the record's own URL ends with"
+required = true
+schema = { type = "string", pattern = "^rec[A-Za-z0-9]+$" }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "createdTime", "fields"]
+properties = { id = { type = "string", pattern = "^rec[A-Za-z0-9]+$", description = "The record's id" }, createdTime = { type = "string", format = "date-time", description = "When the record was created" }, fields = { type = "object", description = "The record's cell values, keyed by column name. Individual columns are not enumerated: they are the base's own schema, which differs per base and changes at runtime — recording the envelope is what a consumer cannot infer" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/type"
+
+# ---------------------------------------------------------------------------------------------
+# The three writes.
+#
+# `risk` is set from what each one changes and whether it can be undone, not from the HTTP method:
+#
+# - `airtable-record-delete` is `destructive`. It is the only operation in the shipped fleet other than
+#   `babelforce-call-hangup` that carries that tier, and it is the clearer case of the two: the record
+#   and every cell value in it are gone, and **the API offers no way back**. Airtable's own trash and
+#   revision history are UI features on a retention window, not endpoints, so a flux run cannot repair
+#   its own mistake. flux's approval gate reads this field.
+# - `airtable-record-create` and `airtable-record-update` are `medium` — "writes with limited blast
+#   radius". A base is shared, and a create or a patch shows up in it immediately and in the record's
+#   revision history, but Airtable notifies nobody on a record change unless the base's owner has
+#   configured an automation, and both are reversible by a human. Neither reaches the `high` tier that
+#   `github-issue-comment-add` and `asana-task-story-add` carry, because neither puts text in front of
+#   people by email.
+#
+# `idempotency` is `non_idempotent` on all three. Airtable documents no idempotency key and no
+# idempotency guarantee on any record endpoint, so `idempotent` would be a claim with nothing behind it
+# even where the call happens to be repeatable — see `airtable-record-delete`, which is the interesting
+# case. The direction is fail-closed: flux forgoes a safe retry rather than replaying a write that
+# turns out to duplicate.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "airtable-record-create"
+method = "POST"
+path = "/v0/{baseId}/{tableIdOrName}"
+description = "Create one record in a table. Cell values are supplied under `fields`, keyed by column name, and must already be in the exact JSON form each column expects — Airtable's `typecast` coercion cannot be requested yet (see the connector's notes). The created record, with its `rec…` id, is in the response"
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "base_id"
+wire = "baseId"
+description = "The base's id, the `app…` segment in the base's URL in Airtable"
+required = true
+schema = { type = "string", pattern = "^app[A-Za-z0-9]+$" }
+
+[[operations.params.path]]
+name = "table_id"
+wire = "tableIdOrName"
+description = "The table's id, the `tbl…` segment in the table's URL in Airtable. The name form is not accepted — see `airtable-record-get`"
+required = true
+schema = { type = "string", pattern = "^tbl[A-Za-z0-9]+$" }
+
+# THE ENVELOPE. One field, at wire path `fields`, carrying an object this file cannot type — see the
+# header comment. Airtable requires the key to be present; `{"fields": {}}` creates an empty record and
+# is legal, so `required = true` is the vendor's own requirement rather than C-56's workaround.
+[[operations.params.body]]
+name = "cell_values"
+wire = "fields"
+description = "The record's cell values, as an object keyed by the table's column names — `{\"Name\": \"Acme\", \"Status\": \"Open\"}`. Each value must match its column's type: a single-select takes one of its configured option names, a linked-record column takes an array of `rec…` ids, a date takes an ISO 8601 string. An unknown column name is rejected, not ignored"
+required = true
+schema = { type = "object", description = "A map from column name to cell value. Untyped here because the columns are the base's own schema" }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "createdTime", "fields"]
+properties = { id = { type = "string", pattern = "^rec[A-Za-z0-9]+$", description = "The created record's id — what later calls address it by" }, createdTime = { type = "string", format = "date-time", description = "When the record was created" }, fields = { type = "object", description = "The created record's cell values as Airtable stored them, keyed by column name. Computed and formula columns appear here having been evaluated" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/type"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "airtable-record-update"
+method = "PATCH"
+path = "/v0/{baseId}/{tableIdOrName}/{recordId}"
+# WHY `PATCH` AND NOT `PUT`, and why that is the whole reason this connector can ship an update at all.
+#
+# Airtable routes both methods at this URL and they differ in exactly the way C-56 makes dangerous:
+# `PATCH` changes only the columns named in `fields` and leaves every other column of the record
+# untouched, while `PUT` *replaces* the record — every column the caller did not send is cleared.
+# Under C-56 a `PUT` here would be a data-loss write on every call that did not restate the entire row,
+# which is the same reasoning that excluded jira's issue update outright. `PATCH` has no such failure
+# mode: the sparse semantics mean the one required body field below is exactly the set of columns the
+# caller chose to change, so the C-56 gap costs this operation nothing.
+#
+# `PUT` is deliberately not offered. If it is ever added it needs its own `risk = "destructive"` and a
+# description that says the quiet part.
+description = "Update one record's cell values. The write is sparse: only the columns named in `fields` change and every other column of the record is left exactly as it was. Values must already be in the form each column expects — `typecast` coercion cannot be requested yet. The updated record is in the response"
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "base_id"
+wire = "baseId"
+description = "The base's id, the `app…` segment in the base's URL in Airtable"
+required = true
+schema = { type = "string", pattern = "^app[A-Za-z0-9]+$" }
+
+[[operations.params.path]]
+name = "table_id"
+wire = "tableIdOrName"
+description = "The table's id, the `tbl…` segment in the table's URL in Airtable. The name form is not accepted — see `airtable-record-get`"
+required = true
+schema = { type = "string", pattern = "^tbl[A-Za-z0-9]+$" }
+
+[[operations.params.path]]
+name = "record_id"
+wire = "recordId"
+description = "The id of the record to update"
+required = true
+schema = { type = "string", pattern = "^rec[A-Za-z0-9]+$" }
+
+# THE ENVELOPE, again — see `airtable-record-create`. Required by Airtable, and under `PATCH` the
+# columns it names are the only ones that change.
+[[operations.params.body]]
+name = "cell_values"
+wire = "fields"
+description = "The columns to change, as an object keyed by the table's column names. Columns not named here keep their current values. Setting a column to `null` clears it, which is the only way to empty a cell through this operation"
+required = true
+schema = { type = "object", description = "A map from column name to cell value. Untyped here because the columns are the base's own schema" }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "createdTime", "fields"]
+properties = { id = { type = "string", pattern = "^rec[A-Za-z0-9]+$", description = "The record's id" }, createdTime = { type = "string", format = "date-time", description = "When the record was created — unchanged by an update" }, fields = { type = "object", description = "The record's cell values after the update, keyed by column name. Every column is returned, not only the changed ones" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/type"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "airtable-record-delete"
+method = "DELETE"
+path = "/v0/{baseId}/{tableIdOrName}/{recordId}"
+description = "Delete one record and every cell value in it. There is no API route back: Airtable's trash and revision history are UI features on a retention window, not endpoints, so a flux run cannot undo this. Responds `{\"id\": …, \"deleted\": true}`"
+# See the note above the writes. The only tier that makes flux's approval gate stop for this.
+risk = "destructive"
+# `DELETE` is idempotent under RFC 9110 §9.2.2 and this call plainly is in effect — the record is gone
+# either way — but Airtable answers the second attempt `404` with its bare-string error body rather
+# than repeating the first response, and it documents no idempotency guarantee. C-75's Acceptance is
+# explicit that no write is marked idempotent unless the vendor documents it as such. The cost is a
+# forgone retry on a call nobody should be retrying blind.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "base_id"
+wire = "baseId"
+description = "The base's id, the `app…` segment in the base's URL in Airtable"
+required = true
+schema = { type = "string", pattern = "^app[A-Za-z0-9]+$" }
+
+[[operations.params.path]]
+name = "table_id"
+wire = "tableIdOrName"
+description = "The table's id, the `tbl…` segment in the table's URL in Airtable. The name form is not accepted — see `airtable-record-get`"
+required = true
+schema = { type = "string", pattern = "^tbl[A-Za-z0-9]+$" }
+
+[[operations.params.path]]
+name = "record_id"
+wire = "recordId"
+description = "The id of the record to delete"
+required = true
+schema = { type = "string", pattern = "^rec[A-Za-z0-9]+$" }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "deleted"]
+properties = { id = { type = "string", pattern = "^rec[A-Za-z0-9]+$", description = "The id of the record that was deleted" }, deleted = { type = "boolean", description = "Always `true` on a 2xx. Airtable reports a record that was already gone as a 404 rather than as `false`" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/type"
