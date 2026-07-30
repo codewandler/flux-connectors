@@ -123,6 +123,16 @@ function contentColumnCap() {
   return css.match(/\.VPDoc\.has-aside\s+\.content-container[^{]*\{[^}]*max-width:\s*([^;}]+)/)
 }
 
+/** Every stylesheet the built site emits, concatenated. */
+function stylesheet() {
+  const assets = path.join(distDir, 'assets')
+  assert.ok(existsSync(assets), 'the site was not built — run `npm run build` before `npm test`')
+  return readdirSync(assets)
+    .filter((entry) => entry.endsWith('.css'))
+    .map((entry) => readFileSync(path.join(assets, entry), 'utf-8'))
+    .join('\n')
+}
+
 /** Every file under the explorer's own sources — where hand-maintained data would have to live. */
 function explorerSources() {
   const roots = [
@@ -927,4 +937,37 @@ test('a card fact holding several values can break between them', () => {
     /flex-wrap:\s*wrap/,
     `\`.card__hosts\` no longer wraps (${rule[1]}) — the hosts run becomes one unbreakable box again and escapes the page at 1280px`
   )
+})
+
+test('nothing in the explorer sets a floor under its own width', () => {
+  // C-100, follow-up. Three separate regressions had one cause: a flex or grid item's automatic
+  // minimum size is its *min-content*, so a control, a row or a card silently refuses to go below
+  // its longest unbreakable run and pushes its container instead.
+  //
+  //   - a `<select>`'s min-content is its widest option, so eight filters could never share a row
+  //   - a grid item's min-content held every operation row open at its longest request path, which
+  //     scrolled the whole page sideways on a phone
+  //   - the provider card's header held a 314px floor under a card, which capped the grid at three
+  //     columns however wide the page got
+  //
+  // Each is released by `min-width: 0` or by letting the run wrap. The rules are asserted in the
+  // emitted stylesheet because a layout regression here is silent: the page still renders, it just
+  // renders wrong, and only at some viewport widths.
+  const css = stylesheet()
+
+  for (const [selector, property] of [
+    ['.filters__field', /min-width:\s*0/],
+    ['.row', /min-width:\s*0/],
+    ['.card__head', /flex-wrap:\s*wrap/],
+  ]) {
+    // The lookahead keeps `.row` off `.row__head` and `.filters__field` off `--wide`; without it
+    // the assertion would silently drift onto a neighbouring rule if the emitted order changed.
+    const rule = css.match(new RegExp(`\\${selector}(?![\\w-])[^{]*\\{([^}]*)\\}`))
+    assert.ok(rule, `the \`${selector}\` rule is gone from the built stylesheet`)
+    assert.match(
+      rule[1],
+      property,
+      `\`${selector}\` no longer releases its automatic minimum size (${rule[1]}) — whatever it contains sets a floor under the layout again`
+    )
+  }
 })

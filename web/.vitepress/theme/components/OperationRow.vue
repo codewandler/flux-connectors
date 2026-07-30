@@ -54,7 +54,16 @@ const own = computed(() => ownIssues(props.operation))
 </template>
 
 <style scoped>
+/*
+ * `min-width: 0` is load-bearing, not tidying. The list is a grid, and a grid item's automatic
+ * minimum size is `auto` — its min-content — so a row is never allowed to be narrower than its
+ * longest unbreakable run. An operation path like `/v0/{baseId}/{tableIdOrName}/{recordId}` has no
+ * break opportunity in it, so on a phone every row forced its track wider than the viewport and the
+ * whole page scrolled sideways by ~193px. `min-width: 0` lets the track shrink; `overflow-wrap` on
+ * the path below is what then makes the path itself break rather than simply overflow the row.
+ */
 .row {
+  min-width: 0;
   border: 1px solid var(--vp-c-divider);
   border-radius: 8px;
   padding: 12px 16px;
@@ -98,6 +107,13 @@ const own = computed(() => ownIssues(props.operation))
   margin: 6px 0 0;
   font-size: 12px;
   color: var(--vp-c-text-2);
+}
+
+/* The request path is one token with no break opportunity a browser will take on its own. It is the
+   longest thing in the row, so it decides the row's min-content width unless it is allowed to break
+   mid-token. Paired with `min-width: 0` on `.row` above. */
+.row__meta code {
+  overflow-wrap: anywhere;
 }
 
 .row__vendor,
