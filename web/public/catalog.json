@@ -3959,6 +3959,306 @@
       ]
     },
     {
+      "id": "sentry",
+      "authority": null,
+      "vendor": "Sentry",
+      "description": "Sentry error tracking: read an issue and its latest event, triage an issue, read a project",
+      "base_url": "https://sentry.io",
+      "api_version": null,
+      "hosts": [
+        "sentry.io"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://sentry.io",
+          "hosts": [
+            "sentry.io"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 4
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "sentry.auth_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "Sentry auth token sent as a bearer — an organization, user or internal-integration token",
+            "env": [
+              "SENTRY_AUTH_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "sentry.auth_token"
+          ]
+        ]
+      },
+      "operation_count": 4,
+      "operations": [
+        {
+          "id": "sentry-issue-get",
+          "provider": "sentry",
+          "service": "default",
+          "description": "Get one issue — its title, culprit, level, status, assignee, first and last seen timestamps and event counts. An issue is Sentry's group of like events, not a single occurrence; use `sentry-issue-event-latest` for the stack trace",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/",
+          "parameters": [
+            {
+              "name": "organization_id_or_slug",
+              "in": "path",
+              "wire": null,
+              "description": "The organization's slug as it appears in a Sentry URL (`acme-inc`), or its numeric id",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9_-]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "issue_id",
+              "in": "path",
+              "wire": null,
+              "description": "The issue's numeric id — the number in a Sentry issue URL, and the `issue_id` an alert payload carries. It is not the short id (`ACME-INC-7F`)",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "sentry.auth_token"
+            ]
+          ],
+          "hosts": [
+            "sentry.io"
+          ],
+          "flux": "op sentry-issue-get(organization_id_or_slug: String, issue_id: String) -> Any\n  description \"Get one issue — its title, culprit, level, status, assignee, first and last seen timestamps and event counts. An issue is Sentry's group of like events, not a single occurrence; use `sentry-issue-event-latest` for the stack trace. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://sentry.io\"\n  $url = fmt(\"{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "sentry-issue-update",
+          "provider": "sentry",
+          "service": "default",
+          "description": "Change an issue's triage state: resolve it, ignore it, or return it to unresolved. This is the state the whole organization triages against — a resolved issue leaves the unresolved queue, and an ignored one stops alerting until it recurs on Sentry's terms. Recorded in the issue's activity feed under the token's owner",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "PUT",
+          "path": "/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/",
+          "parameters": [
+            {
+              "name": "organization_id_or_slug",
+              "in": "path",
+              "wire": null,
+              "description": "The organization's slug as it appears in a Sentry URL (`acme-inc`), or its numeric id",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9_-]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "issue_id",
+              "in": "path",
+              "wire": null,
+              "description": "The issue's numeric id",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "status",
+              "in": "body",
+              "wire": null,
+              "description": "`resolved` closes the issue, `ignored` mutes it until Sentry's own recurrence conditions fire, `unresolved` reopens it and puts it back in the team's queue",
+              "required": true,
+              "schema": {
+                "enum": [
+                  "resolved",
+                  "ignored",
+                  "unresolved"
+                ],
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "sentry.auth_token"
+            ]
+          ],
+          "hosts": [
+            "sentry.io"
+          ],
+          "flux": "op sentry-issue-update(organization_id_or_slug: String, issue_id: String, status: String) -> Any\n  description \"Change an issue's triage state: resolve it, ignore it, or return it to unresolved. This is the state the whole organization triages against — a resolved issue leaves the unresolved queue, and an ignored one stops alerting until it recurs on Sentry's terms. Recorded in the issue's activity feed under the token's owner. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://sentry.io\"\n  $url = fmt(\"{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/\")\n  $content_type = \"application/json\"\n  $payload = { status: $status }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "sentry-project-get",
+          "provider": "sentry",
+          "service": "default",
+          "description": "Get one project — its name, slug, platform, teams, DSN-bearing client keys' status and whether it is currently accepting events. This is the project an issue belongs to, so it is how a triage flow finds out which service is broken",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/0/projects/{organization_id_or_slug}/{project_id_or_slug}/",
+          "parameters": [
+            {
+              "name": "organization_id_or_slug",
+              "in": "path",
+              "wire": null,
+              "description": "The organization's slug as it appears in a Sentry URL (`acme-inc`), or its numeric id",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9_-]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "project_id_or_slug",
+              "in": "path",
+              "wire": null,
+              "description": "The project's slug as it appears in a Sentry URL (`backend-api`), or its numeric id",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9_-]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "sentry.auth_token"
+            ]
+          ],
+          "hosts": [
+            "sentry.io"
+          ],
+          "flux": "op sentry-project-get(organization_id_or_slug: String, project_id_or_slug: String) -> Any\n  description \"Get one project — its name, slug, platform, teams, DSN-bearing client keys' status and whether it is currently accepting events. This is the project an issue belongs to, so it is how a triage flow finds out which service is broken. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://sentry.io\"\n  $url = fmt(\"{base}/api/0/projects/{organization_id_or_slug}/{project_id_or_slug}/\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "sentry-issue-event-latest",
+          "provider": "sentry",
+          "service": "default",
+          "description": "Get the most recent event of an issue — the actual occurrence, with its stack trace, breadcrumbs, request context and tags. This is what makes an issue diagnosable rather than merely countable; the event list itself is excluded because it pages with an opaque cursor",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/events/latest/",
+          "parameters": [
+            {
+              "name": "organization_id_or_slug",
+              "in": "path",
+              "wire": null,
+              "description": "The organization's slug as it appears in a Sentry URL (`acme-inc`), or its numeric id",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9_-]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "issue_id",
+              "in": "path",
+              "wire": null,
+              "description": "The issue's numeric id",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "sentry.auth_token"
+            ]
+          ],
+          "hosts": [
+            "sentry.io"
+          ],
+          "flux": "op sentry-issue-event-latest(organization_id_or_slug: String, issue_id: String) -> Any\n  description \"Get the most recent event of an issue — the actual occurrence, with its stack trace, breadcrumbs, request context and tags. This is what makes an issue diagnosable rather than merely countable; the event list itself is excluded because it pages with an opaque cursor. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://sentry.io\"\n  $url = fmt(\"{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/events/latest/\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "shopify",
       "authority": null,
       "vendor": "Shopify",
