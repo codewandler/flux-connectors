@@ -1,0 +1,304 @@
+# Zendesk Support — hand-authored, no vendor spec.
+#
+# Transcribed from `docs/designs/provider-operation-inventory.md` §3, which derives the operation
+# set from `../flux/plugins/zendesk/src/main.rs` (687 lines). The plugin *is* the requirement: a
+# connector replaces it only if it covers the same surface, so all 7 of its operations are taken.
+#
+# Zendesk publishes OpenAPI descriptions on developer.zendesk.com. When C-14's fetch lands, this
+# file should become a `[spec]` pointer plus a `[[patch.operations]]` selection over the vendored
+# document rather than an inline list (§1.2). Until then drift is undetectable by machine (§6.7).
+
+id = "zendesk"
+vendor = "Zendesk"
+
+# Every Zendesk account lives on its own subdomain, so there is no tenant-independent base URL.
+# The inventory records the endpoint as operator config in `ZENDESK_URL` (§3.1), e.g.
+# `https://company.zendesk.com`.
+#
+# SCHEMA GAP: nothing here binds `{subdomain}` — or the whole URL — to `ZENDESK_URL`. `base_url` is
+# a plain string that `Connector` documents as "may carry tenant templating", but no field declares
+# where a template variable is resolved from, so the binding lives only in this comment. Reported
+# with C-17.
+base_url = "https://{subdomain}.zendesk.com"
+
+description = "Zendesk Support ticketing: search, read, update tickets and their comments"
+
+# Every operation authenticates the same way — the inventory records requirement-set shape `single`
+# identically for all 7 (§3.1).
+default_auth = [{ credentials = ["zendesk.api_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "zendesk.api_token"
+scheme = "basic"
+# The sole secret. Gated and registered with flux's redactor by the host; never read here.
+env = ["ZENDESK_API_TOKEN"]
+# The non-secret identity half: the agent's email address, on its own.
+user_env = ["ZENDESK_USER"]
+# Zendesk's `<email>/token` form. The literal `/token` is what tells Zendesk the password is an API
+# token rather than a password — it is public API syntax, not a credential, which is why it is
+# declared here instead of being baked into `ZENDESK_USER`. Pre-composing it would store a value in
+# `ZENDESK_USER` that is not the thing the variable is named after and that nothing can validate
+# (`docs/designs/auth-seam.md` §7.5).
+user_suffix = "/token"
+description = "Zendesk API token; the user half is the agent email with Zendesk's /token marker"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 7 of 7 (inventory §3.2)
+#
+# Op ids are hyphen-separated, not dotted. flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only, so `op zendesk.ticket.show` is undeclarable and a dotted `$a.b`
+# in expression position is field-access sugar rather than a name (C-8,
+# `crates/connector-flux/src/names.rs`). C-23 settles the canonical rule; this file follows the
+# form C-8's golden modules already emit.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "zendesk-test"
+method = "GET"
+path = "/api/v2/users/me.json"
+description = "Verify credentials by fetching the authenticated Zendesk user"
+risk = "low"
+idempotency = "idempotent"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "zendesk-ticket-search"
+method = "GET"
+path = "/api/v2/search.json"
+description = "Search tickets with Zendesk search syntax, e.g. `type:ticket status:new`"
+risk = "low"
+idempotency = "idempotent"
+
+# KNOWN NON-FUNCTIONAL until C-28 resolves it. Zendesk search expressions are colon-heavy and the
+# plugin percent-encodes them strictly — spaces as `%20` never `+`, colons as `%3A`
+# (`main.rs:426-441`, inventory §3.3.5). The emitted URL is assembled with `fmt`, which does no
+# percent-encoding, and flux has no op that does. The operation is declared because dropping it
+# would leave the connector short of the plugin it replaces; it is expected to mis-query until the
+# encoding gap is closed.
+[[operations.params.query]]
+name = "query"
+description = "Zendesk search expression"
+required = true
+schema = { type = "string" }
+
+[[operations.params.query]]
+name = "page"
+description = "Page number, 1-based"
+required = false
+schema = { type = "integer", minimum = 1, default = 1 }
+
+[[operations.params.query]]
+name = "per_page"
+description = "Results per page; Zendesk caps this at 100"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100, default = 100 }
+
+[operations.quirks.pagination]
+page = { page_param = "page", size_param = "per_page", page_size = 100, max_pages = 10 }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "zendesk-ticket-show"
+method = "GET"
+path = "/api/v2/tickets/{ticket_id}.json"
+description = "Show one ticket"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "ticket_id"
+description = "The ticket id"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "zendesk-ticket-comment-list"
+method = "GET"
+path = "/api/v2/tickets/{ticket_id}/comments.json"
+description = "List a ticket's comments"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "ticket_id"
+description = "The ticket id"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+[[operations.params.query]]
+name = "page"
+description = "Page number, 1-based"
+required = false
+schema = { type = "integer", minimum = 1, default = 1 }
+
+[[operations.params.query]]
+name = "per_page"
+description = "Comments per page; Zendesk caps this at 100"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100, default = 100 }
+
+[operations.quirks.pagination]
+page = { page_param = "page", size_param = "per_page", page_size = 100, max_pages = 10 }
+
+# ---------------------------------------------------------------------------------------------
+# Operations 5, 6 and 7 are all `PUT /api/v2/tickets/{ticket_id}.json`, distinguished *only* by
+# request body (inventory §3.3.1). Three schema gaps bite all three of them, and none is worked
+# around here:
+#
+#   1. Body fields nest. The wire body is `{"ticket": {"updated_stamp": …, "comment": {"body": …}}}`,
+#      but `ParamSet.body` is a flat `Vec<Param>` with a single `name` — there is no field for the
+#      JSON path a body parameter occupies. The caller-facing name is recorded here and the wire
+#      path is stated in each `description`, which is documentation rather than a contract C-9 can
+#      compile.
+#   2. `ticket.safe_update = true` is a *constant* the plugin always sends, not a caller-supplied
+#      parameter (§3.3.2). `Param` has no way to say "always emitted, never in the op signature",
+#      so it is declared as a required boolean pinned by JSON Schema `const` — which still leaks it
+#      into the generated op's parameter list. See the report.
+#   3. The plugin's preflight — at least one mutable field must be non-null (`main.rs:201-209`) —
+#      has no representation. `Quirks` carries pagination, rate limits and error envelopes, not
+#      preconditions.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "zendesk-ticket-update"
+method = "PUT"
+path = "/api/v2/tickets/{ticket_id}.json"
+description = "Safe-update selected ticket fields against the caller's updated_stamp; at least one of status, priority, assignee_id, group_id or type must be supplied"
+risk = "medium"
+# Optimistic concurrency: the same call replayed after the ticket moved is rejected by Zendesk
+# rather than applied, so repeating is safe only under the caller-supplied stamp.
+idempotency = "conditional"
+
+[[operations.params.path]]
+name = "ticket_id"
+description = "The ticket id"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+[[operations.params.body]]
+name = "updated_stamp"
+description = "Wire path `ticket.updated_stamp`. Optimistic-concurrency stamp: Zendesk rejects the update if the ticket moved since this stamp"
+required = true
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "safe_update"
+description = "Wire path `ticket.safe_update`. Constant `true` — not caller-supplied; it is what makes updated_stamp binding. Dropping it turns every write into a last-write-wins race"
+required = true
+schema = { type = "boolean", const = true }
+
+[[operations.params.body]]
+name = "status"
+description = "Wire path `ticket.status`"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "priority"
+description = "Wire path `ticket.priority`"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "assignee_id"
+description = "Wire path `ticket.assignee_id`"
+required = false
+schema = { type = "integer", format = "uint64" }
+
+[[operations.params.body]]
+name = "group_id"
+description = "Wire path `ticket.group_id`"
+required = false
+schema = { type = "integer", format = "uint64" }
+
+[[operations.params.body]]
+name = "type"
+description = "Wire path `ticket.type`"
+required = false
+schema = { type = "string" }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "zendesk-ticket-comment-add"
+method = "PUT"
+path = "/api/v2/tickets/{ticket_id}.json"
+description = "Add a comment to a ticket; the comment is an internal note unless public is explicitly true"
+risk = "medium"
+idempotency = "conditional"
+
+[[operations.params.path]]
+name = "ticket_id"
+description = "The ticket id"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+[[operations.params.body]]
+name = "updated_stamp"
+description = "Wire path `ticket.updated_stamp`. Optimistic-concurrency stamp"
+required = true
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "safe_update"
+description = "Wire path `ticket.safe_update`. Constant `true` — not caller-supplied"
+required = true
+schema = { type = "boolean", const = true }
+
+[[operations.params.body]]
+name = "body"
+description = "Wire path `ticket.comment.body`. The comment text; must not be blank"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# The safety default the plugin sets (`main.rs:79`): a generated op that inherited a "sensible"
+# default of `true` would leak internal notes to end users (inventory §3.3.4).
+[[operations.params.body]]
+name = "public"
+description = "Wire path `ticket.comment.public`. False (an internal note) unless explicitly set true"
+required = false
+schema = { type = "boolean", default = false }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "zendesk-ticket-tag-add"
+method = "PUT"
+path = "/api/v2/tickets/{ticket_id}.json"
+description = "Add tags to a ticket without replacing the tags it already has"
+risk = "medium"
+idempotency = "conditional"
+
+[[operations.params.path]]
+name = "ticket_id"
+description = "The ticket id"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+[[operations.params.body]]
+name = "updated_stamp"
+description = "Wire path `ticket.updated_stamp`. Optimistic-concurrency stamp"
+required = true
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "safe_update"
+description = "Wire path `ticket.safe_update`. Constant `true` — not caller-supplied"
+required = true
+schema = { type = "boolean", const = true }
+
+# `additional_tags`, never `tags`: sending `tags` *replaces* the ticket's tags, which silently
+# destroys data (inventory §3.3.3). The additive field is the whole point of this operation.
+[[operations.params.body]]
+name = "tags"
+description = "Wire path `ticket.additional_tags` — additive, so existing tags survive. Must be non-empty with no blank entries"
+required = true
+schema = { type = "array", minItems = 1, items = { type = "string", minLength = 1 } }
