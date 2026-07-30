@@ -32,6 +32,7 @@ _Every credential problem in this repo has the same shape: **the caller must not
 
 ### Connectors v1 — spec to Flux
 _Prove the whole thesis on two real providers, end to end against a live flux._
+- [C-37 — Give providers and operations stable global addresses](C-37-global-addressing.md) · Spec · pid / gid / oip · the global half; C-23 stays the local half
 - [C-30 — Refuse query values the emitter cannot encode safely](C-30-refuse-unencodable-query.md) · Codegen · **security** · a model-supplied query value can inject request parameters today
 - [C-10 — Emit the $auth marker and the connector manifest](C-10-auth-injection-and-manifest.md) · Codegen · pairs with C-16 · the second generated artifact
 - [C-29 — Close the request-body modelling gaps in the IR](C-29-body-modelling-gaps.md) · Spec · found by C-17 transcribing real providers · blocks correct write operations

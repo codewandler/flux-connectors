@@ -11,6 +11,12 @@ note: op names are what users and models call — renaming one silently breaks c
 
 # Make operation names a stable public contract
 
+> **Scope split (C-37).** This story is the **local** half: how `Operation.id` is spelled, that it is
+> declarable in Flux, stable across regeneration, and collision-checked. The **global** half — the
+> `com.zendesk.api/support/tickets:v2#show` address — is
+> [C-37](C-37-global-addressing.md) / [global-addressing.md](../designs/global-addressing.md). They
+> are complements: flux cannot declare an address, so both identifiers exist and must stay in step.
+
 ## Goal
 Pin how an operation gets its name, so a regeneration never silently renames a tool that flows,
 prompts, and users already call.
