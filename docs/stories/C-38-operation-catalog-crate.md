@@ -18,8 +18,10 @@ embed those renderings in a `crates/catalog` crate — so connectors become cons
 dependency, addressable per operation, instead of as loose files a user must install.
 
 ## Acceptance
-- [ ] `flux-connectors build` writes one `.flux` per operation, keyed by its address, in addition to
-      the per-provider module.
+- [ ] **The final build artifact stays one `.flux` per provider** — `connectors/<name>.flux`,
+      unchanged in role. Per-operation renderings are additional, not a substitution.
+- [ ] `flux-connectors build` also writes one `.flux` rendering per operation, keyed by its address,
+      as the catalog's source.
 - [ ] `crates/catalog` embeds every rendered operation at compile time (`include_str!` or equivalent
       generated module) — no filesystem lookup at runtime, so a consumer gets the catalog by adding
       the crate.
@@ -41,12 +43,11 @@ dependency, addressable per operation, instead of as loose files a user must ins
 - **"Expanded" means post-overlay.** Today the hand-authored provider TOML *is* the expanded form, so
   this works without spec ingest. Once C-4/C-6 land, the same emitter runs over spec-derived
   operations with no change here.
-- **Per-operation files complement the per-provider module; they do not replace it.** flux's
-  `DynamicComposites::load` lifts every `op` declaration out of every `.flux` file in
-  `~/.flux/flows`, so either shape loads. The per-provider module stays the **installable** unit; the
-  per-operation renderings are the **catalog's** unit and give per-op diffs and selective use.
-  Confirm this reading before building — collapsing to one shape is cheaper if the module is not
-  wanted.
+- **Settled: the final build artifact is one `.flux` per provider.** Per-operation renderings are
+  the **catalog's** unit and an intermediate of the build — they are not the deliverable. The
+  per-provider module is what ships and what installs into `~/.flux/flows`, which is what
+  `connectors/<name>.flux` already is today (C-27). Do not replace it, and do not make the
+  per-operation files the thing a user installs.
 - **Why a crate rather than files:** it makes flux-connectors consumable with `cargo add` instead of
   by copying artifacts into `~/.flux/flows`, and it stays inside the charter — a library that hands
   out text, not a runtime. Contrast with the [connectors proxy](../designs/connectors-proxy.md),
