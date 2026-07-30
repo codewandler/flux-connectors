@@ -2,8 +2,8 @@
 id: C-38
 title: Render Flux per operation and embed it in a catalog crate
 pillar: Build
-status: ready
-priority: 6
+status: done
+priority:
 design: docs/designs/global-addressing.md
 epic: connectors-v1
 areas: [connector-flux, connector-cli, catalog]

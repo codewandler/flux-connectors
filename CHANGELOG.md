@@ -7,6 +7,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.0.1] — 2026-07-30
+
+### Added
+- **C-38** — `connector-catalog`: every operation's Flux embedded at compile time, queryable by id
+  with its risk, idempotency, required credentials and hosts. A Rust consumer gets the whole
+  catalogue with `cargo add`, no filesystem lookup.
+- **C-38** — `build` also writes one `.flux` rendering per operation as the catalog's source; the
+  per-provider module remains the installable artifact.
+
+First tagged release. The pipeline works end to end and three providers compile; **no provider can
+make a live API call yet** — see the README's *Known limits*.
+
 ### Added
 - Repository scaffolding: the track backlog framework (vision, roadmap, stories board, design
   records) and the initial `connectors-v1` epic.

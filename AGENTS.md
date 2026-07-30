@@ -1,7 +1,12 @@
 # AGENTS.md — operating contract for agents in flux-connectors
 
-For **coding agents and automation**. Read this before making any change. When in doubt, this file
-and the docs it links are the tie-breaker.
+For **coding agents and automation** — this file is to an agent what [README.md](README.md) is to a
+person. Read it before making any change. When in doubt, this file and the docs it links are the
+tie-breaker.
+
+**Where the project is (v0.0.1).** The pipeline works end to end: `cargo run -p connector-cli -- build`
+compiles three providers into 34 artifacts. **Nothing can make a live API call yet** — read
+[What is deliberately broken](#what-is-deliberately-broken) before you "fix" anything.
 
 ---
 
@@ -15,6 +20,17 @@ flux-connectors compiles **vendor API specs into Flux-Lang**. A provider is desc
 Why: [docs/vision.md](docs/vision.md) · pipeline:
 [docs/designs/connector-pipeline.md](docs/designs/connector-pipeline.md) · status:
 [docs/roadmap.md](docs/roadmap.md).
+
+---
+
+## The crates, and which one owns what
+
+| Crate | Owns | Must never |
+|---|---|---|
+| `connector-spec` | The IR, provider-TOML loading, validation, the lockfile | touch the network |
+| `connector-flux` | Emitting Flux from the IR | emit via string templates |
+| `connector-cli` | The `flux-connectors` binary; all filesystem and network IO | reach the network during `build` |
+| `connector-catalog` | Every operation's Flux embedded at compile time | depend on anything |
 
 ---
 
@@ -66,6 +82,29 @@ not here. This boundary is the first question to ask about any new provider.
 
 ---
 
+## What is deliberately broken
+
+Each of these looks like a bug and is a recorded decision. **Do not "fix" one without reading its
+story** — several were chosen over a working-looking alternative that was quietly wrong.
+
+- **No provider can make a live call.** flux's `http.request` takes `{"$secret": "ENV"}` as a
+  *whole-value* replacement, so it produces neither a `Bearer ` prefix nor a base64-joined Basic
+  pair. Designed in [docs/designs/auth-seam.md](docs/designs/auth-seam.md); must land in flux.
+- **Freshdesk ships with no credential.** Its `base64(<api_key>:X)` puts the secret in the *username*
+  position, which flux documents as non-secret config — expressing it naively would route a live API
+  key outside secret gating and redaction. Fail-closed 401s were chosen deliberately.
+- **`zendesk-ticket-search` is non-functional.** Query values are not percent-encoded and flux has no
+  op that does it. Beware: `url::Url::parse` already rescues *spaces*, so testing with a space
+  wrongly suggests the gap is closed — `&`, `#` and `+` corrupt the request, and `x&per_page=1`
+  *injects* parameters.
+- **Some operations are refused at emit rather than emitted.** A nested body path with no `wire`
+  field, a dotted op id, a free-form body that cannot be distinguished from a bodiless write. Each
+  refusal names its owning story. **A loud refusal beats plausible-but-wrong output** — that is the
+  standard here.
+- **`check` and `fetch` are unimplemented** and `bail!` (C-14).
+
+---
+
 ## Dev loop — run before calling a change done
 
 ```bash
@@ -73,6 +112,14 @@ cargo build --workspace
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings   # must be clean
 cargo fmt --all                                          # then commit the result
+```
+
+**Read the test output correctly.** `cargo test --workspace` **aborts at the first failing binary**,
+so counting `test result: ok` lines is worthless as evidence — a red run looks like a green one with
+a smaller number. Use:
+
+```bash
+cargo test --workspace 2>&1 | grep -E "FAILED|error: test failed|panicked at"   # must print nothing
 ```
 
 Docs-only changes may use a narrower check — say explicitly in the final report what was and was not
