@@ -5933,6 +5933,342 @@
           }
         }
       ]
+    },
+    {
+      "id": "zoom",
+      "authority": null,
+      "vendor": "Zoom",
+      "description": "Zoom meeting scheduling: read, create and delete a meeting, and read a user",
+      "base_url": "https://api.zoom.us",
+      "api_version": null,
+      "hosts": [
+        "api.zoom.us"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.zoom.us",
+          "hosts": [
+            "api.zoom.us"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 4
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "zoom.access_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "Zoom server-to-server OAuth access token, sent as a bearer. Minted outside flux and supplied through the environment; it expires within the hour and nothing here can refresh it",
+            "env": [
+              "ZOOM_ACCESS_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "zoom.access_token"
+          ]
+        ]
+      },
+      "operation_count": 4,
+      "operations": [
+        {
+          "id": "zoom-meeting-get",
+          "provider": "zoom",
+          "service": "default",
+          "description": "Get one meeting — its topic, start time, duration, timezone, join URL and settings. The response also carries `start_url`, which starts the meeting as its host for anyone holding it",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v2/meetings/{meeting_id}",
+          "parameters": [
+            {
+              "name": "meeting_id",
+              "in": "path",
+              "wire": null,
+              "description": "The meeting's numeric id, as returned by `zoom-meeting-create`. Zoom also accepts a meeting UUID here; this operation does not, because a UUID is base64 that can carry `/` and would have to be double URL-encoded, and nothing in this pipeline encodes a path",
+              "required": true,
+              "schema": {
+                "format": "int64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "id": {
+                "description": "The meeting's numeric id — what later calls address it by",
+                "format": "int64",
+                "type": "integer"
+              },
+              "join_url": {
+                "description": "The URL a participant joins with",
+                "type": "string"
+              },
+              "start_url": {
+                "description": "HOST-PRIVILEGED. Embeds the host's ZAK token: anyone holding this URL starts the meeting as its host. Treat it as a credential: do not log it, echo it, or pass it to another tool",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "join_url"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "zoom.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.zoom.us"
+          ],
+          "flux": "op zoom-meeting-get(meeting_id: Number) -> Any\n  description \"Get one meeting — its topic, start time, duration, timezone, join URL and settings. The response also carries `start_url`, which starts the meeting as its host for anyone holding it. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.zoom.us\"\n  $url = fmt(\"{base}/v2/meetings/{meeting_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "zoom-meeting-create",
+          "provider": "zoom",
+          "service": "default",
+          "description": "Schedule a one-off meeting for a user at a fixed time. Nobody is invited and nobody is notified — the meeting appears on the host's own Zoom schedule and the returned `join_url` is how anyone else learns of it. The response also carries `start_url`, which starts the meeting as its host for anyone holding it",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/v2/users/{user_id}/meetings",
+          "parameters": [
+            {
+              "name": "user_id",
+              "in": "path",
+              "wire": null,
+              "description": "The host: `me` for the token's own user, a Zoom user id, or the user's email address",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9@._+-]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "topic",
+              "in": "body",
+              "wire": null,
+              "description": "The meeting's title, as it appears on the host's schedule and in the invitation",
+              "required": true,
+              "schema": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "type",
+              "in": "body",
+              "wire": null,
+              "description": "Constant `2` — a scheduled, one-off meeting at a fixed time. Not caller-supplied: the recurring types need a `recurrence` object this connector cannot declare, and the instant type ignores the start time",
+              "required": true,
+              "schema": {
+                "const": 2,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "start_time",
+              "in": "body",
+              "wire": null,
+              "description": "When the meeting starts, as UTC in `yyyy-MM-ddTHH:mm:ssZ` form. Local-time scheduling is not offered: it requires a paired `timezone` field, and Zoom ignores that field whenever the start time is already absolute",
+              "required": true,
+              "schema": {
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "duration",
+              "in": "body",
+              "wire": null,
+              "description": "How long the meeting is scheduled for, in minutes. A meeting that overruns is not cut off; this is what the calendar entry says",
+              "required": true,
+              "schema": {
+                "maximum": 1440,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "waiting_room",
+              "in": "body",
+              "wire": "settings.waiting_room",
+              "description": "True to hold arrivals in a waiting room until the host admits them; false to let anyone with the join URL enter directly. Always sent, because the account default is not something a caller should inherit silently",
+              "required": true,
+              "schema": {
+                "type": "boolean"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "id": {
+                "description": "The created meeting's numeric id — what `zoom-meeting-get` and `zoom-meeting-delete` address it by",
+                "format": "int64",
+                "type": "integer"
+              },
+              "join_url": {
+                "description": "The URL to hand to participants",
+                "type": "string"
+              },
+              "start_url": {
+                "description": "HOST-PRIVILEGED. Embeds the host's ZAK token: anyone holding this URL starts the meeting as its host. Treat it as a credential: do not log it, echo it, or pass it to another tool",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "join_url"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "zoom.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.zoom.us"
+          ],
+          "flux": "op zoom-meeting-create(user_id: String, topic: String, start_time: String, duration: Number, waiting_room: Bool) -> Any\n  description \"Schedule a one-off meeting for a user at a fixed time. Nobody is invited and nobody is notified — the meeting appears on the host's own Zoom schedule and the returned `join_url` is how anyone else learns of it. The response also carries `start_url`, which starts the meeting as its host for anyone holding it. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.zoom.us\"\n  $url = fmt(\"{base}/v2/users/{user_id}/meetings\")\n  $content_type = \"application/json\"\n  $type = 2\n  $payload = { duration: $duration, settings: { waiting_room: $waiting_room }, start_time: $start_time, topic: $topic, type: $type }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "zoom-meeting-delete",
+          "provider": "zoom",
+          "service": "default",
+          "description": "Cancel a meeting. It is gone — Zoom offers no undelete, and the meeting id, its join URL and any registrations go with it. Whether Zoom emails the host or the registrants about the cancellation is left to Zoom's own default; this operation cannot ask for either",
+          "risk": "destructive",
+          "idempotency": "non_idempotent",
+          "method": "DELETE",
+          "path": "/v2/meetings/{meeting_id}",
+          "parameters": [
+            {
+              "name": "meeting_id",
+              "in": "path",
+              "wire": null,
+              "description": "The numeric id of the meeting to cancel. As on the get, a meeting UUID is not accepted",
+              "required": true,
+              "schema": {
+                "format": "int64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "zoom.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.zoom.us"
+          ],
+          "flux": "op zoom-meeting-delete(meeting_id: Number) -> Any\n  description \"Cancel a meeting. It is gone — Zoom offers no undelete, and the meeting id, its join URL and any registrations go with it. Whether Zoom emails the host or the registrants about the cancellation is left to Zoom's own default; this operation cannot ask for either. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.zoom.us\"\n  $url = fmt(\"{base}/v2/meetings/{meeting_id}\")\n  $response = http.request({ method: \"DELETE\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "zoom-user-get",
+          "provider": "zoom",
+          "service": "default",
+          "description": "Get one user — their id, email, name, timezone, licence type and personal meeting id. This is how `me` is resolved to the id a meeting is created under",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v2/users/{user_id}",
+          "parameters": [
+            {
+              "name": "user_id",
+              "in": "path",
+              "wire": null,
+              "description": "`me` for the token's own user, a Zoom user id, or the user's email address",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9@._+-]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "zoom.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.zoom.us"
+          ],
+          "flux": "op zoom-user-get(user_id: String) -> Any\n  description \"Get one user — their id, email, name, timezone, licence type and personal meeting id. This is how `me` is resolved to the id a meeting is created under. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.zoom.us\"\n  $url = fmt(\"{base}/v2/users/{user_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }

@@ -141,6 +141,12 @@ fn operation_selection_stays_curated() {
         // in its own search syntax, the most injectable value the API exposes — plus C-56, which is
         // why the one write sets `status` and nothing else. See `providers/sentry.toml`.
         ("sentry", 4),
+        // C-78 curates 4 of the several hundred operations in Zoom's Meeting API: meeting get,
+        // create and delete, plus user get. Two cuts shaped it — the meetings *list* is excluded
+        // pending C-30, which is what leaves the connector unable to enumerate a schedule, and every
+        // meeting option but `settings.waiting_room` is excluded pending C-56. See the header comment
+        // in `providers/zoom.toml`.
+        ("zoom", 4),
     ];
     for (name, count) in expected {
         let loaded = load(name);
