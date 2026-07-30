@@ -27,8 +27,6 @@ Gate: `cargo build --workspace && cargo test --workspace && cargo clippy --works
 - [C-86 — The connector configuration surface — enough declared data to generate the UI (epic)](C-86-connector-configuration-epic.md) · Spec · EPIC — the repo modelled how a credential reaches the wire and nothing about how a human supplies it. Configuration has TWO levels (operator: the OAuth app; connection: the tenant), and conflating them leaks the product's own credential to every customer. IR + loader landed; codegen and OAuth remain
 - [C-90 — Credential addressing and the secret-store seam (epic)](C-90-credential-addressing-epic.md) · Spec · EPIC — a hosted product needs two customers' Zendesk tokens in two places, and neither repo could say where. This repo owns the ADDRESS (pure, derived from pid + service, version deliberately omitted); a host library owns the client. Pure layer landed
 - [C-94 — The flow graph — connector members composed into one Flux op (epic)](C-94-flow-graph-epic.md) · Spec · EPIC — four waves built the vocabulary (Operation=call node, EventDecl=source, oip=node id, wire paths=edges); this is the graph. NOT a second language: every past rejection was an EXPRESSION language, every acceptance was declarative structure. IR landed
-- [C-111 — Ship the Fly.io Machines connector](C-111-ship-the-fly-machines-connector.md) · Spec · A deliberately narrow machine-lifecycle surface: nine typed operations, one named service, and no invented channel contract
-- [C-112 — Publish Flux core specifications in the connector explorer](C-112-publish-flux-core-specifications-in-the-explorer.md) · UX · Built-ins and language nodes become searchable beside connectors, with canonical JSON identities rather than fake providers
 
 ## Next (ready — take the top one unless the user named a story)
 
@@ -191,6 +189,8 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-100 — Render the explorer full-width](C-100-explorer-full-width.md) · Surfaces · the largest visible gain for the smallest diff — VPDoc.vue:191 caps content at 688px, so 16 provider cards render in two columns on a page allowed to be 1440px
 - [C-101 — Make services a visible, filterable dimension](C-101-services-in-the-explorer.md) · Surfaces · 18 services are published with base_url, api_version, gid and operation counts — the explorer mentions none of them, so Google's three read as one
 - [C-102 — Make a filtered view shareable, and let the list be sorted](C-102-shareable-explorer-views.md) · Surfaces · the page promises 'every operation has a stable page you can share' — true of an operation, false of a view. 'Every destructive Shopify operation' cannot be sent to anyone
+- [C-111 — Ship the Fly.io Machines connector](C-111-ship-the-fly-machines-connector.md) · Spec · A deliberately narrow machine-lifecycle surface: nine typed operations, one named service, and no invented channel contract
+- [C-112 — Publish Flux core specifications in the connector explorer](C-112-publish-flux-core-specifications-in-the-explorer.md) · UX · Built-ins and language nodes become searchable beside connectors, with canonical JSON identities rather than fake providers
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

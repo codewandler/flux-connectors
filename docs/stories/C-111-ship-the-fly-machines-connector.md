@@ -2,8 +2,7 @@
 id: C-111
 title: Ship the Fly.io Machines connector
 pillar: Spec
-status: in-progress
-priority: 1
+status: done
 design:
 epic: provider-fleet-2
 areas: [providers, connector-flux]
@@ -20,25 +19,27 @@ semantics.
 
 ## Acceptance
 
-- [ ] A failing-first provider contract pins the `io.fly.api/machines:v1` service, bearer credential,
+- [x] A failing-first provider contract pins the `io.fly.api/machines:v1` service, bearer credential,
       verification operation, and exact nine-operation inventory.
-- [ ] The provider exposes regions, machine list/get/events, and create/start/stop/restart/delete;
+- [x] The provider exposes regions, machine list/get/events, and create/start/stop/restart/delete;
       creation accepts only the required image at `config.image` and every optional query/body control
       remains absent.
-- [ ] Risk and idempotency are honest: reads are low/idempotent, lifecycle writes are high or
+- [x] Risk and idempotency are honest: reads are low/idempotent, lifecycle writes are high or
       destructive and non-idempotent.
-- [ ] No Fly event, channel, graph, raw credential, token acquisition, or free-form remote expression
+- [x] No Fly event, channel, graph, raw credential, token acquisition, or free-form remote expression
       is emitted.
-- [ ] Every generated operation parses, analyzes, formats canonically, and the deterministic build
+- [x] Every generated operation parses, analyzes, formats canonically, and the deterministic build
       and diff gates include all Fly artifacts.
-- [ ] Public/provider counts and snapshots are regenerated from the actual build output.
+- [x] Public/provider counts and snapshots are regenerated from the actual build output.
 
 ## Progress
 
-- Contract fixed from Fly's official Machines OpenAPI and documentation; implementation not started.
+- Shipped nine operations as the named `machines:v1` service with generated module, manifest,
+  standalone renderings, Rust catalogue data, and public catalogue data.
+- Verified by the failing-first Fly contract, the full workspace gate, the Node site gate, and the
+  fixed-point result `236 artifacts up to date (17 providers checked)`.
 
 ## Notes
 
 - The public Machines event-list endpoint has no durable cursor, so it cannot satisfy this repo's
   poll-channel contract. Fly's partner Extensions webhook is not a general connector surface.
-
