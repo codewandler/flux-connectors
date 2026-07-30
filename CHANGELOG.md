@@ -44,6 +44,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the binary building under a network-less user namespace. The audit test was falsified-checked by
   temporarily injecting a `TcpStream::connect` and confirming it failed.
 
+- **C-3** — the provider-TOML front-end: a hand-authored file with no vendor spec produces a complete
+  `Connector`, a spec-pointer file produces the patch set, with 13 golden error snapshots and a
+  published JSON Schema kept in sync by test.
+- **C-3** — `deny_unknown_fields` on the IR types themselves, closing the hole C-2's review found: a
+  typo'd `authh` no longer deserializes to `auth: None` and silently inherits the connector's default
+  credentials. Proven at four nesting depths.
+- **C-8** — the Flux op emitter: an IR GET with path and query parameters lowers to a formatted
+  composite `op` built from real `flux_lang` AST nodes, with a test asserting the output is a fixed
+  point of flux's own formatter, and four golden files.
+
 ### Changed
 - **C-1** — flux-lang is depended on from **crates.io** (`codewandler-flux-lang = "0.37"`) rather
   than as a git or path dependency. The flux git remote uses a developer-only SSH host alias that

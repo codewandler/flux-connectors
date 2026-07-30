@@ -2,8 +2,8 @@
 id: C-3
 title: Load and validate provider TOML
 pillar: Spec
-status: ready
-priority: 4
+status: done
+priority:
 design: docs/designs/connector-pipeline.md
 epic: connectors-v1
 areas: [connector-spec]

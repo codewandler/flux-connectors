@@ -146,12 +146,15 @@ via a crates.io dependency on `codewandler-flux-lang` (lib `flux_lang`) pinned t
 version. Unparseable
 or non-canonically-formatted output is therefore structurally impossible. Illustrative output:
 
+> **Corrected by C-8:** the op name is kebab, not dotted — flux's `decl_name` grammar rejects dots
+> in a *declaration* — and the formatter emits `effects ["network"]` with quotes.
+
 ```flux
-op zendesk.ticket.show(ticket_id: Number) -> Any
+op zendesk-ticket-show(ticket_id: Number) -> Any
   description "Show one Zendesk ticket by id"
   risk "low"
   idempotency "idempotent"
-  effects [network]
+  effects ["network"]
   expose true
 
   $url = fmt("{base}/api/v2/tickets/{ticket_id}.json")
