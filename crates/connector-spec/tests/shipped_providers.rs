@@ -104,6 +104,11 @@ fn operation_selection_stays_curated() {
         // `providers/openai.toml`.
         ("openai", 4),
         ("slack", 4),
+        // C-74 curates 5 of the Admin REST API, all addressed by an integer id in the path. The cut
+        // is the query-encoding gap again — every Shopify collection endpoint filters on merchant
+        // text or pages with an opaque `page_info` cursor — plus C-56 for the body of the one write.
+        // See `providers/shopify.toml`.
+        ("shopify", 5),
     ];
     for (name, count) in expected {
         let loaded = load(name);

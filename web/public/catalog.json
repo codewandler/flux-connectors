@@ -2433,6 +2433,310 @@
       ]
     },
     {
+      "id": "shopify",
+      "vendor": "Shopify",
+      "description": "Shopify Admin REST API: read orders, products, customers and inventory levels, and update a product",
+      "base_url": "https://{shop}.myshopify.com",
+      "hosts": [
+        "{shop}.myshopify.com"
+      ],
+      "auth": {
+        "schemes": [
+          "header"
+        ],
+        "credentials": [
+          {
+            "name": "shopify.access_token",
+            "scheme": {
+              "kind": "header",
+              "name": "X-Shopify-Access-Token"
+            },
+            "description": "Shopify Admin API access token, sent as the whole value of X-Shopify-Access-Token, with read_orders, read_products, write_products, read_customers and read_inventory scopes",
+            "env": [
+              "SHOPIFY_ACCESS_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "shopify.access_token"
+          ]
+        ]
+      },
+      "operation_count": 5,
+      "operations": [
+        {
+          "id": "shopify-order-get",
+          "provider": "shopify",
+          "description": "Get one order by id, with its line items, totals, fulfilment and financial status, and the customer and addresses attached to it. The response carries personal data: the customer's name, email, phone and shipping address",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/admin/api/2024-10/orders/{order_id}.json",
+          "parameters": [
+            {
+              "name": "order_id",
+              "in": "path",
+              "wire": null,
+              "description": "The order's numeric id — not its `#1001` order name",
+              "required": true,
+              "schema": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "shopify.access_token"
+            ]
+          ],
+          "hosts": [
+            "{shop}.myshopify.com"
+          ],
+          "flux": "op shopify-order-get(order_id: Number) -> Any\n  description \"Get one order by id, with its line items, totals, fulfilment and financial status, and the customer and addresses attached to it. The response carries personal data: the customer's name, email, phone and shipping address. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{shop}.myshopify.com\"\n  $url = fmt(\"{base}/admin/api/2024-10/orders/{order_id}.json\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {shop} value before it has a valid destination URL.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "shopify-product-get",
+          "provider": "shopify",
+          "description": "Get one product by id, with its title, description, status, vendor, options, variants and images",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/admin/api/2024-10/products/{product_id}.json",
+          "parameters": [
+            {
+              "name": "product_id",
+              "in": "path",
+              "wire": null,
+              "description": "The product's numeric id — not its URL handle",
+              "required": true,
+              "schema": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "shopify.access_token"
+            ]
+          ],
+          "hosts": [
+            "{shop}.myshopify.com"
+          ],
+          "flux": "op shopify-product-get(product_id: Number) -> Any\n  description \"Get one product by id, with its title, description, status, vendor, options, variants and images. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{shop}.myshopify.com\"\n  $url = fmt(\"{base}/admin/api/2024-10/products/{product_id}.json\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {shop} value before it has a valid destination URL.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "shopify-product-update",
+          "provider": "shopify",
+          "description": "Rename a product. The new title is live on the public storefront as soon as this returns, on every sales channel the product is published to. Shopify applies only the fields sent, so nothing else about the product changes",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "PUT",
+          "path": "/admin/api/2024-10/products/{product_id}.json",
+          "parameters": [
+            {
+              "name": "product_id",
+              "in": "path",
+              "wire": null,
+              "description": "The numeric id of the product to update",
+              "required": true,
+              "schema": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "title",
+              "in": "body",
+              "wire": "product.title",
+              "description": "The product's new title, as customers see it. Must not be blank",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "shopify.access_token"
+            ]
+          ],
+          "hosts": [
+            "{shop}.myshopify.com"
+          ],
+          "flux": "op shopify-product-update(product_id: Number, title: String) -> Any\n  description \"Rename a product. The new title is live on the public storefront as soon as this returns, on every sales channel the product is published to. Shopify applies only the fields sent, so nothing else about the product changes. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{shop}.myshopify.com\"\n  $url = fmt(\"{base}/admin/api/2024-10/products/{product_id}.json\")\n  $content_type = \"application/json\"\n  $payload = { product: { title: $title } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {shop} value before it has a valid destination URL.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "shopify-customer-get",
+          "provider": "shopify",
+          "description": "Get one customer by id: name, email, phone, default address, marketing consent state and order count. This is personal data about a named individual — read it only when the task needs it, and do not repeat it further than the task requires",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/admin/api/2024-10/customers/{customer_id}.json",
+          "parameters": [
+            {
+              "name": "customer_id",
+              "in": "path",
+              "wire": null,
+              "description": "The customer's numeric id",
+              "required": true,
+              "schema": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "shopify.access_token"
+            ]
+          ],
+          "hosts": [
+            "{shop}.myshopify.com"
+          ],
+          "flux": "op shopify-customer-get(customer_id: Number) -> Any\n  description \"Get one customer by id: name, email, phone, default address, marketing consent state and order count. This is personal data about a named individual — read it only when the task needs it, and do not repeat it further than the task requires. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{shop}.myshopify.com\"\n  $url = fmt(\"{base}/admin/api/2024-10/customers/{customer_id}.json\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {shop} value before it has a valid destination URL.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "shopify-inventory-level-list",
+          "provider": "shopify",
+          "description": "List the inventory levels held at one location — the available quantity per inventory item. Returns the first page only, so a location stocking more items than one page holds is reported incompletely",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/admin/api/2024-10/locations/{location_id}/inventory_levels.json",
+          "parameters": [
+            {
+              "name": "location_id",
+              "in": "path",
+              "wire": null,
+              "description": "The numeric id of the location whose stock to list",
+              "required": true,
+              "schema": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "shopify.access_token"
+            ]
+          ],
+          "hosts": [
+            "{shop}.myshopify.com"
+          ],
+          "flux": "op shopify-inventory-level-list(location_id: Number) -> Any\n  description \"List the inventory levels held at one location — the available quantity per inventory item. Returns the first page only, so a location stocking more items than one page holds is reported incompletely. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{shop}.myshopify.com\"\n  $url = fmt(\"{base}/admin/api/2024-10/locations/{location_id}/inventory_levels.json\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {shop} value before it has a valid destination URL.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "slack",
       "vendor": "Slack",
       "description": "Slack messaging: post messages, read conversation history, look up users, react",

@@ -1,0 +1,352 @@
+# Shopify Admin REST API (version 2024-10) — hand-authored, no vendor spec.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Shopify publishes an OpenAPI 3 description of the Admin REST
+# API per version on shopify.dev, alongside the per-resource reference pages the operation set below
+# is transcribed from (`shopify.dev/docs/api/admin-rest/2024-10/resources/{order,product,customer,
+# inventorylevel}`). Nothing is vendored under `specs/` because ingest (C-4) and the overlay (C-6) do
+# not exist yet, and the document covers the whole Admin surface — pointing at it without a selection
+# mechanism would be pointing at several hundred LLM tools. When C-14's fetch and C-4's ingest land,
+# this file becomes `[spec]` plus a `[[patch.operations]]` selection, and **the five operations below
+# are the selection to reproduce**, by path and method:
+#
+#   GET    /admin/api/2024-10/orders/{order_id}.json
+#   GET    /admin/api/2024-10/products/{product_id}.json
+#   PUT    /admin/api/2024-10/products/{product_id}.json
+#   GET    /admin/api/2024-10/customers/{customer_id}.json
+#   GET    /admin/api/2024-10/locations/{location_id}/inventory_levels.json
+#
+# Until then drift is undetectable by machine, exactly as for zendesk, freshdesk, github, openai and
+# slack (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# WHY THIS CONNECTOR IS WORTH ITS SLOT: `AuthScheme::Header`, end to end, with no prefix.
+#
+# Shopify authenticates with `X-Shopify-Access-Token: <token>` — a plain custom header whose **entire
+# value is the secret**. There is no `Bearer `, no `Basic `, no scheme word of any kind to compose, so
+# this is the one shipped credential that `AuthScheme::Header { name }` expresses completely rather
+# than approximately. It is therefore the cheapest end-to-end proof that the `Header` variant round
+# trips through the loader, the emitter, the manifest and the public catalogue, and it needs nothing
+# from the prefix axis C-19 has not built: there is no prefix.
+#
+# That does *not* make it callable. `http.request` can replace a whole value with
+# `{"$secret": "ENV"}` but has no `$auth` marker yet, so no generated module attaches a credential of
+# any shape (C-10, `docs/designs/auth-seam.md`). The distinction worth keeping straight is that
+# Shopify is blocked on the *seam* and on nothing about its own credential — the moment `$auth` lands,
+# a whole-value custom header is the first thing that can work, because the whole value is all it
+# needs.
+#
+# ---------------------------------------------------------------------------------------------
+# THE API VERSION IS IN THE PATH, AND THAT IS A SERVICE-VERSIONING PROBLEM, NOT A STRING PROBLEM.
+#
+# Shopify does not version by header or by content type. It spells the version into every URL:
+# `/admin/api/2024-10/orders/{order_id}.json`. Versions are dated, a new one ships quarterly, and each
+# is supported for twelve months — so bumping the version is routine maintenance, not a rewrite.
+#
+# **SCHEMA GAP: nothing in this schema carries an API version.** The whole accepted key set is
+#
+#   provider  → id, vendor, base_url, description, auth, default_auth, operations, spec, patch
+#   operation → id, method, path, description, risk, idempotency, auth, params, response_schema,
+#               quirks
+#
+# (`connector_spec::provider::accepted_keys`). There is no `api_version`, and `base_url` cannot carry
+# the prefix either: it is the *host* the catalogue derives `http_hosts` from (`host_of` in
+# `crates/connector-cli/src/catalog.rs`), so folding `/admin/api/2024-10` into it would put a path into
+# a host field. The version therefore lives, today, as a literal segment of five separate path
+# strings — which is exactly the hand-edited-per-operation shape this repository refuses elsewhere: a
+# bump that reaches four of five paths ships a connector that speaks two versions at once, and no
+# vendor would tell us.
+#
+# Two things close the gap, and both are named rather than worked around:
+#
+#  1. **C-49's per-service `api_version` is where it belongs.** Once an operation's service carries
+#     `api_version = "2024-10"`, the path here becomes the version-free remainder
+#     (`/orders/{order_id}.json`) and the emitter composes `{base}/admin/api/{api_version}` in front of
+#     it. Then the version is one value by construction, a bump is a one-line edit, and the agreement
+#     between the version and the path is a property of the emitter rather than of an author's
+#     diligence. That is the intended relationship; it cannot be used yet because the field does not
+#     exist yet.
+#  2. **Until then the agreement is asserted, not assumed.**
+#     `crates/connector-flux/tests/shopify_connector.rs::the_api_version_is_one_value_across_every_path`
+#     holds one constant against all five paths and against the five emitted URLs. A partial bump
+#     fails there. When C-49 lands, that test becomes the check that the derivation actually happened.
+#
+# ---------------------------------------------------------------------------------------------
+# WHY THERE IS NOT A SINGLE QUERY PARAMETER, and which Shopify operations are therefore missing.
+#
+# Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim into a
+# `fmt` template and flux registers no URL-encoding op (C-30 is unimplemented;
+# `crates/connector-flux/src/op.rs`). `zendesk-ticket-search` is the standing demonstration and
+# AGENTS.md lists it under *Intentional gaps* — a value carrying `&` does not filter, it injects a
+# parameter.
+#
+# Shopify's collection surface is exactly that shape, and it is the popular half of the API:
+#
+#   - `GET /orders.json` filters on `status`, `financial_status`, `fulfillment_status` and
+#     `created_at_min` — enum and timestamp *strings*;
+#   - `GET /products.json` filters on `title`, `vendor`, `handle` and `collection_id`, where `title`
+#     and `vendor` are free-form merchant text and routinely contain `&` ("Salt & Pepper");
+#   - `GET /customers/search.json?query=…` takes a free-form query language, the direct analogue of
+#     `zendesk-ticket-search`;
+#   - `GET /inventory_levels.json` *requires* `inventory_item_ids` or `location_ids`, so it cannot be
+#     expressed without a query parameter at all;
+#   - cursor pagination is `?page_info=<opaque base64ish token>` on every collection endpoint, which
+#     `Pagination::Cursor` can only spell as a query parameter.
+#
+# All of them are **deliberately excluded pending C-30** and named in C-74's Notes. The path surface
+# below is safe rather than merely untested: every parameter is an integer Shopify id, and an integer
+# cannot carry a character that changes the shape of the request.
+#
+# `crates/connector-flux/tests/shopify_connector.rs` asserts the absence in the strong form — zero
+# query parameters, on the IR *and* on every emitted `$url` line — so it stays a property of the
+# connector rather than of this comment.
+#
+# ---------------------------------------------------------------------------------------------
+# WHY THE ONE WRITE DECLARES ONLY REQUIRED BODY FIELDS.
+#
+# An omitted optional body field is emitted as an explicit `null` (C-56). Shopify's product update is
+# a **partial** update: the absence of a key means "leave this alone", and a `null` means "clear it".
+# So an optional `body_html` would let a caller who set only `title` wipe the product description, and
+# Shopify would answer 200. That is the silent-wrong-result class this repository refuses, so
+# `shopify-product-update` declares `product.title` and nothing else, and the fields left out for this
+# reason are named in C-74's Progress. When C-56 lands, `body_html`, `status`, `vendor`,
+# `product_type`, `tags` and `handle` are the obvious additions.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: a leaky bucket is not a fixed window, so Shopify's rate limit is not declarable.
+#
+# The REST Admin API throttles with a leaky bucket: a **capacity of 40 requests** that **refills at 2
+# per second** on Shopify and Advanced Shopify plans (x2 on Shopify Plus), reported per request in
+# `X-Shopify-Shop-Api-Call-Limit: 32/40`. `Quirks.rate_limit` carries `requests` and `per_seconds` —
+# a fixed window — which can express either the sustained rate (2/1) or the burst (40/20) and neither
+# the pair nor the distinction between them. Declaring 2/1 would forbid a burst the vendor allows;
+# declaring 40/20 would permit a sustained rate it refuses. Both are wrong in a way that a `throttle`
+# compiled from the value (C-12) would act on, so no `rate_limit` is declared here and the numbers
+# live in this comment instead. Closing it needs a bucket shape on `RateLimit` — capacity plus refill
+# rate — which is additive rather than a reshape.
+#
+# SCHEMA GAP, narrower: Shopify's `errors` field is polymorphic. A 404 answers
+# `{"errors": "Not Found"}` — a string — while a 422 answers
+# `{"errors": {"title": ["can't be blank"]}}`, an object of field name to message array.
+# `ErrorEnvelope.message_pointer` is a single JSON Pointer to *the* human-readable message, so
+# `/errors` names the right location for both and describes the shape of neither. It is declared
+# anyway, because the location is the part a model needs and losing it entirely would be worse; the
+# fix is a schema on the envelope rather than a pointer alone.
+
+id = "shopify"
+vendor = "Shopify"
+
+# Every Shopify store lives on its own `*.myshopify.com` host, so there is no tenant-independent base
+# URL. `{shop}` is the store's permanent subdomain — the `admin.shopify.com/store/<handle>` handle,
+# never the customer-facing custom domain, which does not serve the Admin API.
+#
+# SCHEMA GAP: nothing here binds `{shop}` — or the whole URL — to an environment variable. `base_url`
+# is a plain string that `Connector` documents as "may carry tenant templating", but no field declares
+# where a template variable is resolved from, so the binding lives only in this comment. This is
+# zendesk's `{subdomain}` gap exactly, reported with C-17 and owned by C-68; no binding is invented
+# here. `status.rs` derives `unbound-base-url-template` from the placeholder, so every operation below
+# is published as needing an operator-supplied value before it has a valid destination URL.
+#
+# `http_hosts` derives from this single value and is therefore exactly `{shop}.myshopify.com`, never
+# widened. Nothing in the selection reaches `cdn.shopify.com` (product images), `admin.shopify.com`
+# (the merchant UI) or the GraphQL endpoint's separate surface, so adding any of them would widen the
+# egress allow-list for nothing.
+base_url = "https://{shop}.myshopify.com"
+
+description = "Shopify Admin REST API: read orders, products, customers and inventory levels, and update a product"
+
+# Every operation authenticates the same way. Shopify issues one access token per app installation
+# per store — a custom app's Admin API access token, or an OAuth app's, which present identically on
+# the wire — so the token *type* is operator configuration rather than connector shape.
+default_auth = [{ credentials = ["shopify.access_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "shopify.access_token"
+# The whole point of this connector, and the only shipped use of the `header` scheme. The header's
+# entire value is the secret; the host applies the placement and registers the value with flux's
+# redactor. See the header comment for why this needs nothing from C-19's prefix axis.
+scheme = { header = { name = "X-Shopify-Access-Token" } }
+# The sole secret. Gated and registered with flux's redactor by the host; never read here.
+env = ["SHOPIFY_ACCESS_TOKEN"]
+description = "Shopify Admin API access token, sent as the whole value of X-Shopify-Access-Token, with read_orders, read_products, write_products, read_customers and read_inventory scopes"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 5, every one addressed by an integer Shopify id in the path
+#
+# Curated to what a commerce support or ops flow executes at runtime: look up the order a customer is
+# asking about, look up the product on it, correct that product, look up the customer, and check what
+# stock a location holds. Everything administrative — themes, scripts, webhooks, price rules, the
+# whole `/admin/api/<v>/shopify_payments` surface — is excluded, as is every collection endpoint (see
+# the header comment). `DELETE` is excluded outright: nothing in a support flow needs to destroy a
+# store's records, and `Risk::Destructive` is not a tier this fleet ships into.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only, so `op shopify.order.get` is undeclarable (C-8, C-23).
+#
+# Every path repeats `/admin/api/2024-10/` because nothing can supply it once yet. That is the
+# service-versioning gap the header comment records and C-49 closes; the paths are held in agreement
+# by test in the meantime.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "shopify-order-get"
+method = "GET"
+path = "/admin/api/2024-10/orders/{order_id}.json"
+description = "Get one order by id, with its line items, totals, fulfilment and financial status, and the customer and addresses attached to it. The response carries personal data: the customer's name, email, phone and shipping address"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "order_id"
+# The numeric id, not the merchant-facing order *name* (`#1001`). The two are different values and
+# only the id addresses this endpoint.
+description = "The order's numeric id — not its `#1001` order name"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+[operations.quirks.error_envelope]
+# See the header comment: this says *where* the error is, and cannot say that its shape varies with
+# the status code.
+message_pointer = "/errors"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "shopify-product-get"
+method = "GET"
+path = "/admin/api/2024-10/products/{product_id}.json"
+description = "Get one product by id, with its title, description, status, vendor, options, variants and images"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "product_id"
+description = "The product's numeric id — not its URL handle"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/errors"
+
+# ---------------------------------------------------------------------------------------------
+# The one write. **It changes what shoppers see, immediately.**
+#
+# `risk = "high"` — "writes a reviewer would want to see first" — rather than the `medium` the zendesk
+# writes carry, and the difference is not cosmetic. A zendesk comment defaults to an internal note; a
+# product title is the storefront. It changes on the live shop the moment this call returns, is
+# visible to every customer and to search engines, propagates to whatever sales channels the product
+# is published to, and reaches anyone with the product page open. flux's approval gate reads this
+# field, so `medium` here would mean an agent renaming a merchant's products without a human seeing
+# it first. `high` is the honest setting and the fail-safe direction.
+#
+# `idempotency = "non_idempotent"`, even though `PUT` is an idempotent *method* under RFC 9110 §9.2.2
+# and the emitter would accept `idempotent` here. Shopify documents no idempotency key on this
+# endpoint and accepts no `updated_at` or `If-Match` precondition, so the call is last-write-wins: a
+# replay after a merchant edited the product in the admin UI silently overwrites that edit rather than
+# repeating one effect. C-74 requires that no write claim idempotency the vendor does not document,
+# and the fail-closed reading is the one that stops flux wrapping this in a `retry`. Contrast
+# zendesk's `conditional`, which is earned by a caller-supplied `updated_stamp`; Shopify's REST
+# product update has no equivalent.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "shopify-product-update"
+method = "PUT"
+path = "/admin/api/2024-10/products/{product_id}.json"
+description = "Rename a product. The new title is live on the public storefront as soon as this returns, on every sales channel the product is published to. Shopify applies only the fields sent, so nothing else about the product changes"
+risk = "high"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "product_id"
+description = "The numeric id of the product to update"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+# The wire body nests: `{"product": {"title": …}}`. Without the `wire` path this field would be
+# emitted at the root of the body, and Shopify — like Zendesk — accepts a body it does not recognise,
+# changes nothing, and answers 200 (C-29). The nesting is a correctness contract codegen compiles, not
+# prose.
+#
+# `title` is the whole declared body, and that is C-56's doing rather than a claim that a title is all
+# anyone wants to change: see the header comment. Shopify's `id` field is deliberately not declared —
+# the path id is what addresses the record, and a second copy in the body is a value that can disagree
+# with it.
+[[operations.params.body]]
+name = "title"
+wire = "product.title"
+description = "The product's new title, as customers see it. Must not be blank"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.quirks.error_envelope]
+# The 422 case is the one that bites here: a rejected title answers
+# `{"errors": {"title": ["can't be blank"]}}`, and `http.request` returns that as data rather than as
+# a failure.
+message_pointer = "/errors"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "shopify-customer-get"
+method = "GET"
+path = "/admin/api/2024-10/customers/{customer_id}.json"
+# Said on the contract a model reads, because `risk` cannot say it: this response is personal data.
+# `Risk` grades what a call *changes* — the emitter's `check_write_metadata` derives write-ness from
+# the method — so it has no axis for what a read *discloses*, and a read of a named individual's
+# contact details and purchase history is `low` on the same scale as reading a product title. Filed
+# with C-74 as an adjacent gap; until it has somewhere structured to live, the description is what
+# reaches the model.
+description = "Get one customer by id: name, email, phone, default address, marketing consent state and order count. This is personal data about a named individual — read it only when the task needs it, and do not repeat it further than the task requires"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "customer_id"
+description = "The customer's numeric id"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/errors"
+
+# ---------------------------------------------------------------------------------------------
+# Inventory, addressed by location rather than by item.
+#
+# C-74's Acceptance names "inventory level get". Shopify has no such endpoint: an inventory level is
+# identified by an (`inventory_item_id`, `location_id`) *pair*, and the only reads of it are
+# collections. `GET /admin/api/2024-10/inventory_levels.json` is the one the story means, and it
+# **requires** `inventory_item_ids` or `location_ids` as query parameters — so it cannot be expressed
+# at all while C-30 is open, let alone addressed by an id in the path.
+#
+# The per-location listing below is the same data reachable with a path id and no query parameter, so
+# it is what ships. The substitution is recorded in C-74's Progress rather than silently made: the
+# connector reads inventory levels, and it reads them a location at a time.
+#
+# No `[operations.quirks.pagination]`. Shopify pages this endpoint with `?limit=` and an opaque
+# `?page_info=` cursor, and `Pagination::Cursor.cursor_param` is defined as "the query parameter
+# carrying the cursor" — declaring it would be declaring a query parameter, which is what this
+# connector must not do. So the first page is what a caller gets, and a location holding more
+# inventory items than one page returns is a known incompleteness rather than a silent truncation the
+# quirk model pretends to handle. Shopify's default page size on this endpoint is 50.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "shopify-inventory-level-list"
+method = "GET"
+path = "/admin/api/2024-10/locations/{location_id}/inventory_levels.json"
+description = "List the inventory levels held at one location — the available quantity per inventory item. Returns the first page only, so a location stocking more items than one page holds is reported incompletely"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "location_id"
+description = "The numeric id of the location whose stock to list"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/errors"
