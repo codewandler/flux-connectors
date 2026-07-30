@@ -8,6 +8,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **C-42** — `site/catalog.json`, a fourth backend over the same IR carrying every provider and
+  operation with its typed parameters, credentials, hosts and generated Flux. Each operation also
+  carries a **derived** `status`: four rules over the IR, no hard-coded operation list.
 - **C-43** — a VitePress site under `web/` and a GitHub Actions workflow deploying it to GitHub
   Pages. The landing page carries the README's *Known limits* verbatim: a docs site that oversells is
   worse than none. CI builds the site on push and PR, so a broken site cannot publish.

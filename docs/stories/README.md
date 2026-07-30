@@ -50,7 +50,7 @@ _A connector's operations are currently legible only by reading `providers/<name
 
 ### a public docs site with a provider & operation explorer
 _`codewandler/flux-connectors` is public as of v0.0.1, and right now the only way to find out what a_
-- [C-42 — Emit catalog.json for the public site](C-42-catalog-json.md) · Codegen · the site's data must be generated, never hand-maintained
+- [C-44 — Build the provider and operation explorer](C-44-operation-explorer.md) · Surfaces · the reason the site exists · needs C-42 and C-43
 - [C-45 — Render Flux to SVG and PNG using flux's own highlighter](C-45-use-flux-highlighter.md) · Codegen · replaces a regex script that duplicates grammar flux already owns
 
 ### unified auth — one model for every provider's credentials
@@ -85,10 +85,6 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 _A connector's operations are currently legible only by reading `providers/<name>.toml` or the_
 - [C-33 — Treat generated docs as a checked artifact](C-33-docs-are-a-checked-artifact.md) · Build
 
-### a public docs site with a provider & operation explorer
-_`codewandler/flux-connectors` is public as of v0.0.1, and right now the only way to find out what a_
-- [C-44 — Build the provider and operation explorer](C-44-operation-explorer.md) · Surfaces · the reason the site exists · needs C-42 and C-43
-
 ### unified auth — one model for every provider's credentials
 _Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._
 - [C-20 — Emit auth from the unified model](C-20-emit-unified-auth.md) · Codegen
@@ -107,6 +103,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-27 — Wire the CLI seams to the loader and the emitter](C-27-wire-cli-seams.md) · Build · two functions · mechanical once C-3 and C-8 land
 - [C-28 — Resolve percent-encoding for query values](C-28-query-percent-encoding.md) · Codegen · blocks zendesk ticket search · flux has no urlencode op at all
 - [C-38 — Render Flux per operation and embed it in a catalog crate](C-38-operation-catalog-crate.md) · Build · **the goal** · one .flux per expanded op, consumable as a Rust crate
+- [C-42 — Emit catalog.json for the public site](C-42-catalog-json.md) · Codegen · the site's data must be generated, never hand-maintained
 - [C-43 — Scaffold the VitePress site and deploy to GitHub Pages](C-43-vitepress-pages.md) · Surfaces · first Node toolchain in a Rust repo — keep it contained
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._

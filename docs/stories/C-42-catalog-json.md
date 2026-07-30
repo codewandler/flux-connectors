@@ -2,8 +2,8 @@
 id: C-42
 title: Emit catalog.json for the public site
 pillar: Codegen
-status: ready
-priority: 4
+status: done
+priority:
 design: docs/designs/public-docs.md
 epic: public-docs
 areas: [connector-cli]

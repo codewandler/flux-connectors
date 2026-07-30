@@ -2,7 +2,8 @@
 id: C-44
 title: Build the provider and operation explorer
 pillar: Surfaces
-status: backlog
+status: ready
+priority: 4
 design: docs/designs/public-docs.md
 epic: public-docs
 areas: [web]
@@ -26,7 +27,16 @@ turning a repo of generated artifacts into something evaluable in a minute.
 - [ ] Works without JavaScript for at least the operation content, or degrades to something useful.
 
 ## Progress
-- **Blocked on C-42** (the data) and **C-43** (the site).
+- **Unblocked** — C-42 (`site/catalog.json`) and C-43 (VitePress under `web/`) are both merged.
+- **Coordinator decision: move the document to `web/public/catalog.json`.** Two top-level directories
+  for one website is a smell C-42 flagged, and VitePress serves `web/public/` at the site root — so
+  the explorer can fetch `/flux-connectors/catalog.json` with no copy step and no build plumbing.
+  `SITE_DIR` in `crates/connector-cli/src/workspace.rs` is the single line; regenerate afterwards.
+- **`works` is `false` for all 25 operations today**, correctly: no provider can make a live call.
+  Do **not** render "0 of 25 working" — filter on `scope: "operation"` to show the 5 operations that
+  own a defect (`zendesk-ticket-search`, `babelforce-agent-list`, `babelforce-call-list`,
+  `freshdesk-ticket-list`, `freshdesk-contact-list`) and present provider- and catalog-scoped issues
+  as banners rather than per-operation failures. C-42 put `scope` on each issue for exactly this.
 
 ## Notes
 - Modelled on the pattern in `~/babelforce/projects/ai-agent-platform/web/packages/console` — list →
