@@ -77,14 +77,47 @@ open:
    `Connector::member_names_of` would have been the other reading, but a member name for an operation
    *is* its full id, and the story ruled that out explicitly.
 
-3. **A `[[services]]` entry may name the reserved `default`, but only to carry `roles`.** C-49
-   refused the name outright, because a second definition of the implicit service could disagree with
-   the connector about a base URL or a version. `roles` has no connector-level spelling, so it has
-   nothing to contradict — and a single-surface provider has no other service to attach a role to.
-   The entry is refused if it also states `description`, `base_url` or `api_version`, and refused if
-   it states no roles at all. `Connector::is_default_only` was widened accordingly ("no service other
-   than `default` is declared"), so writing the entry does **not** rename a provider's artifacts.
-   `tests/golden/reserved-default-service.*` was updated for the narrowed message.
+3. **A `[[services]]` entry may name the reserved `default`, but only to carry `roles`, and only when
+   it is the provider's only service.** C-49 refused the name outright, because a second definition of
+   the implicit service could disagree with the connector about a base URL or a version. `roles` has
+   no connector-level spelling, so it has nothing to contradict — and a single-surface provider has no
+   other service to attach a role to. The exception is scoped on both axes: the entry is refused if it
+   also states `description`, `base_url` or `api_version`, refused if it states no roles at all, and
+   refused if any *named* service is declared beside it. `Connector::is_default_only` was widened
+   accordingly ("no service other than `default` is declared"), so writing the entry does **not**
+   rename a provider's artifacts. `tests/golden/reserved-default-service.*` was updated for the
+   narrowed message.
 
 No `providers/*.toml` changed and no artifact was regenerated: `cargo run -p connector-cli -- build`
-still reports `17 providers, 236 artifacts up to date; nothing written`.
+reports `17 providers, 237 artifacts up to date; nothing written` (237 since C-104 landed the
+provider index as a planned artifact; `main` was merged in before the final gate).
+
+### Rework after review
+
+Two holes the review found, both now closed by a test *and* a golden snapshot:
+
+1. **A `default` entry was accepted beside a named service**, which repealed C-49's rule that a
+   multi-service provider has no implicit `default` for an operation to fall into — an operation
+   omitting `service` became legal again in such a file. `validate_default_service_entry` now refuses
+   the entry unless `default` is the provider's only service, scoped by "no service other than
+   `default` is declared" rather than by a count so that a doubly-declared `default` still reports
+   only the duplicate. Tests: `a_default_service_entry_beside_a_named_service_is_refused` and
+   `declaring_default_does_not_give_a_multi_service_provider_an_implicit_service_back`; fixture
+   `default-service-beside-a-named-one`.
+
+2. **Any member kind filled a role slot, including an event.** `missing_role_members` matched against
+   `member_names_of`, which chains events, channels, config fields and graphs — so a service whose
+   only `list` was an event named `models.list` claimed `llm_catalogue`, publishing a live-listing
+   capability nothing can call. It now matches `operations_of` alone, and the refusal says so.
+   `Graph` is excluded too, though it does lower to an emitted `op`: a role is the vendor's API shape,
+   and a graph is a composition this repository wrote over it. Test:
+   `only_an_operation_fills_a_role_slot_and_an_event_does_not`; fixture `role-slot-filled-by-an-event`.
+
+Also: `Role::known_set()` was removed (public with no caller — the known set in a refusal comes from
+serde), and all six C-120 fixtures were added to the `required` list in `provider_toml_errors.rs`, so
+deleting one now fails the suite instead of passing silently.
+
+`fills_slot` is unchanged, on the reviewer's finding that a bare one-segment slot is loose (9 of 17
+providers contain a trailing `list`) but that the fix is a tighter *slot spelling* — C-121's
+`models.list`, and slots as sets of accepted spellings — rather than a stricter matcher. The looseness
+is now recorded at the function.

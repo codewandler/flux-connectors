@@ -387,28 +387,20 @@ impl Role {
         }
     }
 
-    /// The members a service must have to claim this role.
+    /// The **operations** a service must have to claim this role.
     ///
     /// Named by **member name within the service** (`list`), never by full operation id
     /// (`openai-models-list`) — see [`fills_slot`] for what "within the service" means and why it is
-    /// what makes a role vendor-independent.
+    /// what makes a role vendor-independent. Only an operation fills a slot; see
+    /// [`Connector::missing_role_members`] for why an event does not.
     pub fn required_members(self) -> &'static [&'static str] {
         match self {
             Self::LlmCatalogue => &["list"],
         }
     }
-
-    /// The known set, rendered for a refusal: `llm_catalogue`.
-    pub fn known_set() -> String {
-        Self::ALL
-            .iter()
-            .map(|role| role.word())
-            .collect::<Vec<_>>()
-            .join(", ")
-    }
 }
 
-/// Whether a member name fills one of a role's required-member slots.
+/// Whether an operation's name fills one of a role's required-member slots.
 ///
 /// A role requires `list`, not `openai-models-list`. The slot is matched against the member's
 /// **trailing name segments**, so `openai-models-list` and `openrouter-models-list` fill the same
@@ -419,6 +411,11 @@ impl Role {
 /// [`Connector::member_names_of`]), so a role naming `comment.list` and a member named
 /// `zendesk-ticket-comment-list` are the same slot. The match is on whole segments and never on a
 /// substring, or `acme-blocklist-get` would satisfy a role it has nothing to do with.
+///
+/// **A one-segment slot is loose**, and known to be: a bare `list` is a suffix nine of seventeen
+/// shipped providers contain somewhere. That is a weakness of how a role spells its slots, not of the
+/// match, and C-121 addresses it by giving a slot a tighter spelling (`models.list`) and a set of
+/// accepted ones. Multi-segment slots are already tight.
 fn fills_slot(member: &str, slot: &str) -> bool {
     const SEPARATORS: [char; 3] = ['-', '_', '.'];
     let member: Vec<&str> = member.split(SEPARATORS).collect();
@@ -755,12 +752,34 @@ impl Connector {
     /// Empty when the service satisfies the claim. The loader calls this to refuse a claim that does
     /// not hold; a consumer can call it to explain one. Matching is by member name *within the
     /// service* — see [`fills_slot`].
+    ///
+    /// # Only an operation fills a slot
+    ///
+    /// Deliberately [`operations_of`](Self::operations_of) and **not**
+    /// [`member_names_of`](Self::member_names_of), even though the latter is the per-service
+    /// namespace every other rule here uses. A role is a claim that something is *callable*: a
+    /// consumer resolving `llm_catalogue` intends to call the listing.
+    ///
+    /// The other member kinds cannot answer that. An [`EventDecl`] and a [`ChannelBinding`] reach the
+    /// manifest and the catalogue and are emitted into no module at all — flux lifts `op`
+    /// declarations only — so a service whose only `list` is an event named `models.list` would
+    /// publish a live-listing capability that nothing can call. That is "an event dressed up as a
+    /// pollable op", which this repository refuses on sight. A [`ConfigField`](crate::ConfigField) is
+    /// not addressable in the calling sense either.
+    ///
+    /// [`Graph`](crate::graph::Graph) is the one arguable exclusion: it *does* lower to an emitted
+    /// `op`. It stays out because a role is a vendor's API shape and a graph is a composition this
+    /// repository wrote over it — admitting one would let a provider satisfy a role by wrapping
+    /// members that do not implement it. Nothing needs it today; widening later is cheap.
     pub fn missing_role_members(&self, service: &str, role: Role) -> Vec<&'static str> {
-        let members = self.member_names_of(service);
+        let callable: Vec<&str> = self
+            .operations_of(service)
+            .map(|operation| operation.id.as_str())
+            .collect();
         role.required_members()
             .iter()
             .copied()
-            .filter(|slot| !members.iter().any(|member| fills_slot(member, slot)))
+            .filter(|slot| !callable.iter().any(|member| fills_slot(member, slot)))
             .collect()
     }
 

@@ -1601,7 +1601,7 @@ fn validate_services(connector: &Connector, problems: &mut Vec<String>) {
         // an operation meant — so the entry is admitted for exactly one purpose, and refused for
         // every other. See `validate_default_service_entry`.
         if name == DEFAULT_SERVICE {
-            validate_default_service_entry(service, problems);
+            validate_default_service_entry(connector, service, problems);
         }
         if seen.contains(&name) {
             problems.push(format!(
@@ -1638,15 +1638,48 @@ fn validate_services(connector: &Connector, problems: &mut Vec<String>) {
 /// belongs to when it names none, so declaring it is a second definition of something that already
 /// exists, and the two could disagree about a base URL or a version.
 ///
-/// Roles are the one thing that argument does not cover. A role attaches to a *service*, and a
-/// provider with one API surface has no other service to attach it to — so the choice is to admit a
-/// `default` entry carrying roles or to make roles inexpressible for two thirds of the catalogue.
-/// The entry is therefore admitted **only** for that: `roles` has no connector-level spelling, so it
-/// has nothing to contradict, while `base_url`, `api_version` and `description` all do.
+/// Roles are the one thing that argument does not cover, and only for **a provider with a single API
+/// surface**, which has no other service to attach a role to. The exception is scoped to exactly that
+/// case, along two axes:
 ///
-/// It stays the *implicit* service either way: [`Connector::is_default_only`] remains true, so a
-/// provider that writes the entry emits the same `<provider>.flux` it emitted before.
-fn validate_default_service_entry(service: &Service, problems: &mut Vec<String>) {
+/// 1. **What the entry may carry.** `roles` and nothing else. `roles` has no connector-level
+///    spelling, so it has nothing to contradict, while `base_url`, `api_version` and `description`
+///    all do.
+/// 2. **Whether the provider has any other service.** A `default` entry beside a named one would
+///    hand back the implicit `default` that a multi-service provider must not have — and the harm is
+///    concrete, not doctrinal: [`validate_operation_service`] refuses an operation that omits
+///    `service` in a multi-service file precisely so it is not emitted into a
+///    `<provider>-default.flux` nobody declared. Declaring the entry would make that operation legal
+///    again. So the entry is refused unless `default` is the only service there is.
+///
+/// It stays the *implicit* service when it is admitted: [`Connector::is_default_only`] remains true,
+/// so a provider that writes the entry emits the same `<provider>.flux` it emitted before.
+fn validate_default_service_entry(
+    connector: &Connector,
+    service: &Service,
+    problems: &mut Vec<String>,
+) {
+    // Scoped by "no service other than `default` is declared" rather than by a count, so that a file
+    // declaring `default` twice reports the duplicate once and does not also report this twice.
+    if let Some(other) = connector
+        .services
+        .iter()
+        .find(|other| other.name != DEFAULT_SERVICE)
+    {
+        problems.push(format!(
+            "`[[services]]` declares {DEFAULT_SERVICE:?} beside the named service {:?}. \
+             {DEFAULT_SERVICE:?} may be declared only by a provider whose *only* API surface it is, \
+             and only to carry `roles` — which a single-surface provider has nowhere else to put. \
+             A provider that declares named services has no implicit {DEFAULT_SERVICE:?} for an \
+             operation to fall into, and declaring one here would hand it back: an operation that \
+             omitted `service` would become legal and be emitted into a \
+             `<provider>-{DEFAULT_SERVICE}.flux` nobody asked for. Declare the roles on the service \
+             that actually has them",
+            other.name
+        ));
+        return;
+    }
+
     let mut overreaching: Vec<&str> = Vec::new();
     if !service.description.is_empty() {
         overreaching.push("description");
@@ -1703,11 +1736,13 @@ fn validate_service_roles(connector: &Connector, service: &Service, problems: &m
 
         for missing in connector.missing_role_members(name, *role) {
             problems.push(format!(
-                "service {name:?} claims role {word:?} but has no {missing:?} member. A role names \
-                 the members it requires by their name *within the service* — the trailing segments \
-                 of the member name, so that `openai-models-list` and `openrouter-models-list` fill \
-                 one slot and the shape is the same whatever the vendor calls its endpoint. \
-                 {word:?} requires: {}",
+                "service {name:?} claims role {word:?} but has no {missing:?} operation. A role \
+                 names what it requires by the member's name *within the service* — the trailing \
+                 segments, so that `openai-models-list` and `openrouter-models-list` fill one slot \
+                 and the shape is the same whatever the vendor calls its endpoint. It must be an \
+                 `[[operations]]` entry: a role is a claim that something is callable, and an event \
+                 or a channel binding is emitted into no module, so filling the slot with one would \
+                 publish a capability nothing can call. {word:?} requires: {}",
                 role.required_members().join(", ")
             ));
         }

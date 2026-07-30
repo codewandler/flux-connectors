@@ -188,6 +188,69 @@ roles = ["llm_catalogue"]
     assert_eq!(connector.service_names(), vec!["default"]);
 }
 
+/// …but only when `default` is the provider's **only** service.
+///
+/// The exception exists because a single-surface provider has nowhere else to put a role. Beside a
+/// named service it would hand back the implicit `default` that a multi-service provider must not
+/// have, and the harm is concrete rather than doctrinal — see the test below, which is the one that
+/// would have caught this being missed.
+#[test]
+fn a_default_service_entry_beside_a_named_service_is_refused() {
+    let source = provider(&format!(
+        r#"
+[[services]]
+name = "default"
+roles = ["llm_catalogue"]
+
+[[services]]
+name = "chat"
+{}{}"#,
+        operation("acme-models-list", "default"),
+        operation("acme-chat-completion", "chat"),
+    ));
+
+    let error = refusal(&source);
+    assert!(
+        error.contains("chat"),
+        "the refusal must name the service the entry sits beside, but said: {error}"
+    );
+}
+
+/// The harm the rule above prevents: a `default` entry beside a named service would make an operation
+/// that omits `service` legal again in a multi-service file.
+///
+/// That operation would be emitted into a `<provider>-default.flux` nobody declared or asked for —
+/// which is exactly what C-49's `validate_operation_service` refuses, and what admitting the entry
+/// unconditionally would have repealed.
+#[test]
+fn declaring_default_does_not_give_a_multi_service_provider_an_implicit_service_back() {
+    let with_entry = provider(&format!(
+        r#"
+[[services]]
+name = "default"
+roles = ["llm_catalogue"]
+
+[[services]]
+name = "chat"
+{}
+[[operations]]
+id = "acme-models-list"
+method = "GET"
+path = "/v1/models"
+description = "List the models — and name no service."
+risk = "low"
+idempotency = "idempotent"
+"#,
+        operation("acme-chat-completion", "chat"),
+    ));
+
+    assert!(
+        load(&with_entry).is_err(),
+        "an operation naming no service must stay refused in a multi-service file, whether or not \
+         the file also declares a `default` entry"
+    );
+}
+
 /// …and nothing else. A `base_url`, an `api_version` or a `description` on the `default` entry would
 /// be a second definition of something the connector already states, with nothing to say which one an
 /// operation meant. That is the whole reason the name is reserved, and roles are the one thing that
@@ -292,6 +355,39 @@ roles = ["llm_catalogue"]
     assert!(
         load(&source).is_err(),
         "a substring is not a segment; `acme-models-listing` must not fill the `list` slot"
+    );
+}
+
+/// **Only an operation fills a role slot.** An event of the right name does not.
+///
+/// A role is a claim that something is *callable*: a consumer resolving `llm_catalogue` intends to
+/// call the listing. An event is emitted into no module at all — flux lifts `op` declarations only —
+/// so a service satisfying `list` with an event would publish a live-listing capability that nothing
+/// can call, which is an event dressed up as a pollable op.
+#[test]
+fn only_an_operation_fills_a_role_slot_and_an_event_does_not() {
+    let source = provider(&format!(
+        r#"
+[[services]]
+name = "models"
+roles = ["llm_catalogue"]
+{}
+[[events]]
+name = "models.list"
+service = "models"
+description = "The vendor announces a change to the model list."
+"#,
+        operation("acme-models-fetch", "models")
+    ));
+
+    let error = refusal(&source);
+    assert!(
+        error.contains("\"list\""),
+        "an event named `models.list` must not satisfy the `list` slot, but said: {error}"
+    );
+    assert!(
+        error.contains("[[operations]]"),
+        "the refusal must say which member kind can fill a slot, but said: {error}"
     );
 }
 
