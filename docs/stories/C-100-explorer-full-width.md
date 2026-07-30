@@ -33,13 +33,18 @@ list are scannable instead of columnar.
       - **1280 and 1366px — introduced by this story, and fixed in it.** Widening to two ~424px
         columns pushed the hosts cell's unbreakable inline run off the page: 29px at 1280 and 8px at
         1366, against **0px at the merge base**, measured independently by the implementor and the
-        reviewer. `.card__hosts` now wraps. **The after-measurement was not reproduced** — no browser
-        is available in the coordinator's environment — so what is verified is the mechanism, pinned
-        by `a card fact holding several values can break between them`. A human at 1280px settles it.
+        reviewer. `.card__hosts` now wraps. **The after-measurement has now been reproduced** in
+        headless Chrome against the built site, closing the caveat this line used to carry: a sweep
+        of ten viewport widths from 390 to 2560 finds **0px of overflow and zero offending elements
+        at every width from 768 up**, 1280 and 1366 included, and the hosts `<code>` no longer
+        appears among the offenders at any width. The mechanism is pinned independently of the
+        pixels by `a card fact holding several values can break between them`.
       - **Phone — pre-existing and untouched.** Base and branch overflow *identically* (193px at
         390px per the implementor; 83px at Chrome's ~485px headless floor per the reviewer — the
         equality is the load-bearing part). Cause is `<ul class="list">` being a grid, so each
-        `OperationRow` needs `min-width: 0`. That file is C-103's.
+        `OperationRow` needs `min-width: 0`. That file is C-103's. The post-fix sweep confirms the
+        attribution: every offender left at 390px is an `OperationRow` element — `li.row`,
+        `.row__head`, the status badge — and not one is a card fact.
 - [x] The page still has a usable in-page structure. `outline: [2, 2]` currently drives the right-hand
       outline; if the chosen layout drops it, the story says what replaces it — the two `<h2>` anchors
       (`#providers`, `#operations`) are linked from elsewhere and must keep working.
@@ -77,6 +82,28 @@ bar rows), before → after:
 | 1440 | 688 → **1025** | 2 → **3** | 8 → **6** | 2 rows → **1 row** |
 | 1280 | 609 → **865** | 1 → **2** | 16 → **8** | 2 rows |
 | 390 | 327 (unchanged below 960px) | 1 | 16 | 4 rows |
+
+**Post-fix overflow sweep**, headless Chrome against the built site at `c355bee`, ten widths. This is
+the measurement the rework commit recorded as not reproduced; it is reproduced here. `offenders`
+counts elements whose right edge sits outside `documentElement.clientWidth`.
+
+| viewport | content | cols | card | filter rows | overflow | offenders |
+|---|---|---|---|---|---|---|
+| 390 | 327 | 1 | 327 | 4 | 193 | 585, all `OperationRow` — pre-existing, C-103 |
+| 768 | 689 | 2 | 336.5 | 2 | **0** | – |
+| 960 | 545 | 1 | 545 | 2 | **0** | – |
+| 1180 | 765 | 2 | 374.5 | 2 | **0** | – |
+| 1280 | 865 | 2 | 424.5 | 2 | **0** (was 29) | – |
+| 1366 | 951 | 2 | 467.5 | 2 | **0** (was 8) | – |
+| 1440 | 1025 | 3 | 331 | 1 | **0** | – |
+| 1600 | 1025 | 3 | 331 | 1 | **0** | – |
+| 1920 | 1025 | 3 | 331 | 1 | **0** | – |
+| 2560 | 1025 | 3 | 331 | 1 | **0** | – |
+
+Two things the sweep settles beyond the fix itself. The content column tops out at 1025px and does
+not grow past 1440 — the explorer is bounded by `--vp-layout-max-width`, not by the viewport, so
+three columns is the ceiling on any monitor and the four-column question really is a card question.
+And the filter bar reaches one row only at 1440 and above; at 1280 and 1366 it still takes two.
 
 **The grid minimum is kept at 320px, and that is why the four-column item is unticked.** `auto-fit`
 fits `floor((width + gap) / (min + gap))` tracks, so a fourth column on 1025px needs a minimum of
