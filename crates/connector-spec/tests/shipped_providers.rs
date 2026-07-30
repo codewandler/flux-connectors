@@ -13,23 +13,43 @@ use std::path::{Path, PathBuf};
 
 use connector_spec::{provider, AuthScheme};
 
-/// Every provider this repository ships: C-17's original three, then each connector added
-/// since — `github` (C-52), `openai` (C-51), `slack` (C-53).
-const SHIPPED: &[&str] = &[
-    "zendesk",
-    "freshdesk",
-    "babelforce",
-    "github",
-    "openai",
-    "slack",
-];
-
 /// `<repo root>/providers`, derived from this crate's manifest directory so the test is independent
 /// of the working directory a runner happens to use.
 fn providers_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("providers")
+}
+
+/// Every provider this repository ships, **read from `providers/` rather than listed here** (C-54).
+///
+/// A constant naming the six current ids would be a second source of truth, and the copies drift in
+/// exactly one direction: a provider lands in `providers/` and not in the list, so the gates below
+/// silently stop covering it. That is not hypothetical — C-53 shipped `slack` while one of five such
+/// constants still named only five providers, and two build gates never ran for it.
+///
+/// Sorted, so a failure names providers in a stable order. Empty is a failure rather than a vacuous
+/// pass: every gate here is a `for` loop, and an unreadable or empty `providers/` would satisfy all
+/// of them without checking anything.
+fn shipped() -> Vec<String> {
+    let dir = providers_dir();
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|error| panic!("cannot read {}: {error}", dir.display()))
+        .map(|entry| entry.expect("readable directory entry").file_name())
+        .filter_map(|name| {
+            name.to_string_lossy()
+                .strip_suffix(".toml")
+                .map(str::to_string)
+        })
+        .collect();
+    names.sort();
+
+    assert!(
+        !names.is_empty(),
+        "{} holds no provider definitions, so every gate in this file would pass vacuously",
+        dir.display()
+    );
+    names
 }
 
 fn load(name: &str) -> provider::LoadedProvider {
@@ -40,13 +60,14 @@ fn load(name: &str) -> provider::LoadedProvider {
         .unwrap_or_else(|error| panic!("providers/{name}.toml does not load: {error}"))
 }
 
-/// The story's load gate: all three shipped definitions parse and validate.
+/// The story's load gate: every shipped definition parses and validates.
 #[test]
 fn every_shipped_provider_loads() {
-    for name in SHIPPED {
+    for name in shipped() {
+        let name = name.as_str();
         let loaded = load(name);
         assert_eq!(
-            loaded.connector.id, *name,
+            loaded.connector.id, name,
             "providers/{name}.toml declares id `{}`, but the file name is what names the generated \
              `<id>.flux`",
             loaded.connector.id
@@ -62,6 +83,12 @@ fn every_shipped_provider_loads() {
 /// (`docs/designs/provider-operation-inventory.md` §5.2); 163 generated ops would be 163 LLM tools,
 /// most of them destructive admin CRUD. The upper bound is what this asserts — the exact counts the
 /// inventory selected are asserted next to it.
+///
+/// **This list stays explicit, and is not the duplication C-54 removed.** A count per provider is an
+/// inventory claim: someone read the vendor's surface, chose these operations, and wrote the number
+/// down. Deriving it from the file it describes would assert nothing at all. What C-54 derived is the
+/// provider *set* — see [`shipped`] — so a provider added without a curated count is covered by every
+/// other gate here and simply makes no claim about its own selection until someone reviews it.
 #[test]
 fn operation_selection_stays_curated() {
     let expected = [
@@ -94,8 +121,8 @@ fn operation_selection_stays_curated() {
 /// (C-8, `crates/connector-flux/src/op.rs:108`) and would emit text that does not parse.
 #[test]
 fn operation_ids_are_declarable_in_flux() {
-    for name in SHIPPED {
-        let loaded = load(name);
+    for name in shipped() {
+        let loaded = load(&name);
         for operation in &loaded.connector.operations {
             assert!(
                 !operation.id.is_empty()
@@ -185,8 +212,8 @@ fn zendesk_declares_the_token_suffix_rather_than_pre_composing_it() {
 /// (AGENTS.md). A cheap structural check: nothing that looks like an assignment of a secret.
 #[test]
 fn no_provider_file_carries_a_credential_value() {
-    for name in SHIPPED {
-        let loaded = load(name);
+    for name in shipped() {
+        let loaded = load(&name);
         for method in &loaded.connector.auth {
             for key in method.env.iter().chain(&method.user_env) {
                 assert!(

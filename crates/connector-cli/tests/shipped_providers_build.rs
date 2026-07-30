@@ -1,6 +1,6 @@
 //! **Every shipped provider compiles**, through the real pipeline, against the real repository.
 //!
-//! `connector-spec`'s `shipped_providers.rs` proves the three committed definitions *load*. That is
+//! `connector-spec`'s `shipped_providers.rs` proves the committed definitions *load*. That is
 //! a strictly weaker claim than this one: a definition can load and still be something the emitter
 //! refuses, or — worse — something it compiles into a request the vendor accepts and ignores. Both
 //! happened, and both were invisible to every other test in the tree:
@@ -22,17 +22,6 @@ use std::path::{Path, PathBuf};
 use connector_cli::pipeline::{self, PlannedArtifact};
 use connector_cli::workspace::Workspace;
 
-/// Every provider this repository ships: C-17's original three, then each connector added
-/// since — `github` (C-52), `openai` (C-51), `slack` (C-53).
-const SHIPPED: &[&str] = &[
-    "zendesk",
-    "freshdesk",
-    "babelforce",
-    "github",
-    "openai",
-    "slack",
-];
-
 /// The repository root, derived from this crate's manifest directory so the test is independent of
 /// the working directory a runner happens to use.
 fn workspace() -> Workspace {
@@ -42,6 +31,33 @@ fn workspace() -> Workspace {
             .canonicalize()
             .expect("the repository root exists"),
     )
+}
+
+/// Every provider this repository ships, **read from `providers/` rather than listed here** (C-54).
+///
+/// This file is where the drift cost: `every_shipped_provider_compiles` and
+/// `every_shipped_operation_reaches_its_module` are the two gates a new connector most needs, and a
+/// constant that someone forgot to widen is a constant that skips them without failing. Reading the
+/// directory means the gate covers whatever ships. Empty is a failure rather than a vacuous pass.
+fn shipped() -> Vec<String> {
+    let dir = workspace().providers_dir();
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|error| panic!("cannot read {}: {error}", dir.display()))
+        .map(|entry| entry.expect("readable directory entry").file_name())
+        .filter_map(|name| {
+            name.to_string_lossy()
+                .strip_suffix(".toml")
+                .map(str::to_string)
+        })
+        .collect();
+    names.sort();
+
+    assert!(
+        !names.is_empty(),
+        "{} holds no provider definitions, so every gate in this file would pass vacuously",
+        dir.display()
+    );
+    names
 }
 
 /// The artifacts a build would write for `provider`, or a panic naming why it could not.
@@ -87,7 +103,8 @@ fn planned(provider: &str, file: &str) -> String {
 /// generated modules and none.
 #[test]
 fn every_shipped_provider_compiles() {
-    for provider in SHIPPED {
+    for provider in shipped() {
+        let provider = provider.as_str();
         let artifacts = plan_for(provider);
         let operations = load(provider).operations.len();
 
@@ -123,7 +140,8 @@ fn every_shipped_provider_compiles() {
 /// would still produce a module that parses.
 #[test]
 fn every_shipped_operation_reaches_its_module() {
-    for provider in SHIPPED {
+    for provider in shipped() {
+        let provider = provider.as_str();
         let module = planned(provider, &format!("{provider}.flux"));
         let source =
             std::fs::read_to_string(workspace().providers_dir().join(format!("{provider}.toml")))
@@ -225,6 +243,136 @@ fn slack_sends_its_arguments_in_the_body_and_nothing_in_the_url() {
         !module.contains("$sep") && !module.contains('?'),
         "no Slack operation may assemble a query string:\n{module}"
     );
+}
+
+/// **No test hand-maintains the shipped-provider set** (C-54). The set lives in `providers/`, and
+/// every per-provider gate derives it from that directory; a constant repeating it is a second
+/// source of truth that nothing keeps in step.
+///
+/// This is not a style preference. Five constants held the same six ids, and the copies drifted:
+/// C-53 reached review with `slack` present in four of them and absent from the fifth, so
+/// `every_shipped_provider_compiles` and `every_shipped_operation_reaches_its_module` never ran for
+/// the connector under review. A list that must be edited in five places to stay correct will be
+/// edited in four.
+///
+/// The rule is deliberately about *constants*: a `const` or `static` naming two or more shipped
+/// providers is the duplicated inventory. A per-provider claim inside a test body — the curated
+/// operation counts in `connector-spec`'s `operation_selection_stays_curated`, for instance — is a
+/// deliberate assertion about each provider rather than a copy of the provider set, and stays.
+///
+/// It lives in `connector-cli` because this is the crate whose tests already read the repository
+/// tree (see [`workspace`] above); no other crate should grow that reach for one check.
+#[test]
+fn no_test_hand_maintains_a_shipped_provider_list() {
+    let root = workspace().root().to_path_buf();
+
+    // The ids the repository actually ships — the set a constant would be duplicating.
+    let ids: Vec<String> = std::fs::read_dir(root.join("providers"))
+        .expect("the repository's providers/ directory is readable")
+        .map(|entry| entry.expect("readable directory entry").file_name())
+        .filter_map(|name| {
+            name.to_string_lossy()
+                .strip_suffix(".toml")
+                .map(str::to_string)
+        })
+        .collect();
+    assert!(!ids.is_empty(), "providers/ holds no provider definitions");
+
+    let mut offenders: Vec<String> = Vec::new();
+    for source in test_sources(&root) {
+        let text = std::fs::read_to_string(&source)
+            .unwrap_or_else(|error| panic!("cannot read {}: {error}", source.display()));
+
+        for item in const_items(&text) {
+            let named = ids
+                .iter()
+                .filter(|id| item.contains(&format!("\"{id}\"")))
+                .count();
+            if named >= 2 {
+                let head = item.lines().next().unwrap_or(item).trim();
+                offenders.push(format!(
+                    "{} — `{head}` names {named} shipped providers",
+                    source
+                        .strip_prefix(&root)
+                        .unwrap_or(&source)
+                        .display()
+                        .to_string()
+                        .replace('\\', "/")
+                ));
+            }
+        }
+    }
+    offenders.sort();
+
+    assert!(
+        offenders.is_empty(),
+        "a test constant hand-lists the shipped providers; derive the set from `providers/` \
+         instead, so adding a provider costs one file:\n  {}",
+        offenders.join("\n  ")
+    );
+}
+
+/// Every `*.rs` under `crates/*/tests`, recursively — the test tree this check governs.
+fn test_sources(root: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let crates = std::fs::read_dir(root.join("crates")).expect("crates/ is readable");
+
+    for entry in crates {
+        let tests = entry
+            .expect("readable directory entry")
+            .path()
+            .join("tests");
+        if !tests.is_dir() {
+            continue;
+        }
+
+        let mut pending = vec![tests];
+        while let Some(dir) = pending.pop() {
+            for entry in std::fs::read_dir(&dir)
+                .unwrap_or_else(|error| panic!("cannot read {}: {error}", dir.display()))
+            {
+                let path = entry.expect("readable directory entry").path();
+                if path.is_dir() {
+                    pending.push(path);
+                } else if path.extension().is_some_and(|ext| ext == "rs") {
+                    found.push(path);
+                }
+            }
+        }
+    }
+
+    found
+}
+
+/// The text of every `const`/`static` item in `source`, from the keyword to the `;` that ends it.
+///
+/// A textual scan rather than a parse, on purpose: this check has to run over sibling crates' test
+/// sources, and pulling a Rust parser into `connector-cli`'s dev-dependencies to read six lines
+/// would cost more than the duplication it guards against.
+fn const_items(source: &str) -> Vec<&str> {
+    let mut items = Vec::new();
+
+    for keyword in ["const ", "static "] {
+        let mut cursor = 0;
+        while let Some(offset) = source[cursor..].find(keyword) {
+            let start = cursor + offset;
+            cursor = start + keyword.len();
+
+            // Only a declaration at the start of a line: `as const`, a doc comment mentioning the
+            // word, and `const fn` bodies are not inventories.
+            let line_start = source[..start].rfind('\n').map_or(0, |index| index + 1);
+            if !source[line_start..start].trim().is_empty() {
+                continue;
+            }
+
+            let end = source[start..]
+                .find(';')
+                .map_or(source.len(), |index| start + index);
+            items.push(&source[start..end]);
+        }
+    }
+
+    items
 }
 
 /// A parameter whose wire name differs from its caller-facing one travels under the **vendor's**

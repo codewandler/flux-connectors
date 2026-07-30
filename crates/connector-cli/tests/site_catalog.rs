@@ -27,17 +27,6 @@ mod common;
 
 use common::Fixture;
 
-/// Every provider this repository ships: C-17's original three, then each connector added
-/// since — `github` (C-52), `openai` (C-51), `slack` (C-53).
-const SHIPPED: &[&str] = &[
-    "zendesk",
-    "freshdesk",
-    "babelforce",
-    "github",
-    "openai",
-    "slack",
-];
-
 /// The document's path, relative to the repository root. Chosen by C-42, moved into the site's own
 /// `public/` tree by C-44, and named here so a change to it is a change to a test rather than a
 /// silent break of whatever reads it.
@@ -50,6 +39,32 @@ fn repo_root() -> PathBuf {
         .join("../..")
         .canonicalize()
         .expect("the repository root exists")
+}
+
+/// Every provider this repository ships, **read from `providers/` rather than listed here** (C-54).
+///
+/// The document is generated from this directory, so the check that it is complete has to iterate the
+/// same directory. A constant would let a provider be published to the site — or omitted from it —
+/// without this test having an opinion. Empty is a failure rather than a vacuous pass.
+fn shipped() -> Vec<String> {
+    let dir = repo_root().join("providers");
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|error| panic!("cannot read {}: {error}", dir.display()))
+        .map(|entry| entry.expect("readable directory entry").file_name())
+        .filter_map(|name| {
+            name.to_string_lossy()
+                .strip_suffix(".toml")
+                .map(str::to_string)
+        })
+        .collect();
+    names.sort();
+
+    assert!(
+        !names.is_empty(),
+        "{} holds no provider definitions, so the completeness gate below would pass vacuously",
+        dir.display()
+    );
+    names
 }
 
 /// The committed document, parsed.
@@ -152,7 +167,8 @@ fn the_build_writes_and_checks_site_catalog_json() {
 fn every_shipped_operation_carries_its_metadata_and_its_flux() {
     let document = committed();
 
-    for provider in SHIPPED {
+    for provider in shipped() {
+        let provider = provider.as_str();
         let path = repo_root()
             .join("providers")
             .join(format!("{provider}.toml"));
