@@ -2,7 +2,7 @@
 id: C-70
 title: Ship the Jira connector
 pillar: Spec
-status: in-progress
+status: done
 priority: 7
 design: docs/designs/provider-operation-inventory.md
 epic: provider-fleet

@@ -8,6 +8,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **C-70** — the **Jira** connector on API **v2**: issue get and create, comment list and add,
+  transitions list and transition. v2 rather than v3 because v3's comment body is Atlassian Document
+  Format — an array of block nodes — and `wire` paths address nested records only, so ADF is
+  inexpressible rather than merely awkward. Pinned by a test, so a bulk upgrade to v3 fails loudly.
+- **C-72** — the **HubSpot** connector: contact, company and deal reads plus contact create and
+  update, with the `properties` envelope declared through `wire` paths. HubSpot accepts a flat body
+  with a 2xx and stores nothing, so this is a silent failure mode rather than a loud one.
+- **C-73** — the **Intercom** connector: contact get and create, conversation get and reply, contact
+  note. Admitted where Notion and Anthropic were excluded, because Intercom *defaults* its version
+  header while theirs reject a request without one.
 - **C-74** — the **Shopify** connector: order, product and customer reads plus a product update over
   the 2024-10 Admin REST API. The credential is a plain `X-Shopify-Access-Token` header carrying the
   whole value, which makes this the first shipped use of `AuthScheme::Header`.

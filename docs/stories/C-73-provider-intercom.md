@@ -2,7 +2,7 @@
 id: C-73
 title: Ship the Intercom connector
 pillar: Spec
-status: in-progress
+status: done
 priority: 7
 design: docs/designs/provider-operation-inventory.md
 epic: provider-fleet
