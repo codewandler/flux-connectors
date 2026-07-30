@@ -8,6 +8,8 @@
 //! (`~/babelforce/projects/babelforce-api/.../manager.openapi.json`, document-level
 //! `security: [{oauth2: [*]}, {accessId: [], accessToken: []}]`), not a hypothetical.
 
+use std::collections::BTreeMap;
+
 use connector_spec::{
     AuthMethod, AuthRequirement, AuthScheme, Connector, HttpMethod, Idempotency, OAuth2Spec,
     OAuthGrant, Operation, Param, ParamSet, Provenance, Quirks, Risk, DEFAULT_SERVICE,
@@ -279,6 +281,7 @@ fn parameter_and_response_schemas_survive_the_round_trip() {
             schema: json!({"type": "array", "items": {"type": "string"}}),
         }],
         body_schema: None,
+        const_headers: BTreeMap::from([("Accept".into(), "application/json".into())]),
     };
     operation.response_schema = Some(json!({
         "type": "object",

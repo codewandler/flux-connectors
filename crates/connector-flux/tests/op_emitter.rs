@@ -130,6 +130,7 @@ fn zendesk_comment_list() -> Connector {
                 header: Vec::new(),
                 body: Vec::new(),
                 body_schema: None,
+                ..ParamSet::default()
             },
             response_schema: None,
             quirks: Default::default(),
@@ -177,6 +178,7 @@ fn zendesk_ticket_search() -> Connector {
                 header: Vec::new(),
                 body: Vec::new(),
                 body_schema: None,
+                ..ParamSet::default()
             },
             response_schema: None,
             quirks: Default::default(),
@@ -231,6 +233,7 @@ fn babelforce_call_list() -> Connector {
                 header: Vec::new(),
                 body: Vec::new(),
                 body_schema: None,
+                ..ParamSet::default()
             },
             response_schema: None,
             quirks: Default::default(),
@@ -317,6 +320,7 @@ fn freshdesk_note_add() -> Connector {
                     ),
                 ],
                 body_schema: None,
+                ..ParamSet::default()
             },
             response_schema: None,
             quirks: Default::default(),
@@ -648,6 +652,7 @@ fn headered_operation() -> Connector {
                     json!({"type": "string"}),
                 )],
                 body_schema: None,
+                ..ParamSet::default()
             },
             response_schema: None,
             quirks: Default::default(),

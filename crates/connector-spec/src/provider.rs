@@ -32,6 +32,8 @@
 //! [`load`] takes bytes and a display name. Reading `providers/*.toml` off disk and fetching specs
 //! is `connector-cli`'s job — see the crate docs.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::config::{parse_binding, template_variables, Binding, ConfigField};
@@ -242,6 +244,8 @@ struct ProviderFile {
     #[serde(default)]
     default_auth: Vec<AuthRequirement>,
     #[serde(default)]
+    const_headers: BTreeMap<String, String>,
+    #[serde(default)]
     operations: Vec<Operation>,
     #[serde(default)]
     events: Vec<EventDecl>,
@@ -295,9 +299,12 @@ pub fn load(name: &str, source: &str) -> crate::Result<LoadedProvider> {
         }
     };
 
+    // Kept before `assemble` distributes it, so a provider-level constant header is reported once
+    // rather than once per operation that inherited it.
+    let provider_headers = file.const_headers.clone();
     let loaded = assemble(file, source);
 
-    let problems = validate(&loaded);
+    let problems = validate(&loaded, &provider_headers);
     if !problems.is_empty() {
         return Err(crate::Error::InvalidProvider {
             name: name.to_owned(),
@@ -332,10 +339,13 @@ fn declares_provider_roles(source: &str) -> bool {
 }
 
 /// Turns the parsed file into a [`LoadedProvider`], folding `[spec]` into the connector's
-/// provenance. No validation happens here — assembling and judging are separate so that validation
-/// can see the finished value and report on all of it at once.
+/// provenance and distributing provider-level constant headers onto every operation. No validation
+/// happens here — assembling and judging are separate so that validation can see the finished value
+/// and report on all of it at once.
 fn assemble(file: ProviderFile, source: &str) -> LoadedProvider {
     let spec = file.spec;
+    let mut operations = file.operations;
+    distribute_const_headers(&file.const_headers, &mut operations);
     let provenance = Provenance {
         source_url: spec.as_ref().and_then(|s| s.source_url.clone()),
         upstream_version: spec.as_ref().and_then(|s| s.upstream_version.clone()),
@@ -355,7 +365,7 @@ fn assemble(file: ProviderFile, source: &str) -> LoadedProvider {
             description: file.description,
             auth: file.auth,
             default_auth: file.default_auth,
-            operations: file.operations,
+            operations,
             events: file.events,
             channels: file.channels,
             config: file.config,
@@ -368,11 +378,45 @@ fn assemble(file: ProviderFile, source: &str) -> LoadedProvider {
     }
 }
 
+/// Copies the provider's constant headers onto every operation, an operation's own entry winning.
+///
+/// **Resolved here rather than carried as inheritance**, unlike [`Connector::default_auth`]. Auth
+/// inheritance has to survive into the IR because [`Operation::auth`] is a three-state field whose
+/// `None` means *inherit* and carries meaning that resolving would erase. A constant header has no
+/// such state — it is request content, not policy — so an operation whose IR states every header it
+/// sends is one that no consumer (emitter, manifest, catalogue) has to re-derive an inheritance to
+/// read. The file keeps the one-line shorthand; the IR is the normalized form, which is what it is
+/// for.
+///
+/// The match is case-insensitive because HTTP field names are (RFC 9110 §5.1). `Notion-Version` and
+/// `notion-version` are one header, so keeping both would send it twice with two values; the
+/// operation's own spelling and value are the ones that survive.
+fn distribute_const_headers(provider: &BTreeMap<String, String>, operations: &mut [Operation]) {
+    if provider.is_empty() {
+        return;
+    }
+    for operation in operations {
+        for (name, value) in provider {
+            let overridden = operation
+                .params
+                .const_headers
+                .keys()
+                .any(|own| own.eq_ignore_ascii_case(name));
+            if !overridden {
+                operation
+                    .params
+                    .const_headers
+                    .insert(name.clone(), value.clone());
+            }
+        }
+    }
+}
+
 /// Everything wrong with the file, in the order an author would read it: the connector itself, then
 /// its credentials, then its operations, then the patch set.
 ///
 /// Returning a `Vec` rather than short-circuiting is deliberate — see the module docs.
-fn validate(loaded: &LoadedProvider) -> Vec<String> {
+fn validate(loaded: &LoadedProvider, provider_headers: &BTreeMap<String, String>) -> Vec<String> {
     let mut problems = Vec::new();
     let connector = &loaded.connector;
 
@@ -414,6 +458,7 @@ fn validate(loaded: &LoadedProvider) -> Vec<String> {
 
     validate_services(connector, &mut problems);
     validate_credentials(connector, &mut problems);
+    validate_const_headers(connector, provider_headers, &mut problems);
     validate_operations(connector, &mut problems);
     validate_events(connector, &mut problems);
     validate_channels(connector, &mut problems);
@@ -1840,6 +1885,211 @@ fn validate_credentials(connector: &Connector, problems: &mut Vec<String>) {
         "`default_auth`",
         problems,
     );
+}
+
+/// Header names the `$auth` seam owns. A constant header may not spell one whatever its value is.
+///
+/// `authorization` and `proxy-authorization` are where a credential goes; `cookie` is a session, which
+/// is the same thing arriving by another route. Any of the three declared as a literal would be a
+/// credential written into a committed artifact — see [`validate_const_headers`].
+const AUTH_OWNED_HEADERS: &[&str] = &["authorization", "proxy-authorization", "cookie"];
+
+/// Value prefixes that spell a credential rather than a constant, whatever header carries them.
+const CREDENTIAL_VALUE_PREFIXES: &[&str] = &["bearer ", "basic ", "token ", "apikey ", "digest "];
+
+/// Spellings that say "resolve this from somewhere else". None of them resolves: a constant header is
+/// a literal, emitted verbatim, so a value in one of these shapes reaches the vendor as its own text.
+const RESOLUTION_MARKERS: &[&str] = &["${", "{{", "$secret", "$auth", "env:", "secret:"];
+
+/// Checks every constant request header — the vendor-fixed `Accept`, `Notion-Version`, `User-Agent`
+/// (C-55).
+///
+/// **The rule that earns its keep is the credential one.** Every other field in this file that could
+/// hold a secret is a *reference* — a credential name, an env-var key — resolved by the host at
+/// request time and never written down. This one is a literal that reaches generated Flux, the
+/// capability manifest and the public catalogue verbatim, so an author who reached for it to send
+/// `Authorization: Bearer sk-…` would be committing the token to the repository, and the pipeline
+/// would carry it all the way to a published artifact without a word. That is precisely the failure
+/// `AGENTS.md` forbids ("no credential value enters provider TOML, generated Flux, a manifest, the
+/// public catalogue, or the lockfile"), and the refusals below are what keep the field from becoming
+/// a second, ungated path to the `$auth` seam C-10 owns.
+///
+/// The provider-level table is checked once and the operations' own entries after it, so a header
+/// declared once for the whole provider is reported once.
+fn validate_const_headers(
+    connector: &Connector,
+    provider_headers: &BTreeMap<String, String>,
+    problems: &mut Vec<String>,
+) {
+    check_const_header_table(connector, provider_headers, "`[const_headers]`", problems);
+
+    for operation in &connector.operations {
+        // Entries the provider contributed are already reported above, spelling and value alike.
+        let own: BTreeMap<String, String> = operation
+            .params
+            .const_headers
+            .iter()
+            .filter(|(name, value)| provider_headers.get(*name) != Some(*value))
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect();
+        check_const_header_table(
+            connector,
+            &own,
+            &format!("operation {:?}: `const_headers`", operation.id),
+            problems,
+        );
+    }
+}
+
+/// One table of constant headers, provider-level or operation-level.
+fn check_const_header_table(
+    connector: &Connector,
+    headers: &BTreeMap<String, String>,
+    context: &str,
+    problems: &mut Vec<String>,
+) {
+    let mut seen: Vec<String> = Vec::new();
+
+    for (name, value) in headers {
+        // A map is keyed by exact spelling and HTTP field names are case-insensitive, so two
+        // spellings of one header would reach the request record as two entries and be sent twice.
+        let folded = name.to_ascii_lowercase();
+        if seen.contains(&folded) {
+            problems.push(format!(
+                "{context}: header {name:?} is declared twice under two spellings. HTTP field names \
+                 are case-insensitive (RFC 9110 §5.1), so both would travel as one header sent twice"
+            ));
+        }
+        seen.push(folded.clone());
+
+        if !is_http_field_name(name) {
+            problems.push(format!(
+                "{context}: header name {name:?} is not an HTTP field name — only ASCII token \
+                 characters are allowed (RFC 9110 §5.1), and a request carrying it could never be \
+                 built"
+            ));
+        }
+        // Emitted verbatim into a header record, so a CR or LF would append a header of the
+        // author's choosing to every request — and a non-ASCII byte is not a field value at all.
+        if let Some(bad) = value
+            .chars()
+            .find(|c| !c.is_ascii() || (c.is_ascii_control() && *c != '\t'))
+        {
+            problems.push(format!(
+                "{context}: header {name:?} has a value carrying {bad:?}, which is not an HTTP \
+                 field value (RFC 9110 §5.5). A newline in particular would append a header of its \
+                 own to every request"
+            ));
+        }
+        if value.trim().is_empty() {
+            problems.push(format!(
+                "{context}: header {name:?} has an empty value. A header that says nothing is a \
+                 header the vendor did not ask for — remove it, or state what it sends"
+            ));
+        }
+
+        if folded == "content-type" {
+            problems.push(format!(
+                "{context}: `content-type` is the emitter's, not a provider's. It is derived from \
+                 the request body — `application/json` for every body this pipeline builds — so \
+                 declaring it here would describe an encoding the emitted module does not produce"
+            ));
+        }
+        if AUTH_OWNED_HEADERS.contains(&folded.as_str()) {
+            problems.push(format!(
+                "{context}: header {name:?} carries a credential, and a constant header is a \
+                 literal in a committed artifact. Credentials are declared in `[[auth]]` and \
+                 injected by the host at the `$auth` seam, which is what keeps the value out of the \
+                 generated module, the manifest and the public catalogue"
+            ));
+        }
+        for method in &connector.auth {
+            if let AuthScheme::Header { name: owned } = &method.scheme {
+                if owned.eq_ignore_ascii_case(name) {
+                    problems.push(format!(
+                        "{context}: header {name:?} is where credential {:?} is injected, so a \
+                         constant would either be overwritten by the host or overwrite the \
+                         credential. Declare the header on one side only",
+                        method.name
+                    ));
+                }
+            }
+        }
+
+        credential_shaped_value(connector, name, value, context, problems);
+    }
+}
+
+/// Whether a constant header's *value* is a credential, or something the author expects to resolve
+/// into one.
+///
+/// Nothing here resolves. A constant header is emitted as a literal, so `${GITHUB_TOKEN}` reaches
+/// GitHub as those fourteen characters — the benign reading is a broken request, and the dangerous
+/// one is an author who pastes the real value in once the placeholder does not work. Both are
+/// refused at the declaration.
+fn credential_shaped_value(
+    connector: &Connector,
+    name: &str,
+    value: &str,
+    context: &str,
+    problems: &mut Vec<String>,
+) {
+    let folded = value.to_ascii_lowercase();
+
+    if let Some(marker) = RESOLUTION_MARKERS
+        .iter()
+        .find(|marker| folded.contains(*marker))
+    {
+        problems.push(format!(
+            "{context}: header {name:?} has a value spelling {marker:?}, but a constant header is a \
+             literal and nothing interpolates it — the vendor would receive those characters. A \
+             value that has to be resolved is a credential or configuration: declare it in \
+             `[[auth]]` or `[[config]]`"
+        ));
+    }
+    if let Some(prefix) = CREDENTIAL_VALUE_PREFIXES
+        .iter()
+        .find(|prefix| folded.starts_with(*prefix))
+    {
+        problems.push(format!(
+            "{context}: header {name:?} has a value beginning {prefix:?}, which is a credential. It \
+             would be committed to this repository verbatim and published in the catalogue. \
+             Credentials are declared in `[[auth]]` and injected by the host"
+        ));
+    }
+    for method in &connector.auth {
+        if value.contains(&method.name) {
+            problems.push(format!(
+                "{context}: header {name:?} has a value naming credential {:?}. A constant header is \
+                 a literal, not a reference — nothing resolves the name, and the value that would \
+                 make it work is one this file must never hold",
+                method.name
+            ));
+        }
+        for key in method.env.iter().chain(&method.user_env) {
+            if !key.trim().is_empty() && value.contains(key.as_str()) {
+                problems.push(format!(
+                    "{context}: header {name:?} has a value naming the environment variable \
+                     {key:?}, which resolves credential {:?}. A constant header is emitted as a \
+                     literal, so the name would travel as text and the value it stands for must \
+                     never be written here at all",
+                    method.name
+                ));
+            }
+        }
+    }
+}
+
+/// Whether `name` is a valid HTTP field name (RFC 9110 §5.1 `token`).
+///
+/// The emitter checks the same grammar on the way out (`connector-flux`'s `is_http_token`), for the
+/// same reason the member-name rules are split: this guards what an author may *declare*, and the
+/// emitter guards what may reach `http.request`.
+fn is_http_field_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&b))
 }
 
 /// Checks every operation, and the auth it names.
