@@ -1,0 +1,19 @@
+# C-49: a service name is an address segment AND part of the emitted `<provider>-<service>.flux`, so
+# an unvalidated one lets a *content* field of a provider file decide where a build writes — here,
+# outside the repository root. Before services existed no content field could influence an output
+# path at all; every path came from the discovered file stem. This fixture pins the refusal.
+id = "acme"
+vendor = "Acme"
+base_url = "https://api.acme.example"
+
+[[services]]
+name = "../../../../outside/pwned"
+
+[[operations]]
+id = "acme-thing-get"
+service = "../../../../outside/pwned"
+method = "GET"
+path = "/v1/things"
+description = "Fetch one thing."
+risk = "low"
+idempotency = "idempotent"

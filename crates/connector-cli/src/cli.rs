@@ -18,6 +18,10 @@ pub struct Invocation {
     pub root: Option<PathBuf>,
     /// Restrict the run to one provider.
     pub provider: Option<String>,
+    /// Restrict the run to one whole service of each provider it covers — a service name or a
+    /// rendered gid (C-49). Normally paired with `--provider`, since a service is a level *within* a
+    /// provider; a provider in the run that has no such service is a loud error naming what it has.
+    pub service: Option<String>,
     /// Also rasterize the README snippet to PNG (`build` only). See [`crate::png`].
     pub png: bool,
 }
@@ -74,6 +78,10 @@ COMMANDS:
 
 OPTIONS:
     --provider <NAME>   Restrict the run to one connector
+    --service <NAME>    Restrict the run to one whole service of that connector,
+                        by service name (`s3`) or by its address
+                        (`com.amazonaws/s3:2006-03-01`). A provider with a single
+                        API surface has one service, `default`, and needs no flag
     --root <DIR>        Repository root (default: the current directory)
     --png               `build` only: also rasterize the README snippet to
                         assets/readme-snippet.png with the `flux` binary. Skipped
@@ -94,6 +102,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation> {
             command: Command::Help,
             root: None,
             provider: None,
+            service: None,
             png: false,
         });
     };
@@ -101,6 +110,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation> {
 
     let mut root = None;
     let mut provider = None;
+    let mut service = None;
     let mut png = false;
     while let Some(arg) = args.next() {
         match split_flag(&arg) {
@@ -109,6 +119,9 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation> {
             }
             Some(("--provider" | "-p", value)) => {
                 provider = Some(value_of("--provider", value, &mut args)?);
+            }
+            Some(("--service" | "-s", value)) => {
+                service = Some(value_of("--service", value, &mut args)?);
             }
             // Only `build` writes anything, so only `build` can be asked to write one more thing.
             // Accepting it elsewhere would promise a raster that `diff` has no way to produce.
@@ -119,6 +132,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation> {
                     command: Command::Version,
                     root: None,
                     provider: None,
+                    service: None,
                     png: false,
                 })
             }
@@ -131,6 +145,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation> {
         command,
         root,
         provider,
+        service,
         png,
     })
 }
@@ -140,6 +155,7 @@ fn help() -> Invocation {
         command: Command::Help,
         root: None,
         provider: None,
+        service: None,
         png: false,
     }
 }

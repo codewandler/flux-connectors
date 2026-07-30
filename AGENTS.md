@@ -130,6 +130,36 @@ Putting acquisition in Flux would expose raw tokens in model-visible symbols.
 Flux's four existing `AuthScheme` variants are presets of the three-axis model. A connector using
 only those presets must serialize exactly what flux already understands.
 
+## Service contract
+
+A provider is one vendor; a **service** is one of its API surfaces (`s3` and `bedrock-runtime` under
+AWS). The service is the unit that is addressed, versioned, selected, emitted and installed. See
+[docs/designs/provider-services.md](docs/designs/provider-services.md).
+
+- **Services partition the operation set.** Every operation belongs to **exactly one** service; the
+  per-service sets are pairwise disjoint and their union is every operation. This is what makes
+  "install the whole `s3` service" a well-defined set, and it is asserted as a property
+  (`crates/connector-spec/tests/service_partition.rs`). Do not replace it with a free-form `tags`
+  field: a tag cannot partition an operation set, cannot carry a version, and cannot carry a host.
+- **`default` is reserved, implicit, and elided.** An operation naming no service belongs to
+  `default`; no `[[services]]` entry may declare it; and it is **never rendered** into an address
+  (`com.freshdesk.api:v2`, not `com.freshdesk.api/default:v2`) or into a file name (`zendesk.flux`,
+  not `zendesk-default.flux`). A provider that declares named services has no implicit `default` for
+  an operation to fall into — omitting `service` there is a loud error.
+- **A service owns its base URL and its API version**, with the connector's as defaults. Each emitted
+  manifest carries its own service's `base_url` and its own operations, so a service's egress surface
+  is never widened to the union of the provider's. C-10's `http_hosts` derives from that value.
+- **No content field of a provider TOML influences an output path.** Paths derive from the discovered
+  file stem, and the one content field that reaches a path — a service name, via
+  `<provider>-<service>.flux` — is validated against the address grammar in the loader
+  (`connector_spec::address::validate_service_name`). A name carrying `/` or `..` would let a provider
+  file decide where a build writes, including outside the repository root. Validate any future field
+  that reaches a path the same way, at the loader, before it reaches `Workspace`.
+- **An address, once published, is not reused.** Renaming a service or an operation mints a new
+  address and deprecates the old one; it never repoints an existing one. An `authority`, a service
+  name and an `api_version` are checked against the grammar on load, so a rendered address always
+  parses back to the value it was rendered from.
+
 ## Intentional gaps
 
 These failures are recorded decisions. Do not “fix” one without reading its story and design.

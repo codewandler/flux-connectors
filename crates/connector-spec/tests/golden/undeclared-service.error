@@ -1,0 +1,2 @@
+providers/undeclared-service.toml is not a valid connector definition:
+  - operation "aws-object-get" names service "s4", which no `[[services]]` entry declares. This provider declares: s3, bedrock-runtime

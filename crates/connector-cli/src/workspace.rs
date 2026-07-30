@@ -50,6 +50,16 @@ pub const ASSETS_DIR: &str = "assets";
 /// The stem shared by the README snippet and everything rendered from it (C-45).
 pub const SNIPPET_STEM: &str = "readme-snippet";
 
+/// The file stem a service's artifacts share: `zendesk` for the `default` service, `aws-s3` for a
+/// named one.
+fn artifact_stem(provider: &str, service: &str) -> String {
+    if service == connector_spec::DEFAULT_SERVICE {
+        provider.to_owned()
+    } else {
+        format!("{provider}-{service}")
+    }
+}
+
 /// A repository root plus the layout convention applied to it.
 #[derive(Debug, Clone)]
 pub struct Workspace {
@@ -82,16 +92,32 @@ impl Workspace {
         self.root.join(ARTIFACTS_DIR)
     }
 
-    /// `<root>/connectors/<provider>.flux`.
+    /// `<root>/connectors/<provider>.flux` — the module of a provider's `default` service.
     pub fn module_path(&self, provider: &str) -> PathBuf {
-        self.artifacts_dir()
-            .join(format!("{provider}.{MODULE_EXT}"))
+        self.service_module_path(provider, connector_spec::DEFAULT_SERVICE)
     }
 
-    /// `<root>/connectors/<provider>.connector.toml`.
+    /// `<root>/connectors/<provider>.connector.toml` — the manifest of the `default` service.
     pub fn manifest_path(&self, provider: &str) -> PathBuf {
+        self.service_manifest_path(provider, connector_spec::DEFAULT_SERVICE)
+    }
+
+    /// `<root>/connectors/<provider>-<service>.flux`, or `<provider>.flux` for the `default` service.
+    ///
+    /// The emitted unit is the service (C-49), and the reserved `default` service is elided from the
+    /// file name for the same reason it is elided from an address: it is an internal name for "this
+    /// provider has one API surface", and a `zendesk-default.flux` would publish it.
+    pub fn service_module_path(&self, provider: &str, service: &str) -> PathBuf {
         self.artifacts_dir()
-            .join(format!("{provider}.{MANIFEST_SUFFIX}"))
+            .join(format!("{}.{MODULE_EXT}", artifact_stem(provider, service)))
+    }
+
+    /// `<root>/connectors/<provider>-<service>.connector.toml`, eliding `default` as above.
+    pub fn service_manifest_path(&self, provider: &str, service: &str) -> PathBuf {
+        self.artifacts_dir().join(format!(
+            "{}.{MANIFEST_SUFFIX}",
+            artifact_stem(provider, service)
+        ))
     }
 
     /// `<root>/crates/catalog`.

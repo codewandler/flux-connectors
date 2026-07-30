@@ -37,7 +37,7 @@ use serde::{Deserialize, Serialize};
 use crate::lock::sha256_hex;
 use crate::{
     AuthMethod, AuthRequirement, AuthScheme, Connector, Idempotency, JsonSchema, Operation, Param,
-    ParamSet, Provenance, Quirks, Risk,
+    ParamSet, Provenance, Quirks, Risk, Service, DEFAULT_SERVICE,
 };
 
 /// The documented JSON Schema for `providers/<name>.toml`.
@@ -221,6 +221,12 @@ pub enum ParamPosition {
 struct ProviderFile {
     id: String,
     #[serde(default)]
+    authority: Option<String>,
+    #[serde(default)]
+    api_version: Option<String>,
+    #[serde(default)]
+    services: Vec<Service>,
+    #[serde(default)]
     vendor: String,
     base_url: String,
     #[serde(default)]
@@ -286,6 +292,9 @@ fn assemble(file: ProviderFile, source: &str) -> LoadedProvider {
     LoadedProvider {
         connector: Connector {
             id: file.id,
+            authority: file.authority,
+            api_version: file.api_version,
+            services: file.services,
             vendor: file.vendor,
             base_url: file.base_url,
             description: file.description,
@@ -343,11 +352,132 @@ fn validate(loaded: &LoadedProvider) -> Vec<String> {
         }
     }
 
+    validate_services(connector, &mut problems);
     validate_credentials(connector, &mut problems);
     validate_operations(connector, &mut problems);
     validate_patch(loaded, &mut problems);
 
     problems
+}
+
+/// Checks the connector's address components and its `[[services]]` declarations — C-49.
+///
+/// The operation-side half of the rule (every operation belongs to a declared service) is in
+/// [`validate_operations`], because that is where an operation is already being read.
+///
+/// # Why the grammar is enforced *here*
+///
+/// The [`address`](crate::address) module owns the spelling of an authority, a service name and an
+/// API version, and this is the only place that can refuse a bad one while the author is still
+/// looking at the file. Two things go wrong if it does not:
+///
+/// 1. **A service name reaches the output filesystem path.** It names the emitted
+///    `<provider>-<service>.flux`, and a build creates that file's parent directories. A name
+///    carrying `/` or `..` would therefore let a *content* field of a provider TOML decide where a
+///    build writes — including outside the repository root. Before services existed, no content field
+///    could influence an output path at all: paths came from the discovered file stem. That invariant
+///    is worth keeping, and keeping it costs one call to a validator that already exists.
+/// 2. **An unspellable component publishes a malformed address.** [`Connector::gid_of`] renders
+///    whatever the loader accepted, and that string reaches every service manifest and
+///    `catalog.json`. An authority of `com.acme/s3` renders `com.acme/s3:v2`, which *reparses* — as a
+///    different address. That is exactly the "a typo in a segment cannot masquerade as a valid
+///    address" property the address module claims, and only validation here makes the claim true.
+fn validate_services(connector: &Connector, problems: &mut Vec<String>) {
+    if let Some(authority) = &connector.authority {
+        if let Err(reason) = crate::address::validate_authority(authority) {
+            problems.push(format!(
+                "`authority` is not a valid reverse-DNS authority: {reason}. It is the leading \
+                 component of every service address"
+            ));
+        }
+    }
+    if let Some(api_version) = &connector.api_version {
+        if let Err(reason) = crate::address::validate_api_version(api_version) {
+            problems.push(format!(
+                "`api_version` cannot travel in an address: {reason}"
+            ));
+        }
+    }
+
+    let mut seen: Vec<&str> = Vec::new();
+
+    for service in &connector.services {
+        let name = service.name.as_str();
+        if let Err(reason) = crate::address::validate_service_name(name) {
+            problems.push(format!(
+                "a `[[services]]` entry has an invalid `name`: {reason}"
+            ));
+            continue;
+        }
+        // The reserved name is the *implicit* service. Declaring it would be a second definition of
+        // something that already exists, and the two could then disagree about a base URL or a
+        // version — with nothing to say which one an operation meant.
+        if name == DEFAULT_SERVICE {
+            problems.push(format!(
+                "`[[services]]` declares {DEFAULT_SERVICE:?}, which is reserved: it is the service an \
+                 operation belongs to when it names none, and it is elided from every published \
+                 address. A provider with one API surface declares no services at all"
+            ));
+        }
+        if seen.contains(&name) {
+            problems.push(format!(
+                "service {name:?} is declared more than once; an operation naming it could not say \
+                 which declaration it meant"
+            ));
+        }
+        seen.push(name);
+
+        if let Some(base_url) = &service.base_url {
+            if base_url.trim().is_empty() {
+                problems.push(format!(
+                    "service {name:?} declares an empty `base_url`; omit it to inherit the \
+                     connector's"
+                ));
+            }
+        }
+        if let Some(api_version) = &service.api_version {
+            if let Err(reason) = crate::address::validate_api_version(api_version) {
+                problems.push(format!(
+                    "service {name:?} declares an `api_version` that cannot travel in an address: \
+                     {reason}. Omit it to inherit the connector's"
+                ));
+            }
+        }
+    }
+}
+
+/// Checks that an operation's service is one this provider has.
+///
+/// The set is the declared names, or exactly `default` when nothing is declared — so a
+/// single-surface provider needs no `[[services]]` block, and a multi-service provider has no
+/// implicit `default` for an operation to fall into. That second half is the important one: an
+/// operation that omitted `service` in a multi-service file would otherwise be emitted into an
+/// `<provider>-default.flux` nobody declared or asked for.
+fn validate_operation_service(
+    connector: &Connector,
+    operation: &Operation,
+    problems: &mut Vec<String>,
+) {
+    let available = connector.service_names();
+    if available.contains(&operation.service.as_str()) {
+        return;
+    }
+    let listed = available.join(", ");
+    let id = operation.id.as_str();
+    problems.push(if operation.service == DEFAULT_SERVICE {
+        format!(
+            "operation {id:?} names no `service`, which means the reserved {DEFAULT_SERVICE:?} \
+             service — but this provider declares named services and no `[[services]]` entry \
+             declares {DEFAULT_SERVICE:?}. Every operation of a multi-service provider names one of: \
+             {listed}"
+        )
+    } else {
+        format!(
+            "operation {id:?} names service {:?}, which no `[[services]]` entry declares. This \
+             provider declares: {listed}",
+            operation.service
+        )
+    });
 }
 
 /// Checks the connector's own credential declarations.
@@ -424,6 +554,8 @@ fn validate_operations(connector: &Connector, problems: &mut Vec<String>) {
             ));
         }
         seen.push(id);
+
+        validate_operation_service(connector, operation, problems);
 
         if operation.path.trim().is_empty() {
             problems.push(format!("operation {id:?} has an empty `path`"));
@@ -576,6 +708,7 @@ fn validate_patch(loaded: &LoadedProvider, problems: &mut Vec<String>) {
 pub fn accepted_keys() -> Vec<(&'static str, Vec<String>)> {
     vec![
         ("provider", probe::<ProviderFile>()),
+        ("service", probe::<Service>()),
         ("spec", probe::<SpecSource>()),
         ("patch", probe::<Patch>()),
         ("operationPatch", probe::<OperationPatch>()),

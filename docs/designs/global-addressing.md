@@ -1,6 +1,30 @@
 # Design: stable global addresses for providers and operations
 
-**Status:** approved · **Pillar:** Spec · **Stories:** [C-37](../stories/C-37-global-addressing.md)
+**Status:** approved, **amended by C-49** · **Pillar:** Spec ·
+**Stories:** [C-37](../stories/C-37-global-addressing.md)
+
+> **Amendment (C-49, [provider-services.md](provider-services.md)).** This design's **middle level is
+> no longer anonymous.** Its first path segment is a declared
+> [`Service`](../stories/C-49-provider-services.md) — a named thing that owns the base URL, the
+> description and the API version — not a bare `Operation.path` segment. Three consequences bind
+> anything built on this document:
+>
+> 1. **`api_version` belongs to the service**, with the connector-level value as its default. A single
+>    connector-level version cannot describe AWS, which dates `s3` at `2006-03-01` and
+>    `bedrock-runtime` at `2023-09-30`.
+> 2. **A `default` service is reserved, implicit and elided.** An operation that names no service
+>    belongs to `default`, and `default` is **never rendered**: `com.freshdesk.api:v2`, not
+>    `com.freshdesk.api/default:v2`. `default` must never reach a published address.
+> 3. **`Operation.path: Vec<String>` is not the shape to build.** C-49 landed the first segment as
+>    `Operation.service: String`. C-37's remaining segments, if it still wants them, append *below* the
+>    service — and doing so makes parsing ambiguous, because `com.freshdesk.api/tickets:v2` could be
+>    the `tickets` service or a tail segment under an elided `default`. C-37 must pick one of the two
+>    resolutions provider-services.md records (parse against the connector's declared service set, or
+>    forbid a tail on `default`) before it can claim the round-trip law. **The grammar implemented today
+>    refuses a gid with more than one middle segment** rather than guessing.
+>
+> Where this document says "a versioned resource group", read "a service". Where it says
+> `Operation.path`, read `Operation.service` plus whatever C-37 adds below it.
 
 ## Why
 

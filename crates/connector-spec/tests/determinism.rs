@@ -7,7 +7,7 @@
 
 use connector_spec::{
     AuthMethod, AuthRequirement, AuthScheme, Connector, HttpMethod, Idempotency, Operation, Param,
-    ParamSet, Provenance, Quirks, Risk,
+    ParamSet, Provenance, Quirks, Risk, DEFAULT_SERVICE,
 };
 use serde_json::json;
 
@@ -28,6 +28,9 @@ fn connector(reversed: bool) -> Connector {
 
     Connector {
         id: "b".into(),
+        authority: None,
+        api_version: None,
+        services: Vec::new(),
         vendor: "Babelforce".into(),
         base_url: "https://{tenant}.babelforce.com".into(),
         description: String::new(),
@@ -52,6 +55,7 @@ fn connector(reversed: bool) -> Connector {
         default_auth: vec![AuthRequirement::all(credentials.iter().copied())],
         operations: vec![Operation {
             id: "b.call.list".into(),
+            service: DEFAULT_SERVICE.into(),
             method: HttpMethod::Get,
             path: "/v2/calls".into(),
             description: "List calls".into(),

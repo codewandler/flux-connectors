@@ -1,0 +1,18 @@
+# C-49: `default` is the name of the implicit service, so declaring it would be a second definition
+# of something that already exists — and the two could then disagree about a base URL or a version.
+id = "acme"
+vendor = "Acme"
+base_url = "https://api.acme.example"
+
+[[services]]
+name = "default"
+description = "Everything."
+
+[[operations]]
+id = "acme-thing-get"
+service = "default"
+method = "GET"
+path = "/v1/things"
+description = "Fetch one thing."
+risk = "low"
+idempotency = "idempotent"

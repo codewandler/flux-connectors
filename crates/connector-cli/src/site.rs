@@ -78,14 +78,24 @@ struct Document {
 pub struct ProviderEntry {
     /// The connector id, e.g. `zendesk`. Names `connectors/<id>.flux`.
     id: String,
+    /// The reverse-DNS authority the provider publishes under (`com.amazonaws`), or `null` when it
+    /// declares none — which is every provider shipped today.
+    authority: Option<String>,
     /// The vendor's display name.
     vendor: String,
     /// What the connector is for, in one line.
     description: String,
-    /// The API base URL, templating included.
+    /// The API base URL, templating included. A service may override it; see
+    /// [`ServiceEntry::base_url`].
     base_url: String,
+    /// The vendor's API version, as the default for this provider's services. `null` when unstated.
+    api_version: Option<String>,
     /// The hosts this connector reaches, as the base URL spells them.
     hosts: Vec<String>,
+    /// The provider's API surfaces (C-49). Always at least one: a provider with a single surface
+    /// publishes the reserved `default` service, so a consumer can group by service unconditionally
+    /// rather than special-casing the providers that have not been split.
+    services: Vec<ServiceEntry>,
     /// The credentials it declares and how they reach the wire.
     auth: ProviderAuth,
     /// How many operations it publishes — the number a provider list renders without walking
@@ -94,6 +104,29 @@ pub struct ProviderEntry {
     /// Every operation, in the order the provider declares them, which is also the order
     /// `connectors/<id>.flux` carries them.
     operations: Vec<OperationEntry>,
+}
+
+/// One API surface of a provider: the unit a consumer addresses, versions and installs (C-49).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+struct ServiceEntry {
+    /// The service name, e.g. `s3`, or `default` for a provider with a single surface.
+    name: String,
+    /// What the service is for, in one line. Empty for the implicit `default` service, which has no
+    /// declaration to carry one.
+    description: String,
+    /// The base URL calls to this service reach — its own override, else the provider's.
+    base_url: String,
+    /// The hosts those calls reach, as the base URL spells them. A service's egress surface is its
+    /// own and is never widened to the union of the provider's.
+    hosts: Vec<String>,
+    /// The vendor's API version for this service. `null` when neither it nor the provider states one.
+    api_version: Option<String>,
+    /// The service's rendered address — `com.amazonaws/s3:2006-03-01` — or `null` when the provider
+    /// declares no authority or no version. `default` is elided from it, never spelled out.
+    gid: Option<String>,
+    /// How many operations belong to it. The per-service counts sum to
+    /// [`ProviderEntry::operation_count`], because the services partition the operation set.
+    operation_count: usize,
 }
 
 /// A connector's credentials: what it declares, and what it requires by default.
@@ -156,6 +189,10 @@ struct OperationEntry {
     id: String,
     /// The [`ProviderEntry::id`] it belongs to.
     provider: String,
+    /// The [`ServiceEntry::name`] it belongs to — exactly one, and `default` for a provider with a
+    /// single API surface. This is the grouping a consumer wants once a provider is more than one
+    /// API (C-49).
+    service: String,
     /// What it does, in one line — the same text a model sees as the tool description.
     description: String,
     /// How much damage it can do. Serialized in flux's own vocabulary (`low`…`destructive`).
@@ -226,20 +263,38 @@ pub fn provider_entry(
                 rendering.id
             )
         })?;
-        operations.push(operation_entry(
-            connector,
-            operation,
-            rendering,
-            host.clone(),
-        ));
+        // The host the call actually reaches, which is the operation's **service**'s — not the
+        // provider's, which for a multi-service provider is a different host entirely.
+        let host = catalog::host_of(connector.base_url_of(&operation.service))?.to_string();
+        operations.push(operation_entry(connector, operation, rendering, host));
+    }
+
+    let mut services = Vec::new();
+    for name in connector.service_names() {
+        let base_url = connector.base_url_of(name);
+        services.push(ServiceEntry {
+            name: name.to_owned(),
+            description: connector
+                .service(name)
+                .map(|service| service.description.clone())
+                .unwrap_or_default(),
+            base_url: base_url.to_owned(),
+            hosts: vec![catalog::host_of(base_url)?.to_string()],
+            api_version: connector.api_version_of(name).map(str::to_owned),
+            gid: connector.gid_of(name).map(|gid| gid.to_string()),
+            operation_count: connector.operations_of(name).count(),
+        });
     }
 
     Ok(ProviderEntry {
         id: connector.id.clone(),
+        authority: connector.authority.clone(),
         vendor: connector.vendor.clone(),
         description: connector.description.clone(),
         base_url: connector.base_url.clone(),
+        api_version: connector.api_version.clone(),
         hosts: vec![host],
+        services,
         auth: provider_auth(connector),
         operation_count: operations.len(),
         operations,
@@ -270,6 +325,7 @@ fn operation_entry(
     OperationEntry {
         id: operation.id.clone(),
         provider: connector.id.clone(),
+        service: operation.service.clone(),
         description: operation.description.clone(),
         risk: operation.risk,
         idempotency: operation.idempotency,
@@ -392,6 +448,7 @@ mod tests {
     fn operation() -> Operation {
         Operation {
             id: "acme-thing-list".to_string(),
+            service: connector_spec::DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Get,
             path: "/v2/things".to_string(),
             description: "List things".to_string(),
@@ -416,6 +473,9 @@ mod tests {
     fn connector() -> Connector {
         Connector {
             id: "acme".to_string(),
+            authority: None,
+            api_version: None,
+            services: Vec::new(),
             vendor: "Acme".to_string(),
             base_url: "https://{tenant}.acme.example/api".to_string(),
             description: "Acme".to_string(),

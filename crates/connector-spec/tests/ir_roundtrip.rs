@@ -10,7 +10,7 @@
 
 use connector_spec::{
     AuthMethod, AuthRequirement, AuthScheme, Connector, HttpMethod, Idempotency, OAuth2Spec,
-    OAuthGrant, Operation, Param, ParamSet, Provenance, Quirks, Risk,
+    OAuthGrant, Operation, Param, ParamSet, Provenance, Quirks, Risk, DEFAULT_SERVICE,
 };
 use serde_json::json;
 
@@ -58,6 +58,7 @@ fn babelforce_auth_methods() -> Vec<AuthMethod> {
 fn op(id: &str, auth: Option<Vec<AuthRequirement>>) -> Operation {
     Operation {
         id: id.into(),
+        service: DEFAULT_SERVICE.into(),
         method: HttpMethod::Get,
         path: "/v2/calls".into(),
         description: "List calls".into(),
@@ -73,6 +74,9 @@ fn op(id: &str, auth: Option<Vec<AuthRequirement>>) -> Operation {
 fn babelforce() -> Connector {
     Connector {
         id: "babelforce".into(),
+        authority: None,
+        api_version: None,
+        services: Vec::new(),
         vendor: "Babelforce".into(),
         base_url: "https://{tenant}.babelforce.com".into(),
         description: "Babelforce manager API".into(),

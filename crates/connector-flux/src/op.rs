@@ -798,12 +798,13 @@ fn method_word(method: HttpMethod) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use connector_spec::{ParamSet, Provenance};
+    use connector_spec::{ParamSet, Provenance, DEFAULT_SERVICE};
     use serde_json::json;
 
     fn operation(path: &str, path_params: Vec<Param>) -> Operation {
         Operation {
             id: "vendor-thing-get".to_string(),
+            service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Get,
             path: path.to_string(),
             description: "Get a thing.".to_string(),
@@ -856,6 +857,9 @@ mod tests {
     fn connector(base_url: &str, operation: Operation) -> Connector {
         Connector {
             id: "vendor".to_string(),
+            authority: None,
+            api_version: None,
+            services: Vec::new(),
             vendor: String::new(),
             base_url: base_url.to_string(),
             description: String::new(),

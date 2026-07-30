@@ -1,0 +1,2 @@
+providers/reserved-default-service.toml is not a valid connector definition:
+  - `[[services]]` declares "default", which is reserved: it is the service an operation belongs to when it names none, and it is elided from every published address. A provider with one API surface declares no services at all

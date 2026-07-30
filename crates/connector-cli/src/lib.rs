@@ -71,7 +71,11 @@ pub fn run(invocation: &Invocation, out: &mut impl Write) -> Result<()> {
 /// Compile every provider and write what changed.
 fn build(invocation: &Invocation, out: &mut impl Write) -> Result<()> {
     let workspace = workspace_for(invocation)?;
-    let plan = pipeline::plan(&workspace, invocation.provider.as_deref())?;
+    let plan = pipeline::plan_selected(
+        &workspace,
+        invocation.provider.as_deref(),
+        invocation.service.as_deref(),
+    )?;
 
     if plan.is_up_to_date() {
         writeln!(
@@ -113,7 +117,11 @@ fn rasterize(invocation: &Invocation, workspace: &Workspace, out: &mut impl Writ
 /// Show what a build would change. Writes nothing — see [`pipeline::plan`].
 fn show_diff(invocation: &Invocation, out: &mut impl Write) -> Result<()> {
     let workspace = workspace_for(invocation)?;
-    let plan = pipeline::plan(&workspace, invocation.provider.as_deref())?;
+    let plan = pipeline::plan_selected(
+        &workspace,
+        invocation.provider.as_deref(),
+        invocation.service.as_deref(),
+    )?;
     write!(out, "{}", diff::render(&workspace, &plan))?;
     Ok(())
 }
