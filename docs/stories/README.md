@@ -57,6 +57,8 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-12 — Compile quirks into Flux control flow](C-12-quirks-as-control-flow.md) · Codegen · the payoff for targeting a real language
 - [C-14 — Fetch specs and detect upstream drift](C-14-fetch-and-drift-check.md) · Build
 - [C-15 — Install into flux and prove milestone 1 end to end](C-15-install-and-live-e2e.md) · Build · milestone 1 · needs the $auth seam released in ../flux
+- [C-23 — Make operation names a stable public contract](C-23-operation-naming-contract.md) · Codegen · op names are what users and models call — renaming one silently breaks callers
+- [C-24 — Verify generated connectors against recorded HTTP fixtures](C-24-fixture-verification.md) · Build · proves a connector *works*, not merely that it parses — without live credentials
 
 ### unified auth — one model for every provider's credentials
 _Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._
