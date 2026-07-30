@@ -21,8 +21,8 @@ use connector_cli::pipeline;
 use connector_cli::workspace::Workspace;
 use connector_spec::Connector;
 
-/// The three providers this repository ships, in the order C-17 names them.
-const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce"];
+/// Every provider this repository ships: the three C-17 names, then one per connector story.
+const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce", "github"];
 
 /// The repository root, derived from this crate's manifest directory so the test is independent of
 /// the working directory a runner happens to use.

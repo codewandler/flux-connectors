@@ -22,8 +22,8 @@ use std::path::{Path, PathBuf};
 use connector_cli::pipeline::{self, PlannedArtifact};
 use connector_cli::workspace::Workspace;
 
-/// The three providers this repository ships, in the order C-17 names them.
-const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce"];
+/// Every provider this repository ships: the three C-17 names, then one per connector story.
+const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce", "github"];
 
 /// The repository root, derived from this crate's manifest directory so the test is independent of
 /// the working directory a runner happens to use.
