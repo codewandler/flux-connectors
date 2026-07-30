@@ -118,6 +118,83 @@ the single most dangerous way this design can be implemented wrongly while appea
 **2 · Register the secret with the redactor before the request is built**, not after, so a failure
 between construction and dispatch cannot surface it in an error.
 
+## The redaction guarantee, and the condition it turned out to have
+
+**Decision (C-152): a credential the host's redactor will not hold is refused at resolve time and not
+sent.** C-116 implemented must-do 2 and stated the resulting property unconditionally — "the credential
+never reaches a surface". The property had a condition nobody had written down.
+
+`Redactor::add_secret` **silently ignores a value under six characters once trimmed**
+(`codewandler-flux-secret-1.0.1/src/lib.rs:195-201`, the version pinned in `Cargo.lock`):
+
+```rust
+pub fn add_secret(&self, value: impl Into<String>) {
+    let v = value.into();
+    let trimmed = v.trim();
+    if trimmed.len() >= 6 {
+        self.values.lock().unwrap().push(trimmed.to_string());
+    }
+}
+```
+
+That no-op is right for flux — over-redacting a common English word would corrupt every surface it
+touches — and it means a caller reading `add_secret` as a guarantee gets one only above the threshold.
+A five-character stored credential was registered *successfully* and travelled unredacted through all
+four surfaces `Executor::dispatch` scrubs. **The code was correct about what it did; the prose was
+wrong about what that meant, and the prose is what a reader relies on.**
+
+Two ways out were on the table:
+
+1. **State the threshold everywhere the guarantee is stated** and accept it.
+2. **Refuse** a credential too short to be redactable, naming the address.
+
+Refusing won, on three grounds:
+
+- **It is the posture the rest of this port already takes.** No credential stored, a store that cannot
+  answer, an inbound signing secret, a header the module already set — every one of them refuses and
+  none degrades, precisely because an unauthenticated or unprotected send is the failure that looks
+  like success. A credential the host cannot keep off a surface belongs in the same list.
+- **Option 1 does not remove the leak, it documents it** — and it puts the burden on every future
+  reader of four separate prose sites to notice a numeric threshold and reason about whether their
+  value clears it. The value still travels in the clear.
+- **A five-character API token is a misconfiguration long before it is a credential.** No vendor in
+  this catalogue issues one; a store holding one is far more likely to hold a truncated value, a
+  placeholder, or an empty string with a newline.
+
+The refusal is `connector_pack::Error::UnredactableCredential`, raised where the value is registered
+(`crates/connector-pack/src/credentials.rs`, `register`). It names the operation, the credential and
+the address's tenant and authority — **and neither the value nor its length**, because a length is a
+fingerprint, which is the care `connector_secrets::Secret`'s `Debug` already takes.
+
+### It asks the redactor rather than mirroring the six
+
+The check is not `value.trim().len() < 6`. The value is registered and the redactor is then asked
+whether scrubbing it changes it; if it does not, nothing is protecting it. A mirrored threshold would
+be a constant that goes stale on a flux upgrade **without any test noticing** — the same failure mode
+`DEFAULT_SERVICE`'s mirror is guarded against, and there the guard was worth a test of its own. Asking
+also covers the empty and all-whitespace cases without enumerating them.
+
+### The named consequence
+
+This is a behaviour change, not a tightening of an internal invariant. A deployment whose store holds
+a credential under the threshold used to get a `200` from the vendor and a leak; it now gets a refusal
+that names the address, and no request. That is the intended trade, and it is the one case where this
+pack refuses a call the vendor would have answered.
+
+### Also from that review
+
+- **`auth::Assembled` no longer derives `Debug`.** It holds the assembled plaintext — `Bearer `'s
+  token, or the base64 of a basic pair — and a derive there is a foot-gun waiting for the first `{:?}`
+  added while debugging. Its hand-written `Debug` redacts the value and keeps the credential name and
+  placement, matching `Secret`.
+- **Registration moved above the fallible step.** The user half of a Basic join is a fallible
+  environment read that used to run *between* the store returning a value and the redactor being told
+  about it. Nothing in that window could surface the value, and C-116's own acceptance was
+  "`add_secret` before the request is constructed" — so the window is closed rather than argued about.
+- **The `view` surface is now asserted against a real `view`.** `flux_runtime::tool_fn` builds every
+  result with `ToolResult::ok`, which leaves `view: None`, so the test's stand-in transport has to
+  answer with `ToolResult::ok_view` for that assertion to scrub anything at all.
+
 ## Ports the host binds
 
 - **`CredentialStore`** — the adapter this repo already modelled and never wired to anything.

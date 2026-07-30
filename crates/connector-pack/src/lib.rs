@@ -80,9 +80,17 @@
 //! [`crate::auth`] for the three axes and [`Credentials`] for the port.
 //!
 //! The order is the safety property. Every value is registered with `ctx.redactor` **before the
-//! request is constructed**, so a failure between construction and dispatch cannot surface it —
-//! `flux-web`'s `http.rs:248` is the precedent, and `tests/credentials.rs` holds it against all four
-//! surfaces `Executor::dispatch` scrubs.
+//! request is constructed** — and before any fallible step that follows resolution — so a failure
+//! between construction and dispatch cannot surface it. `flux-web`'s `http.rs:248` is the precedent,
+//! and `tests/credentials.rs` holds it against all four surfaces `Executor::dispatch` scrubs.
+//!
+//! Registration is *checked*, not assumed, and that is the correction C-152 made. flux's
+//! `Redactor::add_secret` silently ignores a value under six trimmed characters, so a short
+//! credential was registered successfully and redacted nowhere, while this paragraph said otherwise.
+//! A value the redactor does not end up holding is now [`Error::UnredactableCredential`] and **is not
+//! sent** — the guarantee holds for every credential that travels, because one it cannot cover does
+//! not travel. See `docs/designs/connector-tool-pack.md` for why refusing beat documenting the
+//! threshold.
 //!
 //! # What is not here yet
 //!
@@ -412,6 +420,40 @@ pub enum Error {
         credential: String,
         /// The environment-variable keys that were tried, in order.
         env: String,
+    },
+
+    /// **A credential the host's redactor will not hold, and therefore will not travel.**
+    ///
+    /// flux's `Redactor::add_secret` silently ignores a value under six characters once trimmed
+    /// (`codewandler-flux-secret-1.0.1/src/lib.rs:195-201`) — refusing to over-redact a common word
+    /// is the right trade for flux, and it means registration can *succeed* while protecting
+    /// nothing. A credential that short would then travel unredacted through all four surfaces
+    /// `Executor::dispatch` scrubs, with every line of code above it reading as though it were
+    /// protected.
+    ///
+    /// Refused rather than sent, which is C-152's recorded decision (see
+    /// `docs/designs/connector-tool-pack.md`): a credential the host cannot keep off a surface is
+    /// one it should not put on the wire, and a five-character API token is a misconfiguration long
+    /// before it is a credential. The alternative considered was to state the threshold wherever the
+    /// guarantee is stated and accept it; the design says why this one won.
+    ///
+    /// The refusal names the address so an operator can go and replace the value, and it names
+    /// neither the value nor its length — a length is a fingerprint, which is the same care
+    /// `connector_secrets::Secret`'s `Debug` takes.
+    #[error(
+        "`{operation}` resolved `{credential}` for tenant `{tenant}` under `{authority}`, and the \
+         host's redactor will not hold a value that short, so it could not be kept off a surface; \
+         the request was not sent"
+    )]
+    UnredactableCredential {
+        /// The operation id.
+        operation: String,
+        /// The credential that could not be protected.
+        credential: String,
+        /// The tenant whose credential it is — the address, minus the value.
+        tenant: String,
+        /// The provider's reverse-DNS authority, the second segment of that address.
+        authority: String,
     },
 
     /// A mechanism naming no credentials at all.

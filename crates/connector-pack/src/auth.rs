@@ -50,7 +50,7 @@ use crate::Error;
 /// Split from the raw secret deliberately: [`acquire`] is a pure function of the stored value, so
 /// the caller can register **both** strings with the redactor before any request exists, and
 /// [`place`] is then a total function that cannot fail on a value it has not seen.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) struct Assembled {
     /// The credential's flat-namespace name, for a refusal that says which one.
     pub(crate) credential: &'static str,
@@ -58,6 +58,25 @@ pub(crate) struct Assembled {
     pub(crate) value: String,
     /// Where it goes.
     pub(crate) place: Placement,
+}
+
+/// **Hand-written, and the `value` does not print.** A derived `Debug` here would render the
+/// assembled plaintext — `Bearer `'s token, or the base64 of a basic pair, which is as good as the
+/// secret to anyone holding it. No call site formats one today, so nothing leaks now; a derive is a
+/// foot-gun waiting for the first `{:?}` someone adds while debugging, and by then the value is on a
+/// surface nobody scrubbed.
+///
+/// This is the posture [`connector_secrets::Secret`] already takes, down to omitting the length: a
+/// length is a fingerprint. The credential's *name* and its *placement* stay, because they are what a
+/// `Debug` of this type is read for — which credential, and where it was going.
+impl std::fmt::Debug for Assembled {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Assembled")
+            .field("credential", &self.credential)
+            .field("value", &format_args!("<redacted>"))
+            .field("place", &self.place)
+            .finish()
+    }
 }
 
 /// Run the acquisition axis: turn the stored value into the value that travels.
@@ -207,6 +226,39 @@ mod tests {
         assert_eq!(base64(b"foobar"), "Zm9vYmFy");
         // Every 6-bit group, so the `+` and `/` end of the alphabet is covered too.
         assert_eq!(base64(&[0xfb, 0xff, 0xbf]), "+/+/");
+    }
+
+    /// **The plaintext does not print.** `Assembled` holds the assembled credential — `Bearer <t>`'s
+    /// token, or the base64 of a basic pair — so a derived `Debug` would put it on any surface the
+    /// first `{:?}` someone adds while debugging reaches. No call site formats one today; this is the
+    /// assertion that keeps that from mattering (C-152, finding 2).
+    ///
+    /// What it must still print is the credential's own name and its placement: those are what a
+    /// `Debug` of this type is read for, and dropping them would trade one bad posture for a useless
+    /// one.
+    #[test]
+    fn an_assembled_credential_redacts_its_value_the_way_a_secret_does() {
+        let credential = credential(
+            Acquisition::Static,
+            Placement::Header {
+                name: "Authorization",
+                prefix: "Bearer ",
+            },
+        );
+        let assembled = Assembled {
+            credential: credential.name,
+            value: acquire(credential, SENTINEL, None),
+            place: credential.place,
+        };
+
+        let rendered = format!("{assembled:?}");
+        assert!(
+            !rendered.contains(SENTINEL),
+            "the assembled plaintext printed: {rendered}"
+        );
+        assert!(rendered.contains("<redacted>"), "{rendered}");
+        assert!(rendered.contains("acme.token"), "{rendered}");
+        assert!(rendered.contains("Authorization"), "{rendered}");
     }
 
     /// **Axis 3, header with prefix.** The bearer preset is a prefix string and nothing else — there
