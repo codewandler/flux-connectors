@@ -1899,11 +1899,11 @@
               "name": "limit",
               "in": "body",
               "wire": null,
-              "description": "Maximum messages to return in one call, newest first. Slack caps this at 1000 and advises far less",
+              "description": "Maximum messages to return in one call, newest first. Slack's documented maximum is 999 and it advises far less",
               "required": false,
               "schema": {
                 "default": 100,
-                "maximum": 1000,
+                "maximum": 999,
                 "minimum": 1,
                 "type": "integer"
               }

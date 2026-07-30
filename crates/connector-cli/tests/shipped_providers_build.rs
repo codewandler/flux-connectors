@@ -22,8 +22,8 @@ use std::path::{Path, PathBuf};
 use connector_cli::pipeline::{self, PlannedArtifact};
 use connector_cli::workspace::Workspace;
 
-/// The three providers this repository ships, in the order C-17 names them.
-const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce"];
+/// Every provider this repository ships: C-17's original three, then the connectors added since.
+const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce", "slack"];
 
 /// The repository root, derived from this crate's manifest directory so the test is independent of
 /// the working directory a runner happens to use.
@@ -187,6 +187,35 @@ fn babelforce_sends_its_free_form_session_bodies() {
             .count(),
         2,
         "both session-variable operations must send the caller's body:\n{module}"
+    );
+}
+
+/// **Slack's arguments travel in the body, and nothing reaches the URL.** The mirror image of the
+/// freshdesk assertion below: where freshdesk pins that a query value is spelled the vendor's way,
+/// this pins that Slack has no query value to spell at all.
+///
+/// Asserted through the real pipeline rather than only over the IR, because the IR and the emitted
+/// request can disagree — that is the whole premise of this file. Slack's body is flat, so the
+/// payload is a single record with no nesting, and the URL is the method name and nothing else. A
+/// read converted to a GET would break both halves at once.
+#[test]
+fn slack_sends_its_arguments_in_the_body_and_nothing_in_the_url() {
+    let module = planned("slack", "slack.flux");
+
+    assert!(
+        module.contains("$payload = { channel: $channel, text: $text, thread_ts: $thread_ts }"),
+        "`slack-chat-post-message` must send its arguments as a flat JSON body:\n{module}"
+    );
+    assert!(
+        module.contains(r#"$url = fmt("{base}/api/conversations.history")"#),
+        "`slack-conversations-history` must address the bare method path, with no query string \
+         — an opaque channel id in a query value cannot be percent-encoded (C-30):\n{module}"
+    );
+    // The emitter binds `$sep` only to carry a `?`/`&` between query parameters, so its absence is
+    // a structural proof that no value was spliced into any of the four URLs.
+    assert!(
+        !module.contains("$sep") && !module.contains('?'),
+        "no Slack operation may assemble a query string:\n{module}"
     );
 }
 

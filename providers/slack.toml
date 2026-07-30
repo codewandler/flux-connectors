@@ -29,26 +29,31 @@
 # `crates/connector-flux/tests/slack_connector.rs` fails if any operation gains a query parameter,
 # and fails again if an emitted module contains the emitter's `$sep` query-separator machinery.
 #
-# Vendor documentation, recorded precisely because the two halves do not say the same thing:
+# Vendor documentation — POST+JSON is documented as supported for all four methods, reads included:
 #
 # - The Web API overview (docs.slack.dev/apis/web-api) states that a JSON body requires the token to
 #   travel as a bearer in the `Authorization` header — *"You must transmit your token as a bearer
 #   token in the Authorization HTTP header"*, and *"you cannot send your token as part of the query
 #   string or as an attribute in your posted JSON"*. That is why `scheme = "bearer"` below is what
 #   makes this request shape legal at all, rather than an incidental choice.
-# - The same page scopes its JSON guarantee to writes: *"Most write methods allow arguments with
-#   `application/json` attributes."*
-# - The reference pages for the two **reads** here (`conversations.history`, `users.info`) list
-#   `application/json` among their accepted content types, but give their HTTP method as `GET`.
+# - Each of the four reference pages lists `application/json` under **Content types**.
+# - Each of them, including the two reads, documents the error `invalid_post_type`: *"The method was
+#   called via a `POST` request, but the specified `Content-Type` was invalid. Valid types are:
+#   `application/json` …"*. A method that defines an error for POSTing with the *wrong* content type,
+#   and names `application/json` among the right ones, is documenting POST+JSON as supported.
 #
-# CONFIRMED-BY-DOCS GAP: for `chat.postMessage` and `reactions.add` the POST+JSON shape is
-# unambiguously documented. For `slack-conversations-history` and `slack-users-info` it rests on
-# `application/json` being listed as accepted for those methods plus Slack's long-standing
-# acceptance of POST for every Web API method (its own guidance for `conversations.history` offers
-# the token *"as a POST parameter"*, which presumes POST). This is the one vendor-behaviour
-# assumption in the file and it is the thing C-15's live end-to-end run must verify first. If a read
-# turns out to reject POST, the fix is C-30's percent-encoding, **not** a GET with a raw
-# `channel=` in the query string.
+# Two things a later reader might mistake for evidence against this, so they are answered here:
+#
+# - The `GET https://slack.com/api/<method>` line on a reference page is that page's **sample
+#   invocation**, not a constraint on the verb.
+# - The overview's *"Most write methods allow arguments with `application/json` attributes"* is a
+#   generalisation about the surface as a whole; the per-method pages are more specific and override
+#   it for these four.
+#
+# What is *not* settled by documentation is practice — whether Slack behaves as documented on these
+# exact methods. That is C-15's live end-to-end run, and it is the first thing that run should check.
+# If a read were to reject POST despite the above, the fix is C-30's percent-encoding, **not** a GET
+# with a raw `channel=` in the query string.
 #
 # ---------------------------------------------------------------------------------------------
 # SCHEMA GAP: nothing expresses "the failure is in the body of a 200".
@@ -204,14 +209,19 @@ description = "Channel id to read (`C0123ABCDEF`)"
 required = true
 schema = { type = "string", minLength = 1 }
 
-# The bound that replaces pagination. Slack's own guidance is to keep this well under the maximum;
-# `cursor` paging is deliberately absent because the quirk model can only express a cursor as a
-# query parameter — see the header comment.
+# The bound that replaces pagination. `cursor` paging is deliberately absent because the quirk model
+# can only express a cursor as a query parameter — see the header comment.
+#
+# `maximum = 999`, not 1000: the vendor's own wording is *"Maximum of 999"*, and its pagination note
+# says *"To begin pagination, specify a `limit` value under `1000`"*
+# (docs.slack.dev/reference/methods/conversations.history). An off-by-one here is not cosmetic — the
+# schema is published verbatim to consumers in `web/public/catalog.json`, so a wrong bound is a wrong
+# contract a model would try to satisfy.
 [[operations.params.body]]
 name = "limit"
-description = "Maximum messages to return in one call, newest first. Slack caps this at 1000 and advises far less"
+description = "Maximum messages to return in one call, newest first. Slack's documented maximum is 999 and it advises far less"
 required = false
-schema = { type = "integer", minimum = 1, maximum = 1000, default = 100 }
+schema = { type = "integer", minimum = 1, maximum = 999, default = 100 }
 
 [[operations.params.body]]
 name = "oldest"

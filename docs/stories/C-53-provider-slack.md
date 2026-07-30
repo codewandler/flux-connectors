@@ -40,8 +40,11 @@ proves a method-style API (`POST /api/chat.postMessage`) needs nothing new from 
       their `risk` reflects that, and neither is marked idempotent.
 
 ## Progress
-- **Done.** `providers/slack.toml` plus its 11 generated artifacts ship; the catalogue is 4 providers
-  and 29 operations. Slack is the first provider whose only recorded defect is the catalogue-wide
+- **Done.** `providers/slack.toml` plus its 7 generated artifacts ship — a module, a manifest, a
+  catalog table and one rendering per operation, which is the `3 + operations` shape
+  `shipped_providers_build.rs` asserts. The repository total moves 37 → 44 and the catalogue is 4
+  providers and 29 operations. Slack is the first provider whose only recorded defect is the
+  catalogue-wide
   `credential-not-injected`: no `unencodable-query-value`, no `no-credential`, and no
   `unbound-base-url-template`, because `https://slack.com` needs no tenant binding. Closing the
   `$auth` seam therefore makes this connector work without any further provider-side change.
@@ -78,16 +81,27 @@ proves a method-style API (`POST /api/chat.postMessage`) needs nothing new from 
    — which is why `slack-reactions-add` and the two reads all sit at `medium`. Fix: decide write-ness
    from something other than the verb.
 
-### Vendor-documentation risk, recorded rather than assumed
+### Vendor documentation: POST+JSON is documented for all four, reads included
 
-Confirmed against docs.slack.dev: `application/json` requires the token to travel as a bearer in the
-`Authorization` header, which is what makes this request shape legal. But the Web API overview scopes
-its JSON guarantee to *"most **write** methods"*, and the reference pages for the two reads
-(`conversations.history`, `users.info`) list `application/json` among accepted content types while
-giving their HTTP method as `GET`. So POST+JSON is unambiguously documented for the two writes and
-rests on an inference for the two reads. This is the one vendor-behaviour assumption in the file and
-is what C-15's live run must verify first. If a read rejects POST, the fix is C-30's
-percent-encoding, **not** a GET with a raw `channel=` in the query string.
+Confirmed against docs.slack.dev. `application/json` requires the token to travel as a bearer in the
+`Authorization` header, which is what makes this request shape legal at all. All four reference pages
+list `application/json` under **Content types**, and — the decisive part — all four, including the two
+reads, document the error `invalid_post_type`: *"The method was called via a `POST` request, but the
+specified `Content-Type` was invalid. Valid types are: `application/json` …"*. A method that defines
+an error for POSTing with the wrong content type, and names `application/json` among the right ones,
+documents POST+JSON as supported.
+
+Two things that look like counter-evidence and are not: the `GET https://slack.com/api/<method>` line
+on a reference page is that page's sample invocation, not a constraint on the verb; and the overview's
+*"most **write** methods"* is a generalisation the per-method pages override.
+
+What documentation cannot settle is practice — whether Slack behaves as documented on these exact
+methods — so C-15's live run should still check it first. If a read were to reject POST anyway, the
+fix is C-30's percent-encoding, **not** a GET with a raw `channel=` in the query string.
+
+An earlier revision of this story and of the TOML header recorded this as a "CONFIRMED-BY-DOCS GAP"
+and called the reads an inference. That overstated the doubt, and a caveat the vendor contradicts
+misleads exactly as much as a missing one; it is corrected above and in `providers/slack.toml`.
 
 ## Notes
 - **Slack's `ok: false` envelope is a quirk worth recording**: it returns HTTP 200 with
