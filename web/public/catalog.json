@@ -418,7 +418,9 @@
             ]
           }
         }
-      ]
+      ],
+      "events": [],
+      "channels": []
     },
     {
       "id": "asana",
@@ -788,7 +790,9 @@
             ]
           }
         }
-      ]
+      ],
+      "events": [],
+      "channels": []
     },
     {
       "id": "babelforce",
@@ -1631,7 +1635,9 @@
             ]
           }
         }
-      ]
+      ],
+      "events": [],
+      "channels": []
     },
     {
       "id": "fly",
@@ -2261,7 +2267,9 @@
             ]
           }
         }
-      ]
+      ],
+      "events": [],
+      "channels": []
     },
     {
       "id": "freshdesk",
@@ -3256,7 +3264,9 @@
             ]
           }
         }
-      ]
+      ],
+      "events": [],
+      "channels": []
     },
     {
       "id": "github",
@@ -3352,7 +3362,7 @@
           "hosts": [
             "api.github.com"
           ],
-          "flux": "op github-repo-get(owner: String, repo: String) -> Any\n  description \"Get one repository's metadata, including its default branch, visibility and permissions\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/repos/{owner}/{repo}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op github-repo-get(owner: String, repo: String) -> Any\n  description \"Get one repository's metadata, including its default branch, visibility and permissions\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/repos/{owner}/{repo}\")\n  Accept = \"application/vnd.github+json\"\n  response = http.request(headers: { Accept }, method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3420,7 +3430,7 @@
           "hosts": [
             "api.github.com"
           ],
-          "flux": "op github-issue-get(owner: String, repo: String, issue_number: Number) -> Any\n  description \"Get one issue by number. GitHub treats a pull request as an issue, so a PR number returns that PR's issue view; use github-pull-get for its merge and review state\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/repos/{owner}/{repo}/issues/{issue_number}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op github-issue-get(owner: String, repo: String, issue_number: Number) -> Any\n  description \"Get one issue by number. GitHub treats a pull request as an issue, so a PR number returns that PR's issue view; use github-pull-get for its merge and review state\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/repos/{owner}/{repo}/issues/{issue_number}\")\n  Accept = \"application/vnd.github+json\"\n  response = http.request(headers: { Accept }, method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3488,7 +3498,7 @@
           "hosts": [
             "api.github.com"
           ],
-          "flux": "op github-pull-get(owner: String, repo: String, pull_number: Number) -> Any\n  description \"Get one pull request by number, with its merge state, head and base refs and review counts\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/repos/{owner}/{repo}/pulls/{pull_number}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op github-pull-get(owner: String, repo: String, pull_number: Number) -> Any\n  description \"Get one pull request by number, with its merge state, head and base refs and review counts\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/repos/{owner}/{repo}/pulls/{pull_number}\")\n  Accept = \"application/vnd.github+json\"\n  response = http.request(headers: { Accept }, method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3593,7 +3603,7 @@
           "hosts": [
             "api.github.com"
           ],
-          "flux": "op github-issue-create(owner: String, repo: String, title: String, body: String, labels: List<String>, assignees: List<String>) -> Any\n  description \"Open a new issue on a repository. The issue is immediately visible to everyone who can see the repository and notifies its subscribers\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/repos/{owner}/{repo}/issues\")\n  content_type = \"application/json\"\n  payload = { assignees, body, labels, title }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "flux": "op github-issue-create(owner: String, repo: String, title: String, body: String, labels: List<String>, assignees: List<String>) -> Any\n  description \"Open a new issue on a repository. The issue is immediately visible to everyone who can see the repository and notifies its subscribers\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/repos/{owner}/{repo}/issues\")\n  content_type = \"application/json\"\n  Accept = \"application/vnd.github+json\"\n  payload = { assignees, body, labels, title }\n  response = http.request(body: payload, headers: { Accept, \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3672,7 +3682,7 @@
           "hosts": [
             "api.github.com"
           ],
-          "flux": "op github-issue-comment-add(owner: String, repo: String, issue_number: Number, body: String) -> Any\n  description \"Add a comment to an issue or pull request. The comment is public to everyone who can see the repository and notifies its participants; GitHub has no private or internal comment here\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/repos/{owner}/{repo}/issues/{issue_number}/comments\")\n  content_type = \"application/json\"\n  payload = { body }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "flux": "op github-issue-comment-add(owner: String, repo: String, issue_number: Number, body: String) -> Any\n  description \"Add a comment to an issue or pull request. The comment is public to everyone who can see the repository and notifies its participants; GitHub has no private or internal comment here\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/repos/{owner}/{repo}/issues/{issue_number}/comments\")\n  content_type = \"application/json\"\n  Accept = \"application/vnd.github+json\"\n  payload = { body }\n  response = http.request(body: payload, headers: { Accept, \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -3685,7 +3695,9 @@
             ]
           }
         }
-      ]
+      ],
+      "events": [],
+      "channels": []
     },
     {
       "id": "google",
@@ -4209,7 +4221,9 @@
             ]
           }
         }
-      ]
+      ],
+      "events": [],
+      "channels": []
     },
     {
       "id": "hubspot",
@@ -4511,7 +4525,9 @@
             ]
           }
         }
-      ]
+      ],
+      "events": [],
+      "channels": []
     },
     {
       "id": "intercom",
@@ -4873,7 +4889,9 @@
             ]
           }
         }
-      ]
+      ],
+      "events": [],
+      "channels": []
     },
     {
       "id": "jira",
@@ -5290,7 +5308,9 @@
             ]
           }
         }
-      ]
+      ],
+      "events": [],
+      "channels": []
     },
     {
       "id": "openai",
@@ -5558,7 +5578,9 @@
             ]
           }
         }
-      ]
+      ],
+      "events": [],
+      "channels": []
     },
     {
       "id": "openrouter",
@@ -5803,7 +5825,9 @@
             ]
           }
         }
-      ]
+      ],
+      "events": [],
+      "channels": []
     },
     {
       "id": "sentry",
@@ -6103,7 +6127,9 @@
             ]
           }
         }
-      ]
+      ],
+      "events": [],
+      "channels": []
     },
     {
       "id": "shopify",
@@ -6437,7 +6463,9 @@
             ]
           }
         }
-      ]
+      ],
+      "events": [],
+      "channels": []
     },
     {
       "id": "slack",
@@ -6769,6 +6797,202 @@
                 "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
               }
+            ]
+          }
+        }
+      ],
+      "events": [
+        {
+          "name": "app_mention",
+          "service": "default",
+          "oip": "com.slack.api:v1#app_mention",
+          "description": "Someone @-mentioned the app in a channel it is a member of",
+          "default": true,
+          "group": "Messages",
+          "when": {},
+          "schema": {
+            "properties": {
+              "channel": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "thread_ts": {
+                "type": "string"
+              },
+              "ts": {
+                "type": "string"
+              },
+              "type": {
+                "const": "app_mention"
+              },
+              "user": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "user",
+              "text",
+              "channel",
+              "ts"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "message",
+          "service": "default",
+          "oip": "com.slack.api:v1#message",
+          "description": "A message was posted in a channel the app is a member of. Fires for every human message, so a program that triggers on it should expect volume",
+          "default": false,
+          "group": "Messages",
+          "when": {},
+          "schema": {
+            "properties": {
+              "bot_id": {
+                "type": "string"
+              },
+              "channel": {
+                "type": "string"
+              },
+              "subtype": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "thread_ts": {
+                "type": "string"
+              },
+              "ts": {
+                "type": "string"
+              },
+              "type": {
+                "const": "message"
+              },
+              "user": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "channel",
+              "ts"
+            ],
+            "type": "object"
+          }
+        }
+      ],
+      "channels": [
+        {
+          "name": "socket",
+          "service": "default",
+          "oip": "com.slack.api:v1#socket",
+          "description": "Socket Mode — flux opens an outbound WebSocket and Slack pushes events down it. No public URL, and no signature: the connection is authenticated by the app-level token that opened it",
+          "transport": "socket",
+          "events": [
+            "app_mention",
+            "message"
+          ],
+          "verification": {
+            "kind": "connection",
+            "verified": true,
+            "hmac": null
+          },
+          "discriminator": {
+            "source": "body",
+            "name": "event.type"
+          },
+          "delivery_id": {
+            "source": "body",
+            "name": "event_id"
+          },
+          "payload": {
+            "channel": "event.channel",
+            "conversation": "event.thread_ts",
+            "text": "event.text",
+            "thread": "event.thread_ts",
+            "user": "event.user"
+          },
+          "reply": {
+            "operation": "slack-chat-post-message",
+            "oip": "com.slack.api:v1#slack-chat-post-message",
+            "result": "text",
+            "bind": {
+              "channel": "channel",
+              "thread_ts": "thread"
+            }
+          },
+          "cursor": null,
+          "interval": null,
+          "subscription": null,
+          "setup": null
+        },
+        {
+          "name": "events-api",
+          "service": "default",
+          "oip": "com.slack.api:v1#events-api",
+          "description": "The Events API — Slack POSTs to an endpoint the operator exposes, signing each request. Use it when an outbound WebSocket is not an option; it needs a public URL and the signing secret",
+          "transport": "webhook",
+          "events": [
+            "app_mention",
+            "message"
+          ],
+          "verification": {
+            "kind": "hmac",
+            "verified": true,
+            "hmac": {
+              "algorithm": "sha256",
+              "encoding": "hex",
+              "header": "X-Slack-Signature",
+              "prefix": "v0=",
+              "signed": "v0:{timestamp}:{body}",
+              "timestamp": {
+                "source": "header",
+                "name": "X-Slack-Request-Timestamp"
+              },
+              "secret": "slack.signing_secret",
+              "tolerance": "5m"
+            }
+          },
+          "discriminator": {
+            "source": "body",
+            "name": "event.type"
+          },
+          "delivery_id": {
+            "source": "body",
+            "name": "event_id"
+          },
+          "payload": {
+            "channel": "event.channel",
+            "conversation": "event.thread_ts",
+            "text": "event.text",
+            "thread": "event.thread_ts",
+            "user": "event.user"
+          },
+          "reply": {
+            "operation": "slack-chat-post-message",
+            "oip": "com.slack.api:v1#slack-chat-post-message",
+            "result": "text",
+            "bind": {
+              "channel": "channel",
+              "thread_ts": "thread"
+            }
+          },
+          "cursor": null,
+          "interval": null,
+          "subscription": null,
+          "setup": {
+            "docs_url": "https://docs.slack.dev/apis/events-api/",
+            "steps": [
+              "Open your app at api.slack.com/apps, or create one for this workspace",
+              "Under Event Subscriptions, turn on Enable Events",
+              "Paste the Request URL shown above and wait for Slack's `url_verification` challenge to pass",
+              "Under Subscribe to bot events, add the events you selected here",
+              "Copy the Signing Secret from Basic Information into this connection's signing secret field",
+              "Reinstall the app to the workspace so the new event scopes take effect"
             ]
           }
         }
@@ -7517,7 +7741,197 @@
             ]
           }
         }
-      ]
+      ],
+      "events": [
+        {
+          "name": "payment_intent.succeeded",
+          "service": "default",
+          "oip": null,
+          "description": "A payment intent completed and the money was taken. The customer has been charged",
+          "default": true,
+          "group": "Payments",
+          "when": {},
+          "schema": {
+            "properties": {
+              "created": {
+                "description": "Unix timestamp",
+                "type": "integer"
+              },
+              "data": {
+                "description": "The payload envelope; the payment intent itself is at `data.object`",
+                "properties": {
+                  "object": {
+                    "description": "The payment intent, in the API version the endpoint is pinned to",
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "object"
+                ],
+                "type": "object"
+              },
+              "id": {
+                "description": "The event's own id, `evt_…`, which is what deduplicates a redelivery",
+                "type": "string"
+              },
+              "livemode": {
+                "type": "boolean"
+              },
+              "object": {
+                "const": "event"
+              },
+              "type": {
+                "const": "payment_intent.succeeded"
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "data"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "payment_intent.payment_failed",
+          "service": "default",
+          "oip": null,
+          "description": "A payment intent failed — the card was declined, the authentication was abandoned, or the bank refused it. No money was taken",
+          "default": true,
+          "group": "Payments",
+          "when": {},
+          "schema": {
+            "properties": {
+              "created": {
+                "type": "integer"
+              },
+              "data": {
+                "description": "The payment intent is at `data.object`; the decline reason is on its `last_payment_error`",
+                "properties": {
+                  "object": {
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "object"
+                ],
+                "type": "object"
+              },
+              "id": {
+                "type": "string"
+              },
+              "livemode": {
+                "type": "boolean"
+              },
+              "object": {
+                "const": "event"
+              },
+              "type": {
+                "const": "payment_intent.payment_failed"
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "data"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "charge.refunded",
+          "service": "default",
+          "oip": null,
+          "description": "A charge was refunded, in whole or in part. Fires for a refund made through this connector as well as one made by a human in the Stripe dashboard, so a flow that triggers on it must not assume it caused the refund",
+          "default": true,
+          "group": "Payments",
+          "when": {},
+          "schema": {
+            "properties": {
+              "created": {
+                "type": "integer"
+              },
+              "data": {
+                "description": "The charge is at `data.object`; `amount_refunded` says how much of it has now been returned",
+                "properties": {
+                  "object": {
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "object"
+                ],
+                "type": "object"
+              },
+              "id": {
+                "type": "string"
+              },
+              "livemode": {
+                "type": "boolean"
+              },
+              "object": {
+                "const": "event"
+              },
+              "type": {
+                "const": "charge.refunded"
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "data"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "charge.dispute.created",
+          "service": "default",
+          "oip": null,
+          "description": "A customer disputed a charge with their bank. Money and a dispute fee are withheld immediately, and there is a deadline to submit evidence — this is a case for a human, not for an automated reply",
+          "default": false,
+          "group": "Disputes",
+          "when": {},
+          "schema": {
+            "properties": {
+              "created": {
+                "type": "integer"
+              },
+              "data": {
+                "description": "The dispute is at `data.object`; `evidence_details.due_by` is the deadline and `charge` is the charge it contests",
+                "properties": {
+                  "object": {
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "object"
+                ],
+                "type": "object"
+              },
+              "id": {
+                "type": "string"
+              },
+              "livemode": {
+                "type": "boolean"
+              },
+              "object": {
+                "const": "event"
+              },
+              "type": {
+                "const": "charge.dispute.created"
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "data"
+            ],
+            "type": "object"
+          }
+        }
+      ],
+      "channels": []
     },
     {
       "id": "zendesk",
@@ -8145,7 +8559,9 @@
             ]
           }
         }
-      ]
+      ],
+      "events": [],
+      "channels": []
     },
     {
       "id": "zoom",
@@ -8481,7 +8897,9 @@
             ]
           }
         }
-      ]
+      ],
+      "events": [],
+      "channels": []
     }
   ],
   "core": {

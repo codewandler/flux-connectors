@@ -7,5 +7,6 @@ op github-issue-get(owner: String, repo: String, issue_number: Number) -> Any
 
   base = "https://api.github.com"
   url = fmt("{base}/repos/{owner}/{repo}/issues/{issue_number}")
-  response = http.request(method: "GET", url)
+  Accept = "application/vnd.github+json"
+  response = http.request(headers: { Accept }, method: "GET", url)
   return response

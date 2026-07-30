@@ -7,5 +7,6 @@ op github-repo-get(owner: String, repo: String) -> Any
 
   base = "https://api.github.com"
   url = fmt("{base}/repos/{owner}/{repo}")
-  response = http.request(method: "GET", url)
+  Accept = "application/vnd.github+json"
+  response = http.request(headers: { Accept }, method: "GET", url)
   return response

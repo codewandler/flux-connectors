@@ -14,49 +14,22 @@
 # (`docs/designs/provider-operation-inventory.md` §6.7).
 #
 # ---------------------------------------------------------------------------------------------
-# SCHEMA GAP: the required `Accept: application/vnd.github+json` header cannot be declared.
+# `Accept: application/vnd.github+json` is declared below, in `[const_headers]`.
 #
-# GitHub asks every client to send `Accept: application/vnd.github+json`. **No field in this schema
-# can express a constant, non-credential request header**, so it is not declared here, and this
-# comment is the only place the requirement survives.
+# This was a SCHEMA GAP until C-55: no field could express a constant, non-credential request
+# header, so the requirement survived only as a comment. Pinning a `params.header` with a JSON
+# Schema `const` — the trick that works for a constant *body* field, as `ticket.safe_update` does in
+# `providers/zendesk.toml` — did not work here: the emitter filtered `constant(...)` out of the
+# declared parameter list for body params only, so a `const`-pinned header stayed a caller-supplied
+# argument with the constraint silently dropped. C-55 refuses that spelling outright and adds
+# `const_headers` as the honest one.
 #
-# This was checked against the loader and the emitter rather than assumed, and the whole schema was
-# enumerated (`connector_spec::provider::accepted_keys`):
+# What this buys is **version pinning**. GitHub serves requests with no `Accept` header by
+# defaulting to this value, so the operations below were well-formed without it — the explicit
+# header is what protects a client from a future change to that default.
 #
-#   provider  → id, vendor, base_url, description, auth, default_auth, operations, spec, patch
-#   operation → id, method, path, description, risk, idempotency, auth, params, response_schema,
-#               quirks
-#   paramSet  → path, query, header, body, body_schema
-#   param     → name, wire, description, required, schema
-#   quirks    → pagination, rate_limit, error_envelope
-#
-# There is no `headers` key at provider or operation level, and no `value`/`const` field on `param`.
-# `params.header` is the only header mechanism, and the IR documents it as "Request headers the
-# caller supplies" — which is precisely what it emits. Pinning such a param with a JSON Schema
-# `const`, the trick that works for a constant *body* field (`ticket.safe_update` in
-# `providers/zendesk.toml`), does **not** work here: `crates/connector-flux/src/op.rs` filters
-# `constant(...)` out of the declared parameter list for `body` params only, so a `const`-pinned
-# header stays a caller-supplied parameter. Emitting the probe produces
-#
-#   op probe-get(accept: String) -> Any
-#     …
-#     $response = http.request({ headers: { accept: $accept }, method: "GET", url: $url })
-#
-# — a required argument every caller must pass and any caller may set to anything, with the `const`
-# dropped entirely. That is a caller-overridable parameter wearing a constant's clothes, so C-52
-# declares nothing rather than smuggling it in. The one constant header the pipeline does send,
-# `content-type: application/json`, is hard-coded in the emitter (`JSON_MEDIA_TYPE`) and is not
-# declarable either.
-#
-# **Impact, stated honestly:** this is not what makes the connector non-functional. GitHub serves
-# requests with no `Accept` header by defaulting to `application/vnd.github+json`, so the five
-# operations below are well-formed as emitted. What is lost is *version pinning* — the explicit
-# header is what protects a client from a future change to that default — plus every other
-# vendor-constant header a connector might need (an API version, a `User-Agent`). Closing it needs
-# either a `headers` table on the connector and the operation, or a constant-value field on `param`
-# that the emitter binds as a literal the way it already binds a constant body field. Filed here
-# with C-52; it is the same class of gap as the `base_url`-to-env binding the other three providers
-# record.
+# `content-type: application/json` remains hard-coded in the emitter and is still not declarable;
+# C-144 tracks the related gap that no connector can send a non-JSON body at all.
 # ---------------------------------------------------------------------------------------------
 
 id = "github"
@@ -68,6 +41,11 @@ vendor = "GitHub"
 # just the authority.) `http_hosts` derives from this single value and is therefore exactly
 # `api.github.com`, never widened.
 base_url = "https://api.github.com"
+
+# C-55: the vendor-constant header, emitted as a literal rather than a caller-supplied argument.
+# An inline table deliberately — a `[const_headers]` section header would scope every provider
+# scalar after it into that table.
+const_headers = { "Accept" = "application/vnd.github+json" }
 
 description = "GitHub REST API: read repositories, issues and pull requests, and write issues and issue comments"
 

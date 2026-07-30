@@ -8,6 +8,7 @@ op github-issue-create(owner: String, repo: String, title: String, body: String,
   base = "https://api.github.com"
   url = fmt("{base}/repos/{owner}/{repo}/issues")
   content_type = "application/json"
+  Accept = "application/vnd.github+json"
   payload = { assignees, body, labels, title }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { Accept, "content-type": content_type }, method: "POST", url)
   return response

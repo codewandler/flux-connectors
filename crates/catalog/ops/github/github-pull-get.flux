@@ -7,5 +7,6 @@ op github-pull-get(owner: String, repo: String, pull_number: Number) -> Any
 
   base = "https://api.github.com"
   url = fmt("{base}/repos/{owner}/{repo}/pulls/{pull_number}")
-  response = http.request(method: "GET", url)
+  Accept = "application/vnd.github+json"
+  response = http.request(headers: { Accept }, method: "GET", url)
   return response

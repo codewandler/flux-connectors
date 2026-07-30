@@ -8,6 +8,7 @@ op github-issue-comment-add(owner: String, repo: String, issue_number: Number, b
   base = "https://api.github.com"
   url = fmt("{base}/repos/{owner}/{repo}/issues/{issue_number}/comments")
   content_type = "application/json"
+  Accept = "application/vnd.github+json"
   payload = { body }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { Accept, "content-type": content_type }, method: "POST", url)
   return response

@@ -2,8 +2,7 @@
 id: C-115
 title: "Request construction, delegation to http.request, and the mirrored network gate"
 pillar: Bridge
-status: in-progress
-priority: 2
+status: done
 design: docs/designs/connector-tool-pack.md
 epic: tool-pack
 areas: [bridge]

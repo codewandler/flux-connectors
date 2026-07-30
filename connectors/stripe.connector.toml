@@ -7,3 +7,24 @@ description = "Stripe payments: read a balance, customer, charge, payment intent
 base_url = "https://api.stripe.com"
 module = "stripe.flux"
 operations = ["stripe-balance-get", "stripe-customer-get", "stripe-charge-get", "stripe-payment-intent-get", "stripe-refund-get", "stripe-payment-intent-capture", "stripe-payment-intent-cancel", "stripe-charge-refund-create"]
+
+[[events]]
+name = "payment_intent.succeeded"
+description = "A payment intent completed and the money was taken. The customer has been charged"
+group = "Payments"
+
+[[events]]
+name = "payment_intent.payment_failed"
+description = "A payment intent failed — the card was declined, the authentication was abandoned, or the bank refused it. No money was taken"
+group = "Payments"
+
+[[events]]
+name = "charge.refunded"
+description = "A charge was refunded, in whole or in part. Fires for a refund made through this connector as well as one made by a human in the Stripe dashboard, so a flow that triggers on it must not assume it caused the refund"
+group = "Payments"
+
+[[events]]
+name = "charge.dispute.created"
+description = "A customer disputed a charge with their bank. Money and a dispute fee are withheld immediately, and there is a deadline to submit evidence — this is a case for a human, not for an automated reply"
+default = false
+group = "Disputes"

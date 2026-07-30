@@ -2,7 +2,7 @@
 id: C-107
 title: Ship the Notion connector
 pillar: Spec
-status: blocked
+status: ready
 priority: 4
 design:
 epic: provider-fleet-2
@@ -142,3 +142,7 @@ repo before. Use a self-evidently fake `help` string and no `example`.
   its own file records that GitHub defaults `Accept` when absent, so nothing there is broken today
   and the test can only assert a header's presence. Notion is the case where the header's absence is
   total failure, which is the difference between version *pinning* and version *working*.
+
+- **Unblocked.** C-55 landed `const_headers`, so `Notion-Version` is declarable as a literal.
+  GitHub is the worked example in `providers/github.toml`. The curation recorded above is unchanged,
+  so the re-dispatch is transcription rather than re-derivation.

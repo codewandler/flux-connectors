@@ -9,6 +9,45 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A connector operation can now reach a vendor, with the network gate mirrored (C-115).** Each Tool
+  builds `{method, url, headers, body}` and delegates to flux's own `http.request`, so flux keeps
+  every byte of egress.
+
+  The safety property is the story. Delegating directly **bypasses `Executor::dispatch`**, so the
+  inner call never consults `http.request`'s own `permission_subjects` or its `NetworkFetch` intent —
+  and both have trait defaults returning empty. A Tool that omitted them would compile, register,
+  execute, reach the vendor, and never be gated. An independent review probed **1470
+  (operation, params) pairs** and established the strong property: `permission_subjects(p)` *equals*
+  `vec![build_request(p).url]` whenever a request builds, so the declared subject cannot drift from
+  what is reached.
+
+  The request is evaluated from the operation's **own emitted Flux** rather than re-lowered from the
+  IR, so the pack's request is the module's request by construction. The node set is closed and
+  anything unmodelled refuses — a partly-evaluated request is not a degraded request, it is a
+  different call, and the vendor answers it.
+
+- **Events and channel bindings reach the manifest and the catalogue (C-83).** Verification publishes
+  as a **total** three-valued `kind` plus a `verified` flag with no `skip_serializing_if`, so C-82's
+  "a deliberately-unverifiable surface stays loud" is structural: a consumer tells it from a verified
+  one by reading a value, never by noticing a missing key. Nothing reaches the `.flux` module, and the
+  emitter refuses rather than dressing an event up as a pollable op. The site renders the inbound
+  surface.
+
+- **A provider can pin a vendor-constant request header (C-55).** `const_headers` emits the value as a
+  literal instead of a caller-overridable argument. A `const`-pinned `params.header` — which silently
+  dropped the constraint and shipped a required argument any caller could set to anything — is now
+  **refused** rather than reinterpreted.
+
+  A constant header can never carry a credential: nine spellings are refused, including a declared
+  env-var name, a credential name, `${ENV}`, and CRLF injection.
+
+  `providers/github.toml` declares its `Accept: application/vnd.github+json` and the SCHEMA GAP note
+  it carried since C-52 is gone. This also unblocks Notion, whose required `Notion-Version` header is
+  why C-107 was parked.
+
+
+### Added
+
 - **`connector-secrets` — a secret store trait and a Vault KV v2 implementation (C-91).** A **host
   library, outside the compile path**: `connector-cli` must not depend on it, and that is now asserted
   rather than assumed.

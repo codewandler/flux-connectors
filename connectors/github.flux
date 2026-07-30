@@ -11,7 +11,8 @@ op github-repo-get(owner: String, repo: String) -> Any
 
   base = "https://api.github.com"
   url = fmt("{base}/repos/{owner}/{repo}")
-  response = http.request(method: "GET", url)
+  Accept = "application/vnd.github+json"
+  response = http.request(headers: { Accept }, method: "GET", url)
   return response
 
 op github-issue-get(owner: String, repo: String, issue_number: Number) -> Any
@@ -23,7 +24,8 @@ op github-issue-get(owner: String, repo: String, issue_number: Number) -> Any
 
   base = "https://api.github.com"
   url = fmt("{base}/repos/{owner}/{repo}/issues/{issue_number}")
-  response = http.request(method: "GET", url)
+  Accept = "application/vnd.github+json"
+  response = http.request(headers: { Accept }, method: "GET", url)
   return response
 
 op github-pull-get(owner: String, repo: String, pull_number: Number) -> Any
@@ -35,7 +37,8 @@ op github-pull-get(owner: String, repo: String, pull_number: Number) -> Any
 
   base = "https://api.github.com"
   url = fmt("{base}/repos/{owner}/{repo}/pulls/{pull_number}")
-  response = http.request(method: "GET", url)
+  Accept = "application/vnd.github+json"
+  response = http.request(headers: { Accept }, method: "GET", url)
   return response
 
 op github-issue-create(owner: String, repo: String, title: String, body: String, labels: List<String>, assignees: List<String>) -> Any
@@ -48,8 +51,9 @@ op github-issue-create(owner: String, repo: String, title: String, body: String,
   base = "https://api.github.com"
   url = fmt("{base}/repos/{owner}/{repo}/issues")
   content_type = "application/json"
+  Accept = "application/vnd.github+json"
   payload = { assignees, body, labels, title }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { Accept, "content-type": content_type }, method: "POST", url)
   return response
 
 op github-issue-comment-add(owner: String, repo: String, issue_number: Number, body: String) -> Any
@@ -62,6 +66,7 @@ op github-issue-comment-add(owner: String, repo: String, issue_number: Number, b
   base = "https://api.github.com"
   url = fmt("{base}/repos/{owner}/{repo}/issues/{issue_number}/comments")
   content_type = "application/json"
+  Accept = "application/vnd.github+json"
   payload = { body }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { Accept, "content-type": content_type }, method: "POST", url)
   return response

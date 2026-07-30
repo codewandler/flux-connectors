@@ -2,8 +2,7 @@
 id: C-83
 title: Publish events and channel bindings into the manifest and the catalogue
 pillar: Codegen
-status: in-progress
-priority: 3
+status: done
 design: docs/designs/channel-bindings.md
 epic: channel-bindings
 areas: [connector-cli, catalog, web]
