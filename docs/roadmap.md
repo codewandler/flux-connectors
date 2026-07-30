@@ -28,6 +28,70 @@ flux.
 An **epic** is a themed group of stories with a shared design doc. Stories join an epic via the
 `epic: <slug>` frontmatter field, where `<slug>` matches a design doc at `docs/designs/<slug>.md`.
 
+### The connectors datasource — the catalogue, queryable from a session
+
+A flux session cannot ask "which connector can do this?". The catalogue is published and unreachable
+from inside a running flow, so an agent either has every connector operation registered as a tool or
+none of them.
+
+The scaling argument is why this matters now. The Tool pack registers **one tool per operation** — 97
+today, and the fleet stories multiply it — and every one is model-facing surface: schema in the
+context window, a name to disambiguate, a chance to pick wrong. A datasource is a fixed handful of
+operations whether the catalogue holds 97 or 970. The two are complementary: discover through the
+datasource, invoke through the pack.
+
+The seam is flux's and already built — `LiveDatasource`, `try_register_live_datasource`, and
+`ClientBuilder::try_with_live_datasource`, which is the same call a host uses for the pack. The
+catalogue is already shaped for it, which is what the addressing work bought: the `oip` is a stable
+record id, and a channel binding's link to its reply operation is C-82's composition made traversable.
+
+Done looks like search, get, list, relation and batch-get answered offline from the compiled-in
+catalogue — with search good enough to act on, since one that returns the wrong connector confidently
+is worse than none. What it must **not** become is an HTTP service: that is the proxy charter question
+C-34 already gates. See [connectors-datasource.md](designs/connectors-datasource.md).
+
+### Authentication as a connector surface — a login that cannot leak
+
+A connector can declare which credential it needs, but not a login you can *trigger*. This epic adds
+one — `oauth2.login(grant: password, …)` and its sibling grants, as members of a service claiming an
+`authentication` role — and gives `OAuth2Spec` its first real consumer; C-88 already records that it
+is a landed type no shipped provider uses.
+
+It is also the most dangerous operation shape this repository has modelled, and the design is mostly
+about that. An operation's result becomes a session value: bound to a symbol, interpolatable,
+readable by the model that called it, printable to a log. A login returns a bearer token, so the
+naive shape violates the requirement by succeeding.
+
+Redaction cannot fix it, and C-79 already proves why in the concrete: Zoom's `start_url` carries a
+host-privileged token the redactor cannot see. Redaction matches values it was already told about,
+and a token minted by *this* call is unknown until after it arrives.
+
+So done looks like a structural answer, not a filter: a credential-producing operation's declared
+output is a **handle** — a `CredentialRef` naming where the value was stored — while the token goes
+from the HTTP response straight into the bound store and never enters the session. A caller can use a
+credential it can never read, and an operation whose declared output would expose the secret is
+refused at load. See [authentication-surface.md](designs/authentication-surface.md).
+
+### babelforce IVR v2 — atomics, not call modules
+
+babelforce's IVR has two layers: primitives in `internal/modules/` (`audioplayer`, `read`,
+`switchnode`, `dial`, `recording`, `acd`) and call modules composed over them in `flows/*.yaml`.
+`simpleMenu` is `audioplayer` + `read` + `switchnode` welded together — so publishing call modules as
+operations would freeze seventeen combinations instead of exposing six composable parts. The epic
+exposes the atomics as a `service = "ivr"` at `api_version = "2"`, with the reverse direction as
+events.
+
+Done looks like: the atomics and their events in the catalogue, no call module published as an
+operation, and the two different "invite" meanings named apart — the ACD inviting an *agent* to take a
+queued call is not the inbound call arriving.
+
+The open question is deliberately unanswered rather than assumed. A flow YAML *is* a graph, but its
+edges are `goto`s, and the flow-graph model refuses cycles because Flux has none — a menu that
+re-prompts on invalid input jumps backwards. An IVR flow is a state machine executed by *babelforce's*
+engine, which is a third case beyond "this repo compiles, flux executes". C-132 decides whether
+composed templates belong here at all; nothing else in the epic waits on it. See
+[babelforce-ivr-atomics.md](designs/babelforce-ivr-atomics.md).
+
 ### Provider fleet 2 — shipped in parallel
 
 The first fleet (C-69–C-78) is fully drained and every connector in it shipped one at a time. That

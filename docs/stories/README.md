@@ -30,6 +30,18 @@ Gate: `cargo build --workspace && cargo test --workspace && cargo clippy --works
 
 ## Next (ready — take the top one unless the user named a story)
 
+### authentication as a connector surface — a login that cannot leak
+_Authentication is currently something the **host** does *around* a connector: `OAuth2Spec` declares_
+- [C-134 — Authentication as a connector surface — a login that cannot leak (epic)](C-134-authentication-surface-epic.md) · Spec · EPIC — an operation's result becomes a session value the model can read, so a login that RETURNS its token hands a bearer credential to an LLM. The answer is structural: divert to the store, return a CredentialRef. Redaction cannot work here — C-79 already proves why
+- [C-136 — A credential-producing operation returns a handle, never the secret](C-136-credential-diversion.md) · Spec · THE safety story of its epic. An operation's result becomes a session value a model can read and a log can print, so a login that returns its token has already lost. Redaction cannot save it — a token minted BY THIS CALL is unknown to the redactor until after it arrives
+- [C-135 — The authentication role and its grant members](C-135-authentication-role.md) · Spec · reuses C-119's role mechanism rather than inventing a category beside it. OAuthGrant already exists with Password (babelforce's flow) and ClientCredentials — this gives OAuth2Spec its first real consumer
+
+### Babelforce Ivr
+- [C-129 — babelforce IVR v2 — atomics, not call modules (epic)](C-129-babelforce-ivr-epic.md) · Spec · EPIC — simpleMenu is audioplayer + read + switchnode welded together, so publishing call modules would freeze combinations instead of exposing parts. But an IVR flow's flowEndApplication is a GOTO, and C-94's graph refuses cycles because Flux has none
+- [C-130 — The ivr service and its atomic operation inventory](C-130-ivr-atomics-inventory.md) · Spec · six composable parts beat seventeen frozen combinations — audioplayer, read, switchnode, dial, recording, acd. Scope agentic and realtime out until the plain six land
+- [C-131 — The IVR inbound event set, including the two different invites](C-131-ivr-events.md) · Spec · 'on invite' is NOT the SIP INVITE of an inbound call — in this codebase it is the ACD inviting an AGENT to take a queued call (acd/handler.go:290-297). Both are real; they must not share a name
+- [C-132 — Decide: do composed IVR templates belong here, and in what execution model?](C-132-decide-ivr-templates.md) · Spec · DECISION — an IVR flow's edges are gotos and C-94's graph refuses cycles because Flux has none. And an IVR flow runs in the VENDOR's engine, a third case 'this repo compiles, flux executes' does not cover
+
 ### channel bindings — generalize a flux `channel` over a connector
 _[inbound-events.md](inbound-events.md) models an **event** — the vendor calls us — and stops there._
 - [C-83 — Publish events and channel bindings into the manifest and the catalogue](C-83-channel-binding-codegen.md) · Codegen · the strict split: bindings reach the manifest and catalog.json and NOTHING reaches the module. The emitter must refuse to dress a binding up as a pollable op
@@ -44,6 +56,13 @@ _A connector is more than a set of callable operations. It also has **schemas** 
 - [C-87 — Publish the configuration surface into the manifest and the catalogue](C-87-configuration-codegen.md) · Codegen · includes a BREAKING change to settle — site.rs flattens the whole OAuth2Spec to `oauth2: bool`, so a hosted product cannot build an authorize URL at all
 - [C-88 — Prove OAuth2 on one provider — the operator level is currently unexercised](C-88-prove-oauth2.md) · Spec · OAuth2Spec is a landed type NO shipped provider uses, so half the configuration model is proven only by a fixture. tests/auth_archetypes.rs asserts that gap and fails the day this lands
 - [C-89 — The hosted OAuth redirect has no home — OAuthRedirect is loopback-only](C-89-hosted-oauth-redirect.md) · Bridge · OAuthRedirect is {port, path} — a CLI shape. A hosted callback is https://app.example.com/oauth/callback, supplied by the host, and often must be pre-registered in the vendor's dashboard before the flow works at all
+
+### the connectors datasource — the catalogue, queryable from a session
+_A flux session has no way to ask **"which connector can do this?"**. The catalogue exists, it is_
+- [C-137 — The connectors datasource — the catalogue, queryable from a session (epic)](C-137-connectors-datasource-epic.md) · Bridge · EPIC — the Tool pack registers one tool per operation (97 and growing); a datasource is FIVE ops regardless of catalogue size. Discover through the datasource, invoke through the pack. flux's LiveDatasource seam already exists and binds at the same ClientBuilder call
+- [C-138 — The datasource entity model, its links, and the oip as record id](C-138-datasource-entity-model.md) · Bridge · the addressing work already bought this — the oip (authority[/service]:version#member) is a stable record id, and a binding's link to its reply operation is C-82's composition made traversable
+- [C-139 — The LiveDatasource backend and its binding](C-139-datasource-backend.md) · Bridge · implements flux's existing LiveDatasource trait over the compiled-in catalogue. Binds through the SAME ClientBuilder call as the Tool pack, so a host configures discovery and invocation in one place
+- [C-140 — Search that is good enough to act on](C-140-datasource-search.md) · Bridge · a search that returns the wrong connector confidently is worse than no search, because the caller acts on it. Role-aware search is what makes the roles epic pay off — 'find me a ticketing provider' is a role query
 
 ### the connectors proxy — server-side credential injection
 _Every credential problem in this repo has the same shape: **the caller must not hold the secret, but_
@@ -140,6 +159,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-36 — Prove the proxy and the Flux emitter build the same request](C-36-proxy-emitter-conformance.md) · Bridge · blocked on C-34 · two backends over one IR will drift without this
 
 ## Backlog
+- [C-133 — The brave connector — Brave Talk's room-token HTTP surface](C-133-provider-brave-talk-tokens.md) · Spec · ONLY the three HTTP calls. The XMPP MUC stream stays OUT — vision.md names protocol-rich technology adapters as a non-goal, and flux already has D-205/D-206 with feasibility proven live. Blocked on two real things; read Notes before starting
 
 ### the connector bundle
 _A connector is more than a set of callable operations. It also has **schemas** (what goes in, what_
