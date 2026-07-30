@@ -50,7 +50,9 @@ Declaring a role you do not satisfy is a load error, in the tradition every othe
 - An unknown role name is refused rather than ignored — a typo'd capability that silently means
   "no capability" is the failure mode this whole design exists to prevent.
 - Roles are a **closed set** defined in this repo. An open string set is a tag system, and a tag
-  system cannot be checked.
+  system cannot be checked. *(A tag system is a legitimate thing to want, for filtering rather than
+  for capability — it is a **separate** field with separate guarantees. See
+  [C-153](../stories/C-153-service-tags.md), and §Roles are not tags below.)*
 
 The point is that `llm_catalogue` becomes a *promise the loader enforces*, so a consumer reading the
 catalogue can rely on it without reading the provider's TOML.
@@ -169,3 +171,27 @@ real consumer on day one.
   once one role is proven, and it is where vendor disagreement will actually bite.
 - **A role hierarchy or role inheritance.** Closed, flat, checkable. If that proves too weak, widening
   it later is cheap; narrowing an open system is not.
+
+## Roles are not tags, and the difference is the guarantee
+
+`tags` ([C-153](../stories/C-153-service-tags.md)) sit beside `roles` on a service and look similar
+enough to be conflated. They are not the same mechanism, and collapsing them would break one of them:
+
+| | `roles` | `tags` |
+|---|---|---|
+| answers | "can this service **do** X, checkably?" | "what **kind** of thing is this service?" |
+| carries | required members, per role | nothing |
+| refuses | an unknown role name, **and** a claim the members do not satisfy | an unknown tag name only |
+| consumer | a flow asking who can do this; the model pool | a UI filter; a human browsing |
+
+**Why not one field.** Giving `office` a required-member list is meaningless — there is no operation
+that makes a service "office". And letting a role carry no members would turn every role into an
+unchecked assertion, which is exactly what the closed set above exists to prevent. So: two fields, and
+a tag is never evidence that anything is callable.
+
+**Both are closed vocabularies**, for the same reason: a typo'd tag silently means "absent from that
+filter", which is the same shape of silent-nothing failure as a typo'd role. A tag is cheaper to be
+wrong about, but not free.
+
+**The misread to design against**: a UI that filters by tag invites the inference "this category means
+these capabilities". It does not. Keep tags and roles distinguishable wherever both are rendered.
