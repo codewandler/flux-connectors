@@ -1,0 +1,379 @@
+# Asana API — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER, even though a good OpenAPI document exists.
+# Asana publishes `Asana/openapi` — an OpenAPI 3.0 description of the whole REST API
+# (`defs/asana_oas.yaml`), which is also what developers.asana.com renders. Nothing is vendored under
+# `specs/` for it here because ingest (C-4) and the overlay (C-6) do not exist yet, and the document
+# describes some 300 operations across every resource Asana has: without a selection mechanism,
+# pointing at it would be pointing at 300 LLM tools. When C-14's fetch and C-4's ingest land, this
+# file becomes `[spec]` plus a `[[patch.operations]]` selection, and **the five operations below are
+# the selection to reproduce** — by `operationId`: `getTask`, `createTask`, `updateTask`,
+# `createStoryForTask`, `getProject`.
+#
+# Until then drift is undetectable by machine, exactly as for zendesk, freshdesk, github, openai and
+# slack (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# THE `data` ENVELOPE IS THE WHOLE POINT OF THIS CONNECTOR. DO NOT FLATTEN IT.
+# ---------------------------------------------------------------------------------------------
+#
+# Asana wraps **every** request body in `{"data": {…}}` and **every** response in `{"data": …}`.
+# There is no operation anywhere in its API that does not, which makes this the first shipped
+# provider where C-29's `wire` paths are not a special case for one field but the shape of the entire
+# connector. (C-29 was motivated by babelforce's `presence.name` — one field on one operation — and
+# by zendesk's `ticket.*` writes. Asana is what proves the feature works on a vendor rather than on a
+# fixture.)
+#
+# So every body field below declares a `wire` path beginning `data.`, and that is a contract codegen
+# compiles rather than prose a reader has to notice:
+#
+#   $payload = { data: { completed: $completed } }      # what a wire path emits
+#   $payload = { completed: $completed }                # what a flat body would emit
+#
+# The second is a request Asana answers `400 Missing input: data` to. That is a *better* failure than
+# zendesk's — zendesk accepts a flat body, ignores it and answers 200 — but it is still a connector
+# that cannot write, and nothing else in this repository would notice. `wire` is what makes the
+# difference, and `crates/connector-flux/tests/asana_connector.rs` fails on the IR *and* on the
+# emitted `$payload` if either half stops being true.
+#
+# The response envelope is recorded per operation in `response_schema`: `{"type": "object",
+# "required": ["data"], …}`, so a consumer reading `web/public/catalog.json` is told the payload is at
+# `/data` instead of inferring it from an example. It cannot be *handled* — `http.request` returns one
+# flat string, so no emitted Flux can extract a pointer from it, the same seam
+# `connector-flux`'s `description()` records for error envelopes.
+#
+# SCHEMA GAP: the envelope has to be restated on every operation. It is a property of the *connector*
+# — every Asana request and response has it — but nothing at connector level can say so: there is no
+# `response_envelope` or `body_envelope` field on the connector, only a per-operation
+# `response_schema` and a per-field `wire`. The consequence is a real one rather than stylistic: a
+# sixth operation added here without a `data.` prefix and without a `response_schema` is silently
+# wrong in both directions, and only the connector's own test catches it. Closing it means an
+# envelope declaration the loader applies to every operation.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: no optional request-body field can be declared (C-56), so several fields are missing.
+# ---------------------------------------------------------------------------------------------
+#
+# The emitter binds every declared body field into the payload record unconditionally, so a caller
+# who leaves an optional field alone sends an explicit `null`. Asana type-checks the members of
+# `data` and rejects `{"data": {"notes": null}}` with a 400 — the connector would fail *because* the
+# caller did nothing, which is the worst available failure mode. Until C-56 teaches the emitter to
+# omit an absent field, this file declares required fields only, and what that costs is:
+#
+# - `asana-task-create`: `notes`, `projects`, `assignee`, `due_on`, `parent`, `followers`. Losing
+#   `projects` and `assignee` is what makes the created task quiet — see that operation's `risk`.
+# - `asana-task-update`: `name`, `notes`, `due_on`, `assignee`. The operation therefore sets exactly
+#   one field, and its own comment explains why that is still a useful operation and not a stub.
+# - `asana-task-story-add`: `html_text` (the rich-text alternative to `text`), and `is_pinned`.
+#
+# A second, narrower facet of the same gap: `required` is documented as *"Whether the vendor requires
+# the parameter"*, and two fields below are marked required that Asana does not itself require —
+# `data.name` on create and `data.completed` on update. Each says so at its declaration. The
+# alternative was an operation with no caller-settable field at all, which is not an operation.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: no query parameter, so paging, field selection and search are all excluded (C-30).
+# ---------------------------------------------------------------------------------------------
+#
+# Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim into a
+# `fmt` template and flux registers no encoding op (`crates/connector-flux/src/op.rs`).
+# `zendesk-ticket-search` is the standing demonstration and AGENTS.md lists it under *Intentional
+# gaps* — a value carrying `&` does not filter, it injects a parameter. Excluded pending C-30:
+#
+# - `opt_fields`, which every Asana endpoint accepts and which is the documented way to ask for more
+#   than the default field set. It is a comma-separated list of dotted field paths
+#   (`assignee.name,projects.gid`), i.e. exactly the free-form string the gap bites on. The five
+#   operations below therefore return Asana's default representation, which is documented and
+#   sufficient to read a task or a project.
+# - `limit` / `offset` paging, and with it every collection endpoint. `offset` is an *opaque
+#   server-issued token* — Asana's documentation says a caller must never construct one — which is
+#   the same shape as a Slack cursor and just as unencodable here.
+# - `GET /tasks` and its filters (`assignee` + `workspace`, `project`, `section`), and
+#   `GET /workspaces/{workspace_gid}/tasks/search` with its dozens of `<field>.query` parameters.
+#   Shipping either would be shipping another `zendesk-ticket-search`.
+#
+# The path surface, by contrast, is genuinely safe rather than merely untested: an Asana `gid` is a
+# decimal string ("1201234567890123") and nothing else, so it cannot carry a character that changes
+# the shape of the request. Each path parameter declares that as a `pattern`, which is a contract a
+# model reads and a future validator can check — the emitted Flux does not enforce it. That asymmetry
+# between path and query is the whole selection principle for this connector.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: Asana returns an *array* of errors and `ErrorEnvelope` addresses one location.
+# ---------------------------------------------------------------------------------------------
+#
+# A failed Asana request answers a non-2xx with `{"errors": [{"message": "…", "help": "…"}]}`, and it
+# may carry more than one entry — a create with two bad fields reports both. `ErrorEnvelope` carries a
+# single `message_pointer`, so the pointer declared below (`/errors/0/message`) names the *first*
+# error and there is nowhere to say that the rest exist. It is declared anyway: the location is then
+# machine-readable for C-12 rather than lost, and the emitter puts it on the tool contract a model
+# reads. `code_pointer` is left off because Asana publishes no machine-readable error code — the HTTP
+# status is the code, and `help` is prose for a human.
+#
+# No `rate_limit` is declared for a related reason: Asana's published limit is per *account tier*
+# (150 requests/minute on a free plan, 1500 on a paid one) and nothing here knows which tier a token
+# belongs to. `RateLimit` has one `requests`/`per_seconds` pair and no way to say "whichever of these
+# the operator is paying for", so declaring the free-tier floor would throttle every paid workspace
+# to a tenth of its allowance and declaring the paid one would be wrong in the other direction.
+# ---------------------------------------------------------------------------------------------
+
+id = "asana"
+vendor = "Asana"
+
+# One host for every workspace and every account tier. Unlike zendesk's `{subdomain}` and freshdesk's
+# `{domain}` there is no tenant templating, so `base_url` is a bound literal, `status.rs` reports no
+# `unbound-base-url-template` issue, and the connector already has a valid destination URL.
+#
+# `http_hosts` derives from this single value (`crates/connector-cli/src/catalog.rs`, `host_of`) and
+# is therefore exactly `app.asana.com`, never widened. Asana's attachment downloads are served from
+# an S3 host and its events stream from the same API host; neither is reachable from the operations
+# below, and adding one would widen the egress allow-list for nothing.
+base_url = "https://app.asana.com"
+
+description = "Asana work management: read tasks and projects, create and update tasks, comment on a task"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["asana.access_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "asana.access_token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; its value is never read
+# here and never reaches a generated artifact.
+#
+# A personal access token and an OAuth-issued access token are the same thing on the wire —
+# `Authorization: Bearer <token>`, both `1/`-prefixed — so which one an operator supplies is
+# configuration rather than connector shape. That is why no `[auth.oauth2]` block appears: flux is
+# handed an already-minted token through the environment and runs no grant, the same provenance
+# babelforce's and slack's bearers have. What differs between the two token types is the scopes they
+# carry, which is not something this file can or should assert.
+env = ["ASANA_ACCESS_TOKEN"]
+description = "Asana access token sent as a bearer — a personal access token or an OAuth-issued one"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 5, all addressed by `gid` path parameters, all under Asana's one versioned prefix
+#
+# Curated to what a task-shaped flow executes at runtime: read a task, create one, close one, comment
+# on one, read the project it lives in. Everything administrative — workspaces, teams, memberships,
+# custom-field definitions, webhooks, portfolios, goals — is excluded, and so is every delete: the
+# same selection principle babelforce's 9-of-163 follows
+# (`docs/designs/provider-operation-inventory.md` §5.2).
+#
+# `/api/1.0` is Asana's only version prefix and has been since the API was published; there is no
+# unversioned alias to fall back to and no `/api/2.0` to migrate towards.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only, so `op asana.tasks.get` is undeclarable (C-8, C-23).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "asana-task-get"
+method = "GET"
+path = "/api/1.0/tasks/{task_gid}"
+description = "Get one task — its name, notes, assignee, due date, completion state and the projects it belongs to. The task is under `data` in the response"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "task_gid"
+description = "The task's `gid`, a decimal string such as `1201234567890123`. It is not the number in the task's web URL for a subtask"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "object", description = "The task resource, in Asana's default field set. Individual fields are not enumerated here — recording the envelope is what a consumer cannot infer; the resource's own shape is in Asana's reference" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/errors/0/message"
+
+# ---------------------------------------------------------------------------------------------
+# The three writes.
+#
+# `risk` is set from what each one changes and who is told about it, not from the HTTP method:
+#
+# - `asana-task-story-add` is `high`. A comment is delivered to every follower of the task by email
+#   and in-app notification, is attributed to whoever owns the token, and cannot be un-sent. That is
+#   the "a reviewer would want to see this first" tier, and it is the same reasoning
+#   `github-issue-comment-add` carries — narrower only because an Asana workspace is not the public
+#   internet.
+# - `asana-task-create` and `asana-task-update` are `medium`. See each one's own comment; neither
+#   notifies anyone, given what C-56 lets this connector send.
+#
+# `idempotency` is `non_idempotent` on all three. Asana documents no idempotency key and no
+# idempotency guarantee on any of these endpoints, so `idempotent` would be a claim with nothing
+# behind it even where the call happens to be repeatable — see `asana-task-update`, which is the
+# interesting case. The direction is fail-closed: flux forgoes a safe retry rather than replaying a
+# write that turns out to duplicate.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "asana-task-create"
+method = "POST"
+path = "/api/1.0/tasks"
+description = "Create a task in a workspace. It is created unassigned and in no project, so nobody is notified; move it or assign it in Asana afterwards. The created task is under `data` in the response"
+# A new object in a shared workspace, but a quiet one: with no `projects` and no `assignee` declarable
+# (C-56) the task lands in the workspace's task list only, notifies nobody, and is trivially
+# deletable by a human. `medium` — "writes with limited blast radius" — rather than the `high` that
+# `github-issue-create` carries, because that one is world-readable and emails every subscriber on
+# creation.
+#
+# WHEN C-56 LANDS AND `projects`/`assignee` BECOME DECLARABLE, REVISIT THIS. Assigning a task
+# notifies the assignee immediately, and adding it to a project puts it in front of everyone watching
+# that project; either turns this into the `high` case.
+risk = "medium"
+idempotency = "non_idempotent"
+
+# Not vendor-required: Asana accepts a task with no name and renders it as an empty row. It is
+# declared required here because C-56 forbids an optional body field, and an operation that could not
+# set a name would create untitled tasks nobody can find. See the header comment.
+[[operations.params.body]]
+name = "name"
+wire = "data.name"
+description = "The task's name, as it appears in a task list"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# Genuinely required by Asana — a task must be created in exactly one workspace and cannot be moved
+# between workspaces afterwards. (Asana lets `projects` or `parent` stand in for it, and neither is
+# declarable here, so this is the only route.)
+[[operations.params.body]]
+name = "workspace"
+wire = "data.workspace"
+description = "The `gid` of the workspace to create the task in. A task's workspace is permanent — it cannot be changed after creation"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "object", description = "The created task, in Asana's default field set. Its `gid` is what later calls address it by" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/errors/0/message"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "asana-task-update"
+method = "PUT"
+path = "/api/1.0/tasks/{task_gid}"
+# WHY THIS OPERATION SETS ONE FIELD, and why it is still `asana-task-update` rather than
+# `asana-task-complete-set`.
+#
+# Asana's `PUT /tasks/{task_gid}` is a *sparse* update: only the members present in `data` change and
+# every other field of the task is left exactly as it was. Nothing in the body is vendor-required —
+# `{"data": {}}` is a legal no-op — so with optional body fields unavailable (C-56) the connector has
+# to pick which fields it always sends. It sends one, `completed`, because completing and re-opening
+# a task is the update a flow actually performs and because it is the only single field that is
+# useful on its own: shipping `name` instead would mean every completion had to overwrite the name,
+# and shipping both would mean every rename had to restate the completion state.
+#
+# The id stays `asana-task-update` because an op id is a stable public contract that callers and
+# models name (`crates/connector-spec/src/ir.rs`). When C-56 lands, `name`, `notes`, `due_on` and
+# `assignee` become optional fields on *this* operation; renaming it now and renaming it back then
+# would break every caller twice. The signature is unambiguous in the meantime —
+# `asana-task-update(task_gid: String, completed: Bool)` — and the description says what it sets.
+description = "Mark a task complete or incomplete. Asana's update is sparse: only completion changes, and every other field of the task is left as it was. The updated task is under `data` in the response"
+# Completing a task is visible to everyone who can see it and is reported in the task's activity
+# feed; Asana notifies followers of a completion. It is also reversible by this same operation with
+# `completed = false`, and it destroys nothing. `medium`.
+risk = "medium"
+# `PUT` is idempotent under RFC 9110 §9.2.2 and this particular call plainly is — setting `completed`
+# twice leaves the same state — but Asana documents no idempotency guarantee for the endpoint, and
+# C-71's Acceptance is explicit that no write is marked idempotent unless the vendor documents it as
+# such. The cost is a forgone retry; the cost of the other error is a replayed write.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "task_gid"
+description = "The `gid` of the task to update"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$", minLength = 1 }
+
+# Not vendor-required — see the comment above the operation. Asana's body has no required member at
+# all, so "required" here means "this connector always sends it", which is what C-56 forces.
+[[operations.params.body]]
+name = "completed"
+wire = "data.completed"
+description = "True to complete the task, false to re-open it. Completing a task also completes nothing else — subtasks stay as they are"
+required = true
+schema = { type = "boolean" }
+
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "object", description = "The task as it stands after the update, in Asana's default field set" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/errors/0/message"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "asana-task-story-add"
+method = "POST"
+path = "/api/1.0/tasks/{task_gid}/stories"
+# Asana calls a comment a *story*, and the endpoint is `/stories`, so the id follows the vendor's own
+# noun rather than renaming it to `comment`. A story is also what Asana calls a system event on a
+# task ("Timo completed this task"); only the comment kind can be created through this endpoint.
+description = "Add a comment to a task. Asana calls a comment a story. It is attributed to the token's owner, notifies every follower of the task by email and in-app, and cannot be un-sent. The created story is under `data` in the response"
+# The one high-risk operation here: it puts text in front of people, immediately, under the operator's
+# name. Deleting it afterwards does not un-notify anyone. flux's approval gate reads this field, so
+# `medium` would mean an agent commenting in a shared workspace without a human seeing it first.
+risk = "high"
+# Posting twice posts two comments. Asana offers no idempotency key.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "task_gid"
+description = "The `gid` of the task to comment on"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$", minLength = 1 }
+
+# Genuinely required by Asana: a story must carry `text` or `html_text`. Only `text` is modelled —
+# `html_text` accepts a restricted HTML subset, and offering both would be offering two ways to write
+# one comment with nothing to say what happens when a caller supplies both.
+[[operations.params.body]]
+name = "text"
+wire = "data.text"
+description = "The comment text, as plain text. Asana renders `@` mentions only in the `html_text` form, which this operation does not send"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "object", description = "The created story: its `gid`, `created_at`, `created_by` and `text`" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/errors/0/message"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "asana-project-get"
+method = "GET"
+path = "/api/1.0/projects/{project_gid}"
+description = "Get one project — its name, notes, owner, team, current status and whether it is archived. The project is under `data` in the response"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "project_gid"
+description = "The project's `gid`, a decimal string. It is the number in the project's web URL"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "object", description = "The project resource, in Asana's default field set" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/errors/0/message"
