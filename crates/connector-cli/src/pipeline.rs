@@ -77,7 +77,7 @@ impl Plan {
 pub fn plan(workspace: &Workspace, only: Option<&str>) -> Result<Plan> {
     let providers = discovery::discover(workspace, only)?;
 
-    let mut artifacts = Vec::with_capacity(providers.len() * 2);
+    let mut artifacts = Vec::new();
     for provider in &providers {
         artifacts.extend(compile(workspace, provider)?);
     }
@@ -89,7 +89,13 @@ pub fn plan(workspace: &Workspace, only: Option<&str>) -> Result<Plan> {
     })
 }
 
-/// One provider's two artifacts, compiled and compared.
+/// One provider's artifacts, compiled and compared.
+///
+/// Two of them ship — the module and the manifest — and the rest is the catalog's (C-38): one
+/// `.flux` rendering per operation plus the generated table that embeds them. They travel through
+/// the same plan on purpose. Every property the pipeline already holds then covers them for free:
+/// nothing is written until everything compiles, an unchanged catalog is not rewritten, and
+/// `flux-connectors diff` reports a stale rendering exactly as it reports a stale module.
 fn compile(workspace: &Workspace, provider: &Provider) -> Result<Vec<PlannedArtifact>> {
     let context = || format!("provider `{}`", provider.name);
 
@@ -97,10 +103,21 @@ fn compile(workspace: &Workspace, provider: &Provider) -> Result<Vec<PlannedArti
     let connector = seam::load(&inputs).with_context(context)?;
     let emitted = seam::emit(&connector).with_context(context)?;
 
-    Ok(vec![
+    let mut artifacts = vec![
         planned(workspace.module_path(&provider.name), emitted.module)?,
         planned(workspace.manifest_path(&provider.name), emitted.manifest)?,
-    ])
+        planned(
+            workspace.catalog_module_path(&provider.name),
+            emitted.catalog,
+        )?,
+    ];
+    for rendering in emitted.operations {
+        artifacts.push(planned(
+            workspace.catalog_op_path(&provider.name, &rendering.id),
+            rendering.source,
+        )?);
+    }
+    Ok(artifacts)
 }
 
 fn planned(path: PathBuf, contents: String) -> Result<PlannedArtifact> {

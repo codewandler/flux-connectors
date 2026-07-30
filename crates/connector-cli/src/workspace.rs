@@ -22,6 +22,13 @@ pub const MODULE_EXT: &str = "flux";
 /// The manifest suffix. Not an extension — `zendesk.connector.toml` has stem `zendesk.connector`.
 pub const MANIFEST_SUFFIX: &str = "connector.toml";
 
+/// The catalog crate (C-38), whose generated half a build writes.
+///
+/// The renderings live **inside** the crate rather than beside `connectors/`, because the crate
+/// embeds them with `include_str!` and a path that escapes the package root is one `cargo package`
+/// would not carry — a catalog that compiled here and nowhere else.
+pub const CATALOG_DIR: &str = "crates/catalog";
+
 /// A repository root plus the layout convention applied to it.
 #[derive(Debug, Clone)]
 pub struct Workspace {
@@ -64,6 +71,40 @@ impl Workspace {
     pub fn manifest_path(&self, provider: &str) -> PathBuf {
         self.artifacts_dir()
             .join(format!("{provider}.{MANIFEST_SUFFIX}"))
+    }
+
+    /// `<root>/crates/catalog`.
+    pub fn catalog_dir(&self) -> PathBuf {
+        self.root.join(CATALOG_DIR)
+    }
+
+    /// `<root>/crates/catalog/ops/<provider>` — that provider's per-operation renderings.
+    ///
+    /// One directory per provider, not one flat directory: 25 operations ship today and a
+    /// spec-ingested babelforce alone offers 163, so the count grows linearly with selection. The
+    /// provider level is the split available now; C-37's `gid` — a versioned resource group such as
+    /// `com.babelforce.api/manager/calls:v1` — is the natural second level, and it slots in below
+    /// this one without moving anything above it.
+    pub fn catalog_ops_dir(&self, provider: &str) -> PathBuf {
+        self.catalog_dir().join("ops").join(provider)
+    }
+
+    /// `<root>/crates/catalog/ops/<provider>/<operation>.flux`.
+    pub fn catalog_op_path(&self, provider: &str, operation: &str) -> PathBuf {
+        self.catalog_ops_dir(provider)
+            .join(format!("{operation}.{MODULE_EXT}"))
+    }
+
+    /// `<root>/crates/catalog/src/generated/<provider>.rs` — the generated table for one provider.
+    ///
+    /// Per provider, not one file for all of them, so that `build --provider zendesk` regenerates
+    /// exactly what it compiled. A single index would have to drop the providers the run did not
+    /// look at.
+    pub fn catalog_module_path(&self, provider: &str) -> PathBuf {
+        self.catalog_dir()
+            .join("src")
+            .join("generated")
+            .join(format!("{provider}.rs"))
     }
 
     /// `path` relative to the root when it is below it, for stable, machine-independent output.
