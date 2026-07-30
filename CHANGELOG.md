@@ -9,6 +9,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A flow graph lowers to one composite Flux op (C-95).** Operation, Select, Template, Object,
+  Literal, Gate, Approval, Retry and Throttle lower through `flux_lang::ast`; Trigger, Schedule and
+  Endpoint are boundary declarations that reach no statement. Cycles, region-crossing edges, unbound
+  region outputs and a `Select` wired to an operation's response are all refusals rather than
+  degraded output.
+
+  It found an upstream defect and refused rather than working around it: **flux-lang 0.39's two
+  formatters disagree about durations.** `format::fmt_duration` never emits a bare number, so every
+  `throttle` and every `retry` with a delay produces text `format_cst` declines to re-print — though
+  both spellings parse to the same AST. Emitting a module flux's own formatter cannot format would
+  have been the alternative, so `throttle` is pinned as a refusal with the three steps to undo it
+  recorded.
+
+
+### Added
+
 - **A service can declare the roles it implements (C-120).** `[[services]] roles = [...]` as a
   **closed, checkable** set: an unknown role name is refused rather than ignored, because a typo'd
   capability that silently means "no capability" is the failure the mechanism exists to prevent. A

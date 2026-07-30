@@ -2,8 +2,7 @@
 id: C-95
 title: Lower a flow graph to a composite Flux op
 pillar: Codegen
-status: in-progress
-priority: 3
+status: done
 design: docs/designs/flow-graph.md
 epic: flow-graph
 areas: [connector-flux]
