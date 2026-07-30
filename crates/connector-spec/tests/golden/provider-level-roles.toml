@@ -1,0 +1,21 @@
+# C-120: a provider's roles are the union of its services', derived and never authored — the same
+# rule a config field's `level` follows against its `binds`. `deny_unknown_fields` would report the
+# key as unknown and list the valid ones, which says the key is wrong without saying where it
+# belongs; this is the one key worth naming a destination for.
+id = "acme"
+vendor = "Acme"
+base_url = "https://api.acme.example"
+roles = ["llm_catalogue"]
+
+[[services]]
+name = "models"
+description = "The model catalogue."
+
+[[operations]]
+id = "acme-models-list"
+service = "models"
+method = "GET"
+path = "/v1/models"
+description = "List the models."
+risk = "low"
+idempotency = "idempotent"

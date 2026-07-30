@@ -418,6 +418,7 @@ fn a_service_overrides_the_connector_version_and_base_url() {
                 description: "Object storage.".to_owned(),
                 base_url: Some("https://s3.amazonaws.com".to_owned()),
                 api_version: Some("2006-03-01".to_owned()),
+                roles: Vec::new(),
             },
             service("inherits"),
         ],

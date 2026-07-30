@@ -1,0 +1,20 @@
+# C-120: a role is a contract. This service claims `llm_catalogue`, whose required member is `list`,
+# and its only member ends in `fetch` — so the claim does not hold and the file is refused rather
+# than shipped into a catalogue that would then be lying about what the provider can do.
+id = "acme"
+vendor = "Acme"
+base_url = "https://api.acme.example"
+
+[[services]]
+name = "models"
+description = "The model catalogue."
+roles = ["llm_catalogue"]
+
+[[operations]]
+id = "acme-models-fetch"
+service = "models"
+method = "GET"
+path = "/v1/models"
+description = "Fetch the models."
+risk = "low"
+idempotency = "idempotent"

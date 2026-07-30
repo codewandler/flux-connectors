@@ -684,12 +684,14 @@ mod tests {
                 description: "Mail.".to_string(),
                 base_url: Some("https://mail.acme.example".to_string()),
                 api_version: Some("v1".to_string()),
+                roles: Vec::new(),
             },
             connector_spec::Service {
                 name: "calendar".to_string(),
                 description: "Calendar.".to_string(),
                 base_url: None,
                 api_version: Some("v3".to_string()),
+                roles: Vec::new(),
             },
         ];
         connector.operations[0].service = "mail".to_string();

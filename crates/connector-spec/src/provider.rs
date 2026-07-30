@@ -43,7 +43,7 @@ use crate::inbound::{
 use crate::lock::sha256_hex;
 use crate::{
     AuthMethod, AuthRequirement, AuthScheme, Connector, Idempotency, JsonSchema, Operation, Param,
-    ParamSet, Provenance, Quirks, Risk, Service, DEFAULT_SERVICE,
+    ParamSet, Provenance, Quirks, Risk, Role, Service, DEFAULT_SERVICE,
 };
 
 /// The documented JSON Schema for `providers/<name>.toml`.
@@ -273,11 +273,27 @@ struct ProviderFile {
 /// does not match the schema, and [`Error::InvalidProvider`](crate::Error::InvalidProvider) — with
 /// *every* problem found, not just the first — when it parses but is not a valid connector.
 pub fn load(name: &str, source: &str) -> crate::Result<LoadedProvider> {
-    let file: ProviderFile =
-        toml::from_str(source).map_err(|source| crate::Error::ParseProvider {
-            name: name.to_owned(),
-            source: Box::new(source),
-        })?;
+    let file: ProviderFile = match toml::from_str(source) {
+        Ok(file) => file,
+        // `deny_unknown_fields` has already reported `roles` as an unknown top-level key and listed
+        // every key that *would* have been valid — which says the key is wrong without saying where
+        // it belongs. This is the one key worth naming a destination for, because it is not wrong,
+        // only one level too high. A well-formed `ProviderFile` can never carry it, so the extra
+        // parse is paid on the error path alone.
+        Err(parse) => {
+            return Err(if declares_provider_roles(source) {
+                crate::Error::InvalidProvider {
+                    name: name.to_owned(),
+                    problems: vec![PROVIDER_LEVEL_ROLES.to_owned()],
+                }
+            } else {
+                crate::Error::ParseProvider {
+                    name: name.to_owned(),
+                    source: Box::new(parse),
+                }
+            });
+        }
+    };
 
     let loaded = assemble(file, source);
 
@@ -290,6 +306,29 @@ pub fn load(name: &str, source: &str) -> crate::Result<LoadedProvider> {
     }
 
     Ok(loaded)
+}
+
+/// The refusal for a provider-level `roles` key — C-120.
+///
+/// A provider's roles are the union of its services' and are computed, so the key does not exist at
+/// that level at all. Saying only "unknown field" would leave an author to guess; the message that
+/// pays for itself names the level that does own it, including for the single-surface case, which is
+/// the one an author is most likely to be in when they reach for the key.
+const PROVIDER_LEVEL_ROLES: &str = "\
+    `roles` is not a provider-level key. A role is a capability of one API surface, so it is \
+    declared on a `[[services]]` entry, and a provider's roles are derived as the union of its \
+    services' — never authored, for the reason a config field's `level` is derived from its \
+    `binds`. A provider with a single API surface declares `[[services]]` with `name = \"default\"` \
+    and puts them there";
+
+/// Whether the file states a **top-level** `roles` key, so [`load`] can say where it belongs.
+///
+/// Reached only when the typed parse has already failed, and deliberately tolerant: a file too
+/// malformed to parse as a table is not a roles problem, so it falls through to `toml`'s own error.
+fn declares_provider_roles(source: &str) -> bool {
+    source
+        .parse::<toml::Table>()
+        .is_ok_and(|table| table.contains_key("roles"))
 }
 
 /// Turns the parsed file into a [`LoadedProvider`], folding `[spec]` into the connector's
@@ -1557,15 +1596,12 @@ fn validate_services(connector: &Connector, problems: &mut Vec<String>) {
             ));
             continue;
         }
-        // The reserved name is the *implicit* service. Declaring it would be a second definition of
-        // something that already exists, and the two could then disagree about a base URL or a
-        // version — with nothing to say which one an operation meant.
+        // The reserved name is the *implicit* service. A second definition of something that already
+        // exists could disagree with it about a base URL or a version, with nothing to say which one
+        // an operation meant — so the entry is admitted for exactly one purpose, and refused for
+        // every other. See `validate_default_service_entry`.
         if name == DEFAULT_SERVICE {
-            problems.push(format!(
-                "`[[services]]` declares {DEFAULT_SERVICE:?}, which is reserved: it is the service an \
-                 operation belongs to when it names none, and it is elided from every published \
-                 address. A provider with one API surface declares no services at all"
-            ));
+            validate_default_service_entry(service, problems);
         }
         if seen.contains(&name) {
             problems.push(format!(
@@ -1590,6 +1626,90 @@ fn validate_services(connector: &Connector, problems: &mut Vec<String>) {
                      {reason}. Omit it to inherit the connector's"
                 ));
             }
+        }
+
+        validate_service_roles(connector, service, problems);
+    }
+}
+
+/// Checks the one `[[services]]` entry that may name the reserved [`DEFAULT_SERVICE`] — C-120.
+///
+/// C-49 refused the name outright, and the reason was sound: `default` is the service an operation
+/// belongs to when it names none, so declaring it is a second definition of something that already
+/// exists, and the two could disagree about a base URL or a version.
+///
+/// Roles are the one thing that argument does not cover. A role attaches to a *service*, and a
+/// provider with one API surface has no other service to attach it to — so the choice is to admit a
+/// `default` entry carrying roles or to make roles inexpressible for two thirds of the catalogue.
+/// The entry is therefore admitted **only** for that: `roles` has no connector-level spelling, so it
+/// has nothing to contradict, while `base_url`, `api_version` and `description` all do.
+///
+/// It stays the *implicit* service either way: [`Connector::is_default_only`] remains true, so a
+/// provider that writes the entry emits the same `<provider>.flux` it emitted before.
+fn validate_default_service_entry(service: &Service, problems: &mut Vec<String>) {
+    let mut overreaching: Vec<&str> = Vec::new();
+    if !service.description.is_empty() {
+        overreaching.push("description");
+    }
+    if service.base_url.is_some() {
+        overreaching.push("base_url");
+    }
+    if service.api_version.is_some() {
+        overreaching.push("api_version");
+    }
+
+    if !overreaching.is_empty() {
+        problems.push(format!(
+            "`[[services]]` declares {DEFAULT_SERVICE:?} with `{}`. {DEFAULT_SERVICE:?} is \
+             reserved — it is the service an operation belongs to when it names none, and it is \
+             elided from every published address — so the entry may carry `roles` and nothing else. \
+             A role attaches to a service and a single-surface provider has nowhere else to put one; \
+             everything else is already stated at connector level, and a second definition could \
+             disagree with it",
+            overreaching.join("`, `")
+        ));
+    } else if service.roles.is_empty() {
+        problems.push(format!(
+            "`[[services]]` declares {DEFAULT_SERVICE:?} and nothing else. {DEFAULT_SERVICE:?} is \
+             reserved: it is the service an operation belongs to when it names none, and a provider \
+             with one API surface declares no services at all. The one reason to write the entry is \
+             to carry `roles`"
+        ));
+    }
+}
+
+/// Checks that every role a service claims is one it satisfies, and claimed once — C-120.
+///
+/// A role is a *contract*, and the checking is the whole value of declaring one: a consumer reading
+/// the catalogue relies on `llm_catalogue` without reading the provider's TOML, so an unsatisfied
+/// claim would make the catalogue lie. The unknown-name case is not here because `serde` refuses it
+/// first, at the parse — [`Role`] is a closed enum, and serde's error already quotes the name that
+/// was written and lists the ones that exist.
+fn validate_service_roles(connector: &Connector, service: &Service, problems: &mut Vec<String>) {
+    let name = service.name.as_str();
+    let mut seen: Vec<Role> = Vec::new();
+
+    for role in &service.roles {
+        let word = role.word();
+        if seen.contains(role) {
+            problems.push(format!(
+                "service {name:?} declares role {word:?} more than once. A role is a claim; stating \
+                 it twice states nothing the first one did not, and a set that tolerates repeats is \
+                 a list pretending to be a set"
+            ));
+            continue;
+        }
+        seen.push(*role);
+
+        for missing in connector.missing_role_members(name, *role) {
+            problems.push(format!(
+                "service {name:?} claims role {word:?} but has no {missing:?} member. A role names \
+                 the members it requires by their name *within the service* — the trailing segments \
+                 of the member name, so that `openai-models-list` and `openrouter-models-list` fill \
+                 one slot and the shape is the same whatever the vendor calls its endpoint. \
+                 {word:?} requires: {}",
+                role.required_members().join(", ")
+            ));
         }
     }
 }

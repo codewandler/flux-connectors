@@ -1,0 +1,2 @@
+providers/service-claims-an-unsatisfied-role.toml is not a valid connector definition:
+  - service "models" claims role "llm_catalogue" but has no "list" member. A role names the members it requires by their name *within the service* — the trailing segments of the member name, so that `openai-models-list` and `openrouter-models-list` fill one slot and the shape is the same whatever the vendor calls its endpoint. "llm_catalogue" requires: list
