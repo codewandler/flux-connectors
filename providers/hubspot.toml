@@ -1,0 +1,358 @@
+# HubSpot CRM v3 — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER, even though vendor OpenAPI documents exist.
+# HubSpot publishes an OpenAPI 3 description per API through its public API catalogue (linked from
+# developers.hubspot.com). Nothing is vendored under `specs/` for it because ingest (C-4) and the
+# overlay (C-6) do not exist yet, and the CRM objects document describes every object type — standard
+# and custom — behind one generic `/crm/v3/objects/{objectType}` family. Pointing at it without a
+# selection mechanism would be pointing at hundreds of LLM tools. When C-14's fetch and C-4's ingest
+# land, this file becomes `[spec]` plus a `[[patch.operations]]` selection, and **the five operations
+# below are the selection to reproduce**.
+#
+# Until then drift is undetectable by machine, exactly as for zendesk, freshdesk, github and slack
+# (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# The paths below are the *typed* spellings (`/crm/v3/objects/contacts/…`), not the generic
+# `{objectType}` form the document is organised around. That is deliberate: a generic path would make
+# one tool that can read or write any object type in the portal, with the object type chosen at call
+# time by a model, and it would put a caller-supplied string into the URL path. Five typed operations
+# are five things a reviewer can reason about.
+#
+# ---------------------------------------------------------------------------------------------
+# THE `properties` ENVELOPE. EVERY WRITE NESTS ITS FIELDS UNDER `properties`. DO NOT FLATTEN IT.
+# ---------------------------------------------------------------------------------------------
+#
+# HubSpot's CRM write body is `{"properties": {"email": "…"}}`. The flat form — `{"email": "…"}` —
+# is **accepted, ignored and answered 2xx**: the request succeeds, the record is unchanged, and
+# nothing in the response says so. That is the worst failure mode this repository has a name for, and
+# it is the same one `providers/zendesk.toml` shipped before `wire` existed, when three ticket updates
+# emitted a flat body Zendesk answered 200 to.
+#
+# So every body field below declares the JSON path it occupies with `wire` (C-29), and
+# `crates/connector-flux/tests/hubspot_connector.rs` asserts the *emitted payload record* field by
+# field rather than trusting the `wire` strings. Prose in a `description` is what failed for zendesk;
+# a contract codegen compiles is what replaced it.
+#
+# ---------------------------------------------------------------------------------------------
+# WHY THERE IS NOT A SINGLE QUERY PARAMETER, of any type
+# ---------------------------------------------------------------------------------------------
+#
+# Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim into a
+# `fmt` template and flux registers no URL-encoding op (C-30 is unimplemented,
+# `crates/connector-flux/src/op.rs`). `zendesk-ticket-search` is the standing demonstration and
+# AGENTS.md lists it under *Intentional gaps* — a value carrying `&` does not filter, it injects a
+# parameter.
+#
+# The claim this connector makes is the strong one — **no query parameter at all** — and not the
+# weaker "no string-ish query parameter". HubSpot's `archived` filter is a boolean, which
+# `crates/connector-cli/src/status.rs` classifies as safely interpolated and would *not* flag; it is
+# still excluded, because "the query surface is empty" is a property that survives editing while "the
+# query values happen to be scalars" is one that invites the next author to add `properties=` beside
+# them. Same reasoning as `providers/openai.toml` and `providers/slack.toml`.
+#
+# Excluded pending C-30, and named here rather than left absent:
+#
+#   - `properties` and `propertiesWithHistory` — the projection that selects which properties come
+#     back. **This is the real cost of the exclusion**: without it every read returns only the object
+#     type's default property set, so no custom property is reachable. It is a comma-joined list of
+#     property names, which is exactly the unencodable shape.
+#   - `associations` — the associated companies, deals and tickets of a record, also a comma-joined
+#     list. A caller therefore cannot get a contact and its company in one call.
+#   - `archived` — a boolean, and safe to interpolate; excluded for the strong-form reason above.
+#     Reading an archived record is not possible; HubSpot answers 404 for one.
+#   - `idProperty` — the parameter that addresses a record by a unique property instead of its id,
+#     i.e. **"get the contact with this email address"**, the single most-wanted CRM read. Two things
+#     block it, and only one of them is C-30: see the schema gap below.
+#   - the object *search* endpoints (`POST /crm/v3/objects/contacts/search`). These do **not** hit the
+#     encoding gap at all — they are POSTs with a JSON body, the shape `providers/slack.toml` relies
+#     on. C-72's story Notes attribute their exclusion to C-30; that is not what blocks them. See the
+#     second schema gap below.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: a vendor-constant query parameter has nowhere to live.
+# ---------------------------------------------------------------------------------------------
+#
+# Addressing a contact by email is `GET /crm/v3/objects/contacts/{email}?idProperty=email`. The email
+# in the path is a caller value; `idProperty=email` is a **constant** — this operation always sends
+# exactly that. No field in this schema can express a constant, non-credential request field outside
+# the body: `params.query` is documented as caller-supplied and emits as such, and pinning it with a
+# JSON Schema `const` does not work, because `crates/connector-flux/src/op.rs` filters `constant(...)`
+# out of the declared parameter list for **body** params only. The result would be a required argument
+# every caller must pass and any caller may set to anything, with the `const` dropped.
+#
+# This is the same gap `providers/github.toml` records for its required `Accept:
+# application/vnd.github+json` header, recorded here because it bites a second provider in a second
+# request position. Closing it needs a constant-value field the emitter binds as a literal, or a
+# `query`/`headers` table on the operation. Reported with C-72.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: `wire` addresses records, not array elements — so the search DSL is unexpressible.
+# ---------------------------------------------------------------------------------------------
+#
+# HubSpot's search body is
+# `{"filterGroups": [{"filters": [{"propertyName": "email", "operator": "EQ", "value": "…"}]}]}` — an
+# array of objects containing an array of objects. `Param::wire` is a dot-separated path assembled by
+# `body_tree`, which builds nested **records** only (`BodyNode::Branch` is a `BTreeMap`); a `0`
+# segment would emit the literal object key `"0"`, not an array element. So the filter DSL cannot be
+# declared field by field at all.
+#
+# The one thing that *would* compile is `body_schema` — a free-form `{"type": "object"}` body, the
+# route babelforce's two session writes take. It is refused here on tool-contract grounds: it would
+# publish HubSpot's filter DSL to a model as an untyped `Any` with no properties, so the model would
+# have to invent the operator vocabulary, and a search that silently matches nothing looks identical
+# to a search with no results. Closing this needs array support in `wire`, or a body-shape mechanism
+# richer than "these fields" and "anything at all".
+#
+# ---------------------------------------------------------------------------------------------
+# DELIBERATELY NOT DECLARED: `quirks.rate_limit`.
+# ---------------------------------------------------------------------------------------------
+#
+# HubSpot does publish per-portal request limits, and they differ by subscription tier and by app
+# type. `RateLimit` takes an exact `requests`/`per_seconds` pair, and the schema is published verbatim
+# to consumers in `web/public/catalog.json`, so a bound guessed from memory would be a wrong contract
+# a model tries to satisfy — the same argument `providers/slack.toml` makes for its `limit` maximum,
+# in the direction of declaring nothing rather than declaring a number nobody verified. It is left out
+# until someone reads the current limits page and writes down which tier the number describes.
+
+id = "hubspot"
+vendor = "HubSpot"
+
+# One host for every portal. Unlike zendesk's `{subdomain}` and freshdesk's `{domain}`, `base_url`
+# carries no placeholder for an operator to bind, so `status.rs` reports no
+# `unbound-base-url-template` issue: the connector already has a valid destination URL, and its whole
+# egress surface is this one literal name.
+#
+# `http_hosts` derives from this value (`crates/connector-cli/src/catalog.rs`, `host_of`) and is
+# therefore exactly `api.hubapi.com`, never widened. `api.hubspot.com` serves the developer API
+# catalogue and `app.hubspot.com` is the web UI; neither is reachable from the operations below, and
+# adding either would widen the egress allow-list for nothing. The manifest's real `http_hosts` field
+# lands in C-10.
+base_url = "https://api.hubapi.com"
+
+description = "HubSpot CRM: read contacts, companies and deals, and create and update contact records"
+
+# Every operation authenticates the same way — one private-app access token, no per-operation
+# override.
+default_auth = [{ credentials = ["hubspot.access_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "hubspot.access_token"
+scheme = "bearer"
+# The sole secret: a private-app access token, `pat-…`, reaching the wire as
+# `Authorization: Bearer <token>`. Gated and registered with flux's redactor by the host; its value is
+# never read here and never enters a generated artifact.
+#
+# A private app rather than a public OAuth app deliberately. Both mint a bearer, so `scheme` would be
+# the same either way; what differs is provenance. A private app's token is created once in the
+# portal's own settings with an explicit scope list, which is why no `[auth.oauth2]` block appears —
+# flux is handed an already-minted token through the environment and runs no grant, the same
+# provenance babelforce's and slack's bearers have. A public app would need the authorization-code
+# grant and a refresh token, which is C-21's effectful acquisition and belongs to the host, not here.
+env = ["HUBSPOT_ACCESS_TOKEN"]
+description = "HubSpot private-app access token (pat-…) with crm.objects.contacts.read/write, crm.objects.companies.read and crm.objects.deals.read"
+
+# 🚫 EXCLUDED, DELIBERATELY: the legacy `hapikey` query parameter.
+#
+# HubSpot's original authentication was `?hapikey=<key>` — an account-wide API key in the query
+# string. **It is deprecated and was sunset for API traffic in 2022**, and it is not modelled here and
+# must not be emitted. Two independent reasons, either of which is sufficient:
+#
+#  1. It is a *credential in a URL*. A query string is logged by proxies, kept in server access logs
+#     and forwarded in referrers, so modelling it would leak a live secret by design — and it would
+#     have to travel through `params.query`, the caller-supplied parameter surface, which is precisely
+#     where AGENTS.md forbids a credential from passing.
+#  2. It is unencodable. Query values reach the wire verbatim (C-30), so a key containing a reserved
+#     character would corrupt the request as well as leak.
+#
+# To a future reader: its absence is not a bug and not a gap in ingest. Do not "fix" this connector by
+# adding it back, and do not treat a vendor document that still mentions it as evidence it is
+# supported. This is the same class of decision `providers/babelforce.toml` records for its deprecated
+# `X-Auth-Access-Id`/`X-Auth-Access-Token` pair: known-and-excluded must stay distinguishable from
+# absent (C-19). It is checked structurally rather than by grepping this file —
+# `crates/connector-flux/tests/hubspot_connector.rs` asserts that nothing named `hapikey` reaches the
+# IR in any request position, since the comment you are reading names it too.
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 5 over `/crm/v3/objects`
+#
+# Curated to what a support or sales flow executes at runtime: read the customer record, read the
+# company and the deal it hangs off, and correct or create the contact. Everything administrative is
+# excluded — properties and pipeline schema management, associations, imports, owners, engagements,
+# batch endpoints and every `DELETE`. A batch read would be the obvious sixth operation and takes a
+# JSON body rather than a query, so it is available whenever someone wants it; it is left out because
+# a batch of ids is a shape a model gets wrong more often than it gets it right.
+#
+# **No optional request-body field appears anywhere below, and that is a constraint rather than a
+# coincidence** (C-56). The emitter binds every declared body field into the payload record, so an
+# unsupplied optional field travels as an explicit `null` rather than being omitted. HubSpot's
+# property model gives a null property value its own meaning, so an omitted field is a value the
+# vendor acts on. Every field below is therefore `required = true`, and what that cost is — the fields
+# left out — is stated on each write.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only (C-8, C-23).
+#
+# Record ids are declared `integer`, though HubSpot renders them as JSON *strings* in every response
+# (`"id": "512"`). The integer is the stronger declaration: it becomes a Flux `Number` in the op
+# signature, so the placeholder cannot carry a `/`, `?` or `#` that changes the shape of the request —
+# the same path-safety asymmetry `providers/github.toml` argues for its `{issue_number}`. The cost is
+# named: a caller copying an id straight out of a response has a string in hand.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "hubspot-contact-get"
+method = "GET"
+path = "/crm/v3/objects/contacts/{contact_id}"
+description = "Read one contact by record id. Returns only HubSpot's default contact properties — name, email and record timestamps; a custom property needs a `properties` projection this connector cannot express yet"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "contact_id"
+description = "The contact's HubSpot record id (`hs_object_id`), e.g. 512"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+# HubSpot reports failure with a non-2xx status *and* a body carrying the detail, which is what
+# `ErrorEnvelope` is for. `category` is the machine code — `OBJECT_NOT_FOUND`, `VALIDATION_ERROR`,
+# `RATE_LIMIT` — and `message` the human half. Declared on every operation because it is a property of
+# the whole API rather than of one endpoint.
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/category"
+
+# ---------------------------------------------------------------------------------------------
+# The two writes. **Both change a record every user of the portal sees**, and their `risk` says so.
+#
+# `risk = "high"` — "writes a reviewer would want to see first" — rather than the `medium` the zendesk
+# writes carry, and the difference is not cosmetic. A zendesk comment defaults to an internal note; a
+# HubSpot contact write is immediately visible to every rep in the portal, appears on the record's
+# timeline, and **can trigger a workflow**: HubSpot workflows enrol records on creation and on
+# property change, and an enrolled contact can be sent marketing email. So a write here can cause an
+# email to a real person as a second-order effect, which is not something an approval gate should wave
+# through. flux's gate reads this field.
+#
+# Neither is `destructive`: no record is deleted, and a property's previous value survives in its
+# history, so the change is recoverable by a human in the UI. That is the honest tier — recoverable,
+# but wide-reaching.
+#
+# `idempotency = "non_idempotent"` for both. HubSpot documents no idempotency key on these endpoints,
+# so `conditional` would be a claim with nothing behind it: unlike zendesk's `updated_stamp` there is
+# no optimistic-concurrency token to condition on, and a replayed update is last-write-wins. A replay
+# is also observable in its own right — each write appends an entry to the property's history. (The
+# emitter refuses `idempotent` on a `POST` or `PATCH` regardless, and refuses `risk = "low"` on any
+# state-changing method — `check_write_metadata`.)
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "hubspot-contact-create"
+method = "POST"
+path = "/crm/v3/objects/contacts"
+description = "Create a contact from an email address. HubSpot treats email as the contact's unique identifier and rejects a duplicate with 409. The new record is visible to everyone in the portal and can be enrolled by a workflow, which may send it marketing email"
+risk = "high"
+idempotency = "non_idempotent"
+
+# `email` alone, and the reason is C-56 rather than the vendor: HubSpot requires no property at all on
+# a create, and `firstname`, `lastname`, `phone` and `company` are the obvious companions — but an
+# optional field would travel as an explicit `null`, and making them *required* would force a caller
+# who knows only an email address to invent a person's name and write it into a CRM. One required
+# identifier is the fail-closed reading of both constraints.
+#
+# The two-call form works today: create with the email, then `hubspot-contact-update` for the name.
+# The one-call form needs C-56.
+[[operations.params.body]]
+name = "email"
+wire = "properties.email"
+description = "The contact's email address — HubSpot's unique identifier for a contact"
+required = true
+schema = { type = "string", minLength = 3 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/category"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "hubspot-contact-update"
+method = "PATCH"
+path = "/crm/v3/objects/contacts/{contact_id}"
+description = "Overwrite a contact's first and last name. Both are written on every call — this operation replaces them rather than merging, so re-send the one you are not changing (read it first with hubspot-contact-get). The change is visible to everyone in the portal and can trigger a workflow"
+risk = "high"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "contact_id"
+description = "The contact's HubSpot record id (`hs_object_id`)"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+# Two required fields, and the "re-send what you are not changing" wording in the description above is
+# the cost of C-56 stated on the contract a model actually reads. A partial update — set one property,
+# leave the rest untouched — is what the vendor supports and what this schema cannot yet express: as
+# optional fields these would arrive as explicit nulls.
+#
+# `email` is deliberately **not** writable here. It is HubSpot's unique identifier for a contact, so
+# changing it can collide with an existing record (409) or provoke a merge, which is a different
+# operation with a different blast radius rather than a field on this one.
+[[operations.params.body]]
+name = "firstname"
+wire = "properties.firstname"
+description = "The contact's first name; written on every call"
+required = true
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "lastname"
+wire = "properties.lastname"
+description = "The contact's last name; written on every call"
+required = true
+schema = { type = "string" }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/category"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "hubspot-company-get"
+method = "GET"
+path = "/crm/v3/objects/companies/{company_id}"
+description = "Read one company by record id. Returns only HubSpot's default company properties — name, domain and record timestamps"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "company_id"
+description = "The company's HubSpot record id (`hs_object_id`)"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/category"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "hubspot-deal-get"
+method = "GET"
+path = "/crm/v3/objects/deals/{deal_id}"
+description = "Read one deal by record id. Returns only HubSpot's default deal properties — name, amount, stage, pipeline and close date"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "deal_id"
+description = "The deal's HubSpot record id (`hs_object_id`)"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/category"

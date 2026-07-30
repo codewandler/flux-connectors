@@ -104,6 +104,10 @@ fn operation_selection_stays_curated() {
         // `providers/openai.toml`.
         ("openai", 4),
         ("slack", 4),
+        // C-72 curates 5 over `/crm/v3/objects`: contact get, create and update, company get and
+        // deal get. The cut is the query-encoding gap again — HubSpot's search endpoints and every
+        // `properties=` projection are excluded. See `providers/hubspot.toml`.
+        ("hubspot", 5),
         // C-70 curates 6 of the Jira Cloud platform API's several hundred, all on the v2 issue
         // resource tree. Two cuts shaped it: JQL search is excluded pending C-30 — a `jql` value is
         // the most injectable query string in this fleet — and issue update is excluded pending
