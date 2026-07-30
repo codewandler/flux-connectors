@@ -35,27 +35,85 @@ pub enum Error {
         feature: &'static str,
     },
 
-    /// A body field whose name is a **JSON path** rather than a key at the root of the body.
+    /// A body field whose **caller-facing name** looks like a JSON path, with no `wire` to say
+    /// whether it is one.
     ///
-    /// babelforce's `presence.name` and Zendesk's `ticket.comment.body` both nest
-    /// (`providers/babelforce.toml`, `providers/zendesk.toml`), but [`connector_spec::ParamSet`]'s
-    /// `body` is a flat `Vec<Param>` carrying one `name` — there is no field recording the path a
-    /// body field occupies. Emitting the dotted name as a literal JSON key produces
-    /// `{"presence.name": …}`, which is a request the vendor accepts and ignores: the worst
-    /// possible failure, because it succeeds.
+    /// The path a body field occupies is [`connector_spec::Param::wire`]'s job. A dotted `name` and
+    /// no `wire` is ambiguous in the one direction that cannot be guessed at: it means either "a
+    /// field literally called `presence.name` at the root of the body" or "the `name` field inside
+    /// `presence`", and the two produce different requests. Emitting the dotted spelling as a
+    /// literal JSON key yields `{"presence.name": …}`, which a vendor accepts and ignores — the
+    /// worst failure available, because it answers 200.
     ///
-    /// So it is refused. Closing this needs an additive field on `Param` — see the crate docs.
+    /// So it is refused, and the fix is one line in the provider file.
     #[error(
-        "operation `{operation}`: body field `{name}` names a nested JSON path, and the IR cannot \
-         express one — `ParamSet::body` is a flat field list, so this would be emitted as the \
-         literal key `\"{name}\"` and silently ignored by the vendor. `Param` needs an additive \
-         wire-path field before this operation can be emitted"
+        "operation `{operation}`: body field `{name}` has a dotted name and no `wire`, so whether \
+         it is one field called `\"{name}\"` or a nested path is undecidable. A body field's JSON \
+         path is declared with `wire` — write `wire = \"{name}\"` and give the field a \
+         caller-facing `name`. Emitted as-is it would be the literal key `\"{name}\"`, which the \
+         vendor accepts and ignores"
     )]
     NestedBodyField {
         /// The operation id.
         operation: String,
         /// The dotted body field name.
         name: String,
+    },
+
+    /// A `wire` path with an empty segment — `"a..b"`, `".a"`, `"a."`, or the empty string.
+    ///
+    /// Every segment is a JSON object key, and an empty key is not one a vendor ever means. Left
+    /// alone it would produce `{"a": {"": {"b": …}}}`, which is once again a request that is
+    /// accepted and ignored.
+    #[error(
+        "operation `{operation}`: body field `{name}` declares `wire = \"{wire}\"`, which has an \
+         empty path segment — every segment between dots is a JSON object key"
+    )]
+    BadWirePath {
+        /// The operation id.
+        operation: String,
+        /// The caller-facing field name.
+        name: String,
+        /// The malformed path.
+        wire: String,
+    },
+
+    /// Two body fields whose wire paths cannot both exist: one occupies a JSON path that the other
+    /// needs as an object, or two fields claim the same path outright.
+    ///
+    /// `ticket.comment` and `ticket.comment.body` are not composable — the first says
+    /// `comment` holds the caller's value, the second says it holds an object. Emitting either
+    /// silently discards the other, so the operation is refused instead of one field being dropped.
+    #[error(
+        "operation `{operation}`: body fields `{first}` and `{second}` claim conflicting wire \
+         paths — `{path}` cannot be both a value and an object. One of the two would be silently \
+         dropped from the request"
+    )]
+    BodyPathConflict {
+        /// The operation id.
+        operation: String,
+        /// The field already occupying the path.
+        first: String,
+        /// The field that collided with it.
+        second: String,
+        /// The contested path.
+        path: String,
+    },
+
+    /// An operation declares both named body fields and a free-form `body_schema`.
+    ///
+    /// "The body is these fields" and "the body is this schema" are two answers to one question,
+    /// and nothing in the IR states how to merge them — whether the schema is the envelope the
+    /// fields sit in, or a sibling, or a replacement. Guessing would send one of the two and drop
+    /// the other without saying so.
+    #[error(
+        "operation `{operation}`: declares both `params.body` fields and `params.body_schema`, and \
+         nothing states how to merge them. A body is assembled from named fields *or* supplied \
+         whole by the caller — declare one of the two"
+    )]
+    AmbiguousBody {
+        /// The operation id.
+        operation: String,
     },
 
     /// A request-changing method declared the risk of a read.
