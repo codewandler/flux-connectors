@@ -9,6 +9,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A credential the redactor will not hold is now refused rather than sent (C-152).** flux's
+  `Redactor::add_secret` silently ignores a value under six trimmed characters — correct for flux, since
+  over-redacting a common word would corrupt every surface it touches — so a five-character stored
+  credential registered *successfully* and travelled unredacted through all four surfaces. C-116 stated
+  the resulting property unconditionally. **The code was correct about what it did; the prose was wrong
+  about what that meant, and the prose is what a reader relies on.**
+
+  The check **asks the redactor rather than mirroring the threshold**: register the value, then assert
+  that scrubbing it changes it. A mirrored `6` would have gone stale on a flux upgrade with nothing
+  failing, and asking also covers the empty and all-whitespace cases without naming them. An independent
+  review probed both directions empirically — a value the redactor holds always rewrites, and no longer
+  registered value can rescue a short one, because stored values are trimmed and ≥6 and so cannot be
+  substrings of shorter ones.
+
+  Also: `auth::Assembled` gained a redacting `Debug` matching `Secret`'s; the `view` surface of the
+  guarantee test is no longer asserted against an empty string; and every value now passes one door,
+  which closes the window where a secret was in memory before registration.
+
+
+### Fixed
+
 - **A verification field reached the IR and neither consumer (C-151).** C-141's `timestamp_format` was
   published in the loader and the JSON schema but silently dropped from the manifest and `catalog.json`,
   because `ManifestHmac` and `HmacEntry` enumerate `HmacSpec`'s fields **by hand**. Both now carry it.

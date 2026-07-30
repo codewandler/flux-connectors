@@ -2,8 +2,7 @@
 id: C-152
 title: "The redaction guarantee has two holes and one vacuous assertion"
 pillar: Bridge
-status: in-progress
-priority: 2
+status: done
 design: docs/designs/connector-tool-pack.md
 epic: authentication-surface
 areas: [bridge]
