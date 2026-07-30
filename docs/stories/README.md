@@ -23,6 +23,7 @@ Gate: `cargo build --workspace && cargo test --workspace && cargo clippy --works
 
 ## Now (in progress)
 - [C-9 — Emit request bodies, headers, and response handling](C-9-bodies-and-responses.md) · Codegen
+- [C-29 — Close the request-body modelling gaps in the IR](C-29-body-modelling-gaps.md) · Spec · found by C-17 transcribing real providers · blocks correct write operations
 
 ## Next (ready — take the top one unless the user named a story)
 
@@ -36,7 +37,6 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-30 — Refuse query values the emitter cannot encode safely](C-30-refuse-unencodable-query.md) · Codegen · **security** · a model-supplied query value can inject request parameters today
 - [C-38 — Render Flux per operation and embed it in a catalog crate](C-38-operation-catalog-crate.md) · Build · **the goal** · one .flux per expanded op, consumable as a Rust crate
 - [C-10 — Emit the $auth marker and the connector manifest](C-10-auth-injection-and-manifest.md) · Codegen · pairs with C-16 · the second generated artifact
-- [C-29 — Close the request-body modelling gaps in the IR](C-29-body-modelling-gaps.md) · Spec · found by C-17 transcribing real providers · blocks correct write operations
 - [C-11 — Prove every generated module parses and analyzes](C-11-parse-and-analyze-gate.md) · Codegen · **load-bearing** · without it invalid Flux can be committed
 - [C-17 — Author provider configs for zendesk, freshdesk and babelforce](C-17-provider-configs.md) · Spec · **the goal** · three configs that compile to executable .flux
 

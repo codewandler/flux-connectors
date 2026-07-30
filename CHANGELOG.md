@@ -74,6 +74,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   explicitly so a non-2xx is data rather than an op failure. Write operations may not claim a read's
   risk, and a JSON Schema `const` body field is sent without appearing in the op signature.
 
+- **C-29** — `Param::wire` (a dot-separated JSON path for body fields, a plain alias for query and
+  header parameters) and `ParamSet::body_schema` for free-form object bodies. Both additive; C-2's
+  determinism and round-trip tests pass with no assertion changed.
+- **C-29** — the emitter builds a **nested** request body from wire paths, and three new refusals
+  (`BadWirePath`, `BodyPathConflict`, `AmbiguousBody`) reject shapes that would otherwise silently
+  drop a declared field.
+- **C-29** — **`flux-connectors build` now produces all six artifacts**: `connectors/{zendesk,
+  freshdesk,babelforce}.flux` and their manifests. All 25 shipped operations parse, are fixed points
+  of flux's formatter, and reload as composite ops.
+
 ### Changed
 - **C-1** — flux-lang is depended on from **crates.io** (`codewandler-flux-lang = "0.37"`) rather
   than as a git or path dependency. The flux git remote uses a developer-only SSH host alias that

@@ -3,7 +3,7 @@ id: C-29
 title: Close the request-body modelling gaps in the IR
 pillar: Spec
 status: in-progress
-priority: 7
+priority:
 design: docs/designs/connector-pipeline.md
 epic: connectors-v1
 areas: [connector-spec]
