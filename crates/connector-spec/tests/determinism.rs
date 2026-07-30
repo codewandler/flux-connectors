@@ -61,6 +61,7 @@ fn connector(reversed: bool) -> Connector {
             params: ParamSet {
                 query: vec![Param {
                     name: "limit".into(),
+                    wire: None,
                     description: String::new(),
                     required: false,
                     schema: schema.clone(),

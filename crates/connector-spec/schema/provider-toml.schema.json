@@ -407,8 +407,12 @@
         },
         "body": {
           "type": "array",
-          "description": "Fields assembled into the JSON request body.",
+          "description": "Fields assembled into the JSON request body, each at the JSON path its `wire` names.",
           "items": { "$ref": "#/$defs/param" }
+        },
+        "body_schema": {
+          "$ref": "#/$defs/jsonSchema",
+          "description": "The body IS this schema, rather than being assembled from named fields — a free-form object body such as babelforce's session-variable maps. Mutually exclusive with `body`: codegen refuses an operation that declares both."
         }
       }
     },
@@ -421,7 +425,11 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "The parameter name as the vendor API expects it."
+          "description": "The caller-facing name: what the generated op declares and what a model passes. Also the wire name unless `wire` says otherwise."
+        },
+        "wire": {
+          "type": "string",
+          "description": "The spelling the vendor sees, when it differs from `name`. For a body field this is the dot-separated JSON path it occupies (`ticket.comment.body`); for a path, query or header parameter it is a plain alias (`req_id` -> `requester_id`). Without it a nested body field is emitted at the root of the body, which a vendor such as Zendesk accepts and ignores."
         },
         "description": {
           "type": "string",

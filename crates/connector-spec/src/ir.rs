@@ -108,8 +108,31 @@ pub enum Idempotency {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Param {
-    /// The parameter name as the vendor API expects it.
+    /// The **caller-facing** name: what the generated op declares, and what a model passes.
+    ///
+    /// It is also the wire name unless [`wire`](Self::wire) says otherwise, which is the common
+    /// case — a vendor that names a field the same thing its callers do needs no second name.
     pub name: String,
+    /// The spelling the **vendor** sees, when it differs from [`name`](Self::name).
+    ///
+    /// Two shapes, one field, because they are the same fact — *where this value goes on the
+    /// request* — asked of two different request positions:
+    ///
+    /// - a **body** field: the dot-separated JSON path it occupies in the request body.
+    ///   Zendesk's comment text is `ticket.comment.body`, not `body`
+    ///   (`docs/designs/provider-operation-inventory.md` §3.3.1); babelforce's agent-status update
+    ///   writes `presence.name`. Without this the field is emitted at the root of the body, which
+    ///   Zendesk **accepts and ignores** — a wrong result that answers 200, which is why this is a
+    ///   correctness field and not a convenience one.
+    /// - a **path, query or header** parameter: a plain alias, the vendor's own name for a
+    ///   parameter whose caller-facing name reads better. Freshdesk's requester filter is
+    ///   `req_id` to a caller and `requester_id` on the wire (inventory §4.2 op 2).
+    ///
+    /// A single field rather than a `body_path` and an `alias`: a JSON path with one segment *is*
+    /// an alias, so two fields would be two spellings of one idea, and codegen would have to decide
+    /// what a parameter carrying both meant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wire: Option<String>,
     /// Human-readable description, surfaced to the model as part of the op's tool contract.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
@@ -137,22 +160,42 @@ pub struct ParamSet {
     /// the host from an [`AuthMethod`], so no credential passes through the parameter surface.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub header: Vec<Param>,
-    /// Fields assembled into the JSON request body. Emitting the body is C-9's job; this is the
-    /// shape it reads.
+    /// Fields assembled into the JSON request body, each at the JSON path its
+    /// [`Param::wire`] names (or at the root of the body when it names none).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub body: Vec<Param>,
+    /// The body **is** this schema, rather than being assembled from named fields.
+    ///
+    /// A free-form object body: `babelforce-call-session-set` and `babelforce-session-update` both
+    /// take `{"type": "object"}` with no properties — a map of caller-chosen keys
+    /// (`docs/designs/provider-operation-inventory.md` §6.5). A field list cannot describe that, and
+    /// an operation that declared no body field at all emitted a `PUT` with **no body**, which is
+    /// indistinguishable from a legitimately bodiless write.
+    ///
+    /// Mutually exclusive with [`body`](Self::body): "the body is these fields" and "the body is
+    /// this schema" are two answers to one question, and nothing states how to merge them. Codegen
+    /// refuses an operation that declares both rather than picking one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body_schema: Option<JsonSchema>,
 }
 
 impl ParamSet {
     /// Whether the operation takes no parameters at all.
+    ///
+    /// `body_schema` counts: an operation whose only body declaration is a schema would otherwise
+    /// encode as an absent `params` and lose the whole body on the way back.
     pub fn is_empty(&self) -> bool {
         self.path.is_empty()
             && self.query.is_empty()
             && self.header.is_empty()
             && self.body.is_empty()
+            && self.body_schema.is_none()
     }
 
     /// Every parameter, in request-position order: path, query, header, body.
+    ///
+    /// [`body_schema`](Self::body_schema) is deliberately absent — it is a schema, not a [`Param`],
+    /// and a caller iterating parameters is asking about named ones.
     pub fn iter(&self) -> impl Iterator<Item = &Param> {
         self.path
             .iter()
