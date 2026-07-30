@@ -135,7 +135,7 @@
 
 use std::collections::BTreeMap;
 
-use connector_spec::{Connector, HttpMethod, Idempotency, Operation, Param, Risk};
+use connector_spec::{Connector, HttpMethod, Idempotency, Operation, Param, Risk, FREE_FORM_BODY};
 use flux_lang::ast::{DraftAst, Node, Param as FluxParam, SymbolName, TypeRef};
 use flux_lang::program::{CompositeOpDecl, CompositeOpMeta};
 
@@ -156,13 +156,6 @@ const CONTENT_TYPE: &str = "content_type";
 const CONTENT_TYPE_HEADER: &str = "content-type";
 /// The symbol holding the assembled JSON request body.
 const PAYLOAD: &str = "payload";
-/// The caller-facing name of the one parameter a free-form body travels in.
-///
-/// A convention rather than an IR field: [`connector_spec::ParamSet::body_schema`] says the body
-/// *is* a schema and names nothing, so the parameter needs a name from somewhere. It is allocated
-/// through [`Symbols`] like any other, so an operation that already has a `body` elsewhere gets a
-/// disambiguated symbol rather than a silently shadowed one.
-const FREE_FORM_BODY: &str = "body";
 /// The symbol holding the HTTP response.
 const RESPONSE: &str = "response";
 /// The one media type this emitter sends. Every launch provider is JSON over HTTP — Freshdesk sends
@@ -314,9 +307,17 @@ fn bind_parameters<'a>(operation: &'a Operation) -> Result<Bindings<'a>> {
 /// The **caller-facing** name of every parameter a caller supplies, mapped to the Flux symbol the
 /// emitted `op` declares for it.
 ///
-/// A constant body field is deliberately absent: it is sent but never declared (see [`constant`]),
-/// so naming it at a call site would pass an argument the operation does not have.
-pub(crate) fn parameter_symbols(operation: &Operation) -> Result<BTreeMap<String, String>> {
+/// A constant body field is deliberately absent: it is sent but never declared (see this module's
+/// `constant`), so naming it at a call site would pass an argument the operation does not have.
+///
+/// **Public because it is the seam between the two schemas one operation now has.**
+/// [`connector_spec::Operation::input_schema`] composes the catalogue's answer and keys it by the
+/// caller-facing name; anything reading the *emitted declaration* — `connector-pack`'s `ToolSpec`
+/// projection above all — sees the Flux symbol instead, because that is what a composite op can
+/// declare. This map is that correspondence, computed once here where the allocation happens, so
+/// the relationship between the two is mechanical rather than a coincidence two crates maintain
+/// separately. `tests/input_schema_agreement.rs` holds them together over every shipped operation.
+pub fn parameter_symbols(operation: &Operation) -> Result<BTreeMap<String, String>> {
     let bound = bind_parameters(operation)?;
     Ok(bound
         .path

@@ -287,3 +287,140 @@ fn no_provider_file_carries_a_credential_value() {
         }
     }
 }
+
+/// **One schema per operation, covering everything it receives.**
+///
+/// The measurement this is written against: of the shipped operations, all but six declare
+/// parameters, yet nothing said what an operation *receives* as a single schema — so every consumer
+/// re-derived it and disagreed at the corners (C-125, `docs/designs/member-io-schemas.md` §1). This
+/// asserts the composition over every shipped operation rather than a fixture, because the corners
+/// are in the real data: babelforce's dotted `time.start`, zendesk's `const`-pinned `safe_update`,
+/// babelforce's two free-form `body_schema` bodies, and six operations that take nothing at all.
+///
+/// Four claims, and each one is a corner a re-deriving consumer got wrong:
+///
+/// 1. it is always an `object` schema carrying both `properties` and `required`, present even when
+///    empty — "takes nothing" is a real answer;
+/// 2. every declared parameter is a property, keyed by its **caller-facing** name and carrying its
+///    declared schema **verbatim** — composition, not enrichment;
+/// 3. a free-form `body_schema` is the one property [`connector_spec::FREE_FORM_BODY`] names, which
+///    is the same name the emitted `op` declares it under;
+/// 4. `required` is *exactly* the required parameters — not everything, not nothing.
+#[test]
+fn every_operation_composes_an_input_schema_covering_its_parameters() {
+    for name in shipped() {
+        let connector = load(&name).connector;
+        for operation in &connector.operations {
+            let id = &operation.id;
+            let schema = operation.input_schema();
+
+            assert_eq!(
+                schema["type"], "object",
+                "providers/{name}.toml: `{id}` composes {schema}, which is not an object schema"
+            );
+            let properties = schema["properties"].as_object().unwrap_or_else(|| {
+                panic!("providers/{name}.toml: `{id}` composes no `properties` object")
+            });
+            let required: Vec<&str> = schema["required"]
+                .as_array()
+                .unwrap_or_else(|| {
+                    panic!("providers/{name}.toml: `{id}` composes no `required` array")
+                })
+                .iter()
+                .map(|value| {
+                    value.as_str().unwrap_or_else(|| {
+                        panic!("providers/{name}.toml: `{id}` names a non-string in `required`")
+                    })
+                })
+                .collect();
+
+            for param in operation.params.iter() {
+                let property = properties.get(&param.name).unwrap_or_else(|| {
+                    panic!(
+                        "providers/{name}.toml: `{id}` declares parameter `{}`, which is not in its \
+                         composed input schema",
+                        param.name
+                    )
+                });
+                assert_eq!(
+                    property, &param.schema,
+                    "providers/{name}.toml: `{id}` composes a different schema for `{}` than the \
+                     one it declares",
+                    param.name
+                );
+                assert_eq!(
+                    required.contains(&param.name.as_str()),
+                    param.required,
+                    "providers/{name}.toml: `{id}` declares `{}` as required={} and composes the \
+                     opposite",
+                    param.name,
+                    param.required
+                );
+            }
+
+            if let Some(body) = &operation.params.body_schema {
+                let property = properties
+                    .get(connector_spec::FREE_FORM_BODY)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "providers/{name}.toml: `{id}` declares a free-form body, which is not \
+                             in its composed input schema"
+                        )
+                    });
+                assert_eq!(property, body);
+                assert!(
+                    required.contains(&connector_spec::FREE_FORM_BODY),
+                    "providers/{name}.toml: `{id}` composes an optional free-form body, but the \
+                     body is the request"
+                );
+            }
+
+            // Nothing invented: the properties are the declared parameters and the free-form body,
+            // and no more. A constant header is deliberately not among them — it is not a
+            // parameter, and nothing about it is caller-supplied.
+            let expected = operation.params.iter().count()
+                + usize::from(operation.params.body_schema.is_some());
+            assert_eq!(
+                properties.len(),
+                expected,
+                "providers/{name}.toml: `{id}` composes {} properties for {expected} declarations",
+                properties.len()
+            );
+            let expected_required = operation
+                .params
+                .iter()
+                .filter(|param| param.required)
+                .count()
+                + usize::from(operation.params.body_schema.is_some());
+            assert_eq!(
+                required.len(),
+                expected_required,
+                "providers/{name}.toml: `{id}` requires {:?}, which is not exactly its required \
+                 parameters",
+                required
+            );
+        }
+    }
+}
+
+/// An operation that takes nothing composes an **empty object schema, not absence.**
+///
+/// The asymmetry with the output side is the point (`docs/designs/member-io-schemas.md`): "this
+/// operation takes nothing" is a real, derivable answer, while "we do not know what it returns" is
+/// not — so a response schema publishes absence and an input schema never does. Six shipped
+/// operations are in this state; `openai-models-list` is one.
+#[test]
+fn an_operation_that_takes_nothing_composes_an_empty_object_schema() {
+    let connector = load("openai").connector;
+    let operation = connector
+        .operations
+        .iter()
+        .find(|operation| operation.id == "openai-models-list")
+        .expect("providers/openai.toml declares `openai-models-list`");
+
+    assert!(operation.params.is_empty());
+    assert_eq!(
+        operation.input_schema(),
+        serde_json::json!({"type": "object", "properties": {}, "required": []})
+    );
+}

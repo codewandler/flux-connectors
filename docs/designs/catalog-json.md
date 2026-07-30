@@ -164,7 +164,8 @@ changes with its value would force every consumer to write a discriminated union
 | `method` | string | Uppercase HTTP method. |
 | `path` | string | Template, relative to the provider's `base_url`. |
 | `parameters` | array\<Parameter\> | See below. |
-| `body_schema` | object \| null | Set when the body **is** a schema rather than assembled from named fields (babelforce's free-form session bodies). Mutually exclusive with `in: "body"` parameters. |
+| `input_schema` | object | **One JSON Schema for everything the operation receives**, composed from `parameters` and `body_schema` (C-125). Never null: an operation that takes nothing composes `{"type": "object", "properties": {}, "required": []}`, because "takes nothing" is a derived answer. Keyed by the caller-facing `name`; `required` is exactly the required parameters. |
+| `body_schema` | object \| null | Set when the body **is** a schema rather than assembled from named fields (babelforce's free-form session bodies). Mutually exclusive with `in: "body"` parameters — an operation declaring both does not load. |
 | `response_schema` | object \| null | The vendor's success schema, when it publishes one. |
 | `credentials` | array\<array\<string\>\> | See **Credentials are OR-of-AND**. |
 | `hosts` | array\<string\> | The hosts this call reaches — its **service's**, which for a multi-service provider is not the provider's. |
