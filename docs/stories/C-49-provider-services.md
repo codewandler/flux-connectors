@@ -2,7 +2,7 @@
 id: C-49
 title: Model a provider's services as the middle addressing level
 pillar: Spec
-status: in-progress
+status: done
 priority: 4
 design: docs/designs/provider-services.md
 epic: connectors-v1

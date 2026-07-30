@@ -36,7 +36,6 @@ _Every credential problem in this repo has the same shape: **the caller must not
 
 ### Connectors v1 — spec to Flux
 _Prove the whole thesis on two real providers, end to end against a live flux._
-- [C-49 — Model a provider's services as the middle addressing level](C-49-provider-services.md) · Spec · provider → service → operations · one service per operation · unset means `default`
 - [C-37 — Give providers and operations stable global addresses](C-37-global-addressing.md) · Spec · pid / gid / oip · the global half; C-23 stays the local half
 - [C-56 — Omit an optional body field instead of sending an explicit null](C-56-omit-optional-body-fields.md) · Codegen · query params get a `when` guard; body fields do not
 - [C-30 — Refuse query values the emitter cannot encode safely](C-30-refuse-unencodable-query.md) · Codegen · **security** · a model-supplied query value can inject request parameters today
@@ -135,6 +134,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-44 — Build the provider and operation explorer](C-44-operation-explorer.md) · Surfaces · the reason the site exists · needs C-42 and C-43
 - [C-45 — Render Flux to SVG and PNG using flux's own highlighter](C-45-use-flux-highlighter.md) · Codegen · replaces a regex script that duplicates grammar flux already owns
 - [C-48 — Make the root documentation current and audience-specific](C-48-audience-specific-root-docs.md) · Surfaces · README for humans · AGENTS for agents
+- [C-49 — Model a provider's services as the middle addressing level](C-49-provider-services.md) · Spec · provider → service → operations · one service per operation · unset means `default`
 - [C-51 — Ship the OpenAI connector](C-51-provider-openai.md) · Spec · bearer · JSON in and out · no query strings
 - [C-52 — Ship the GitHub connector](C-52-provider-github.md) · Spec · bearer · path-and-body surface only · listing ops wait on C-30
 - [C-53 — Ship the Slack connector](C-53-provider-slack.md) · Spec · bearer · POST+JSON throughout, which is what avoids the query gap

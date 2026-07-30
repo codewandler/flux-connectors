@@ -8,6 +8,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **C-49** — a provider's **services** are the middle addressing level: `provider → service →
+  operations`. A `Service` owns its own base URL and API version, an operation belongs to exactly one
+  service, and an unset service means the reserved `default`, which is **elided** from published
+  addresses. Building can select one whole service (`--service <NAME|GID>`). All ten shipped providers
+  are single-service, so every artifact except `catalog.json` is byte-identical — the service fields
+  carry `skip_serializing_if` inside the hash domain so no `connectors.lock` entry churns for a
+  provider nobody edited.
+  - **Security:** a service name reaches the emitted file path, so the loader now enforces the address
+    grammar on every service name, authority and API version. A provider declaring
+    `name = "../../../../outside/pwned"` previously wrote files **outside the repository root**; it is
+    now refused, with a golden pinning the error.
 - **C-70** — the **Jira** connector on API **v2**: issue get and create, comment list and add,
   transitions list and transition. v2 rather than v3 because v3's comment body is Atlassian Document
   Format — an array of block nodes — and `wire` paths address nested records only, so ADF is
