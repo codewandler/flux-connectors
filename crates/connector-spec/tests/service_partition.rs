@@ -145,6 +145,165 @@ fn a_connector_without_services_has_exactly_the_default_one() {
     assert_eq!(connector.operations_of(DEFAULT_SERVICE).count(), 2);
 }
 
+/// Component spellings the generators draw from: valid ones **and** the hostile ones the validators
+/// exist to reject.
+///
+/// The corpus is mixed on purpose. A generator drawing only from hand-picked valid components proves
+/// that the renderer and the parser agree with each other and nothing else — it cannot see a component
+/// that renders into a string which parses back as something *different*, and that is the failure that
+/// actually occurred. So the property below is stated over the whole corpus with the **validator as
+/// the gate**.
+const AUTHORITIES: &[&str] = &[
+    "com.amazonaws",
+    "com.zendesk.api",
+    "io.example.sub.domain",
+    // Hostile: an embedded separator renders an address that reparses as a *different* one.
+    "com.acme/s3",
+    "com.acme:1",
+    "com.acme#x",
+    "",
+    "acme",
+    "Com.ACME",
+    "com..acme",
+    "com.acme.",
+];
+
+const SERVICES: &[&str] = &[
+    DEFAULT_SERVICE,
+    "s3",
+    "bedrock-runtime",
+    "support",
+    "v2-beta",
+    // Hostile: `/` splits the segment, and `..` would also reach the emitted file path.
+    "a/b",
+    "../../../../outside/pwned",
+    "My Service",
+    "S3",
+    "",
+    "s3.",
+];
+
+const VERSIONS: &[&str] = &[
+    "v1",
+    "v2",
+    "2006-03-01",
+    "2023-09-30",
+    "",
+    "v2/beta",
+    "v2:1",
+    "v2#x",
+];
+
+/// Whether the address grammar admits a triple at all. `default` is admissible as a service — it
+/// renders as nothing, which is the elision under test.
+fn is_admissible(authority: &str, service: &str, api_version: &str) -> bool {
+    connector_spec::address::validate_authority(authority).is_ok()
+        && (service == DEFAULT_SERVICE
+            || connector_spec::address::validate_service_name(service).is_ok())
+        && connector_spec::address::validate_api_version(api_version).is_ok()
+}
+
+/// **The validators are exactly the gate on round-tripping.** Over the mixed corpus: every triple they
+/// admit round-trips, and every triple they reject fails to parse back — rather than parsing back as
+/// something else.
+///
+/// The second half is what catches a masquerade. `authority = "com.acme/s3"` renders `com.acme/s3:v2`,
+/// which parses *successfully* — as `authority = com.acme`, `service = s3`. Unvalidated, that is a
+/// valid-looking address for a connector that never declared one, which is why the loader refuses the
+/// component and why this test asserts the refusal rather than the round trip.
+#[test]
+fn the_validators_decide_which_addresses_round_trip() {
+    let mut admissible = 0;
+    let mut rejected = 0;
+
+    for authority in AUTHORITIES {
+        for service in SERVICES {
+            for api_version in VERSIONS {
+                let gid = Gid::new(authority, service, api_version);
+                let rendered = gid.to_string();
+
+                if is_admissible(authority, service, api_version) {
+                    assert_eq!(
+                        Gid::parse(&rendered).ok(),
+                        Some(gid.clone()),
+                        "an admissible gid must round-trip: {rendered}"
+                    );
+                    assert!(
+                        !rendered.contains(&format!("/{DEFAULT_SERVICE}")),
+                        "`{DEFAULT_SERVICE}` must never reach a rendered address: {rendered}"
+                    );
+                    admissible += 1;
+                } else {
+                    assert_ne!(
+                        Gid::parse(&rendered).ok().as_ref(),
+                        Some(&gid),
+                        "a gid the validators reject must not round-trip, or it masquerades as a \
+                         valid address: {rendered}"
+                    );
+                    rejected += 1;
+                }
+            }
+        }
+    }
+
+    // A corpus that stopped covering one side of the gate would make this test vacuous.
+    assert!(admissible > 50, "only {admissible} admissible triples");
+    assert!(rejected > 50, "only {rejected} rejected triples");
+}
+
+/// **Every address the loader lets through round-trips.** The property stated where it matters: over
+/// provider files rather than over constructed values, because the loader is the only gate between a
+/// content field and a published address.
+///
+/// A file that loads must yield a gid that parses back to itself; a component the grammar rejects must
+/// make the file fail to load. There is no third outcome — in particular, no "loads, renders, reparses
+/// as something else".
+#[test]
+fn a_provider_file_that_loads_publishes_only_round_tripping_addresses() {
+    let mut loaded = 0;
+    let mut refused = 0;
+
+    for authority in AUTHORITIES {
+        for service in SERVICES {
+            for api_version in VERSIONS {
+                let source = format!(
+                    "id = \"acme\"\nbase_url = \"https://api.acme.example\"\n\
+                     authority = {authority:?}\napi_version = {api_version:?}\n\n\
+                     [[services]]\nname = {service:?}\n\n\
+                     [[operations]]\nid = \"acme-thing-get\"\nservice = {service:?}\n\
+                     method = \"GET\"\npath = \"/v1/things\"\nrisk = \"low\"\n\
+                     idempotency = \"idempotent\"\n"
+                );
+
+                match connector_spec::provider::load("providers/fuzz.toml", &source) {
+                    Err(_) => refused += 1,
+                    Ok(loaded_provider) => {
+                        loaded += 1;
+                        let connector = loaded_provider.connector;
+                        for name in connector.service_names() {
+                            let Some(gid) = connector.gid_of(name) else {
+                                continue;
+                            };
+                            let rendered = gid.to_string();
+                            assert_eq!(
+                                Gid::parse(&rendered).ok(),
+                                Some(gid),
+                                "the loader accepted a provider whose service address does not parse \
+                                 back: {rendered}\n{source}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // `default` is a reserved service name, so every triple naming it is refused — which still leaves
+    // the valid triples loading. Both counts must be non-trivial or the property proves nothing.
+    assert!(loaded > 20, "only {loaded} provider files loaded");
+    assert!(refused > 50, "only {refused} provider files were refused");
+}
+
 /// `parse(render(x)) == x` for every level, **including the elision**: a `default` gid renders with no
 /// middle segment and parses back to `default`.
 #[test]

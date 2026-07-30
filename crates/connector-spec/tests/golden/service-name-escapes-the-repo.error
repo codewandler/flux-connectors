@@ -1,0 +1,2 @@
+providers/service-name-escapes-the-repo.toml is not a valid connector definition:
+  - a `[[services]]` entry has an invalid `name`: a service name is lowercase ASCII letters, digits and `-`, and "../../../../outside/pwned" is not — it is both an address segment and part of the emitted file name

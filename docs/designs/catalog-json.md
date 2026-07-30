@@ -60,15 +60,16 @@ reason.)
 
 ## Versioning
 
-`schema_version` is `1`.
+`schema_version` is `2`.
 
 It is bumped **only** when an existing field changes meaning or disappears. **Adding a field does not
 bump it**: every consumer reads by name, so a new key is invisible to one that does not know it.
 
-This is the rule that makes [C-37](../stories/C-37-global-addressing.md) additive. When global
-addressing lands, a provider gains `pid` (`com.zendesk.api`) and an operation gains `oip`
-(`com.zendesk.api/support/tickets:v2#show`) as **new fields on the existing objects**. Nothing
-reshapes, and `schema_version` stays `1`. That is also why every entity here is a JSON *object* and
+That rule has already paid twice. [C-49](../stories/C-49-provider-services.md) added `services` and
+`authority` to every provider and `service` to every operation without bumping it. When
+[C-37](../stories/C-37-global-addressing.md) lands, a provider gains `pid` (`com.zendesk.api`) and an
+operation gains `oip` (`com.zendesk.api/support:v2#show`) the same way — **new fields on the existing
+objects**. Nothing reshapes. That is also why every entity here is a JSON *object* and
 never a tuple or a positional array.
 
 ## The shape

@@ -154,6 +154,9 @@ fn every_required_rejection_has_a_fixture() {
         // and the reserved `default` may not be redeclared.
         "undeclared-service",
         "reserved-default-service",
+        // C-49 review: a service name reaches the emitted file path, so the address grammar is what
+        // keeps a content field from choosing where a build writes.
+        "service-name-escapes-the-repo",
     ];
 
     let cases = cases();

@@ -82,6 +82,31 @@ Two rules make the reserved name safe:
 So the service set of a connector is: the declared names, or exactly `["default"]` when it declares
 none.
 
+### A service name is validated, because it reaches two places that matter
+
+`[[services]].name`, `authority` and `api_version` are checked against the address grammar **in the
+loader** (`address::validate_service_name` and friends, called from `provider::validate_services`).
+Not for tidiness — for two concrete failures that a review of the first cut of this story caught:
+
+1. **A service name reaches the output filesystem path.** It names the emitted
+   `<provider>-<service>.flux`, and writing an artifact creates its parent directories. A name of
+   `../../../../outside/pwned` therefore made a build write *outside the repository root*. Before
+   services existed, **no content field of a provider TOML could influence an output path at all** —
+   every path derived from the discovered file stem. That invariant is worth keeping even though
+   `providers/*.toml` is committed, reviewed input, and keeping it costs one call to a validator that
+   already existed.
+2. **An unvalidated component publishes a malformed address.** `Connector::gid_of` renders whatever
+   the loader accepted, and that string reaches every service manifest and `catalog.json`. An
+   authority of `com.acme/s3` renders `com.acme/s3:v2`, which *does* parse — as `authority=com.acme`,
+   `service=s3`. A valid-looking address for a connector that declared no such thing is exactly the
+   masquerade this scheme claims is impossible, so the claim has to be enforced where the value enters.
+
+The property tests state this with the **validator as the gate**, over a corpus that includes the
+hostile spellings: a component the validators admit round-trips, and one they reject never reaches a
+rendered address. A generator drawing only from hand-picked valid components proves that the renderer
+and the parser agree with each other and nothing else — which is why the first cut's 500 cases were
+all green while both failures above were live.
+
 ### The service is the first path segment of C-37's gid, and `default` is elided
 
 ```
@@ -136,6 +161,13 @@ The catalog crate's unit stays the **provider** (`crates/catalog/ops/<provider>/
 `generated/<provider>.rs`). Splitting it per service is a second reshape with its own churn and no
 acceptance behind it; the service travels in `catalog.json` instead, where C-42's consumers can group
 by it.
+
+That has a consequence for a scoped run, and it is the same rule `catalog.json` already follows: **a
+`--service` run plans only that service's own module and manifest.** `generated/<provider>.rs` is one
+table indexing every operation the provider publishes, so regenerating it from a connector narrowed to
+one service would *truncate* it — the other service's rows dropped while their renderings stayed on
+disk. A stale catalogue that still compiles is worse than a stale one that does not, so a scoped run
+leaves every provider-unit artifact alone rather than rewriting it from a partial view.
 
 ### Selecting a service
 

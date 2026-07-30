@@ -66,7 +66,7 @@ impl Pid {
     /// [`Error::InvalidAddress`](crate::Error::InvalidAddress) when the authority is not a
     /// reverse-DNS label sequence.
     pub fn parse(text: &str) -> crate::Result<Self> {
-        validate_authority(text)?;
+        validate_authority(text).map_err(|reason| invalid(text, &reason))?;
         Ok(Self::new(text))
     }
 }
@@ -133,16 +133,16 @@ impl Gid {
                  `com.amazonaws/s3:2006-03-01`",
             ));
         };
-        validate_version(text, api_version)?;
+        validate_api_version(api_version).map_err(|reason| invalid(text, &reason))?;
 
         let mut segments = path.split('/');
         let authority = segments.next().unwrap_or_default();
-        validate_authority(authority)?;
+        validate_authority(authority).map_err(|reason| invalid(text, &reason))?;
 
         let service = match (segments.next(), segments.next()) {
             (None, _) => DEFAULT_SERVICE.to_owned(),
             (Some(service), None) => {
-                validate_service(text, service)?;
+                validate_service_name(service).map_err(|reason| invalid(text, &reason))?;
                 if service == DEFAULT_SERVICE {
                     return Err(invalid(
                         text,
@@ -228,69 +228,84 @@ impl fmt::Display for Oip {
     }
 }
 
-/// An authority is a reverse-DNS label sequence: two or more lowercase labels joined by dots.
+/// Whether `authority` is a well-formed reverse-DNS label sequence: two or more lowercase labels
+/// joined by dots.
 ///
 /// `com.amazonaws`, not `amazonaws` and not `Com.Amazonaws`. A single label would be a name in no
 /// namespace, which is the collision space reverse-DNS exists to make obvious.
-fn validate_authority(authority: &str) -> crate::Result<()> {
+///
+/// **Public, and called by the provider loader**, which is the point: an authority that reaches the
+/// IR unvalidated is one [`Gid`] renders into a string that does not parse back — and the loader is
+/// the only place that can refuse it while the author is still looking at the file. The error is a
+/// reason rather than an [`Error`](crate::Error) so the loader can fold it into its own
+/// all-problems-at-once report.
+pub fn validate_authority(authority: &str) -> Result<(), String> {
     if authority.is_empty() {
-        return Err(invalid(authority, "an address begins with an authority"));
+        return Err("an authority must not be empty".to_owned());
     }
     let labels: Vec<&str> = authority.split('.').collect();
     if labels.len() < 2 {
-        return Err(invalid(
-            authority,
-            "an authority is a reverse-DNS label sequence of at least two labels, as in \
-             `com.amazonaws`",
+        return Err(format!(
+            "{authority:?} is not a reverse-DNS label sequence; it needs at least two labels, as in \
+             `com.amazonaws`"
         ));
     }
     for label in labels {
         if label.is_empty() {
-            return Err(invalid(authority, "an authority has an empty label"));
+            return Err(format!("{authority:?} has an empty label"));
         }
-        if !label
-            .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
-        {
-            return Err(invalid(
-                authority,
-                "authority labels are lowercase ASCII letters, digits and `-`",
+        if !label.chars().all(is_segment_char) {
+            return Err(format!(
+                "{authority:?} has the label {label:?}; authority labels are lowercase ASCII \
+                 letters, digits and `-`"
             ));
         }
     }
     Ok(())
 }
 
-/// A service segment is lowercase kebab: `s3`, `bedrock-runtime`.
-fn validate_service(address: &str, service: &str) -> crate::Result<()> {
+/// Whether `service` is a well-formed service name: lowercase kebab, as in `s3` or
+/// `bedrock-runtime`.
+///
+/// **Public, and called by the provider loader**, for two reasons that are both about what the name
+/// reaches. It is the middle segment of a [`Gid`], so an unspellable one renders an address that does
+/// not parse back. And it names the emitted `<provider>-<service>.flux`, so a name carrying `/` or
+/// `..` would let a provider file choose where a build writes — the one thing no content field may
+/// do.
+pub fn validate_service_name(service: &str) -> Result<(), String> {
     if service.is_empty() {
-        return Err(invalid(address, "the service segment is empty"));
+        return Err("a service name must not be empty".to_owned());
     }
-    if !service
-        .chars()
-        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
-    {
-        return Err(invalid(
-            address,
-            "a service name is lowercase ASCII letters, digits and `-`",
+    if !service.chars().all(is_segment_char) {
+        return Err(format!(
+            "a service name is lowercase ASCII letters, digits and `-`, and {service:?} is not — it \
+             is both an address segment and part of the emitted file name"
         ));
     }
     Ok(())
 }
 
-/// The version is the vendor's own spelling — `v2`, `2006-03-01`, `2023-09-30` — so it is checked for
-/// being present and free of the scheme's separators, not for matching a shape we invented.
-fn validate_version(address: &str, api_version: &str) -> crate::Result<()> {
+/// Whether `api_version` can travel in an address.
+///
+/// The version is the **vendor's** own spelling — `v2`, `2006-03-01`, `2023-09-30` — so it is checked
+/// for being present and free of the scheme's separators, not for matching a shape we invented. A
+/// version carrying `/`, `:` or `#` would move the boundary a parser reads the address at.
+pub fn validate_api_version(api_version: &str) -> Result<(), String> {
     if api_version.is_empty() {
-        return Err(invalid(address, "the API version after the `:` is empty"));
+        return Err("an API version must not be empty".to_owned());
     }
-    if api_version.contains('/') {
-        return Err(invalid(
-            address,
-            "the API version must not contain `/`; the `:` comes after the last path segment",
+    if let Some(separator) = api_version.chars().find(|c| matches!(c, '/' | ':' | '#')) {
+        return Err(format!(
+            "{api_version:?} contains `{separator}`, which is one of the address scheme's separators \
+             — `/` is hierarchy, `:` the version boundary, `#` the operation"
         ));
     }
     Ok(())
+}
+
+/// The one character class both an authority label and a service name admit.
+fn is_segment_char(c: char) -> bool {
+    c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'
 }
 
 fn invalid(address: &str, reason: &str) -> crate::Error {

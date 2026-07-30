@@ -48,18 +48,22 @@ or "group" C-37 sketched as a bare path segment, promoted to a named thing with 
       `web/public/catalog.json`, which gains the service fields on purpose. The four goldens are
       byte-unchanged in the diff and remain pinned by `connector-flux`'s `op_emitter.rs`, whose only
       edit was naming the new field in its fixtures.
-- [x] **The service is the first path segment of C-37's gid, and `default` is elided from it.**
+- [~] **The service is the first path segment of C-37's gid, and `default` is elided from it.**
       `com.amazonaws/s3:2006-03-01#object-get` · `com.zendesk.api/support/tickets:v2#show` ·
       `com.freshdesk.api/tickets:v2#create` (default elided, so C-37's variable depth still holds and
       `default` never reaches a published address). `parse(render(x)) == x` round-trips including the
       elision.
       → `crates/connector-spec/src/address.rs` (`Pid`/`Gid`/`Oip`) and
       `tests/service_partition.rs::addresses_round_trip_through_the_default_elision` (500 generated
-      addresses). **Note the second example needs C-37:** `com.zendesk.api/support/tickets:v2` has a
-      `tickets` tail that only C-37's remaining path segments produce, and the grammar implemented here
-      *refuses* a gid with more than one middle segment rather than guessing — because a tail plus the
-      elision is genuinely ambiguous. Both admissible resolutions are recorded in the design and in the
-      amendment note, and C-37 must choose one.
+      addresses), plus `the_validators_decide_which_addresses_round_trip` and
+      `a_provider_file_that_loads_publishes_only_round_tripping_addresses`, which state the property
+      over a corpus that includes the hostile spellings — the validators are the gate, and the loader
+      enforces them (`address::validate_authority`/`validate_service_name`/`validate_api_version`).
+      **`[~]` because one of the three published examples cannot be produced:**
+      `com.zendesk.api/support/tickets:v2#show` has a `tickets` tail that only C-37's remaining path
+      segments make, and the grammar implemented here *refuses* a gid with more than one middle segment
+      rather than guessing — a tail plus the elision is genuinely ambiguous. Both admissible
+      resolutions are recorded in the design and in the amendment note, and C-37 must choose one.
 - [x] **`api_version` belongs to the service**, with the connector-level value as its default. AWS
       versions each service on its own date (`s3:2006-03-01`, `bedrock-runtime:2023-09-30`), so a
       single connector-level version cannot describe a multi-service provider.
@@ -116,6 +120,27 @@ or "group" C-37 sketched as a bare path segment, promoted to a named thing with 
   this story added. And C-37 must resolve the tail-plus-elision ambiguity recorded in
   `docs/designs/provider-services.md` §Risks before adding path segments below the service; today a gid
   with more than one middle segment is refused.
+- **Review round 1 found the validation gap and it is closed.** `[[services]].name`, `authority` and
+  `api_version` were accepted unvalidated even though the grammar for them already lived in
+  `address.rs`. Two consequences, both now fixed at the loader with the validators that module exposes:
+  a service name reached the emitted file path (`name = "../../../../outside/pwned"` wrote *outside*
+  the repository root, because a name flows into `artifact_stem` and `write_atomic` calls
+  `create_dir_all`), and an unvalidated `authority = "com.acme/s3"` rendered `com.acme/s3:v2`, which
+  reparses as a **different** address — falsifying the round-trip item while looking valid.
+  **The invariant now restored and worth naming: no content field of a provider TOML influences an
+  output path.** Before services, every path came from the discovered file stem. Pinned by
+  `service_units.rs::a_service_name_cannot_write_outside_the_repository_root` and the golden
+  `tests/golden/service-name-escapes-the-repo.error`. The property generators were the reason this was
+  invisible — they drew only from hand-picked valid components — so they now draw from a mixed corpus
+  with the validator as the gate.
+- **Also from review:** a `--service` run no longer plans the provider-unit catalogue at all. Planned
+  from a narrowed connector, `crates/catalog/src/generated/<provider>.rs` was *truncated* — the other
+  service's rows dropped while their renderings stayed on disk, a stale catalogue that still compiles.
+  It is now left alone exactly as `catalog.json` is, and
+  `a_service_scoped_run_leaves_the_provider_unit_catalogue_alone` pins it.
+- **For C-50 (AWS), the first multi-service provider:** `services.rs::every_shipped_provider_is_single_service`
+  deliberately pins that no shipped provider declares services, so **C-50 must delete that test.** It
+  exists to prove this story is meaning-preserving for today's catalogue, not to forbid tomorrow's.
 - **Not done, deliberately:** the Rust catalogue (`crates/catalog`) still keys by provider rather than
   service. Splitting `ops/<provider>/` per service is a second reshape with no acceptance behind it, and
   the service travels in `catalog.json` where C-42's consumers can group by it. C-44's explorer UI is

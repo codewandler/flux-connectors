@@ -360,21 +360,53 @@ fn validate(loaded: &LoadedProvider) -> Vec<String> {
     problems
 }
 
-/// Checks the `[[services]]` declarations themselves — C-49.
+/// Checks the connector's address components and its `[[services]]` declarations — C-49.
 ///
 /// The operation-side half of the rule (every operation belongs to a declared service) is in
 /// [`validate_operations`], because that is where an operation is already being read.
+///
+/// # Why the grammar is enforced *here*
+///
+/// The [`address`](crate::address) module owns the spelling of an authority, a service name and an
+/// API version, and this is the only place that can refuse a bad one while the author is still
+/// looking at the file. Two things go wrong if it does not:
+///
+/// 1. **A service name reaches the output filesystem path.** It names the emitted
+///    `<provider>-<service>.flux`, and a build creates that file's parent directories. A name
+///    carrying `/` or `..` would therefore let a *content* field of a provider TOML decide where a
+///    build writes — including outside the repository root. Before services existed, no content field
+///    could influence an output path at all: paths came from the discovered file stem. That invariant
+///    is worth keeping, and keeping it costs one call to a validator that already exists.
+/// 2. **An unspellable component publishes a malformed address.** [`Connector::gid_of`] renders
+///    whatever the loader accepted, and that string reaches every service manifest and
+///    `catalog.json`. An authority of `com.acme/s3` renders `com.acme/s3:v2`, which *reparses* — as a
+///    different address. That is exactly the "a typo in a segment cannot masquerade as a valid
+///    address" property the address module claims, and only validation here makes the claim true.
 fn validate_services(connector: &Connector, problems: &mut Vec<String>) {
+    if let Some(authority) = &connector.authority {
+        if let Err(reason) = crate::address::validate_authority(authority) {
+            problems.push(format!(
+                "`authority` is not a valid reverse-DNS authority: {reason}. It is the leading \
+                 component of every service address"
+            ));
+        }
+    }
+    if let Some(api_version) = &connector.api_version {
+        if let Err(reason) = crate::address::validate_api_version(api_version) {
+            problems.push(format!(
+                "`api_version` cannot travel in an address: {reason}"
+            ));
+        }
+    }
+
     let mut seen: Vec<&str> = Vec::new();
 
     for service in &connector.services {
         let name = service.name.as_str();
-        if name.trim().is_empty() {
-            problems.push(
-                "a `[[services]]` entry has an empty `name`; the name is the addressing segment and \
-                 names the emitted `<provider>-<service>.flux`"
-                    .to_owned(),
-            );
+        if let Err(reason) = crate::address::validate_service_name(name) {
+            problems.push(format!(
+                "a `[[services]]` entry has an invalid `name`: {reason}"
+            ));
             continue;
         }
         // The reserved name is the *implicit* service. Declaring it would be a second definition of
@@ -404,10 +436,10 @@ fn validate_services(connector: &Connector, problems: &mut Vec<String>) {
             }
         }
         if let Some(api_version) = &service.api_version {
-            if api_version.trim().is_empty() {
+            if let Err(reason) = crate::address::validate_api_version(api_version) {
                 problems.push(format!(
-                    "service {name:?} declares an empty `api_version`; omit it to inherit the \
-                     connector's"
+                    "service {name:?} declares an `api_version` that cannot travel in an address: \
+                     {reason}. Omit it to inherit the connector's"
                 ));
             }
         }

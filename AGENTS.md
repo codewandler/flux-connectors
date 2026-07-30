@@ -149,8 +149,16 @@ AWS). The service is the unit that is addressed, versioned, selected, emitted an
 - **A service owns its base URL and its API version**, with the connector's as defaults. Each emitted
   manifest carries its own service's `base_url` and its own operations, so a service's egress surface
   is never widened to the union of the provider's. C-10's `http_hosts` derives from that value.
+- **No content field of a provider TOML influences an output path.** Paths derive from the discovered
+  file stem, and the one content field that reaches a path — a service name, via
+  `<provider>-<service>.flux` — is validated against the address grammar in the loader
+  (`connector_spec::address::validate_service_name`). A name carrying `/` or `..` would let a provider
+  file decide where a build writes, including outside the repository root. Validate any future field
+  that reaches a path the same way, at the loader, before it reaches `Workspace`.
 - **An address, once published, is not reused.** Renaming a service or an operation mints a new
-  address and deprecates the old one; it never repoints an existing one.
+  address and deprecates the old one; it never repoints an existing one. An `authority`, a service
+  name and an `api_version` are checked against the grammar on load, so a rendered address always
+  parses back to the value it was rendered from.
 
 ## Intentional gaps
 

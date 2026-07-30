@@ -169,6 +169,15 @@ struct Compiled {
 /// The site entry rides along rather than being recomputed: it needs the same `Connector` and the
 /// same renderings, and compiling twice is how a document comes to describe an operation the module
 /// no longer carries.
+///
+/// # A service-scoped run plans only that service's own files
+///
+/// The catalog's unit is the **provider**: `crates/catalog/src/generated/<provider>.rs` is one table
+/// indexing every operation the provider publishes. Planned from a connector narrowed to one service
+/// it would be *truncated* — the other service's rows silently dropped while their renderings stayed
+/// on disk — which is a stale catalogue that still compiles, the worst available outcome. So a
+/// `--service` run leaves every provider-unit artifact alone, exactly as a `--provider` run leaves
+/// `catalog.json` alone, and for the same reason: it is not a function of what the run compiled.
 fn compile(workspace: &Workspace, provider: &Provider, service: Option<&str>) -> Result<Compiled> {
     let context = || format!("provider `{}`", provider.name);
 
@@ -180,12 +189,9 @@ fn compile(workspace: &Workspace, provider: &Provider, service: Option<&str>) ->
     let emitted = seam::emit(&connector).with_context(context)?;
     let site = site::provider_entry(&connector, &emitted.operations).with_context(context)?;
 
-    let mut artifacts = vec![planned(
-        workspace.catalog_module_path(&provider.name),
-        emitted.catalog,
-    )?];
     // One module and one manifest per service — the emitted unit (C-49). A `default`-only provider
     // yields exactly the two files it always did.
+    let mut artifacts = Vec::new();
     for unit in emitted.services {
         artifacts.push(planned(
             workspace.service_module_path(&provider.name, &unit.service),
@@ -196,11 +202,19 @@ fn compile(workspace: &Workspace, provider: &Provider, service: Option<&str>) ->
             unit.manifest,
         )?);
     }
-    for rendering in emitted.operations {
+
+    // The catalog's half is provider-unit — see the note above on a service-scoped run.
+    if service.is_none() {
         artifacts.push(planned(
-            workspace.catalog_op_path(&provider.name, &rendering.id),
-            rendering.source,
+            workspace.catalog_module_path(&provider.name),
+            emitted.catalog,
         )?);
+        for rendering in emitted.operations {
+            artifacts.push(planned(
+                workspace.catalog_op_path(&provider.name, &rendering.id),
+                rendering.source,
+            )?);
+        }
     }
     Ok(Compiled { artifacts, site })
 }

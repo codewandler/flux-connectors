@@ -218,8 +218,82 @@ fn a_duplicate_service_declaration_is_refused() {
 
 #[test]
 fn an_empty_service_name_is_refused() {
-    let error = refuse(&AWS.replace(r#"name = "s3""#, r#"name = "  ""#));
-    assert!(error.contains("empty"), "{error}");
+    let error = refuse(&AWS.replace(r#"name = "s3""#, r#"name = """#));
+    assert!(error.contains("must not be empty"), "{error}");
+}
+
+/// **A service name is not free text, and the reason is not tidiness.** It is the middle segment of
+/// the service's address *and* part of the emitted `<provider>-<service>.flux`, so an unvalidated one
+/// both publishes an address that does not parse back and lets a provider file choose where a build
+/// writes. `..` and `/` are the two that matter; the case and space cases are the same rule.
+#[test]
+fn an_unspellable_service_name_is_refused() {
+    for name in [
+        "../../../../outside/pwned",
+        "a/b",
+        "My Service",
+        "S3",
+        "  ",
+        "s3.",
+        "s3:v1",
+        "s3#get",
+    ] {
+        let error = refuse(&AWS.replace(r#"name = "s3""#, &format!("name = {name:?}")));
+        assert!(
+            error.contains("service name"),
+            "service name {name:?} must be refused by the loader, got:\n{error}"
+        );
+    }
+}
+
+/// An authority is validated for the same reason: `Connector::gid_of` renders whatever the loader
+/// accepted, and `com.acme/s3` renders `com.acme/s3:v2` — a string that reparses as a *different*
+/// address, which is precisely the masquerade the address module claims is impossible.
+#[test]
+fn an_unspellable_authority_is_refused() {
+    for authority in [
+        "com.acme/s3",
+        "",
+        "acme",
+        "Com.ACME",
+        "com..acme",
+        "com.acme:1",
+        "com.acme#x",
+    ] {
+        let error = refuse(&AWS.replace(
+            r#"authority = "com.amazonaws""#,
+            &format!("authority = {authority:?}"),
+        ));
+        assert!(
+            error.contains("authority"),
+            "authority {authority:?} must be refused by the loader, got:\n{error}"
+        );
+    }
+}
+
+/// A version carrying one of the scheme's separators would move the boundary a parser reads the
+/// address at, so it is refused at both levels that can declare one.
+#[test]
+fn an_api_version_carrying_a_separator_is_refused() {
+    for version in ["", "v2/beta", "v2:1", "v2#x"] {
+        let connector_level = refuse(&AWS.replace(
+            r#"api_version = "2010-05-08""#,
+            &format!("api_version = {version:?}"),
+        ));
+        assert!(
+            connector_level.contains("api_version"),
+            "connector `api_version` {version:?} must be refused, got:\n{connector_level}"
+        );
+
+        let service_level = refuse(&AWS.replace(
+            r#"api_version = "2006-03-01""#,
+            &format!("api_version = {version:?}"),
+        ));
+        assert!(
+            service_level.contains("api_version"),
+            "service `api_version` {version:?} must be refused, got:\n{service_level}"
+        );
+    }
 }
 
 /// Service fields are part of a connector's **compiled meaning**, like C-37's addresses and unlike

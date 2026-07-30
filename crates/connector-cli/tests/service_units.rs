@@ -241,6 +241,68 @@ fn selecting_a_service_builds_that_service_and_no_other() {
     }
 }
 
+/// **A service-scoped run must not truncate a provider-unit artifact.** The generated catalogue table
+/// indexes every operation the *provider* publishes; rewritten from a connector narrowed to one
+/// service it would silently lose the other service's rows while their renderings stayed on disk —
+/// a stale catalogue that still compiles.
+#[test]
+fn a_service_scoped_run_leaves_the_provider_unit_catalogue_alone() {
+    let fixture = aws_fixture("scoped-catalogue");
+    let root = fixture.root().to_str().unwrap().to_string();
+
+    run(&["build", "--root", &root]).expect("the full build succeeds");
+    let table = fixture.read("crates/catalog/src/generated/aws.rs");
+    assert!(table.contains("aws-model-invoke"), "{table}");
+
+    run(&["build", "--root", &root, "--service", "s3"]).expect("the scoped build succeeds");
+
+    assert_eq!(
+        fixture.read("crates/catalog/src/generated/aws.rs"),
+        table,
+        "`--service s3` rewrote the provider's catalogue table, dropping bedrock-runtime's rows"
+    );
+    assert!(
+        fixture.exists("crates/catalog/ops/aws/aws-model-invoke.flux"),
+        "the other service's rendering must survive a scoped run"
+    );
+}
+
+/// **No content field of a provider TOML may decide where a build writes.** A service name reaches
+/// the emitted `<provider>-<service>.flux`, and writing an artifact creates its parent directories,
+/// so an unvalidated name is a path-traversal primitive. The loader refuses it; this asserts the
+/// refusal reaches the *build* and that nothing lands outside the root.
+#[test]
+fn a_service_name_cannot_write_outside_the_repository_root() {
+    let fixture = Fixture::new("service-name-traversal");
+    let nested = fixture.root().join("nested").join("repo");
+    std::fs::create_dir_all(nested.join("providers")).expect("create the nested root");
+    std::fs::write(
+        nested.join("providers").join("acme.toml"),
+        AWS.replace(r#"name = "s3""#, r#"name = "../../../../outside/pwned""#)
+            .replace(
+                r#"service = "s3""#,
+                r#"service = "../../../../outside/pwned""#,
+            )
+            .replace(r#"id = "aws""#, r#"id = "acme""#),
+    )
+    .expect("write the hostile provider");
+
+    let error = run(&["build", "--root", nested.to_str().unwrap()])
+        .expect_err("a service name that escapes the root must not build");
+    let rendered = format!("{error:#}");
+    assert!(rendered.contains("service name"), "{rendered}");
+
+    let escaped: Vec<PathBuf> = fixture
+        .snapshot()
+        .into_keys()
+        .filter(|path| !path.starts_with("nested/repo"))
+        .collect();
+    assert!(
+        escaped.is_empty(),
+        "the build wrote outside its own root: {escaped:?}"
+    );
+}
+
 #[test]
 fn an_unknown_service_is_an_error_that_names_the_available_ones() {
     let fixture = aws_fixture("unknown-service");
