@@ -103,6 +103,13 @@ fn operation_selection_stays_curated() {
         // gap — every listing parameter OpenAI documents is a query value. See
         // `providers/openai.toml`.
         ("openai", 4),
+        // C-76 curates 4 of the 68 paths in `https://openrouter.ai/openapi.json`: the models list,
+        // one model's upstream endpoints, chat completion and the credit balance. The story asked for
+        // roughly three including `GET /api/v1/generation`, which is excluded because its generation
+        // id is a **required** query parameter — the query-encoding gap again, and here it removed an
+        // operation outright rather than trimming one. See the header comment in
+        // `providers/openrouter.toml`.
+        ("openrouter", 4),
         ("slack", 4),
         // C-71 curates 5 of some 300 operations in `Asana/openapi`: task get, create, update, a
         // comment, and project get. The cut is the same query-encoding gap — `opt_fields`,
