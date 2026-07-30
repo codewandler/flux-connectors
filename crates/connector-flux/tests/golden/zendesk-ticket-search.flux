@@ -13,4 +13,5 @@ op zendesk-ticket-search(query: String, page: Number, per_page: Number) -> Any
     $sep = "&"
   when $per_page
     $url = fmt("{url}{sep}per_page={per_page}")
-  do http.request { method: "GET", url: $url }
+  $response = http.request({ method: "GET", url: $url })
+  return $response

@@ -7,4 +7,5 @@ op zendesk-test -> Any
 
   $base = "https://example.zendesk.com"
   $url = fmt("{base}/api/v2/users/me.json")
-  do http.request { method: "GET", url: $url }
+  $response = http.request({ method: "GET", url: $url })
+  return $response
