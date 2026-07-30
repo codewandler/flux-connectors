@@ -1,0 +1,15 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/language/node/unless.json",
+  "schema_version": 1,
+  "kind": "node",
+  "name": "unless",
+  "title": "Unless",
+  "description": "Negated conditional: run `body` only when `cond` is falsey. Sugar for `when !cond`; the body may contain any nodes (reads, writes, sub-plans — anything).",
+  "category": [
+    "language",
+    "node"
+  ],
+  "availability": "available",
+  "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-unless"
+}

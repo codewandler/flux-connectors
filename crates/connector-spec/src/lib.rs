@@ -16,16 +16,25 @@
 //!             operations: [Operation { id, service, method, path, params, response_schema,
 //!                                      risk, idempotency, description,
 //!                                      auth: Option<[AuthRequirement]>, quirks }],
+//!             events:   [EventDecl { name, service, description, when, schema }],
+//!             channels: [ChannelBinding { name, service, transport, events, verification,
+//!                                         discriminator, delivery_id, payload,
+//!                                         reply: Option<Reply>, cursor, interval }],
 //!             provenance }
 //! ```
 //!
-//! Three things about it are worth reading the docs on before using it:
+//! Four things about it are worth reading the docs on before using it:
 //!
-//! - **A service is a level, not a label.** Every [`Operation`] belongs to exactly one [`Service`],
-//!   the services partition the operation set, and an operation that names none belongs to the
-//!   reserved [`DEFAULT_SERVICE`] — which is elided from every rendered [`address`]. A service owns
-//!   its base URL and its API version, because AWS versions `s3` and `bedrock-runtime` separately.
-//!   See [`Connector::service_names`] and `docs/designs/provider-services.md`.
+//! - **A service is a level, not a label.** Every member belongs to exactly one [`Service`], the
+//!   services partition the member set, and one that names none belongs to the reserved
+//!   [`DEFAULT_SERVICE`] — which is elided from every rendered [`address`]. A service owns its base
+//!   URL and its API version, because AWS versions `s3` and `bedrock-runtime` separately. See
+//!   [`Connector::service_names`] and `docs/designs/provider-services.md`.
+//! - **A service has three member kinds, sharing one namespace.** An [`Operation`] is the outbound
+//!   direction, an [`EventDecl`] the inbound one, and a [`ChannelBinding`] the composition of the two
+//!   — it names the events it carries *and* the operation that replies to them. All three project
+//!   into the same address space and into flux's declaration namespace, so a name collision across
+//!   kinds is a loader error. See [`Connector::member_names_of`] and [`inbound`].
 //! - **Auth is many-to-many.** A connector declares several [`AuthMethod`]s; each [`Operation`]
 //!   selects among them with a list of [`AuthRequirement`]s — AND within a requirement, OR across
 //!   the list — and distinguishes *unset* (inherit the connector default) from *explicitly none*.
@@ -53,12 +62,25 @@
 
 pub mod address;
 mod auth;
+pub mod config;
+pub mod credential;
+pub mod graph;
+pub mod inbound;
 mod ir;
 pub mod lock;
 pub mod provider;
 
 pub use address::{Gid, Oip, Pid};
 pub use auth::{AuthMethod, AuthRequirement, AuthScheme, OAuth2Spec, OAuthGrant, OAuthRedirect};
+pub use config::{Binding, ConfigField, Format, Level};
+pub use credential::{CredentialRef, Layout, TenantLayout};
+pub use graph::{
+    Backoff, Compare, Condition, Edge, Graph, GraphNode, NodeKind, Port, PortRef, TextRole,
+};
+pub use inbound::{
+    ChannelBinding, Digest, Encoding, EventDecl, FieldSource, HmacSpec, ManualSetup, Reply,
+    Selector, Subscription, Transport, VerificationScheme,
+};
 pub use ir::{
     Connector, ErrorEnvelope, HttpMethod, Idempotency, JsonSchema, Operation, Pagination, Param,
     ParamSet, Provenance, Quirks, RateLimit, Risk, Service, DEFAULT_SERVICE,

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/language/node/fmt.json",
+  "schema_version": 1,
+  "kind": "node",
+  "name": "fmt",
+  "title": "Fmt",
+  "description": "Pure string interpolation. `template` is a string with `{name}` placeholders substituted from already-bound session symbols (same `{name}`/`{{name}}` syntax as `Lit` interpolation). No IO, no approval gate. Example: `fmt(\"BTC: {price} | Double: {doubled}\")`.",
+  "category": [
+    "language",
+    "node"
+  ],
+  "availability": "available",
+  "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-fmt"
+}

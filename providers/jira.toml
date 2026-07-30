@@ -65,7 +65,7 @@
 # can move. Until then, moving it is a regression, which is why the version is asserted by test.
 #
 # ---------------------------------------------------------------------------------------------
-# SCHEMA GAP: nothing binds `{site}` to an environment variable.
+# `{site}` is bound by the `[[config]]` field at the end of this file.
 # ---------------------------------------------------------------------------------------------
 #
 # Every Jira Cloud tenant lives on its own `*.atlassian.net` subdomain, so there is no
@@ -342,3 +342,35 @@ wire = "transition.id"
 description = "Id of the transition to perform, as returned by `jira-issue-transitions-list`, e.g. `31`"
 required = true
 schema = { type = "string", minLength = 1 }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "site"
+label = "Atlassian site name"
+help = "The part of your Jira URL before `.atlassian.net` — if you sign in at `acme.atlassian.net`, this is `acme`"
+example = "acme"
+format = "subdomain"
+docs_url = "https://support.atlassian.com/jira-software-cloud/docs/what-is-a-jira-site/"
+binds = "endpoint.site"
+
+[[config]]
+name = "email"
+label = "Atlassian account email"
+help = "The email of the account that minted the API token. It travels as the username half of the request"
+example = "you@acme.com"
+format = "email"
+# Not secret — the same non-gated `user_env` path zendesk's agent email takes. Note the contrast with
+# zendesk: there is no `user_suffix` here, so the value is sent exactly as typed.
+binds = "username.jira.api_token"
+
+[[config]]
+name = "api_token"
+label = "API token"
+help = "Create one at id.atlassian.com under Security → API tokens. Atlassian shows it once"
+format = "token"
+secret = true
+docs_url = "https://id.atlassian.com/manage-profile/security/api-tokens"
+binds = "credential.jira.api_token"

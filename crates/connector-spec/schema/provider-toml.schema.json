@@ -55,6 +55,30 @@
           "description": "Operations written out in full. This is the whole connector for a hand-authored provider; alongside `[spec]` it adds operations the vendor document does not describe.",
           "items": { "$ref": "#/$defs/operation" }
         },
+        "events": {
+          "type": "array",
+          "description": "The events this connector receives — the inbound call direction. An operation is flux calling the vendor; an event is the vendor calling flux.",
+          "items": { "$ref": "#/$defs/event" }
+        },
+        "channels": {
+          "type": "array",
+          "description": "The ingress surfaces this connector describes. A binding composes events with the operation that replies to them, over a transport flux owns — it is not a new primitive.",
+          "items": { "$ref": "#/$defs/channel" }
+        },
+        "config": {
+          "type": "array",
+          "description": "What a human must supply before any of the above can run — the surface a settings page renders. Every other part of this file models how a credential reaches the wire; this models how it gets there in the first place.",
+          "items": { "$ref": "#/$defs/configField" }
+        },
+        "verify": {
+          "type": "string",
+          "description": "The operation a host calls to prove the configuration works — a `Test connection` button. Read-shaped and cheap by construction; a high-risk or destructive operation is refused, because a connection test runs unattended whenever someone opens a settings page."
+        },
+        "graphs": {
+          "type": "array",
+          "description": "Flows this connector composes from its own members. A graph is the only member kind that is itself a composition of members: its nodes name operations, events and channel bindings already declared here, and it lowers to one Flux `op`.",
+          "items": { "$ref": "#/$defs/graph" }
+        },
         "spec": {
           "$ref": "#/$defs/spec",
           "description": "The vendored vendor spec this connector is derived from. Omit it for a fully hand-authored connector."
@@ -64,6 +88,478 @@
           "description": "Corrections applied over the ingested spec. Only meaningful alongside `[spec]`."
         }
       }
+    },
+
+    "event": {
+      "type": "object",
+      "title": "One event the vendor sends",
+      "description": "The inbound member kind. An event keeps its vendor name, exactly as an operation keeps its vendor operation name — a normalized cross-vendor event taxonomy is a different product, and one that discards the fidelity this pipeline exists to preserve.\n\nAn event shares one name namespace with the operations and channel bindings of its service: all three render into the same address (`…#name`) and into flux's declaration namespace, so a collision across kinds is an error.",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The event name, in the vendor's own spelling — `issues.opened`, `app_mention`. Lowercase ASCII letters, digits, `-`, `_` and `.`; wider than an operation id because nothing is emitted for an event, so it need not be a declarable Flux symbol. This is the label a flux `trigger { on = … }` matches."
+        },
+        "service": {
+          "type": "string",
+          "description": "The `[[services]]` entry this event belongs to. Omit it for a provider with a single API surface."
+        },
+        "description": {
+          "type": "string",
+          "description": "What the event means, in one line."
+        },
+        "default": {
+          "type": "boolean",
+          "description": "Whether a product offers this event on by default when a user connects. Defaults to true. Slack's `message` is the case for saying otherwise — it fires for every human message in every channel the app is in, so defaulting it on turns a connection into a firehose."
+        },
+        "group": {
+          "type": "string",
+          "description": "An optional grouping label, so a long event list renders as sections rather than forty checkboxes."
+        },
+        "when": {
+          "type": "object",
+          "description": "Field equalities that narrow a coarse vendor event into this one. GitHub sends one `issues` event with an `action` field; `{ action = \"opened\" }` is what makes `issues.opened` a distinct thing a trigger can match."
+        },
+        "schema": {
+          "$ref": "#/$defs/jsonSchema",
+          "description": "The JSON Schema of the event payload, when the vendor publishes one."
+        }
+      }
+    },
+
+    "channel": {
+      "type": "object",
+      "title": "One ingress surface, over a transport flux owns",
+      "description": "The third member kind, and the one that is not a primitive: a binding is the composition of an event (inbound) with an operation (the reply). Both halves already exist in the IR, so a binding emits nothing new into the module — it reaches the manifest and the catalogue only.\n\nNote what is absent: no URL, no secret, no schedule. The endpoint address is the operator's deployment detail, the secret is a credential name the host resolves, and the loop driving a `poll` binding is an operator's `channel schedule` + `trigger`. This repository ships no runtime.",
+      "additionalProperties": false,
+      "required": ["name", "transport"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The binding name, e.g. `slack`. Unique across all three member kinds of its service."
+        },
+        "service": {
+          "type": "string",
+          "description": "The `[[services]]` entry this binding belongs to. Omit it for a provider with a single API surface."
+        },
+        "description": {
+          "type": "string",
+          "description": "What the binding is for, in one line."
+        },
+        "transport": { "$ref": "#/$defs/transport" },
+        "events": {
+          "type": "array",
+          "description": "The `[[events]]` names this binding carries, all from its own service. Required for `webhook` and `socket`; a `poll` binding may omit them, because its `cursor` operation is what it carries.",
+          "items": { "type": "string" }
+        },
+        "verification": {
+          "$ref": "#/$defs/verification",
+          "description": "How an inbound request proves it came from the vendor. Tri-state: omitted is legal for `socket` and `poll` (the credential that opens the connection authenticates it) and an error for `webhook`; `\"none\"` states deliberately that the vendor publishes no signature; an `hmac` table verifies."
+        },
+        "discriminator": {
+          "$ref": "#/$defs/selector",
+          "description": "Where to read which event this is, when the transport carries it out of band — GitHub's `X-GitHub-Event` header."
+        },
+        "delivery_id": {
+          "$ref": "#/$defs/selector",
+          "description": "Where to read the vendor's redelivery id, so a flow can dedupe at-least-once delivery. Without it a retried webhook is indistinguishable from a second real event."
+        },
+        "payload": {
+          "type": "object",
+          "description": "Flow symbol → dotted source path into the inbound envelope. Keys are what a journey reads (`$text`) and must be snake case; values address the vendor's envelope with the same dotted grammar `wire` uses for request bodies.",
+          "additionalProperties": { "type": "string" }
+        },
+        "reply": {
+          "$ref": "#/$defs/reply",
+          "description": "The operation that answers an event on this binding. Omit for a fire-and-forget binding."
+        },
+        "subscription": {
+          "$ref": "#/$defs/subscription",
+          "description": "How this binding gets registered with the vendor, when the vendor has an API for it. A `webhook` binding declares this or `setup`."
+        },
+        "setup": {
+          "$ref": "#/$defs/manualSetup",
+          "description": "What a human does in the vendor's dashboard, when there is no subscription API. Slack is the case: no Web API method registers an Events API endpoint."
+        },
+        "cursor": {
+          "type": "string",
+          "description": "The operation a `poll` binding calls to read forward from a recorded position. Required for `poll` and refused for the other transports: flux's schedule channel is best-effort — a restart drops ticks and replays none — so the cursor, not the interval, is what makes a poll correct."
+        },
+        "interval": {
+          "type": "string",
+          "description": "The suggested poll interval (`5m`), for `poll` only. Advisory: the operator writes the actual schedule in their own program, and flux's cron drops ticks across a restart."
+        }
+      }
+    },
+
+    "reply": {
+      "type": "object",
+      "title": "The outbound half of a channel binding",
+      "description": "An operation of this same connector, with its parameters filled from the inbound payload. This is the part that removes hand-written code from flux: its Slack adapter ends by constructing a `chat.postMessage` from the message it just received, which expressed here is an operation id and a two-entry map.",
+      "additionalProperties": false,
+      "required": ["operation"],
+      "properties": {
+        "operation": {
+          "type": "string",
+          "description": "The `[[operations]]` id that answers. It must belong to this connector and to the binding's own service."
+        },
+        "result": {
+          "type": "string",
+          "description": "The reply parameter that carries the journey's own output. The rest of a reply is filled from the inbound payload, but what a flow computed has no dotted path into the event that triggered it — flux's Slack adapter makes the same split in code, passing the joined run results as `text` while `channel` and `thread_ts` come off the message it received."
+        },
+        "bind": {
+          "type": "object",
+          "description": "Reply parameter name → `payload` key. Every required parameter of the reply operation must be covered, by this map or by `result`: a partially bound reply would build, ship, and then fail on the first real delivery.",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+
+    "graph": {
+      "type": "object",
+      "title": "A flow: connector members composed into one Flux op",
+      "description": "The nodes name operations, events and channel bindings this connector already declares; the edges become generated symbols. A graph lowers to a single `op`, which is the only declaration flux lifts from a module — so trigger, schedule and endpoint nodes are the graph's BOUNDARY and are emitted nowhere.\n\nNo node carries a formula. Every rejection in this repository's history was an expression language; every acceptance was declarative structure. A gate's condition is a port reference, a closed operator and a literal — the Flux expression is generated from it.",
+      "additionalProperties": false,
+      "required": ["name", "nodes"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Becomes the emitted `op`'s name, so it must be a legal Flux declaration name. Unique across every member kind of its service."
+        },
+        "service": {
+          "type": "string",
+          "description": "The `[[services]]` entry this graph belongs to. Every member it names must be in the same service."
+        },
+        "description": {
+          "type": "string",
+          "description": "What the flow does, in one line."
+        },
+        "inputs": {
+          "type": "array",
+          "description": "The emitted op's parameters.",
+          "items": { "$ref": "#/$defs/port" }
+        },
+        "output": {
+          "$ref": "#/$defs/portRef",
+          "description": "What the emitted op returns."
+        },
+        "nodes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/graphNode" }
+        },
+        "edges": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/edge" }
+        }
+      }
+    },
+
+    "graphNode": {
+      "type": "object",
+      "title": "One node",
+      "additionalProperties": false,
+      "required": ["id", "kind"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The author-stable identity, unique within the graph. Deliberately unlike flux's own `NodeId`, which is a positional index invalidated by any edit — a saved graph must survive re-ordering."
+        },
+        "kind": {
+          "description": "What the node does. An externally-tagged object: `{ operation = { operation = \"…\" } }`, `{ select = { path = \"a.b\" } }`, `{ gate = { condition = … } }`, and so on. Kinds are `operation`, `select`, `template`, `object`, `literal`, `gate`, `approval`, `retry`, `throttle`, `trigger`, `schedule`, `endpoint`.",
+          "type": "object"
+        },
+        "region": {
+          "type": "string",
+          "description": "The region node containing this one. Recorded on the child so there is one source of truth — a region listing its members and a member naming its region could disagree, and nothing would say which was right. Region kinds are `gate`, `approval`, `retry` and `throttle`."
+        },
+        "inputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/port" }
+        },
+        "outputs": {
+          "type": "array",
+          "description": "The ports values leave on. For a region these are the values that ESCAPE it — the phi node Flux does not have, made explicit. A `gate` may declare none: Flux's `when` has no else here, so a symbol bound inside it is unbound on the false path.",
+          "items": { "$ref": "#/$defs/port" }
+        }
+      }
+    },
+
+    "port": {
+      "type": "object",
+      "title": "A named connection point",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "schema": {
+          "$ref": "#/$defs/jsonSchema",
+          "description": "What the port carries, when known. This is where a graph can be stricter than Flux, whose checker treats two `Named` types as never conflicting."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether a value must reach this port. Defaults to true."
+        }
+      }
+    },
+
+    "portRef": {
+      "type": "object",
+      "title": "One end of an edge",
+      "additionalProperties": false,
+      "required": ["node", "port"],
+      "properties": {
+        "node": { "type": "string" },
+        "port": { "type": "string" }
+      }
+    },
+
+    "edge": {
+      "type": "object",
+      "title": "One connection",
+      "description": "Lowering generates a `$symbol` per edge, satisfying flux's identifier grammar and avoiding its reserved words. An author never sees or names one — which is what makes action-proxy's silent `$emit` shadowing unrepresentable here.",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "$ref": "#/$defs/portRef" },
+        "to": { "$ref": "#/$defs/portRef" }
+      }
+    },
+
+    "condition": {
+      "type": "object",
+      "title": "When a gate opens",
+      "description": "Structured, never a formula. This is the event `when` block's field-equality idea generalised by exactly one closed operator set: `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `exists`. The Flux expression is generated from it, so nothing an author types is evaluated.",
+      "additionalProperties": false,
+      "required": ["left", "op"],
+      "properties": {
+        "left": { "$ref": "#/$defs/portRef" },
+        "op": {
+          "enum": ["eq", "ne", "lt", "lte", "gt", "gte", "exists"]
+        },
+        "right": {
+          "$ref": "#/$defs/jsonSchema",
+          "description": "The literal compared against. Absent for `exists`, which takes no right-hand side."
+        }
+      }
+    },
+
+    "configField": {
+      "type": "object",
+      "title": "One thing a human must supply",
+      "description": "Everything a form needs to ask for one value. The presentation fields are separate from `description` on purpose: every `description` in this file is already the text a model receives as a tool contract, so overloading it with UI copy makes one string serve two audiences that want different things.\n\nConfiguration has two levels — operator (set once per vendor: the OAuth app registration) and connection (set once per tenant: the subdomain, the token). The level is DERIVED from `binds`, never authored, because it is a consequence of where the value goes and an author who could state it could state it wrongly.",
+      "additionalProperties": false,
+      "required": ["name", "label", "help", "binds"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The field name, e.g. `subdomain`. Unique across every member kind of its service, and the key a host stores the collected value under."
+        },
+        "service": {
+          "type": "string",
+          "description": "The `[[services]]` entry this field configures. Omit it for a provider with a single API surface."
+        },
+        "label": {
+          "type": "string",
+          "description": "The form label, e.g. `Zendesk subdomain`. Mandatory: defaulting it to `name` would ship an identifier like `zendesk.api_token` into a form as user-facing copy."
+        },
+        "help": {
+          "type": "string",
+          "description": "One line telling a user what the value is and how to find it. Mandatory — a field a user cannot answer is a field that stops the installation."
+        },
+        "example": {
+          "type": "string",
+          "description": "A realistic example, rendered as a placeholder. Never a default, and validated against `format` so it cannot mislead — a placeholder that would fail the field's own validation is worse than none, because a user copies it."
+        },
+        "format": { "$ref": "#/$defs/format" },
+        "required": {
+          "type": "boolean",
+          "description": "Whether the connector cannot function without it. Defaults to true: a connector declaring a field it does not need is the rarer case, and the safe default is to ask."
+        },
+        "secret": {
+          "type": "boolean",
+          "description": "Whether the value is masked on input, never logged, never echoed back. MUST agree with `binds` — a credential binding is secret, an endpoint or username binding is not. flux partitions secret from non-secret by type and enforces it host-side, so a disagreeing flag would be a second, contradicting source of truth."
+        },
+        "docs_url": {
+          "type": "string",
+          "description": "Where a user goes to obtain the value — the vendor's own page, never ours."
+        },
+        "binds": {
+          "type": "string",
+          "description": "Where the collected value goes. One of `endpoint.<variable>` (a `{variable}` in the service's base URL), `credential.<name>` (the secret half of a declared credential), `username.<name>` (the username half of a `basic` credential), `oauth.client_id`, or `oauth.client_secret`.\n\nThe username half is a separate prefix rather than a `.user` suffix because credential names contain dots (`zendesk.api_token`), which would make a suffix ambiguous."
+        }
+      }
+    },
+
+    "format": {
+      "title": "The shape of a configuration value",
+      "description": "Closed on purpose: a renderer switches on this to pick an input type, a validator and an error message. A renderer given a raw regex can reject a value and cannot explain why.",
+      "oneOf": [
+        { "const": "text", "description": "No particular shape. A free-text input." },
+        { "const": "subdomain", "description": "One DNS label — `acme` in `acme.zendesk.com`. The most common tenant value there is." },
+        { "const": "hostname", "description": "A full host — `acme.freshdesk.com`. Freshdesk asks for the whole thing where Zendesk asks for the label." },
+        { "const": "url", "description": "An absolute `https://` URL." },
+        { "const": "email", "description": "An email address. Zendesk and Jira both put one in the Basic username position." },
+        { "const": "token", "description": "An opaque credential string. No shape beyond `no whitespace` — a vendor's token format is the vendor's business, and guessing at it would reject valid tokens the day the vendor changed them." }
+      ]
+    },
+
+    "subscription": {
+      "type": "object",
+      "title": "How a webhook gets registered with the vendor",
+      "description": "Registering a webhook is an ordinary outbound write — an authorized, approvable operation like any other, never a build-time side effect. What was missing was the link: a binding knew its reply and its cursor but had no way to say which operation subscribes it.",
+      "additionalProperties": false,
+      "required": ["subscribe", "callback_param"],
+      "properties": {
+        "subscribe": {
+          "type": "string",
+          "description": "The operation that registers the endpoint. An `[[operations]]` id of the binding's own service."
+        },
+        "unsubscribe": {
+          "type": "string",
+          "description": "The operation that removes it. Absent when the vendor offers no removal — worth knowing, because it means a disconnect leaves the vendor sending to a dead URL."
+        },
+        "list": {
+          "type": "string",
+          "description": "The operation that lists existing registrations, for reconciling duplicates."
+        },
+        "callback_param": {
+          "type": "string",
+          "description": "Which parameter of `subscribe` receives our public callback URL. The URL itself is never here: it is the product's deployment detail, and a connector carrying one would be describing someone else's infrastructure."
+        }
+      }
+    },
+
+    "manualSetup": {
+      "type": "object",
+      "title": "What a human does in the vendor's dashboard",
+      "description": "For vendors with no subscription API. Slack is the case: no Web API method registers an Events API endpoint, so somebody opens api.slack.com/apps and pastes a URL. That work does not disappear because it is undeclared — it moves into a support article nobody keeps current.",
+      "additionalProperties": false,
+      "required": ["steps"],
+      "properties": {
+        "docs_url": {
+          "type": "string",
+          "description": "The vendor's own page for this, so a UI can link out rather than restate it."
+        },
+        "steps": {
+          "type": "array",
+          "description": "The steps, in order, each one thing a person does. Rendered as a numbered list beside the callback URL the product displays.",
+          "items": { "type": "string" },
+          "minItems": 1
+        }
+      }
+    },
+
+    "selector": {
+      "type": "object",
+      "title": "One named value read off an inbound request",
+      "additionalProperties": false,
+      "required": ["source", "name"],
+      "properties": {
+        "source": { "$ref": "#/$defs/fieldSource" },
+        "name": {
+          "type": "string",
+          "description": "The header name, or — for `source = \"body\"` — the dotted body path."
+        }
+      }
+    },
+
+    "hmac": {
+      "type": "object",
+      "title": "One HMAC webhook signature scheme",
+      "description": "GitHub, Stripe, Slack and Zendesk each document a bespoke-looking signature, and they vary along exactly four axes: which digest, how it is encoded, what string is signed, and how long a signature stays acceptable. Four vendors, one parameterized algorithm — which is a struct, not a script, and therefore something a compiler can carry.\n\nNothing here verifies anything: the comparison runs in flux, over the raw request bytes, before any parsing.",
+      "additionalProperties": false,
+      "required": ["algorithm", "encoding", "header", "signed", "secret"],
+      "properties": {
+        "algorithm": { "$ref": "#/$defs/digest" },
+        "encoding": { "$ref": "#/$defs/encoding" },
+        "header": {
+          "type": "string",
+          "description": "The header carrying the signature, e.g. `X-Hub-Signature-256`."
+        },
+        "prefix": {
+          "type": "string",
+          "description": "A literal prefix the header value carries before the digest, e.g. `sha256=` or `v0=`."
+        },
+        "signed": {
+          "type": "string",
+          "description": "The string that is signed, as a template over `{body}` and `{timestamp}`. Any other placeholder is an error: a template the host cannot fill would fail open or fail confusingly, and neither is acceptable on an authentication path."
+        },
+        "timestamp": {
+          "$ref": "#/$defs/selector",
+          "description": "Where the `{timestamp}` in `signed` is read from — Slack's `X-Slack-Request-Timestamp`, Stripe's `t=` component. Required exactly when `signed` interpolates `{timestamp}`: the template says the value is signed but cannot say where it comes from, and a host left to guess would fall back to its own clock, which verifies nothing."
+        },
+        "secret": {
+          "type": "string",
+          "description": "The NAME of the `[[auth]]` credential holding the shared secret — never a value. It must be declared `scheme = \"signing\"`, so that one credential namespace covers both directions and the manifest names every credential this connector requires."
+        },
+        "tolerance": {
+          "type": "string",
+          "description": "How old a signed request may be (`5m`). Mandatory when `signed` interpolates `{timestamp}`, and refused when it does not: a timestamped signature with no window replays forever, which reads as though replay had been handled."
+        }
+      }
+    },
+
+    "transport": {
+      "title": "How an inbound event reaches flux",
+      "description": "The three exhaust what vendors actually offer, and the split is what makes inbound an abstraction over transports rather than a synonym for webhook.",
+      "oneOf": [
+        {
+          "const": "webhook",
+          "description": "The vendor POSTs to an endpoint the operator exposes. The only transport that needs `verification`."
+        },
+        {
+          "const": "socket",
+          "description": "We connect outward and hold a stream the vendor pushes down (Slack Socket Mode). Inbound in data direction, outbound in operation — which is why it needs no signature."
+        },
+        {
+          "const": "poll",
+          "description": "The vendor offers no push at all, so a cursor operation is called on a schedule."
+        }
+      ]
+    },
+
+    "verification": {
+      "title": "How an inbound request proves it came from the vendor",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "This transport cannot be verified, stated deliberately. Not the same as saying nothing: an unset verification on a webhook is an error, and this is how an author says `the vendor publishes no signature` in a way the manifest can then say loudly."
+        },
+        {
+          "type": "object",
+          "description": "An HMAC over the raw request bytes.",
+          "additionalProperties": false,
+          "required": ["hmac"],
+          "properties": {
+            "hmac": { "$ref": "#/$defs/hmac" }
+          }
+        }
+      ]
+    },
+
+    "fieldSource": {
+      "title": "Where on an inbound request a value is read from",
+      "oneOf": [
+        { "const": "header", "description": "An HTTP header of the inbound request." },
+        { "const": "body", "description": "A field of the decoded body, by dotted path." }
+      ]
+    },
+
+    "digest": {
+      "title": "The digest an HMAC scheme signs with",
+      "oneOf": [
+        { "const": "sha1", "description": "Legacy — GitHub's `X-Hub-Signature`, superseded by its SHA-256 header." },
+        { "const": "sha256", "description": "What every scheme worth adopting uses." }
+      ]
+    },
+
+    "encoding": {
+      "title": "How an HMAC digest is spelled in the header",
+      "oneOf": [
+        { "const": "hex", "description": "Lowercase hex — GitHub, Stripe, Slack." },
+        { "const": "base64", "description": "Base64 — Zendesk." }
+      ]
     },
 
     "service": {
@@ -252,11 +748,15 @@
 
     "authScheme": {
       "title": "Credential injection scheme",
-      "description": "Mirrors flux's `AuthScheme` exactly, so a connector using only these serializes to what flux already understands.",
+      "description": "Mirrors flux's `AuthScheme`, so a connector using only the outbound schemes serializes to what flux already understands. `signing` is the one deliberate divergence: every other variant answers `where does this secret go on the way out`, and a webhook signing secret has no answer because it never goes out at all.",
       "oneOf": [
         {
           "const": "bearer",
           "description": "`Authorization: Bearer <secret>`."
+        },
+        {
+          "const": "signing",
+          "description": "A shared secret that is never placed in a request — it verifies an inbound one, via a channel binding's `verification.hmac.secret`. Declared in `[[auth]]` like any other credential so that one namespace covers both directions and the manifest names everything this connector requires."
         },
         {
           "const": "basic",

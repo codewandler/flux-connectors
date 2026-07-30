@@ -1,0 +1,43 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/data/transform/dedupe.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "dedupe",
+  "title": "Dedupe",
+  "description": "Remove duplicates from an array, preserving first-seen order. Pass `by` (dotted path) to de-duplicate on that field.",
+  "category": [
+    "data",
+    "transform"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [],
+    "description": "Remove duplicates from an array, preserving first-seen order. Pass `by` (dotted path) to de-duplicate on that field.",
+    "effects": [],
+    "group": "cognition",
+    "idempotency": "idempotent",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "by": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "items": {
+          "items": true,
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "name": "dedupe",
+    "risk": "low"
+  }
+}

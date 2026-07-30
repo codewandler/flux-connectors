@@ -1,0 +1,15 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/language/node/match.json",
+  "schema_version": 1,
+  "kind": "node",
+  "name": "match",
+  "title": "Match",
+  "description": "Multi-way **exhaustive** branch: evaluate `subject` (a literal or bound symbol), then run the body of the first `case` whose `value` equals it — by JSON equality, so a *string* subject does not equal a *numeric* literal. If none match, run `default`. A deterministic replacement for chains of `when`. To branch on an op's result, bind it first (`$s = call(); match $s {…}`) or use `route`. The analyzer requires at least one case; at runtime an unmatched subject with no `default` is an error — the exhaustiveness guard-rail.",
+  "category": [
+    "language",
+    "node"
+  ],
+  "availability": "available",
+  "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-match"
+}

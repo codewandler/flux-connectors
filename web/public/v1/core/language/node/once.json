@@ -1,0 +1,15 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/language/node/once.json",
+  "schema_version": 1,
+  "kind": "node",
+  "name": "once",
+  "title": "Once",
+  "description": "**At-most-once side effect** across re-runs — an effect-level `memo`. `label` is an explicit idempotency key: the first time the body runs to success in a session its result is recorded durably; later re-runs in the same session skip the body and reuse the stored result. A failed body records nothing and is retried. `bind` optionally names the body's result. Safety under re-execution (`send_email`/`charge` never fire twice). With no durable store wired (a throwaway interpreter) it degrades to running every time. Requires a non-empty literal label.",
+  "category": [
+    "language",
+    "node"
+  ],
+  "availability": "available",
+  "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-once"
+}

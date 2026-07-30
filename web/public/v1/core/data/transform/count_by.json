@@ -1,0 +1,40 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/data/transform/count_by.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "count_by",
+  "title": "Count By",
+  "description": "Group array items by a field and count each group. Returns `[{key, count}]` sorted by count descending, then key ascending (deterministic).",
+  "category": [
+    "data",
+    "transform"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [],
+    "description": "Group array items by a field and count each group. Returns `[{key, count}]` sorted by count descending, then key ascending (deterministic).",
+    "effects": [],
+    "group": "cognition",
+    "idempotency": "idempotent",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": true,
+          "type": "array"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "items",
+        "path"
+      ],
+      "type": "object"
+    },
+    "name": "count_by",
+    "risk": "low"
+  }
+}

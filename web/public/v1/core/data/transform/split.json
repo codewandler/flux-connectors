@@ -1,0 +1,49 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/data/transform/split.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "split",
+  "title": "Split",
+  "description": "Split string on separator (default \"\\n\"). If `trim` is true, trim each part. Empty input returns `[]`. Returns JSON array of strings.",
+  "category": [
+    "data",
+    "transform"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [],
+    "description": "Split string on separator (default \"\\n\"). If `trim` is true, trim each part. Empty input returns `[]`. Returns JSON array of strings.",
+    "effects": [],
+    "group": "cognition",
+    "idempotency": "idempotent",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "s": {
+          "type": "string"
+        },
+        "sep": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "trim": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "s"
+      ],
+      "type": "object"
+    },
+    "name": "split",
+    "risk": "low"
+  }
+}

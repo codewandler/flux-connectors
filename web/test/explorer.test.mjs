@@ -47,6 +47,12 @@ function operations(document) {
   return document.providers.flatMap((provider) => provider.operations)
 }
 
+/** Every Flux-owned entry, kept separate from vendor connector operations. */
+function coreEntries(document) {
+  assert.ok(document.core, 'the generated catalogue has no Flux core section')
+  return [...document.core.operations, ...document.core.nodes, ...document.core.capabilities]
+}
+
 /** The issues an operation owns itself, as opposed to the ones it inherits. */
 function ownIssues(operation) {
   return operation.status.issues.filter((issue) => issue.scope === 'operation')
@@ -194,6 +200,100 @@ test('the published logo and mark match the canonical brand assets', () => {
 test('every operation has its own deep-linkable page', () => {
   for (const operation of operations(catalog())) {
     page('operations', `${operation.id}.html`)
+  }
+})
+
+test('the Flux core catalogue is complete, versioned, and does not invent a noop', () => {
+  const document = catalog()
+  const core = document.core
+  assert.ok(core, 'catalog.json has no Flux-owned core catalogue')
+  assert.equal(core.schema_version, 1)
+  assert.ok(core.operations.length > 0, 'the core catalogue names no operations')
+  assert.ok(core.nodes.length > 0, 'the core catalogue names no language nodes')
+  assert.ok(core.capabilities.length > 0, 'the core catalogue names no network capabilities')
+  assert.ok(!coreEntries(document).some((entry) => entry.name === 'noop'))
+
+  const ids = coreEntries(document).map((entry) => entry.$id)
+  assert.equal(new Set(ids).size, ids.length, 'two core entries publish the same canonical id')
+
+  for (const entry of coreEntries(document)) {
+    assert.ok(entry.$id.startsWith('https://flux.codewandler.org/v1/'))
+    const relative = entry.$id.slice('https://flux.codewandler.org/'.length)
+    const published = path.join(webRoot, 'public', relative)
+    assert.ok(existsSync(published), `${entry.$id} has no published JSON document`)
+    assert.deepEqual(JSON.parse(readFileSync(published, 'utf-8')), entry)
+  }
+
+  for (const schema of Object.values(core.schemas)) {
+    const relative = schema.$id.slice('https://flux.codewandler.org/'.length)
+    assert.deepEqual(
+      JSON.parse(readFileSync(path.join(webRoot, 'public', relative), 'utf-8')),
+      schema
+    )
+  }
+})
+
+test('every Flux core entry has a static detail page with its contract and canonical spec', () => {
+  const document = catalog()
+  for (const entry of coreEntries(document)) {
+    const kind = entry.kind === 'capability' ? 'capabilities' : `${entry.kind}s`
+    const body = text(page('core', kind, `${entry.name}.html`))
+    assert.ok(body.includes(entry.description), `${entry.kind} ${entry.name} loses its description`)
+    assert.ok(body.includes(entry.$id), `${entry.kind} ${entry.name} loses its canonical JSON id`)
+
+    if (entry.kind === 'operation') {
+      assert.ok(body.includes(entry.tool_spec.risk), `${entry.name} loses its risk`)
+      assert.ok(body.includes(entry.tool_spec.idempotency), `${entry.name} loses its idempotency`)
+      assert.ok(body.includes(JSON.stringify(entry.tool_spec.input_schema, null, 2)))
+    } else if (entry.kind === 'node') {
+      assert.ok(body.includes(entry.schema_ref), `${entry.name} loses its AST schema anchor`)
+    } else {
+      assert.ok(body.includes(entry.callable ? 'callable' : 'not callable'))
+      for (const id of entry.operation_ids) assert.ok(body.includes(id))
+    }
+  }
+})
+
+test('planned network capabilities are clearly non-callable everywhere they appear', () => {
+  const document = catalog()
+  const planned = document.core.capabilities.filter((entry) => entry.availability === 'planned')
+  assert.ok(planned.length > 0, 'the planned capability state is not exercised')
+
+  const explorer = page('explorer.html')
+  for (const entry of planned) {
+    assert.equal(entry.callable, false)
+    assert.deepEqual(entry.operation_ids, [])
+    assert.match(
+      explorer,
+      new RegExp(`data-core-name="${entry.name}"[^>]*data-availability="planned"[^>]*data-callable="false"`)
+    )
+    assert.ok(text(page('core', 'capabilities', `${entry.name}.html`)).includes('not callable'))
+  }
+})
+
+// A previous version of this test asserted `base === '/'` because `public/CNAME` names a custom
+// domain. That is exactly the reasoning that shipped an unstyled site: a committed CNAME is a
+// *request* for a custom domain, not evidence one is serving. GitHub never accepted it — the Pages
+// API reports `"cname": null` and still serves the project-pages URL — so every asset 404'd.
+//
+// So this asserts the one thing a file can actually prove: that the base the site is built with and
+// the base its own emitted HTML uses are the same string, and that it is the project-pages prefix
+// the deployment is known to serve from. Whoever moves the site to the custom domain flips both
+// halves here, and should confirm the move first with
+// `gh api repos/codewandler/flux-connectors/pages --jq .cname`.
+test('the site is built for the path GitHub Pages actually serves it from', () => {
+  const config = readFileSync(path.join(webRoot, '.vitepress', 'config.mts'), 'utf-8')
+  assert.match(config, /const base = '\/flux-connectors\/'/)
+
+  // The built HTML is the artifact that gets deployed, so it is what must carry the prefix.
+  const home = page('index.html')
+  const assets = [...home.matchAll(/(?:href|src)="(\/[^"]*\/assets\/[^"]+)"/g)].map((m) => m[1])
+  assert.ok(assets.length > 0, 'the built home page links no bundled assets; this would pass vacuously')
+  for (const url of assets) {
+    assert.ok(
+      url.startsWith('/flux-connectors/assets/'),
+      `\`${url}\` is not under the deployed base, so it 404s and the page renders unstyled`
+    )
   }
 })
 
@@ -381,7 +481,7 @@ test('the explorer is outside the content column that constrains the prose pages
 
   // Dropping the outline is only acceptable because the section headings remain link targets; they
   // are linked from elsewhere.
-  for (const anchor of ['providers', 'operations']) {
+  for (const anchor of ['core', 'providers', 'operations']) {
     assert.match(
       page('explorer.html'),
       new RegExp(`id="${anchor}"`),
@@ -459,6 +559,201 @@ test('the service filter is a facet of the catalogue and narrows to the chosen c
       )
     }
   }
+})
+
+test('a filtered view round-trips through the query string, and an unfiltered one is clean', () => {
+  // C-102. The page promises "every operation has a stable page you can share" — true of an
+  // operation, false of a *view*. The encode/decode pair is what makes it true of a view, so it is a
+  // pure function in `data/catalog.mts` and asserted here rather than left as component state.
+  //
+  // Every value that is catalogue data is read out of the catalogue. The only vocabularies named
+  // literally are the ones the site owns and the catalogue cannot supply: the parameter keys, the
+  // defect filter's two choices, and the sort orders.
+  const providers = catalog().providers
+  const multi = providers.find((provider) => namedServices(provider).length > 1)
+  assert.ok(multi, 'no connector publishes several services; this would not exercise the pair')
+  const sample = multi.operations[0]
+
+  const empty = selectors.emptyView()
+
+  // An empty filter contributes no parameter, so the unfiltered URL is clean.
+  assert.equal(selectors.encodeView(empty), '', 'the unfiltered view still writes a parameter')
+  assert.deepEqual(selectors.decodeView(''), empty)
+  assert.deepEqual(selectors.decodeView('?'), empty)
+
+  const views = [
+    empty,
+    { ...empty, query: 'list' },
+    { ...empty, query: sample.path },
+    { ...empty, provider: multi.id },
+    { ...empty, provider: multi.id, service: sample.service },
+    { ...empty, risk: sample.risk },
+    { ...empty, idempotency: sample.idempotency },
+    { ...empty, defect: 'own' },
+    { ...empty, defect: 'none' },
+    { ...empty, sort: 'id' },
+    { ...empty, sort: 'risk' },
+    {
+      query: sample.path,
+      provider: multi.id,
+      service: sample.service,
+      risk: sample.risk,
+      idempotency: sample.idempotency,
+      defect: 'own',
+      sort: 'risk',
+    },
+  ]
+
+  for (const view of views) {
+    const encoded = selectors.encodeView(view)
+    assert.deepEqual(
+      selectors.decodeView(encoded),
+      view,
+      `the view does not survive the round trip through \`?${encoded}\``
+    )
+    // One view, one string: re-encoding what was parsed cannot drift.
+    assert.equal(selectors.encodeView(selectors.decodeView(encoded)), encoded)
+  }
+
+  // Only the fields that are set appear at all.
+  assert.deepEqual(
+    [...new URLSearchParams(selectors.encodeView({ ...empty, risk: sample.risk })).keys()],
+    ['risk'],
+    'a view with one filter set writes more than one parameter'
+  )
+
+  // Two routes to the same view produce the same string: the key order a caller happens to build
+  // the object in is not part of the URL.
+  assert.equal(
+    selectors.encodeView({ ...empty, provider: multi.id, sort: 'id' }),
+    selectors.encodeView({
+      sort: 'id',
+      defect: '',
+      idempotency: '',
+      risk: '',
+      service: '',
+      provider: multi.id,
+      query: '',
+    }),
+    'the same view encodes to two different strings'
+  )
+
+  // Unknown or stale parameters are ignored, not fatal — a shared link outliving a rename degrades
+  // to a wider view rather than to an error page.
+  const full = views.at(-1)
+  const encoded = selectors.encodeView(full)
+  assert.deepEqual(selectors.decodeView(`${encoded}&nonesuch=1`), full)
+  assert.deepEqual(selectors.decodeView('nonesuch=1'), empty)
+  assert.deepEqual(
+    selectors.decodeView('sort=nonesuch'),
+    empty,
+    'an unrecognised sort order survives parsing, so a stale link sorts by nothing'
+  )
+  assert.deepEqual(
+    selectors.decodeView('defect=nonesuch'),
+    empty,
+    'an unrecognised defect filter survives parsing, so a stale link hides every operation'
+  )
+
+  // A filter value the catalogue no longer offers is dropped against the catalogue itself, which is
+  // the half of "ignored, not fatal" that a pure parse cannot decide: a renamed connector must widen
+  // the view, not empty it.
+  const stale = { ...empty, provider: 'nonesuch', service: 'nonesuch', risk: 'nonesuch' }
+  assert.deepEqual(
+    selectors.narrowView(stale, providers),
+    empty,
+    'a link naming a connector, service or risk the catalogue no longer publishes filters everything away'
+  )
+
+  // A service its connector does not publish is dropped, and the connector is kept.
+  const single = providers.find((provider) => namedServices(provider).length === 0)
+  assert.ok(single, 'every connector publishes a named service; this case is untested')
+  assert.deepEqual(
+    selectors.narrowView({ ...empty, provider: single.id, service: sample.service }, providers),
+    { ...empty, provider: single.id },
+    'a service the chosen connector does not publish survives and empties the list'
+  )
+
+  // What the catalogue does publish is left exactly alone.
+  assert.deepEqual(selectors.narrowView(full, providers), full)
+})
+
+test('the operation list sorts by catalogue order, by id, and by declared risk', () => {
+  const ops = operations(catalog())
+  const ids = ops.map((operation) => operation.id)
+
+  // Catalogue order is the default and it is meaningful — it is the order the module emits.
+  assert.deepEqual(
+    selectors.sortOperations(ops, 'catalog').map((operation) => operation.id),
+    ids,
+    'the default sort reorders the catalogue'
+  )
+  assert.deepEqual(ops.map((operation) => operation.id), ids, 'sorting mutated its input')
+
+  assert.deepEqual(
+    selectors.sortOperations(ops, 'id').map((operation) => operation.id),
+    [...ids].sort(),
+    'sorting by id does not order by id'
+  )
+
+  // The one ordering the catalogue cannot supply. JSON carries no notion of which tier is worse, and
+  // alphabetical would put the worst tier in the middle, which is wrong without ever looking wrong.
+  assert.deepEqual(selectors.RISK_ORDER, ['low', 'medium', 'high', 'destructive'])
+
+  const tiers = [...new Set(ops.map((operation) => operation.risk))]
+  for (const tier of tiers) {
+    assert.ok(
+      selectors.RISK_ORDER.includes(tier),
+      `the catalogue publishes the risk tier \`${tier}\` and the declared order does not rank it`
+    )
+  }
+
+  const byRisk = selectors.sortOperations(ops, 'risk')
+  assert.equal(byRisk.length, ops.length, 'sorting by risk drops or duplicates operations')
+
+  const ranks = byRisk.map((operation) => selectors.RISK_ORDER.indexOf(operation.risk))
+  assert.deepEqual(ranks, [...ranks].sort((a, b) => a - b), 'sorting by risk is not in rank order')
+
+  // Catalogue order is the tiebreaker inside a tier, so the default sort is never thrown away — it
+  // is only grouped.
+  for (const tier of tiers) {
+    const same = (operation) => operation.risk === tier
+    assert.deepEqual(
+      byRisk.filter(same).map((operation) => operation.id),
+      ops.filter(same).map((operation) => operation.id),
+      `sorting by risk reorders within \`${tier}\`, losing catalogue order as the tiebreaker`
+    )
+  }
+
+  // Every sort the URL can name is one the comparator answers.
+  for (const sort of selectors.SORTS) {
+    assert.equal(
+      selectors.sortOperations(ops, sort).length,
+      ops.length,
+      `the sort \`${sort}\` is offered in the URL and not implemented`
+    )
+  }
+})
+
+test('changing a filter replaces the URL rather than pushing a history entry', () => {
+  // C-102, and the reason it is asserted on the source: the failure is invisible on the page. A
+  // pushed entry per keystroke means the back button walks back through a search instead of leaving
+  // the explorer, and nothing about the rendered HTML shows it.
+  const list = readFileSync(
+    path.join(webRoot, '.vitepress', 'theme', 'components', 'OperationList.vue'),
+    'utf-8'
+  )
+
+  assert.match(
+    list,
+    /replaceState/,
+    'the operation list no longer replaces the URL when a filter changes'
+  )
+  assert.doesNotMatch(
+    list,
+    /pushState|router\.go\(/,
+    'the operation list pushes a history entry for a filter change, so the back button walks back through every keystroke of a search'
+  )
 })
 
 test('the explorer shows the services a connector publishes, and never the reserved one', () => {
@@ -556,8 +851,8 @@ test('a published service address is shown, and an absent one is shown as nothin
     .filter((service) => service.gid === null)
   assert.ok(absent.length > 0, 'every service publishes an address; the null case is untested')
   assert.doesNotMatch(
-    body,
-    /\bnull\b/,
+    explorer,
+    />\s*null\s*</,
     'the explorer renders a null the catalogue does not publish'
   )
 })

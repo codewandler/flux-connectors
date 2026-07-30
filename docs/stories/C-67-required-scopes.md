@@ -12,6 +12,15 @@ note: least privilege, and mechanical 403 diagnosis
 
 # Declare the scopes an operation requires
 
+> **Amendment ([C-86](C-86-connector-configuration-epic.md)).** A hosted **consent screen** is a second
+> consumer for this, and it needs more than bare strings: a per-scope display name and one line of
+> explanation ("Post messages as the app"), plus a read/write classification so a form can group them.
+> This story's "union per service" is already exactly the right primitive for that screen.
+>
+> Also relevant: scopes today live inside credential `description` strings — slack's, shopify's and
+> hubspot's each list them in prose — and that field is the model-facing tool contract, so it is the
+> wrong home for two reasons rather than one.
+
 ## Goal
 Let an operation say which permissions its credential needs — `chat:write`, `repo`,
 `tickets:write` — so a connector can state least privilege, a tool catalogue can hide what the

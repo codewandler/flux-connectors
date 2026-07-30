@@ -350,3 +350,29 @@ schema = { type = "integer", format = "uint64", minimum = 1 }
 
 [operations.quirks.error_envelope]
 message_pointer = "/errors"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "shop"
+label = "Shop name"
+help = "The part of your `myshopify.com` address before the dot — for `acme.myshopify.com`, this is `acme`. Not your custom storefront domain"
+example = "acme"
+format = "subdomain"
+docs_url = "https://help.shopify.com/en/manual/domains"
+binds = "endpoint.shop"
+
+[[config]]
+name = "access_token"
+label = "Admin API access token"
+help = "From your custom app's API credentials page in the Shopify admin. Starts with `shpat_`, and Shopify shows it once"
+# No `example`, deliberately. A placeholder for a *secret* field has to be recognisable as fake, and
+# the one that was here — `shpat_` followed by 32 hex characters — was not: GitHub's push protection
+# matched it as a live Shopify Access Token and refused the push, which is the correct behaviour and
+# the right verdict. The format belongs in `help`, where it cannot be mistaken for a value.
+format = "token"
+secret = true
+docs_url = "https://help.shopify.com/en/manual/apps/app-types/custom-apps"
+binds = "credential.shopify.access_token"

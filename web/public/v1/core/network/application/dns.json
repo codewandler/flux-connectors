@@ -1,0 +1,16 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/network/application/dns.json",
+  "schema_version": 1,
+  "kind": "capability",
+  "name": "dns",
+  "title": "DNS",
+  "description": "Explicit DNS resolution; planned pending a guarded resolver contract.",
+  "category": [
+    "network",
+    "application"
+  ],
+  "availability": "planned",
+  "callable": false,
+  "operation_ids": []
+}

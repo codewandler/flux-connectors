@@ -1,0 +1,16 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/network/transport/tcp.json",
+  "schema_version": 1,
+  "kind": "capability",
+  "name": "tcp",
+  "title": "TCP",
+  "description": "Guarded TCP stream access; planned pending connection-lifetime and authority rules.",
+  "category": [
+    "network",
+    "transport"
+  ],
+  "availability": "planned",
+  "callable": false,
+  "operation_ids": []
+}

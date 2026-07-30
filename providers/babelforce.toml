@@ -32,6 +32,10 @@ base_url = "https://services.babelforce.com"
 
 description = "Babelforce voice platform: agent availability, live and reported calls, and the session variables a flow reads and writes"
 
+# The "Test connection" operation. Its own description already says it *"doubles as the
+# verification operation"*; this is that sentence made machine-readable.
+verify = "babelforce-agent-list"
+
 # The document declares `security` once at the root and **zero of its 163 operations override it**,
 # so one connector-wide default is the whole auth model (§5.1.1).
 default_auth = [{ credentials = ["babelforce.access_token"] }]

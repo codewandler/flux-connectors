@@ -1,0 +1,15 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/language/node/cap_scope.json",
+  "schema_version": 1,
+  "kind": "node",
+  "name": "cap_scope",
+  "title": "Cap Scope",
+  "description": "**Capability scope**: run `body`, but restrict op dispatch to the tool names in `tools` — a call to anything outside that allowlist fails closed at the runtime's dispatch gate, even when the outer session policy would allow it. Capabilities only ever narrow on descent: a nested `with_tools` is intersected with the scope it's nested in, so an inner block can never re-grant a tool an outer one removed. This is the runtime-enforced counterpart of an advisory tool restriction — the analyzer also flags a literal-op `call` here that provably names a tool absent from `tools` (a static echo of the same rule dispatch enforces dynamically). `bind` names the body's result. Native text: `with_tools [\"read\", \"grep\"]` + an indented body.",
+  "category": [
+    "language",
+    "node"
+  ],
+  "availability": "available",
+  "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-cap_scope"
+}

@@ -6,10 +6,23 @@ status: backlog
 design: docs/designs/inbound-events.md
 epic: inbound-events
 areas: [connector-flux]
-note: "a cursor `op` (emitted) plus a documented `schedule`-channel program pattern (not emitted) — proves inbound is an abstraction over transports rather than a synonym for webhook, and ships with zero cross-repo dependency"
+note: "a cursor `op` (emitted) plus a documented `schedule`-channel program pattern (not emitted) — proves inbound is an abstraction over transports rather than a synonym for webhook, and ships with zero cross-repo dependency. AMENDED by C-82: the cursor is MANDATORY, because flux's cron drops ticks and replays none"
 ---
 
 # A `poll` transport — inbound for vendors with no webhook, no flux blocker
+
+> **Amendment ([C-82](C-82-channel-bindings-epic.md), [channel-bindings.md](../designs/channel-bindings.md)).**
+> The cursor is **mandatory**, not optional, and the reason is a fact about flux rather than a
+> preference: its schedule channel is one in-process task per channel, and **missed-tick replay is a
+> named non-goal** of its own design (`../../flux/docs/designs/event-trigger-channels.md`). A restart
+> drops ticks and replays none of them. So the schedule cannot be trusted to have run, and resuming
+> from a recorded position is the only thing that makes a poll correct — a poll without a cursor loses
+> events with nothing to detect it.
+>
+> `interval` is correspondingly **advisory**: the operator writes the actual schedule in their own
+> program, this repository runs nothing, and the cadence is never a guarantee. The loader already
+> enforces both rules (`crates/connector-spec/src/provider.rs`, `validate_channel_transport`), so what
+> remains here is the emitted cursor op and the documented program pattern.
 
 ## Goal
 

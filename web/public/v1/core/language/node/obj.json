@@ -1,0 +1,15 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/language/node/obj.json",
+  "schema_version": 1,
+  "kind": "node",
+  "name": "obj",
+  "title": "Obj",
+  "description": "Build an **object value** from sub-expressions — the record constructor `{ k: expr, … }`. Each field value is itself a node, so a record can mix literals and variables: `{ ok: true, n: $count, intent: $extract.intent }`. Pure: it assembles a value, performing no IO and no op dispatch. Leaves must be pure value nodes (`var`/`lit`/`jq`/`expr`/`fmt`/`obj`/ `list`); a call or control-flow leaf is rejected by the analyzer so templates stay side-effect free. This is what lets `return { … }` assemble a result from computed symbols.",
+  "category": [
+    "language",
+    "node"
+  ],
+  "availability": "available",
+  "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-obj"
+}

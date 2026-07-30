@@ -12,11 +12,13 @@ operations, capability manifests, and a queryable Rust catalogue.
 > to end, but none of the generated providers can authenticate and make a live API call yet. See
 > [Current limitations](#current-limitations).
 
-The repository currently contains 88 curated operations across 16 providers — **Zendesk** (7),
+The repository currently contains 97 curated connector operations across 17 providers — **Fly.io**
+(9), **Zendesk** (7),
 **Freshdesk** (9), **babelforce** (9), **Google Workspace** (8, across three services), **Jira** (6),
 **GitHub** (5), **HubSpot** (5), **Intercom** (5), **Shopify** (5), **Asana** (5), **OpenAI** (4),
-**OpenRouter** (4), **Slack** (4), **Airtable** (4), **Sentry** (4) and **Zoom** (4). A full build
-compiles them into 143 committed, reviewable artifacts without contacting a vendor.
+**OpenRouter** (4), **Slack** (4), **Airtable** (4), **Sentry** (4) and **Zoom** (4). It also publishes
+77 Flux-owned core operations, nodes, and capability records. A full build compiles everything into
+236 committed, reviewable artifacts without contacting a vendor.
 
 ## Why this exists
 
@@ -40,6 +42,7 @@ Describe a provider once in `providers/<name>.toml`. `flux-connectors build` wri
 | `crates/catalog/ops/<name>/*.flux` | One standalone rendering per operation. |
 | `crates/catalog/src/generated/<name>.rs` | Static metadata embedded by `connector-catalog`. |
 | `web/public/catalog.json` | The generated data behind the public operation explorer. |
+| `web/public/v1/**/*.json` | Dereferenceable Flux core entries and JSON Schemas. |
 
 Generated Flux is built as real `flux_lang` AST nodes and formatted by flux-lang's formatter—never
 assembled with string templates. Generated artifacts are committed so changes arrive as ordinary,
@@ -60,11 +63,11 @@ cargo run -p connector-cli -- build
 On a clean checkout, `diff` reports:
 
 ```text
-143 artifacts up to date (16 providers checked)
+236 artifacts up to date (17 providers checked)
 ```
 
 Then inspect [`connectors/zendesk.flux`](connectors/zendesk.flux), browse the
-[operation explorer](https://codewandler.github.io/flux-connectors/explorer), or query the embedded
+[catalogue explorer](https://flux.codewandler.org/explorer), or query the embedded
 catalogue from Rust:
 
 ```bash
@@ -153,7 +156,7 @@ fails closed:
   [docs/designs/query-encoding.md](docs/designs/query-encoding.md).
 - **Base URLs can contain unbound template variables**, such as
   `https://{subdomain}.zendesk.com`; environment binding has not landed.
-- **OpenAPI ingest is not wired.** All 16 providers are hand-authored. A `[spec]`-backed provider
+- **OpenAPI ingest is not wired.** All 17 providers are hand-authored. A `[spec]`-backed provider
   is rejected rather than compiled into a plausible but empty module.
 - **`check`, `fetch`, and `install` are not implemented.** Their CLI entries fail explicitly and
   point to their owning stories.

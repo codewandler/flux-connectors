@@ -1,0 +1,15 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/language/node/route.json",
+  "schema_version": 1,
+  "kind": "node",
+  "name": "route",
+  "title": "Route",
+  "description": "Model-routed branch — the signature *bounded non-determinism* primitive. Run `selector` (typically a `!model` op) to produce a label, then run the `case` whose `label` it names. The cases are fixed and analyzer-validated: the model chooses *which* declared branch runs, never *what*. Falls back to `default` when the label matches no case (an error if `default` is empty).",
+  "category": [
+    "language",
+    "node"
+  ],
+  "availability": "available",
+  "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-route"
+}

@@ -20,6 +20,7 @@ import {
   type Catalog,
 } from '../../../data/catalog.mts'
 import IssueNotice from './IssueNotice.vue'
+import CoreExplorer from './CoreExplorer.vue'
 import OperationList from './OperationList.vue'
 import ProviderCard from './ProviderCard.vue'
 
@@ -28,14 +29,28 @@ const props = defineProps<{ catalog: Catalog }>()
 const operations = computed(() => allOperations(props.catalog))
 const defects = computed(() => defectCount(operations.value))
 const wide = computed(() => catalogIssues(props.catalog))
+const coreEntries = computed(() =>
+  props.catalog.core
+    ? props.catalog.core.operations.length +
+      props.catalog.core.nodes.length +
+      props.catalog.core.capabilities.length
+    : 0
+)
+const planned = computed(
+  () => props.catalog.core?.capabilities.filter((entry) => entry.availability === 'planned').length ?? 0
+)
 </script>
 
 <template>
   <p class="summary" :data-defect-count="defects">
     <strong>{{ catalog.providers.length }}</strong> connectors ·
-    <strong>{{ operations.length }}</strong> operations ·
+    <strong>{{ operations.length }}</strong> connector operations ·
+    <template v-if="catalog.core">
+      <strong>{{ coreEntries }}</strong> Flux core entries ·
+      <strong>{{ planned }}</strong> planned network capabilities ·
+    </template>
     <strong>{{ defects }}</strong> with an operation-specific limitation.
-    Choose a connector below or filter the complete operation list.
+    Browse Flux's built-ins or choose a connector below.
   </p>
 
   <IssueNotice
@@ -44,6 +59,11 @@ const wide = computed(() => catalogIssues(props.catalog))
     banner="catalog"
     :issues="wide"
   />
+
+  <template v-if="catalog.core">
+    <h2 id="core">Flux core</h2>
+    <CoreExplorer :core="catalog.core" />
+  </template>
 
   <h2 id="providers">Connectors</h2>
   <div class="providers">

@@ -12,6 +12,22 @@ note: closes the SCHEMA GAP every shipped provider records in a comment
 
 # Bind a service's endpoint to operator configuration
 
+> **Amendment ([C-86](C-86-connector-configuration-epic.md), [connector-configuration.md](../designs/connector-configuration.md)).**
+> **The binding half has landed, in a different shape than this story assumed.** A template variable
+> is bound by a `[[config]]` field with `binds = "endpoint.<variable>"` — not by naming an environment
+> variable. The difference is the point: `ZENDESK_URL` is a *host resolution strategy*, and a hosted
+> product does not have environment variables per tenant. What a connector declares is the **question
+> to ask a human**; flux's `EndpointSpec`/`ConfigSpec` still own resolution.
+>
+> Landed here: all four templated providers declare their variable, their `SCHEMA GAP:` comments are
+> deleted, and `tests/config_fields.rs::no_shipped_provider_has_an_unbound_template_variable` asserts
+> the second acceptance bullet over the whole fleet. The loader refuses an unbound variable, so the gap
+> cannot reopen. `first_template_variable` — which reported one variable of however many — is gone.
+>
+> **What remains here:** multiple servers per service (production versus sandbox, AWS's per-region
+> hosts) with the selection as operator config, and `http_hosts` deriving from the endpoint spec
+> across every declared server.
+
 ## Goal
 Make a connector's endpoint a declared, bindable thing instead of a plain string with a comment:
 which environment variable supplies it, which template variables it binds, and whether a sandbox

@@ -303,6 +303,45 @@ pub fn validate_api_version(api_version: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Whether `name` can be the fragment of an [`Oip`] — the name of an operation, an event or a
+/// channel binding.
+///
+/// The three member kinds share **one namespace per service**, so they share one spelling rule. It is
+/// deliberately wider than an operation id's, and the extra characters are there for one reason:
+/// **an event keeps its vendor name.** Slack's event really is `app_mention` and GitHub's really is
+/// `issues.opened`; respelling them `app-mention` and `issues-opened` would be this repository
+/// renaming someone else's API, which is the fidelity principle 1 exists to protect.
+///
+/// An operation id is *additionally* a declarable Flux symbol, and that narrower rule is enforced
+/// where it belongs — `connector-flux` refuses an unspellable operation id at emission. Nothing is
+/// emitted for an event or a binding, so nothing narrows them. This function guards the **address**;
+/// the emitter guards the **declaration**.
+///
+/// **Public, and called by the provider loader**, for the same reason the two validators above are:
+/// a name that reaches the IR unvalidated is one an oip renders into a string that does not parse
+/// back, and this is the only place that can refuse it while the author is still looking at the file.
+pub fn validate_member_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("a member name must not be empty".to_owned());
+    }
+    if !name
+        .chars()
+        .all(|c| is_segment_char(c) || c == '.' || c == '_')
+    {
+        return Err(format!(
+            "a member name is lowercase ASCII letters, digits, `-`, `_` and `.`, and {name:?} is \
+             not — it is the fragment of an operation, event or channel address"
+        ));
+    }
+    if name.starts_with('.') || name.ends_with('.') || name.contains("..") {
+        return Err(format!(
+            "{name:?} has an empty dotted segment; a member name reads as `issues.opened`, never with \
+             a leading, trailing or doubled `.`"
+        ));
+    }
+    Ok(())
+}
+
 /// The one character class both an authority label and a service name admit.
 fn is_segment_char(c: char) -> bool {
     c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'

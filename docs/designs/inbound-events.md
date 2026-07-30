@@ -208,9 +208,30 @@ is still open.
 - **Does flux gain a first-class `event` declaration**, or do generated events ride the existing
   `channel webhook` + `trigger` pair with a routing table? The latter needs no language change and is
   the assumed starting point; the former is cleaner if inbound proves central.
-- **Slack Socket Mode** is a second transport flux already implements as its own channel kind. Does a
-  connector's inbound declaration target it, or does Slack stay special-cased? Probably the latter
-  until a second socket-mode vendor appears.
+- ~~**Slack Socket Mode** … does a connector's inbound declaration target it, or does Slack stay
+  special-cased?~~ **Settled by [channel-bindings.md](channel-bindings.md) (C-82): a connector's
+  declaration targets it.** `Transport::Socket` is one of three transports a binding may name, and
+  `providers/slack.toml` ships both a socket binding and an Events API webhook binding over *the same*
+  event set, payload map and reply. The answer arrived earlier than "when a second socket-mode vendor
+  appears" because the question turned out to be the wrong shape: Socket Mode is not a Slack
+  peculiarity to special-case, it is the transport axis this design already named.
 - **Endpoint lifecycle ownership.** If a connector emits `subscribe`, who calls it — an operator
   running a setup flow once, or a program at startup that reconciles its own subscriptions? The second
   is more autonomous and more dangerous (a restart loop creating duplicate webhooks).
+
+## Amendment: the surface above an event
+
+This design models an **event**. The thing an operator declares is one level up, and flux hard-codes
+it — see [channel-bindings.md](channel-bindings.md) (C-82). Three of this document's shapes moved
+there and are superseded:
+
+- **`[inbound]` is not a provider-level block.** Events are `[[events]]` and bindings are
+  `[[channels]]`, both **members of a service** — C-66's objection, applied before it could bite.
+- **Transport, verification, discriminator and delivery id belong to the binding**, not to the
+  provider, because one vendor can offer two transports for the same events and Slack does.
+- **The signed-string template needs a `timestamp` selector.** The shape sketched above says
+  `signed = "v0:{timestamp}:{body}"` but never says *where the timestamp is read from*. A host left to
+  guess would fall back to its own clock, which verifies nothing.
+
+The verification matrix itself — the finding this document rests on — is unchanged and landed
+verbatim as `HmacSpec`.

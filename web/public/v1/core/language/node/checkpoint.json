@@ -1,0 +1,15 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/language/node/checkpoint.json",
+  "schema_version": 1,
+  "kind": "node",
+  "name": "checkpoint",
+  "title": "Checkpoint",
+  "description": "**Durable resume point** for long-running / resumable flows. A **top-level-only** marker (like `await`): the first time a run reaches it, the position is recorded durably; a later re-run of the *same* flow in the *same* session fast-forwards past the already-completed prefix (its symbols are still durably bound and its side effects are not repeated) and continues from here. `label` is a human-readable name for the phase it closes. Pairs with `once` for finer-grained idempotency; a no-op when no durable store is wired. Requires a non-empty literal label.",
+  "category": [
+    "language",
+    "node"
+  ],
+  "availability": "available",
+  "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-checkpoint"
+}

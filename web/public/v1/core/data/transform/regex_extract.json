@@ -1,0 +1,59 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/data/transform/regex_extract.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "regex_extract",
+  "title": "Regex Extract",
+  "description": "Extract text from a string using a regex pattern. Returns the first match as a string, or `null` if no match. With `group` (default 0 = whole match), extracts that capture group. With `all: true`, returns a JSON array of all matches. Missing capture group index yields a clear error.",
+  "category": [
+    "data",
+    "transform"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [],
+    "description": "Extract text from a string using a regex pattern. Returns the first match as a string, or `null` if no match. With `group` (default 0 = whole match), extracts that capture group. With `all: true`, returns a JSON array of all matches. Missing capture group index yields a clear error.",
+    "effects": [],
+    "group": "cognition",
+    "idempotency": "idempotent",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "all": {
+          "default": null,
+          "description": "Extract all matches instead of just the first (default false)",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "group": {
+          "default": null,
+          "description": "Capture group index to extract (default 0 = whole match)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "pattern": {
+          "description": "The regex pattern to match against",
+          "type": "string"
+        },
+        "s": {
+          "description": "The string to search in",
+          "type": "string"
+        }
+      },
+      "required": [
+        "s",
+        "pattern"
+      ],
+      "type": "object"
+    },
+    "name": "regex_extract",
+    "risk": "low"
+  }
+}

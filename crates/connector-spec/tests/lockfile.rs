@@ -111,6 +111,11 @@ fn bare(provenance: Provenance) -> Connector {
         auth: Vec::new(),
         default_auth: Vec::new(),
         operations: Vec::new(),
+        events: Vec::new(),
+        channels: Vec::new(),
+        config: Vec::new(),
+        verify: None,
+        graphs: Vec::new(),
         provenance,
     }
 }

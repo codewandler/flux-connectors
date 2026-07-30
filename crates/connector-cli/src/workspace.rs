@@ -44,6 +44,9 @@ pub const SITE_DIR: &str = "web/public";
 /// The site's generated catalogue: `web/public/catalog.json`.
 pub const SITE_CATALOG: &str = "catalog.json";
 
+/// The checked Flux-owned core catalogue snapshot.
+pub const CORE_CATALOG_SOURCE: &str = "specs/flux/core-v1.json";
+
 /// The repository's documentation images: `assets/`.
 pub const ASSETS_DIR: &str = "assets";
 
@@ -162,6 +165,17 @@ impl Workspace {
     /// full build. See [`crate::site`].
     pub fn site_catalog_path(&self) -> PathBuf {
         self.root.join(SITE_DIR).join(SITE_CATALOG)
+    }
+
+    /// `<root>/specs/flux/core-v1.json` — the vendored output of
+    /// `flux catalog core --format json`.
+    pub fn core_catalog_source_path(&self) -> PathBuf {
+        self.root.join(CORE_CATALOG_SOURCE)
+    }
+
+    /// A generated public resource below `web/public/`.
+    pub fn site_public_path(&self, relative: impl AsRef<Path>) -> PathBuf {
+        self.root.join(SITE_DIR).join(relative)
     }
 
     /// `<root>/assets/readme-snippet.flux` — the Flux the README shows (C-45).

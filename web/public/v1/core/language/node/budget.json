@@ -1,0 +1,15 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/language/node/budget.json",
+  "schema_version": 1,
+  "kind": "node",
+  "name": "budget",
+  "title": "Budget",
+  "description": "Cap the cost of a scope: run `body` but allow at most `limit` op dispatches within it (checked at statement boundaries; a nested statement can consume more than one dispatch before the next check). A first-class cost guard-rail; v1 counts dispatches (token/money budgets are a later refinement). `bind` names the body's result.",
+  "category": [
+    "language",
+    "node"
+  ],
+  "availability": "available",
+  "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-budget"
+}

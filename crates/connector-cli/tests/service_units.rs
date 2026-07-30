@@ -441,11 +441,22 @@ fn the_published_catalogue_carries_the_service() {
                 connector.operations_of(name).count(),
                 "`{id}`/`{name}` publishes an operation count its declaration does not support"
             );
-            // No authority is declared by any shipped provider yet, so no address renders — stated as
-            // `null`, never invented.
-            assert_eq!(service["gid"], serde_json::Value::Null);
+            // Derived, not hardcoded. This assertion used to read "no shipped provider declares an
+            // authority yet, so this is always null" — which stopped being true the moment slack
+            // declared one for its channel binding's reply address, and would have gone on being
+            // asserted for every provider that never got one. Compare against what the connector
+            // renders, exactly as the three assertions above do.
+            assert_eq!(
+                service["gid"].as_str(),
+                connector.gid_of(name).map(|gid| gid.to_string()).as_deref(),
+                "`{id}`/`{name}` publishes an address that is not the one it renders"
+            );
         }
-        assert_eq!(provider["authority"], serde_json::Value::Null);
+        assert_eq!(
+            provider["authority"].as_str(),
+            connector.authority.as_deref(),
+            "`{id}` publishes an authority that is not the one it declares"
+        );
 
         let operations = provider["operations"]
             .as_array()

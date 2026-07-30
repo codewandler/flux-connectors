@@ -174,15 +174,28 @@ pub fn of(connector: &Connector, operation: &Operation) -> Status {
     // 3. The base URL names a tenant nobody has bound. Read through the operation's **service**
     //    (C-49): a service may override the connector's base URL, and it is the URL the call
     //    actually reaches that decides whether the destination is bound.
-    if let Some(variable) = first_template_variable(connector.base_url_of(&operation.service)) {
+    //
+    //    Every variable, not the first one. This used to call a `first_template_variable` whose name
+    //    was an accurate description of its bug: `https://{region}.{tenant}.example` reported one and
+    //    left the other invisible to every consumer of this status. The loader now refuses a variable
+    //    no `[[config]]` field binds (C-86), so a provider reaching this point has declared what it
+    //    needs — and the issue's job is to say the values are not *supplied* yet, naming all of them.
+    let unbound =
+        connector_spec::config::template_variables(connector.base_url_of(&operation.service));
+    if !unbound.is_empty() {
+        let named = unbound
+            .iter()
+            .map(|variable| format!("{{{variable}}}"))
+            .collect::<Vec<_>>()
+            .join(", ");
         issues.push(Issue {
             code: UNBOUND_BASE_URL_TEMPLATE,
             scope: Scope::Provider,
             story: "C-17",
             summary: format!(
-                "This connector needs an operator-supplied {{{variable}}} value before it has a valid destination URL."
+                "This connector needs an operator-supplied {named} value before it has a valid destination URL."
             ),
-            params: Vec::new(),
+            params: unbound.iter().map(|v| (*v).to_string()).collect(),
         });
     }
 
@@ -217,17 +230,6 @@ fn is_safely_interpolated(schema: &JsonSchema) -> bool {
 /// string.
 fn wire_name(param: &Param) -> &str {
     param.wire.as_deref().unwrap_or(&param.name)
-}
-
-/// The first `{name}` placeholder in a base URL, if it has one.
-///
-/// A deliberately small scan rather than a template engine: `base_url` is documented as "may carry
-/// tenant templating" and nothing in the IR parses it, so this reports the first placeholder and
-/// leaves the rest to C-17's binding work.
-fn first_template_variable(base_url: &str) -> Option<&str> {
-    let (_, after) = base_url.split_once('{')?;
-    let (variable, _) = after.split_once('}')?;
-    Some(variable)
 }
 
 #[cfg(test)]
@@ -279,6 +281,11 @@ mod tests {
             )],
             default_auth: vec![AuthRequirement::single("acme.token")],
             operations: vec![operation("acme-thing-list")],
+            events: Vec::new(),
+            channels: Vec::new(),
+            config: Vec::new(),
+            verify: None,
+            graphs: Vec::new(),
             provenance: Default::default(),
         }
     }

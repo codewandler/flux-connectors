@@ -28,6 +28,46 @@ flux.
 An **epic** is a themed group of stories with a shared design doc. Stories join an epic via the
 `epic: <slug>` frontmatter field, where `<slug>` matches a design doc at `docs/designs/<slug>.md`.
 
+### Provider fleet 2 — shipped in parallel
+
+The first fleet (C-69–C-78) is fully drained and every connector in it shipped one at a time. That
+was not a staffing limit: **`crates/catalog/src/generated.rs` carries two hand-maintained lists that
+every provider story appends to**, so any two branches conflict on one file and integrate serially
+however many implementors run. `web/public/catalog.json` has the same shape and already solves it
+correctly — it is emitted only on a full run, and a scoped build leaves it untouched.
+
+C-104 applies that rule to the one list C-54 left behind, which makes provider write sets pairwise
+disjoint and moves the wave size from one to whatever disk allows.
+
+The five connectors that follow are each chosen for what they force the model to confront rather
+than to add a row: Stripe is the second vendor behind the webhook HMAC matrix, Notion cannot ship
+until a provider can declare a constant header, Microsoft Graph asks whether a service is a real
+addressing level or was Google's host problem in disguise, Twilio puts one value in both a
+credential and a path, and Linear asks whether a GraphQL vendor can be a connector at all — with a
+documented refusal an acceptable answer.
+
+**Done looks like:** a wave of provider branches that merge without touching each other, and a
+catalogue that grew by five without anyone editing a shared list by hand.
+
+### The explorer at fleet scale
+
+The public explorer was designed against six providers and twenty-five operations. It now indexes
+sixteen providers, eighteen services and eighty-eight operations, and the decisions that were right at
+a third of the size are wrong at this one: VitePress's doc layout caps the content column at 688px, so
+a `minmax(320px, 1fr)` provider grid renders exactly two columns and the five-control filter bar wraps.
+Services — the middle addressing level C-49 established — are published in the catalogue and appear
+nowhere in the UI. Design: [designs/explorer-ux.md](designs/explorer-ux.md).
+
+The constraint that outlives the redesign: the explorer does **not** report "N of 88 operations
+working". `works` is false for every operation until the `$auth` seam lands in flux, and a
+working-count headline would misrepresent the eighty that are exactly as designed and waiting on one
+shared seam. Presentation follows each issue's `scope` instead — catalogue-wide once, per-provider on
+the card, per-operation as a badge.
+
+**Done looks like:** a full-width explorer where sixteen connectors are visible without scrolling,
+"every destructive Shopify operation" is a URL you can send someone, and the honest account of what
+does not work is exactly as clear as it is today.
+
 ### Connectors v1 — spec to Flux
 
 Prove the whole thesis on two real providers: a provider TOML plus a vendored vendor spec compiles

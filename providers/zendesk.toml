@@ -15,13 +15,16 @@ vendor = "Zendesk"
 # The inventory records the endpoint as operator config in `ZENDESK_URL` (§3.1), e.g.
 # `https://company.zendesk.com`.
 #
-# SCHEMA GAP: nothing here binds `{subdomain}` — or the whole URL — to `ZENDESK_URL`. `base_url` is
-# a plain string that `Connector` documents as "may carry tenant templating", but no field declares
-# where a template variable is resolved from, so the binding lives only in this comment. Reported
-# with C-17.
+# `{subdomain}` is bound by the `[[config]]` field at the end of this file, which is what a product
+# asks a user for before this connector has a destination URL at all. The loader refuses a template
+# variable nothing binds, so the gap this comment used to record cannot reopen silently.
 base_url = "https://{subdomain}.zendesk.com"
 
 description = "Zendesk Support ticketing: search, read, update tickets and their comments"
+# The "Test connection" operation: a bounded read of the authenticated user. It existed already —
+# `zendesk-test` is named for it — but nothing declared which op played the role, so no host could
+# find it.
+verify = "zendesk-test"
 
 # Every operation authenticates the same way — the inventory records requirement-set shape `single`
 # identically for all 7 (§3.1).
@@ -315,3 +318,44 @@ wire = "ticket.additional_tags"
 description = "Tags to add; additive, so existing tags survive. Must be non-empty with no blank entries"
 required = true
 schema = { type = "array", minItems = 1, items = { type = "string", minLength = 1 } }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any of the above can run
+#
+# Three fields, which is the whole "Connect Zendesk" form. Note that all three are *connection*
+# level, derived from what they bind: every one is per-tenant, and this connector has no
+# operator-level registration because it uses no OAuth app.
+#
+# The labels and help text are separate from the credential's `description` on purpose. That
+# description is the text a *model* receives as part of the tool contract; these are the words a
+# *person* reads while looking at an empty input box. One string cannot serve both without serving
+# each badly.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "subdomain"
+label = "Zendesk subdomain"
+help = "The part of your Zendesk URL before `.zendesk.com` — if you sign in at `acme.zendesk.com`, this is `acme`"
+example = "acme"
+format = "subdomain"
+docs_url = "https://support.zendesk.com/hc/en-us/articles/4409381383578"
+binds = "endpoint.subdomain"
+
+[[config]]
+name = "email"
+label = "Agent email"
+help = "The email of the Zendesk agent whose API token you are using. Zendesk sends it as the username half of the request, with its own `/token` marker appended — you do not type that part"
+example = "agent@acme.com"
+format = "email"
+# Not secret, and the distinction is load-bearing rather than pedantic: this half travels through the
+# non-gated `user_env` path, so it may appear where the token beside it may not.
+binds = "username.zendesk.api_token"
+
+[[config]]
+name = "api_token"
+label = "API token"
+help = "Create one under Admin Center → Apps and integrations → Zendesk API. Zendesk shows it once"
+format = "token"
+secret = true
+docs_url = "https://support.zendesk.com/hc/en-us/articles/4408889192858"
+binds = "credential.zendesk.api_token"

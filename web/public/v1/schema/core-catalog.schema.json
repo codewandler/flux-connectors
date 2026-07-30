@@ -1,0 +1,354 @@
+{
+  "$defs": {
+    "AccessKind": {
+      "description": "A host capability the tool needs access to.",
+      "enum": [
+        "auth",
+        "secret",
+        "network",
+        "connection",
+        "datasource",
+        "provider",
+        "process",
+        "browser",
+        "filesystem",
+        "local_system"
+      ],
+      "type": "string"
+    },
+    "Availability": {
+      "enum": [
+        "available",
+        "planned"
+      ],
+      "type": "string"
+    },
+    "CapabilityKind": {
+      "enum": [
+        "capability"
+      ],
+      "type": "string"
+    },
+    "CoreCapability": {
+      "properties": {
+        "$id": {
+          "type": "string"
+        },
+        "$schema": {
+          "type": "string"
+        },
+        "availability": {
+          "$ref": "#/$defs/Availability"
+        },
+        "callable": {
+          "type": "boolean"
+        },
+        "category": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "description": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/CapabilityKind"
+        },
+        "name": {
+          "type": "string"
+        },
+        "operation_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "$schema",
+        "$id",
+        "schema_version",
+        "kind",
+        "name",
+        "title",
+        "description",
+        "category",
+        "availability",
+        "callable",
+        "operation_ids"
+      ],
+      "type": "object"
+    },
+    "CoreNode": {
+      "properties": {
+        "$id": {
+          "type": "string"
+        },
+        "$schema": {
+          "type": "string"
+        },
+        "availability": {
+          "$ref": "#/$defs/Availability"
+        },
+        "category": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "description": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/NodeKind"
+        },
+        "name": {
+          "type": "string"
+        },
+        "schema_ref": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "$schema",
+        "$id",
+        "schema_version",
+        "kind",
+        "name",
+        "title",
+        "description",
+        "category",
+        "availability",
+        "schema_ref"
+      ],
+      "type": "object"
+    },
+    "CoreOperation": {
+      "properties": {
+        "$id": {
+          "type": "string"
+        },
+        "$schema": {
+          "type": "string"
+        },
+        "availability": {
+          "$ref": "#/$defs/Availability"
+        },
+        "category": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "description": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/OperationKind"
+        },
+        "name": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "tool_spec": {
+          "$ref": "#/$defs/ToolSpec"
+        }
+      },
+      "required": [
+        "$schema",
+        "$id",
+        "schema_version",
+        "kind",
+        "name",
+        "title",
+        "description",
+        "category",
+        "availability",
+        "tool_spec"
+      ],
+      "type": "object"
+    },
+    "CoreSchemas": {
+      "properties": {
+        "catalog": true,
+        "entry": true,
+        "flux_ast": true
+      },
+      "required": [
+        "catalog",
+        "entry",
+        "flux_ast"
+      ],
+      "type": "object"
+    },
+    "Effect": {
+      "description": "A side effect a tool may have.",
+      "enum": [
+        "read",
+        "write",
+        "network",
+        "process",
+        "browser",
+        "filesystem",
+        "local_system"
+      ],
+      "type": "string"
+    },
+    "Idempotency": {
+      "description": "Whether repeating the operation is safe.",
+      "enum": [
+        "idempotent",
+        "non_idempotent",
+        "conditional"
+      ],
+      "type": "string"
+    },
+    "NodeKind": {
+      "enum": [
+        "node"
+      ],
+      "type": "string"
+    },
+    "OperationKind": {
+      "enum": [
+        "operation"
+      ],
+      "type": "string"
+    },
+    "Risk": {
+      "description": "Coarse risk classification, driving approval thresholds.",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "destructive"
+      ],
+      "type": "string"
+    },
+    "ToolSpec": {
+      "description": "The inert specification of a tool/operation.",
+      "properties": {
+        "access": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AccessKind"
+          },
+          "type": "array"
+        },
+        "description": {
+          "type": "string"
+        },
+        "effects": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Effect"
+          },
+          "type": "array"
+        },
+        "group": {
+          "description": "The evidence-gated tool group this op belongs to. `None` means *core* — always advertised to\nthe model. A named group is only surfaced into the model-facing catalog when the workspace\nshows evidence the group is relevant (see `flux-runtime`'s group resolver).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "idempotency": {
+          "$ref": "#/$defs/Idempotency"
+        },
+        "input_schema": {
+          "description": "JSON Schema for the tool's input object."
+        },
+        "name": {
+          "type": "string"
+        },
+        "output_schema": true,
+        "risk": {
+          "$ref": "#/$defs/Risk"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "input_schema",
+        "risk",
+        "idempotency"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://flux.codewandler.org/v1/schema/core-catalog.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "$id": {
+      "type": "string"
+    },
+    "$schema": {
+      "type": "string"
+    },
+    "capabilities": {
+      "items": {
+        "$ref": "#/$defs/CoreCapability"
+      },
+      "type": "array"
+    },
+    "generator": {
+      "type": "string"
+    },
+    "nodes": {
+      "items": {
+        "$ref": "#/$defs/CoreNode"
+      },
+      "type": "array"
+    },
+    "operations": {
+      "items": {
+        "$ref": "#/$defs/CoreOperation"
+      },
+      "type": "array"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schemas": {
+      "$ref": "#/$defs/CoreSchemas"
+    }
+  },
+  "required": [
+    "$schema",
+    "$id",
+    "schema_version",
+    "generator",
+    "operations",
+    "nodes",
+    "capabilities",
+    "schemas"
+  ],
+  "title": "CoreCatalog",
+  "type": "object"
+}

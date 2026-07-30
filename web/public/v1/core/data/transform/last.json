@@ -1,0 +1,36 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/data/transform/last.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "last",
+  "title": "Last",
+  "description": "Return the last item of an array (or `null` if the array is empty).",
+  "category": [
+    "data",
+    "transform"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [],
+    "description": "Return the last item of an array (or `null` if the array is empty).",
+    "effects": [],
+    "group": "cognition",
+    "idempotency": "idempotent",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": true,
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "name": "last",
+    "risk": "low"
+  }
+}

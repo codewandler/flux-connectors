@@ -85,6 +85,20 @@ pub enum AuthScheme {
         /// The query parameter name.
         name: String,
     },
+    /// A shared secret that is **never placed in a request** — it verifies an inbound one.
+    ///
+    /// **This is the one variant that is not in `flux_plugin_protocol::AuthScheme`**, and the mirror
+    /// is broken deliberately rather than by drift. Every other variant answers "where does this
+    /// secret go on the way out"; a webhook signing secret has no answer, because it never goes out
+    /// at all. It is read by the host to recompute an HMAC over bytes that arrived
+    /// ([`HmacSpec::secret`](crate::HmacSpec::secret)).
+    ///
+    /// The alternative was a second credential namespace beside `[[auth]]`, and it is worse: a
+    /// connector manifest names every credential the connector requires (vision principle 5), and an
+    /// operator provisioning one would have had to know that inbound secrets live somewhere else.
+    /// One namespace, one list, one place to look — at the cost of a variant flux's plugin protocol
+    /// has no use for, since a plugin has no inbound direction to verify.
+    Signing,
 }
 
 /// A token grant an [`OAuth2Spec`] credential allows the host to run. Mirrors

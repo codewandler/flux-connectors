@@ -1,7 +1,7 @@
 # web — the public documentation site
 
 The [VitePress](https://vitepress.dev) site published to
-<https://codewandler.github.io/flux-connectors/> by
+<https://flux.codewandler.org/> by
 [`.github/workflows/pages.yml`](../.github/workflows/pages.yml) on every push to `main`.
 
 **The Node toolchain is contained here.** `package.json`, `package-lock.json` and `node_modules` all
@@ -41,8 +41,9 @@ link, so a broken site fails the workflow instead of publishing silently.
 | `index.md` | Landing page: what the project is, and what does not work yet. |
 | `explorer.md` | The provider & operation explorer. |
 | `operations/[operation].md` | One pre-rendered page per operation, enumerated from the catalogue. |
+| `core/[kind]/[name].md` | One pre-rendered page per Flux core specification. |
 | `data/` | The catalogue's types, the questions the explorer asks of it, and the build-time loader. |
-| `public/` | Served verbatim at the site root. Holds the generated `catalog.json`. |
+| `public/` | Served verbatim at the site root. Holds generated catalogue/specs and the Pages CNAME. |
 | `test/` | The explorer's contract with the catalogue, over the built site. |
 
 ## Public content boundary
@@ -58,17 +59,19 @@ cannot drift.
 
 ## Two things to keep right
 
-**The base path.** A project Pages site is served from `/flux-connectors/`, so
-`.vitepress/config.mts` sets `base: '/flux-connectors/'`. With the default `/` the deployed site
-requests its own JS from the wrong path and renders blank — while building and previewing perfectly
-on a dev server. Only a rename or a custom domain should change it.
+**The base path.** The committed `public/CNAME` serves the site from `flux.codewandler.org`, so
+`.vitepress/config.mts` sets `base: '/'`. Switching back to a project Pages URL requires changing
+the base and deployment URL together.
 
-**No hand-written catalogue data.** Everything the site says about providers and operations must come
-from a generated file, not from markdown or a `.vue` component. A second, hand-maintained copy of the
-catalogue is the exact failure this repository exists to correct.
+**No hand-written catalogue data.** Everything the site says about providers, connector operations,
+and Flux core entries must come from generated files, not from markdown or a `.vue` component. A
+second, hand-maintained copy of the catalogue is the exact failure this repository exists to correct.
 
 `public/catalog.json` is written by `cargo run -p connector-cli -- build` and committed — the same
 plan and drift check as every other generated artifact (`crates/connector-cli/tests/site_catalog.rs`).
 It is not copied here by the Node build, and it must not be edited. The last test in
 `test/explorer.test.mjs` enforces the rule mechanically: it fails if any explorer source names a
 provider, an operation, a credential, a host or an issue code.
+
+`public/v1/` is emitted by the same build from the vendored `specs/flux/core-v1.json`; its documents
+are the dereferenceable `$id` targets linked by the explorer and must not be edited by hand.

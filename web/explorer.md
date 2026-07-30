@@ -1,5 +1,5 @@
 ---
-title: Connector & operation explorer
+title: Connector & core explorer
 
 # The explorer is the one page that is a grid and a table rather than paragraphs, and it is the one
 # page that leaves the prose column. That column is 688px wide, which is two provider cards, and the
@@ -8,7 +8,7 @@ title: Connector & operation explorer
 # everything else the doc layout gives a Markdown page — typography, padding, the footer.
 #
 # What the outline is not missed for: it listed exactly two entries. Both headings are still rendered
-# and still carry `#providers` and `#operations`, which are linked from elsewhere.
+# and still carry `#core`, `#providers`, and `#operations`, which are linked from elsewhere.
 #
 # `layout: page` is the shorter diff and the wrong one — it drops the `vp-doc` class, so this page's
 # heading, paragraph and warning callout would lose the site's prose styling and have to be rebuilt
@@ -20,11 +20,11 @@ aside: false
 import { data as catalog } from './data/catalog.data.mts'
 </script>
 
-# Connector & operation explorer
+# Connector & Flux core explorer
 
-Browse the available connectors, filter operations by connector, risk, and idempotency, then open any
-operation to inspect its parameters, request path, credentials, hosts, safety metadata, and Flux
-source. Every operation has a stable page you can share directly.
+Browse Flux-owned built-ins alongside the available SaaS connectors. Core operations, language nodes,
+and network capabilities each link to a versioned JSON specification. Connector operations remain
+filterable by connector, service, risk, and idempotency, and every entry has a stable detail page.
 
 > [!WARNING]
 > **Live API calls are not available yet.** Shared availability constraints are stated once below;

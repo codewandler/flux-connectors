@@ -2,7 +2,7 @@
 id: C-100
 title: Render the explorer full-width
 pillar: Surfaces
-status: in-progress
+status: done
 priority: 3
 design: docs/designs/explorer-ux.md
 epic: explorer-ux

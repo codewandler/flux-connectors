@@ -1,0 +1,15 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/language/node/lit.json",
+  "schema_version": 1,
+  "kind": "node",
+  "name": "lit",
+  "title": "Lit",
+  "description": "A literal value (raw JSON, as written in the AST by the compiler front-end).",
+  "category": [
+    "language",
+    "node"
+  ],
+  "availability": "available",
+  "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-lit"
+}

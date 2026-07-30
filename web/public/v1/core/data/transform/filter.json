@@ -1,0 +1,62 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/data/transform/filter.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "filter",
+  "title": "Filter",
+  "description": "Keep array items that satisfy a predicate. With `where` (formula with `it` bound), keeps elements where the formula is truthy. With `by` (dotted path), inspects that field; with `equals`, matches value. `where` and `by`/`equals` are mutually exclusive.",
+  "category": [
+    "data",
+    "transform"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [],
+    "description": "Keep array items that satisfy a predicate. With `where` (formula with `it` bound), keeps elements where the formula is truthy. With `by` (dotted path), inspects that field; with `equals`, matches value. `where` and `by`/`equals` are mutually exclusive.",
+    "effects": [],
+    "group": "cognition",
+    "idempotency": "idempotent",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "by": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "equals": {
+          "default": null
+        },
+        "items": {
+          "items": true,
+          "type": "array"
+        },
+        "vars": {
+          "additionalProperties": true,
+          "default": null,
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "where": {
+          "default": null,
+          "format": "flux-expr",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "name": "filter",
+    "risk": "low"
+  }
+}

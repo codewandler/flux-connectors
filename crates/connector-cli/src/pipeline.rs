@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 
 use crate::artifact;
+use crate::core_catalog;
 use crate::discovery::{self, Provider};
 use crate::seam::{self, ProviderInputs};
 use crate::site::{self, ProviderEntry};
@@ -106,10 +107,16 @@ pub fn plan_selected(
     // is the same reasoning `crates/catalog/src/generated.rs` records for keeping its provider
     // index by hand, reached from the other direction.
     if only.is_none() && service.is_none() {
+        let core = core_catalog::read_optional(workspace)?;
         artifacts.push(planned(
             workspace.site_catalog_path(),
-            site::document(entries)?,
+            site::document_with_core(entries, core.clone())?,
         )?);
+        if let Some(core) = &core {
+            for (path, contents) in core_catalog::public_artifacts(workspace, core)? {
+                artifacts.push(planned(path, contents)?);
+            }
+        }
         artifacts.extend(readme_images(workspace)?);
     }
 

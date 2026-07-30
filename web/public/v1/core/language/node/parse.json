@@ -1,0 +1,15 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/language/node/parse.json",
+  "schema_version": 1,
+  "kind": "node",
+  "name": "parse",
+  "title": "Parse",
+  "description": "Pure type coercion. Converts the string result of a `jq` or `fmt` node into a typed value. `as_type` is one of `\"f64\"`, `\"i64\"`, `\"bool\"`, `\"json\"`, `\"string\"`. No IO, no approval gate. Example: `parse(jq(\".price\", $raw), as: \"f64\")`.",
+  "category": [
+    "language",
+    "node"
+  ],
+  "availability": "available",
+  "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-parse"
+}
