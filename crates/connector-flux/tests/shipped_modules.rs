@@ -127,3 +127,48 @@ fn every_shipped_operation_reloads_as_a_composite_op() {
         }
     }
 }
+
+/// **Every shipped operation emits the bytes already committed for it** — the guarantee a change to
+/// the emitter itself has to clear, and the one C-144 was measured against.
+///
+/// `crates/catalog/ops/<provider>/<id>.flux` is the committed rendering of one operation, written by
+/// `flux-connectors build` and reviewed as a diff. Comparing against it here, in the crate that
+/// produces the text, is what makes "no shipped provider's emitted module changes" an assertion
+/// rather than a claim: `connector-cli`'s `service_units` states the same property over the whole
+/// artifact plan, but only after a full pipeline run, so a scoped emitter change could look clean in
+/// this crate and only fail two crates away.
+///
+/// It is `assert_eq!` on the text, not a hash: a reviewer reading a failure needs to see *what*
+/// moved.
+#[test]
+fn every_shipped_operation_is_byte_identical_to_its_committed_rendering() {
+    let ops_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../catalog/ops");
+    let mut compared = 0;
+
+    for name in shipped() {
+        let connector = load(&name);
+        for operation in &connector.operations {
+            let path = ops_dir.join(&name).join(format!("{}.flux", operation.id));
+            let committed = std::fs::read_to_string(&path).unwrap_or_else(|error| {
+                panic!(
+                    "cannot read the committed rendering {}: {error}",
+                    path.display()
+                )
+            });
+            let emitted = emit_operation(&connector, operation).expect("shipped operations emit");
+            assert_eq!(
+                emitted,
+                committed,
+                "the emitter no longer reproduces {} — regenerate with `flux-connectors build` only \
+                 if this change was intended",
+                path.display()
+            );
+            compared += 1;
+        }
+    }
+
+    assert!(
+        compared > 0,
+        "no committed rendering was compared, so this test proved nothing"
+    );
+}

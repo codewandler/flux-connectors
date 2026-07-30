@@ -164,6 +164,81 @@ pub struct Param {
 /// silently shadowed one.
 pub const FREE_FORM_BODY: &str = "body";
 
+/// How an operation's request body is encoded on the wire — C-144.
+///
+/// # Why it exists
+///
+/// Stripe parses `application/x-www-form-urlencoded` and nothing else, and so do Twilio, Mailgun,
+/// PayPal classic, and **every OAuth2 token endpoint by specification** (RFC 6749 §4.3.2). Before
+/// this existed the pipeline bound one media type unconditionally, which is why
+/// `providers/stripe.toml` selects only operations that address everything they need in the path:
+/// a Stripe write with a body field would have sent a JSON document Stripe does not parse.
+///
+/// # Why it is a closed enum
+///
+/// An open media-type string is a header nobody validates, so a typo ships a body the vendor
+/// accepts and silently ignores — the failure mode this whole module is arranged against. A closed
+/// set makes an unknown spelling a **load error**, and it also means the value can never carry
+/// anything but one of these two words: a declared encoding cannot become a second, ungated route
+/// for a credential into a request header, which is what a free-text `content_type` key would have
+/// been.
+///
+/// # Why it sits on [`ParamSet`] rather than on a service or a provider
+///
+/// The axis is per-request, not per-vendor: Stripe's API is form-encoded while its *webhook*
+/// payloads are JSON, and an OAuth2 token grant is form-encoded on a vendor whose whole business
+/// API is JSON. It lives next to [`body`](ParamSet::body) and
+/// [`body_schema`](ParamSet::body_schema) because it describes exactly what those declare and
+/// nothing else.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BodyEncoding {
+    /// A JSON document — `application/json`. The default, so no shipped provider had to change.
+    #[default]
+    Json,
+    /// `key=value&key=value` — `application/x-www-form-urlencoded`.
+    ///
+    /// It has **no agreed nesting convention** (Stripe writes `metadata[key]`, PHP writes `a[b]`,
+    /// Rails writes `a[b][]`, and a token grant nests nothing), so `connector-flux` refuses a nested
+    /// body under this encoding rather than picking one of them silently.
+    Form,
+}
+
+impl BodyEncoding {
+    /// The spelling a provider file's `body_encoding` key carries.
+    ///
+    /// The serde tag, restated as a value so an error message can name what the author wrote.
+    /// `tests/ir_roundtrip.rs` holds the two together, so a variant added with a mismatched word
+    /// fails rather than producing an error message that names a key nobody can find.
+    pub fn tag(&self) -> &'static str {
+        match self {
+            Self::Json => "json",
+            Self::Form => "form",
+        }
+    }
+
+    /// The media type this encoding travels under, which the emitter puts in `content-type`.
+    ///
+    /// A method on the enum rather than a table in the emitter: the encoding and the media type are
+    /// one fact, and separating them would let a future variant exist with no answer to "what does
+    /// the vendor see".
+    pub fn media_type(&self) -> &'static str {
+        match self {
+            Self::Json => "application/json",
+            Self::Form => "application/x-www-form-urlencoded",
+        }
+    }
+
+    /// Whether this is the default, in which case it is omitted from every serialization.
+    ///
+    /// That omission is what keeps every committed artifact byte-identical across C-144: a
+    /// `body_encoding` nobody declared does not appear in a manifest, in the lockfile's hash domain,
+    /// or in the published catalogue.
+    pub fn is_json(&self) -> bool {
+        matches!(self, Self::Json)
+    }
+}
+
 /// An operation's parameters, grouped by where they travel on the request.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -223,6 +298,15 @@ pub struct ParamSet {
     /// refuses an operation that declares both rather than picking one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body_schema: Option<JsonSchema>,
+    /// How the body above is encoded on the wire. See [`BodyEncoding`].
+    ///
+    /// Defaulted rather than mandatory, unlike [`Risk`] and [`Idempotency`]: silence here is not a
+    /// safety decision, it is the answer nineteen of nineteen shipped providers already give, and
+    /// making it explicit everywhere would be nineteen files restating one fact. What silence must
+    /// not do is *change* — so `json` is the default and the emitter's output for an operation that
+    /// declares nothing is byte-for-byte what it was before this field existed.
+    #[serde(default, skip_serializing_if = "BodyEncoding::is_json")]
+    pub body_encoding: BodyEncoding,
 }
 
 impl ParamSet {
@@ -232,7 +316,10 @@ impl ParamSet {
     /// encode as an absent `params` and lose the whole body on the way back. So does
     /// [`const_headers`](Self::const_headers), for the same reason — an operation whose only request
     /// declaration is a pinned header would lose it on the way back, and the emitted module would
-    /// stop sending the header the vendor requires.
+    /// stop sending the header the vendor requires. And so does a non-default
+    /// [`body_encoding`](Self::body_encoding): the emitter refuses that shape rather than emitting
+    /// it, so it cannot ship — but a round trip that dropped the declaration would turn a loud
+    /// refusal into a silent JSON body, which is the wrong direction to fail in.
     pub fn is_empty(&self) -> bool {
         self.path.is_empty()
             && self.query.is_empty()
@@ -240,6 +327,7 @@ impl ParamSet {
             && self.body.is_empty()
             && self.body_schema.is_none()
             && self.const_headers.is_empty()
+            && self.body_encoding.is_json()
     }
 
     /// Every parameter, in request-position order: path, query, header, body.

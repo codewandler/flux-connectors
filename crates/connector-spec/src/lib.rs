@@ -84,8 +84,9 @@ pub use inbound::{
     Selector, Subscription, TimestampFormat, Transport, VerificationScheme,
 };
 pub use ir::{
-    Connector, ErrorEnvelope, HttpMethod, Idempotency, JsonSchema, Operation, Pagination, Param,
-    ParamSet, Provenance, Quirks, RateLimit, Risk, Role, Service, DEFAULT_SERVICE, FREE_FORM_BODY,
+    BodyEncoding, Connector, ErrorEnvelope, HttpMethod, Idempotency, JsonSchema, Operation,
+    Pagination, Param, ParamSet, Provenance, Quirks, RateLimit, Risk, Role, Service,
+    DEFAULT_SERVICE, FREE_FORM_BODY,
 };
 pub use lock::{sha256_hex, LockEntry, Lockfile, LOCKFILE_NAME, LOCKFILE_VERSION};
 pub use provider::{
