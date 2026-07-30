@@ -35,9 +35,11 @@
 //! - Allocation walks the graph in **declaration order** — `inputs`, then boundary nodes, then every
 //!   other node — so a regenerated module does not churn when an edge is added or an editor
 //!   re-orders a canvas. Node ids are author-stable for the same reason.
-//! - The allocator reserves **flux's own keywords** ([`FLUX_KEYWORDS`]). A node an author called
-//!   `retry` must not generate a symbol that reads as a statement keyword; today's `$` sigil hides
-//!   the collision, and a language that drops the sigil would not.
+//! - The allocator vetoes **flux's own reserved words**, through `flux_lang::ast::is_reserved_word`
+//!   rather than a list transcribed from flux's parser. Under flux-lang 0.39 a local binding is
+//!   spelled *without* the `$` sigil unless it collides with a keyword, so a node an author called
+//!   `retry` would otherwise generate a name that reads as a statement keyword — and a transcribed
+//!   list is wrong the moment flux adds a word.
 //!
 //! # Control flow must nest; data flow need not
 //!
@@ -63,6 +65,19 @@
 //! none: both always run their body or fail, so the symbol the body already bound is still bound when
 //! the block closes, and the region's port resolves straight to it. That contrast is why rule 3 is
 //! about Flux's semantics rather than a blanket ban on exporting from a block.
+//!
+//! # The second blocker, upstream this time
+//!
+//! **flux-lang 0.39's two formatters disagree about how to spell a duration.** Its AST formatter
+//! (what this crate emits through) writes `delay 250ms` / `per 1m`; its CST formatter (what a human
+//! editing the generated file runs) accepts only bare milliseconds and declines to re-print the
+//! suffixed form at all. Both spellings parse to the same AST, so nothing here is ambiguous — it is
+//! an upstream defect. It bites **every `throttle`** (no window value avoids a suffix) and **every
+//! `retry` carrying a delay**; a `retry` without one is unaffected and lowers normally. Both are
+//! [refused](Error::UnspellableDuration) rather than emitted, because the alternative is shipping a
+//! module flux's own formatter cannot format, and rewriting the token after the fact would be the
+//! string surgery on generated Flux that AGENTS.md exists to prevent. See
+//! [C-95](../../../docs/stories/C-95-graph-lowering.md)'s progress note.
 //!
 //! # The blocker this lowering states rather than papers over
 //!
@@ -95,83 +110,6 @@ use crate::names::Symbols;
 use crate::op::parameter_symbols;
 use crate::types::flux_type;
 use crate::{Error, Result};
-
-/// The words flux's parser dispatches on at statement position.
-///
-/// A generated symbol colliding with one is a name an author never chose and could not read back, so
-/// the allocator reserves the whole set. It is transcribed from flux-lang's own parser rather than
-/// derived, because flux exposes no list; a word added upstream costs one line here and, until it is
-/// added, costs nothing (a `$` sigil still disambiguates every statement position today).
-const FLUX_KEYWORDS: &[&str] = &[
-    "agent",
-    "agent_loop",
-    "assert",
-    "await",
-    "branch",
-    "budget",
-    "case",
-    "catch",
-    "channel",
-    "checkpoint",
-    "confirm",
-    "contains",
-    "ctx",
-    "custom",
-    "datasource",
-    "debounce",
-    "default",
-    "description",
-    "do",
-    "each",
-    "effects",
-    "else",
-    "expose",
-    "fallback",
-    "false",
-    "finally",
-    "flat",
-    "flow",
-    "fmt",
-    "goal",
-    "idempotency",
-    "in",
-    "journey",
-    "limits",
-    "loop",
-    "match",
-    "memo",
-    "null",
-    "once",
-    "op",
-    "parallel",
-    "parse",
-    "peek",
-    "permissions",
-    "pipe",
-    "race",
-    "repeat",
-    "retry",
-    "return",
-    "risk",
-    "route",
-    "saga",
-    "scope",
-    "seq",
-    "step",
-    "thing",
-    "throttle",
-    "timeout",
-    "trigger",
-    "true",
-    "try",
-    "undo",
-    "unless",
-    "until",
-    "verify",
-    "view",
-    "when",
-    "with_tools",
-];
 
 /// Emit `graph` as a formatted Flux composite `op` declaration, ready to concatenate into a module.
 ///
@@ -274,7 +212,7 @@ impl<'a> Lowering<'a> {
             region_bind: BTreeMap::new(),
             expected: BTreeMap::new(),
         };
-        let mut symbols = Symbols::seeded(FLUX_KEYWORDS);
+        let mut symbols = Symbols::guarded(flux_lang::ast::is_reserved_word);
 
         // 1. The graph's own declared parameters.
         for port in &graph.inputs {
@@ -306,6 +244,7 @@ impl<'a> Lowering<'a> {
         // 3. Every other node's value, and a gate's expected literal.
         for node in graph.nodes.iter().filter(|n| !n.kind.is_boundary()) {
             lowering.check_output_shape(node)?;
+            lowering.check_durations(node)?;
             if node.kind.is_region() {
                 // Only `retry` has a result bind; the other regions export the symbol their body
                 // already bound. See the module documentation.
@@ -387,6 +326,31 @@ impl<'a> Lowering<'a> {
             });
         }
         Ok(())
+    }
+
+    /// Refuse a duration flux-lang cannot spell the same way twice.
+    ///
+    /// See [`Error::UnspellableDuration`]: flux's AST formatter writes `1m`/`1s`/`250ms` and its CST
+    /// formatter accepts only bare milliseconds, so a `throttle` (whose window always takes a suffix)
+    /// and a `retry` carrying a delay both emit text flux's own formatter then declines to re-print.
+    /// A `retry` without a delay is untouched, which is why the check is this narrow.
+    fn check_durations(&self, node: &GraphNode) -> Result<()> {
+        let refuse = |clause, ms| {
+            Err(Error::UnspellableDuration {
+                graph: self.graph.name.clone(),
+                node: node.id.clone(),
+                clause,
+                ms,
+                suffixed: suffixed_duration(ms),
+            })
+        };
+        match &node.kind {
+            NodeKind::Retry {
+                delay_ms: Some(ms), ..
+            } => refuse("delay", *ms),
+            NodeKind::Throttle { window_ms, .. } => refuse("per", *window_ms),
+            _ => Ok(()),
+        }
     }
 
     /// The one node directly inside `region` that binds its output port `port`.
@@ -1170,6 +1134,18 @@ fn port_type(port: &Port) -> TypeRef {
     port.schema.as_ref().map(flux_type).unwrap_or(TypeRef::Any)
 }
 
+/// The spelling flux's **AST** formatter gives a duration, reproduced here only so a refusal can
+/// quote it back. Mirrors `flux_lang::format::fmt_duration`, which is private.
+fn suffixed_duration(ms: u64) -> String {
+    if ms != 0 && ms.is_multiple_of(60_000) {
+        format!("{}m", ms / 60_000)
+    } else if ms != 0 && ms.is_multiple_of(1_000) {
+        format!("{}s", ms / 1_000)
+    } else {
+        format!("{ms}ms")
+    }
+}
+
 /// The backoff word flux's `retry` reads, or `None` for a fixed delay, which takes no clause.
 fn backoff_tag(backoff: Backoff) -> Option<&'static str> {
     match backoff {
@@ -1228,28 +1204,30 @@ fn bind(name: &str, value: Node) -> Node {
 mod tests {
     use super::*;
 
-    /// The keyword list is the reason a generated symbol can never read as a statement keyword, so
-    /// it must actually be reserved rather than merely written down.
+    /// The allocator asks **flux** what is reserved rather than carrying its own copy of the list,
+    /// so a word flux adds is dodged the moment the pin moves. Under 0.39 a bare `retry = …` reads
+    /// as a statement keyword, so this is the check that keeps a node id an author chose from
+    /// generating one.
     #[test]
-    fn every_flux_keyword_is_reserved_by_the_allocator() {
-        for keyword in FLUX_KEYWORDS {
-            let mut symbols = Symbols::seeded(FLUX_KEYWORDS);
+    fn a_name_flux_reserves_is_never_handed_out() {
+        for keyword in [
+            "retry", "throttle", "when", "return", "do", "op", "true", "channel",
+        ] {
+            assert!(
+                flux_lang::ast::is_reserved_word(keyword),
+                "`{keyword}` is expected to be reserved by the flux-lang pin"
+            );
+            let mut symbols = Symbols::guarded(flux_lang::ast::is_reserved_word);
+            let allocated = symbols.allocate("g", keyword).expect("a spellable base");
             assert_ne!(
-                &symbols.allocate("g", keyword).expect("a spellable base"),
-                keyword,
+                allocated, keyword,
                 "`{keyword}` must not be handed out as a generated symbol"
             );
+            assert!(
+                flux_lang::ast::is_bare_symbol_name(&allocated),
+                "`{allocated}` must be spellable without the sigil"
+            );
         }
-    }
-
-    /// The list is sorted and free of duplicates, so a word added upstream lands in one obvious place
-    /// and cannot be added twice.
-    #[test]
-    fn the_keyword_list_is_sorted_and_unique() {
-        let mut sorted = FLUX_KEYWORDS.to_vec();
-        sorted.sort_unstable();
-        sorted.dedup();
-        assert_eq!(sorted.as_slice(), FLUX_KEYWORDS);
     }
 
     /// Only `retry` carries a result bind in flux, which is the whole reason a region's output port

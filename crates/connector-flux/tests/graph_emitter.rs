@@ -283,9 +283,13 @@ fn autoreply() -> Graph {
     graph
 }
 
-/// **One region per kind.** A schedule wakes the flow; a `retry` bounds the read, a `throttle` bounds
-/// the write rate, an `approval` fences the delete, and a `gate` guards the audit note. Every one of
-/// the three exporting kinds hands a value out through a port it declares.
+/// **One region per spellable kind.** A schedule wakes the flow; a `retry` bounds the read, an
+/// `approval` fences the delete, and a `gate` guards the audit note. Both exporting kinds hand a
+/// value out through a port they declare, and the gate exports nothing.
+///
+/// **`throttle` is deliberately absent, and so is the retry's delay** — flux-lang 0.39 cannot spell
+/// either consistently (see [`a_duration_flux_cannot_spell_consistently_is_refused`]), so a fixture
+/// carrying one would only ever assert the refusal. [`throttled_sweep`] is that fixture.
 fn nightly_sweep() -> Graph {
     let mut graph = graph(
         "nightly-sweep",
@@ -311,7 +315,7 @@ fn nightly_sweep() -> Graph {
                     NodeKind::Retry {
                         max: 3,
                         backoff: connector_spec::Backoff::Exponential,
-                        delay_ms: Some(250),
+                        delay_ms: None,
                     },
                 ),
                 &[],
@@ -326,23 +330,9 @@ fn nightly_sweep() -> Graph {
                 "read",
             ),
             wired(
-                node(
-                    "paced",
-                    NodeKind::Throttle {
-                        max: 5,
-                        window_ms: 60000,
-                    },
-                ),
-                &[],
+                node("note", call("vendor-thing-note")),
+                &["body"],
                 &["noted"],
-            ),
-            inside(
-                wired(
-                    node("note", call("vendor-thing-note")),
-                    &["body"],
-                    &["noted"],
-                ),
-                "paced",
             ),
             wired(
                 node(
@@ -390,7 +380,7 @@ fn nightly_sweep() -> Graph {
             edge(("window", "query"), ("fetch", "q")),
             edge(("read", "result"), ("note", "body")),
             edge(("read", "result"), ("wipe", "id")),
-            edge(("paced", "noted"), ("audit", "body")),
+            edge(("note", "noted"), ("audit", "body")),
         ],
     );
     graph.description =
@@ -399,6 +389,33 @@ fn nightly_sweep() -> Graph {
         node: "ask".to_string(),
         port: "gone".to_string(),
     });
+    graph
+}
+
+/// [`nightly_sweep`] with its note wrapped in a `throttle` — the shape flux-lang 0.39 cannot spell.
+fn throttled_sweep() -> Graph {
+    let mut graph = nightly_sweep();
+    graph.nodes.push(wired(
+        node(
+            "paced",
+            NodeKind::Throttle {
+                max: 5,
+                window_ms: 60000,
+            },
+        ),
+        &[],
+        &["noted"],
+    ));
+    for node in &mut graph.nodes {
+        if node.id == "note" {
+            node.region = Some("paced".to_string());
+        }
+    }
+    for edge in &mut graph.edges {
+        if edge.to.node == "audit" {
+            edge.from.node = "paced".to_string();
+        }
+    }
     graph
 }
 
@@ -583,8 +600,14 @@ fn generated_symbols_are_identifiers_and_never_flux_keywords() {
             "`{name}` is not a spellable Flux symbol:\n{emitted}"
         );
         assert!(
-            !FLUX_KEYWORDS.contains(&name.as_str()),
-            "`{name}` is one of flux's own keywords:\n{emitted}"
+            !flux_lang::ast::is_reserved_word(&name),
+            "`{name}` is one of flux's own reserved words:\n{emitted}"
+        );
+        // Under 0.39 a local binding drops the `$` sigil unless it collides with a keyword, so a
+        // generated name has to be spellable bare or the emitted text changes shape.
+        assert!(
+            flux_lang::ast::is_bare_symbol_name(&name),
+            "`{name}` cannot be spelled without the sigil:\n{emitted}"
         );
     }
 }
@@ -615,80 +638,6 @@ fn renamed(mut graph: Graph, renames: &[(&str, &str)]) -> Graph {
     }
     graph
 }
-
-/// The words flux's parser dispatches on at statement position. A generated symbol that collided
-/// with one would be a name an author never chose and could not read back.
-const FLUX_KEYWORDS: &[&str] = &[
-    "agent",
-    "agent_loop",
-    "assert",
-    "await",
-    "branch",
-    "budget",
-    "case",
-    "catch",
-    "channel",
-    "checkpoint",
-    "confirm",
-    "contains",
-    "ctx",
-    "custom",
-    "datasource",
-    "debounce",
-    "default",
-    "description",
-    "do",
-    "each",
-    "effects",
-    "else",
-    "expose",
-    "fallback",
-    "false",
-    "finally",
-    "flat",
-    "flow",
-    "fmt",
-    "goal",
-    "idempotency",
-    "in",
-    "journey",
-    "limits",
-    "loop",
-    "match",
-    "memo",
-    "null",
-    "once",
-    "op",
-    "parallel",
-    "parse",
-    "peek",
-    "permissions",
-    "pipe",
-    "race",
-    "repeat",
-    "retry",
-    "return",
-    "risk",
-    "route",
-    "saga",
-    "scope",
-    "seq",
-    "step",
-    "thing",
-    "throttle",
-    "timeout",
-    "trigger",
-    "true",
-    "try",
-    "undo",
-    "unless",
-    "until",
-    "verify",
-    "view",
-    "when",
-    "with_tools",
-];
-
 /// **Regions nest, and a `retry`'s declared output port is its `-> $bind`.** Flux has no `goto`, so
 /// a region's nodes must lower *into* its block; the declared output port is the phi node Flux does
 /// not have, made explicit.
@@ -710,7 +659,10 @@ fn a_region_lowers_into_its_block_and_binds_its_declared_output() {
     .expect("the sweep declares a retry region");
     assert_eq!(retry.0, 3);
     assert_eq!(retry.1.as_deref(), Some("exponential"));
-    assert_eq!(retry.2, Some(250));
+    assert_eq!(
+        retry.2, None,
+        "a delay is refused under flux-lang 0.39 — see a_duration_flux_cannot_spell_consistently_is_refused"
+    );
     assert!(
         retry.4.is_some(),
         "a retry's declared output port must become the block's bind"
@@ -724,23 +676,6 @@ fn a_region_lowers_into_its_block_and_binds_its_declared_output() {
         "the region's node must lower into its block: {:?}",
         retry.3
     );
-
-    let throttle = find(&body, |node| match node {
-        Node::Throttle {
-            name,
-            max,
-            window_ms,
-            body,
-        } => Some((name.clone(), *max, *window_ms, body.len())),
-        _ => None,
-    })
-    .expect("the sweep declares a throttle region");
-    assert_eq!(
-        throttle.0, "nightly-sweep#paced",
-        "a throttle's bucket name is generated from the graph and node ids, never authored"
-    );
-    assert_eq!((throttle.1, throttle.2), (5, 60000));
-    assert_eq!(throttle.3, 1, "its one node lowered into its block");
 
     let confirm = find(&body, |node| match node {
         Node::Confirm {
@@ -760,41 +695,13 @@ fn a_region_lowers_into_its_block_and_binds_its_declared_output() {
     assert_eq!(confirm.2, 1);
 }
 
-/// A `throttle` and an `approval` always run their body or fail, so a value escapes them through the
-/// symbol the body already bound — no `-> $bind` exists on either node, and none is needed.
+/// An `approval` always runs its body or fails, so a value escapes it through the symbol the body
+/// already bound — flux's `confirm` carries no `-> $bind`, and none is needed. A `throttle` exports
+/// by the identical rule; flux-lang 0.39 cannot spell one at all, so only `confirm` is exercised.
 #[test]
-fn a_throttle_and_an_approval_export_the_symbol_their_body_bound() {
+fn an_approval_exports_the_symbol_its_body_bound() {
     use flux_lang::ast::Node;
     let body = body_of(&emit(&nightly_sweep()));
-
-    // The throttle's body binds one symbol; the audit note downstream is fed by exactly it.
-    let exported = find(&body, |node| match node {
-        Node::Throttle { body, .. } => body.iter().find_map(declared_name),
-        _ => None,
-    })
-    .expect("the throttle's body binds its exported value");
-    let audit_arg = find(&body, |node| match node {
-        // The audit note is the gate's own statement, and it discards its result — a gate exports
-        // nothing, so binding a value inside one could not be read afterwards anyway.
-        Node::When { then, .. } => then.iter().find_map(|node| match node {
-            Node::Call { args, .. } => match args.first() {
-                Some(Node::Obj { fields }) => {
-                    fields.get("body").map(|value| match value.as_ref() {
-                        Node::Var { name } => name.0.clone(),
-                        other => panic!("an argument must be a symbol, got {other:?}"),
-                    })
-                }
-                _ => None,
-            },
-            _ => None,
-        }),
-        _ => None,
-    });
-    assert_eq!(
-        audit_arg.as_deref(),
-        Some(exported.as_str()),
-        "the throttle's exported value must be the symbol its body bound"
-    );
 
     // The graph's output resolves through the approval's declared port to the symbol `wipe` bound.
     let confirm_bound = find(&body, |node| match node {
@@ -877,6 +784,54 @@ fn a_select_off_an_event_payload_still_lowers() {
     );
 }
 
+/// **The upstream blocker.** flux-lang 0.39's two formatters disagree about how to spell a
+/// duration: `flux_lang::format` writes `per 1m` / `delay 250ms`, and
+/// `flux_lang::format_cst::format_module` — the formatter a human editing the generated file runs —
+/// accepts only bare milliseconds and returns `None` rather than re-printing the suffixed form.
+///
+/// Both spellings parse to the same AST, so this is an upstream defect and not an ambiguity this
+/// repository has to resolve. It is refused rather than emitted, because the alternative is shipping
+/// a generated module flux's own formatter cannot format — and rewriting the token afterwards would
+/// be the string surgery on generated Flux that AGENTS.md exists to prevent.
+///
+/// It bites **every** `throttle` (no window value avoids the suffix) and **every** `retry` carrying
+/// a delay. A `retry` without one is unaffected, which is what [`nightly_sweep`] still exercises.
+#[test]
+fn a_duration_flux_cannot_spell_consistently_is_refused() {
+    // Every throttle, whatever its window.
+    for window_ms in [1000u64, 1500, 60000, 90000] {
+        let mut sweep = throttled_sweep();
+        for node in &mut sweep.nodes {
+            if let NodeKind::Throttle { window_ms: w, .. } = &mut node.kind {
+                *w = window_ms;
+            }
+        }
+        let error = emit_graph(&vendor(), &sweep)
+            .expect_err("a throttle must be refused whatever its window")
+            .to_string();
+        assert!(
+            error.contains("per") && error.contains("formatter"),
+            "the refusal must name the clause and the property it protects, got: {error}"
+        );
+    }
+
+    // And every retry that declares a delay.
+    let mut sweep = nightly_sweep();
+    for node in &mut sweep.nodes {
+        if let NodeKind::Retry { delay_ms, .. } = &mut node.kind {
+            *delay_ms = Some(250);
+        }
+    }
+    let error = emit_graph(&vendor(), &sweep).expect_err("a retry delay must be refused");
+    assert!(
+        error.to_string().contains("delay") && error.to_string().contains("250"),
+        "the refusal must name the clause and the value, got: {error}"
+    );
+
+    // The same graph without the delay lowers, so the refusal is as narrow as it claims.
+    emit_graph(&vendor(), &nightly_sweep()).expect("a retry without a delay is unaffected");
+}
+
 /// Flux has no `goto`, so a cyclic graph has no lowering at all — an iteration is a bounded loop
 /// node, never an edge pointing backwards.
 #[test]
@@ -897,12 +852,12 @@ fn a_cycle_has_no_lowering() {
 #[test]
 fn an_edge_leaving_a_region_without_a_declared_port_is_refused() {
     let mut sweep = nightly_sweep();
-    // A second node inside the throttle, exporting on a port name the throttle does not declare.
+    // A second node inside the approval, exporting on a port name the approval does not declare.
     sweep.nodes.push(inside(
         wired(node("leak", template("{of}")), &["of"], &["escapee"]),
-        "paced",
+        "ask",
     ));
-    sweep.edges.push(edge(("note", "noted"), ("leak", "of")));
+    sweep.edges.push(edge(("wipe", "gone"), ("leak", "of")));
     for edge in &mut sweep.edges {
         if edge.to.node == "audit" {
             edge.from = PortRef {
@@ -915,7 +870,7 @@ fn an_edge_leaving_a_region_without_a_declared_port_is_refused() {
     let error = emit_graph(&vendor(), &sweep).expect_err("a value may not leak out of a region");
     let rendered = error.to_string();
     assert!(
-        rendered.contains("paced") && rendered.contains("escapee"),
+        rendered.contains("ask") && rendered.contains("escapee"),
         "the refusal must name the region and the port, got: {rendered}"
     );
 }

@@ -336,6 +336,45 @@ pub enum Error {
         port: String,
     },
 
+    /// A node carries a duration, and **flux-lang 0.39's two formatters disagree about how to spell
+    /// one**.
+    ///
+    /// `flux_lang::format` (the AST printer this crate emits through) writes the suffixed form —
+    /// `fmt_duration` turns 60000 into `1m`, 1000 into `1s`, 250 into `250ms`, and never produces a
+    /// bare number. `flux_lang::format_cst::format_module` — the formatter a human editing the
+    /// generated file actually runs — declines to re-print the suffixed form and returns `None`,
+    /// accepting only bare milliseconds (`delay 500`, `per 1000`).
+    ///
+    /// Both spellings parse to the same AST, so nothing here is ambiguous: this is an **upstream
+    /// defect**, not a shape this repository has to decide about. It bites every `throttle` (no
+    /// window value avoids the suffix) and every `retry` that declares a delay; a `retry` without one
+    /// is unaffected and still lowers.
+    ///
+    /// Refused rather than emitted because the alternative is shipping a generated module flux's own
+    /// formatter cannot format — and rewriting the token afterwards would be exactly the string
+    /// surgery on generated Flux that AGENTS.md forbids. It lifts on a flux-lang release whose two
+    /// formatters agree.
+    #[error(
+        "graph `{graph}`: node `{node}` declares `{clause}` of {ms}ms, which flux-lang cannot spell \
+         consistently: its AST formatter writes `{clause} {suffixed}` while its CST formatter — the \
+         one a human editing the generated file runs — accepts only bare milliseconds and declines \
+         to re-print the suffixed form. Both parse to the same AST, so this is an upstream defect \
+         rather than an ambiguity here. Emitting it would ship a module flux's own formatter cannot \
+         format. A `retry` without a delay is unaffected"
+    )]
+    UnspellableDuration {
+        /// The graph name.
+        graph: String,
+        /// The node id.
+        node: String,
+        /// The clause carrying the duration (`delay` or `per`).
+        clause: &'static str,
+        /// The duration in milliseconds, as the IR carries it.
+        ms: u64,
+        /// The suffixed spelling flux's AST formatter would write.
+        suffixed: String,
+    },
+
     /// A `select` node reads a path out of an **operation's** response.
     ///
     /// **This is the blocker the flow-graph design states first.** `http.request` returns one flat

@@ -5,8 +5,8 @@ op message-autoreply(wake_event: Any) -> Any
   effects ["network"]
   expose true
 
-  $thread_out = $wake_event.event.thread_ts
-  $channel_out = $wake_event.event.channel
-  $greeting_out = fmt("Thanks for the ping in {thread_out}")
-  when $thread_out
-    do vendor-message-post { channel: $channel_out, text: $greeting_out }
+  thread_out = wake_event.event.thread_ts
+  channel_out = wake_event.event.channel
+  greeting_out = fmt("Thanks for the ping in {thread_out}")
+  when thread_out
+    vendor-message-post(channel: channel_out, text: greeting_out)
