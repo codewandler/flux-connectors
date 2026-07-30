@@ -114,6 +114,71 @@ pub enum Error {
         path: String,
     },
 
+    /// A **header parameter** pinned with a JSON Schema `const`.
+    ///
+    /// `const` reads as "this value and no other", and for a *body* field that is exactly what
+    /// [`op::constant`](crate::op) honours: the field is sent and never declared. A header parameter
+    /// is not the same declaration. `ParamSet::header` means *the caller supplies this*, so honouring
+    /// the keyword there would make one list mean two things depending on a schema keyword, and the
+    /// IR would no longer say which headers a caller may set.
+    ///
+    /// Refused rather than emitted, because emitting is what it used to do and the result was the
+    /// worst of the three: the parameter stayed in the signature as a required, caller-overridable
+    /// argument with the constraint dropped, so a connector that looked pinned sent whatever the
+    /// caller passed (C-52's finding, measured again by C-107 against Notion's mandatory
+    /// `Notion-Version`). The fix is one table.
+    #[error(
+        "operation `{operation}`: header parameter `{name}` is pinned with a JSON Schema `const`, \
+         but `params.header` means the caller supplies the value — the pin would be dropped and the \
+         header would stay a required, caller-overridable argument. A vendor-fixed header is \
+         declared in `const_headers`, at provider level or on the operation, and is emitted as a \
+         literal"
+    )]
+    ConstantHeaderParam {
+        /// The operation id.
+        operation: String,
+        /// The pinned header parameter's caller-facing name.
+        name: String,
+    },
+
+    /// A constant header whose name is not an HTTP field name.
+    ///
+    /// `http.request` builds a `HeaderName` from it and errors on anything that is not an RFC 9110
+    /// token (`../flux/crates/flux-web/src/http.rs:172-174`), so this turns a request that could
+    /// never be sent into a build failure — the same check `params.header` entries already get.
+    #[error(
+        "operation `{operation}`: constant header `{name}` is not an HTTP field name — only ASCII \
+         token characters are allowed (RFC 9110 §5.1)"
+    )]
+    BadHeaderName {
+        /// The operation id.
+        operation: String,
+        /// The unspellable header name.
+        name: String,
+    },
+
+    /// One header name declared twice on one request: as a constant and as something else.
+    ///
+    /// The request's header record has one slot per name, so the second declaration overwrites the
+    /// first — silently, and in an order nothing in the provider file makes visible. Both spellings
+    /// of the collision are real: a `const_headers` entry against a caller-supplied `params.header`,
+    /// and either of those against `content-type`, which the emitter derives from the request body.
+    #[error(
+        "operation `{operation}`: header `{name}` is declared as {first} and as {second}. A request \
+         carries one value per header name, so one of the two would be dropped without a word — \
+         declare it on one side only"
+    )]
+    HeaderConflict {
+        /// The operation id.
+        operation: String,
+        /// The contested header name, in the spelling that reaches the wire.
+        name: String,
+        /// Where the header comes from first.
+        first: &'static str,
+        /// Where it comes from second.
+        second: &'static str,
+    },
+
     /// An operation declares both named body fields and a free-form `body_schema`.
     ///
     /// "The body is these fields" and "the body is this schema" are two answers to one question,

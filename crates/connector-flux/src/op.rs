@@ -86,6 +86,29 @@
 //!    (flux-lang `runtime.rs:4005-4010`), storing text either way — so both spellings of "here is
 //!    my body" reach the vendor.
 //!
+//! # How a request header is decided
+//!
+//! Two kinds, and keeping them apart is the whole of C-55. A **caller-supplied** header is a
+//! [`connector_spec::Param`] in `params.header` and becomes an argument, exactly as the IR
+//! documents. A **vendor-fixed** header — `Accept: application/vnd.github+json`,
+//! `Notion-Version: 2022-06-28`, an API version, a `User-Agent` — is a
+//! [`connector_spec::ParamSet::const_headers`] entry: its value is bound as a literal and put in the
+//! request record, and it never reaches the declared parameter list. A model is not asked to supply
+//! a value the vendor has already decided, and no caller can overwrite one.
+//!
+//! `const` on a header *parameter* is [refused](Error::ConstantHeaderParam) rather than honoured. It
+//! used to be a silent no-op — `constant` was consulted for `body` fields only, so the pin was
+//! dropped and the parameter stayed — which shipped connectors whose mandatory header was whatever
+//! the caller passed. Honouring it instead would make one list mean two things depending on a schema
+//! keyword, and the IR would stop saying which headers a caller may set.
+//!
+//! One header name, one value: a name claimed twice — by a constant, by a caller-supplied parameter,
+//! or by the `content-type` this emitter derives from the body — is
+//! [refused](Error::HeaderConflict), because the request record has one slot per name and the second
+//! claim would silently overwrite the first. **A constant header never carries a credential**; that
+//! is enforced where the value is authored, in `connector_spec`'s loader, because only it can see
+//! the credential and environment-variable names a value would have to name.
+//!
 //! # Two constraints on the *response* side, for the same reason
 //!
 //! `http.request` returns one flat string — `format!("HTTP {status}\n{headers}\n{body}")`
@@ -128,6 +151,9 @@ const URL: &str = "url";
 const SEP: &str = "sep";
 /// The symbol holding the media type of the request body.
 const CONTENT_TYPE: &str = "content_type";
+/// The header that media type travels in — the one constant header the emitter owns, because it
+/// describes a body only the emitter assembles.
+const CONTENT_TYPE_HEADER: &str = "content-type";
 /// The symbol holding the assembled JSON request body.
 const PAYLOAD: &str = "payload";
 /// The caller-facing name of the one parameter a free-form body travels in.
@@ -180,6 +206,19 @@ struct FreeFormBody<'a> {
     symbol: String,
 }
 
+/// A vendor-fixed header, and the symbol its literal value is bound to.
+///
+/// It carries a symbol for the same reason every other literal the emitter contributes does — see
+/// [`bind_lit`] — and *not* because anything supplies it: no [`FluxParam`] is ever built from one.
+struct ConstantHeader<'a> {
+    /// The header name as the vendor sees it. Its own key is the wire name; there is no second
+    /// spelling, because nobody calls it by a caller-facing one.
+    name: &'a str,
+    /// The value, emitted as a string literal.
+    value: &'a str,
+    symbol: String,
+}
+
 /// Every parameter of one operation, paired with the Flux symbol the emitted `op` declares for it.
 struct Bindings<'a> {
     path: Vec<Bound<'a>>,
@@ -187,6 +226,8 @@ struct Bindings<'a> {
     header: Vec<Bound<'a>>,
     body: Vec<Bound<'a>>,
     free_form: Option<FreeFormBody<'a>>,
+    /// The headers the vendor fixes. Not parameters — see [`ConstantHeader`].
+    const_headers: Vec<ConstantHeader<'a>>,
 }
 
 /// Allocate one Flux symbol per parameter, in the IR's own request-position order.
@@ -244,12 +285,29 @@ fn bind_parameters<'a>(operation: &'a Operation) -> Result<Bindings<'a>> {
         None => None,
     };
 
+    // Allocated last, from the same allocator, so a constant header can never take a symbol a
+    // parameter would have had: adding one to a provider must not rename a symbol that already
+    // travelled. They are not parameters and never reach the declared list.
+    let const_headers: Vec<ConstantHeader<'_>> = operation
+        .params
+        .const_headers
+        .iter()
+        .map(|(name, value)| {
+            Ok(ConstantHeader {
+                name,
+                value,
+                symbol: symbols.allocate(&operation.id, name)?,
+            })
+        })
+        .collect::<Result<_>>()?;
+
     Ok(Bindings {
         path,
         query,
         header,
         body,
         free_form,
+        const_headers,
     })
 }
 
@@ -287,15 +345,27 @@ fn lower(connector: &Connector, operation: &Operation) -> Result<CompositeOpDecl
     }
     check_write_metadata(operation)?;
 
+    // Kept whole rather than destructured: `request_body` needs every group, and passing them one
+    // slice at a time is how a lowering grows an argument list nobody can read.
+    let bound = bind_parameters(operation)?;
     let Bindings {
         path,
         query,
         header,
         body,
         free_form,
-    } = bind_parameters(operation)?;
+        const_headers,
+    } = &bound;
 
-    for bound in &header {
+    for bound in header {
+        // `const` on a header parameter used to be a silent no-op: the pin was dropped and the
+        // parameter stayed. Refused rather than honoured — see `Error::ConstantHeaderParam`.
+        if constant(bound.param).is_some() {
+            return Err(Error::ConstantHeaderParam {
+                operation: operation.id.clone(),
+                name: bound.param.name.clone(),
+            });
+        }
         // `http.request` builds a `HeaderName` from this and errors on anything that is not an HTTP
         // token (`../flux/crates/flux-web/src/http.rs:172-174`). Catching it here turns a request
         // that could never be sent into a build failure. The check is on the *wire* name, which is
@@ -308,7 +378,7 @@ fn lower(connector: &Connector, operation: &Operation) -> Result<CompositeOpDecl
             });
         }
     }
-    for bound in &body {
+    for bound in body {
         // A dotted name with no `wire` cannot be read either way — see `Error::NestedBodyField`.
         if bound.param.wire.is_none() && bound.param.name.contains('.') {
             return Err(Error::NestedBodyField {
@@ -317,14 +387,21 @@ fn lower(connector: &Connector, operation: &Operation) -> Result<CompositeOpDecl
             });
         }
     }
+    check_header_names(
+        operation,
+        header,
+        const_headers,
+        !body.is_empty() || free_form.is_some(),
+    )?;
 
     // A constant body field is *sent* but never *declared*: pinning it with a JSON Schema `const`
     // already says "this value and no other", so asking a model to supply it would be asking it to
-    // guess a value the schema fixes. See `constant`.
+    // guess a value the schema fixes. See `constant`. A constant *header* is absent for the same
+    // reason and needs no filter: it is not a parameter at all.
     let params: Vec<FluxParam> = path
         .iter()
-        .chain(&query)
-        .chain(&header)
+        .chain(query)
+        .chain(header)
         .chain(body.iter().filter(|b| constant(b.param).is_none()))
         .map(|b| FluxParam {
             name: SymbolName(b.symbol.clone()),
@@ -342,18 +419,59 @@ fn lower(connector: &Connector, operation: &Operation) -> Result<CompositeOpDecl
         returns: Some(TypeRef::Any),
         meta: metadata(operation)?,
         body: DraftAst {
-            body: request_body(
-                connector,
-                operation,
-                &path,
-                &query,
-                &header,
-                &body,
-                free_form.as_ref(),
-            )?,
+            body: request_body(connector, operation, &bound)?,
             ..DraftAst::default()
         },
     })
+}
+
+/// Every header the request will carry, checked once: spellable, and claimed by one declaration.
+///
+/// The record `http.request` receives has one slot per name, so a second claim on a name overwrites
+/// the first — silently, in an order nothing in the provider file makes visible. That is why this is
+/// a refusal rather than a merge, and it is the header-side twin of [`Error::BodyPathConflict`].
+///
+/// Three sources can claim a name: the media type the emitter derives from the request body, a
+/// caller-supplied `params.header`, and a `const_headers` entry. The comparison is case-insensitive
+/// because HTTP field names are (RFC 9110 §5.1) — a map keyed by spelling would hold `Notion-Version`
+/// and `notion-version` happily, and send the header twice.
+fn check_header_names(
+    operation: &Operation,
+    header: &[Bound<'_>],
+    const_headers: &[ConstantHeader<'_>],
+    has_body: bool,
+) -> Result<()> {
+    let mut claimed: Vec<(String, &'static str)> = Vec::new();
+    let mut claim = |name: &str, source: &'static str| -> Result<()> {
+        let folded = name.to_ascii_lowercase();
+        if let Some((_, first)) = claimed.iter().find(|(seen, _)| *seen == folded) {
+            return Err(Error::HeaderConflict {
+                operation: operation.id.clone(),
+                name: name.to_string(),
+                first,
+                second: source,
+            });
+        }
+        claimed.push((folded, source));
+        Ok(())
+    };
+
+    if has_body {
+        claim(CONTENT_TYPE_HEADER, "the media type of the request body")?;
+    }
+    for bound in header {
+        claim(wire_name(bound.param), "a caller-supplied parameter")?;
+    }
+    for constant_header in const_headers {
+        if !is_http_token(constant_header.name) {
+            return Err(Error::BadHeaderName {
+                operation: operation.id.clone(),
+                name: constant_header.name.to_string(),
+            });
+        }
+        claim(constant_header.name, "a constant header")?;
+    }
+    Ok(())
 }
 
 /// The value a body field is pinned to, when its schema pins one.
@@ -469,12 +587,18 @@ fn description(operation: &Operation) -> String {
 fn request_body(
     connector: &Connector,
     operation: &Operation,
-    path: &[Bound<'_>],
-    query: &[Bound<'_>],
-    header: &[Bound<'_>],
-    body_params: &[Bound<'_>],
-    free_form: Option<&FreeFormBody<'_>>,
+    bound: &Bindings<'_>,
 ) -> Result<Vec<Node>> {
+    let Bindings {
+        path,
+        query,
+        header,
+        body: body_params,
+        free_form,
+        const_headers,
+    } = bound;
+    let free_form = free_form.as_ref();
+
     let (required, optional): (Vec<_>, Vec<_>) = query.iter().partition(|b| b.param.required);
 
     let mut template = String::from("{base}");
@@ -545,18 +669,33 @@ fn request_body(
         ),
     ]);
 
-    // Headers: the media type the payload is encoded in, plus whatever the caller supplies. Auth
-    // headers are deliberately absent — C-10 adds the credential reference.
+    // Headers: the media type the payload is encoded in, the ones the vendor fixes, plus whatever
+    // the caller supplies. Auth headers are deliberately absent — C-10 adds the credential
+    // reference, and a constant header may not carry one (`connector_spec`'s loader refuses it).
     let has_body = !body_params.is_empty() || free_form.is_some();
     let mut headers: BTreeMap<String, Box<Node>> = BTreeMap::new();
     if has_body {
         body.push(bind_string(CONTENT_TYPE, JSON_MEDIA_TYPE));
-        headers.insert("content-type".to_string(), Box::new(symbol(CONTENT_TYPE)));
+        headers.insert(
+            CONTENT_TYPE_HEADER.to_string(),
+            Box::new(symbol(CONTENT_TYPE)),
+        );
     }
     for bound in header {
         headers.insert(
             wire_name(bound.param).to_string(),
             Box::new(symbol(&bound.symbol)),
+        );
+    }
+    // A vendor-fixed header is *sent* and never *declared*: the value is the vendor's, so asking a
+    // caller for it would be asking for a value that has exactly one right answer — the same
+    // reasoning a constant body field already carries. Bound to a symbol first, like every literal
+    // this emitter contributes to a record; see `bind_lit`.
+    for constant_header in const_headers {
+        body.push(bind_string(&constant_header.symbol, constant_header.value));
+        headers.insert(
+            constant_header.name.to_string(),
+            Box::new(symbol(&constant_header.symbol)),
         );
     }
     if !headers.is_empty() {
@@ -1113,6 +1252,41 @@ mod tests {
                 "`{wire}` must be refused"
             );
         }
+    }
+
+    /// The loader refuses this in an authored file; the emitter refuses it again, because
+    /// `http.request` builds a `HeaderName` from the name it is handed and an IR does not have to
+    /// have come from a provider TOML — spec ingest (C-4) produces one too.
+    #[test]
+    fn a_constant_header_name_that_is_not_a_token_is_refused() {
+        let mut op = operation("/v2/agents", Vec::new());
+        op.params.const_headers = BTreeMap::from([("X Api Version".to_string(), "2".to_string())]);
+        let connector = connector("https://api.example.com", op.clone());
+        assert!(matches!(
+            emit_operation(&connector, &op),
+            Err(Error::BadHeaderName { .. })
+        ));
+    }
+
+    /// `content-type` describes a body only this emitter assembles, so a constant claiming the name
+    /// is refused rather than merged: the request record has one slot for it, and whichever
+    /// declaration lost would be dropped without a word.
+    #[test]
+    fn a_constant_header_may_not_claim_the_media_type() {
+        let mut op = operation("/v2/agents", Vec::new());
+        op.method = HttpMethod::Post;
+        op.risk = Risk::Medium;
+        op.idempotency = Idempotency::NonIdempotent;
+        op.params.body = vec![body_param("subject", None)];
+        op.params.const_headers = BTreeMap::from([(
+            "Content-Type".to_string(),
+            "application/x-www-form-urlencoded".to_string(),
+        )]);
+        let connector = connector("https://api.example.com", op.clone());
+        assert!(matches!(
+            emit_operation(&connector, &op),
+            Err(Error::HeaderConflict { .. })
+        ));
     }
 
     /// A trailing slash on the connector's base URL must not become a double slash in the request.

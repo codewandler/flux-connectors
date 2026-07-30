@@ -50,6 +50,11 @@
           "description": "The connector-wide default auth, as a list of alternative mechanisms (OR). Every operation that does not declare its own `auth` inherits this. An omitted or empty list means the connector is unauthenticated by default.",
           "items": { "$ref": "#/$defs/authRequirement" }
         },
+        "const_headers": {
+          "type": "object",
+          "description": "Request headers the VENDOR fixes, sent by every operation: `Accept: application/vnd.github+json`, `Notion-Version: 2022-06-28`, a `User-Agent`. Emitted as a literal, so it is never an argument a caller must pass and may overwrite; an operation may replace one entry through its own `params.const_headers`.\n\nIt may never carry a credential. A value that resolves from an environment variable or names a declared credential is refused, as is any header the `$auth` seam owns (`Authorization`, `Proxy-Authorization`, `Cookie`) or that a declared credential is injected into — a constant header is a literal in a committed artifact, and a secret in one would be a secret in the repository. `content-type` is the emitter's, derived from the request body.",
+          "additionalProperties": { "type": "string" }
+        },
         "operations": {
           "type": "array",
           "description": "Operations written out in full. This is the whole connector for a hand-authored provider; alongside `[spec]` it adds operations the vendor document does not describe.",
@@ -973,6 +978,11 @@
         "body_schema": {
           "$ref": "#/$defs/jsonSchema",
           "description": "The body IS this schema, rather than being assembled from named fields — a free-form object body such as babelforce's session-variable maps. Mutually exclusive with `body`: codegen refuses an operation that declares both."
+        },
+        "const_headers": {
+          "type": "object",
+          "description": "Request headers the VENDOR fixes, for this operation only — the provider-level `const_headers` table states the ones every operation sends, and an entry here replaces it. Emitted as a literal, never as a parameter. It may never carry a credential: a value resolving from an environment variable or naming a declared credential is refused, and so is any header the `$auth` seam owns.",
+          "additionalProperties": { "type": "string" }
         }
       }
     },
