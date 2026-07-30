@@ -64,6 +64,17 @@ const wide = computed(() => catalogIssues(props.catalog))
   color: var(--vp-c-text-2);
 }
 
+/*
+ * The 320px minimum is kept, and kept on purpose (C-100). `auto-fit` fits
+ * `floor((width + gap) / (min + gap))` tracks, so on the 1025px the page now gets this is three
+ * columns, and a fourth would need a minimum of 244px or less.
+ *
+ * 244px is below what these cards can render. A card is `min` wide less 40px of padding, and the
+ * widest header — vendor name, id and status badge on one unwrapped flex line — has a min-content
+ * width of 274px, so a card needs 314px before the badge escapes its border; twelve of the sixteen
+ * do at 244px. Four columns is therefore a card change and not a grid change, and the card belongs
+ * to C-103. 320px is the smallest round number above that 314px floor.
+ */
 .providers {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
