@@ -40,6 +40,10 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-17 — Author provider configs for zendesk, freshdesk and babelforce](C-17-provider-configs.md) · Spec · **the goal** · three configs that compile to executable .flux
 - [C-7 — Record provenance and write connectors.lock](C-7-provenance-lockfile.md) · Spec
 
+### unified auth — one model for every provider's credentials
+_Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._
+- [C-19 — Model credentials as source x acquisition x placement](C-19-unified-credential-model.md) · Bridge · extends C-2's AuthMethod · the axis split that keeps auth from going combinatorial
+
 ## Blocked
 _None._
 
@@ -53,6 +57,12 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-12 — Compile quirks into Flux control flow](C-12-quirks-as-control-flow.md) · Codegen · the payoff for targeting a real language
 - [C-14 — Fetch specs and detect upstream drift](C-14-fetch-and-drift-check.md) · Build
 - [C-15 — Install into flux and prove milestone 1 end to end](C-15-install-and-live-e2e.md) · Build · milestone 1 · needs the $auth seam released in ../flux
+
+### unified auth — one model for every provider's credentials
+_Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._
+- [C-20 — Emit auth from the unified model](C-20-emit-unified-auth.md) · Codegen
+- [C-21 — Declare effectful acquisition for host execution](C-21-effectful-acquisition.md) · Bridge · OAuth2 and session login · the token never enters generated Flux
+- [C-22 — Auth conformance matrix across provider archetypes](C-22-auth-conformance-matrix.md) · Bridge · a new provider shape must fail at the model, not at request time
 
 ## Done
 - [C-1 — Scaffold the Cargo workspace and the gate](C-1-scaffold-workspace.md) · Foundation · everything else builds on this

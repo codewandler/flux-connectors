@@ -40,7 +40,26 @@ the host and never present in any artifact. Design:
 `zendesk.ticket.show` and `anthropic.messages.create` among its ops and calls one successfully
 against the live API.
 
-The two providers are chosen to exercise different halves of the pipeline:
+### Unified auth
+
+Every connector differs from its neighbours mostly in **how it authenticates**. Endpoints are
+boring; credentials are where providers are irreducibly different and where a naive model runs out of
+room fastest. This epic replaces flat scheme variants with three orthogonal axes — **source ×
+acquisition × placement** — so a new provider archetype costs one value on one axis instead of a new
+variant crossing all of them. Design: [designs/unified-auth.md](designs/unified-auth.md).
+
+The three in-scope providers already break the flat model: zendesk and freshdesk need a base64 join
+with different user halves, and babelforce needs a Bearer prefix with JWT planned. flux's four
+`AuthScheme` variants become *presets* of the unified model rather than the vocabulary itself, which
+is what keeps the `$auth` seam acceptable to flux instead of proposing a rival auth system.
+
+**Done looks like:** the conformance matrix (C-22) expresses every real archetype we know of — raw
+header, prefixed header, basic join, query key, AND, OR, unauthenticated, OAuth2, JWT — with no
+provider-specific code, and the four flux presets round-trip exactly.
+
+### The two milestone-1 providers
+
+They are chosen to exercise different halves of the pipeline:
 
 - **anthropic** — spec-driven with raw-header auth. Proves ingest → IR → codegen → registered op with
   no auth blocker in the way.
