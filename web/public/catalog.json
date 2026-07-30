@@ -12677,6 +12677,7 @@
                 "source": "header",
                 "name": "X-Slack-Request-Timestamp"
               },
+              "timestamp_format": "unix_seconds",
               "secret": "slack.signing_secret",
               "tolerance": "5m"
             }

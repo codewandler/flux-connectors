@@ -9,6 +9,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A verification field reached the IR and neither consumer (C-151).** C-141's `timestamp_format` was
+  published in the loader and the JSON schema but silently dropped from the manifest and `catalog.json`,
+  because `ManifestHmac` and `HmacEntry` enumerate `HmacSpec`'s fields **by hand**. Both now carry it.
+
+  The fix that matters is not the field — it is that the hand-enumeration stopped being a place a field
+  can go missing. The authoritative list is now **derived** from `provider::accepted_keys()`, which reads
+  the field names out of `deny_unknown_fields`' own error, so a field added to `HmacSpec` fails a test
+  with **no edit to any test file**: first at the every-field fixture, then at whichever projection
+  forgot it.
+
+  Neither projection could consume `HmacSpec` directly, and the reasons are recorded beside both types:
+  the manifest's field order is load-bearing (TOML places a nested table after its parent's scalars, and
+  `HmacSpec` declares `secret`/`tolerance` *after* `timestamp`, so flattening would emit a manifest that
+  reparses wrongly), and `catalog.json` publishes every key always while `HmacSpec` skips its `None`s.
+
+  Both artifacts publish the **effective** spelling rather than passing the declaration through, so a
+  host reads the answer instead of having to know the IR's default.
+
+
+### Fixed
+
 - **The integration test harness leaked its fixtures into a shared tmpfs (C-150).** `Fixture::new`
   rooted every fixture at `std::env::temp_dir()` with a `{label}-{pid}-{counter}` name — and `/tmp` here
   is a 32 GB tmpfs, so a pid plus a process-local counter does not separate two agents running the same

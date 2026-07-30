@@ -2,8 +2,7 @@
 id: C-151
 title: "A verification field that stops at the IR is silently dropped from the manifest and the catalogue"
 pillar: Codegen
-status: in-progress
-priority: 3
+status: done
 design: docs/designs/inbound-events.md
 epic: inbound-events
 areas: [connector-cli]
