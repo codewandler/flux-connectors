@@ -5,8 +5,10 @@
 //! a projection that is right for `zendesk-ticket-show` and wrong for
 //! `google-calendar-calendar-get` is a projection that ships broken.
 
+use std::sync::Arc;
+
 use catalog::{OperationKey, ProviderKey};
-use connector_pack::Egress;
+use connector_pack::{Credentials, Egress, MemoryStore};
 use flux_runtime::ToolRegistry;
 
 /// A stand-in for flux's `http.request`, which every projected operation delegates its egress to.
@@ -28,6 +30,15 @@ fn http() -> Egress {
         },
         |params| async move { Ok(params) },
     ))
+}
+
+/// A bound credential port over an **empty** store (C-116).
+///
+/// The pack requires one, and this file asserts the *projection* — so it holds nothing, for the same
+/// reason the transport is a stand-in. Whether a value happens to be stored must not decide whether
+/// the shipped catalogue installs.
+fn credentials() -> Credentials {
+    Credentials::new(Arc::new(MemoryStore::new()), "t-projection").expect("a valid tenant id")
 }
 
 /// Every provider the catalogue ships, in its own stable order.
@@ -100,7 +111,8 @@ fn every_shipped_operation_projects_to_a_registrable_spec() {
 #[test]
 fn the_reference_flow_resolves_every_operation_it_calls() {
     let mut registry = ToolRegistry::new();
-    connector_pack::pack(&["zendesk"], http(), credentials())(&mut registry).expect("zendesk installs");
+    connector_pack::pack(&["zendesk"], http(), credentials())(&mut registry)
+        .expect("zendesk installs");
 
     for name in [
         "zendesk.test",
@@ -120,7 +132,8 @@ fn the_reference_flow_resolves_every_operation_it_calls() {
 #[test]
 fn the_spec_carries_the_catalogue_entry_and_invents_nothing() {
     let mut registry = ToolRegistry::new();
-    connector_pack::pack(&["zendesk"], http(), credentials())(&mut registry).expect("zendesk installs");
+    connector_pack::pack(&["zendesk"], http(), credentials())(&mut registry)
+        .expect("zendesk installs");
 
     let operation = catalog::operation(OperationKey::id("zendesk-ticket-comment-add"))
         .expect("the shipped catalogue carries zendesk-ticket-comment-add");
@@ -156,7 +169,8 @@ fn the_spec_carries_the_catalogue_entry_and_invents_nothing() {
 #[test]
 fn a_collision_surfaces_fluxs_duplicate_diagnostic_rather_than_panicking() {
     let mut registry = ToolRegistry::new();
-    connector_pack::pack(&["zendesk"], http(), credentials())(&mut registry).expect("the first install succeeds");
+    connector_pack::pack(&["zendesk"], http(), credentials())(&mut registry)
+        .expect("the first install succeeds");
 
     // The same provider again: every one of its operations collides with itself.
     let error = connector_pack::pack(&["zendesk"], http(), credentials())(&mut registry)
@@ -201,7 +215,8 @@ fn an_unknown_provider_is_refused_rather_than_installed_as_nothing() {
 fn a_call_that_cannot_be_built_is_refused_by_name_rather_than_panicking() {
     let entry = catalog::operation(OperationKey::id("zendesk-ticket-show"))
         .expect("the shipped catalogue carries zendesk-ticket-show");
-    let operation = connector_pack::Operation::project(entry, http(), credentials()).expect("the entry projects");
+    let operation = connector_pack::Operation::project(entry, http(), credentials())
+        .expect("the entry projects");
 
     let error = operation
         .build_request(&serde_json::json!({}))

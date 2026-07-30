@@ -18,9 +18,14 @@ connector-catalog.workspace = true
 # **This edge is allowed here and forbidden from `connector-cli`.** The fence
 # (`crates/connector-cli/tests/dependency_fence.rs`) is about the *compiler* crates, whose offline
 # guarantee a Vault client would quietly end. The pack is the host-facing surface: it is where a
-# credential is supposed to be resolved. `default-features = false` keeps that honest — the `vault`
-# feature stays off, so this links no HTTP client and the pack still opens no socket.
-connector-secrets = { workspace = true, default-features = false }
+# credential is supposed to be resolved.
+#
+# No feature is named, and that is the point rather than an omission: `connector-secrets` declares
+# `default = []`, so `vault` — and with it `reqwest` — stays off unless a *host* asks for it. This
+# edge therefore links no HTTP client, and the pack still opens no socket. Spelling
+# `default-features = false` here would be a no-op cargo warns about, and would read as a guarantee
+# this manifest is not the one making.
+connector-secrets.workspace = true
 
 # The flux side of the seam. `flux-spec` owns `ToolSpec` and its vocabulary; `flux-runtime` owns
 # the `Tool` trait and the registry a host installs into. Deliberately *not* `flux-sdk`: the pack

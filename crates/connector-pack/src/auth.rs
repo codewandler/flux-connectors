@@ -131,8 +131,7 @@ pub(crate) fn place(
 /// of table lookup is cheaper to audit than a supply-chain edge added for one call site. It is
 /// pinned against RFC 4648's own vectors in the tests below.
 fn base64(bytes: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
     for chunk in bytes.chunks(3) {
@@ -304,10 +303,7 @@ mod tests {
     /// vendor answers by ignoring the credential.
     #[test]
     fn a_query_placement_picks_its_own_separator_and_encodes_the_value() {
-        let credential = credential(
-            Acquisition::Static,
-            Placement::Query { name: "api_key" },
-        );
+        let credential = credential(Acquisition::Static, Placement::Query { name: "api_key" });
         let assembled = Assembled {
             credential: credential.name,
             value: acquire(credential, "a+b/c=d", None),

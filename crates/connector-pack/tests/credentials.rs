@@ -33,8 +33,8 @@
 
 use std::sync::{Arc, Mutex};
 
-use connector_pack::{Credentials, Egress, Error, Operation};
-use connector_secrets::{CredentialRef, MemoryStore, Secret, SecretStore, DEFAULT_SERVICE};
+use connector_pack::{Credentials, Egress, Error, Operation, DEFAULT_SERVICE};
+use connector_secrets::{CredentialRef, MemoryStore, Secret, SecretStore};
 use flux_runtime::{RuntimeTurnContext, Tool, ToolContext, ToolProgress, ToolProgressSink};
 use flux_system::{System, Workspace};
 use serde_json::{json, Value};
@@ -86,9 +86,10 @@ fn slack_bot_token() -> CredentialRef {
 
 /// An egress that reflects the request it was handed. See this module's documentation.
 fn reflecting_egress() -> Egress {
-    Egress::new(flux_runtime::tool_fn(stand_in_spec(), |params: Value| async move {
-        Ok(json!({ "reflected": params }))
-    }))
+    Egress::new(flux_runtime::tool_fn(
+        stand_in_spec(),
+        |params: Value| async move { Ok(json!({ "reflected": params })) },
+    ))
 }
 
 /// An egress that fails, quoting the request — the failure path flux folds to `ToolResult::error`.
@@ -194,22 +195,34 @@ async fn a_credential_never_reaches_a_surface() {
 /// The call below omits a declared parameter, so `build_request` refuses and no request is ever
 /// built — and the redactor must already know the value at that point. An implementation that
 /// registers after building fails here while passing every assertion above.
+///
+/// The refusal comes back as an `Err`, not a soft result: this pack's [`Error`] converts to
+/// `flux_core::Error::Config`, and only a *handler's* failure inside `http.request` folds to
+/// `ToolResult::error`. That distinction is exactly why the ordering matters — the window between
+/// "credentials resolved" and "the request exists" is a window in which the only thing that can
+/// happen is a failure.
 #[tokio::test]
 async fn the_redactor_knows_the_value_before_the_request_is_constructed() {
     let credentials = Credentials::new(store_with_the_sentinel().await, TENANT).expect("a tenant");
     let ctx = context(Arc::new(Progress::default()));
 
     let tool = projected("slack-chat-post-message", reflecting_egress(), credentials);
-    let result = tool
+    let error = tool
         .execute(&ctx, json!({}))
         .await
-        .expect("a refusal folds to a soft result");
-    assert!(result.is_error, "an omitted parameter is not a request");
+        .expect_err("an omitted parameter is not a request");
+    assert!(
+        error.to_string().contains("channel"),
+        "the refusal must name the parameter, not the credential: {error}"
+    );
 
     assert!(
         !ctx.redactor.redact(SENTINEL).contains(SENTINEL),
         "the request failed to build and the redactor had never been told the value"
     );
+    // And the refusal itself carries nothing. Belt and braces: the redactor is the guarantee, but an
+    // error that quoted a resolved value would be a second surface nobody scrubs on this path.
+    assert!(!error.to_string().contains(SENTINEL), "{error}");
 }
 
 /// A missing credential names the address that was not found, and **no request is sent**.

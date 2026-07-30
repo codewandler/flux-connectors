@@ -44,11 +44,23 @@
 
 use std::sync::Arc;
 
-use connector_secrets::{validate_tenant, CredentialRef, SecretStore, StoreError, DEFAULT_SERVICE};
+use connector_secrets::{validate_tenant, CredentialRef, SecretStore, StoreError};
 use flux_runtime::ToolContext;
 
 use crate::auth::{self, Assembled};
 use crate::Error;
+
+/// The reserved service name [`CredentialRef::new`] elides, spelled here because a credential is
+/// declared at **provider** level and therefore always addresses it.
+///
+/// `connector-spec` owns the definition (`ir::DEFAULT_SERVICE`), and this crate deliberately does not
+/// depend on the loader — the pack's input is the catalogue. So this is a mirror, and a mirror is only
+/// safe if drift is *checked* rather than promised. It is:
+/// [`the_elided_service_is_the_one_the_addressing_reserves`](tests::the_elided_service_is_the_one_the_addressing_reserves)
+/// builds a real [`CredentialRef`] with it and asserts the addressing agrees that it elides, which is
+/// a stronger statement than string equality would be — it fails if the reserved name changes *or* if
+/// the elision rule does.
+pub const DEFAULT_SERVICE: &str = "default";
 
 /// **The credential adapter a host binds when it constructs the pack.**
 ///
@@ -108,11 +120,13 @@ impl Credentials {
         provider: &'static catalog::Provider,
         credential: &'static catalog::Credential,
     ) -> Result<CredentialRef, Error> {
-        let authority = provider.authority.ok_or_else(|| Error::NoCredentialAddress {
-            operation: operation.to_owned(),
-            provider: provider.id.to_owned(),
-            credential: credential.name.to_owned(),
-        })?;
+        let authority = provider
+            .authority
+            .ok_or_else(|| Error::NoCredentialAddress {
+                operation: operation.to_owned(),
+                provider: provider.id.to_owned(),
+                credential: credential.name.to_owned(),
+            })?;
         // Always the elided default service: a credential is declared at provider level, so it
         // belongs to the connector rather than to one of its surfaces. `CredentialRef` can carry a
         // service, and that headroom is C-90's, for a vendor whose surfaces authenticate separately.
@@ -155,7 +169,10 @@ impl Credentials {
 
         let mut unmet: Vec<String> = Vec::new();
         for mechanism in operation.credentials {
-            match self.resolve_mechanism(ctx, operation, provider, mechanism).await {
+            match self
+                .resolve_mechanism(ctx, operation, provider, mechanism)
+                .await
+            {
                 Ok(assembled) => return Ok(assembled),
                 // Only "this tenant has not connected it" moves on to the next alternative.
                 Err(Error::MissingCredential { path, .. }) => unmet.push(path),
@@ -296,5 +313,43 @@ fn not_found_path(error: &StoreError) -> String {
     match error {
         StoreError::NotFound { path } => path.clone(),
         other => other.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use connector_secrets::{Layout, MemoryStore, TenantLayout};
+
+    /// **The guard on [`DEFAULT_SERVICE`]'s mirror.**
+    ///
+    /// Asserted through the addressing type rather than against `connector_spec`'s constant, because
+    /// this crate does not depend on the loader and should not start. That makes it the stronger
+    /// check of the two: it fails if the reserved name changes, and it also fails if the *elision
+    /// rule* changes — either of which would have this port writing a service segment into every
+    /// credential path and looking up values nobody stored.
+    #[test]
+    fn the_elided_service_is_the_one_the_addressing_reserves() {
+        let reference = CredentialRef::new("t-guard", "com.acme.api", DEFAULT_SERVICE, "token")
+            .expect("a valid address");
+        assert!(
+            reference.is_default_service(),
+            "`{DEFAULT_SERVICE}` is no longer the service the addressing elides"
+        );
+        assert!(
+            !TenantLayout.render(&reference).contains(DEFAULT_SERVICE),
+            "the default service rendered into the path: {}",
+            TenantLayout.render(&reference)
+        );
+    }
+
+    /// A tenant id is untrusted input on its way into a store path, and it is refused when the port
+    /// is **bound** rather than at the first call — so a misconfiguration is a startup failure.
+    #[test]
+    fn a_traversing_tenant_is_refused_when_the_port_is_bound() {
+        let error = Credentials::new(Arc::new(MemoryStore::new()), "../../etc")
+            .expect_err("a traversing tenant cannot address anything");
+        assert!(matches!(error, Error::Tenant { .. }), "{error}");
+        assert!(error.to_string().contains("../../etc"), "{error}");
     }
 }

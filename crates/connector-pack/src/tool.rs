@@ -129,12 +129,13 @@ impl Operation {
             });
         }
 
-        let provider = catalog::provider(catalog::ProviderKey::id(entry.provider)).ok_or_else(
-            || Error::UnknownProvider {
-                provider: entry.provider.to_owned(),
-                available: catalog::providers().len(),
-            },
-        )?;
+        let provider =
+            catalog::provider(catalog::ProviderKey::id(entry.provider)).ok_or_else(|| {
+                Error::UnknownProvider {
+                    provider: entry.provider.to_owned(),
+                    available: catalog::providers().len(),
+                }
+            })?;
 
         let declaration = spec::declaration_of(entry.id, entry.flux)?;
         Ok(Self {
@@ -292,7 +293,7 @@ impl Tool for Operation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::recording_http;
+    use crate::tests::{empty_credentials, recording_http};
     use catalog::OperationKey;
     use serde_json::json;
 

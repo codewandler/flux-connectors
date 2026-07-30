@@ -79,10 +79,6 @@ pub use vault::VaultStore;
 pub use connector_spec::credential::{
     validate_tenant, CredentialRef, Layout, TenantLayout, MAX_TENANT, TENANTS_ROOT,
 };
-// The reserved service name [`CredentialRef::new`] elides. Re-exported for the same reason the
-// addressing is: a caller spelling one address should not have to name a second crate to say
-// "this credential belongs to the provider, not to one of its surfaces".
-pub use connector_spec::DEFAULT_SERVICE;
 
 use async_trait::async_trait;
 

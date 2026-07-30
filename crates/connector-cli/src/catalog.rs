@@ -383,9 +383,11 @@ pub(crate) fn host_of(base_url: &str) -> Result<&str> {
 /// The connector's `AUTH` table: one `crate::Credential` per declared credential (C-116).
 ///
 /// **This is a declaration, never a value.** [`string`] quotes a credential *name*, a path leaf, a
-/// header name, a prefix and environment-variable *keys*; `AuthMethod` carries no value to quote in
-/// the first place, and `crates/connector-cli/tests/no_secrets.rs` is what keeps that checked rather
-/// than asserted.
+/// header name, a placement prefix and environment-variable *keys*. That it cannot quote a value is
+/// structural rather than careful: `connector_spec::AuthMethod` has no field one could live in — `env`
+/// and `user_env` are key lists, and `user_suffix` is Zendesk's public `/token` marker
+/// (`crates/connector-spec/src/auth.rs`) — so an emitter that wanted to leak a credential would have
+/// to change the IR first, which is a reviewed change in a different crate.
 ///
 /// It exists because the Tool pack assembles auth in Rust — the `Bearer` prefix, the basic-auth
 /// base64, the query placement — and it cannot assemble what it has not been told. Until this, the
@@ -400,7 +402,9 @@ fn render_auth(connector: &Connector) -> Result<String> {
         // otherwise render a plausible path under the wrong vendor.
         let leaf = connector
             .local_credential_name(&method.name)
-            .with_context(|| format!("connector `{}`: credential `{}`", connector.id, method.name))?;
+            .with_context(|| {
+                format!("connector `{}`: credential `{}`", connector.id, method.name)
+            })?;
         out.push_str("    crate::Credential {\n");
         out.push_str(&format!("        name: {},\n", string(&method.name)));
         out.push_str(&format!("        leaf: {},\n", string(leaf)));

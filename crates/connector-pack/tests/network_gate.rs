@@ -10,8 +10,10 @@
 //! sampled one, because a subject that is right for `zendesk-ticket-show` and empty for
 //! `google-calendar-calendar-get` is a hole in exactly the connector nobody checked.
 
+use std::sync::Arc;
+
 use catalog::OperationKey;
-use connector_pack::Egress;
+use connector_pack::{Credentials, Egress, MemoryStore};
 use flux_runtime::{Tool, ToolRegistry};
 use serde_json::{json, Map, Value};
 
@@ -32,6 +34,17 @@ fn http() -> Egress {
         },
         |params| async move { Ok(params) },
     ))
+}
+
+/// A bound credential port over an **empty** store (C-116).
+///
+/// The pack requires one, so the gate cannot be asserted without binding it. It holds nothing on
+/// purpose: the gate is what a host consults *before* dispatch, and every subject asserted below is
+/// the **unauthenticated** URL — a credential resolving here would be the one way a query-placed
+/// secret could end up in a permission subject, which is precisely what this file must not let
+/// happen quietly.
+fn credentials() -> Credentials {
+    Credentials::new(Arc::new(MemoryStore::new()), "t-network-gate").expect("a valid tenant id")
 }
 
 /// Every provider the catalogue ships, in its own stable order.

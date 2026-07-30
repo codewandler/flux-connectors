@@ -235,9 +235,10 @@ pub enum Acquisition {
 /// One credential a connector declares: what it is called, where its value is kept, and how it
 /// reaches the wire.
 ///
-/// **No value, ever.** [`Credential::leaf`] is the last segment of a *path*; [`Acquisition`] names
-/// environment variables. Nothing in this crate holds a secret, and
-/// `crates/connector-cli/tests/no_secrets.rs` is what keeps that a checked statement.
+/// **No value, ever**, and no field it could occupy: [`Credential::leaf`] is the last segment of a
+/// *path*, [`Acquisition`] names environment-variable *keys*, and [`Placement`] names a header, a
+/// prefix or a query key. This crate is `&'static` data compiled from the IR, so "it holds no secret"
+/// is a property of the shape rather than a habit of whoever last edited the emitter.
 ///
 /// Not `#[non_exhaustive]`: a consumer constructs one in a test to prove its own placement code, and
 /// the type is small, declarative and complete.

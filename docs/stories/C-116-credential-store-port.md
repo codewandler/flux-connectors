@@ -22,22 +22,22 @@ This is what takes the `$auth` seam off milestone 1's critical path.
 
 ## Acceptance
 
-- [ ] A `CredentialStore` port exists and is bound when the pack is constructed, not looked up
+- [x] A `CredentialStore` port exists and is bound when the pack is constructed, not looked up
       globally. Its addressing is C-90's existing `CredentialRef` + `Layout` /
       `TenantLayout` (`crates/connector-spec/src/credential.rs`), which currently has no consumer.
-- [ ] The three axes of [unified-auth.md](../designs/unified-auth.md) — source × acquisition ×
+- [x] The three axes of [unified-auth.md](../designs/unified-auth.md) — source × acquisition ×
       placement — are honoured: header with prefix, basic base64, and query placement each reach the
       request correctly.
-- [ ] **`ctx.redactor.add_secret(...)` is called before the request is constructed**, not after, so a
+- [x] **`ctx.redactor.add_secret(...)` is called before the request is constructed**, not after, so a
       failure between construction and dispatch cannot surface the value. `crates/flux-web/src/http.rs:248`
       is the precedent.
-- [ ] **Failing-first test:** `a_credential_never_reaches_a_surface` — drive an operation with a known
+- [x] **Failing-first test:** `a_credential_never_reaches_a_surface` — drive an operation with a known
       sentinel secret and assert the sentinel appears in neither the `ToolResult` content, nor the
       `view`, nor an error string, nor a progress line. It must fail against an implementation that
       builds the header without registering the redactor.
-- [ ] A missing credential is a clear, actionable error naming the `CredentialRef` that was not found
+- [x] A missing credential is a clear, actionable error naming the `CredentialRef` that was not found
       — never a request sent without auth.
-- [ ] The gate is green.
+- [x] The gate is green.
 
 ## Notes
 
@@ -81,3 +81,35 @@ This is what takes the `$auth` seam off milestone 1's critical path.
 
   Everything C-116 depends on has landed: C-115's request path and C-91's `SecretStore`. The story is
   unblocked on substance; it is blocked only on capacity.
+
+- **Resumed and finished from `ebdaed8`**, with `main` merged in (`--no-ff`, so C-107's Notion, C-125's
+  composed `input_schema` and the v0.5.0 release are underneath). The three open questions are settled:
+
+  1. **The generated files were needed, and they are per-provider rather than whole-catalogue.**
+     Assembling auth in Rust means the pack has to be *told* each credential's acquisition and
+     placement, and the pack's only input is the catalogue — so `catalog::Provider` gained `authority`
+     and `auth: &[Credential]`, and the emitter (`crates/connector-cli/src/catalog.rs`) gained
+     `render_auth`. Every per-provider file must then be rewritten or `connector-catalog` does not
+     compile: the proof is that C-107's `notion.rs`, which the WIP never saw, failed with
+     `missing fields `auth` and `authority` in initializer of `Provider``. `AGENTS.md`'s table files
+     `crates/catalog/src/generated/<provider>.rs` as **per-provider**, not whole-catalogue, so all 19
+     were regenerated with 19 scoped `build --provider <id>` runs — which by design leave
+     `generated.rs`, `catalog.json`, `web/public/v1/**` and the README SVGs untouched. `git status`
+     confirms none of the four is modified, and a **full** `build` then reports
+     `19 providers, 256 artifacts up to date; nothing written`, so the tree is already a fixed point.
+  2. `Cargo.toml` keeps the `flux-system` dev-dependency (a real `ToolContext` is the only way to reach
+     the redactor, so without it the story's property could not be driven through `Tool::execute` at
+     all). `connector-pack/Cargo.toml`'s `default-features = false` on `connector-secrets` was dropped:
+     that crate declares `default = []`, so the flag was a no-op cargo warns about.
+  3. The failing-first proof was re-taken at the merge base, and additionally against an
+     implementation that builds the header without registering the redactor — which is the form the
+     Acceptance names.
+
+  **Two corrections to the inherited work.** `crates/connector-secrets/src/lib.rs` was reverted: it is
+  fenced, and the `DEFAULT_SERVICE` re-export it added was only about spelling. The pack now defines the
+  constant itself, guarded behaviourally by
+  `credentials::tests::the_elided_service_is_the_one_the_addressing_reserves`, which builds a real
+  `CredentialRef` and asserts the addressing still elides it — a stronger check than string equality,
+  and one that needs no dependency on the loader. And two doc comments cited
+  `crates/connector-cli/tests/no_secrets.rs`, which does not exist; they now cite the structural reason
+  instead (`connector_spec::AuthMethod` has no field a credential value could occupy).

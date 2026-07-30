@@ -87,17 +87,20 @@
 //! # What is not here yet
 //!
 //! **Not every connector can be authenticated.** A credential's address is
-//! `tenants/<tenant>/<authority>/<credential>`, and only two of the eighteen shipped connectors
-//! declare an `authority` (C-37). The rest refuse with [`Error::NoCredentialAddress`] rather than
-//! sending an unauthenticated request — fail-closed, and with a diagnostic naming the missing fact
-//! instead of a vendor's `401`.
+//! `tenants/<tenant>/<authority>/<credential>`, and only two of the nineteen shipped connectors —
+//! `slack` and `fly` — declare an `authority` (C-37). The rest refuse with
+//! [`Error::NoCredentialAddress`] rather than sending an unauthenticated request — fail-closed, and
+//! with a diagnostic naming the missing fact instead of a vendor's `401`.
 //!
 //! **No response shaping.** `http.request` returns one flat string
 //! (`HTTP {status}\n{headers}\n{body}`), which is returned whole.
 //!
-//! **No config resolution**, so a templated base URL still carries `{subdomain}` verbatim: five of
-//! the eighteen connectors cannot reach a vendor at all until C-10's base-URL configuration lands,
-//! and a credential does not change that.
+//! **No config resolution**, so a templated base URL still carries `{subdomain}` verbatim. Five of
+//! the nineteen connectors declare a templated host (`{subdomain}.zendesk.com`, `{domain}`,
+//! `{site}.atlassian.net`, `{shop}.myshopify.com`), which is **27 of 105 operations that cannot
+//! reach a vendor** until C-10's base-URL configuration lands. A credential does not change that,
+//! and nothing here should be read as saying it does: an authenticated request to
+//! `https://{subdomain}.zendesk.com/...` is still a request to a host that does not resolve.
 
 mod auth;
 mod credentials;
@@ -106,7 +109,7 @@ mod request;
 mod spec;
 mod tool;
 
-pub use credentials::Credentials;
+pub use credentials::{Credentials, DEFAULT_SERVICE};
 pub use name::{dotted_name, NameError};
 pub use request::Request;
 pub use spec::project;
@@ -117,7 +120,6 @@ pub use tool::{Egress, Operation};
 // credential port should not have to name three crates to spell one address.
 pub use connector_secrets::{
     CredentialRef, Layout, MemoryStore, Secret, SecretStore, StoreError, TenantLayout,
-    DEFAULT_SERVICE,
 };
 
 use catalog::ProviderKey;
@@ -367,8 +369,10 @@ pub enum Error {
     /// has no answer, because it never goes out — it verifies bytes that arrived. Placing one on a
     /// request would hand the vendor the value that authenticates *their* calls inbound. The loader
     /// already refuses it (`AGENTS.md`'s authentication contract); this is the second lock.
-    #[error("`{operation}` authenticates with `{credential}`, which is an inbound signing secret \
-             and never leaves")]
+    #[error(
+        "`{operation}` authenticates with `{credential}`, which is an inbound signing secret \
+             and never leaves"
+    )]
     InboundCredential {
         /// The operation id.
         operation: String,
@@ -414,7 +418,9 @@ pub enum Error {
     ///
     /// It would authenticate nothing while looking satisfied, which is the one failure shape that
     /// resembles success. The loader refuses a degenerate empty mechanism; this is the second lock.
-    #[error("`{operation}` offers a mechanism that names no credentials, so it authenticates nothing")]
+    #[error(
+        "`{operation}` offers a mechanism that names no credentials, so it authenticates nothing"
+    )]
     EmptyMechanism {
         /// The operation id.
         operation: String,
@@ -521,12 +527,6 @@ fn source_label(provider: &str) -> String {
 pub(crate) mod tests {
     use super::*;
 
-    /// A stand-in for flux's `http.request`, for tests that need a transport but not a socket.
-    ///
-    /// A real [`flux_runtime::ToolContext`] needs a `flux_system::System` over a real workspace
-    /// root, so `execute` itself is not reachable from this crate's tests at all. What is asserted
-    /// instead is [`Operation::build_request`] — the request *before* it is sent, which is where the
-    /// two mistakes that matter live, and which a live call would prove nothing extra about.
     /// A bound credential port over an **empty** store.
     ///
     /// Every test in this crate that does not itself care about credentials wants exactly this: the
@@ -541,6 +541,13 @@ pub(crate) mod tests {
         .expect("a valid tenant id")
     }
 
+    /// A stand-in for flux's `http.request`, for tests that need a transport but not a socket.
+    ///
+    /// A real [`flux_runtime::ToolContext`] needs a `flux_system::System` over a real workspace
+    /// root, which unit tests in this crate do not build — so what they assert is
+    /// [`Operation::build_request`], the request *before* it is sent, which is where the two
+    /// mistakes that matter live. `execute` is driven end to end from `tests/credentials.rs`, where
+    /// the `flux-system` dev-dependency makes a real context available.
     pub(crate) fn recording_http() -> Egress {
         Egress::new(flux_runtime::tool_fn(
             flux_spec::ToolSpec {
@@ -561,7 +568,8 @@ pub(crate) mod tests {
     #[test]
     fn a_providers_operations_are_labelled_with_the_provider() {
         let mut registry = ToolRegistry::new();
-        pack(&["zendesk"], recording_http(), empty_credentials())(&mut registry).expect("zendesk installs");
+        pack(&["zendesk"], recording_http(), empty_credentials())(&mut registry)
+            .expect("zendesk installs");
 
         assert_eq!(
             registry.source("zendesk.ticket.show"),
@@ -587,7 +595,8 @@ pub(crate) mod tests {
     #[test]
     fn several_providers_install_together() {
         let mut registry = ToolRegistry::new();
-        pack(&["zendesk", "slack"], recording_http(), empty_credentials())(&mut registry).expect("both install");
+        pack(&["zendesk", "slack"], recording_http(), empty_credentials())(&mut registry)
+            .expect("both install");
 
         assert!(registry.get("zendesk.ticket.show").is_some());
         assert!(registry.get("slack.chat.post.message").is_some());
@@ -600,8 +609,8 @@ pub(crate) mod tests {
     #[test]
     fn an_unknown_provider_names_itself() {
         let mut registry = ToolRegistry::new();
-        let error =
-            pack(&["salesforce"], recording_http(), empty_credentials())(&mut registry).expect_err("no such connector");
+        let error = pack(&["salesforce"], recording_http(), empty_credentials())(&mut registry)
+            .expect_err("no such connector");
 
         assert!(error.to_string().contains("salesforce"), "{error}");
         assert!(registry.names().is_empty());
@@ -617,7 +626,8 @@ pub(crate) mod tests {
         assert!(!entries.is_empty(), "zendesk carries operations");
 
         for entry in entries {
-            let operation = Operation::project(entry, http.clone(), empty_credentials()).expect("the entry projects");
+            let operation = Operation::project(entry, http.clone(), empty_credentials())
+                .expect("the entry projects");
             assert!(
                 Arc::ptr_eq(http.tool(), operation.egress().tool()),
                 "`{}` holds a transport the host did not supply",

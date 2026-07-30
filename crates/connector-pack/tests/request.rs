@@ -7,11 +7,16 @@
 //! string assembled without its `?`/`&` separators. A live call would prove neither, and a green
 //! integration suite against a real vendor is exactly how both ship.
 //!
-//! Credentials are C-116: these requests carry no `Authorization` header, and asserting the header
-//! set exactly is what will make that story's addition visible rather than incidental.
+//! **These requests are the unauthenticated ones**, and that is still true after C-116. Every
+//! assertion below goes through `Operation::build_request`, which applies no credential — it is the
+//! request the operation's own emitted module describes and nothing more. `build_authenticated_request`
+//! is the one that resolves and places a credential, and `tests/credentials.rs` is where it is
+//! followed. Keeping the two apart is what lets this file assert a header set *exactly*.
+
+use std::sync::Arc;
 
 use catalog::OperationKey;
-use connector_pack::{Egress, Operation, Request};
+use connector_pack::{Credentials, Egress, MemoryStore, Operation, Request};
 use flux_runtime::Tool;
 use serde_json::{json, Value};
 
@@ -35,11 +40,21 @@ fn http() -> Egress {
     ))
 }
 
+/// A bound credential port over an **empty** store (C-116).
+///
+/// The pack requires one; this file asserts the unauthenticated request, so it must hold nothing.
+/// An empty store here is what keeps the header assertions below a statement about the *emitter*
+/// rather than about whichever credential happened to resolve.
+fn credentials() -> Credentials {
+    Credentials::new(Arc::new(MemoryStore::new()), "t-request").expect("a valid tenant id")
+}
+
 /// One shipped operation, projected.
 fn projected(id: &str) -> Operation {
     let entry = catalog::operation(OperationKey::id(id))
         .unwrap_or_else(|| panic!("the shipped catalogue carries `{id}`"));
-    Operation::project(entry, http(), credentials()).unwrap_or_else(|error| panic!("`{id}`: {error}"))
+    Operation::project(entry, http(), credentials())
+        .unwrap_or_else(|error| panic!("`{id}`: {error}"))
 }
 
 /// The request `id` makes when called with `params`.
