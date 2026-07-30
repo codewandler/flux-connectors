@@ -32,6 +32,7 @@ Gate: `cargo build --workspace && cargo test --workspace && cargo clippy --works
 - [C-144 — No connector can send a non-JSON request body](C-144-request-body-encoding.md) · Spec · found shipping Stripe: op.rs binds application/json unconditionally and the IR has no content_type key anywhere. Blocks every form-encoded vendor — and OAuth2 token endpoints are form-encoded BY SPEC, so C-135's oauth2.login needs this too
 - [C-143 — The artifact tests leak their fixtures and go flaky under load](C-143-artifact-tests-leak-fixtures.md) · Core · found twice during a 7-agent wave, both times attributed to the wrong diff before being measured. 55 stale fixture directories in /tmp, which is a 32G tmpfs — the tests write to env::temp_dir() and do not always clean up
 - [C-149 — The Vault live leg reports ok when it skips, and three smaller gaps beside it](C-149-vault-live-leg-reports-ok-when-it-skips.md) · Core · found by C-91's review. The test's own module doc says 'there is no third path where it reports success without having talked to anything' — and that is exactly what it does today. A skipped leg that prints ok is the failure mode the whole no-simulated-success rule exists to prevent
+- [C-133 — The brave connector — Brave Talk's room-token HTTP surface](C-133-provider-brave-talk-tokens.md) · Spec · ONLY the three HTTP calls. The XMPP MUC stream stays OUT — vision.md names protocol-rich technology adapters as a non-goal, and flux already has D-205/D-206 with feasibility proven live. Blocked on two real things; read Notes before starting
 
 ### authentication as a connector surface — a login that cannot leak
 _Authentication is currently something the **host** does *around* a connector: `OAuth2Spec` declares_
@@ -153,7 +154,6 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-116 — The CredentialStore port, in-Rust auth assembly, and redaction](C-116-credential-store-port.md) · Bridge · finally wires C-90's Layout/CredentialRef to a consumer — and removes the $auth seam from milestone 1's critical path, because a Tool builds `Bearer <token>` itself
 
 ## Backlog
-- [C-133 — The brave connector — Brave Talk's room-token HTTP surface](C-133-provider-brave-talk-tokens.md) · Spec · ONLY the three HTTP calls. The XMPP MUC stream stays OUT — vision.md names protocol-rich technology adapters as a non-goal, and flux already has D-205/D-206 with feasibility proven live. Blocked on two real things; read Notes before starting
 
 ### the connector bundle
 _A connector is more than a set of callable operations. It also has **schemas** (what goes in, what_
