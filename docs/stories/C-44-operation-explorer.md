@@ -2,8 +2,8 @@
 id: C-44
 title: Build the provider and operation explorer
 pillar: Surfaces
-status: ready
-priority: 4
+status: done
+priority:
 design: docs/designs/public-docs.md
 epic: public-docs
 areas: [web]

@@ -5,7 +5,7 @@ person. Read it before making any change. When in doubt, this file and the docs 
 tie-breaker.
 
 **Where the project is (v0.0.1).** The pipeline works end to end: `cargo run -p connector-cli -- build`
-compiles three providers into 34 artifacts. **Nothing can make a live API call yet** — read
+compiles three providers into 37 artifacts. **Nothing can make a live API call yet** — read
 [What is deliberately broken](#what-is-deliberately-broken) before you "fix" anything.
 
 ---

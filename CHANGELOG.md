@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **C-44** — the provider and operation explorer: every provider and operation browsable and
+  filterable, one deep-linkable pre-rendered page per operation, and the whole thing working without
+  JavaScript. A test fails if any explorer source hard-codes a provider id, vendor, host, credential
+  or issue code.
+- **C-45** — the README image is rendered by **flux's own** `flux_lang::highlight` — a CST walk that
+  classifies a token by its parent node's kind — replacing a regex script that duplicated grammar
+  flux owns. `build --png` additionally shells out to `flux render`.
+- **Brand assets** — mark, icon, banner and favicon sizes under `assets/brand/`.
 - **C-42** — `site/catalog.json`, a fourth backend over the same IR carrying every provider and
   operation with its typed parameters, credentials, hosts and generated Flux. Each operation also
   carries a **derived** `status`: four rules over the IR, no hard-coded operation list.

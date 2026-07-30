@@ -29,7 +29,7 @@ call yet.** See [Known limits](#known-limits).
 
 ```bash
 cargo run -p connector-cli -- build
-# 3 providers, 6 artifacts; 6 written
+# 3 providers, 37 artifacts; 37 written
 ```
 
 Shipping today: **zendesk** (7 operations), **freshdesk** (9), **babelforce** (9) — 25 operations
