@@ -19,12 +19,19 @@ Define the first two roles, assign them to the providers that already fit, and p
 
 ## Acceptance
 
-- [ ] Two roles are defined against the closed set from [C-120](C-120-service-roles-declaration.md):
+- [ ] **A slot becomes a set of accepted spellings** — so `show`|`get` is one slot. This is the design
+      correction C-120's review earned; see [provider-roles.md](../designs/provider-roles.md). About
+      five lines in `Role::required_members` and `missing_role_members`, and **`fills_slot` is not
+      touched**.
 
-      | role | required members | providers that must claim it |
+- [ ] Two roles are defined against the closed set from [C-120](C-120-service-roles-declaration.md),
+      with the member lists **re-measured** against 19 providers rather than taken from the original
+      design:
+
+      | role | required members | providers that satisfy it |
       |---|---|---|
-      | `llm_catalogue` | `list`, optional `get` | `openai`, `openrouter` |
-      | `ticketing` | `show`, `search`, `comment.list` | `zendesk`, `freshdesk`, `intercom`, `jira` |
+      | `llm_catalogue` | `models.list` | `openai`, `openrouter` |
+      | `ticketing` | `show`\|`get`, plus `comment.list` | `zendesk`, `jira` |
 
 - [ ] Assigning a role to those providers requires **no change to any operation** — if a provider has
       to be reshaped to fit, either the role's contract is wrong or that provider does not have the
@@ -56,3 +63,24 @@ Define the first two roles, assign them to the providers that already fit, and p
   `openai-models-list` is a live call.
 - Expect vendor disagreement about what a "model id" is (`gpt-4o` vs `openai/gpt-4o` on OpenRouter's
   proxied slugs). Record the rule you pick; do not normalise silently.
+
+## Progress
+
+- **The design's role table was wrong and is fixed** (coordinator, before dispatch). Measured against
+  the shipped catalogue:
+
+  - `show` matches **one** operation, in zendesk alone; `get` matches **37 across 17 providers**. So
+    `ticketing` as written was satisfiable by zendesk only — the single-vendor failure the role exists
+    to avoid.
+  - A bare `list` is filled by **9 of 19** providers, only two legitimately. `models.list` matches
+    exactly `openai` and `openrouter`.
+  - `search` matches zendesk only, so it is dropped from `ticketing`.
+  - `freshdesk` and `intercom` have a `get` but publish **no** comment list, so they do not satisfy
+    `ticketing` and were removed from the candidate list.
+
+  The fix is the slot *spelling*, plus slots as sets — **not** a stricter matcher. `fills_slot` is left
+  alone on the reviewer's finding that it is already tight for multi-segment slots.
+
+- **Both roles end up with exactly two satisfying providers**, the floor that makes a role a contract
+  rather than a description of one vendor. Neither clears it by much, which is worth knowing before a
+  third role is added by the same reasoning.
