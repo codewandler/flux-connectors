@@ -9,6 +9,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Every operation publishes one composed `input_schema` (C-125).** Path, query, header and body
+  parameters plus `body_schema` become a single object schema with `properties` and `required`,
+  derived and never authored, published per operation in `catalog.json`.
+
+  **The merge rule `ir.rs` left unstated is now stated — as a refusal.** An operation declaring both
+  named body fields *and* a free-form `body_schema` no longer loads. Refusal rather than a merge
+  because there is no rule to write down: "the body is these fields" and "the body *is* this schema"
+  describe the same bytes two ways, and every possible merge is a decision no vendor document
+  supports whose failure mode is a request the vendor answers `200` and ignores. The refusal moved
+  from the emitter to the **loader**, making it an invariant of the IR rather than of one back-end.
+
+  **Two derivations are held together by a test rather than collapsed**, because they genuinely
+  answer different questions. `connector-pack` keys by Flux *symbol* — babelforce's `time.start` is
+  `time_start` in a declaration — and the name→symbol mapping lives a dependency edge downstream of
+  the IR. And flux has no optional composite-op parameter, so the pack's `required` is necessarily
+  *every* parameter, while the composed schema states what the **vendor** requires. Collapsing them
+  would have published as optional a parameter the pack's own request builder rejects. An agreement
+  test over all 105 shipped operations asserts they describe the same parameter set modulo the symbol
+  mapping, with a proper-subset guard so the divergence stays tested rather than assumed away.
+
+
+### Added
+
 - **The Notion connector (C-107)** — the nineteenth provider, 256 artifacts. Five operations, with
   `Notion-Version: 2022-06-28` emitted as a **literal** on every request.
 

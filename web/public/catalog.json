@@ -97,6 +97,28 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "base_id": {
+                "pattern": "^app[A-Za-z0-9]+$",
+                "type": "string"
+              },
+              "record_id": {
+                "pattern": "^rec[A-Za-z0-9]+$",
+                "type": "string"
+              },
+              "table_id": {
+                "pattern": "^tbl[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "base_id",
+              "table_id",
+              "record_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -187,6 +209,28 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "base_id": {
+                "pattern": "^app[A-Za-z0-9]+$",
+                "type": "string"
+              },
+              "cell_values": {
+                "description": "A map from column name to cell value. Untyped here because the columns are the base's own schema",
+                "type": "object"
+              },
+              "table_id": {
+                "pattern": "^tbl[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "base_id",
+              "table_id",
+              "cell_values"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -288,6 +332,33 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "base_id": {
+                "pattern": "^app[A-Za-z0-9]+$",
+                "type": "string"
+              },
+              "cell_values": {
+                "description": "A map from column name to cell value. Untyped here because the columns are the base's own schema",
+                "type": "object"
+              },
+              "record_id": {
+                "pattern": "^rec[A-Za-z0-9]+$",
+                "type": "string"
+              },
+              "table_id": {
+                "pattern": "^tbl[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "base_id",
+              "table_id",
+              "record_id",
+              "cell_values"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -378,6 +449,28 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "base_id": {
+                "pattern": "^app[A-Za-z0-9]+$",
+                "type": "string"
+              },
+              "record_id": {
+                "pattern": "^rec[A-Za-z0-9]+$",
+                "type": "string"
+              },
+              "table_id": {
+                "pattern": "^tbl[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "base_id",
+              "table_id",
+              "record_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -496,6 +589,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "task_gid": {
+                "minLength": 1,
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "task_gid"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -564,6 +670,24 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "workspace": {
+                "minLength": 1,
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "workspace"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -631,6 +755,23 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "completed": {
+                "type": "boolean"
+              },
+              "task_gid": {
+                "minLength": 1,
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "task_gid",
+              "completed"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -699,6 +840,24 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "task_gid": {
+                "minLength": 1,
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              },
+              "text": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "task_gid",
+              "text"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -756,6 +915,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "project_gid": {
+                "minLength": 1,
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project_gid"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -996,6 +1168,75 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "groupIds": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "groups": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "max": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "number": {
+                "type": "string"
+              },
+              "page": {
+                "type": "integer"
+              },
+              "q": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "sourceId": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "available",
+                  "busy",
+                  "declined",
+                  "unreachable",
+                  "selected",
+                  "ringing",
+                  "in-call",
+                  "wrap-up"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -1055,6 +1296,17 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -1119,6 +1371,23 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "id": {
+                "type": "string"
+              },
+              "presence_name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -1369,6 +1638,130 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "agentId": {
+                "oneOf": [
+                  {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "conversationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "finishReason": {
+                "enum": [
+                  "unknown",
+                  "passive-hangup",
+                  "system-hangup",
+                  "failed",
+                  "timeout",
+                  "unreachable",
+                  "busy",
+                  "declined",
+                  "canceled",
+                  "transferred"
+                ],
+                "type": "string"
+              },
+              "fromNumber": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "id": {
+                "oneOf": [
+                  {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "max": {
+                "type": "integer"
+              },
+              "page": {
+                "type": "integer"
+              },
+              "q": {
+                "type": "string"
+              },
+              "sessionId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "init",
+                  "scheduled",
+                  "ringing",
+                  "in-progress",
+                  "queued",
+                  "bridged",
+                  "canceled",
+                  "busy",
+                  "no-answer",
+                  "purged",
+                  "completed",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              "time.end": {
+                "type": "integer"
+              },
+              "time.start": {
+                "type": "integer"
+              },
+              "toNumber": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "type": {
+                "enum": [
+                  "inbound",
+                  "outbound"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -1430,6 +1823,17 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -1474,6 +1878,17 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -1518,6 +1933,22 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "body": {
+                "description": "The session variables to set, as a JSON object. Every key must start with `app`",
+                "type": "object"
+              },
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "body"
+            ],
+            "type": "object"
+          },
           "body_schema": {
             "description": "The session variables to set, as a JSON object. Every key must start with `app`",
             "type": "object"
@@ -1565,6 +1996,17 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -1609,6 +2051,22 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "body": {
+                "description": "The user-scoped session variables to update, as a JSON object",
+                "type": "object"
+              },
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "body"
+            ],
+            "type": "object"
+          },
           "body_schema": {
             "description": "The user-scoped session variables to update, as a JSON object",
             "type": "object"
@@ -1700,6 +2158,11 @@
           "method": "GET",
           "path": "/platform/regions",
           "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -1758,6 +2221,18 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "app_name": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "app_name"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "items": {
@@ -1836,6 +2311,23 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "app_name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "machine_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "app_name",
+              "machine_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -1920,6 +2412,23 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "app_name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "machine_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "app_name",
+              "machine_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "items": {
@@ -1998,6 +2507,23 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "app_name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "image": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "app_name",
+              "image"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -2076,6 +2602,23 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "app_name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "machine_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "app_name",
+              "machine_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -2132,6 +2675,23 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "app_name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "machine_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "app_name",
+              "machine_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -2188,6 +2748,23 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "app_name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "machine_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "app_name",
+              "machine_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -2244,6 +2821,23 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "app_name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "machine_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "app_name",
+              "machine_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -2324,6 +2918,17 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "per_page": {
+                "default": 1,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [],
@@ -2404,6 +3009,26 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "company_id": {
+                "type": "string"
+              },
+              "req_email": {
+                "format": "email",
+                "type": "string"
+              },
+              "req_id": {
+                "type": "string"
+              },
+              "updated": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [],
@@ -2463,6 +3088,17 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [],
@@ -2698,6 +3334,102 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "cc_emails": {
+                "items": {
+                  "format": "email",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "custom_fields": {
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "integer"
+                  ]
+                },
+                "type": "object"
+              },
+              "description": {
+                "type": "string"
+              },
+              "email_config_id": {
+                "type": "integer"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "phone": {
+                "type": "string"
+              },
+              "priority": {
+                "default": 2,
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  4
+                ],
+                "type": "integer"
+              },
+              "product_id": {
+                "type": "integer"
+              },
+              "requester_id": {
+                "type": "integer"
+              },
+              "responder_id": {
+                "type": "integer"
+              },
+              "source": {
+                "default": 3,
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  7,
+                  8,
+                  9,
+                  10
+                ],
+                "type": "integer"
+              },
+              "status": {
+                "default": 2,
+                "enum": [
+                  2,
+                  3,
+                  4,
+                  5
+                ],
+                "type": "integer"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "subject",
+              "description",
+              "status",
+              "priority"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [],
@@ -2918,6 +3650,84 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "custom_fields": {
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "integer"
+                  ]
+                },
+                "type": "object"
+              },
+              "description": {
+                "type": "string"
+              },
+              "email": {
+                "format": "email",
+                "type": "string"
+              },
+              "email_config_id": {
+                "type": "integer"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "phone": {
+                "type": "string"
+              },
+              "priority": {
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  4
+                ],
+                "type": "integer"
+              },
+              "product_id": {
+                "type": "integer"
+              },
+              "requester_id": {
+                "type": "integer"
+              },
+              "responder_id": {
+                "type": "integer"
+              },
+              "status": {
+                "enum": [
+                  2,
+                  3,
+                  4,
+                  5
+                ],
+                "type": "integer"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [],
@@ -3013,6 +3823,37 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "body": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "incoming": {
+                "default": true,
+                "type": "boolean"
+              },
+              "notify_emails": {
+                "items": {
+                  "format": "email",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "private": {
+                "default": true,
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "body"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [],
@@ -3108,6 +3949,34 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "company_id": {
+                "type": "string"
+              },
+              "email": {
+                "format": "email",
+                "type": "string"
+              },
+              "mobile": {
+                "type": "string"
+              },
+              "phone": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "blocked",
+                  "deleted",
+                  "unverified",
+                  "verified"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [],
@@ -3168,6 +4037,17 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [],
@@ -3237,6 +4117,24 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "email": {
+                "format": "email",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "phone": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [],
@@ -3352,6 +4250,23 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "owner": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "repo": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "owner",
+              "repo"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -3420,6 +4335,29 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "issue_number": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "owner": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "repo": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "owner",
+              "repo",
+              "issue_number"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -3488,6 +4426,29 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "owner": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "pull_number": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "repo": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "owner",
+              "repo",
+              "pull_number"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -3593,6 +4554,45 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "assignees": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "body": {
+                "type": "string"
+              },
+              "labels": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "owner": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "repo": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "title": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "owner",
+              "repo",
+              "title"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -3672,6 +4672,34 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "body": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "issue_number": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "owner": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "repo": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "owner",
+              "repo",
+              "issue_number",
+              "body"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -3808,6 +4836,25 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "message_id": {
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              "user_id": {
+                "minLength": 2,
+                "pattern": "^(me|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "user_id",
+              "message_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -3866,6 +4913,25 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "raw": {
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+={0,2}$",
+                "type": "string"
+              },
+              "user_id": {
+                "minLength": 2,
+                "pattern": "^(me|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "user_id",
+              "raw"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -3912,6 +4978,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "user_id": {
+                "minLength": 2,
+                "pattern": "^(me|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "user_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -3970,6 +5049,25 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "calendar_id": {
+                "minLength": 3,
+                "pattern": "^(primary|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$",
+                "type": "string"
+              },
+              "event_id": {
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "calendar_id",
+              "event_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -4049,6 +5147,34 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "calendar_id": {
+                "minLength": 3,
+                "pattern": "^(primary|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$",
+                "type": "string"
+              },
+              "end_time": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "start_time": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "summary": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "calendar_id",
+              "summary",
+              "start_time",
+              "end_time"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -4095,6 +5221,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "calendar_id": {
+                "minLength": 3,
+                "pattern": "^(primary|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "calendar_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -4141,6 +5280,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "file_id": {
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "file_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -4198,6 +5350,24 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "file_id": {
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              "name": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "file_id",
+              "name"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -4299,6 +5469,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "contact_id": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "contact_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -4344,6 +5527,18 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "email": {
+                "minLength": 3,
+                "type": "string"
+              }
+            },
+            "required": [
+              "email"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -4410,6 +5605,27 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "contact_id": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "firstname": {
+                "type": "string"
+              },
+              "lastname": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "contact_id",
+              "firstname",
+              "lastname"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -4456,6 +5672,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "company_id": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "company_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -4502,6 +5731,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "deal_id": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "deal_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -4602,6 +5844,18 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "contact_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "contact_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -4662,6 +5916,27 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "email": {
+                "format": "email",
+                "minLength": 1,
+                "type": "string"
+              },
+              "role": {
+                "enum": [
+                  "user",
+                  "lead"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "email"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -4707,6 +5982,18 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "conversation_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "conversation_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -4799,6 +6086,41 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "admin_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "body": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "conversation_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "message_type": {
+                "enum": [
+                  "comment",
+                  "note"
+                ],
+                "type": "string"
+              },
+              "type": {
+                "const": "admin",
+                "type": "string"
+              }
+            },
+            "required": [
+              "conversation_id",
+              "message_type",
+              "type",
+              "admin_id",
+              "body"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -4866,6 +6188,28 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "admin_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "body": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "contact_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "contact_id",
+              "body",
+              "admin_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -4968,6 +6312,18 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "issue_key": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "issue_key"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -5043,6 +6399,28 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "issue_type": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "project_key": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "summary": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "project_key",
+              "summary",
+              "issue_type"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -5096,6 +6474,18 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "issue_key": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "issue_key"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -5160,6 +6550,23 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "body": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "issue_key": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "issue_key",
+              "body"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -5213,6 +6620,18 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "issue_key": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "issue_key"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -5277,6 +6696,23 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "issue_key": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "transition_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "issue_key",
+              "transition_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -5373,6 +6809,11 @@
           "method": "GET",
           "path": "/v1/users/me",
           "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -5440,6 +6881,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "page_id": {
+                "minLength": 32,
+                "pattern": "^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "page_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -5518,6 +6972,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "database_id": {
+                "minLength": 32,
+                "pattern": "^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "database_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -5584,6 +7051,17 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -5686,6 +7164,48 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "parent_page_id": {
+                "minLength": 32,
+                "pattern": "^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$",
+                "type": "string"
+              },
+              "title": {
+                "items": {
+                  "properties": {
+                    "text": {
+                      "properties": {
+                        "content": {
+                          "description": "The literal text of this run",
+                          "type": "string"
+                        },
+                        "link": {
+                          "description": "An optional link on this run, `{\"url\": \"...\"}`",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "content"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ],
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "parent_page_id",
+              "title"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -5796,6 +7316,11 @@
           "method": "GET",
           "path": "/v1/models",
           "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -5841,6 +7366,18 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "model": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "model"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -5911,6 +7448,31 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "max_completion_tokens": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "messages": {
+                "items": {
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "model": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "model",
+              "messages",
+              "max_completion_tokens"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -5978,6 +7540,34 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "input": {
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                ]
+              },
+              "model": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "model",
+              "input"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -6066,6 +7656,11 @@
           "method": "GET",
           "path": "/api/v1/models",
           "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -6122,6 +7717,23 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "author": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "slug": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "author",
+              "slug"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -6192,6 +7804,31 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "max_completion_tokens": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "messages": {
+                "items": {
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "model": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "model",
+              "messages",
+              "max_completion_tokens"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -6225,6 +7862,11 @@
           "method": "GET",
           "path": "/api/v1/credits",
           "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -6338,6 +7980,25 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "issue_id": {
+                "minLength": 1,
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              },
+              "organization_id_or_slug": {
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9_-]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "organization_id_or_slug",
+              "issue_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -6411,6 +8072,34 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "issue_id": {
+                "minLength": 1,
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              },
+              "organization_id_or_slug": {
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9_-]+$",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "resolved",
+                  "ignored",
+                  "unresolved"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "organization_id_or_slug",
+              "issue_id",
+              "status"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -6469,6 +8158,25 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "organization_id_or_slug": {
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9_-]+$",
+                "type": "string"
+              },
+              "project_id_or_slug": {
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9_-]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "organization_id_or_slug",
+              "project_id_or_slug"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -6527,6 +8235,25 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "issue_id": {
+                "minLength": 1,
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              },
+              "organization_id_or_slug": {
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9_-]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "organization_id_or_slug",
+              "issue_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -6628,6 +8355,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "order_id": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "order_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -6682,6 +8422,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "product_id": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "product_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -6747,6 +8500,24 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "product_id": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "title": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "product_id",
+              "title"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -6801,6 +8572,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "customer_id": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "customer_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -6855,6 +8639,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "location_id": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "location_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -6999,6 +8796,26 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "channel": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "text": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "thread_ts": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "channel",
+              "text"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -7077,6 +8894,30 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "channel": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "latest": {
+                "type": "string"
+              },
+              "limit": {
+                "default": 100,
+                "maximum": 999,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "oldest": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "channel"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -7133,6 +8974,22 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "include_locale": {
+                "default": false,
+                "type": "boolean"
+              },
+              "user": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "user"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -7200,6 +9057,28 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "channel": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "timestamp": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "channel",
+              "timestamp",
+              "name"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -7497,6 +9376,11 @@
           "method": "GET",
           "path": "/v1/balance",
           "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -7573,6 +9457,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "customer": {
+                "minLength": 5,
+                "pattern": "^cus_[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "customer"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -7646,6 +9543,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "charge": {
+                "minLength": 4,
+                "pattern": "^ch_[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "charge"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -7742,6 +9652,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "payment_intent": {
+                "minLength": 4,
+                "pattern": "^pi_[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "payment_intent"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -7840,6 +9763,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "refund": {
+                "minLength": 4,
+                "pattern": "^re_[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "refund"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -7937,6 +9873,25 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "idempotency_key": {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              "payment_intent": {
+                "minLength": 4,
+                "pattern": "^pi_[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "payment_intent",
+              "idempotency_key"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -8027,6 +9982,25 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "idempotency_key": {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              "payment_intent": {
+                "minLength": 4,
+                "pattern": "^pi_[A-Za-z0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "payment_intent",
+              "idempotency_key"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -8110,6 +10084,25 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "charge": {
+                "minLength": 4,
+                "pattern": "^ch_[A-Za-z0-9]+$",
+                "type": "string"
+              },
+              "idempotency_key": {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "charge",
+              "idempotency_key"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -8419,6 +10412,11 @@
           "method": "GET",
           "path": "/api/v2/users/me.json",
           "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -8496,6 +10494,28 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "page": {
+                "default": 1,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "per_page": {
+                "default": 100,
+                "maximum": 100,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -8558,6 +10578,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "ticket_id": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "ticket_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -8637,6 +10670,30 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "page": {
+                "default": 1,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "per_page": {
+                "default": 100,
+                "maximum": 100,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "ticket_id": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "ticket_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -8764,6 +10821,45 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "assignee_id": {
+                "format": "uint64",
+                "type": "integer"
+              },
+              "group_id": {
+                "format": "uint64",
+                "type": "integer"
+              },
+              "priority": {
+                "type": "string"
+              },
+              "safe_update": {
+                "const": true,
+                "type": "boolean"
+              },
+              "status": {
+                "type": "string"
+              },
+              "ticket_id": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "type": {
+                "type": "string"
+              },
+              "updated_stamp": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ticket_id",
+              "updated_stamp",
+              "safe_update"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -8861,6 +10957,37 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "body": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "public": {
+                "default": false,
+                "type": "boolean"
+              },
+              "safe_update": {
+                "const": true,
+                "type": "boolean"
+              },
+              "ticket_id": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "updated_stamp": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ticket_id",
+              "updated_stamp",
+              "safe_update",
+              "body"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -8951,6 +11078,37 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "safe_update": {
+                "const": true,
+                "type": "boolean"
+              },
+              "tags": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "ticket_id": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "updated_stamp": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ticket_id",
+              "updated_stamp",
+              "safe_update",
+              "tags"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -9060,6 +11218,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "meeting_id": {
+                "format": "int64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "meeting_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -9184,6 +11355,46 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "duration": {
+                "maximum": 1440,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "start_time": {
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+                "type": "string"
+              },
+              "topic": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": {
+                "const": 2,
+                "type": "integer"
+              },
+              "user_id": {
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9@._+-]+$",
+                "type": "string"
+              },
+              "waiting_room": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "user_id",
+              "topic",
+              "type",
+              "start_time",
+              "duration",
+              "waiting_room"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": {
             "properties": {
@@ -9251,6 +11462,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "meeting_id": {
+                "format": "int64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "meeting_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [
@@ -9297,6 +11521,19 @@
               }
             }
           ],
+          "input_schema": {
+            "properties": {
+              "user_id": {
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9@._+-]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "user_id"
+            ],
+            "type": "object"
+          },
           "body_schema": null,
           "response_schema": null,
           "credentials": [

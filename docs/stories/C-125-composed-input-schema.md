@@ -2,8 +2,7 @@
 id: C-125
 title: "Compose one input_schema per operation"
 pillar: Codegen
-status: in-progress
-priority: 2
+status: done
 design: docs/designs/member-io-schemas.md
 epic: member-io
 areas: [connector-spec, codegen]
