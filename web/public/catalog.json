@@ -2184,6 +2184,288 @@
       ]
     },
     {
+      "id": "hubspot",
+      "vendor": "HubSpot",
+      "description": "HubSpot CRM: read contacts, companies and deals, and create and update contact records",
+      "base_url": "https://api.hubapi.com",
+      "hosts": [
+        "api.hubapi.com"
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "hubspot.access_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "HubSpot private-app access token (pat-…) with crm.objects.contacts.read/write, crm.objects.companies.read and crm.objects.deals.read",
+            "env": [
+              "HUBSPOT_ACCESS_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "hubspot.access_token"
+          ]
+        ]
+      },
+      "operation_count": 5,
+      "operations": [
+        {
+          "id": "hubspot-contact-get",
+          "provider": "hubspot",
+          "description": "Read one contact by record id. Returns only HubSpot's default contact properties — name, email and record timestamps; a custom property needs a `properties` projection this connector cannot express yet",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/crm/v3/objects/contacts/{contact_id}",
+          "parameters": [
+            {
+              "name": "contact_id",
+              "in": "path",
+              "wire": null,
+              "description": "The contact's HubSpot record id (`hs_object_id`), e.g. 512",
+              "required": true,
+              "schema": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "hubspot.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.hubapi.com"
+          ],
+          "flux": "op hubspot-contact-get(contact_id: Number) -> Any\n  description \"Read one contact by record id. Returns only HubSpot's default contact properties — name, email and record timestamps; a custom property needs a `properties` projection this connector cannot express yet. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.hubapi.com\"\n  $url = fmt(\"{base}/crm/v3/objects/contacts/{contact_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "hubspot-contact-create",
+          "provider": "hubspot",
+          "description": "Create a contact from an email address. HubSpot treats email as the contact's unique identifier and rejects a duplicate with 409. The new record is visible to everyone in the portal and can be enrolled by a workflow, which may send it marketing email",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/crm/v3/objects/contacts",
+          "parameters": [
+            {
+              "name": "email",
+              "in": "body",
+              "wire": "properties.email",
+              "description": "The contact's email address — HubSpot's unique identifier for a contact",
+              "required": true,
+              "schema": {
+                "minLength": 3,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "hubspot.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.hubapi.com"
+          ],
+          "flux": "op hubspot-contact-create(email: String) -> Any\n  description \"Create a contact from an email address. HubSpot treats email as the contact's unique identifier and rejects a duplicate with 409. The new record is visible to everyone in the portal and can be enrolled by a workflow, which may send it marketing email. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.hubapi.com\"\n  $url = fmt(\"{base}/crm/v3/objects/contacts\")\n  $content_type = \"application/json\"\n  $payload = { properties: { email: $email } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "hubspot-contact-update",
+          "provider": "hubspot",
+          "description": "Overwrite a contact's first and last name. Both are written on every call — this operation replaces them rather than merging, so re-send the one you are not changing (read it first with hubspot-contact-get). The change is visible to everyone in the portal and can trigger a workflow",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "PATCH",
+          "path": "/crm/v3/objects/contacts/{contact_id}",
+          "parameters": [
+            {
+              "name": "contact_id",
+              "in": "path",
+              "wire": null,
+              "description": "The contact's HubSpot record id (`hs_object_id`)",
+              "required": true,
+              "schema": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "firstname",
+              "in": "body",
+              "wire": "properties.firstname",
+              "description": "The contact's first name; written on every call",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "lastname",
+              "in": "body",
+              "wire": "properties.lastname",
+              "description": "The contact's last name; written on every call",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "hubspot.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.hubapi.com"
+          ],
+          "flux": "op hubspot-contact-update(contact_id: Number, firstname: String, lastname: String) -> Any\n  description \"Overwrite a contact's first and last name. Both are written on every call — this operation replaces them rather than merging, so re-send the one you are not changing (read it first with hubspot-contact-get). The change is visible to everyone in the portal and can trigger a workflow. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.hubapi.com\"\n  $url = fmt(\"{base}/crm/v3/objects/contacts/{contact_id}\")\n  $content_type = \"application/json\"\n  $payload = { properties: { firstname: $firstname, lastname: $lastname } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PATCH\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "hubspot-company-get",
+          "provider": "hubspot",
+          "description": "Read one company by record id. Returns only HubSpot's default company properties — name, domain and record timestamps",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/crm/v3/objects/companies/{company_id}",
+          "parameters": [
+            {
+              "name": "company_id",
+              "in": "path",
+              "wire": null,
+              "description": "The company's HubSpot record id (`hs_object_id`)",
+              "required": true,
+              "schema": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "hubspot.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.hubapi.com"
+          ],
+          "flux": "op hubspot-company-get(company_id: Number) -> Any\n  description \"Read one company by record id. Returns only HubSpot's default company properties — name, domain and record timestamps. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.hubapi.com\"\n  $url = fmt(\"{base}/crm/v3/objects/companies/{company_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "hubspot-deal-get",
+          "provider": "hubspot",
+          "description": "Read one deal by record id. Returns only HubSpot's default deal properties — name, amount, stage, pipeline and close date",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/crm/v3/objects/deals/{deal_id}",
+          "parameters": [
+            {
+              "name": "deal_id",
+              "in": "path",
+              "wire": null,
+              "description": "The deal's HubSpot record id (`hs_object_id`)",
+              "required": true,
+              "schema": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "hubspot.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.hubapi.com"
+          ],
+          "flux": "op hubspot-deal-get(deal_id: Number) -> Any\n  description \"Read one deal by record id. Returns only HubSpot's default deal properties — name, amount, stage, pipeline and close date. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://api.hubapi.com\"\n  $url = fmt(\"{base}/crm/v3/objects/deals/{deal_id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "openai",
       "vendor": "OpenAI",
       "description": "OpenAI platform: list models, and create chat completions and embeddings",

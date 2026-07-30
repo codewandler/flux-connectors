@@ -104,6 +104,10 @@ fn operation_selection_stays_curated() {
         // `providers/openai.toml`.
         ("openai", 4),
         ("slack", 4),
+        // C-72 curates 5 over `/crm/v3/objects`: contact get, create and update, company get and
+        // deal get. The cut is the query-encoding gap again — HubSpot's search endpoints and every
+        // `properties=` projection are excluded. See `providers/hubspot.toml`.
+        ("hubspot", 5),
     ];
     for (name, count) in expected {
         let loaded = load(name);
