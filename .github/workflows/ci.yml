@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  # Note: deliberately NOT setting `RUSTFLAGS: -D warnings` globally — that would also deny warnings
+  # in third-party dependencies, breaking CI on any upstream warning or new rustc lint. Warning
+  # enforcement for our own code lives in the clippy step below (`-- -D warnings`).
+
+jobs:
+  check:
+    name: build · test · clippy · fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Install Rust toolchain
+        # Pinned, not `stable`: every Rust release ships new clippy lints that `-D warnings`
+        # promotes to errors, so a floating CI toolchain breaks on code that is clean locally.
+        # To bump: change the version here, run clippy/fmt locally on that same version, fix, commit.
+        uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        with:
+          # `master` above pins the action's *code* to a commit; the toolchain the tag used to encode
+          # is an explicit — and, at this SHA, required — input.
+          toolchain: "1.97.0"
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      # `--locked` here, not on the build/test steps below: it makes a stale or hand-edited
+      # `Cargo.lock` an obvious, named failure rather than something cargo silently repairs, while
+      # the four gate commands stay byte-identical to the ones in AGENTS.md's dev loop.
+      - name: Fetch locked dependencies
+        run: cargo fetch --locked
+
+      - name: Build
+        run: cargo build --workspace
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Format
+        run: cargo fmt --all --check

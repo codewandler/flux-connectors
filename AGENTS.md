@@ -72,8 +72,10 @@ run.
 
 ## Relationship to ../flux
 
-- flux-connectors **depends on** `codewandler-flux-lang` (lib `flux_lang`) as a git dependency pinned
-  to a flux tag. Bumping that pin is a deliberate, reviewed change.
+- flux-connectors **depends on** `codewandler-flux-lang` (lib `flux_lang`) from **crates.io**, pinned
+  to a published version in `[workspace.dependencies]`. Not a git dependency and not a path
+  dependency: flux publishes flux-lang to crates.io, so a registry pin is the only form that
+  resolves in a fresh clone and in CI. Bumping that pin is a deliberate, reviewed change.
 - flux-connectors **does not** depend on the flux runtime. It compiles; flux executes.
 - One change is required **in flux** and is on the critical path: the `$auth` marker for
   `http.request`. It is designed here in [docs/designs/auth-seam.md](docs/designs/auth-seam.md); the
