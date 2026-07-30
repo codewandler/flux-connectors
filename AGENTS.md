@@ -114,25 +114,42 @@ implementor runs is scoped and does not include a full build:**
 cargo run -p connector-cli -- build --provider <id>   # per-provider artifacts only
 cargo run -p connector-cli -- diff  --provider <id>   # must report no drift
 cargo build --workspace
-cargo test --workspace
+cargo test --workspace --no-fail-fast
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
 
-**A story that adds a new provider leaves exactly three tests red, and that is the design working.**
-They are the whole-catalogue staleness checks, and they are red precisely because the implementor
-correctly did *not* write a whole-catalogue file:
+`--no-fail-fast` is not optional here. Plain `cargo test --workspace` stops at the first failing
+binary, and the expected failures below are spread across **five** of them, so a run without it
+reports a number that is simply wrong — see [Validation](#validation).
 
-| red test | what it is reporting |
-|---|---|
-| `catalog::embedded_operations::the_provider_list_matches_the_repository` | the committed index does not yet name the new provider |
-| `catalog::embedded_operations::the_catalog_is_not_empty` | the provider and rendering counts disagree with `providers/` and `ops/` |
-| `connector-cli::catalog_artifacts::the_committed_tree_is_a_fixed_point_of_a_build` | a full build would write `crates/catalog/src/generated.rs` and `web/public/catalog.json` |
+**A story that adds a new provider leaves exactly eight tests red across five binaries, and that is
+the design working.** They are whole-catalogue staleness checks, and every one is red precisely
+because the implementor correctly did *not* write a whole-catalogue file. Measured, not predicted:
+add `providers/<id>.toml` + `specs/<id>/v1.json`, run `build --provider <id>`, then
+`cargo test --workspace --no-fail-fast`.
 
-Report them and stop; do **not** run a full build to silence them. The coordinator's full build at
-integration is what resolves all three, and it is the only build that can, because it is the only one
-that has every provider. A story that only *changes* an existing provider leaves the index correct
-and so trips the third alone.
+| red test | binary | what it is reporting |
+|---|---|---|
+| `the_provider_list_matches_the_repository` | `catalog::embedded_operations` | the committed index does not yet name the new provider |
+| `the_catalog_is_not_empty` | `catalog::embedded_operations` | the provider and rendering counts disagree with `providers/` and `ops/` |
+| `the_committed_tree_is_a_fixed_point_of_a_build` | `connector-cli::catalog_artifacts` | a full build would write the index and `catalog.json` |
+| `a_build_plans_both_readme_images_and_they_are_current` | `connector-cli::readme_snippet` | same whole-tree fixed-point assertion, reached from the README images |
+| `the_shipped_artifacts_are_byte_identical` | `connector-cli::service_units` | same again; it excludes only `catalog.json`, so the stale index surfaces here |
+| `the_published_catalogue_carries_the_service` | `connector-cli::service_units` | committed `catalog.json` does not carry the new provider's service |
+| `every_shipped_operation_carries_its_metadata_and_its_flux` | `connector-cli::site_catalog` | committed `catalog.json` is missing the new provider's operations |
+| `the_build_writes_and_checks_site_catalog_json` | `connector-cli::site_catalog` | same, from the document-level check |
+
+Four of the eight are the *same* whole-tree fixed-point assertion written in four places; the rest
+are `catalog.json` and index staleness. Report them and stop; do **not** run a full build to silence
+them. The coordinator's full build at integration resolves all eight, and it is the only build that
+can, because it is the only one with every provider.
+
+**A story that only changes an existing provider leaves three red**, not one — the index is still
+correct, but `catalog.json` and the README images are not. Measured by editing a `description` in
+`providers/zendesk.toml` and running `build --provider zendesk`:
+`the_committed_tree_is_a_fixed_point_of_a_build`, `a_build_plans_both_readme_images_and_they_are_current`
+and `the_build_writes_and_checks_site_catalog_json`.
 
 The public VitePress site is a consumer surface, not a publication of repository internals. Public
 pages may explain connectors, operation contracts, safety metadata, credentials, hosts, and current

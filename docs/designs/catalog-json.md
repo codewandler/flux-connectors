@@ -47,7 +47,12 @@ index *by hand*, and so became the one file every provider story had to append t
 index generated under this same full-run rule, and named the resulting class in `AGENTS.md`:
 **whole-catalogue artifacts**, written by a full build only and owned by the coordinator. That is
 what lets provider stories run in parallel, because it makes two implementors' write sets disjoint.
-`crates/connector-cli/tests/catalog_index.rs` asserts the rule for every member of the class.
+
+`crates/connector-cli/tests/catalog_index.rs` asserts the rule by comparing **whole-tree snapshots**
+either side of a scoped build, rather than by checking a list of paths. The distinction is the point:
+an enumerated list covers the members someone remembered to add, and stops covering the class the
+moment the pipeline grows a fifth artifact. A snapshot comparison covers every member — the index,
+this document, `web/public/v1/**` and the README SVGs — and covers a future one for free.
 
 ## Guarantees
 
