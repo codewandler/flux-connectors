@@ -1,0 +1,141 @@
+//! Wire names and Flux symbol names are **not** the same namespace, and this module is the seam
+//! between them.
+//!
+//! A vendor is free to name a query parameter `time.start`; babelforce does exactly that
+//! (`docs/designs/provider-operation-inventory.md` §6.5). Flux is not: a session symbol name is
+//! ASCII alphanumerics and `_` only, and a dot in particular is *never* valid in a declared name —
+//! in expression position `$a.b` is field-access sugar for `jq(".b", $a)`, so a dotted symbol would
+//! silently change meaning rather than fail (`flux_lang::ast::SymbolName::is_identifier`).
+//!
+//! So each parameter carries two names: the **wire name**, which is what the vendor sees in the
+//! query string, and the **symbol name**, which is what the generated `op` declares and references.
+//! Nothing is mangled silently — the mapping is total, deterministic, and only ever changes the
+//! symbol side.
+
+use std::collections::BTreeSet;
+
+use crate::Error;
+
+/// Symbols the emitter binds inside every op body. A vendor parameter that would map onto one of
+/// these is disambiguated instead of being allowed to shadow it — a parameter named `url` must not
+/// quietly overwrite the URL the request is built from.
+const RESERVED: &[&str] = &["base", "url", "sep"];
+
+/// Hands out a unique Flux symbol name for each vendor parameter name, in declaration order.
+pub(crate) struct Symbols {
+    taken: BTreeSet<String>,
+}
+
+impl Symbols {
+    /// A fresh allocator, pre-seeded with the emitter's own [`RESERVED`] symbols.
+    pub(crate) fn new() -> Self {
+        Self {
+            taken: RESERVED.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    /// The Flux symbol for `wire`, reserving it so no later parameter can collide with it.
+    ///
+    /// The mapping, in order:
+    ///
+    /// 1. every character outside `[A-Za-z0-9_]` becomes `_` (`time.start` → `time_start`);
+    /// 2. a name that would start with a digit is prefixed with `p_`, because a leading digit is
+    ///    not a spellable identifier start;
+    /// 3. a name already taken — by [`RESERVED`] or by an earlier parameter that normalized to the
+    ///    same thing — gains a `_2`, `_3`, … suffix.
+    ///
+    /// Step 3 is why this is a stateful allocator rather than a pure function: `time.start` and
+    /// `time_start` are distinct wire names that normalize identically, and collapsing them would
+    /// send one parameter's value under the other's name.
+    pub(crate) fn allocate(&mut self, operation: &str, wire: &str) -> Result<String, Error> {
+        if wire.is_empty() {
+            return Err(Error::BadParamName {
+                operation: operation.to_string(),
+                name: wire.to_string(),
+                reason: "it is empty",
+            });
+        }
+        // A brace would be read as an interpolation delimiter by the `fmt` template the URL is
+        // built from, corrupting the query string rather than escaping it.
+        if wire.contains('{') || wire.contains('}') {
+            return Err(Error::BadParamName {
+                operation: operation.to_string(),
+                name: wire.to_string(),
+                reason: "it contains a brace, which would corrupt the URL template",
+            });
+        }
+
+        let mut symbol: String = wire
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+            .collect();
+        if symbol.starts_with(|c: char| c.is_ascii_digit()) {
+            symbol.insert_str(0, "p_");
+        }
+
+        if self.taken.contains(&symbol) {
+            let base = symbol.clone();
+            let mut n = 2;
+            while self.taken.contains(&symbol) {
+                symbol = format!("{base}_{n}");
+                n += 1;
+            }
+        }
+
+        self.taken.insert(symbol.clone());
+        Ok(symbol)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_identifier_safe_name_is_left_alone() {
+        let mut symbols = Symbols::new();
+        assert_eq!(symbols.allocate("op", "per_page").unwrap(), "per_page");
+        assert_eq!(symbols.allocate("op", "agentId").unwrap(), "agentId");
+    }
+
+    /// The babelforce case: dots are not identifier-safe, and `$time.start` would reparse as field
+    /// access on `$time` rather than failing.
+    #[test]
+    fn a_dotted_vendor_name_becomes_an_identifier() {
+        let mut symbols = Symbols::new();
+        assert_eq!(symbols.allocate("op", "time.start").unwrap(), "time_start");
+    }
+
+    #[test]
+    fn two_names_that_normalize_alike_stay_distinct() {
+        let mut symbols = Symbols::new();
+        assert_eq!(symbols.allocate("op", "time.start").unwrap(), "time_start");
+        assert_eq!(
+            symbols.allocate("op", "time_start").unwrap(),
+            "time_start_2"
+        );
+    }
+
+    /// The emitter's own symbols are not up for grabs — a vendor parameter called `url` must not
+    /// overwrite the URL the request is built from.
+    #[test]
+    fn the_emitters_own_symbols_are_reserved() {
+        let mut symbols = Symbols::new();
+        assert_eq!(symbols.allocate("op", "url").unwrap(), "url_2");
+        assert_eq!(symbols.allocate("op", "base").unwrap(), "base_2");
+        assert_eq!(symbols.allocate("op", "sep").unwrap(), "sep_2");
+    }
+
+    #[test]
+    fn a_leading_digit_is_prefixed() {
+        let mut symbols = Symbols::new();
+        assert_eq!(symbols.allocate("op", "2fa").unwrap(), "p_2fa");
+    }
+
+    #[test]
+    fn an_empty_or_brace_bearing_name_is_refused() {
+        let mut symbols = Symbols::new();
+        assert!(symbols.allocate("op", "").is_err());
+        assert!(symbols.allocate("op", "a{b}").is_err());
+    }
+}
