@@ -9,7 +9,7 @@
 //! plausible-but-wrong output `AGENTS.md` requires the pipeline to refuse rather than emit, and it is
 //! why almost every test below asserts on a refusal.
 
-use connector_spec::{provider, Connector, Transport, VerificationScheme};
+use connector_spec::{provider, Connector, TimestampFormat, Transport, VerificationScheme};
 
 /// A connector with one reply-shaped operation and one event, ready for a binding to be bolted on.
 /// The `{binding}` placeholder is where each test writes the binding under test.
@@ -324,6 +324,92 @@ fn a_signed_template_the_host_cannot_fill_is_refused() {
     assert!(
         error.contains("the host can fill only"),
         "an unfillable template would fail open or fail confusingly:\n{error}"
+    );
+}
+
+/// **The refusal that keeps a signature meaning something.**
+///
+/// Every other rule in this section is about a declaration that would fail; this one is about a
+/// declaration that would *succeed* at authenticating the wrong thing. `signed = "v0:{timestamp}:"`
+/// is well formed, names only fillable placeholders, carries its selector and carries its window — and
+/// signs a string the payload never enters, so one captured signature verifies every forged body for
+/// the length of the window. `verification_conformance.rs` demonstrates the forgery itself before
+/// demanding this refusal; here it is the loader rule.
+#[test]
+fn a_signed_template_that_never_interpolates_the_body_is_refused() {
+    let error = refuse(&fixture(
+        &HMAC.replace("v0:{timestamp}:{body}", "v0:{timestamp}:"),
+    ));
+    assert!(
+        error.contains("never interpolates {body}"),
+        "a signed string the body never enters authenticates every forged payload:\n{error}"
+    );
+}
+
+/// A window is parsed, not merely required — see `inbound::parse_tolerance`.
+#[test]
+fn a_tolerance_that_is_not_a_duration_is_refused() {
+    let error = refuse(&fixture(&HMAC.replace("\"5m\"", "\"banana\"")));
+    assert!(
+        error.contains("not a window a host can apply"),
+        "a window nobody can read leaves the real window to whatever a host decides:\n{error}"
+    );
+}
+
+/// A count too large to scale is refused through the loader, in **both** build profiles.
+///
+/// `parse_tolerance` scaled with `*`, so this declaration panicked inside `provider::load` in a debug
+/// build and, in a release build, wrapped `i64::MAX * 60` to `-60` — a negative window that satisfies
+/// every remaining check and therefore *loaded*. A declared window no host could apply is the defect
+/// item 2 of this story exists to close, so the overflow class belongs in the same gate.
+#[test]
+fn a_tolerance_too_large_to_scale_is_refused_by_the_loader() {
+    let error = refuse(&fixture(
+        &HMAC.replace("\"5m\"", "\"9223372036854775807m\""),
+    ));
+    assert!(
+        error.contains("too large to be a window"),
+        "an overflowing count must come back as a refusal, never as a wrapped window:\n{error}"
+    );
+}
+
+/// Finding the timestamp would mean parsing the bytes whose trustworthiness it helps decide.
+#[test]
+fn a_verification_timestamp_read_from_the_body_is_refused() {
+    let error = refuse(&fixture(&HMAC.replace(
+        "{ source = \"header\", name = \"X-Acme-Timestamp\" }",
+        "{ source = \"body\", name = \"event.created_at\" }",
+    )));
+    assert!(
+        error.contains("inverts the order verification depends on"),
+        "verification runs before parsing, so its inputs cannot come from the parse:\n{error}"
+    );
+}
+
+/// The format axis is declared beside the selector: *where* the timestamp is read from, and *how* it
+/// is spelled. Absent means unix seconds, which is what Slack, Stripe and GitHub send.
+#[test]
+fn a_timestamp_format_loads_beside_its_selector() {
+    let connector = load(&fixture(&HMAC.replace(
+        "secret = \"acme.webhook_secret\"",
+        "timestamp_format = \"rfc3339\"\nsecret = \"acme.webhook_secret\"",
+    )));
+    let Some(VerificationScheme::Hmac(hmac)) =
+        &connector.channel("hook").expect("loads").verification
+    else {
+        panic!("the binding verifies with an HMAC scheme");
+    };
+    assert_eq!(hmac.timestamp_format, Some(TimestampFormat::Rfc3339));
+
+    let default = load(&fixture(HMAC));
+    let Some(VerificationScheme::Hmac(hmac)) =
+        &default.channel("hook").expect("loads").verification
+    else {
+        panic!("the binding verifies with an HMAC scheme");
+    };
+    assert_eq!(
+        hmac.timestamp_format, None,
+        "an omitted format is unix seconds, and stays absent from the encoding"
     );
 }
 

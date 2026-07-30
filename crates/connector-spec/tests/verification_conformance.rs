@@ -38,8 +38,10 @@
 
 use std::path::{Path, PathBuf};
 
-use connector_spec::inbound::{signed_placeholders, SIGNED_PLACEHOLDERS};
-use connector_spec::{provider, Digest, Encoding, FieldSource, HmacSpec, VerificationScheme};
+use connector_spec::inbound::{parse_tolerance, signed_placeholders, SIGNED_PLACEHOLDERS};
+use connector_spec::{
+    provider, Digest, Encoding, FieldSource, HmacSpec, TimestampFormat, VerificationScheme,
+};
 use sha2::{Digest as _, Sha256};
 
 // -------------------------------------------------------------------------------------------
@@ -150,12 +152,12 @@ fn verify(spec: &HmacSpec, secret: &[u8], request: &Request) -> Result<(), Refus
     };
     let message = signed_message(&spec.signed, &request.body, timestamp.as_deref())?;
 
-    // Axis 4 — how long a signature stays acceptable.
+    // Axis 4 — how long a signature stays acceptable, and axis 5 — how the timestamp is spelled.
     if let (Some(tolerance), Some(stamp)) = (&spec.tolerance, timestamp.as_deref()) {
         let window = parse_tolerance(tolerance).map_err(|reason| {
             Refusal::CannotVerify(format!("tolerance {tolerance:?}: {reason}"))
         })?;
-        let signed_at = parse_timestamp(stamp)
+        let signed_at = parse_timestamp(stamp, spec.timestamp_format.unwrap_or_default())
             .map_err(|reason| Refusal::Malformed(format!("timestamp {stamp:?}: {reason}")))?;
         if (request.now - signed_at).abs() > window {
             return Err(Refusal::Stale);
@@ -335,42 +337,28 @@ fn decode(encoding: Encoding, value: &str) -> Result<Vec<u8>, String> {
     }
 }
 
-/// `5m`, `300s` — the spelling [`HmacSpec::tolerance`] documents, in seconds.
+/// A signed timestamp, in unix seconds, read the way the scheme **declares** it is spelled.
 ///
-/// Nothing in the crate parses this today and the loader does not check its shape, so a
-/// `tolerance = "banana"` loads and the window is whatever a host decides at runtime.
-/// [`every_shipped_tolerance_is_a_window_a_host_can_actually_apply`] is the gate that keeps that
-/// from shipping while the loader has no opinion.
-fn parse_tolerance(tolerance: &str) -> Result<i64, String> {
-    let (digits, scale) = match tolerance.strip_suffix('s') {
-        Some(digits) => (digits, 1),
-        None => match tolerance.strip_suffix('m') {
-            Some(digits) => (digits, 60),
-            None => match tolerance.strip_suffix('h') {
-                Some(digits) => (digits, 3600),
-                None => return Err("no unit; a window reads as `5m`, `300s` or `1h`".to_owned()),
-            },
-        },
-    };
-    digits
-        .parse::<i64>()
-        .map(|count| count * scale)
-        .map_err(|_| format!("{digits:?} is not a whole number of units"))
-}
-
-/// A signed timestamp, in unix seconds.
-///
-/// **This function is a finding, not a feature.** `HmacSpec` says *where* the timestamp is read
-/// from and never *how it is spelled*, so a host must sniff: Slack and Stripe send unix seconds,
-/// Zendesk sends RFC 3339. Sniffing is exactly the guessing the `timestamp` selector was added to
-/// stop — see the deviations recorded on the story.
-fn parse_timestamp(value: &str) -> Result<i64, String> {
-    if let Ok(seconds) = value.parse::<i64>() {
-        return Ok(seconds);
+/// This function used to be a finding rather than a feature: `HmacSpec` said *where* the timestamp
+/// was read from and never *how it was spelled*, so it sniffed — try an integer, fall back to a date
+/// shape. Sniffing was exactly the guessing the `timestamp` selector had been added to stop, and it
+/// is not harmless: `20220505183228` is a plausible spelling that parses as an integer and lands
+/// 600,000 years from now, so a sniffing host applies its window to a number the vendor never meant.
+/// C-141 added [`TimestampFormat`], and the sniff is gone: the format is a parameter, and a value in
+/// the wrong spelling is refused rather than reinterpreted.
+fn parse_timestamp(value: &str, format: TimestampFormat) -> Result<i64, String> {
+    match format {
+        TimestampFormat::UnixSeconds => {
+            return value
+                .parse::<i64>()
+                .map_err(|_| format!("{value:?} is not a whole number of unix seconds"))
+        }
+        TimestampFormat::Rfc3339 => {}
     }
+
     let bytes = value.as_bytes();
     if bytes.len() != 20 || bytes[10] != b'T' || bytes[19] != b'Z' {
-        return Err("neither unix seconds nor `YYYY-MM-DDTHH:MM:SSZ`".to_owned());
+        return Err(format!("{value:?} is not `YYYY-MM-DDTHH:MM:SSZ`"));
     }
     let number = |range: std::ops::Range<usize>| -> Result<i64, String> {
         value[range]
@@ -488,6 +476,9 @@ secret = "acme.webhook_secret"
         // Parameters from developer.zendesk.com "Verifying webhook authenticity": base64 rather
         // than hex, no prefix, an RFC 3339 timestamp concatenated straight onto the body. Zendesk
         // publishes no worked triple, so the digest is CPython's, not this repository's.
+        //
+        // The row that motivates `timestamp_format`: it is the one vendor here that does not send
+        // unix seconds, and before C-141 the verifier had to sniff the spelling to read it.
         Row {
             vendor: "zendesk",
             source: Source::IndependentImplementation,
@@ -499,6 +490,7 @@ encoding = "base64"
 header = "X-Zendesk-Webhook-Signature"
 signed = "{timestamp}{body}"
 timestamp = { source = "header", name = "X-Zendesk-Webhook-Signature-Timestamp" }
+timestamp_format = "rfc3339"
 secret = "acme.webhook_secret"
 tolerance = "5m"
 "#,
@@ -868,6 +860,110 @@ fn assert_body_is_signed(row: &Row, spec: &HmacSpec) {
     }
 }
 
+/// **The same defect as the missing brace, reachable with no typo at all.**
+///
+/// `signed = "{timestamp}"` is a well-formed template. Every check the loader made before C-141
+/// passed on it: the placeholder list is non-empty, every name is fillable, the timestamp selector is
+/// present and the tolerance is present. What it signs is a string that does not contain the body, so
+/// **one captured signature verifies every forged payload for the whole window** — the tolerance is
+/// the only thing bounding the attack, and it bounds it to five minutes rather than to nothing.
+///
+/// The forgery is demonstrated before the refusal is demanded, and it is demonstrated on the
+/// **shipped** Slack parameters with `{body}` deleted from the template and nothing else touched, so
+/// the reader can see that the distance between a working scheme and a forging one is one word in one
+/// field. The first half keeps running after the loader learns to refuse the declaration: it is the
+/// reason for the refusal, and a test that asserted only "the loader says no" would not record it.
+#[test]
+fn a_signed_template_that_omits_the_body_verifies_a_forged_payload() {
+    // Slack's shipped binding, loaded from `providers/slack.toml`, with the body dropped out of the
+    // signed string. Everything else — the digest, the hex encoding, the `v0=` prefix, the timestamp
+    // header, the five-minute window — is the vendor's own and unchanged.
+    let mut spec = shipped_spec("slack", "events-api");
+    spec.signed = spec.signed.replace("{body}", "");
+    assert_eq!(
+        spec.signed, "v0:{timestamp}:",
+        "the template under test is Slack's with `{{body}}` removed"
+    );
+
+    let secret = SENTINEL_SECRET.as_bytes();
+    let stamp = "1531420618";
+    let now = 1_531_420_618 + 60;
+    let genuine = b"payload=the+delivery+the+vendor+actually+signed";
+    let forged = b"payload=a+payload+the+vendor+never+saw";
+
+    // 1. The signed string is the same for both bodies. Nothing about the payload enters it.
+    let over_genuine = signed_message(&spec.signed, genuine, Some(stamp)).expect("renders");
+    let over_forged = signed_message(&spec.signed, forged, Some(stamp)).expect("renders");
+    assert_eq!(
+        over_genuine, over_forged,
+        "`signed = {:?}` signs a body-independent string",
+        spec.signed
+    );
+
+    // 2. Capture the signature the vendor would send with the genuine delivery.
+    let captured = format!("v0={}", hex_encode(&hmac_sha256(secret, &over_genuine)),);
+    let request = |body: &[u8]| Request {
+        headers: vec![
+            (spec.header.clone(), captured.clone()),
+            (
+                spec.timestamp
+                    .as_ref()
+                    .expect("Slack's binding reads a timestamp header")
+                    .name
+                    .clone(),
+                stamp.to_owned(),
+            ),
+        ],
+        body: body.to_vec(),
+        now,
+    };
+
+    // 3. It verifies the genuine delivery, as it must…
+    assert_eq!(
+        verify(&spec, secret, &request(genuine)),
+        Ok(()),
+        "the captured signature verifies the delivery it was captured from"
+    );
+    // …and it verifies a body the holder of the secret never signed. This is the forgery: an
+    // attacker who observed one delivery can now submit any payload at all for five minutes.
+    assert_eq!(
+        verify(&spec, secret, &request(forged)),
+        Ok(()),
+        "THE FORGERY: `signed = {:?}` accepts a forged body under a signature captured from a \
+         different one. Verification proves only that somebody, once, held the secret",
+        spec.signed
+    );
+
+    // 4. So the declaration must not load. A build is the last place this can be caught: after it,
+    //    the scheme looks verified in the manifest, in the catalogue and to an operator.
+    let bodyless = fixture(
+        r#"
+[channels.verification.hmac]
+algorithm = "sha256"
+encoding = "hex"
+header = "X-Acme-Signature"
+prefix = "v0="
+signed = "v0:{timestamp}:"
+timestamp = { source = "header", name = "X-Acme-Timestamp" }
+secret = "acme.webhook_secret"
+tolerance = "5m"
+"#,
+    );
+    let error = provider::load("providers/fixture.toml", &bodyless)
+        .err()
+        .unwrap_or_else(|| {
+            panic!(
+                "a `signed` template that never interpolates {{body}} must be refused at load — the \
+                 forgery above is what it ships"
+            )
+        });
+    let error = format!("{error}");
+    assert!(
+        error.contains("signed") && error.contains("{body}"),
+        "the refusal must name the template and what it is missing:\n{error}"
+    );
+}
+
 /// The primitive, pinned to an authority outside this repository.
 ///
 /// RFC 4231 §4.2 and §4.3. Without this the vendor rows above would only show that this file agrees
@@ -954,7 +1050,7 @@ fn a_signature_outside_its_window_is_refused() {
 
         // One second inside the window still verifies…
         let fresh = Request {
-            now: signed_at(&row) + window - 1,
+            now: signed_at(&row, &spec) + window - 1,
             ..row.request()
         };
         assert_eq!(
@@ -966,7 +1062,7 @@ fn a_signature_outside_its_window_is_refused() {
 
         // …one second past it does not, even though the signature is perfectly valid.
         let stale = Request {
-            now: signed_at(&row) + window + 1,
+            now: signed_at(&row, &spec) + window + 1,
             ..row.request()
         };
         assert_eq!(
@@ -978,7 +1074,7 @@ fn a_signature_outside_its_window_is_refused() {
 
         // And a replay from the future is the same attack with the clock the other way round.
         let ahead = Request {
-            now: signed_at(&row) - window - 1,
+            now: signed_at(&row, &spec) - window - 1,
             ..row.request()
         };
         assert_eq!(
@@ -990,9 +1086,10 @@ fn a_signature_outside_its_window_is_refused() {
     }
 }
 
-fn signed_at(row: &Row) -> i64 {
+fn signed_at(row: &Row, spec: &HmacSpec) -> i64 {
     let (_, value) = row.timestamp.expect("a timestamped row");
-    parse_timestamp(value).expect("the fixture's timestamp parses")
+    parse_timestamp(value, spec.timestamp_format.unwrap_or_default())
+        .expect("the fixture's timestamp parses in the spelling its scheme declares")
 }
 
 /// The defect this exists to prevent is `expected == actual` on the digest.
@@ -1076,28 +1173,161 @@ fn every_shipped_hmac_scheme_is_covered_by_the_matrix() {
     }
 }
 
-/// A window a host cannot parse is a window it will not apply.
+/// A window a host cannot parse is a window it will not apply — and the loader now says so.
 ///
-/// The loader requires a `tolerance` on any timestamped scheme but says nothing about its shape, so
-/// `tolerance = "banana"` loads today. Until it has an opinion, this is the gate.
+/// This used to be a per-provider gate, because the loader required a `tolerance` on a timestamped
+/// scheme and had no opinion about its shape: `tolerance = "banana"` loaded, and the real window
+/// became whatever each host decided at runtime. C-141 moved the opinion to the loader, so the gate
+/// is now an invariant of *loading* rather than a sweep over what happens to be shipped — every spec
+/// [`shipped_specs`] returns came through [`provider::load`] and therefore already parses.
+///
+/// What is left to check is the loader's refusal itself, which is the thing the sweep was standing in
+/// for. Both halves matter: a spelling nobody can read, and a window so long it is one only in name.
 #[test]
-fn every_shipped_tolerance_is_a_window_a_host_can_actually_apply() {
-    for (provider_id, channel, spec) in shipped_specs() {
-        let Some(tolerance) = spec.tolerance.as_deref() else {
-            continue;
-        };
-        let window = parse_tolerance(tolerance).unwrap_or_else(|reason| {
-            panic!(
-                "providers/{provider_id}.toml's `{channel}` binding declares \
-                 `tolerance = {tolerance:?}`, which no host can turn into a window: {reason}"
-            )
-        });
+fn a_tolerance_no_host_could_apply_does_not_load() {
+    let with_tolerance = |value: &str| {
+        fixture(&format!(
+            r#"
+[channels.verification.hmac]
+algorithm = "sha256"
+encoding = "hex"
+header = "X-Acme-Signature"
+signed = "{{timestamp}}.{{body}}"
+timestamp = {{ source = "header", name = "X-Acme-Timestamp" }}
+secret = "acme.webhook_secret"
+tolerance = "{value}"
+"#
+        ))
+    };
+
+    assert!(
+        provider::load("providers/fixture.toml", &with_tolerance("5m")).is_ok(),
+        "a window the vendor documents must still load"
+    );
+
+    // The last is the overflow case: `*` panicked here in a debug build and, in a release build,
+    // wrapped `i64::MAX * 60` to a negative window that loaded cleanly.
+    for unusable in ["banana", "5", "0s", "2h", "7d", "9223372036854775807m"] {
+        let error = provider::load("providers/fixture.toml", &with_tolerance(unusable))
+            .err()
+            .unwrap_or_else(|| {
+                panic!(
+                    "`tolerance = {unusable:?}` must be refused at load: the window is the only \
+                     bound on how long a captured signature stays usable, so one no host can apply \
+                     is a replay window in name only"
+                )
+            });
         assert!(
-            (1..=3600).contains(&window),
-            "providers/{provider_id}.toml's `{channel}` binding allows a signature to be replayed \
-             for {window}s; a webhook window is minutes, not hours"
+            format!("{error}").contains("tolerance"),
+            "the refusal must name the field it rejected:\n{error}"
         );
     }
+
+    // And the sweep the loader replaced, kept as the statement that it is now redundant.
+    for (provider_id, channel, spec) in shipped_specs() {
+        if let Some(tolerance) = spec.tolerance.as_deref() {
+            assert!(
+                parse_tolerance(tolerance).is_ok(),
+                "providers/{provider_id}.toml's `{channel}` binding loaded with \
+                 `tolerance = {tolerance:?}`, which means the loader stopped parsing it"
+            );
+        }
+    }
+}
+
+/// The timestamp *format* axis, and why it is not cosmetic.
+///
+/// `HmacSpec` used to say where the timestamp was read from and never how it was spelled, so the
+/// reference verifier sniffed. Sniffing looks harmless until a spelling is ambiguous:
+/// `20220505183228` reads as a date to a person and as unix seconds to `parse`, and a sniffing host
+/// would compute a window against a moment 600,000 years away — accepting a replay of any age. With
+/// the axis declared, a value in the wrong spelling is **refused** rather than reinterpreted.
+#[test]
+fn the_declared_timestamp_format_is_read_instead_of_sniffed() {
+    let zendesk = matrix()
+        .into_iter()
+        .find(|row| row.vendor == "zendesk")
+        .expect("the matrix carries the RFC 3339 row");
+    let spec = zendesk.spec();
+    assert_eq!(
+        spec.timestamp_format,
+        Some(TimestampFormat::Rfc3339),
+        "the row declares its spelling rather than leaving it to be guessed"
+    );
+
+    // Each vendor's own spelling parses under its own declared format…
+    assert_eq!(
+        parse_timestamp("1531420618", TimestampFormat::UnixSeconds),
+        Ok(1_531_420_618)
+    );
+    assert_eq!(
+        parse_timestamp("2022-05-05T18:32:28Z", TimestampFormat::Rfc3339),
+        Ok(1_651_775_548)
+    );
+
+    // …and neither is silently read under the other's.
+    assert!(parse_timestamp("2022-05-05T18:32:28Z", TimestampFormat::UnixSeconds).is_err());
+    assert!(parse_timestamp("1531420618", TimestampFormat::Rfc3339).is_err());
+
+    // The ambiguous spelling: a compact date that is also a valid integer. Declared as RFC 3339 it
+    // is refused; a sniffing host accepted it as a timestamp 600,000 years in the future, against
+    // which no five-minute window can be stale.
+    assert!(parse_timestamp("20220505183228", TimestampFormat::Rfc3339).is_err());
+    assert_eq!(
+        parse_timestamp("20220505183228", TimestampFormat::UnixSeconds),
+        Ok(20_220_505_183_228),
+        "the sniffing hazard, stated: it is a perfectly good integer"
+    );
+
+    // A format declared where nothing reads a timestamp is refused, on the same ground as an unused
+    // selector: it describes the spelling of a value nothing reads.
+    let unused = fixture(
+        r#"
+[channels.verification.hmac]
+algorithm = "sha256"
+encoding = "hex"
+header = "X-Acme-Signature"
+signed = "{body}"
+timestamp_format = "rfc3339"
+secret = "acme.webhook_secret"
+"#,
+    );
+    let error = provider::load("providers/fixture.toml", &unused)
+        .expect_err("a format with no timestamp to spell must be refused");
+    assert!(
+        format!("{error}").contains("timestamp_format"),
+        "the refusal must name the field it rejected:\n{error}"
+    );
+}
+
+/// A verification timestamp read from the body inverts the order verification depends on.
+///
+/// `HmacSpec::timestamp` is a full [`Selector`], so `source = "body"` is spellable — and incoherent:
+/// finding the value would mean parsing the bytes whose trustworthiness that value helps decide,
+/// which puts a parser in front of an anonymous caller. The reference verifier already refuses it at
+/// request time (`Refusal::CannotVerify`), and flux refuses it in its own request path, but a
+/// connector could still *ship* it. Now it cannot load.
+#[test]
+fn a_body_sourced_verification_timestamp_does_not_load() {
+    let from_body = fixture(
+        r#"
+[channels.verification.hmac]
+algorithm = "sha256"
+encoding = "hex"
+header = "X-Acme-Signature"
+signed = "{timestamp}.{body}"
+timestamp = { source = "body", name = "event.created_at" }
+secret = "acme.webhook_secret"
+tolerance = "5m"
+"#,
+    );
+    let error = provider::load("providers/fixture.toml", &from_body)
+        .expect_err("a body-sourced verification timestamp must be refused at load");
+    let error = format!("{error}");
+    assert!(
+        error.contains("body") && error.contains("verified"),
+        "the refusal must say why the ordering is the problem:\n{error}"
+    );
 }
 
 /// A vendor that publishes no signature says so, and the loader will not let it stay quiet.

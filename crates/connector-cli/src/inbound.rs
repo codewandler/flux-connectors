@@ -160,6 +160,8 @@ mod tests {
             prefix: None,
             signed: "{body}".to_string(),
             timestamp: None,
+            // GitHub's shape: nothing is timestamped, so there is no spelling to declare.
+            timestamp_format: None,
             secret: "acme.signing_secret".to_string(),
             tolerance: None,
         })

@@ -104,6 +104,24 @@ pub struct Selector {
     pub name: String,
 }
 
+/// How the value [`HmacSpec::timestamp`] selects is **spelled**.
+///
+/// A separate axis from the selector, because the selector says only *where* the timestamp is read
+/// from. Slack and Stripe send unix seconds; Zendesk sends RFC 3339. Without this, a host has to sniff
+/// — try an integer, fall back to a date shape — and sniffing is exactly the guessing the selector was
+/// added to stop. It is also not free: `20220505183228` is a plausible timestamp spelling that parses
+/// as an integer and lands 600,000 years from now, and a sniffing host would apply the window to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimestampFormat {
+    /// Whole seconds since the unix epoch, as a decimal integer — `1531420618`. Slack, Stripe,
+    /// GitHub, and the default, because it is what the large majority of vendors send.
+    #[default]
+    UnixSeconds,
+    /// RFC 3339, as `2022-05-05T18:32:28Z` — Zendesk.
+    Rfc3339,
+}
+
 /// The parameters of one HMAC webhook signature scheme.
 ///
 /// **This struct is the finding the inbound design rests on.** GitHub, Stripe, Slack and Zendesk each
@@ -140,26 +158,48 @@ pub struct HmacSpec {
     /// `{body}` is the raw request bytes. `{timestamp}` is the value [`timestamp`](Self::timestamp)
     /// selects. Any other placeholder is a loader error — a template the host cannot fill would fail
     /// open or fail confusingly, and neither is acceptable on an authentication path.
+    ///
+    /// **`{body}` is mandatory, and it is the load-bearing rule of this struct.** A template that
+    /// omits it signs a string the payload never enters, so one captured signature verifies every
+    /// forged payload — for the whole [`tolerance`](Self::tolerance) window, or forever without one.
+    /// `signed = "{timestamp}"` is a perfectly well-formed template that does exactly that, which is
+    /// why the rule is stated here rather than left to the shape of the template: the defect needs no
+    /// typo, and everything else about such a declaration reads as correct.
     pub signed: String,
     /// Where the `{timestamp}` in [`signed`](Self::signed) is read from — Slack's
-    /// `X-Slack-Request-Timestamp`, Stripe's `t=` component.
+    /// `X-Slack-Request-Timestamp`.
     ///
     /// Required exactly when `signed` interpolates `{timestamp}`, and refused when it does not. The
     /// template alone cannot say *where* the value comes from, and a host left to guess would either
     /// fail every request or, worse, fall back to its own clock — which verifies nothing.
+    ///
+    /// **[`FieldSource::Body`] is refused.** It is spellable in the type and incoherent in practice: a
+    /// timestamp read from the body has to be parsed *before* the bytes carrying it are verified, which
+    /// inverts the order that makes verification mean anything and exposes a parser to any anonymous
+    /// caller. flux refuses it in its own request path (C-291); the loader refuses it first, so the
+    /// failure lands in a build rather than in an operator's runtime.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<Selector>,
+    /// How the selected timestamp is spelled. Absent means [`TimestampFormat::UnixSeconds`].
+    ///
+    /// Refused when `signed` does not interpolate `{timestamp}`, on the same ground as an unused
+    /// selector: it would describe the spelling of a value nothing reads.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamp_format: Option<TimestampFormat>,
     /// The **name** of the credential holding the shared secret — never a value.
     ///
     /// Resolves to an [`AuthMethod`](crate::AuthMethod) of this connector, declared with
     /// [`AuthScheme::Signing`](crate::AuthScheme::Signing). One credential namespace, so the
     /// manifest's credential list stays complete and the host has one place to look.
     pub secret: String,
-    /// How old a signed request may be, as a duration (`5m`, `300s`).
+    /// How old a signed request may be, as a duration (`5m`, `300s`) — the grammar
+    /// [`parse_tolerance`] defines, and the loader parses.
     ///
     /// Mandatory when `signed` interpolates `{timestamp}`: a timestamped scheme without a window is a
     /// signature that replays forever, which is strictly worse than not timestamping at all because
-    /// it reads as though replay were handled.
+    /// it reads as though replay were handled. Requiring one is not enough on its own, though —
+    /// `tolerance = "banana"` is a declared window nobody can apply, and it reads as though replay
+    /// were handled just as convincingly.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tolerance: Option<String>,
 }
@@ -470,6 +510,80 @@ pub fn signed_placeholders(signed: &str) -> Vec<String> {
     found
 }
 
+/// The longest replay window a webhook scheme may declare, in seconds.
+///
+/// One hour, and the bound is deliberately opinionated rather than merely arithmetic. Every vendor in
+/// the matrix documents minutes — Slack five, Stripe five by default — because the window is how long
+/// a captured request stays usable, and there is no delivery-latency argument for an hour. A
+/// `tolerance = "7d"` parses, satisfies every other rule, and is a replay window in name only.
+pub const MAX_TOLERANCE_SECONDS: i64 = 3600;
+
+/// A [`HmacSpec::tolerance`] as a whole number of seconds: `5m`, `300s`, `1h`.
+///
+/// # Why the loader parses this rather than the host
+///
+/// The window is the *only* bound on how long a captured signature stays usable, so a spelling no host
+/// can read is a replay window that does not exist — and the declaration still reads as though replay
+/// had been handled. `tolerance = "banana"` used to load: the loader required a window on any
+/// timestamped scheme but had no opinion about its shape, which left the actual window to whatever each
+/// host decided at runtime (reject everything, or apply no window at all). Parsing here makes it one
+/// number, decided once, in a build.
+///
+/// The grammar is deliberately tiny: a whole number and one of `s`, `m`, `h`. No fractions, no
+/// compound `1m30s`, no bare integer — a bare `300` would have to guess a unit, and this repository
+/// refuses to be the layer that guesses.
+pub fn parse_tolerance(tolerance: &str) -> Result<i64, String> {
+    let (digits, unit, scale) = match tolerance.strip_suffix('s') {
+        Some(digits) => (digits, "s", 1),
+        None => match tolerance.strip_suffix('m') {
+            Some(digits) => (digits, "m", 60),
+            None => match tolerance.strip_suffix('h') {
+                Some(digits) => (digits, "h", 3600),
+                None => {
+                    return Err(format!(
+                        "{tolerance:?} names no unit; a window reads as `5m`, `300s` or `1h`"
+                    ))
+                }
+            },
+        },
+    };
+
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(format!(
+            "{tolerance:?} is not a whole number of {unit:?} units; a window reads as `5m`, `300s` \
+             or `1h`"
+        ));
+    }
+    // `checked_mul`, not `*`. Scaling a count into seconds is fallible arithmetic on author input, and
+    // both of its failure modes are the very defect this function exists to close: in a debug build
+    // `"9223372036854775807m"` panics inside the loader, and in a release build it *wraps* — to `-60`,
+    // a negative window that passes every check below and ships a declared replay bound no host could
+    // apply. The contract is already `Result`, so the failure has somewhere to go. One message for
+    // both modes, because the author's mistake is the same either way: the number is too big.
+    let too_large = || format!("{tolerance:?} is too large to be a window");
+    let seconds = digits
+        .parse::<i64>()
+        .ok()
+        .and_then(|count| count.checked_mul(scale))
+        .ok_or_else(too_large)?;
+
+    // A zero window accepts only a request signed in the same second the host checks it, which is not
+    // a strict policy but a broken one: it rejects nearly every genuine delivery.
+    if seconds == 0 {
+        return Err(format!(
+            "{tolerance:?} is a window of no length, which rejects every delivery that took any time \
+             to arrive; state the window the vendor documents"
+        ));
+    }
+    if seconds > MAX_TOLERANCE_SECONDS {
+        return Err(format!(
+            "{tolerance:?} lets a captured signature be replayed for {seconds}s; a webhook window is \
+             minutes, not hours (at most {MAX_TOLERANCE_SECONDS}s)"
+        ));
+    }
+    Ok(seconds)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -504,6 +618,81 @@ mod tests {
             vec!["timestamp", "body"]
         );
         assert!(signed_placeholders("nothing here").is_empty());
+    }
+
+    #[test]
+    fn a_window_is_a_whole_number_of_seconds_minutes_or_hours() {
+        assert_eq!(parse_tolerance("300s"), Ok(300));
+        assert_eq!(parse_tolerance("5m"), Ok(300));
+        assert_eq!(parse_tolerance("1h"), Ok(3600));
+        assert_eq!(parse_tolerance("1s"), Ok(1));
+    }
+
+    /// Each of these used to load, and each one leaves the real window to whatever a host decides.
+    #[test]
+    fn a_window_no_host_could_apply_is_not_a_window() {
+        for spelling in [
+            "banana", // the story's own example: no unit, no number
+            "",       // an empty string
+            "5",      // a bare number has to guess a unit
+            "m",      // a unit with no count
+            "5 m",    // whitespace
+            "5M",     // the wrong case, so `M` is not silently read as minutes
+            "-5m",    // a negative window
+            "1.5m",   // a fraction the grammar does not admit
+            "1m30s",  // a compound duration the grammar does not admit
+            "0s",     // a window of no length rejects every genuine delivery
+            "2h",     // longer than a webhook window has any reason to be
+            "7d",     // and `d` is not a unit here at all
+        ] {
+            assert!(
+                parse_tolerance(spelling).is_err(),
+                "`tolerance = {spelling:?}` must not pass for a window"
+            );
+        }
+    }
+
+    /// Scaling a count into seconds is fallible arithmetic on author input, and it must fail as a
+    /// `Result` rather than as a panic or a wrap.
+    ///
+    /// Both modes are the defect this function exists to close, arrived at from the other end. `*`
+    /// panicked inside the loader in a debug build; in a release build it wrapped
+    /// `"9223372036854775807m"` to `Ok(-60)` — a negative window that satisfies "not zero" and "not
+    /// over an hour", so the declaration **loaded** and shipped a replay bound no host could apply.
+    #[test]
+    fn a_count_too_large_to_scale_is_refused_rather_than_wrapped() {
+        for enormous in [
+            // i64::MAX with a unit that has to scale it: `* 60` wrapped to a negative window.
+            "9223372036854775807m",
+            "9223372036854775807h",
+            // The smallest multiple-of-60 overflow, which wrapped to `Ok(-16)`.
+            "307445734561825860m",
+            // Too large for `i64` before any scaling happens.
+            "99999999999999999999s",
+            // And the seconds unit, whose scale is 1, still has to clear the hour bound.
+            "9223372036854775807s",
+        ] {
+            let refusal = parse_tolerance(enormous);
+            assert!(
+                refusal.is_err(),
+                "`tolerance = {enormous:?}` must be refused, not wrapped into a window: got \
+                 {refusal:?}"
+            );
+        }
+
+        // The property behind the cases: no accepted window is outside the declared bound, whatever
+        // the arithmetic did on the way. A wrap would show up here as a negative `Ok`.
+        for digits in ["9223372036854775807", "307445734561825860", "3600", "61"] {
+            for unit in ["s", "m", "h"] {
+                if let Ok(window) = parse_tolerance(&format!("{digits}{unit}")) {
+                    assert!(
+                        (1..=MAX_TOLERANCE_SECONDS).contains(&window),
+                        "`tolerance = {digits}{unit}` was accepted as {window}s, outside \
+                         1..={MAX_TOLERANCE_SECONDS}"
+                    );
+                }
+            }
+        }
     }
 
     /// The one-character typo that would otherwise sign a string with no body in it.

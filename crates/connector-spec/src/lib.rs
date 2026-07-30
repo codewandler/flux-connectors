@@ -81,7 +81,7 @@ pub use graph::{
 };
 pub use inbound::{
     ChannelBinding, Digest, Encoding, EventDecl, FieldSource, HmacSpec, ManualSetup, Reply,
-    Selector, Subscription, Transport, VerificationScheme,
+    Selector, Subscription, TimestampFormat, Transport, VerificationScheme,
 };
 pub use ir::{
     Connector, ErrorEnvelope, HttpMethod, Idempotency, JsonSchema, Operation, Pagination, Param,
