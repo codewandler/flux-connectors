@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **C-74** — the **Shopify** connector: order, product and customer reads plus a product update over
+  the 2024-10 Admin REST API. The credential is a plain `X-Shopify-Access-Token` header carrying the
+  whole value, which makes this the first shipped use of `AuthScheme::Header`.
+
 ### Changed
 - **C-54** — the five hand-maintained `SHIPPED` provider lists and the two hardcoded catalogue totals
   are gone: every per-provider gate now derives its set from `providers/`, matching the definition
