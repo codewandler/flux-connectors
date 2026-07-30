@@ -26,7 +26,7 @@ and blocks milestone 1's finish.
       plugin registry has no file-ingestion path to fold into. The design was changed so it no
       longer depends on either; the residual trust-model decision is filed as draft **F-8 / C-273**.
 - [ ] Implementation stories filed on `../flux`'s board covering: the `{"$auth": {...}}` header
-      marker, `AuthScheme` reuse from `flux-plugin-protocol`, deny-by-default purpose resolution,
+      marker, `AuthScheme` reuse from `flux-plugin-protocol`, deny-by-default credential resolution,
       redactor registration of the composed value, `http_hosts` scoping, and `Query`-scheme injection
       as its own story.
 - [ ] Each filed story names its failing-first test.
@@ -59,7 +59,7 @@ and blocks milestone 1's finish.
      has** `AuthScheme`/`AuthMethod` in scope, because it already depends on `flux-plugin` and
      `flux-plugin/src/lib.rs:35` is `pub use flux_plugin_protocol::*;`. **No new dependency at all.**
   3. *"Connector manifests in `~/.flux/connectors/`."* The premise was wrong — see below. The
-     design no longer depends on them; purposes travel in flux's operator config instead.
+     design no longer depends on them; credentials travel in flux's operator config instead.
 - **Open question resolved with evidence.** flux has **no file-based capability manifest of any
   kind**: a `PluginManifest` is fetched by spawning the binary and sending a `manifest` frame
   (`flux-plugin/src/host/loading.rs:186-188`), and what is on disk in `~/.flux/plugins`
@@ -85,10 +85,11 @@ and blocks milestone 1's finish.
     "one credential per request" is exactly the assumption that gets introduced by accident later.
     Two limits recorded: two schemes cannot both target `Authorization` (permanent, acceptable —
     codegen rejects such a set), and a `Query` scheme has no header to hang a marker on, so
-    F-6/C-271 now also adds a request-level `auth: [{purpose}]` array.
+    F-6/C-271 now also adds a request-level `auth: [{credential}]` array.
   - **OR is resolved at build time, so flux needs no OR support at all** — a real simplification.
     Which alternative codegen chose is recorded *here* (C-7 lockfile, so C-13 diffs it and C-14 can
-    drift-check it), never in flux; flux's purpose map needs only the union of declared purposes.
+    drift-check it), never in flux; flux's credential map needs only the union of declared
+    credentials.
   - **All three providers are blocked on this seam** — zendesk `Basic <email>/token`, freshdesk
     `Basic <api_key>:X`, babelforce SSO-issued `Bearer`. The design now says so plainly instead of
     implying a partial-credit path.
@@ -128,7 +129,7 @@ and blocks milestone 1's finish.
     exactly"* is **false today**, becomes true for `Basic` after F-9/C-274, and for `Query` only if
     the encoding is pinned. Written that conformance test now would fail honestly — which is right.
   - **Prefix confirmed implicit** in `Bearer`/`Basic` (`format!("Bearer {token}")` at `:1250`,
-    `format!("Basic {encoded}")` at `:1258`), so a purpose→`AuthMethod`→scheme seam gets it free.
+    `format!("Basic {encoded}")` at `:1258`), so a credential→`AuthMethod`→scheme seam gets it free.
     **And `resolve_header_value` permits composed values:** it returns `Result<String>`
     (`flux-web/src/http.rs:234`) — *a header value*, not "an env var's value" — and the caller just
     does `HeaderValue::from_str` (`:175`). No caller changes. Bonus: `from_str` rejects control
@@ -154,6 +155,16 @@ and blocks milestone 1's finish.
     configuredness is not an auth attempt. Recommended first cut: build-time selection on
     expressibility with a recorded preference order. Not blocking: none of the three providers has
     an OR alternative set.
+- **Fourth pass — "purpose" → "credential" rename applied** (coordinator instruction; the rest of
+  the repo was renamed in `5cf6c21`, these three files were held by this agent). The marker is now
+  `{"$auth": {credential: "zendesk.api_token"}}`; the `WebOptions` field proposal is
+  `auth_credentials`; test names, the `credential -> AuthMethod` map, and the F-3/F-11 story titles
+  all follow. An **AND-group is a mechanism**, its members are **credentials** — which is what makes
+  babelforce's two-header case read correctly. **flux's own `AuthMethod.purpose` field is not
+  renamed**, and the design now states explicitly that our `credential` name resolves to it; every
+  flux identifier (`AuthMethod.purpose`, `auth_purpose`, `resolve_purpose`,
+  `plugin:<name>:<purpose>`) is quoted verbatim and left alone. Ordinary English uses of the word
+  were left alone too.
 - **Deliverables:** [auth-seam.md](../designs/auth-seam.md) rewritten with cited/corrected claims
   and a new §9 reconciling it with [unified-auth.md](../designs/unified-auth.md);
   [auth-seam-flux-stories.md](../designs/auth-seam-flux-stories.md) holds eleven paste-ready story

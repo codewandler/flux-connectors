@@ -108,11 +108,19 @@ copy exists for settings-block secret references, not for header values).
 
 ## Approach
 
-### 1. A second marker: `{"$auth": {"purpose": "<name>"}}`
+### 1. A second marker: `{"$auth": {"credential": "<name>"}}`
 
 Extend `resolve_header_value` to recognize a second marker alongside `$secret`. Where `$secret` names
-an *environment variable*, `$auth` names a **purpose** — a declared credential slot whose scheme the
-host knows.
+an *environment variable*, `$auth` names a **credential** — a declared credential slot whose scheme
+the host knows.
+
+> **Naming.** Our word is **credential**, not "purpose". An AND-group of credentials is a
+> *mechanism*; alternatives are alternative mechanisms. Where this design maps our marker onto flux's
+> struct, **our `credential` name resolves to flux's `AuthMethod.purpose` field**
+> (`crates/flux-plugin-protocol/src/lib.rs:424`). We are **not** proposing to rename flux's field —
+> keeping that mapping visible is deliberate. Flux's own identifiers (`AuthMethod.purpose`,
+> `auth_purpose`, `resolve_purpose`, the `plugin:<name>:<purpose>` store key) are quoted verbatim
+> throughout and are never renamed.
 
 Object keys survive this fine in Flux text — **confirmed**: `fmt_obj_key`
 (`crates/flux-lang/src/format.rs:479-485`) emits a JSON-quoted key when `is_ident_key` is false, and
@@ -120,7 +128,7 @@ the parser recovers it losslessly (`crates/flux-lang/src/parse.rs:1861` round-tr
 key). So codegen can emit:
 
 ```flux
-http.request({url: $url, method: "GET", headers: {Authorization: {"$auth": {purpose: "zendesk.api_token"}}}})
+http.request({url: $url, method: "GET", headers: {Authorization: {"$auth": {credential: "zendesk.api_token"}}}})
 ```
 
 ### 2. Reuse `flux_plugin_protocol::AuthScheme` — do not invent a second vocabulary
@@ -175,7 +183,7 @@ work.
 The payoff of the shared vocabulary stands: OAuth2 connectors come almost free — `OAuth2Spec` and the
 `flux auth login` grants already exist for plugins.
 
-### 3. Where purposes come from — the draft's premise was wrong
+### 3. Where credentials come from — the draft's premise was wrong
 
 The draft asserted that flux-connectors emits `<provider>.connector.toml`, installed to
 `~/.flux/connectors/`, which flux loads and resolves into `WebOptions`. Verification changed the
@@ -187,7 +195,7 @@ picture materially. See §"Risks & open questions" below for the resolved answer
 > grant with no binary-hash anchor. That is a trust-model change, not a new file format, and it is
 > the thing flux's maintainers will actually push back on.
 
-**The design therefore no longer depends on connector manifests.** The purpose map reaches flux-web
+**The design therefore no longer depends on connector manifests.** The credential map reaches flux-web
 through **flux's own operator config**, exactly as `allowed_secrets` does today (§6). A connector
 manifest becomes an optional later convenience, tracked separately, not a precondition for the seam.
 
@@ -201,7 +209,7 @@ scopes hosts in **two** places, not one as the draft's example showed: per-endpo
 
 Both behaviors have precedent in the `$secret` path and must be matched exactly:
 
-- **Deny-by-default.** A purpose absent from the resolved map is refused *before any value is read*,
+- **Deny-by-default.** A credential absent from the resolved map is refused *before any value is read*,
   with the same shape of error `allowed_secrets` produces today
   (`crates/flux-web/src/http.rs:236-242`, the C-76 precedent — flux story
   `docs/stories/C-76-http-request-secret-exfil.md`). The existing refusal test to mirror is
@@ -251,7 +259,7 @@ skipped in the header match (`:1247`). In flux-web the equivalent point is *befo
 be part of the URL that the SSRF guard vets and pins. That ordering constraint is the reason this is
 genuinely a separate change to `HttpRequestTool::execute` and its own story on flux's board.
 
-### 6. Carrying the purpose map: `WebOptions`
+### 6. Carrying the credential map: `WebOptions`
 
 **Confirmed as the right place.** `WebOptions` is at `crates/flux-web/src/lib.rs:75`, and
 `allowed_secrets: Option<Vec<String>>` at `:97` is the exact precedent — a security-boundary
@@ -270,11 +278,12 @@ Two mechanical facts the story must handle:
   `allowed_secrets: None`. A new field must be added there, and that is also where the operator
   config is read.
 
-So the purpose map is `auth_purposes: Option<Vec<AuthMethod>>` (or a `BTreeMap<String, AuthMethod>`)
+So the credential map is `auth_credentials: Option<Vec<AuthMethod>>` (or a
+`BTreeMap<String, AuthMethod>` keyed by our `credential` name, which is flux's `AuthMethod.purpose`)
 alongside `allowed_secrets`, populated in `execution.rs` from flux's config — same operator, same
 trust anchor, no new artifact kind.
 
-### 7. Multi-scheme: requirement sets, and what a purpose must be able to describe
+### 7. Multi-scheme: mechanisms, and what a credential must be able to describe
 
 A provider may support several schemes, and one operation may require zero, one, or several of them.
 This is a **first-class requirement**, not an edge case, and the design must answer it explicitly.
@@ -285,6 +294,12 @@ satisfied (**AND**); across objects **any one** suffices (**OR**); `security: []
 operation needs **no** auth, and that must stay distinguishable from *unspecified* (which inherits
 the document-level default).
 
+In this repo's vocabulary an **AND-group is a mechanism**, and its members are **credentials**. That
+is what makes babelforce's two-header case read correctly — `credentials = ["access_id",
+"access_token"]` is two credentials in *one* mechanism, not two mechanisms — and it makes the OR case
+read as *alternative mechanisms*, each composed of credentials. "Requirement object" below is
+OpenAPI's word for the same thing as our *mechanism*.
+
 #### 7.1 AND — confirmed: one `$auth` marker per header works, with two stated limits
 
 **Confirmed against the code.** `resolve_header_value` is called once per header inside the
@@ -294,8 +309,8 @@ marker per request. So this needs **no additional design at all**:
 
 ```flux
 http.request({url: $url, method: "GET", headers: {
-  "X-Api-Key":    {"$auth": {purpose: "acme.api_key"}},
-  "X-Account-Id": {"$auth": {purpose: "acme.account"}}
+  "X-Api-Key":    {"$auth": {credential: "acme.api_key"}},
+  "X-Account-Id": {"$auth": {credential: "acme.account"}}
 }})
 ```
 
@@ -310,8 +325,9 @@ Two limits must be written down rather than discovered later:
    say, a `Header` scheme and a `Query` scheme has no complete spelling in the header marker alone.
    `http.request` has no `query` parameter to hang a marker on (its params are `url`, `method`,
    `headers`, `body`, `timeout` — `crates/flux-web/src/http.rs:88-110`), so this needs a
-   **request-level** spelling: an `auth: [{purpose: "…"}]` array on the request, applied by the host
-   according to each purpose's declared scheme. That lands with the `Query` story (**F-6 / C-271**),
+   **request-level** spelling: an `auth: [{credential: "…"}]` array on the request, applied by the
+   host according to each credential's declared scheme. That lands with the `Query` story
+   (**F-6 / C-271**),
    not with the header marker.
 
    This is deliberately **two spellings**, and the reason is worth stating: the header marker keeps
@@ -333,7 +349,7 @@ That is a real simplification and none of the flux stories should carry alternat
 
 #### 7.3 Does anything need to record which alternative was selected? Yes — here, not in flux
 
-flux's purpose map needs only the **union** of purposes the operator declared; it never needs to know
+flux's credential map needs only the **union** of credentials the operator declared; it never needs to know
 which alternative codegen picked, because by the time a request is dispatched the choice is already
 baked into the emitted Flux.
 
@@ -346,7 +362,7 @@ But the choice must be recorded **in this repo**, for three reasons that map ont
 - **Drift (C-14)** — if the vendor edits its `security` block and removes the alternative we chose,
   the drift check must be able to notice. It can only do that if the chosen alternative was recorded.
 
-Recommended record: the selected requirement object, the purposes it resolved to, and *why* it was
+Recommended record: the selected mechanism, the credentials it resolved to, and *why* it was
 selected (the selection rule, e.g. "first object all of whose schemes are supported").
 
 #### 7.4 Zero auth: `[]` must not collapse into "unspecified"
@@ -504,7 +520,7 @@ Both halves of the request check out.
 
 - **Prefix handling is already implicit in the presets.** `Bearer` prefixes at
   `crates/flux-plugin/src/host.rs:1250` (`format!("Bearer {token}")`) and `Basic` at `:1258`
-  (`format!("Basic {encoded}")`). A seam that resolves a purpose to an `AuthMethod` and applies its
+  (`format!("Basic {encoded}")`). A seam that resolves a credential to an `AuthMethod` and applies its
   scheme gets prefixing for free — there is no separate prefix step to build for the preset cases.
   Turning the prefix into *data* (so `Token `/`GenieKey ` cost nothing) is a change to `AuthScheme`
   and is **not** proposed here; the presets cover every provider in scope, and §9.1's discipline
@@ -541,14 +557,15 @@ by what flux already has**, but the reuse is partial. Verified split:
 1. **The credential-store key namespace is `plugin:<caller>:<purpose>`** —
    `crates/flux-plugin/src/host.rs:381` and `:426`, and the CLI writes the same key at
    `crates/flux-cli/src/auth_cmd.rs:171` and `:385`. A connector must get its own namespace
-   (`connector:<name>:<purpose>`) or it will collide with, and be indistinguishable from, a plugin's
-   credentials. **This is the single most concrete blocker.**
+   (`connector:<name>:<credential>`) or it will collide with, and be indistinguishable from, a
+   plugin's credentials. **This is the single most concrete blocker.** (`<purpose>` here is flux's
+   own key format, quoted verbatim; the connector namespace is ours to name.)
 2. **`resolve_purpose` is a private method on `SystemHostCaps`** (`crates/flux-plugin/src/host.rs:358`)
    reading plugin state — `self.auth`, `self.grants.secrets`, `self.caller`, `self.secret_sink`,
    `self.cred_store`. It is not callable from flux-web at any layer.
 3. **`flux auth login` / `flux auth set` are written against the plugin store.** Both start with
    `plugins_dir()` + `load_descriptor` + `spawn_and_load_manifest`
-   (`crates/flux-cli/src/auth_cmd.rs:136-140` and `:367-371`). A connector purpose has no plugin
+   (`crates/flux-cli/src/auth_cmd.rs:136-140` and `:367-371`). A connector credential has no plugin
    descriptor and no binary to spawn, so **`flux auth login <connector>` cannot work today** — there
    is no path through that code that does not require an installed plugin.
 4. **`OAuth2Spec.endpoint` names an `EndpointSpec` from the plugin manifest**
@@ -558,7 +575,7 @@ by what flux already has**, but the reuse is partial. Verified split:
    meet here.
 
 **Verdict:** effectful acquisition for connectors is **feasible with real reuse and is not a rewrite**,
-but it is not free either. It needs a purpose resolver parameterized over *(auth methods, host
+but it is not free either. It needs a credential resolver parameterized over *(auth methods, host
 allowlist, store-key namespace, secret sink)* rather than over `SystemHostCaps`, plus a login path
 that does not assume a plugin descriptor. That is bounded, nameable work — filed as **F-11 / C-276**.
 Until it lands, connectors can use only the **pure** acquisitions (`static`, `basic_join`), which is
@@ -569,14 +586,14 @@ own "ship the presets first" scope discipline.
 
 1. **Where the auth declaration lives.** unified-auth says "the connector manifest, not the Flux
    module, carries the auth declaration". §3 of this design removed the connector manifest from the
-   critical path (evidence: flux has no file-based capability manifest at all) and puts purposes in
+   critical path (evidence: flux has no file-based capability manifest at all) and puts credentials in
    flux's **operator config** instead. **These are compatible on the point that matters** — the
    argument unified-auth is making is that the declaration lives *outside the generated Flux*, and
    operator config satisfies that identically. Only the file changes, not the boundary. If the
    manifest decision (F-8 / C-273) later goes the other way, this section is where the two docs
    re-converge; neither should be edited without the other.
 2. **When an OR alternative is selected — a genuine conflict.** unified-auth says "choose the first
-   requirement set whose purposes are all *configured* (their sources resolve)". §7.2 of this design
+   mechanism whose credentials are all *configured* (their sources resolve)". §7.2 of this design
    says codegen selects at **build time**, which is what lets us claim flux needs no OR support at
    all. Both cannot be true: *configuredness* is only knowable where configuration lives, i.e.
    host-side, so a configuredness rule forces the OR structure to reach the host.
@@ -605,7 +622,7 @@ own "ship the presets first" scope discipline.
   keeps one guarded path.
 - **A `~/.flux/connectors/` manifest registry as a precondition.** *Now rejected as a precondition*
   (it remains a reasonable later convenience). It would make flux accept its first capability grant
-  with no binary-hash anchor — see below. Config-carried purposes achieve the same deny-by-default
+  with no binary-hash anchor — see below. Config-carried credentials achieve the same deny-by-default
   guarantee with flux's existing trust model.
 - **Write connectors as typed plugins instead.** This is flux's *current* answer, and it works: flux
   ships `plugins/zendesk`, `plugins/jira`, `plugins/confluence`, `plugins/slack`,
@@ -654,7 +671,7 @@ depends on the answer.
    objection**, and any proposal that ignores it will be rejected.
 
 **Answer recorded.** Connector manifests are **not** a precondition for the `$auth` seam and are
-removed from its critical path. The purpose map reaches `WebOptions` from flux's operator config
+removed from its critical path. The credential map reaches `WebOptions` from flux's operator config
 (§6), which inherits `allowed_secrets`' trust model exactly. The remaining decision — whether flux
 eventually accepts a file-based manifest kind (and with what integrity anchor: signature, pack-index
 entry, or `flux connector install` recording a hash the way `PluginDescriptor` does) — **is a flux
@@ -689,9 +706,9 @@ flux story (**F-8 / C-273** in the handoff) and this repo does not wait on it.
 
 ## Acceptance / done
 
-- `http.request` accepts `{"$auth": {"purpose": "<name>"}}` as a header value and injects per
+- `http.request` accepts `{"$auth": {"credential": "<name>"}}` as a header value and injects per
   `AuthScheme`, with `Bearer`, `Basic`, and `Header` covered.
-- An undeclared purpose is refused before any credential value is read — proven by a failing-first
+- An undeclared credential is refused before any value is read — proven by a failing-first
   test mirroring `secret_ref_to_non_allowlisted_env_var_is_refused`
   (`crates/flux-web/src/http.rs:571`).
 - The **composed** value is registered with the redactor; a test asserts the on-the-wire

@@ -21,6 +21,11 @@
   `design: docs/designs/outbound-auth-marker.md`. Either port
   [auth-seam.md](auth-seam.md) into flux under that name, or drop the `design:` line from each
   block. Do not leave a `design:` pointing at a file that does not exist in flux.
+- **Vocabulary.** These drafts say **credential** where an earlier revision said "purpose": an
+  AND-group of credentials is a *mechanism*, and alternatives are alternative mechanisms.
+  **flux's own `AuthMethod.purpose` field is NOT renamed** — our `credential` name resolves to it.
+  Every flux identifier (`AuthMethod.purpose`, `auth_purpose`, `resolve_purpose`, the
+  `plugin:<name>:<purpose>` store key) is quoted verbatim below and must stay that way.
 - **Layer facts these stories rely on** (verified in flux at `bcfab0ad` + working tree):
   `flux-plugin-protocol` is L0 and `flux-web` is L5 (`crates/flux-codegate/src/lib.rs:36`, `:51`);
   flux-web already reaches `AuthScheme`/`AuthMethod` today via its existing `flux-plugin` dep, since
@@ -31,7 +36,7 @@
 ```
 F-1 (C-266) extract apply_scheme → L0
       ↓
-F-2 (C-267) $auth marker + WebOptions.auth_purposes ──┐
+F-2 (C-267) $auth marker + WebOptions.auth_credentials ──┐
       ↓                                               │  must ship in the SAME release
 F-3 (C-268) deny-by-default, proven ──────────────────┘
       ↓
@@ -125,7 +130,7 @@ inside one arm of `HostCapabilities::handle` — Bearer at `:1248-1252`, the Bas
 ```markdown
 ---
 id: C-267
-title: "`http.request` accepts the outbound `{\"$auth\": {\"purpose\": \"…\"}}` header marker"
+title: "`http.request` accepts the outbound `{\"$auth\": {\"credential\": \"…\"}}` header marker"
 pillar: Core
 status: ready
 priority: 3
@@ -137,8 +142,8 @@ note: "unblocks flux-connectors: Bearer/Basic are unreachable today because $sec
 # `http.request` accepts the outbound `$auth` header marker
 
 ## Goal
-Let a caller name a **credential purpose** in a header value and have the host compose the credential
-per its declared `AuthScheme`, so `Authorization: Bearer <tok>` and
+Let a caller name a **credential** in a header value and have the host compose it per its declared
+`AuthScheme`, so `Authorization: Bearer <tok>` and
 `Authorization: Basic base64(user:tok)` become reachable from Flux. Today `resolve_header_value`
 (`crates/flux-web/src/http.rs:234`) supports only `{"$secret": "ENV"}`, which is whole-value
 replacement (`as_secret_ref`, `:275`, requires an object of exactly one key) with no prefixing or
@@ -146,32 +151,34 @@ encoding — and flux-lang cannot compose it either, since the `expr` built-in w
 `base64` (`crates/flux-lang/src/expr.rs:136-139`).
 
 ## Acceptance
-- [ ] `WebOptions` (`crates/flux-web/src/lib.rs:75`) gains `auth_purposes: Option<Vec<AuthMethod>>`
-      alongside `allowed_secrets` (`:97`), carrying the operator-declared purpose→method map.
-      `None` = no purposes declared = every `$auth` reference refused.
+- [ ] `WebOptions` (`crates/flux-web/src/lib.rs:75`) gains
+      `auth_credentials: Option<Vec<AuthMethod>>` alongside `allowed_secrets` (`:97`), carrying the
+      operator-declared credential→method map. Our `credential` name is matched against flux's
+      existing `AuthMethod.purpose` field (`crates/flux-plugin-protocol/src/lib.rs:424`) — that
+      field is **not** renamed. `None` = no credentials declared = every `$auth` reference refused.
 - [ ] `HttpRequestTool` resolves it once at construction, mirroring `allowed_secrets`
       (field at `crates/flux-web/src/http.rs:46`, `new` at `:50`).
 - [ ] `resolve_header_value` recognizes an object of exactly one key `$auth` whose value is an object
-      with a string `purpose`; a malformed `$auth` shape is a caller error, never a silent
+      with a string `credential`; a malformed `$auth` shape is a caller error, never a silent
       passthrough to the string branch.
 - [ ] `Bearer`, `Basic` and `Header` schemes compose via `flux_plugin_protocol::apply_scheme`
       (C-266). `Query` is explicitly rejected with "use C-271" until that story lands — it must not
       silently emit a header.
-- [ ] Failing-first test: `auth_marker_composes_bearer_header_from_declared_purpose` — a
+- [ ] Failing-first test: `auth_marker_composes_bearer_header_from_declared_credential` — a
       `HttpRequestTool` built with one `AuthMethod::bearer("api_token", vec!["TEST_TOK"])` sends
       `Authorization: Bearer <value of TEST_TOK>`. Before the change the request fails with
       `header values must be strings or a secret reference {"$secret": "ENV"}`
       (`crates/flux-web/src/http.rs:251-256`).
 - [ ] Second test: `auth_marker_composes_basic_header_from_user_env_and_secret` — a
-      `AuthMethod::basic` purpose produces `Authorization: Basic <base64(user:secret)>`.
+      `AuthMethod::basic` credential produces `Authorization: Basic <base64(user:secret)>`.
 - [ ] **Several credentials on one request (AND) work.** Test:
       `two_auth_markers_on_different_headers_both_resolve` — a request carrying
-      `{"X-Api-Key": {"$auth":{purpose:"a"}}, "X-Account-Id": {"$auth":{purpose:"b"}}}` sends both
+      `{"X-Api-Key": {"$auth":{credential:"a"}}, "X-Account-Id": {"$auth":{credential:"b"}}}` sends both
       resolved values. This should need no extra code — the header loop at
       `crates/flux-web/src/http.rs:169-181` already calls `resolve_header_value` once per header
       with no shared state — but it must be **proven**, because "one credential per request" is
       exactly the kind of assumption that gets introduced accidentally later.
-- [ ] An undeclared purpose is refused **before any env var is read** (the minimum refusal path;
+- [ ] An undeclared credential is refused **before any env var is read** (the minimum refusal path;
       C-268 proves the full envelope). This must be in the first commit of this story.
 - [ ] The op's JSON schema description (`crates/flux-web/src/http.rs:88`, `:99`) documents the new
       marker alongside `$secret`.
@@ -210,39 +217,39 @@ encoding — and flux-lang cannot compose it either, since the `expr` built-in w
 ```markdown
 ---
 id: C-268
-title: Deny-by-default purpose resolution for the outbound `$auth` marker
+title: Deny-by-default credential resolution for the outbound `$auth` marker
 pillar: Core
 status: ready
 priority: 3
 epic: outbound-auth-marker
 design: docs/designs/outbound-auth-marker.md
-note: "the C-76 refusal envelope, applied to purposes — must not reach a release without C-267"
+note: "the C-76 refusal envelope, applied to credentials — must not reach a release without C-267"
 ---
 
-# Deny-by-default purpose resolution for the outbound `$auth` marker
+# Deny-by-default credential resolution for the outbound `$auth` marker
 
 ## Goal
 Make the `$auth` marker's refusal path as provably fail-closed as the `$secret` allowlist C-76
-established, so a prompt-injected model naming an arbitrary purpose gets nothing — and gets it
+established, so a prompt-injected model naming an arbitrary credential gets nothing — and gets it
 before any credential value is read from the environment or the credential store.
 
 ## Acceptance
-- [ ] `auth_purposes: None` and `Some(vec![])` are both **deny-all**, mirroring `allowed_secrets`'
+- [ ] `auth_credentials: None` and `Some(vec![])` are both **deny-all**, mirroring `allowed_secrets`'
       documented contract (`crates/flux-web/src/lib.rs:90-97`).
 - [ ] Refusal happens strictly before any env read, credential-store read, or `user_env` lookup —
       no value is materialized on the refusal path.
 - [ ] The error text matches the shape C-76 established at
-      `crates/flux-web/src/http.rs:236-242`: it names the refused purpose, states it is not
+      `crates/flux-web/src/http.rs:236-242`: it names the refused credential, states it is not
       declared, and tells the operator where to declare it. It must **not** echo any env-var value.
-- [ ] Failing-first test: `auth_ref_to_undeclared_purpose_is_refused` — direct mirror of
+- [ ] Failing-first test: `auth_ref_to_undeclared_credential_is_refused` — direct mirror of
       `secret_ref_to_non_allowlisted_env_var_is_refused` (`crates/flux-web/src/http.rs:571`). Set an
-      env var that a *declared* purpose would resolve, then reference a *different*, undeclared
-      purpose; assert the call errors and that the env value appears nowhere in the error.
-- [ ] Second test: `auth_purposes_empty_vec_is_explicit_deny_all` — a tool built with
-      `Some(vec![])` refuses a purpose name that a populated map would accept.
-- [ ] Third test: `declared_purpose_with_unset_env_is_a_clean_error` — mirrors
+      env var that a *declared* credential would resolve, then reference a *different*, undeclared
+      credential; assert the call errors and that the env value appears nowhere in the error.
+- [ ] Second test: `auth_credentials_empty_vec_is_explicit_deny_all` — a tool built with
+      `Some(vec![])` refuses a credential name that a populated map would accept.
+- [ ] Third test: `declared_credential_with_unset_env_is_a_clean_error` — mirrors
       `missing_secret_header_env_is_a_clean_error` (`crates/flux-web/src/http.rs:545`): a declared
-      purpose whose `env` keys are all unset produces a clean, value-free error, not a panic and not
+      credential whose `env` keys are all unset produces a clean, value-free error, not a panic and not
       an empty `Authorization: Bearer ` header.
 
 ## Progress
@@ -252,8 +259,8 @@ before any credential value is read from the environment or the credential store
 - Precedent story: `docs/stories/C-76-http-request-secret-exfil.md`.
 - The plugin host's analogous refusal is
   `format!("no auth method declared for purpose `{p}`")` at
-  `crates/flux-plugin/src/host.rs:657` — match its wording where it makes sense so operators see one
-  vocabulary across both paths.
+  `crates/flux-plugin/src/host.rs:657` — that is flux's existing string and stays verbatim on the
+  plugin path. The `$auth` path should say **credential**, since that is the word its caller used.
 - An empty resolved credential must be treated as *absent*, not as a valid empty token.
 ```
 
@@ -290,7 +297,7 @@ with `token`; the `Basic dXNl…` form also matches no entry in `SECRET_PREFIXES
 - [ ] The raw secret is registered **as well**, not instead — an upstream error body can echo the
       bare token.
 - [ ] Failing-first test: `basic_auth_composed_header_is_registered_with_the_redactor` — resolve a
-      `Basic` purpose, then assert `redactor.redact(&composed_authorization_value)` no longer
+      `Basic` credential, then assert `redactor.redact(&composed_authorization_value)` no longer
       contains the base64 payload. Before the change it contains it verbatim, since only the raw
       token was registered.
 - [ ] Second test: `bearer_auth_composed_header_is_registered_with_the_redactor` — same shape for
@@ -323,19 +330,19 @@ status: ready
 priority: 3
 epic: outbound-auth-marker
 design: docs/designs/outbound-auth-marker.md
-note: "the single most important control in the design — without it a purpose can be sent to any host"
+note: "the single most important control in the design — without it a credential can be sent to any host"
 ---
 
 # Scope an outbound `$auth` credential to declared hosts
 
 ## Goal
-Stop a credential resolved by purpose from reaching a host its operator never authorized. Without
+Stop a resolved credential from reaching a host its operator never authorized. Without
 this, a generated (or injected) call can name `zendesk.api_token` and point the request at an
 attacker's URL — the SSRF guard (`crates/flux-web/src/http.rs:157`) blocks private ranges but
 happily allows any public host.
 
 ## Acceptance
-- [ ] Each declared auth purpose carries an `http_hosts` allowlist; a request whose guarded URL host
+- [ ] Each declared credential carries an `http_hosts` allowlist; a request whose guarded URL host
       matches none of them is refused **before dispatch and before the credential is resolved**.
 - [ ] The check uses **one shared matcher**, not a third copy. `host_matches` exists twice today and
       is private both times — `crates/flux-plugin/src/host.rs:1840` and
@@ -343,10 +350,10 @@ happily allows any public host.
       depends on flux-system) and have `flux-plugin` call it; delete its private copy.
 - [ ] Wildcard semantics match the plugin path exactly, including `*` and leading-label wildcards
       such as `*.zendesk.com` (`plugins/zendesk/src/main.rs:131` is the reference shape).
-- [ ] Failing-first test: `auth_purpose_is_refused_for_a_host_outside_its_http_hosts` — declare a
-      purpose scoped to `*.zendesk.com`, issue a request to `https://evil.example.com`, assert the
+- [ ] Failing-first test: `auth_credential_is_refused_for_a_host_outside_its_http_hosts` — declare a
+      credential scoped to `*.zendesk.com`, issue a request to `https://evil.example.com`, assert the
       call is refused and no `Authorization` header was built.
-- [ ] Second test: `auth_purpose_is_allowed_for_a_matching_wildcard_host` — the same purpose against
+- [ ] Second test: `auth_credential_is_allowed_for_a_matching_wildcard_host` — the same credential against
       `https://acme.zendesk.com` succeeds.
 - [ ] Third test: `shared_host_matcher_is_used_by_both_plugin_and_web` — a table test on the now-
       public matcher covering `*`, `*.zendesk.com`, exact match, case-insensitivity, and bracketed
@@ -362,7 +369,7 @@ happily allows any public host.
   (`crates/flux-plugin-protocol/src/lib.rs:504`) and manifest-wide
   `PluginCapabilities.http_hosts` (`:565`) — with env-resolved endpoint hosts additionally admitted
   by `endpoint_allows_host` (`crates/flux-plugin/src/host.rs:603-628`). The `$auth` path needs only
-  the per-purpose list; do not import the endpoint machinery.
+  the per-credential list; do not import the endpoint machinery.
 - Making `host_matches` public is a small L2 public-API addition. Flag it in the changelog.
 ```
 
@@ -391,7 +398,7 @@ Support the fourth `AuthScheme` variant — `Query { name }`
 header map, and the mutated URL must be the one the SSRF guard vets.
 
 ## Acceptance
-- [ ] A `$auth` reference to a `Query`-scheme purpose appends `?<name>=<secret>` to the request URL.
+- [ ] A `$auth` reference to a `Query`-scheme credential appends `?<name>=<secret>` to the request URL.
 - [ ] The parameter is appended **before** `guard_url_scoped_pinned`
       (`crates/flux-web/src/http.rs:157`), so the guarded and pinned URL is the one actually sent.
       A design that appends afterwards is wrong and must fail review.
@@ -401,17 +408,18 @@ header map, and the mutated URL must be the one the SSRF guard vets.
 - [ ] The composed URL is **not** registered with the redactor as a whole; the *token value* is, so
       a logged URL has the parameter value scrubbed rather than the whole URL replaced.
 - [ ] Deny-by-default (C-268) and `http_hosts` scoping (C-270) apply identically to `Query`
-      purposes — a test asserts each.
+      credentials — a test asserts each.
 - [ ] The `$auth`-rejects-`Query` guard added by C-267 is removed.
-- [ ] **A request-level `auth: [{purpose: "…"}]` array is added to `http.request`**, because a
-      `Query` purpose has no header to hang a marker on and `http.request` has no `query` parameter
-      (`crates/flux-web/src/http.rs:88-110`). This is what makes an AND set that mixes a header
-      scheme and a `Query` scheme expressible at all. Purposes named there are applied by scheme;
-      a header-scheme purpose named there is also valid (it just injects its header).
+- [ ] **A request-level `auth: [{credential: "…"}]` array is added to `http.request`**, because a
+      `Query` credential has no header to hang a marker on and `http.request` has no `query`
+      parameter (`crates/flux-web/src/http.rs:88-110`). This is what makes a *mechanism* (an AND
+      group) that mixes a header scheme and a `Query` scheme expressible at all. Credentials named
+      there are applied by scheme; a header-scheme credential named there is also valid (it just
+      injects its header).
 - [ ] Test: `query_and_header_auth_can_be_required_together` — one request carrying a `Query`
-      purpose in `auth` and a `Header` purpose as a header marker sends both.
+      credential in `auth` and a `Header` credential as a header marker sends both.
 - [ ] Failing-first test: `query_scheme_auth_appends_parameter_to_the_guarded_url` — declare a
-      `Query { name: "api_key" }` purpose, issue a request, assert the sent URL carries
+      `Query { name: "api_key" }` credential, issue a request, assert the sent URL carries
       `api_key=<secret>` and that no `Authorization` header is present. Before the change the call is
       refused by C-267's explicit `Query`-not-supported error.
 - [ ] Second test: `query_scheme_parameter_is_present_in_the_url_the_ssrf_guard_saw` — proves the
@@ -462,7 +470,7 @@ on the wire is not scrubbed. The full `register_secret` census in that file — 
 - [ ] The composed `Authorization` value is registered with the redactor for both `Bearer` and
       `Basic` before the request is sent.
 - [ ] Failing-first test: `plugin_http_do_basic_auth_composed_header_is_redacted` — drive `http.do`
-      with a `Basic` auth purpose through the existing test harness (the `register_secret`-capturing
+      with a `Basic` auth method through the existing test harness (the `register_secret`-capturing
       sink at `crates/flux-plugin/src/host.rs:4841` is the hook), then assert the captured composed
       value redacts. It fails today.
 - [ ] No behavior change on the wire — this adds a registration, nothing else.
@@ -488,7 +496,7 @@ pillar: Core
 status: backlog
 epic: outbound-auth-marker
 design: docs/designs/outbound-auth-marker.md
-note: "maintainer decision, NOT a blocker — the outbound $auth seam carries purposes in operator config instead"
+note: "maintainer decision, NOT a blocker — the outbound $auth seam carries credentials in operator config instead"
 ---
 
 # Decide whether flux accepts a file-based capability manifest
@@ -496,8 +504,8 @@ note: "maintainer decision, NOT a blocker — the outbound $auth seam carries pu
 ## Goal
 Settle a trust-model question the flux-connectors work surfaced, on flux's own terms and timeline.
 flux-connectors originally proposed installing `~/.flux/connectors/<provider>.connector.toml`
-declaring auth purposes and egress hosts. Verification showed this is a larger ask than it looks,
-so the outbound `$auth` seam (C-267) was redesigned to **not depend on it** — purposes travel in
+declaring credentials and egress hosts. Verification showed this is a larger ask than it looks,
+so the outbound `$auth` seam (C-267) was redesigned to **not depend on it** — credentials travel in
 flux's operator config. This story exists so the question is answered deliberately rather than by
 default.
 
@@ -518,7 +526,7 @@ default.
   `crates/flux-credentials/src/lib.rs:49` even records "flux doesn't use connectors".
 
 ## Acceptance
-- [ ] A recorded decision, one of: (a) no file-based manifests — connector purposes stay in operator
+- [ ] A recorded decision, one of: (a) no file-based manifests — connector credentials stay in operator
       config indefinitely; (b) accept them with a named integrity anchor (signature, pack-index
       entry, or an install-time recorded hash mirroring `PluginDescriptor.sha256`); or (c) require
       connectors to ship as plugins.
@@ -684,12 +692,12 @@ claim template. flux also has no JWT **signing** dependency today (it only decod
 
 ---
 
-## F-11 → `C-276-purpose-resolver-usable-outside-the-plugin-registry.md`
+## F-11 → `C-276-credential-resolver-usable-outside-the-plugin-registry.md`
 
 ```markdown
 ---
 id: C-276
-title: Make OAuth2 purpose resolution usable outside the plugin registry
+title: Make OAuth2 credential resolution usable outside the plugin registry
 pillar: Core
 status: backlog
 epic: outbound-auth-marker
@@ -697,7 +705,11 @@ design: docs/designs/outbound-auth-marker.md
 note: "the token machinery is already reusable; the store-key namespace and the login CLI are what are plugin-bound"
 ---
 
-# Make OAuth2 purpose resolution usable outside the plugin registry
+# Make OAuth2 credential resolution usable outside the plugin registry
+
+> Naming: flux's `AuthMethod.purpose` field and `resolve_purpose` function are quoted verbatim
+> throughout and are **not** renamed by this story. "Credential" is the caller-facing word the
+> outbound `$auth` marker uses; it resolves to flux's `purpose`.
 
 ## Goal
 Let a non-plugin caller (the outbound `$auth` seam) use flux's existing OAuth2 token machinery, so
@@ -727,16 +739,16 @@ refresh buffer (`:661-664`); and `jwt_expiry_ms` (`:126-127`), already used at `
    (`crates/flux-plugin/src/host.rs:380`).
 
 ## Acceptance
-- [ ] A purpose resolver parameterized over *(auth methods, host allowlist, store-key namespace,
+- [ ] A credential resolver parameterized over *(auth methods, host allowlist, store-key namespace,
       secret sink, credential store)* rather than over `SystemHostCaps`. `flux-plugin` calls it with
       `plugin:` and its manifest; a connector caller calls it with `connector:` and its own host
       list (C-270).
-- [ ] **Namespace separation is enforced, not conventional.** A connector purpose can never read a
+- [ ] **Namespace separation is enforced, not conventional.** A connector credential can never read a
       credential stored under a `plugin:` key, and vice versa.
 - [ ] Failing-first test: `connector_namespace_cannot_read_a_plugin_stored_credential` — store a
-      token under `plugin:acme:api_token`, resolve the same purpose name in the connector namespace,
+      token under `plugin:acme:api_token`, resolve the same name in the connector namespace,
       assert it is not found. It cannot even be written today, since there is no second namespace.
-- [ ] Second test: `resolver_is_callable_without_a_plugin_descriptor` — resolve an OAuth2 purpose
+- [ ] Second test: `resolver_is_callable_without_a_plugin_descriptor` — resolve an OAuth2 credential
       with no `~/.flux/plugins` entry present at all.
 - [ ] A login path exists that does not require a plugin descriptor. Whether that is
       `flux auth login --connector <name>` or a generalized subject argument is this story's design
