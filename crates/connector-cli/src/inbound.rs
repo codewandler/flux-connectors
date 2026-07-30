@@ -27,7 +27,8 @@
 //! for the same reason: a consumer decides without knowing the vocabulary.
 
 use connector_spec::{
-    ChannelBinding, Digest, Encoding, FieldSource, Transport, VerificationScheme,
+    ChannelBinding, Digest, Encoding, FieldSource, HmacSpec, TimestampFormat, Transport,
+    VerificationScheme,
 };
 
 /// How an inbound request on one binding proves it came from the vendor — the published,
@@ -117,6 +118,31 @@ pub(crate) fn encoding_token(encoding: Encoding) -> &'static str {
         Encoding::Hex => "hex",
         Encoding::Base64 => "base64",
     }
+}
+
+/// The token one timestamp spelling is published under.
+pub(crate) fn timestamp_format_token(format: TimestampFormat) -> &'static str {
+    match format {
+        TimestampFormat::UnixSeconds => "unix_seconds",
+        TimestampFormat::Rfc3339 => "rfc3339",
+    }
+}
+
+/// How a binding's signed `{timestamp}` is spelled, as the artifacts publish it — or `None` for a
+/// scheme that interpolates no timestamp, which has no spelling to state.
+///
+/// **The default is resolved here rather than passed on.** `HmacSpec::timestamp_format` is optional
+/// in the IR because an author who writes nothing means unix seconds; a host reading an artifact must
+/// not be asked to know that, because the cost of guessing the spelling of a signed timestamp is a
+/// refused delivery at best. This is the same resolution `connector-spec`'s reference verifier makes.
+///
+/// The guard is the *selector*, not the format: the loader accepts a `timestamp_format` exactly when
+/// `signed` interpolates `{timestamp}`, which is exactly when it accepts a `timestamp` selector, so
+/// reading one answers for both.
+pub(crate) fn timestamp_format_of(spec: &HmacSpec) -> Option<&'static str> {
+    spec.timestamp
+        .as_ref()
+        .map(|_| timestamp_format_token(spec.timestamp_format.unwrap_or_default()))
 }
 
 /// The token one selector's source is published under — where on the inbound request a value is

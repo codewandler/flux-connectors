@@ -498,6 +498,16 @@ struct ManifestVerification<'a> {
 }
 
 /// The HMAC parameters, in the vendor's own terms. `secret` is a **credential name**, never a value.
+///
+/// **Every field of `HmacSpec` must appear here**, and this restatement of them is why that is a
+/// promise rather than a habit: a field the IR gains and this struct does not is dropped from every
+/// manifest, silently, because both halves still compile. `HmacSpec` cannot simply be flattened in —
+/// TOML places a nested table after its parent's key/value pairs, so a scalar declared after
+/// `timestamp` would reparse as a field *of* the timestamp table, and `HmacSpec` declares `secret`
+/// and `tolerance` after it. So the field set is held to the IR's by a test instead:
+/// `inbound_artifacts.rs::neither_projection_can_lose_a_field_hmac_spec_declares` derives the
+/// authoritative list from `HmacSpec`'s own `Deserialize` impl and fails until this struct carries
+/// all of it (C-151).
 #[derive(Serialize)]
 struct ManifestHmac<'a> {
     algorithm: &'static str,
@@ -509,6 +519,11 @@ struct ManifestHmac<'a> {
     secret: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     tolerance: Option<&'a str>,
+    /// How the signed timestamp is spelled — the **resolved** answer, so a host never has to know
+    /// the IR's default. A scalar, so it sits above the `timestamp` table for the reason
+    /// [`ManifestChannel`] records.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    timestamp_format: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     timestamp: Option<ManifestSelector<'a>>,
 }
@@ -570,6 +585,7 @@ fn manifest_channel<'a>(connector: &Connector, channel: &'a ChannelBinding) -> M
                     signed: &spec.signed,
                     secret: &spec.secret,
                     tolerance: spec.tolerance.as_deref(),
+                    timestamp_format: crate::inbound::timestamp_format_of(spec),
                     timestamp: spec.timestamp.as_ref().map(manifest_selector),
                 }),
                 Some(VerificationScheme::None) | None => None,

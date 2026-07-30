@@ -223,6 +223,14 @@ struct VerificationEntry {
 /// only declares what that comparison uses — and [`secret`](Self::secret) is a **credential name**,
 /// never a value. `site_catalog.rs::no_credential_value_reaches_the_document` builds with the
 /// signing secret's variable set to a sentinel and asserts it appears nowhere.
+///
+/// **Every field of `HmacSpec` must appear here**, and restating them is why that needs a test
+/// rather than a comment: a field the IR gains and this struct does not is dropped from the published
+/// catalogue while both halves still compile. `HmacSpec` cannot be flattened in instead — this
+/// document publishes every key always (`docs/designs/catalog-json.md`), and the IR skips its `None`
+/// fields so that a provider TOML need not spell out absences. So the field set is held to the IR's
+/// by `inbound_artifacts.rs::neither_projection_can_lose_a_field_hmac_spec_declares`, which derives
+/// the authoritative list from `HmacSpec`'s own `Deserialize` impl (C-151).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 struct HmacEntry {
     /// `sha1` or `sha256`.
@@ -237,6 +245,11 @@ struct HmacEntry {
     signed: String,
     /// Where the `{timestamp}` is read from. Present exactly when `signed` interpolates one.
     timestamp: Option<SelectorEntry>,
+    /// How that timestamp is **spelled** — `unix_seconds` or `rfc3339` — and `null` for a scheme
+    /// that signs none. A separate axis from the selector, which says only where the value is read
+    /// from; the IR's default is resolved here so that a consumer reads the answer instead of
+    /// having to know it (`crate::inbound::timestamp_format_of`).
+    timestamp_format: Option<&'static str>,
     /// The **name** of the credential holding the shared secret. Resolve it against
     /// `provider.auth.credentials[].name`, where it is declared with `scheme: "signing"`.
     secret: String,
@@ -574,6 +587,7 @@ fn verification_entry(channel: &ChannelBinding) -> VerificationEntry {
             prefix: spec.prefix.clone(),
             signed: spec.signed.clone(),
             timestamp: spec.timestamp.as_ref().map(selector_entry),
+            timestamp_format: inbound::timestamp_format_of(spec),
             // A credential **name**. Nothing in this module reads the process environment.
             secret: spec.secret.clone(),
             tolerance: spec.tolerance.clone(),

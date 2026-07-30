@@ -21,13 +21,18 @@
 
 mod common;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use connector_cli::catalog::OperationRendering;
 use connector_cli::workspace::Workspace;
 use connector_cli::{catalog, pipeline, seam, site};
-use connector_spec::Connector;
+use connector_spec::{Connector, VerificationScheme};
+use serde_json::Value;
+
+/// The published catalogue, as a build plans it. A whole-catalogue artifact, so the committed bytes
+/// are the coordinator's; the assertions here are claims about the emitter and read the plan.
+const CATALOG_JSON: &str = "web/public/catalog.json";
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -260,6 +265,277 @@ fn a_manifest_verification_block_names_a_declared_signing_credential() {
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// 1b — every field of the verification declaration survives the trip (C-151)
+// ---------------------------------------------------------------------------------------------
+
+/// Every key `HmacSpec` accepts, **as serde reports them**.
+///
+/// `connector_spec::provider::accepted_keys` reads the field list out of `deny_unknown_fields`' own
+/// error, so this is derived from the `Deserialize` impl that parses real provider files rather than
+/// from a second list that could disagree with it — the same derived answer `provider_schema.rs`
+/// holds the published JSON schema to. Nothing below is hand written, which is the point: a field
+/// added to `HmacSpec` joins this set without anyone editing this file.
+fn hmac_fields() -> BTreeSet<String> {
+    connector_spec::provider::accepted_keys()
+        .into_iter()
+        .find(|(object, _)| *object == "hmac")
+        .map(|(_, keys)| keys.into_iter().collect::<BTreeSet<String>>())
+        .filter(|keys| !keys.is_empty())
+        .expect("`accepted_keys` documents the `hmac` object, or every check below is vacuous")
+}
+
+/// The keys of a JSON object.
+fn keys(value: &Value) -> BTreeSet<String> {
+    value
+        .as_object()
+        .unwrap_or_else(|| panic!("expected an object, got {value}"))
+        .keys()
+        .cloned()
+        .collect()
+}
+
+/// One binding's declaration as the **artifacts** state it: the IR's own answer, with the single
+/// default they resolve rather than pass on.
+///
+/// `HmacSpec::timestamp_format` is optional in the IR because an author who writes nothing means
+/// unix seconds. A host reading an artifact must not be asked to know that — the cost of guessing
+/// the spelling of a signed timestamp is a refused delivery at best — so both projections publish
+/// the *effective* format, exactly as `connector-spec`'s reference verifier resolves it.
+fn as_published(spec: &connector_spec::HmacSpec) -> connector_spec::HmacSpec {
+    connector_spec::HmacSpec {
+        timestamp_format: spec
+            .timestamp
+            .as_ref()
+            .map(|_| spec.timestamp_format.unwrap_or_default()),
+        ..spec.clone()
+    }
+}
+
+/// One binding of one provider, from the planned `catalog.json`.
+fn published_channel<'a>(document: &'a Value, provider: &str, channel: &str) -> &'a Value {
+    document["providers"]
+        .as_array()
+        .expect("a providers array")
+        .iter()
+        .find(|entry| entry["id"] == Value::String(provider.to_string()))
+        .unwrap_or_else(|| panic!("{CATALOG_JSON} carries no provider `{provider}`"))["channels"]
+        .as_array()
+        .expect("a channels array")
+        .iter()
+        .find(|entry| entry["name"] == Value::String(channel.to_string()))
+        .unwrap_or_else(|| panic!("{CATALOG_JSON} carries no `{provider}` binding `{channel}`"))
+}
+
+/// One binding of one provider, from the planned manifest.
+fn manifest_channel<'a>(manifest: &'a toml::Value, channel: &str) -> &'a toml::Value {
+    blocks(manifest, "channels")
+        .into_iter()
+        .find(|block| text(block, "name") == channel)
+        .unwrap_or_else(|| panic!("the manifest publishes no binding `{channel}`"))
+}
+
+/// **A shipped binding's declared verification round-trips, whole, into both artifacts.**
+///
+/// The failure this catches is the quiet one: both projections restate `HmacSpec`'s fields by hand,
+/// so a field the IR gained reaches neither consumer while every test that names a field explicitly
+/// keeps passing. So nothing here names a field. The comparison is driven off the declaration
+/// itself — every key the IR serializes must appear in `connectors/<id>.connector.toml` and in
+/// `catalog.json` with the same value — and the document is additionally held to the full accepted
+/// key set, because `catalog.json` publishes every key always.
+///
+/// The manifest is not: TOML has no `null`, so an undeclared optional field is legitimately absent
+/// there, which is why the probe below covers the manifest's key set with a binding that declares
+/// everything.
+#[test]
+fn every_declared_hmac_field_reaches_the_manifest_and_the_document() {
+    let artifacts = planned();
+    let document: Value = serde_json::from_str(
+        artifacts
+            .get(CATALOG_JSON)
+            .unwrap_or_else(|| panic!("a build plans no {CATALOG_JSON}")),
+    )
+    .expect("the planned document is valid JSON");
+    let expected = hmac_fields();
+    let mut checked = 0;
+
+    for provider in shipped() {
+        let connector = load(&provider);
+        if connector.channels.is_empty() {
+            continue;
+        }
+        let manifest = manifest_of(&artifacts, &provider);
+
+        for channel in &connector.channels {
+            let Some(VerificationScheme::Hmac(spec)) = &channel.verification else {
+                continue;
+            };
+            checked += 1;
+            let name = channel.name.as_str();
+            let declared =
+                serde_json::to_value(as_published(spec)).expect("an HmacSpec serializes");
+
+            let published = &published_channel(&document, &provider, name)["verification"]["hmac"];
+            assert_eq!(
+                keys(published),
+                expected,
+                "`{provider}` binding `{name}`: {CATALOG_JSON} does not carry every field of its \
+                 verification declaration — every key is always present there, so a field the \
+                 emitter forgot is a field no consumer can read"
+            );
+
+            let block = manifest_channel(&manifest, name);
+            let in_manifest: Value = serde_json::to_value(&block["verification"]["hmac"])
+                .expect("a TOML table converts to JSON");
+
+            for (key, value) in declared.as_object().expect("an object") {
+                assert_eq!(
+                    in_manifest.get(key),
+                    Some(value),
+                    "`{provider}` binding `{name}` declares `{key} = {value}`, which \
+                     connectors/{provider}.connector.toml does not publish; a host reading the \
+                     manifest cannot verify a delivery it cannot fully describe"
+                );
+                assert_eq!(
+                    published.get(key),
+                    Some(value),
+                    "`{provider}` binding `{name}` declares `{key} = {value}`, which \
+                     {CATALOG_JSON} does not publish"
+                );
+            }
+        }
+    }
+
+    assert!(
+        checked > 0,
+        "no shipped connector declares an HMAC-verified binding, so every assertion above passed \
+         vacuously"
+    );
+}
+
+/// A connector whose one binding declares **every** field `HmacSpec` has.
+///
+/// Written here rather than added to `providers/`: no shipped vendor needs an RFC 3339 timestamp
+/// yet, and the guarantee below must not wait for one — the whole point of C-151 is that the first
+/// such vendor must not be the thing that discovers a projection drops a field.
+const EVERY_HMAC_FIELD: &str = r#"
+id = "acme"
+vendor = "Acme"
+authority = "com.acme.api"
+api_version = "v1"
+base_url = "https://api.acme.example"
+description = "A hand-authored fixture connector."
+default_auth = [{ credentials = ["acme.token"] }]
+
+[[auth]]
+name = "acme.token"
+scheme = "bearer"
+env = ["ACME_TOKEN"]
+description = "The fixture credential."
+
+[[auth]]
+name = "acme.signing_secret"
+scheme = "signing"
+env = ["ACME_SIGNING_SECRET"]
+description = "The fixture webhook signing secret."
+
+[[operations]]
+id = "acme-thing-list"
+method = "GET"
+path = "/v1/things"
+description = "List things."
+risk = "low"
+idempotency = "idempotent"
+
+[[events]]
+name = "thing.created"
+description = "A thing was created."
+
+[[channels]]
+name = "hook"
+transport = "webhook"
+description = "The fixture webhook."
+events = ["thing.created"]
+
+# Every field, so that a projection that drops one is caught here rather than by the first vendor
+# that needs it. `timestamp_format` is the field this fixture was written for.
+[channels.verification.hmac]
+algorithm = "sha256"
+encoding = "base64"
+header = "X-Acme-Signature"
+prefix = "sha256="
+signed = "{timestamp}{body}"
+timestamp = { source = "header", name = "X-Acme-Timestamp" }
+timestamp_format = "rfc3339"
+secret = "acme.signing_secret"
+tolerance = "5m"
+
+[channels.setup]
+docs_url = "https://docs.acme.example/webhooks"
+steps = ["Open the Acme dashboard.", "Paste the callback URL."]
+"#;
+
+/// **The hand-enumeration stops being a place a field can go missing.**
+///
+/// `seam::ManifestHmac` and `site::HmacEntry` each restate `HmacSpec`'s fields, and neither could
+/// simply serialize the IR type instead. The reasons are structural rather than stylistic, and both
+/// are recorded beside the types:
+///
+/// - **The manifest's field order is load-bearing.** TOML places a nested table after its parent's
+///   key/value pairs, so a scalar declared after `timestamp` would be parsed as a field *of* the
+///   timestamp table. `HmacSpec` declares `secret` and `tolerance` after `timestamp`, so flattening
+///   it would emit a manifest that reparses wrongly.
+/// - **The document publishes every key always** (`docs/designs/catalog-json.md`), while `HmacSpec`
+///   skips its `None` fields so that a provider TOML is not required to spell out absences.
+///
+/// So this is the C-125 resolution instead of a comment asking the next person to remember: the
+/// authoritative field list is *derived* from `HmacSpec` — see [`hmac_fields`] — and both
+/// projections are held to it, over a binding that declares all of them. A field added to `HmacSpec`
+/// fails this test with no edit to this file, first at the fixture and then at whichever projection
+/// forgot it.
+#[test]
+fn neither_projection_can_lose_a_field_hmac_spec_declares() {
+    let expected = hmac_fields();
+    let connector = connector_spec::provider::load("providers/acme.toml", EVERY_HMAC_FIELD)
+        .expect("the fixture loads")
+        .connector;
+
+    let Some(VerificationScheme::Hmac(spec)) = &connector.channels[0].verification else {
+        panic!("the fixture declares an HMAC-verified binding");
+    };
+    let declared = serde_json::to_value(spec).expect("an HmacSpec serializes");
+    assert_eq!(
+        keys(&declared),
+        expected,
+        "EVERY_HMAC_FIELD does not declare every field `HmacSpec` accepts, so the two checks below \
+         would be made against a subset of them — declare the missing one in the fixture above"
+    );
+
+    let emitted = seam::emit(&connector).expect("the fixture emits");
+    let manifest: toml::Value =
+        toml::from_str(&emitted.services[0].manifest).expect("the manifest is valid TOML");
+    let in_manifest: Value =
+        serde_json::to_value(&manifest_channel(&manifest, "hook")["verification"]["hmac"])
+            .expect("a TOML table converts to JSON");
+    assert_eq!(
+        keys(&in_manifest),
+        expected,
+        "the manifest projection publishes a different field set than `HmacSpec` declares, so a \
+         host reading connectors/<id>.connector.toml cannot see everything the IR carries"
+    );
+
+    let entry =
+        site::provider_entry(&connector, &emitted.operations).expect("the fixture compiles");
+    let document: Value =
+        serde_json::from_str(&site::document(vec![entry]).expect("it serializes"))
+            .expect("the document is valid JSON");
+    assert_eq!(
+        keys(&published_channel(&document, "acme", "hook")["verification"]["hmac"]),
+        expected,
+        "the public-catalogue projection publishes a different field set than `HmacSpec` declares"
+    );
 }
 
 // ---------------------------------------------------------------------------------------------

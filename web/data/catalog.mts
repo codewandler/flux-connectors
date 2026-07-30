@@ -100,6 +100,11 @@ export interface Hmac {
   prefix: string | null
   signed: string
   timestamp: FieldSelector | null
+  /**
+   * How the signed timestamp is **spelled** — `'unix_seconds'` or `'rfc3339'` — and `null` for a
+   * scheme that signs none. A separate axis from `timestamp`, which says only where it is read from.
+   */
+  timestamp_format: string | null
   secret: string
   tolerance: string | null
 }
