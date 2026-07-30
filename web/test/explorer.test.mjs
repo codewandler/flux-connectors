@@ -123,6 +123,16 @@ function contentColumnCap() {
   return css.match(/\.VPDoc\.has-aside\s+\.content-container[^{]*\{[^}]*max-width:\s*([^;}]+)/)
 }
 
+/** Every stylesheet the built site emits, concatenated. */
+function stylesheet() {
+  const assets = path.join(distDir, 'assets')
+  assert.ok(existsSync(assets), 'the site was not built — run `npm run build` before `npm test`')
+  return readdirSync(assets)
+    .filter((entry) => entry.endsWith('.css'))
+    .map((entry) => readFileSync(path.join(assets, entry), 'utf-8'))
+    .join('\n')
+}
+
 /** Every file under the explorer's own sources — where hand-maintained data would have to live. */
 function explorerSources() {
   const roots = [
@@ -927,4 +937,86 @@ test('a card fact holding several values can break between them', () => {
     /flex-wrap:\s*wrap/,
     `\`.card__hosts\` no longer wraps (${rule[1]}) — the hosts run becomes one unbreakable box again and escapes the page at 1280px`
   )
+})
+
+test('nothing in the explorer sets a floor under its own width', () => {
+  // C-100, follow-up. Three separate regressions had one cause: a flex or grid item's automatic
+  // minimum size is its *min-content*, so a control, a row or a card silently refuses to go below
+  // its longest unbreakable run and pushes its container instead.
+  //
+  //   - a `<select>`'s min-content is its widest option, so eight filters could never share a row
+  //   - a grid item's min-content held every operation row open at its longest request path, which
+  //     scrolled the whole page sideways on a phone
+  //   - the provider card's header held a 314px floor under a card, which capped the grid at three
+  //     columns however wide the page got
+  //
+  // Each is released by `min-width: 0` or by letting the run wrap. The rules are asserted in the
+  // emitted stylesheet because a layout regression here is silent: the page still renders, it just
+  // renders wrong, and only at some viewport widths.
+  const css = stylesheet()
+
+  for (const [selector, property] of [
+    ['.filters__field', /min-width:\s*0/],
+    ['.row', /min-width:\s*0/],
+    ['.card__head', /flex-wrap:\s*wrap/],
+  ]) {
+    // The lookahead keeps `.row` off `.row__head` and `.filters__field` off `--wide`; without it
+    // the assertion would silently drift onto a neighbouring rule if the emitted order changed.
+    const rule = css.match(new RegExp(`\\${selector}(?![\\w-])[^{]*\\{([^}]*)\\}`))
+    assert.ok(rule, `the \`${selector}\` rule is gone from the built stylesheet`)
+    assert.match(
+      rule[1],
+      property,
+      `\`${selector}\` no longer releases its automatic minimum size (${rule[1]}) — whatever it contains sets a floor under the layout again`
+    )
+  }
+})
+
+// A tool contract is the page's most information-dense block, and it was rendered as bare text plus
+// an unhighlighted `JSON.stringify`. These assertions pin the two properties that make it readable
+// and that a refactor would silently lose: the safety fields carry a *derived* tone, and the schema
+// is tokenised rather than dumped.
+//
+// Read out of the built HTML, so this also holds the block to the suite's standing rule that the
+// content survives without JavaScript.
+test('a tool contract renders its safety fields as toned chips and its schema highlighted', () => {
+  const document = catalog()
+  const ops = document.core.operations.filter((entry) => entry.tool_spec)
+  assert.ok(ops.length > 0, 'no core operation carries a tool spec; this test would pass vacuously')
+
+  let checked = 0
+  for (const operation of ops) {
+    const html = page('core', 'operations', `${operation.name}.html`)
+    if (!html.includes('Tool contract')) continue
+    checked += 1
+
+    // The tone is derived from the value, never passed in — so a risk level cannot be rendered calm
+    // on one page and alarming on another.
+    const tones = [...html.matchAll(/class="chip chip--([a-z]+)"[^>]*>([^<]+)/g)]
+    assert.ok(
+      tones.length >= 2,
+      `${operation.name} renders its tool contract without chips — the fields are bare text again`
+    )
+    for (const [, tone, value] of tones) {
+      assert.match(tone, /^(alarming|cautionary|reassuring|neutral)$/, `unknown tone on \`${value}\``)
+    }
+
+    // An unrecognised value must stay neutral rather than being guessed at: a wrong colour on a
+    // safety field reads as an assurance nobody made.
+    const riskTone = tones.find(([, , value]) => value.trim() === operation.tool_spec.risk)
+    assert.ok(riskTone, `${operation.name} does not render its declared risk as a chip`)
+
+    // The schema is tokenised, not dumped. Keys and punctuation are present in any JSON object.
+    assert.match(
+      html,
+      /tok tok--key/,
+      `${operation.name}'s input schema is not highlighted — it is a raw JSON dump again`
+    )
+    assert.ok(
+      html.includes('aria-label="Schema format"'),
+      `${operation.name} offers no JSON/YAML choice`
+    )
+  }
+
+  assert.ok(checked > 0, 'no page rendered a tool contract; the selector above is stale')
 })

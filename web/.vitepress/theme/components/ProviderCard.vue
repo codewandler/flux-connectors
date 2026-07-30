@@ -132,8 +132,16 @@ const headline = computed(() => {
   padding: 16px 20px;
 }
 
+/*
+ * The header is what set the floor on card width, and therefore on how many columns the grid could
+ * have. Vendor name, id and status badge sat on one unwrappable flex line whose min-content came to
+ * 274px, so a card could not go below 314px and the grid could not fit a fourth track in 1025px.
+ * Letting it wrap removes that floor: the badge drops to its own line on a narrow card instead of
+ * escaping the border, and the header is unchanged on a wide one, where it still fits on one line.
+ */
 .card__head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 8px;
 }

@@ -1,232 +1,102 @@
-# Handoff: ready-to-paste flux stories for verified inbound webhooks
+# Handoff: flux stories for verified inbound webhooks — **FILED**
 
 > **This file is a handoff artifact, not a tracked backlog.** Nothing in it is a story on *this*
-> repo's board, and `/track:board` must never pick these up. Each block below is a complete story file
-> destined for **`../flux`**'s `docs/stories/`. A human copies a block verbatim into
-> `/home/timo/projects/flux/docs/stories/<id>-<slug>.md` and runs flux's own `/track:board`.
+> repo's board, and `/track:board` must never pick these up.
 >
-> Source design: [inbound-events.md](inbound-events.md) · Parent story:
+> Source design: [verified-webhook-seam.md](verified-webhook-seam.md) (the flux-side design) ·
+> [inbound-events.md](inbound-events.md) (the parent) · Parent story:
 > [C-64](../stories/C-64-design-verified-webhook-seam.md)
 
-## Before you paste
+## Status: filed on flux's board, 2026-07-30
 
-- **IDs are provisional and the previous handoff's were wrong.** The `auth-seam` handoff claimed
-  `C-266 … C-276`; by the time anyone looked, flux's fleet had consumed that entire range with
-  unrelated work (C-266 sandbox CI, C-268 wasm epic, C-274 events sqlite, …) and flux's highest `C-`
-  id was already **275**. Do not assume. Re-check immediately before pasting:
+The five draft blocks this document used to carry as ready-to-paste text **have been written directly
+into flux** and are no longer drafts. The filed versions are the authority; they carry more evidence
+than the drafts did, because writing them required reading the request path rather than summarizing it.
+
+| was | filed as | flux path |
+|---|---|---|
+| F-1 raw body + `verify` block | **C-291** | `../flux/docs/stories/C-291-webhook-verify-raw-body.md` |
+| F-2 scheme matrix, constant-time, tolerance | **C-292** | `../flux/docs/stories/C-292-webhook-signature-schemes.md` |
+| F-3 challenge/handshake | **C-293** | `../flux/docs/stories/C-293-webhook-challenge-handshake.md` |
+| F-4 discriminator → trigger routing | **C-294** | `../flux/docs/stories/C-294-webhook-discriminator-routing.md` |
+| F-5 delivery id | **C-295** (widened) | `../flux/docs/stories/C-295-delivery-envelope-verified-flag.md` |
+
+All five carry `epic: verified-webhook-channel` and `pillar: Core`, `status: backlog`, and no
+`design:` field — flux has no design doc for this seam, and a `design:` pointing at a file flux does
+not have is worse than none. Each story's `## Notes` points at
+[verified-webhook-seam.md](verified-webhook-seam.md) in this repository instead.
+
+**C-295 is wider than F-5 was.** F-5 asked only for the delivery id. The filed story also carries the
+`verified` flag, because C-82's invariant — a deliberately-unverifiable surface must be
+distinguishable from a verified one — is *false in effect* if flux normalises the distinction away at
+delivery. Without it, `verification = "none"` is loud in the manifest and invisible to the flow.
+
+**These ids were free at the moment of writing** (flux's highest `C-` was `C-290`, checked
+immediately before each file was created). They are now taken. flux's board was **not** regenerated —
+the files are uncommitted in flux's working tree, and whoever commits them runs flux's own
+`/track:board`.
+
+## The lessons that made this handoff work — keep them
+
+- **IDs are consumed concurrently.** The previous handoff (`auth-seam`) claimed `C-266 … C-276`; by
+  the time anyone looked, flux's fleet had consumed that entire range with unrelated work. The rule
+  that replaced "claim a range in advance" is: **check immediately before each write**, with
 
   ```bash
   ls ../flux/docs/stories | grep -oP '^C-\d+' | sort -t- -k2 -n | tail -1
   ```
 
-  and renumber every block plus its cross-references.
+  and re-check after, to catch a concurrent filer.
 - **Naming: this is `webhook signature verification`, never "the inbound auth seam".** flux already
   has a **done** `request-auth-seam` (`docs/designs/request-auth-seam.md`, D-64/D-68) covering inbound
-  *bearer → principal* resolution. A story titled "inbound auth" will be read as a duplicate of
-  shipped work and closed.
-- **A design doc must exist in flux** if a block sets `design:`. Either port
-  [inbound-events.md](inbound-events.md) into flux as `docs/designs/verified-webhook-channel.md`, or
-  drop the `design:` line. Never leave a `design:` pointing at a file flux does not have.
-- **Facts verified in flux** (re-grep by symbol, not line number):
-  `crates/flux-channels/src/adapters/webhook.rs` — `WebhookSettings { addr, path, async, token }`, an
-  optional **static bearer token**, and **no** HMAC/signature path anywhere in the file.
-  `crates/flux-channels/src/adapters/mod.rs` — `build_channels` dispatches
-  `"webhook" | "http"`, and an unknown kind is a hard error.
-  `AppDeliverer` serializes deliveries behind a mutex, so a verified channel inherits the
-  one-delivery-at-a-time property (flux story A-112 is the isolation follow-up).
+  *bearer → principal* resolution. A story titled "inbound auth" reads as a duplicate of shipped work
+  and gets closed. Every filed story repeats this in its Notes.
+- **A design doc must exist in flux if a block sets `design:`.** None of the five does; they cite the
+  path in this repository from `## Notes`, which survives whether or not flux ever ports the design.
+- **Every flux-side claim is anchored to a symbol and a verified tree.** All citations in the filed
+  stories and in [verified-webhook-seam.md](verified-webhook-seam.md) were read at flux
+  `v0.40.0-4-g2abd0a13` (workspace version `0.40.0`). Line numbers move; symbol names do not.
 
 ## Sequencing
 
 ```
-F-1  declarative `verify` block on `channel webhook`   ← the foundation; raw-body capture lives here
-F-2  scheme matrix + constant-time compare + tolerance ← depends on F-1
-F-3  challenge/handshake hook (answer without a turn)  ← independent of F-2, needs F-1
-F-4  discriminator → trigger-label routing            ← depends on F-1
-F-5  delivery id + dedupe surface                      ← depends on F-1
+C-291  raw-body capture + the `verify` declaration      ← the foundation
+C-292  scheme matrix, constant-time compare, tolerance  ← depends on C-291
+C-293  challenge/handshake, answered without a turn     ← depends on C-291, independent of C-292
+C-294  discriminator → trigger-label routing            ← depends on C-291
+C-295  delivery envelope: id + verified flag            ← depends on C-291
 ```
 
-F-1 is the only hard prerequisite. F-2 through F-5 can run in parallel afterwards.
+C-291 is the only hard prerequisite; C-292 through C-295 can run in parallel afterwards.
 
----
+## The load-bearing facts, re-verified at flux `v0.40.0-4-g2abd0a13`
 
-## F-1 — capture the raw body and add a declarative `verify` block
+Re-grep by symbol, not by line number.
 
-```markdown
----
-id: C-NNN
-title: A declarative `verify` block on `channel webhook`, over the raw request body
-pillar: Core
-status: backlog
-areas: [flux-channels]
-note: "channel webhook authenticates with an optional STATIC BEARER TOKEN and has no signature path, so a vendor that signs its payloads but cannot send a custom Authorization header has no authenticated route into flux at all"
----
-
-# A declarative `verify` block on `channel webhook`, over the raw request body
-
-## Goal
-Let a `channel webhook` declaration carry a signature-verification scheme, so a signed vendor webhook
-(GitHub, Stripe, Slack, Zendesk) has an authenticated path into flux. Today `WebhookSettings` is
-`{ addr, path, async, token }` and the only check is a static bearer — which vendors do not send.
-
-## Acceptance
-- [ ] `WebhookSettings` gains an optional `verify` block: `scheme`, `algorithm`, `encoding`, `header`,
-      optional `prefix`, a `signed` template over `{body}`/`{timestamp}`, optional `tolerance`, and a
-      `secret` that is a **host-resolved reference** (`verify_secret secret "KEY"`), never a literal.
-- [ ] **The raw body bytes are captured before parsing and verification runs against them.**
-      Failing-first test `verify_uses_raw_body_not_reserialized`: a body whose JSON keys are reordered
-      after parsing fails verification, proving the raw bytes are what is checked. Any
-      normalize-then-verify path is a bypass, not a convenience.
-- [ ] **Fail closed with zero delivery.** Test `bad_signature_delivers_nothing` asserts the recording
-      deliverer's delivery count is **0** — not merely that the response was 401/403. An agent, journey
-      or model call reached on a bad signature is the defect this story exists to prevent.
-- [ ] `verify` and `token` compose: if both are declared, both must pass.
-- [ ] The secret is registered with the redactor, so it cannot surface in a transcript or error.
-- [ ] A `verify` block naming an unknown scheme is a **load error**, consistent with an unknown channel
-      kind being a load error.
-
-## Progress
-- (not started)
-
-## Notes
-- Verified: `crates/flux-channels/src/adapters/webhook.rs` has no HMAC path; `handle` passes the parsed
-  body straight to `deliver`. Raw-body capture is the structural change — everything else layers on it.
-- Upstream source of the scheme parameters: flux-connectors' inbound spec (its C-59/C-60), which
-  generates them per vendor from the vendor's own documentation.
-```
-
----
-
-## F-2 — the scheme matrix, constant-time comparison, and replay tolerance
-
-```markdown
----
-id: C-NNN
-title: Webhook signature schemes — one parameterized HMAC, constant-time, replay-bounded
-pillar: Core
-status: backlog
-areas: [flux-channels]
-note: "four vendors' 'unique' schemes collapse to one algorithm over {digest, encoding, signed-template, tolerance}; the test vectors must come from vendor docs, never from our own implementation"
----
-
-# Webhook signature schemes — one parameterized HMAC, constant-time, replay-bounded
-
-## Goal
-Implement the verification F-1 declares, covering the real vendor schemes with one parameterized
-algorithm rather than a function per vendor.
-
-## Acceptance
-- [ ] HMAC with `sha256` (and `sha1` for legacy GitHub), `hex` and `base64` encodings, an optional
-      literal prefix, and a `signed` template over `{body}` / `{timestamp}`.
-- [ ] Failing-first test `vendor_signature_vectors_verify` using vectors **from each vendor's own
-      documentation** — GitHub `X-Hub-Signature-256`, Stripe `Stripe-Signature` (`t=`/`v1=`), Slack
-      `v0:{ts}:{body}`, Zendesk base64. Self-generated fixtures would agree with our implementation and
-      prove nothing.
-- [ ] Comparison is **constant-time**; a `==` on the digest is the defect under test.
-- [ ] `tolerance` is enforced for any timestamped scheme: test `stale_timestamp_is_rejected` with a
-      signature that is otherwise valid.
-- [ ] Negative matrix: wrong secret, mutated body, truncated signature, missing header, wrong prefix —
-      each rejected with zero delivery.
-
-## Progress
-- (not started)
-```
-
----
-
-## F-3 — answer the vendor's endpoint challenge without waking an agent
-
-```markdown
----
-id: C-NNN
-title: Webhook challenge/handshake — answer endpoint verification without a turn
-pillar: Core
-status: backlog
-areas: [flux-channels]
-note: "Slack's url_verification echo and Meta's hub.challenge GET arrive at the same path as real events; waking a model to answer a handshake is both wasteful and a way to feed vendor-shaped text to an agent"
----
-
-# Webhook challenge/handshake — answer endpoint verification without a turn
-
-## Goal
-Let a `channel webhook` satisfy a vendor's endpoint-verification handshake itself, so registering a
-webhook does not depend on an agent happening to echo the right field back.
-
-## Acceptance
-- [ ] An optional `challenge` declaration: which field or query parameter carries the token, and what
-      to echo (Slack: `type == "url_verification"` → echo `challenge`; Meta: GET `hub.challenge`).
-- [ ] Failing-first test `challenge_answers_without_delivery`: the handshake gets the correct response
-      body and the delivery count is **0** — no trigger fires, no model call happens.
-- [ ] The challenge path is subject to the same verification as events where the vendor signs it, and is
-      explicitly documented where it cannot be.
-- [ ] A challenge-shaped body that does not match the declaration is treated as an ordinary event, not
-      silently swallowed.
-
-## Progress
-- (not started)
-```
-
----
-
-## F-4 — route by event type instead of one mega-trigger
-
-```markdown
----
-id: C-NNN
-title: Route a webhook to a trigger label by its event discriminator
-pillar: Core
-status: backlog
-areas: [flux-channels, flux-app]
-note: "today one webhook channel = one trigger label, so every vendor event lands in one flow that must switch on JSON; the vendor already tells us the type in a header or field"
----
-
-# Route a webhook to a trigger label by its event discriminator
-
-## Goal
-Let a webhook channel fan out to per-event triggers — `trigger on "github.issues.opened"` — instead of
-a single trigger that reimplements dispatch inside the flow.
-
-## Acceptance
-- [ ] An optional `discriminator` on the channel: `source` (`header` | `body`), `name`, and an optional
-      `when` narrowing on a body field.
-- [ ] The channel fires `"<channel>.<event>"` when the discriminator resolves, and plain `"<channel>"`
-      when it does not — so existing single-trigger programs keep working unchanged.
-- [ ] Failing-first test `discriminator_routes_to_distinct_triggers`: two events on one channel reach
-      two different triggers.
-- [ ] An event with no matching trigger is **not** an error; it is a logged no-op (vendors send event
-      types you did not subscribe to).
-- [ ] Trigger matching stays an exact label match — no globbing introduced by this story.
-
-## Progress
-- (not started)
-```
-
----
-
-## F-5 — surface the delivery id so a flow can dedupe
-
-```markdown
----
-id: C-NNN
-title: Surface the webhook delivery id for at-least-once dedupe
-pillar: Core
-status: backlog
-areas: [flux-channels]
-note: "every vendor redelivers on a non-2xx and some redeliver spuriously; without the delivery id in the payload a flow cannot tell a retry from a second real event"
----
-
-# Surface the webhook delivery id for at-least-once dedupe
-
-## Goal
-Give a flow what it needs to be idempotent under redelivery: the vendor's own delivery identifier.
-
-## Acceptance
-- [ ] An optional `delivery_id` declaration (`source`, `name`) whose resolved value is placed in the
-      delivered payload under a documented key.
-- [ ] Failing-first test `delivery_id_reaches_the_payload`.
-- [ ] Documented guidance that the payload key is stable, since flows will key dedupe state on it.
-- [ ] No dedupe state is kept in the channel itself — the channel reports, the flow decides. (A cache
-      in the channel would be per-process and silently wrong across restarts and replicas.)
-
-## Progress
-- (not started)
-```
+- `crates/flux-channels/src/config.rs:18-32` — `WebhookSettings { addr, path, async, token }`, an
+  optional **static bearer token**, and the struct derives `Debug` while holding the resolved
+  plaintext `token` at `:31`.
+- `crates/flux-channels/src/adapters/webhook.rs` — **no HMAC path anywhere in the file.** The bearer
+  check at `:88-97` is the only authentication. `constant_time_eq` at `:123-132` is reusable.
+- `crates/flux-channels/src/adapters/webhook.rs:86` — **`Json(body): Json<Value>` is an axum
+  extractor**, so the body is already parsed by the time the handler runs. This is the finding that
+  makes C-291 a structural change rather than an added `if`.
+- `crates/flux-channels/src/adapters/mod.rs:48` — `build_channels` dispatches `"webhook" | "http"`;
+  an unknown kind is a hard error at `:63`; an unresolved `{"$secret":…}` marker is refused at
+  `:39-45` (`first_unresolved_secret`, `:23-32`; test at `:75`).
+- `crates/flux-app/src/secrets.rs:43` — `resolve_secrets` registers every resolved secret with the
+  redactor **before** channels are built, recursing into nested records (`:47-58`). The secret-supply
+  path for `verify` needs no new machinery.
+- `crates/flux-app/src/bus.rs:115-118` — `Event { label, payload }`, which is why C-295 exists.
+- `crates/flux-app/src/app.rs:1988-1996` — `seed_payload` binds every top-level payload field as a
+  flow symbol, which is why "put the delivery id in the payload" collides with vendor fields.
+- `Cargo.toml:150-153` — `base64`, `sha2`, `hmac`, `hex` are already workspace dependencies;
+  `crates/flux-providers/src/bedrock.rs:32,42` already computes HMAC-SHA256. No new third-party
+  dependency is needed.
+- **Correction to the previous handoff.** It claimed `AppDeliverer` serializes deliveries behind a
+  mutex, so a verified channel would inherit a one-delivery-at-a-time property. **That is false at
+  `v0.40.0`.** `AppDeliverer` is `{ app: Arc<App> }` and does nothing but forward
+  (`crates/flux-channels/src/deliver.rs:22-39`); admission is a **semaphore**, not a mutex —
+  `DEFAULT_MAX_INFLIGHT_DELIVERIES = 64` with a `FLUX_MAX_INFLIGHT_DELIVERIES` override
+  (`crates/flux-app/src/admission.rs:49`, `:51-68`). Up to 64 verified deliveries run concurrently, so
+  nothing about the seam may assume delivery serialization.

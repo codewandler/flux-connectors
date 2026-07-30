@@ -5,7 +5,7 @@ op jira-issue-comment-list(issue_key: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://{site}.atlassian.net"
-  $url = fmt("{base}/rest/api/2/issue/{issue_key}/comment")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://{site}.atlassian.net"
+  url = fmt("{base}/rest/api/2/issue/{issue_key}/comment")
+  response = http.request(method: "GET", url)
+  return response

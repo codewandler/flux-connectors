@@ -9,10 +9,10 @@ op intercom-contact-get(contact_id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.intercom.io"
-  $url = fmt("{base}/contacts/{contact_id}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.intercom.io"
+  url = fmt("{base}/contacts/{contact_id}")
+  response = http.request(method: "GET", url)
+  return response
 
 op intercom-contact-create(role: String, email: String) -> Any
   description "Create an email-identified Intercom contact. A contact created here is visible to every teammate in the workspace and is counted against its contact quota; creating one twice creates two contacts unless the workspace deduplicates on email. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body."
@@ -21,12 +21,12 @@ op intercom-contact-create(role: String, email: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.intercom.io"
-  $url = fmt("{base}/contacts")
-  $content_type = "application/json"
-  $payload = { email: $email, role: $role }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.intercom.io"
+  url = fmt("{base}/contacts")
+  content_type = "application/json"
+  payload = { email, role }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response
 
 op intercom-conversation-get(conversation_id: String) -> Any
   description "Get one conversation by id, with its state, the contacts on it and its message parts in Intercom's default rendering. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body."
@@ -35,10 +35,10 @@ op intercom-conversation-get(conversation_id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.intercom.io"
-  $url = fmt("{base}/conversations/{conversation_id}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.intercom.io"
+  url = fmt("{base}/conversations/{conversation_id}")
+  response = http.request(method: "GET", url)
+  return response
 
 op intercom-conversation-reply(conversation_id: String, message_type: String, admin_id: String, body: String) -> Any
   description "Reply to a conversation as an admin. With message_type `comment` the reply is delivered to the end user by email or in-app message and cannot be un-sent; with `note` it is an internal comment only teammates see. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body."
@@ -47,13 +47,13 @@ op intercom-conversation-reply(conversation_id: String, message_type: String, ad
   effects ["network"]
   expose true
 
-  $base = "https://api.intercom.io"
-  $url = fmt("{base}/conversations/{conversation_id}/reply")
-  $content_type = "application/json"
-  $type = "admin"
-  $payload = { admin_id: $admin_id, body: $body, message_type: $message_type, type: $type }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.intercom.io"
+  url = fmt("{base}/conversations/{conversation_id}/reply")
+  content_type = "application/json"
+  type = "admin"
+  payload = { admin_id, body, message_type, type }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response
 
 op intercom-contact-note-create(contact_id: String, body: String, admin_id: String) -> Any
   description "Add an internal note to a contact, visible to teammates in the workspace and never to the contact. Adding the same note twice adds two notes. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body."
@@ -62,9 +62,9 @@ op intercom-contact-note-create(contact_id: String, body: String, admin_id: Stri
   effects ["network"]
   expose true
 
-  $base = "https://api.intercom.io"
-  $url = fmt("{base}/contacts/{contact_id}/notes")
-  $content_type = "application/json"
-  $payload = { admin_id: $admin_id, body: $body }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.intercom.io"
+  url = fmt("{base}/contacts/{contact_id}/notes")
+  content_type = "application/json"
+  payload = { admin_id, body }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

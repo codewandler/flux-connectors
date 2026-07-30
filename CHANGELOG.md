@@ -7,7 +7,113 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The Tool pack's declaration half (C-114).** `crates/connector-pack` projects a catalogue
+  operation onto a flux `ToolSpec`, so a host can register a provider's operations into a
+  `ToolRegistry` and resolve them by dotted name (`zendesk.ticket.comment.add`) — the spelling flux's
+  reference flow uses and one a composite declaration cannot have. 97 operations across 17 providers
+  register and resolve.
+
+  Two findings the work turned up. `ToolSpec::access` cannot be left empty: flux **refuses the
+  registration** of a declared network effect with no carrying access kind, so the pack derives access
+  from effects and re-runs flux's own checker at projection time. An independent review reproduced
+  that refusal verbatim and confirmed the derivation picks the narrowest carrier rather than
+  over-granting. And the projection reads the *embedded Flux declaration* rather than the catalogue's
+  flat columns, which makes the pack's answer the module's answer by construction — removing the
+  drift C-117 exists to guard, for the declaration half, instead of testing for it.
+
+- **Verification conformance against real vendor vectors (C-60).** A parameterized matrix over
+  GitHub, Slack, Zendesk and Stripe, with the HMAC primitive pinned separately to RFC 4231 so the two
+  vendor-published triples count as independent evidence rather than the implementation agreeing with
+  itself.
+
 ### Fixed
+
+- **A signature scheme that verified forgeries (C-60).** `signed_placeholders` silently swallowed an
+  unterminated brace, so `signed = "v0:{timestamp}:{body"` — one missing character, a plausible typo —
+  passed every loader check and produced a signed string **containing no body at all**. A signature
+  captured from one delivery would then verify any forged payload for the whole tolerance window. The
+  fragment now comes back as a placeholder no host can fill, so the loader's existing refusal catches
+  it.
+
+### Changed
+
+- **Whole-catalogue artifacts are coordinator-owned (C-104).** The provider index is generated on a
+  full build only, so provider stories no longer collide on a hand-maintained list. The real class is
+  **four** artifacts, not the two the story assumed — enumerated by differencing a full plan against a
+  scoped one.
+
+  The rework corrected two documented claims that were measurably wrong, and both mattered because
+  they are the instruction implementors follow: a new provider leaves **eight** tests red, not three,
+  and a changed provider three, not one. Both undercounts came from plain `cargo test --workspace`
+  stopping at the first failing binary — the trap `AGENTS.md` documents elsewhere. Both gates now say
+  `--no-fail-fast`.
+
+- **`AGENTS.md`'s "does not depend on the flux runtime" is now scoped to the compiler crates**, since
+  `connector-pack` links `flux-runtime`/`flux-spec` by necessity. This repository still constructs no
+  runtime.
+
+
+### Added
+
+- **A tool contract is now readable.** The core explorer rendered `Risk`, `Idempotency`, `Effects`,
+  `Access` and `Group` as bare text and dumped the input schema through an unhighlighted
+  `JSON.stringify`. The safety fields are now chips whose tone is **derived from the value** — so a
+  risk level cannot read calm on one page and alarming on another — and the schema is syntax
+  highlighted with a JSON/YAML toggle and a copy button.
+
+  An unrecognised value stays neutral rather than being guessed at: a wrong colour on a safety field
+  would read as an assurance nobody made.
+
+  The highlighter is hand-rolled and about forty lines, deliberately. Shiki is a *build-time*
+  dependency in VitePress and this content is read from the catalogue at **runtime**, so the built
+  pipeline does not apply; a client-side highlighter would cost more bytes than the catalogue. Tokens
+  render as elements rather than through `v-html`. Every colour is a VitePress token, so light and
+  dark both work and a theme change carries automatically.
+
+
+### Fixed
+
+- **The explorer set a floor under its own width (C-100, follow-up).** Three symptoms — 193px of
+  horizontal overflow on a phone, a filter bar that always wrapped to two rows, and a provider grid
+  stuck at three columns — turned out to be one cause: a flex or grid item's automatic minimum size
+  is its `min-content`, so a `<select>` (as wide as its widest option), a row (as wide as its longest
+  request path) and a card header (274px) each refused to shrink and pushed their container instead.
+  Measured after: overflow 193px → 0, filter bar 2 rows → 1 from 1280px up, provider grid 3 → 4
+  columns from 1440px up.
+
+  The earlier reasoning that 320px was "the smallest round number above the 314px floor" is kept in
+  the story as the thing that was wrong rather than deleted: it identified the cause correctly and
+  drew the wrong conclusion, because the floor was never a fact about the card — it was one missing
+  declaration.
+
+### Changed
+
+- **flux-lang 0.37 → 0.39, and every generated module is rewritten in the new canonical syntax.**
+  Flux's L-93 changed what canonical source looks like: local bindings lose the `$` sigil, object
+  fields pun when the field and symbol names agree, and calls take direct named arguments. So
+  `$payload = { channel: $channel, text: $text }` / `http.request({ method: "POST", url: $url })`
+  becomes `payload = { channel: $channel, text }` / `http.request(method: "POST", url)`.
+
+  The change is syntactic — no operation's method, host, body shape, or credential handling moved.
+  117 of 236 artifacts were regenerated, and the build is a fixed point again. The compatibility
+  claim is measured rather than assumed: every provider's `…_emits_a_module_that_parses_analyzes_and_is_canonical`
+  test requires the emitted module to parse with no errors, be a **fixed point of flux's own
+  formatter**, and load as a program with exactly one exposed op. All pass under 0.39.
+
+  The sigil survives exactly where a bare name would collide with a Flux keyword — `$channel`,
+  `$include` — which is why some fields pun and their neighbours do not.
+
+### Fixed
+
+- **A sigil-matching test would have gone vacuous under the upgrade.** Nine assertions checked the
+  *absence* of an emitted symbol by its old spelling — `!module.contains("$sep")`, which pins that no
+  operation assembles a query string. With the sigil gone those became true no matter what the
+  emitter did, so the query-string guard would have passed while asserting nothing. They now match
+  the binding (`sep = `). The same class was fixed in the `$payload` / `body: $body` negative checks,
+  and the dotted-symbol guard now matches the interpolation form `{time.start}` rather than a
+  substring the vendor's own wire name legitimately contains.
 
 - **The published site rendered unstyled.** `web/.vitepress/config.mts` had been set to
   `base = '/'` on the strength of the committed `web/public/CNAME`, but GitHub never accepted that

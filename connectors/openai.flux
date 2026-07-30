@@ -9,10 +9,10 @@ op openai-models-list -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.openai.com"
-  $url = fmt("{base}/v1/models")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.openai.com"
+  url = fmt("{base}/v1/models")
+  response = http.request(method: "GET", url)
+  return response
 
 op openai-model-get(model: String) -> Any
   description "Retrieve one model by id, with its ownership and permissions"
@@ -21,10 +21,10 @@ op openai-model-get(model: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.openai.com"
-  $url = fmt("{base}/v1/models/{model}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.openai.com"
+  url = fmt("{base}/v1/models/{model}")
+  response = http.request(method: "GET", url)
+  return response
 
 op openai-chat-completion(model: String, messages: List<Any>, max_completion_tokens: Number) -> Any
   description "Create a chat completion. Billed per input and output token, so the caller must state a token budget via max_completion_tokens"
@@ -33,12 +33,12 @@ op openai-chat-completion(model: String, messages: List<Any>, max_completion_tok
   effects ["network"]
   expose true
 
-  $base = "https://api.openai.com"
-  $url = fmt("{base}/v1/chat/completions")
-  $content_type = "application/json"
-  $payload = { max_completion_tokens: $max_completion_tokens, messages: $messages, model: $model }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.openai.com"
+  url = fmt("{base}/v1/chat/completions")
+  content_type = "application/json"
+  payload = { max_completion_tokens, messages, model }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response
 
 op openai-embeddings-create(model: String, input: Any) -> Any
   description "Create embedding vectors for one or more input texts. Billed per input token"
@@ -47,9 +47,9 @@ op openai-embeddings-create(model: String, input: Any) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.openai.com"
-  $url = fmt("{base}/v1/embeddings")
-  $content_type = "application/json"
-  $payload = { input: $input, model: $model }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.openai.com"
+  url = fmt("{base}/v1/embeddings")
+  content_type = "application/json"
+  payload = { input, model }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

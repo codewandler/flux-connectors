@@ -153,7 +153,15 @@ outbound `$auth` seam:
    answered by the channel *without waking an agent*. An endpoint-verification request is not a turn.
 6. **Delivery id in the payload**, so a flow can dedupe redeliveries.
 
-Per repo convention these are drafted as ready-to-paste flux stories in
+**These six are designed in full in [verified-webhook-seam.md](verified-webhook-seam.md)** (C-64) —
+where verification sits in flux's request path, how `HmacSpec` reaches it, what a failure does, and how
+the secret is supplied without reaching a log or an error. Two things that document found are worth
+carrying back here: `Json<Value>` is an axum *extractor*, so there is no point in flux's webhook
+handler at which the raw bytes still exist; and Stripe's `t=`/`v1=` composite header is **not
+expressible** in `HmacSpec`'s `prefix` + `Selector` shape, which is a C-59/C-60 modelling gap this
+design's own table walked past.
+
+The stories are filed on flux's board as **C-291 … C-295**; the filing record is
 [inbound-events-flux-stories.md](inbound-events-flux-stories.md), which is a **handoff artifact, not
 this board's backlog**.
 

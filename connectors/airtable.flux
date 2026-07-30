@@ -9,10 +9,10 @@ op airtable-record-get(base_id: String, table_id: String, record_id: String) -> 
   effects ["network"]
   expose true
 
-  $base = "https://api.airtable.com"
-  $url = fmt("{base}/v0/{base_id}/{table_id}/{record_id}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.airtable.com"
+  url = fmt("{base}/v0/{base_id}/{table_id}/{record_id}")
+  response = http.request(method: "GET", url)
+  return response
 
 op airtable-record-create(base_id: String, table_id: String, cell_values: Any) -> Any
   description "Create one record in a table. Cell values are supplied under `fields`, keyed by column name, and must already be in the exact JSON form each column expects — Airtable's `typecast` coercion cannot be requested yet (see the connector's notes). The created record, with its `rec…` id, is in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body."
@@ -21,12 +21,12 @@ op airtable-record-create(base_id: String, table_id: String, cell_values: Any) -
   effects ["network"]
   expose true
 
-  $base = "https://api.airtable.com"
-  $url = fmt("{base}/v0/{base_id}/{table_id}")
-  $content_type = "application/json"
-  $payload = { fields: $cell_values }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.airtable.com"
+  url = fmt("{base}/v0/{base_id}/{table_id}")
+  content_type = "application/json"
+  payload = { fields: cell_values }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response
 
 op airtable-record-update(base_id: String, table_id: String, record_id: String, cell_values: Any) -> Any
   description "Update one record's cell values. The write is sparse: only the columns named in `fields` change and every other column of the record is left exactly as it was. Values must already be in the form each column expects — `typecast` coercion cannot be requested yet. The updated record is in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body."
@@ -35,12 +35,12 @@ op airtable-record-update(base_id: String, table_id: String, record_id: String, 
   effects ["network"]
   expose true
 
-  $base = "https://api.airtable.com"
-  $url = fmt("{base}/v0/{base_id}/{table_id}/{record_id}")
-  $content_type = "application/json"
-  $payload = { fields: $cell_values }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "PATCH", url: $url })
-  return $response
+  base = "https://api.airtable.com"
+  url = fmt("{base}/v0/{base_id}/{table_id}/{record_id}")
+  content_type = "application/json"
+  payload = { fields: cell_values }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PATCH", url)
+  return response
 
 op airtable-record-delete(base_id: String, table_id: String, record_id: String) -> Any
   description "Delete one record and every cell value in it. There is no API route back: Airtable's trash and revision history are UI features on a retention window, not endpoints, so a flux run cannot undo this. Responds `{\"id\": …, \"deleted\": true}`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body."
@@ -49,7 +49,7 @@ op airtable-record-delete(base_id: String, table_id: String, record_id: String) 
   effects ["network"]
   expose true
 
-  $base = "https://api.airtable.com"
-  $url = fmt("{base}/v0/{base_id}/{table_id}/{record_id}")
-  $response = http.request({ method: "DELETE", url: $url })
-  return $response
+  base = "https://api.airtable.com"
+  url = fmt("{base}/v0/{base_id}/{table_id}/{record_id}")
+  response = http.request(method: "DELETE", url)
+  return response

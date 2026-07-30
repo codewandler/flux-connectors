@@ -238,7 +238,7 @@ fn babelforce_call_list() -> Connector {
     )
 }
 
-/// `zendesk-test` — the floor of the shape: no parameters at all, so no `$sep` and no guards.
+/// `zendesk-test` — the floor of the shape: no parameters at all, so no `sep` and no guards.
 /// Inventory §3.2 op 1 (`../flux/plugins/zendesk/src/main.rs:19`).
 fn zendesk_test() -> Connector {
     connector(
@@ -545,7 +545,7 @@ fn risk_and_idempotency_are_taken_from_the_ir_not_assumed() {
 fn path_parameters_substitute_into_the_url() {
     let emitted = emit_only_operation(&zendesk_comment_list());
     assert!(
-        emitted.contains(r#"$url = fmt("{base}/api/v2/tickets/{ticket_id}/comments.json")"#),
+        emitted.contains(r#"url = fmt("{base}/api/v2/tickets/{ticket_id}/comments.json")"#),
         "expected the path template interpolated into $url in:\n{emitted}"
     );
 }
@@ -556,11 +556,11 @@ fn path_parameters_substitute_into_the_url() {
 fn query_parameters_assemble_into_the_request() {
     let emitted = emit_only_operation(&zendesk_ticket_search());
     assert!(
-        emitted.contains(r#"$url = fmt("{base}/api/v2/search.json?query={query}")"#),
+        emitted.contains(r#"url = fmt("{base}/api/v2/search.json?query={query}")"#),
         "a required query parameter belongs in the base URL:\n{emitted}"
     );
     assert!(
-        emitted.contains("when $page\n") && emitted.contains(r#"fmt("{url}{sep}page={page}")"#),
+        emitted.contains("when page\n") && emitted.contains(r#"fmt("{url}{sep}page={page}")"#),
         "an optional query parameter must be guarded:\n{emitted}"
     );
 }
@@ -580,7 +580,7 @@ fn dotted_vendor_names_map_to_flux_symbols_without_losing_the_wire_name() {
         "the query string must keep the vendor's wire name:\n{emitted}"
     );
     assert!(
-        !emitted.contains("$time.start"),
+        !emitted.contains("{time.start}"),
         "a dotted symbol reference would silently reparse as field access:\n{emitted}"
     );
 }
@@ -663,13 +663,11 @@ fn headered_operation() -> Connector {
 fn a_post_assembles_its_json_body_from_the_ir_body_params() {
     let emitted = emit_only_operation(&freshdesk_note_add());
     assert!(
-        emitted.contains(
-            r#"$payload = { body: $body, incoming: $incoming, notify_emails: $notify_emails, private: $private }"#
-        ),
+        emitted.contains(r#"payload = { body, incoming, notify_emails, private }"#),
         "the body params must assemble into one record:\n{emitted}"
     );
     assert!(
-        emitted.contains("body: $payload"),
+        emitted.contains("body: payload"),
         "the record must reach the request by symbol, not inline:\n{emitted}"
     );
     assert!(
@@ -684,11 +682,11 @@ fn a_post_assembles_its_json_body_from_the_ir_body_params() {
 fn a_body_bearing_request_declares_its_content_type() {
     let emitted = emit_only_operation(&freshdesk_note_add());
     assert!(
-        emitted.contains(r#"$content_type = "application/json""#),
+        emitted.contains(r#"content_type = "application/json""#),
         "the static media type must be bound:\n{emitted}"
     );
     assert!(
-        emitted.contains(r#"headers: { "content-type": $content_type }"#),
+        emitted.contains(r#"headers: { "content-type": content_type }"#),
         "the media type must travel as a request header:\n{emitted}"
     );
 }
@@ -698,7 +696,7 @@ fn a_body_bearing_request_declares_its_content_type() {
 fn a_request_without_a_body_carries_no_content_type() {
     let emitted = emit_only_operation(&zendesk_comment_list());
     assert!(
-        !emitted.contains("content_type") && !emitted.contains("$payload"),
+        !emitted.contains("content_type") && !emitted.contains("payload"),
         "a bodiless GET must stay bare:\n{emitted}"
     );
 }
@@ -713,11 +711,11 @@ fn parameterized_headers_travel_under_their_wire_name() {
         "the declared param must be a spellable Flux symbol:\n{emitted}"
     );
     assert!(
-        emitted.contains(r#""Idempotency-Key": $Idempotency_Key"#),
+        emitted.contains(r#""Idempotency-Key": Idempotency_Key"#),
         "the header must keep the vendor's spelling:\n{emitted}"
     );
     assert!(
-        emitted.contains(r#""content-type": $content_type"#),
+        emitted.contains(r#""content-type": content_type"#),
         "a static and a parameterized header must coexist:\n{emitted}"
     );
 }
@@ -730,11 +728,11 @@ fn the_response_is_bound_and_returned_explicitly() {
     for connector in [zendesk_test(), freshdesk_note_add(), zendesk_ticket_show()] {
         let emitted = emit_only_operation(&connector);
         assert!(
-            emitted.contains("$response = http.request({"),
+            emitted.contains("response = http.request("),
             "the response must be bound:\n{emitted}"
         );
         assert!(
-            emitted.trim_end().ends_with("return $response"),
+            emitted.trim_end().ends_with("return response"),
             "the op must end by returning it:\n{emitted}"
         );
         assert!(
@@ -850,11 +848,15 @@ fn a_post_may_not_claim_to_be_idempotent() {
 fn a_constant_body_field_is_sent_but_not_declared() {
     let emitted = emit_only_operation(&constant_body_operation());
     assert!(
-        emitted.contains("$safe_update = true"),
+        emitted.contains("safe_update = true"),
         "the constant must be bound:\n{emitted}"
     );
+    let payload_line = emitted
+        .lines()
+        .find(|line| line.trim_start().starts_with("payload = "))
+        .expect("the op binds a payload");
     assert!(
-        emitted.contains("safe_update: $safe_update"),
+        payload_line.contains("safe_update"),
         "the constant must reach the payload:\n{emitted}"
     );
     let signature = emitted.lines().next().expect("a declaration line");
@@ -1029,8 +1031,7 @@ fn a_body_field_travels_at_the_json_path_its_wire_names() {
     let emitted = emit_only_operation(&zendesk_comment_add());
     assert!(
         emitted.contains(
-            "$payload = { ticket: { comment: { body: $body, public: $public }, \
-             safe_update: $safe_update, updated_stamp: $updated_stamp } }"
+            "payload = { ticket: { comment: { body, public }, safe_update, updated_stamp } }"
         ),
         "the body must nest under its wire paths:\n{emitted}"
     );
@@ -1059,19 +1060,19 @@ fn a_body_field_travels_at_the_json_path_its_wire_names() {
 fn a_free_form_body_is_canonicalized_before_it_is_sent() {
     let emitted = emit_only_operation(&babelforce_session_set());
     assert!(
-        emitted.contains(r#"$payload = parse($body, as: "json")"#),
+        emitted.contains(r#"payload = parse(body, as: "json")"#),
         "the caller's body must be canonicalized to text:\n{emitted}"
     );
     assert!(
-        emitted.contains("body: $payload"),
+        emitted.contains("body: payload"),
         "the payload must reach the request by symbol:\n{emitted}"
     );
     assert!(
-        !emitted.contains("body: $body,") && !emitted.contains("body: $body }"),
+        !emitted.contains("http.request(body,") && !emitted.contains("body: body"),
         "passing the parameter straight through would send no body at all:\n{emitted}"
     );
     assert!(
-        emitted.contains(r#"$content_type = "application/json""#),
+        emitted.contains(r#"content_type = "application/json""#),
         "a free-form body still describes itself:\n{emitted}"
     );
     let signature = emitted.lines().next().expect("a declaration line");
@@ -1127,7 +1128,7 @@ fn a_query_alias_travels_under_its_wire_name() {
 
     let emitted = emit_only_operation(&connector);
     assert!(
-        emitted.contains(r#"$url = fmt("{base}/api/v2/search.json?query={q}")"#),
+        emitted.contains(r#"url = fmt("{base}/api/v2/search.json?query={q}")"#),
         "a required alias must reach the vendor under its wire name:\n{emitted}"
     );
     assert!(
@@ -1156,7 +1157,7 @@ fn a_header_alias_travels_under_its_wire_name() {
 
     let emitted = emit_only_operation(&connector);
     assert!(
-        emitted.contains(r#""Idempotency-Key": $idempotency_key"#),
+        emitted.contains(r#""Idempotency-Key": idempotency_key"#),
         "the header must keep the vendor's spelling:\n{emitted}"
     );
     assert!(

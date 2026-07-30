@@ -5,9 +5,9 @@ op hubspot-contact-create(email: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.hubapi.com"
-  $url = fmt("{base}/crm/v3/objects/contacts")
-  $content_type = "application/json"
-  $payload = { properties: { email: $email } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.hubapi.com"
+  url = fmt("{base}/crm/v3/objects/contacts")
+  content_type = "application/json"
+  payload = { properties: { email } }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

@@ -9,43 +9,43 @@ op babelforce-agent-list(page: Number, max: Number, q: String, enabled: Bool, na
   effects ["network"]
   expose true
 
-  $base = "https://services.babelforce.com"
-  $url = fmt("{base}/api/v2/agents")
-  $sep = "?"
-  when $page
-    $url = fmt("{url}{sep}page={page}")
-    $sep = "&"
-  when $max
-    $url = fmt("{url}{sep}max={max}")
-    $sep = "&"
-  when $q
-    $url = fmt("{url}{sep}q={q}")
-    $sep = "&"
-  when $enabled
-    $url = fmt("{url}{sep}enabled={enabled}")
-    $sep = "&"
-  when $name
-    $url = fmt("{url}{sep}name={name}")
-    $sep = "&"
-  when $number
-    $url = fmt("{url}{sep}number={number}")
-    $sep = "&"
-  when $sourceId
-    $url = fmt("{url}{sep}sourceId={sourceId}")
-    $sep = "&"
-  when $source
-    $url = fmt("{url}{sep}source={source}")
-    $sep = "&"
-  when $state
-    $url = fmt("{url}{sep}state={state}")
-    $sep = "&"
-  when $groupIds
-    $url = fmt("{url}{sep}groupIds={groupIds}")
-    $sep = "&"
-  when $groups
-    $url = fmt("{url}{sep}groups={groups}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://services.babelforce.com"
+  url = fmt("{base}/api/v2/agents")
+  sep = "?"
+  when page
+    url = fmt("{url}{sep}page={page}")
+    sep = "&"
+  when max
+    url = fmt("{url}{sep}max={max}")
+    sep = "&"
+  when q
+    url = fmt("{url}{sep}q={q}")
+    sep = "&"
+  when enabled
+    url = fmt("{url}{sep}enabled={enabled}")
+    sep = "&"
+  when name
+    url = fmt("{url}{sep}name={name}")
+    sep = "&"
+  when number
+    url = fmt("{url}{sep}number={number}")
+    sep = "&"
+  when sourceId
+    url = fmt("{url}{sep}sourceId={sourceId}")
+    sep = "&"
+  when source
+    url = fmt("{url}{sep}source={source}")
+    sep = "&"
+  when state
+    url = fmt("{url}{sep}state={state}")
+    sep = "&"
+  when groupIds
+    url = fmt("{url}{sep}groupIds={groupIds}")
+    sep = "&"
+  when groups
+    url = fmt("{url}{sep}groups={groups}")
+  response = http.request(method: "GET", url)
+  return response
 
 op babelforce-agent-get(id: String) -> Any
   description "Get one agent"
@@ -54,10 +54,10 @@ op babelforce-agent-get(id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://services.babelforce.com"
-  $url = fmt("{base}/api/v2/agents/{id}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://services.babelforce.com"
+  url = fmt("{base}/api/v2/agents/{id}")
+  response = http.request(method: "GET", url)
+  return response
 
 op babelforce-agent-status-update(id: String, enabled: Bool, presence_name: String) -> Any
   description "Update an agent's status. Supply at least one of enabled or presence.name — the request body's properties are all optional, so an empty PUT is schema-valid and does nothing"
@@ -66,12 +66,12 @@ op babelforce-agent-status-update(id: String, enabled: Bool, presence_name: Stri
   effects ["network"]
   expose true
 
-  $base = "https://services.babelforce.com"
-  $url = fmt("{base}/api/v2/agents/{id}/status")
-  $content_type = "application/json"
-  $payload = { enabled: $enabled, presence: { name: $presence_name } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "PUT", url: $url })
-  return $response
+  base = "https://services.babelforce.com"
+  url = fmt("{base}/api/v2/agents/{id}/status")
+  content_type = "application/json"
+  payload = { enabled, presence: { name: presence_name } }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
+  return response
 
 op babelforce-call-list(page: Number, max: Number, id: Any, sessionId: String, conversationId: String, agentId: Any, fromNumber: Any, toNumber: Any, type: String, state: String, finishReason: String, time_start: Number, time_end: Number, q: String) -> Any
   description "List and filter calls from the reporting view"
@@ -80,52 +80,52 @@ op babelforce-call-list(page: Number, max: Number, id: Any, sessionId: String, c
   effects ["network"]
   expose true
 
-  $base = "https://services.babelforce.com"
-  $url = fmt("{base}/api/v2/calls/reporting")
-  $sep = "?"
-  when $page
-    $url = fmt("{url}{sep}page={page}")
-    $sep = "&"
-  when $max
-    $url = fmt("{url}{sep}max={max}")
-    $sep = "&"
-  when $id
-    $url = fmt("{url}{sep}id={id}")
-    $sep = "&"
-  when $sessionId
-    $url = fmt("{url}{sep}sessionId={sessionId}")
-    $sep = "&"
-  when $conversationId
-    $url = fmt("{url}{sep}conversationId={conversationId}")
-    $sep = "&"
-  when $agentId
-    $url = fmt("{url}{sep}agentId={agentId}")
-    $sep = "&"
-  when $fromNumber
-    $url = fmt("{url}{sep}fromNumber={fromNumber}")
-    $sep = "&"
-  when $toNumber
-    $url = fmt("{url}{sep}toNumber={toNumber}")
-    $sep = "&"
-  when $type
-    $url = fmt("{url}{sep}type={type}")
-    $sep = "&"
-  when $state
-    $url = fmt("{url}{sep}state={state}")
-    $sep = "&"
-  when $finishReason
-    $url = fmt("{url}{sep}finishReason={finishReason}")
-    $sep = "&"
-  when $time_start
-    $url = fmt("{url}{sep}time.start={time_start}")
-    $sep = "&"
-  when $time_end
-    $url = fmt("{url}{sep}time.end={time_end}")
-    $sep = "&"
-  when $q
-    $url = fmt("{url}{sep}q={q}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://services.babelforce.com"
+  url = fmt("{base}/api/v2/calls/reporting")
+  sep = "?"
+  when page
+    url = fmt("{url}{sep}page={page}")
+    sep = "&"
+  when max
+    url = fmt("{url}{sep}max={max}")
+    sep = "&"
+  when id
+    url = fmt("{url}{sep}id={id}")
+    sep = "&"
+  when sessionId
+    url = fmt("{url}{sep}sessionId={sessionId}")
+    sep = "&"
+  when conversationId
+    url = fmt("{url}{sep}conversationId={conversationId}")
+    sep = "&"
+  when agentId
+    url = fmt("{url}{sep}agentId={agentId}")
+    sep = "&"
+  when fromNumber
+    url = fmt("{url}{sep}fromNumber={fromNumber}")
+    sep = "&"
+  when toNumber
+    url = fmt("{url}{sep}toNumber={toNumber}")
+    sep = "&"
+  when type
+    url = fmt("{url}{sep}type={type}")
+    sep = "&"
+  when state
+    url = fmt("{url}{sep}state={state}")
+    sep = "&"
+  when finishReason
+    url = fmt("{url}{sep}finishReason={finishReason}")
+    sep = "&"
+  when time_start
+    url = fmt("{url}{sep}time.start={time_start}")
+    sep = "&"
+  when time_end
+    url = fmt("{url}{sep}time.end={time_end}")
+    sep = "&"
+  when q
+    url = fmt("{url}{sep}q={q}")
+  response = http.request(method: "GET", url)
+  return response
 
 op babelforce-call-get(id: String) -> Any
   description "Get one call"
@@ -134,10 +134,10 @@ op babelforce-call-get(id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://services.babelforce.com"
-  $url = fmt("{base}/api/v2/calls/{id}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://services.babelforce.com"
+  url = fmt("{base}/api/v2/calls/{id}")
+  response = http.request(method: "GET", url)
+  return response
 
 op babelforce-call-hangup(id: String) -> Any
   description "Hang up a live call"
@@ -146,10 +146,10 @@ op babelforce-call-hangup(id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://services.babelforce.com"
-  $url = fmt("{base}/api/v2/calls/{id}/hangup")
-  $response = http.request({ method: "POST", url: $url })
-  return $response
+  base = "https://services.babelforce.com"
+  url = fmt("{base}/api/v2/calls/{id}/hangup")
+  response = http.request(method: "POST", url)
+  return response
 
 op babelforce-call-session-set(id: String, body: Any) -> Any
   description "Set session variables on a live call. Variable keys must start with `app` — babelforce rejects other keys, and states the rule only in prose"
@@ -158,12 +158,12 @@ op babelforce-call-session-set(id: String, body: Any) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://services.babelforce.com"
-  $url = fmt("{base}/api/v2/calls/{id}/session/set")
-  $content_type = "application/json"
-  $payload = parse($body, as: "json")
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "PUT", url: $url })
-  return $response
+  base = "https://services.babelforce.com"
+  url = fmt("{base}/api/v2/calls/{id}/session/set")
+  content_type = "application/json"
+  payload = parse(body, as: "json")
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
+  return response
 
 op babelforce-session-get(id: String) -> Any
   description "Get the IVR variables for a session"
@@ -172,10 +172,10 @@ op babelforce-session-get(id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://services.babelforce.com"
-  $url = fmt("{base}/api/v2/sessions/{id}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://services.babelforce.com"
+  url = fmt("{base}/api/v2/sessions/{id}")
+  response = http.request(method: "GET", url)
+  return response
 
 op babelforce-session-update(id: String, body: Any) -> Any
   description "Update the user-scoped variables of a session"
@@ -184,9 +184,9 @@ op babelforce-session-update(id: String, body: Any) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://services.babelforce.com"
-  $url = fmt("{base}/api/v2/sessions/{id}")
-  $content_type = "application/json"
-  $payload = parse($body, as: "json")
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "PUT", url: $url })
-  return $response
+  base = "https://services.babelforce.com"
+  url = fmt("{base}/api/v2/sessions/{id}")
+  content_type = "application/json"
+  payload = parse(body, as: "json")
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
+  return response

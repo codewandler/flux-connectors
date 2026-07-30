@@ -5,7 +5,7 @@ op google-calendar-calendar-get(calendar_id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://www.googleapis.com"
-  $url = fmt("{base}/calendar/v3/calendars/{calendar_id}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://www.googleapis.com"
+  url = fmt("{base}/calendar/v3/calendars/{calendar_id}")
+  response = http.request(method: "GET", url)
+  return response

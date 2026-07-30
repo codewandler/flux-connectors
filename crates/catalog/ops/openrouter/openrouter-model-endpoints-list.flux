@@ -5,7 +5,7 @@ op openrouter-model-endpoints-list(author: String, slug: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://openrouter.ai"
-  $url = fmt("{base}/api/v1/models/{author}/{slug}/endpoints")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://openrouter.ai"
+  url = fmt("{base}/api/v1/models/{author}/{slug}/endpoints")
+  response = http.request(method: "GET", url)
+  return response

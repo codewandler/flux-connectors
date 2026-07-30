@@ -5,7 +5,7 @@ op zoom-meeting-get(meeting_id: Number) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.zoom.us"
-  $url = fmt("{base}/v2/meetings/{meeting_id}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.zoom.us"
+  url = fmt("{base}/v2/meetings/{meeting_id}")
+  response = http.request(method: "GET", url)
+  return response

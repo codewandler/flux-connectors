@@ -5,10 +5,10 @@ op zendesk-ticket-update(ticket_id: Number, updated_stamp: String, status: Strin
   effects ["network"]
   expose true
 
-  $base = "https://{subdomain}.zendesk.com"
-  $url = fmt("{base}/api/v2/tickets/{ticket_id}.json")
-  $content_type = "application/json"
-  $safe_update = true
-  $payload = { ticket: { assignee_id: $assignee_id, group_id: $group_id, priority: $priority, safe_update: $safe_update, status: $status, type: $type, updated_stamp: $updated_stamp } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "PUT", url: $url })
-  return $response
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/tickets/{ticket_id}.json")
+  content_type = "application/json"
+  safe_update = true
+  payload = { ticket: { assignee_id, group_id, priority, safe_update, status, type, updated_stamp } }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
+  return response

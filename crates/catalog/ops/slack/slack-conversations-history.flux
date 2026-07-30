@@ -5,9 +5,9 @@ op slack-conversations-history(channel: String, limit: Number, oldest: String, l
   effects ["network"]
   expose true
 
-  $base = "https://slack.com"
-  $url = fmt("{base}/api/conversations.history")
-  $content_type = "application/json"
-  $payload = { channel: $channel, latest: $latest, limit: $limit, oldest: $oldest }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://slack.com"
+  url = fmt("{base}/api/conversations.history")
+  content_type = "application/json"
+  payload = { channel: $channel, latest, limit, oldest }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

@@ -9,10 +9,10 @@ op sentry-issue-get(organization_id_or_slug: String, issue_id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://sentry.io"
-  $url = fmt("{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://sentry.io"
+  url = fmt("{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/")
+  response = http.request(method: "GET", url)
+  return response
 
 op sentry-issue-update(organization_id_or_slug: String, issue_id: String, status: String) -> Any
   description "Change an issue's triage state: resolve it, ignore it, or return it to unresolved. This is the state the whole organization triages against — a resolved issue leaves the unresolved queue, and an ignored one stops alerting until it recurs on Sentry's terms. Recorded in the issue's activity feed under the token's owner. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body."
@@ -21,12 +21,12 @@ op sentry-issue-update(organization_id_or_slug: String, issue_id: String, status
   effects ["network"]
   expose true
 
-  $base = "https://sentry.io"
-  $url = fmt("{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/")
-  $content_type = "application/json"
-  $payload = { status: $status }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "PUT", url: $url })
-  return $response
+  base = "https://sentry.io"
+  url = fmt("{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/")
+  content_type = "application/json"
+  payload = { status }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
+  return response
 
 op sentry-project-get(organization_id_or_slug: String, project_id_or_slug: String) -> Any
   description "Get one project — its name, slug, platform, teams, DSN-bearing client keys' status and whether it is currently accepting events. This is the project an issue belongs to, so it is how a triage flow finds out which service is broken. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body."
@@ -35,10 +35,10 @@ op sentry-project-get(organization_id_or_slug: String, project_id_or_slug: Strin
   effects ["network"]
   expose true
 
-  $base = "https://sentry.io"
-  $url = fmt("{base}/api/0/projects/{organization_id_or_slug}/{project_id_or_slug}/")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://sentry.io"
+  url = fmt("{base}/api/0/projects/{organization_id_or_slug}/{project_id_or_slug}/")
+  response = http.request(method: "GET", url)
+  return response
 
 op sentry-issue-event-latest(organization_id_or_slug: String, issue_id: String) -> Any
   description "Get the most recent event of an issue — the actual occurrence, with its stack trace, breadcrumbs, request context and tags. This is what makes an issue diagnosable rather than merely countable; the event list itself is excluded because it pages with an opaque cursor. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body."
@@ -47,7 +47,7 @@ op sentry-issue-event-latest(organization_id_or_slug: String, issue_id: String) 
   effects ["network"]
   expose true
 
-  $base = "https://sentry.io"
-  $url = fmt("{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/events/latest/")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://sentry.io"
+  url = fmt("{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/events/latest/")
+  response = http.request(method: "GET", url)
+  return response

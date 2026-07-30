@@ -9,10 +9,10 @@ op asana-task-get(task_gid: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://app.asana.com"
-  $url = fmt("{base}/api/1.0/tasks/{task_gid}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://app.asana.com"
+  url = fmt("{base}/api/1.0/tasks/{task_gid}")
+  response = http.request(method: "GET", url)
+  return response
 
 op asana-task-create(name: String, workspace: String) -> Any
   description "Create a task in a workspace. It is created unassigned and in no project, so nobody is notified; move it or assign it in Asana afterwards. The created task is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body."
@@ -21,12 +21,12 @@ op asana-task-create(name: String, workspace: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://app.asana.com"
-  $url = fmt("{base}/api/1.0/tasks")
-  $content_type = "application/json"
-  $payload = { data: { name: $name, workspace: $workspace } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://app.asana.com"
+  url = fmt("{base}/api/1.0/tasks")
+  content_type = "application/json"
+  payload = { data: { name, workspace } }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response
 
 op asana-task-update(task_gid: String, completed: Bool) -> Any
   description "Mark a task complete or incomplete. Asana's update is sparse: only completion changes, and every other field of the task is left as it was. The updated task is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body."
@@ -35,12 +35,12 @@ op asana-task-update(task_gid: String, completed: Bool) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://app.asana.com"
-  $url = fmt("{base}/api/1.0/tasks/{task_gid}")
-  $content_type = "application/json"
-  $payload = { data: { completed: $completed } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "PUT", url: $url })
-  return $response
+  base = "https://app.asana.com"
+  url = fmt("{base}/api/1.0/tasks/{task_gid}")
+  content_type = "application/json"
+  payload = { data: { completed } }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
+  return response
 
 op asana-task-story-add(task_gid: String, text: String) -> Any
   description "Add a comment to a task. Asana calls a comment a story. It is attributed to the token's owner, notifies every follower of the task by email and in-app, and cannot be un-sent. The created story is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body."
@@ -49,12 +49,12 @@ op asana-task-story-add(task_gid: String, text: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://app.asana.com"
-  $url = fmt("{base}/api/1.0/tasks/{task_gid}/stories")
-  $content_type = "application/json"
-  $payload = { data: { text: $text } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://app.asana.com"
+  url = fmt("{base}/api/1.0/tasks/{task_gid}/stories")
+  content_type = "application/json"
+  payload = { data: { text } }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response
 
 op asana-project-get(project_gid: String) -> Any
   description "Get one project — its name, notes, owner, team, current status and whether it is archived. The project is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body."
@@ -63,7 +63,7 @@ op asana-project-get(project_gid: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://app.asana.com"
-  $url = fmt("{base}/api/1.0/projects/{project_gid}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://app.asana.com"
+  url = fmt("{base}/api/1.0/projects/{project_gid}")
+  response = http.request(method: "GET", url)
+  return response

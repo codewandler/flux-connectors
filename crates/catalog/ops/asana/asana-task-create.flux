@@ -5,9 +5,9 @@ op asana-task-create(name: String, workspace: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://app.asana.com"
-  $url = fmt("{base}/api/1.0/tasks")
-  $content_type = "application/json"
-  $payload = { data: { name: $name, workspace: $workspace } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://app.asana.com"
+  url = fmt("{base}/api/1.0/tasks")
+  content_type = "application/json"
+  payload = { data: { name, workspace } }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

@@ -5,7 +5,7 @@ op zendesk-test -> Any
   effects ["network"]
   expose true
 
-  $base = "https://{subdomain}.zendesk.com"
-  $url = fmt("{base}/api/v2/users/me.json")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/users/me.json")
+  response = http.request(method: "GET", url)
+  return response

@@ -18,7 +18,7 @@ The repository currently contains 97 curated connector operations across 17 prov
 **GitHub** (5), **HubSpot** (5), **Intercom** (5), **Shopify** (5), **Asana** (5), **OpenAI** (4),
 **OpenRouter** (4), **Slack** (4), **Airtable** (4), **Sentry** (4) and **Zoom** (4). It also publishes
 77 Flux-owned core operations, nodes, and capability records. A full build compiles everything into
-236 committed, reviewable artifacts without contacting a vendor.
+237 committed, reviewable artifacts without contacting a vendor.
 
 ## Why this exists
 
@@ -63,7 +63,7 @@ cargo run -p connector-cli -- build
 On a clean checkout, `diff` reports:
 
 ```text
-236 artifacts up to date (17 providers checked)
+237 artifacts up to date (17 providers checked)
 ```
 
 Then inspect [`connectors/zendesk.flux`](connectors/zendesk.flux), browse the

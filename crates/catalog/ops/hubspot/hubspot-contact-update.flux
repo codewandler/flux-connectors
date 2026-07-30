@@ -5,9 +5,9 @@ op hubspot-contact-update(contact_id: Number, firstname: String, lastname: Strin
   effects ["network"]
   expose true
 
-  $base = "https://api.hubapi.com"
-  $url = fmt("{base}/crm/v3/objects/contacts/{contact_id}")
-  $content_type = "application/json"
-  $payload = { properties: { firstname: $firstname, lastname: $lastname } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "PATCH", url: $url })
-  return $response
+  base = "https://api.hubapi.com"
+  url = fmt("{base}/crm/v3/objects/contacts/{contact_id}")
+  content_type = "application/json"
+  payload = { properties: { firstname, lastname } }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PATCH", url)
+  return response

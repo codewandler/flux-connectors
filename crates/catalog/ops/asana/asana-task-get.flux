@@ -5,7 +5,7 @@ op asana-task-get(task_gid: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://app.asana.com"
-  $url = fmt("{base}/api/1.0/tasks/{task_gid}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://app.asana.com"
+  url = fmt("{base}/api/1.0/tasks/{task_gid}")
+  response = http.request(method: "GET", url)
+  return response

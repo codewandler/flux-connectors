@@ -5,9 +5,9 @@ op openai-chat-completion(model: String, messages: List<Any>, max_completion_tok
   effects ["network"]
   expose true
 
-  $base = "https://api.openai.com"
-  $url = fmt("{base}/v1/chat/completions")
-  $content_type = "application/json"
-  $payload = { max_completion_tokens: $max_completion_tokens, messages: $messages, model: $model }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.openai.com"
+  url = fmt("{base}/v1/chat/completions")
+  content_type = "application/json"
+  payload = { max_completion_tokens, messages, model }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response
