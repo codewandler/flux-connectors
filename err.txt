@@ -1,0 +1,1 @@
+fatal: unknown write failure on standard output

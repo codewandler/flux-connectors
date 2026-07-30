@@ -252,9 +252,14 @@ schema = { type = "string", pattern = "^[0-9]+$", minLength = 1 }
 # one travels as an explicit `null`, and on this endpoint a `null` is *applied* rather than rejected —
 # and because an update with no settable field is not an operation. See the header comment.
 #
-# The enum is the three transitions that stand on their own. `resolvedInNextRelease` and `inRelease`
-# need a `statusDetails` companion object, which C-56 makes undeclarable, so offering them would
-# offer a value Sentry answers 400 to.
+# The enum is the three transitions that stand on their own, and the exclusion of the rest is a
+# deliberate narrowing of the tool surface rather than a claim about what Sentry accepts. Be precise
+# about which is which: `inRelease` and `inNextRelease` are `statusDetails` **keys**, not `status`
+# values, and `statusDetails` is an object C-56 makes undeclarable. `resolvedInNextRelease` *is* a
+# documented `status` value and Sentry accepts it without a companion object — it fails only where a
+# project has no release data. It is left out because a release-conditional resolution an operator
+# cannot see the release for is a worse tool contract than three transitions that always mean the
+# same thing, not because it would 400.
 [[operations.params.body]]
 name = "status"
 description = "`resolved` closes the issue, `ignored` mutes it until Sentry's own recurrence conditions fire, `unresolved` reopens it and puts it back in the team's queue"
