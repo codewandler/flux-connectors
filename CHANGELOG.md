@@ -9,6 +9,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A service can declare the roles it implements (C-120).** `[[services]] roles = [...]` as a
+  **closed, checkable** set: an unknown role name is refused rather than ignored, because a typo'd
+  capability that silently means "no capability" is the failure the mechanism exists to prevent. A
+  provider's roles are derived as the union of its services' and are never authored — roles attach to
+  a *service* because a vendor's model-listing surface and its chat surface are different
+  capabilities.
+
+  Two holes an independent review demonstrated with probes were closed before merge. A `default`
+  service entry was accepted *alongside* named services, which repealed the rule that a provider
+  declaring named services has no implicit `default` — an operation omitting `service` became legal
+  again. And a role slot could be filled by **any member kind, including an event**, which would
+  publish a live-listing capability nothing can call, since an event is emitted into no module.
+
+
+### Added
+
 - **The Tool pack's declaration half (C-114).** `crates/connector-pack` projects a catalogue
   operation onto a flux `ToolSpec`, so a host can register a provider's operations into a
   `ToolRegistry` and resolve them by dotted name (`zendesk.ticket.comment.add`) — the spelling flux's

@@ -2,8 +2,7 @@
 id: C-120
 title: "Declare roles on a service, with the closed set and its refusals"
 pillar: Spec
-status: in-progress
-priority: 2
+status: done
 design: docs/designs/provider-roles.md
 epic: provider-roles
 areas: [connector-spec]

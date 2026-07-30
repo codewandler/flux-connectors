@@ -130,7 +130,6 @@ _A connector's operations are currently legible only by reading `providers/<name
 ### provider roles — a declared, checkable capability shape
 _Seventeen connectors share structure that nothing currently names. `zendesk`, `freshdesk`,_
 - [C-119 — Provider roles — a declared, checkable capability shape (epic)](C-119-provider-roles-epic.md) · Spec · EPIC — a role is a contract the loader enforces, declared on a SERVICE not a provider (openai's models surface and its chat surface are different capabilities). Connectors inform the model pool; flux keeps serving inference, per the vision non-goal
-- [C-120 — Declare roles on a service, with the closed set and its refusals](C-120-service-roles-declaration.md) · Spec · the mechanism — roles attach to a SERVICE and a provider's are derived; an unknown role name is a load error, because a typo'd capability that silently means 'no capability' is the whole failure mode
 - [C-121 — The llm_catalogue and ticketing roles, and the model pool they feed](C-121-llm-catalogue-role.md) · Spec · two roles, not one — a mechanism validated by a single role is designed around a single case. Connectors contribute a LIVE model list; flux's static pricing tables are explicitly 'the fallback'
 - [C-122 — Ship the Anthropic connector — management surface and model catalogue](C-122-provider-anthropic.md) · Spec · the third vendor to fill llm_catalogue, and the one that proves the role is vendor-independent rather than shaped around OpenAI. Management plane only — inference stays with flux's native anthropic provider
 - [C-123 — Decide: may a connector ever serve LLM inference?](C-123-decide-connector-inference.md) · Spec · DECISION, not a task — it contradicts a stated vision non-goal, so it needs an explicit answer before any code, exactly as C-34 gates the proxy. Nothing else in the epic depends on it
@@ -235,6 +234,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-111 — Ship the Fly.io Machines connector](C-111-ship-the-fly-machines-connector.md) · Spec · A deliberately narrow machine-lifecycle surface: nine typed operations, one named service, and no invented channel contract
 - [C-112 — Publish Flux core specifications in the connector explorer](C-112-publish-flux-core-specifications-in-the-explorer.md) · UX · Built-ins and language nodes become searchable beside connectors, with canonical JSON identities rather than fake providers
 - [C-114 — The connector-pack crate and the ToolSpec projection](C-114-tool-spec-projection.md) · Bridge · the foundation the rest of the epic builds on — a catalogue entry becomes a flux ToolSpec, dotted name and all
+- [C-120 — Declare roles on a service, with the closed set and its refusals](C-120-service-roles-declaration.md) · Spec · the mechanism — roles attach to a SERVICE and a provider's are derived; an unknown role name is a load error, because a typo'd capability that silently means 'no capability' is the whole failure mode
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->
