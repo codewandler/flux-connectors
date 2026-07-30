@@ -94,22 +94,25 @@ description = "List and filter tickets"
 risk = "low"
 idempotency = "idempotent"
 
-# Parameter names are the **wire** names Freshdesk expects. The source collection renames every one
-# of them for its own UI (`req_id` -> `requester_id`, `req_email` -> `email`, `updated` ->
-# `updated_since`); those aliases are action-proxy's, not Freshdesk's, and the IR carries one name
-# per parameter, so the wire name is the one that survives.
+# Every parameter of this operation is **renamed on the wire** (inventory §4.2 op 2, which records
+# both columns). `name` is what a caller and a model see; `wire` is Freshdesk's own spelling, and it
+# is what travels in the query string (C-29). Before `wire` existed the IR carried one name per
+# parameter, so the caller-facing name was dropped and this comment was the only record of it.
 [[operations.params.query]]
-name = "requester_id"
+name = "req_id"
+wire = "requester_id"
 description = "Filter by requester"
 required = false
 schema = { type = "string" }
 
 [[operations.params.query]]
-name = "email"
+name = "req_email"
+wire = "email"
 description = "Filter by requester email"
 required = false
 schema = { type = "string", format = "email" }
 
+# The one parameter the source does not rename, so it declares no `wire`.
 [[operations.params.query]]
 name = "company_id"
 description = "Filter by company id"
@@ -119,7 +122,8 @@ schema = { type = "string" }
 # §6.4: the source marks this `required: true` (`yml:69-74`). That is an action-proxy UI constraint;
 # Freshdesk's `GET /tickets` does not require `updated_since`. Recorded optional.
 [[operations.params.query]]
-name = "updated_since"
+name = "updated"
+wire = "updated_since"
 description = "Only tickets updated at or after this date"
 required = false
 schema = { type = "string", format = "date-time" }
