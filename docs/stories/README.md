@@ -133,7 +133,6 @@ _Seventeen connectors share structure that nothing currently names. `zendesk`, `
 
 ### Tool Pack
 - [C-113 — The connector Tool pack — the flux interop layer (epic)](C-113-tool-pack-epic.md) · Bridge · EPIC — flux REMOVED flux-plugin-zendesk pending 'a flux-connectors interop layer'; D-200/D-201/D-202 are blocked on this and examples/zendesk.triage.flux is the written acceptance target. A Tool pack delegates to flux's own http.request, so flux keeps every byte of egress
-- [C-116 — The CredentialStore port, in-Rust auth assembly, and redaction](C-116-credential-store-port.md) · Bridge · finally wires C-90's Layout/CredentialRef to a consumer — and removes the $auth seam from milestone 1's critical path, because a Tool builds `Bearer <token>` itself
 - [C-145 — A dry-run transport that cannot send](C-145-dry-run-transport.md) · Bridge · dry-run and 'intercept the calls for a demo' are ONE mechanism with two payloads — C-115 already takes its transport as a constructor argument, so neither forks the request path. Structurally unable to send, not a live client with a flag
 - [C-117 — Generate the pack from the IR and hold it to the drift gate](C-117-pack-codegen.md) · Codegen · two surfaces from one IR can disagree about the same operation — the differential test is the honest guard, and it belongs here rather than in a later postmortem
 - [C-146 — Recorded fixtures so the explorer can demonstrate an operation](C-146-demo-fixtures.md) · Bridge · the explorer is a PUBLIC site — the demo path must be structurally unable to hold a credential, which a recorded fixture gives for free. Offline, so it does not become a way to call a vendor from a web page
@@ -151,6 +150,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-26 — File the outbound $auth seam stories on flux's board](C-26-file-seam-stories-on-flux.md) · Bridge · **critical path** · 11 paste-ready drafts wait on a decision to write into ../flux
 - [C-35 — Specify the proxy request contract and its guardrails](C-35-proxy-request-contract.md) · Bridge · blocked on C-34
 - [C-36 — Prove the proxy and the Flux emitter build the same request](C-36-proxy-emitter-conformance.md) · Bridge · blocked on C-34 · two backends over one IR will drift without this
+- [C-116 — The CredentialStore port, in-Rust auth assembly, and redaction](C-116-credential-store-port.md) · Bridge · finally wires C-90's Layout/CredentialRef to a consumer — and removes the $auth seam from milestone 1's critical path, because a Tool builds `Bearer <token>` itself
 
 ## Backlog
 - [C-133 — The brave connector — Brave Talk's room-token HTTP surface](C-133-provider-brave-talk-tokens.md) · Spec · ONLY the three HTTP calls. The XMPP MUC stream stays OUT — vision.md names protocol-rich technology adapters as a non-goal, and flux already has D-205/D-206 with feasibility proven live. Blocked on two real things; read Notes before starting
