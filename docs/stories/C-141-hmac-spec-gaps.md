@@ -2,8 +2,7 @@
 id: C-141
 title: "Four gaps C-60 found in HmacSpec, one of which is a forgery hole by construction"
 pillar: Spec
-status: in-progress
-priority: 2
+status: done
 design: docs/designs/inbound-events.md
 epic: inbound-events
 areas: [connector-spec]

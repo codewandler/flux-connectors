@@ -2,8 +2,7 @@
 id: C-126
 title: "Raise response_schema coverage and put a floor under it"
 pillar: Spec
-status: in-progress
-priority: 3
+status: done
 design: docs/designs/member-io-schemas.md
 epic: member-io
 areas: [providers, connector-spec]

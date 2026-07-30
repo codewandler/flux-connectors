@@ -2930,7 +2930,28 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "description": "The contacts, as a bare JSON array. With `per_page = 1` it holds one element; an empty array is still a successful credential check, because an account may genuinely have no contacts",
+            "items": {
+              "properties": {
+                "active": {
+                  "type": "boolean"
+                },
+                "email": {
+                  "format": "email",
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
           "credentials": [],
           "hosts": [
             "{domain}"
@@ -3030,7 +3051,98 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "description": "The matching tickets, as a bare JSON array with no envelope. The ticket bodies (`description`, `description_text`) are NOT included in a listing — read one ticket with `freshdesk-ticket-get` to get its text",
+            "items": {
+              "properties": {
+                "company_id": {
+                  "type": "integer"
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "due_by": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "fr_due_by": {
+                  "description": "When a first response is due",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "fr_escalated": {
+                  "description": "True when the first-response SLA was breached",
+                  "type": "boolean"
+                },
+                "group_id": {
+                  "type": "integer"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "is_escalated": {
+                  "type": "boolean"
+                },
+                "priority": {
+                  "description": "1 Low, 2 Medium, 3 High, 4 Urgent",
+                  "enum": [
+                    1,
+                    2,
+                    3,
+                    4
+                  ],
+                  "type": "integer"
+                },
+                "requester_id": {
+                  "description": "The contact who asked",
+                  "type": "integer"
+                },
+                "responder_id": {
+                  "description": "The agent it is assigned to; null when unassigned",
+                  "type": "integer"
+                },
+                "source": {
+                  "description": "How the ticket arrived: 1 Email, 2 Portal, 3 Phone, 7 Chat, 9 Feedback widget, 10 Outbound email",
+                  "enum": [
+                    1,
+                    2,
+                    3,
+                    7,
+                    9,
+                    10
+                  ],
+                  "type": "integer"
+                },
+                "spam": {
+                  "type": "boolean"
+                },
+                "status": {
+                  "description": "2 Open, 3 Pending, 4 Resolved, 5 Closed",
+                  "enum": [
+                    2,
+                    3,
+                    4,
+                    5
+                  ],
+                  "type": "integer"
+                },
+                "subject": {
+                  "type": "string"
+                },
+                "type": {
+                  "description": "The ticket type, e.g. `Question` or `Incident`. Null when unset",
+                  "type": "string"
+                },
+                "updated_at": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
           "credentials": [],
           "hosts": [
             "{domain}"
@@ -3100,7 +3212,149 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "attachments": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "cc_emails": {
+                "items": {
+                  "format": "email",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "company_id": {
+                "type": "integer"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "custom_fields": {
+                "description": "The account's own ticket fields, keyed by field name — an object, unlike zendesk's array of `{id, value}` pairs",
+                "type": "object"
+              },
+              "description": {
+                "description": "The requester's opening message as **HTML**",
+                "type": "string"
+              },
+              "description_text": {
+                "description": "The same message as plain text. This is the one to summarize or quote",
+                "type": "string"
+              },
+              "due_by": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "email_config_id": {
+                "type": "integer"
+              },
+              "fr_due_by": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "fr_escalated": {
+                "type": "boolean"
+              },
+              "fwd_emails": {
+                "items": {
+                  "format": "email",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "is_escalated": {
+                "type": "boolean"
+              },
+              "priority": {
+                "description": "1 Low, 2 Medium, 3 High, 4 Urgent",
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  4
+                ],
+                "type": "integer"
+              },
+              "product_id": {
+                "type": "integer"
+              },
+              "reply_cc_emails": {
+                "items": {
+                  "format": "email",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "requester_id": {
+                "type": "integer"
+              },
+              "responder_id": {
+                "description": "The assigned agent; null when unassigned",
+                "type": "integer"
+              },
+              "source": {
+                "description": "1 Email, 2 Portal, 3 Phone, 7 Chat, 9 Feedback widget, 10 Outbound email",
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  7,
+                  9,
+                  10
+                ],
+                "type": "integer"
+              },
+              "spam": {
+                "type": "boolean"
+              },
+              "status": {
+                "description": "2 Open, 3 Pending, 4 Resolved, 5 Closed",
+                "enum": [
+                  2,
+                  3,
+                  4,
+                  5
+                ],
+                "type": "integer"
+              },
+              "structured_description": {
+                "description": "The message again, as `{description_contents: [{type, data: {content}}]}` — Freshdesk's block form",
+                "type": "object"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": {
+                "description": "The ticket type, e.g. `Question` or `Incident`. Null when unset",
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
           "credentials": [],
           "hosts": [
             "{domain}"
@@ -3431,7 +3685,118 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "cc_emails": {
+                "items": {
+                  "format": "email",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "company_id": {
+                "type": "integer"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "description": {
+                "description": "The opening message as HTML",
+                "type": "string"
+              },
+              "description_text": {
+                "description": "The opening message as plain text",
+                "type": "string"
+              },
+              "due_by": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "fr_due_by": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "fr_escalated": {
+                "type": "boolean"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "id": {
+                "description": "The new ticket's id — the only place it is returned, and what every later call addresses",
+                "type": "integer"
+              },
+              "is_escalated": {
+                "type": "boolean"
+              },
+              "priority": {
+                "description": "1 Low, 2 Medium, 3 High, 4 Urgent. Defaults to 1",
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  4
+                ],
+                "type": "integer"
+              },
+              "product_id": {
+                "type": "integer"
+              },
+              "requester_id": {
+                "description": "Set even when the ticket was created by phone and name — Freshdesk resolves or creates the contact and reports which one it used",
+                "type": "integer"
+              },
+              "responder_id": {
+                "type": "integer"
+              },
+              "source": {
+                "description": "1 Email, 2 Portal, 3 Phone, 7 Chat, 9 Feedback widget, 10 Outbound email",
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  7,
+                  9,
+                  10
+                ],
+                "type": "integer"
+              },
+              "spam": {
+                "type": "boolean"
+              },
+              "status": {
+                "description": "2 Open, 3 Pending, 4 Resolved, 5 Closed. Defaults to 2 when the create did not set it",
+                "enum": [
+                  2,
+                  3,
+                  4,
+                  5
+                ],
+                "type": "integer"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": {
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
           "credentials": [],
           "hosts": [
             "{domain}"
@@ -3729,7 +4094,113 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "attachments": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "description": {
+                "description": "The opening message as HTML — unchanged by an update, which never edits the first message",
+                "type": "string"
+              },
+              "description_text": {
+                "description": "The opening message as plain text",
+                "type": "string"
+              },
+              "due_by": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "fr_due_by": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "fr_escalated": {
+                "type": "boolean"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "is_escalated": {
+                "type": "boolean"
+              },
+              "priority": {
+                "description": "1 Low, 2 Medium, 3 High, 4 Urgent",
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  4
+                ],
+                "type": "integer"
+              },
+              "product_id": {
+                "type": "integer"
+              },
+              "requester_id": {
+                "type": "integer"
+              },
+              "responder_id": {
+                "type": "integer"
+              },
+              "source": {
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  7,
+                  9,
+                  10
+                ],
+                "type": "integer"
+              },
+              "spam": {
+                "type": "boolean"
+              },
+              "status": {
+                "description": "2 Open, 3 Pending, 4 Resolved, 5 Closed — the value **after** this update",
+                "enum": [
+                  2,
+                  3,
+                  4,
+                  5
+                ],
+                "type": "integer"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "tags": {
+                "description": "The ticket's tag set after the update. Freshdesk documents no additive form of this field — unlike zendesk's `additional_tags` — so read it back rather than assuming earlier tags survived",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": {
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "Moves on every accepted update, so it is the cheapest confirmation that the call changed something",
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
           "credentials": [],
           "hosts": [
             "{domain}"
@@ -3855,7 +4326,72 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "attachments": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "body": {
+                "description": "The note as HTML",
+                "type": "string"
+              },
+              "body_text": {
+                "description": "The note as plain text",
+                "type": "string"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "description": "The note's own id, distinct from the ticket's",
+                "type": "integer"
+              },
+              "incoming": {
+                "description": "True when the note represents something the customer sent in rather than an agent's own note",
+                "type": "boolean"
+              },
+              "notified_to": {
+                "description": "Who was notified — the response's name for the request's `notify_emails`",
+                "items": {
+                  "format": "email",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "private": {
+                "description": "True for a note only agents can see. Defaults to true — read it back before assuming a note was published",
+                "type": "boolean"
+              },
+              "structured_body": {
+                "description": "The note again, as `{body_contents: [{type, data: {content}}]}`",
+                "type": "object"
+              },
+              "support_email": {
+                "description": "The support address involved, or null",
+                "type": "string"
+              },
+              "ticket_id": {
+                "description": "The ticket the note was added to",
+                "type": "integer"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "user_id": {
+                "description": "Who the note is attributed to",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
           "credentials": [],
           "hosts": [
             "{domain}"
@@ -3978,7 +4514,82 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "description": "The matching contacts, as a bare JSON array with no envelope. Empty when nothing matched — which is a successful call, and the signal that the caller is not a known contact",
+            "items": {
+              "properties": {
+                "active": {
+                  "type": "boolean"
+                },
+                "company_id": {
+                  "type": "integer"
+                },
+                "contact_type": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "deleted": {
+                  "type": "boolean"
+                },
+                "email": {
+                  "description": "The primary address; further ones are in `other_emails`",
+                  "format": "email",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The contact id — this is the `requester_id` a ticket create takes",
+                  "type": "integer"
+                },
+                "job_title": {
+                  "type": "string"
+                },
+                "language": {
+                  "type": "string"
+                },
+                "mobile": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "other_companies": {
+                  "description": "Freshdesk's own examples disagree about this member: bare company ids in a listing, `{company_id, view_all_tickets}` objects on a single read. No item schema is declared rather than guessing which",
+                  "type": "array"
+                },
+                "other_emails": {
+                  "items": {
+                    "format": "email",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "phone": {
+                  "type": "string"
+                },
+                "tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "time_zone": {
+                  "type": "string"
+                },
+                "twitter_id": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
           "credentials": [],
           "hosts": [
             "{domain}"
@@ -4049,7 +4660,104 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "address": {
+                "type": "string"
+              },
+              "avatar": {
+                "description": "The contact's picture — `{avatar_url, content_type, id, name, size}` — or null",
+                "type": "object"
+              },
+              "company_id": {
+                "type": "integer"
+              },
+              "contact_type": {
+                "type": "string"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "custom_fields": {
+                "description": "The account's own contact fields, keyed by field name",
+                "type": "object"
+              },
+              "description": {
+                "type": "string"
+              },
+              "devices": {
+                "description": "Known devices, each `{device_type, device_make, device_model, app_version, os, os_version}`",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "email": {
+                "format": "email",
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "job_title": {
+                "type": "string"
+              },
+              "language": {
+                "type": "string"
+              },
+              "mobile": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "other_companies": {
+                "description": "On a single read Freshdesk's example shows `{company_id, view_all_tickets}` objects; its listing example shows bare ids. No item schema is declared rather than picking one",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "other_emails": {
+                "items": {
+                  "format": "email",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "phone": {
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "time_zone": {
+                "type": "string"
+              },
+              "twitter_id": {
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "view_all_tickets": {
+                "description": "True when this contact can see every ticket of their company, not only their own",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
           "credentials": [],
           "hosts": [
             "{domain}"
@@ -4136,7 +4844,87 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "active": {
+                "description": "Whether the contact has an active portal account. Freshdesk's own create example returns `false`, so do not treat a create as producing an active contact",
+                "type": "boolean"
+              },
+              "address": {
+                "type": "string"
+              },
+              "avatar": {
+                "description": "Null on a contact created through the API",
+                "type": "object"
+              },
+              "company_id": {
+                "type": "integer"
+              },
+              "contact_type": {
+                "type": "string"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "deleted": {
+                "type": "boolean"
+              },
+              "email": {
+                "format": "email",
+                "type": "string"
+              },
+              "id": {
+                "description": "The new contact's id — the `requester_id` for a following `freshdesk-ticket-create`",
+                "type": "integer"
+              },
+              "job_title": {
+                "type": "string"
+              },
+              "language": {
+                "type": "string"
+              },
+              "mobile": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "other_emails": {
+                "items": {
+                  "format": "email",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "phone": {
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "time_zone": {
+                "type": "string"
+              },
+              "twitter_id": {
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "view_all_tickets": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
           "credentials": [],
           "hosts": [
             "{domain}"
@@ -4268,7 +5056,83 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "archived": {
+                "description": "An archived repository is read-only — a write against it fails, so check this before `github-issue-create`",
+                "type": "boolean"
+              },
+              "default_branch": {
+                "type": "string"
+              },
+              "description": {
+                "description": "Null when the repository has none",
+                "type": "string"
+              },
+              "disabled": {
+                "type": "boolean"
+              },
+              "fork": {
+                "type": "boolean"
+              },
+              "full_name": {
+                "description": "`owner/repo`, which is how every other operation here addresses it",
+                "type": "string"
+              },
+              "html_url": {
+                "format": "uri",
+                "type": "string"
+              },
+              "id": {
+                "description": "The repository's global id, stable across renames",
+                "type": "integer"
+              },
+              "language": {
+                "description": "The dominant language, or null",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "node_id": {
+                "type": "string"
+              },
+              "open_issues_count": {
+                "description": "Open issues **and** open pull requests, since GitHub counts a PR as an issue",
+                "type": "integer"
+              },
+              "owner": {
+                "description": "The owning user or organisation: `login`, `id`, `type` (`User` or `Organization`), `avatar_url`, `html_url`",
+                "type": "object"
+              },
+              "permissions": {
+                "description": "What the authenticated token can do here: `admin`, `push` and `pull` are always present, `maintain` and `triage` only sometimes. Absent entirely for an unauthenticated read",
+                "type": "object"
+              },
+              "private": {
+                "type": "boolean"
+              },
+              "pushed_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "stargazers_count": {
+                "type": "integer"
+              },
+              "visibility": {
+                "description": "`public` or `private` per the reference; an enterprise repository can also be `internal`, so this is deliberately not a closed enum",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "full_name",
+              "private",
+              "owner"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "github.token"
@@ -4359,7 +5223,97 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "assignees": {
+                "description": "Everyone assigned. The reference's issue schema documents this array and does **not** document a singular `assignee`, so none is declared here even though the API returns one",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "body": {
+                "description": "The issue body as Markdown; null when the author wrote none",
+                "type": "string"
+              },
+              "closed_at": {
+                "description": "Null while open",
+                "format": "date-time",
+                "type": "string"
+              },
+              "comments": {
+                "description": "How many comments it has — a count, not the comments",
+                "type": "integer"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "draft": {
+                "type": "boolean"
+              },
+              "html_url": {
+                "format": "uri",
+                "type": "string"
+              },
+              "id": {
+                "description": "The issue's global id. For a pull request read through this endpoint it is an **issue** id and does not address the PR resource",
+                "type": "integer"
+              },
+              "labels": {
+                "description": "The applied labels, each `{id, name, color, description}`",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "locked": {
+                "type": "boolean"
+              },
+              "milestone": {
+                "description": "The milestone, or null",
+                "type": "object"
+              },
+              "node_id": {
+                "type": "string"
+              },
+              "number": {
+                "description": "The per-repository number — what this operation's `issue_number` takes",
+                "type": "integer"
+              },
+              "pull_request": {
+                "description": "PRESENT ONLY IF THIS IS A PULL REQUEST — `{url, html_url, diff_url, patch_url, merged_at}`. Its presence is how GitHub says the answer is a PR; read its merge and review state with `github-pull-get`, and note that `merged_at` here is null for an open or closed-unmerged PR",
+                "type": "object"
+              },
+              "state": {
+                "description": "`open` or `closed`",
+                "type": "string"
+              },
+              "state_reason": {
+                "description": "Why it closed: `completed`, `not_planned`, `duplicate` or `reopened`. Null on an open issue, and the difference between a fixed issue and a dismissed one",
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "user": {
+                "description": "Who opened it: `login`, `id`, `type`",
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "number",
+              "state",
+              "title",
+              "labels"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "github.token"
@@ -4450,7 +5404,91 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "additions": {
+                "type": "integer"
+              },
+              "base": {
+                "description": "Where it would land: `{ref, sha, label, repo}`",
+                "type": "object"
+              },
+              "body": {
+                "description": "The description as Markdown, or null",
+                "type": "string"
+              },
+              "changed_files": {
+                "type": "integer"
+              },
+              "commits": {
+                "type": "integer"
+              },
+              "deletions": {
+                "type": "integer"
+              },
+              "draft": {
+                "type": "boolean"
+              },
+              "head": {
+                "description": "The source of the change: `{ref, sha, label, repo}` — `repo` is a different repository for a fork PR",
+                "type": "object"
+              },
+              "html_url": {
+                "format": "uri",
+                "type": "string"
+              },
+              "id": {
+                "description": "The pull request's own id — distinct from the issue id `github-issue-get` returns for the same number",
+                "type": "integer"
+              },
+              "merge_commit_sha": {
+                "description": "The resulting commit once merged. Its nullability before a merge is not documented, so nothing is asserted here",
+                "type": "string"
+              },
+              "mergeable": {
+                "description": "THREE-VALUED: true, false, or **null meaning not yet computed** — GitHub starts a background job on first read and the reference says to resubmit the request. Treat null as unknown, never as false",
+                "type": "boolean"
+              },
+              "mergeable_state": {
+                "description": "GitHub's word for the merge situation, e.g. `clean`, `dirty`, `blocked`, `behind`, `unknown`",
+                "type": "string"
+              },
+              "merged": {
+                "description": "Whether it landed. This is the settled answer; `mergeable` below is about whether it *could*",
+                "type": "boolean"
+              },
+              "merged_at": {
+                "description": "When it merged, or null",
+                "format": "date-time",
+                "type": "string"
+              },
+              "number": {
+                "type": "integer"
+              },
+              "review_comments": {
+                "description": "Line-level review comments. Conversation comments are counted separately and are what `github-issue-comment-add` writes",
+                "type": "integer"
+              },
+              "state": {
+                "description": "`open` or `closed`. A merged PR is `closed`, so this cannot distinguish merged from abandoned — read `merged`",
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "user": {
+                "description": "Who opened it",
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "number",
+              "state",
+              "title"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "github.token"
@@ -4594,7 +5632,72 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "assignees": {
+                "description": "Who was actually assigned. GitHub silently drops a login without push access, so compare this against what was requested rather than assuming it took",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "body": {
+                "type": "string"
+              },
+              "comments": {
+                "type": "integer"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "html_url": {
+                "description": "The issue's page — the link to give a human",
+                "format": "uri",
+                "type": "string"
+              },
+              "id": {
+                "description": "The new issue's global id",
+                "type": "integer"
+              },
+              "labels": {
+                "description": "The labels that were applied. A name the repository did not have is created by this call and appears here",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "node_id": {
+                "type": "string"
+              },
+              "number": {
+                "description": "The per-repository number to address it by afterwards",
+                "type": "integer"
+              },
+              "state": {
+                "description": "`open` on a freshly created issue",
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "user": {
+                "description": "The account the token belongs to — a created issue is attributed to it, not to whoever asked for it",
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "number",
+              "state",
+              "title"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "github.token"
@@ -4701,7 +5804,60 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "author_association": {
+                "description": "The commenter's standing in the repository: `OWNER`, `MEMBER`, `COLLABORATOR`, `CONTRIBUTOR`, `NONE` and so on",
+                "type": "string"
+              },
+              "body": {
+                "description": "The comment as posted",
+                "type": "string"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "html_url": {
+                "description": "Link to this comment, anchored — not to the issue",
+                "format": "uri",
+                "type": "string"
+              },
+              "id": {
+                "description": "The comment's own id — not the issue's",
+                "type": "integer"
+              },
+              "issue_url": {
+                "description": "API URL of the issue or pull request that was commented on",
+                "format": "uri",
+                "type": "string"
+              },
+              "node_id": {
+                "type": "string"
+              },
+              "reactions": {
+                "description": "Reaction rollup counts, all zero on a new comment",
+                "type": "object"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "url": {
+                "format": "uri",
+                "type": "string"
+              },
+              "user": {
+                "description": "The commenting account, which is whoever the token belongs to",
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "body"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "github.token"
@@ -4856,7 +6012,50 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "historyId": {
+                "description": "The mailbox history id at which this message was last changed. **A string**, despite being an integer value",
+                "type": "string"
+              },
+              "id": {
+                "description": "The message's id — what this operation takes",
+                "type": "string"
+              },
+              "internalDate": {
+                "description": "When Gmail received it, as **epoch milliseconds in a string** — not an ISO timestamp, and not seconds. The RFC 2822 `Date` header inside `payload` may differ from it",
+                "type": "string"
+              },
+              "labelIds": {
+                "description": "The labels applied, as ids: `INBOX`, `UNREAD`, `SENT`, `IMPORTANT`, `CATEGORY_PERSONAL`, plus any user label's opaque id. `UNREAD`'s presence is how read-state is expressed — there is no `read` boolean",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "payload": {
+                "description": "THE MESSAGE ITSELF, as a MIME tree: `{partId, mimeType, filename, headers, body, parts}`. `headers` is an **array** of `{name, value}` — so `Subject` and `From` are found by searching it, not by keying into it — and each `body.data` is **base64url-encoded**. A multipart message's text is in `parts`, not in the top-level `body`",
+                "type": "object"
+              },
+              "sizeEstimate": {
+                "description": "Approximate size in bytes",
+                "type": "integer"
+              },
+              "snippet": {
+                "description": "A short plain-text extract of the body — the only text in this response that needs no decoding, and it is truncated",
+                "type": "string"
+              },
+              "threadId": {
+                "description": "The conversation it belongs to. Several messages share one",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "threadId"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "google.access_token"
@@ -4933,7 +6132,29 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "id": {
+                "description": "The sent message's id — the only handle on a mail that cannot be recalled, and what `google-gmail-message-get` reads back",
+                "type": "string"
+              },
+              "labelIds": {
+                "description": "Typically `[\"SENT\"]`. Google documents the response as \"an instance of Message\" without stating which members are populated on a send, so treat anything beyond `id` and `threadId` as possibly absent",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "threadId": {
+                "description": "The thread it landed in. Equal to `id` for a new conversation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "google.access_token"
@@ -4992,7 +6213,58 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "labels": {
+                "description": "Every label in the mailbox, in one unpaginated response — there is no `nextPageToken` on this method. Only the five members below are returned by a *list*; the per-label message counts belong to a `labels.get`",
+                "items": {
+                  "properties": {
+                    "id": {
+                      "description": "The label id — `INBOX`, `SENT`, `UNREAD` and the other system labels are ids in their own right; a user label's id is opaque (`Label_12`). This is what appears in a message's `labelIds`",
+                      "type": "string"
+                    },
+                    "labelListVisibility": {
+                      "enum": [
+                        "labelShow",
+                        "labelShowIfUnread",
+                        "labelHide"
+                      ],
+                      "type": "string"
+                    },
+                    "messageListVisibility": {
+                      "enum": [
+                        "show",
+                        "hide"
+                      ],
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "The display name. A nested label's name carries its path, e.g. `Clients/Acme`",
+                      "type": "string"
+                    },
+                    "type": {
+                      "description": "`system` labels cannot be renamed or deleted",
+                      "enum": [
+                        "system",
+                        "user"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "labels"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "google.access_token"
@@ -5069,7 +6341,95 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "attendees": {
+                "description": "Each `{email, displayName, organizer, self, optional, responseStatus}`, where `responseStatus` is `needsAction`, `declined`, `tentative` or `accepted` — this is how attendance is read. Absent entirely on an event with no attendees, such as every event `google-calendar-event-insert` creates. Personal data: it is a list of named people's addresses",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "conferenceData": {
+                "description": "The conference in full: `entryPoints` with join URLs and dial-in numbers, plus a `conferenceId`. Contains the same joinable links as `hangoutLink`",
+                "type": "object"
+              },
+              "created": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "creator": {
+                "description": "Same shape; the creator need not still be the organizer",
+                "type": "object"
+              },
+              "description": {
+                "type": "string"
+              },
+              "end": {
+                "description": "Same shape, and **exclusive**: an all-day event on the 30th has `end.date` of the 31st. For a recurring event this describes the first instance",
+                "type": "object"
+              },
+              "etag": {
+                "description": "The resource's ETag, as a quoted string",
+                "type": "string"
+              },
+              "hangoutLink": {
+                "description": "The Google Meet join link, when the event has a conference. **Anyone holding it can join the meeting**, so treat it as sensitive rather than as an ordinary URL",
+                "format": "uri",
+                "type": "string"
+              },
+              "htmlLink": {
+                "description": "The event's page in Google Calendar — the link to give a human",
+                "format": "uri",
+                "type": "string"
+              },
+              "id": {
+                "description": "The event id — what this operation takes",
+                "type": "string"
+              },
+              "kind": {
+                "const": "calendar#event"
+              },
+              "location": {
+                "description": "Free text, not a structured address",
+                "type": "string"
+              },
+              "organizer": {
+                "description": "`{email, displayName, self}` — who owns the event. `self` is true when it is the token's own calendar",
+                "type": "object"
+              },
+              "recurringEventId": {
+                "description": "Present on an instance of a recurring event: the id of the series it belongs to",
+                "type": "string"
+              },
+              "start": {
+                "description": "WHEN IT STARTS, as an object: `dateTime` (RFC 3339) for a timed event **or** `date` (`yyyy-mm-dd`) for an all-day event — never both — plus an optional IANA `timeZone`. Reading `start.dateTime` unconditionally misses every all-day event",
+                "type": "object"
+              },
+              "status": {
+                "description": "**A cancelled event is still returned here**, with `cancelled`. Check this before treating the event as live",
+                "enum": [
+                  "confirmed",
+                  "tentative",
+                  "cancelled"
+                ],
+                "type": "string"
+              },
+              "summary": {
+                "description": "The title. Absent on an event created without one, which Calendar renders as \"(No title)\"",
+                "type": "string"
+              },
+              "updated": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "status"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "google.access_token"
@@ -5176,7 +6536,82 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "attendees": {
+                "description": "ABSENT on every event this operation creates: no attendee can be declared yet (C-56), so nobody was invited and nobody was notified",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "created": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "creator": {
+                "description": "The token's own account",
+                "type": "object"
+              },
+              "end": {
+                "description": "Same shape, and exclusive",
+                "type": "object"
+              },
+              "etag": {
+                "type": "string"
+              },
+              "htmlLink": {
+                "description": "The event's page in Google Calendar — the link to give a human",
+                "format": "uri",
+                "type": "string"
+              },
+              "iCalUID": {
+                "description": "The RFC 5545 UID, which is what identifies this event across calendars — distinct from `id`",
+                "type": "string"
+              },
+              "id": {
+                "description": "The new event's id — the only handle on it, and what `google-calendar-event-get` reads back",
+                "type": "string"
+              },
+              "kind": {
+                "const": "calendar#event"
+              },
+              "organizer": {
+                "description": "`{email, displayName, self}` — the calendar the event was created on",
+                "type": "object"
+              },
+              "sequence": {
+                "description": "The iCalendar revision number, `0` on creation",
+                "type": "integer"
+              },
+              "start": {
+                "description": "`{dateTime, timeZone}` as created. Calendar resolves the offset that was sent into its own representation, so this may not be the literal string that was sent",
+                "type": "object"
+              },
+              "status": {
+                "description": "`confirmed` on a freshly created event",
+                "enum": [
+                  "confirmed",
+                  "tentative",
+                  "cancelled"
+                ],
+                "type": "string"
+              },
+              "summary": {
+                "description": "Echoes the title that was sent",
+                "type": "string"
+              },
+              "updated": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "status"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "google.access_token"
@@ -5235,7 +6670,44 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "conferenceProperties": {
+                "description": "`{allowedConferenceSolutionTypes}` — which conferencing this calendar permits (`hangoutsMeet`, `eventHangout`, `eventNamedHangout`)",
+                "type": "object"
+              },
+              "description": {
+                "type": "string"
+              },
+              "etag": {
+                "type": "string"
+              },
+              "id": {
+                "description": "The calendar's address, e.g. `you@example.com` or `team@group.calendar.google.com`. Asking for `primary` resolves to this",
+                "type": "string"
+              },
+              "kind": {
+                "const": "calendar#calendar"
+              },
+              "location": {
+                "description": "Free-text geographic location of the calendar",
+                "type": "string"
+              },
+              "summary": {
+                "description": "The calendar's title",
+                "type": "string"
+              },
+              "timeZone": {
+                "description": "The calendar's own IANA time zone, e.g. `Europe/Berlin`. **This is what an event's offset should be computed from** — `google-calendar-event-insert` cannot send a `timeZone`, so the caller has to apply the right offset itself",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "summary"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "google.access_token"
@@ -5483,7 +6955,60 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "archived": {
+                "description": "True for a record in the recycle bin",
+                "type": "boolean"
+              },
+              "archivedAt": {
+                "description": "Present only on an archived record",
+                "format": "date-time",
+                "type": "string"
+              },
+              "associations": {
+                "description": "Related records — companies, deals, tickets — keyed by object type. Returned only when asked for. Present on this read schema and absent from the create's",
+                "type": "object"
+              },
+              "createdAt": {
+                "description": "When the record was created — an ISO timestamp here, unlike the epoch-milliseconds string the equivalent `createdate` property carries",
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "description": "The record id (`hs_object_id`) **as a string**, even though this operation takes it as a number",
+                "type": "string"
+              },
+              "properties": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "The contact's property values, keyed by HubSpot's internal property name (`email`, `firstname`, `lastname`, `createdate`, `lastmodifieddate`, `hs_object_id`). EVERY VALUE IS A STRING regardless of the property's configured type — a number is `\"17\"`, a checkbox `\"false\"`, a date the epoch-milliseconds string `\"1572480000000\"`. Which keys are present depends on the portal's own property set and on the `properties` projection this connector cannot send",
+                "type": "object"
+              },
+              "propertiesWithHistory": {
+                "additionalProperties": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "description": "Previous values per property, each an array of `{value, timestamp, sourceType}`. Returned only when asked for, which this connector cannot do",
+                "type": "object"
+              },
+              "updatedAt": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "properties",
+              "createdAt",
+              "updatedAt"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "hubspot.access_token"
@@ -5540,7 +7065,47 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "createdAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "description": "The new record's id, as a string. This is the `contact_id` for a following update — and the update's parameter is a number, so it has to be converted",
+                "type": "string"
+              },
+              "properties": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "The created record's properties, keyed by internal name, EVERY VALUE A STRING. HubSpot fills in more than was sent — `createdate`, `lastmodifieddate` and `hs_object_id` at minimum",
+                "type": "object"
+              },
+              "updatedAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "warnings": {
+                "description": "Non-fatal complaints about the create — a property HubSpot ignored, for instance. Present only on the create schema, and worth reading: the call still succeeded",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "properties",
+              "createdAt",
+              "updatedAt",
+              "archived"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "hubspot.access_token"
@@ -5686,7 +7251,57 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "archivedAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "associations": {
+                "description": "Related contacts, deals and tickets. Returned only when asked for",
+                "type": "object"
+              },
+              "createdAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "description": "The company's record id, as a string",
+                "type": "string"
+              },
+              "properties": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "The company's property values, keyed by internal name (`name`, `domain`, `createdate`, `hs_lastmodifieddate`, `hs_object_id`). EVERY VALUE IS A STRING — including numeric properties such as `numberofemployees` and `annualrevenue`",
+                "type": "object"
+              },
+              "propertiesWithHistory": {
+                "additionalProperties": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "description": "Returned only when asked for, which this connector cannot do",
+                "type": "object"
+              },
+              "updatedAt": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "properties",
+              "createdAt",
+              "updatedAt"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "hubspot.access_token"
@@ -5745,7 +7360,57 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "archivedAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "associations": {
+                "description": "The contacts and companies on the deal. Returned only when asked for",
+                "type": "object"
+              },
+              "createdAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "description": "The deal's record id, as a string",
+                "type": "string"
+              },
+              "properties": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "The deal's property values, keyed by internal name (`dealname`, `amount`, `dealstage`, `pipeline`, `closedate`, `hs_object_id`). EVERY VALUE IS A STRING — `amount` arrives as `\"1500.00\"` and `closedate` as an ISO string, so a numeric or date comparison has to convert first. `dealstage` and `pipeline` are per-portal internal ids, not display names",
+                "type": "object"
+              },
+              "propertiesWithHistory": {
+                "additionalProperties": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "description": "Returned only when asked for",
+                "type": "object"
+              },
+              "updatedAt": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "properties",
+              "createdAt",
+              "updatedAt"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "hubspot.access_token"
@@ -5857,7 +7522,113 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "avatar": {
+                "description": "`{type, image_url}` or null — an object, not a URL string",
+                "type": "object"
+              },
+              "companies": {
+                "description": "The same wrapper shape — companies at `.data`",
+                "type": "object"
+              },
+              "created_at": {
+                "description": "Unix seconds — an integer, not an ISO string",
+                "type": "integer"
+              },
+              "custom_attributes": {
+                "description": "The workspace's own attributes, keyed by name. Which keys exist is per workspace, so none is declared",
+                "type": "object"
+              },
+              "email": {
+                "format": "email",
+                "type": "string"
+              },
+              "external_id": {
+                "description": "Your own id for this person, or null. Intercom's identity model treats this and `email` as the two identifiers",
+                "type": "string"
+              },
+              "has_hard_bounced": {
+                "description": "Their address bounced permanently; mail to it will not arrive",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The 24-character Intercom id, which is what this operation takes",
+                "type": "string"
+              },
+              "last_contacted_at": {
+                "description": "Unix seconds, or null",
+                "type": "integer"
+              },
+              "last_replied_at": {
+                "description": "Unix seconds, or null",
+                "type": "integer"
+              },
+              "last_seen_at": {
+                "description": "Unix seconds of the last time Intercom saw this person, or null. This is the field that says whether a contact is live",
+                "type": "integer"
+              },
+              "location": {
+                "description": "Intercom's IP-derived guess: `{type, country, region, city}`",
+                "type": "object"
+              },
+              "marked_email_as_spam": {
+                "type": "boolean"
+              },
+              "name": {
+                "description": "Null unless set",
+                "type": "string"
+              },
+              "notes": {
+                "description": "The same wrapper shape — notes at `.data`",
+                "type": "object"
+              },
+              "owner_id": {
+                "description": "The admin who owns the contact, or null",
+                "type": "integer"
+              },
+              "phone": {
+                "description": "Null unless set",
+                "type": "string"
+              },
+              "role": {
+                "description": "`user` for an identified person or `lead` for an unidentified visitor. A lead can be merged into a user later, which changes the id a flow should hold",
+                "type": "string"
+              },
+              "signed_up_at": {
+                "description": "Unix seconds, or null for a contact that never signed up",
+                "type": "integer"
+              },
+              "social_profiles": {
+                "description": "The same wrapper shape",
+                "type": "object"
+              },
+              "tags": {
+                "description": "A PAGINATED WRAPPER, not an array: `{type, data, url, total_count, has_more}`. The tags are at `.data`, and `has_more` true means there are more than were returned",
+                "type": "object"
+              },
+              "type": {
+                "const": "contact"
+              },
+              "unsubscribed_from_emails": {
+                "description": "TRUE MEANS DO NOT EMAIL THIS PERSON. Check it before a flow sends anything",
+                "type": "boolean"
+              },
+              "updated_at": {
+                "description": "Unix seconds",
+                "type": "integer"
+              },
+              "workspace_id": {
+                "description": "The workspace the contact belongs to — Intercom's app id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "intercom.access_token"
@@ -5938,7 +7709,80 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "avatar": {
+                "description": "`{type, image_url}` or null",
+                "type": "object"
+              },
+              "companies": {
+                "description": "The paginated wrapper shape",
+                "type": "object"
+              },
+              "created_at": {
+                "description": "Unix seconds — an integer, not an ISO string",
+                "type": "integer"
+              },
+              "custom_attributes": {
+                "type": "object"
+              },
+              "email": {
+                "format": "email",
+                "type": "string"
+              },
+              "external_id": {
+                "type": "string"
+              },
+              "id": {
+                "description": "The new contact's id — the only handle on the record this call created, and what a following note addresses",
+                "type": "string"
+              },
+              "last_seen_at": {
+                "description": "Null until Intercom sees the person",
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "notes": {
+                "description": "The paginated wrapper shape",
+                "type": "object"
+              },
+              "phone": {
+                "type": "string"
+              },
+              "role": {
+                "description": "Echoes back `user` or `lead` as sent",
+                "type": "string"
+              },
+              "signed_up_at": {
+                "description": "Null on a contact created this way",
+                "type": "integer"
+              },
+              "tags": {
+                "description": "The paginated wrapper shape, empty on a new contact",
+                "type": "object"
+              },
+              "type": {
+                "const": "contact"
+              },
+              "unsubscribed_from_emails": {
+                "type": "boolean"
+              },
+              "updated_at": {
+                "description": "Unix seconds",
+                "type": "integer"
+              },
+              "workspace_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "intercom.access_token"
@@ -5995,7 +7839,107 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "admin_assignee_id": {
+                "description": "The assigned admin, or null when unassigned",
+                "type": "integer"
+              },
+              "ai_agent_participated": {
+                "description": "Whether Intercom's own AI agent replied in this conversation, which is worth knowing before a second automation replies too",
+                "type": "boolean"
+              },
+              "contacts": {
+                "description": "The customers on the conversation, as `{type, contacts: […]}` — a wrapper, not an array",
+                "type": "object"
+              },
+              "conversation_parts": {
+                "description": "THE MESSAGES, nested twice: `{type, conversation_parts: […], total_count}`. Each part carries `part_type` (`comment`, `note`, `assignment`, `close`), `body` as HTML, `author` and `created_at`. Only a page of them is returned — check `total_count`",
+                "type": "object"
+              },
+              "conversation_rating": {
+                "description": "The customer's rating of the conversation, or null: `{rating, remark, created_at, contact, teammate}`",
+                "type": "object"
+              },
+              "created_at": {
+                "description": "Unix seconds",
+                "type": "integer"
+              },
+              "custom_attributes": {
+                "type": "object"
+              },
+              "id": {
+                "description": "The conversation id, a decimal string",
+                "type": "string"
+              },
+              "open": {
+                "description": "True while the conversation is unresolved — **including while it is snoozed**. Use with `state` rather than instead of it",
+                "type": "boolean"
+              },
+              "priority": {
+                "description": "`priority` or `not_priority` — Intercom's own two-valued flag, not a severity scale",
+                "type": "string"
+              },
+              "read": {
+                "description": "Whether a teammate has read it",
+                "type": "boolean"
+              },
+              "snoozed_until": {
+                "description": "Unix seconds when a snoozed conversation reopens, or null",
+                "type": "integer"
+              },
+              "source": {
+                "description": "How it started: `{type, id, delivered_as, subject, body, author, attachments}` — the first message, and `author` is who sent it",
+                "type": "object"
+              },
+              "state": {
+                "description": "The inbox state. `snoozed` is a *kind of open*: see `open` beside it",
+                "enum": [
+                  "open",
+                  "closed",
+                  "snoozed"
+                ],
+                "type": "string"
+              },
+              "statistics": {
+                "description": "Timing aggregates — first response time, last close time and so on — or null",
+                "type": "object"
+              },
+              "tags": {
+                "description": "The paginated wrapper shape — tags at `.data`",
+                "type": "object"
+              },
+              "team_assignee_id": {
+                "description": "The assigned team, or null",
+                "type": "integer"
+              },
+              "teammates": {
+                "description": "The admins on it, same wrapper shape, or null",
+                "type": "object"
+              },
+              "title": {
+                "description": "The subject, or null — most conversations have none",
+                "type": "string"
+              },
+              "type": {
+                "const": "conversation"
+              },
+              "updated_at": {
+                "description": "Unix seconds",
+                "type": "integer"
+              },
+              "waiting_since": {
+                "description": "Unix seconds since the customer has been waiting for a reply, or null when they are not. This is the SLA-relevant field",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "type",
+              "id",
+              "state"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "intercom.access_token"
@@ -6122,7 +8066,84 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "admin_assignee_id": {
+                "type": "integer"
+              },
+              "contacts": {
+                "description": "`{type, contacts: […]}` — who the reply went to, when `message_type` was `comment`",
+                "type": "object"
+              },
+              "conversation_parts": {
+                "description": "WHERE THE SENT REPLY IS: `{type, conversation_parts: […], total_count}`, and the reply is the last entry. Its `part_type` is `comment` (delivered to the customer) or `note` (internal), which is the only confirmation of which audience was written to",
+                "type": "object"
+              },
+              "created_at": {
+                "description": "Unix seconds — of the conversation, not of this reply",
+                "type": "integer"
+              },
+              "custom_attributes": {
+                "type": "object"
+              },
+              "id": {
+                "description": "The conversation's id, unchanged by the reply",
+                "type": "string"
+              },
+              "open": {
+                "description": "True while unresolved, including while snoozed",
+                "type": "boolean"
+              },
+              "priority": {
+                "type": "string"
+              },
+              "read": {
+                "type": "boolean"
+              },
+              "snoozed_until": {
+                "type": "integer"
+              },
+              "source": {
+                "description": "The conversation's first message, not this reply",
+                "type": "object"
+              },
+              "state": {
+                "description": "The state after the reply. An admin comment on a closed conversation reopens it",
+                "enum": [
+                  "open",
+                  "closed",
+                  "snoozed"
+                ],
+                "type": "string"
+              },
+              "statistics": {
+                "type": "object"
+              },
+              "tags": {
+                "type": "object"
+              },
+              "team_assignee_id": {
+                "type": "integer"
+              },
+              "type": {
+                "const": "conversation"
+              },
+              "updated_at": {
+                "description": "Unix seconds, moved by this reply",
+                "type": "integer"
+              },
+              "waiting_since": {
+                "description": "Null after an admin reply, since the customer is no longer waiting",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "type",
+              "id",
+              "state"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "intercom.access_token"
@@ -6211,7 +8232,38 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "author": {
+                "description": "The admin it is attributed to: `{type, id, name, email, job_title, away_mode_enabled}`. This is what the required `admin_id` produced",
+                "type": "object"
+              },
+              "body": {
+                "description": "The note as stored, HTML",
+                "type": "string"
+              },
+              "contact": {
+                "description": "The contact it was attached to, as `{type, id}` — **nullable** in Intercom's schema, so confirm it rather than assuming the note landed on a person",
+                "type": "object"
+              },
+              "created_at": {
+                "description": "Unix seconds — an integer, e.g. 1674589321",
+                "type": "integer"
+              },
+              "id": {
+                "description": "The note's own id",
+                "type": "string"
+              },
+              "type": {
+                "const": "note"
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "intercom.access_token"
@@ -6325,7 +8377,45 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "changelog": {
+                "description": "Change history, when expanded. Not requested by this operation",
+                "type": "object"
+              },
+              "expand": {
+                "description": "Comma-separated names of the parts that *could* be expanded — a hint, not data",
+                "type": "string"
+              },
+              "fields": {
+                "description": "EVERY FIELD OF THE ISSUE, one level down — `summary`, `description`, `status`, `assignee`, `reporter`, `priority`, `issuetype`, `project`, `created`, `updated`, plus every custom field as `customfield_NNNNN`. Jira's schema declares no member of this map, because the members are whatever the site has configured, so nothing is enumerated here. `status` is a nested object (`{name, statusCategory}`), not a string, and text fields are wiki markup",
+                "type": "object"
+              },
+              "id": {
+                "description": "The issue's numeric id, **as a string** — Jira returns ids as strings throughout",
+                "type": "string"
+              },
+              "key": {
+                "description": "The issue key, e.g. `PROJ-123`. It changes if the issue moves project; the id does not",
+                "type": "string"
+              },
+              "renderedFields": {
+                "description": "The same fields rendered to HTML, when asked for. Not requested by this operation",
+                "type": "object"
+              },
+              "self": {
+                "description": "The issue's own API URL",
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "key",
+              "fields"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "jira.api_token"
@@ -6422,7 +8512,35 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "id": {
+                "description": "The new issue's numeric id, as a string",
+                "type": "string"
+              },
+              "key": {
+                "description": "The new issue's key, e.g. `PROJ-123`. This is what every following call addresses it by — nothing else in the response identifies it",
+                "type": "string"
+              },
+              "self": {
+                "format": "uri",
+                "type": "string"
+              },
+              "transition": {
+                "description": "Present when the create asked for a transition: its own `{status, errorCollection, warningCollection}`. A failure here does not fail the create, so a `201` can still mean the transition did not happen",
+                "type": "object"
+              },
+              "watchers": {
+                "description": "Same shape, for watchers the create asked to add",
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "key"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "jira.api_token"
@@ -6487,7 +8605,74 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "comments": {
+                "description": "The comments, oldest first. Bodies are Jira wiki markup",
+                "items": {
+                  "properties": {
+                    "author": {
+                      "description": "Who wrote it: `{accountId, displayName, active, self}` — an `accountId`, never a username, and `emailAddress` only where the site's privacy settings expose it",
+                      "type": "object"
+                    },
+                    "body": {
+                      "description": "The comment text in wiki markup",
+                      "type": "string"
+                    },
+                    "created": {
+                      "description": "Jira's own timestamp format, e.g. `2021-01-17T12:34:00.000+0000` — not RFC 3339 with a colon in the offset",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "The comment's id, as a string",
+                      "type": "string"
+                    },
+                    "jsdPublic": {
+                      "description": "On Jira Service Management, whether the customer on the portal can see this comment. False is an internal note",
+                      "type": "boolean"
+                    },
+                    "renderedBody": {
+                      "description": "The same body as HTML, when expanded",
+                      "type": "string"
+                    },
+                    "self": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "updateAuthor": {
+                      "description": "Who last edited it, which need not be the author",
+                      "type": "object"
+                    },
+                    "updated": {
+                      "type": "string"
+                    },
+                    "visibility": {
+                      "description": "Present when the comment is restricted to a role or group: `{type, value, identifier}`. Its absence means everyone who can see the issue can see the comment",
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "maxResults": {
+                "description": "How many comments the page could hold, chosen by Jira",
+                "type": "integer"
+              },
+              "startAt": {
+                "description": "The offset this page starts at — 0 here, since this operation cannot send one",
+                "type": "integer"
+              },
+              "total": {
+                "description": "How many comments the issue has in total. **Greater than the length of `comments` means the discussion is truncated**, and this operation cannot fetch the rest",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "comments"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "jira.api_token"
@@ -6568,7 +8753,50 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "author": {
+                "description": "The account the token belongs to — a posted comment is attributed to it",
+                "type": "object"
+              },
+              "body": {
+                "description": "The comment as stored, in wiki markup",
+                "type": "string"
+              },
+              "created": {
+                "description": "Jira's timestamp format, e.g. `2021-01-17T12:34:00.000+0000`",
+                "type": "string"
+              },
+              "id": {
+                "description": "The new comment's id, as a string",
+                "type": "string"
+              },
+              "jsdPublic": {
+                "description": "On Jira Service Management, whether the portal customer can see it. Read it before treating a comment as internal",
+                "type": "boolean"
+              },
+              "self": {
+                "description": "The comment's own API URL. There is no browser link in this response — a human-facing link has to be built from the issue key",
+                "format": "uri",
+                "type": "string"
+              },
+              "updateAuthor": {
+                "type": "object"
+              },
+              "updated": {
+                "type": "string"
+              },
+              "visibility": {
+                "description": "Absent here, because this connector cannot restrict a comment. Absence means everyone who can see the issue can see it",
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "body"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "jira.api_token"
@@ -6633,7 +8861,63 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "expand": {
+                "description": "Expansion hint, absent from the vendor's example",
+                "type": "string"
+              },
+              "transitions": {
+                "description": "The transitions available from the issue's **current** status. An empty array means the workflow offers none to this user right now — not that the issue is closed",
+                "items": {
+                  "properties": {
+                    "fields": {
+                      "description": "What a screen would ask for, keyed by field id, each with its own metadata including whether it is required. A required field here is the reason a transition can be listed and still be refused",
+                      "type": "object"
+                    },
+                    "hasScreen": {
+                      "description": "True when Jira would show a form for this transition. It may then require fields this connector cannot send, and the call fails",
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "description": "The transition id to send as `transition_id`. Per-workflow, not global, and a string",
+                      "type": "string"
+                    },
+                    "isAvailable": {
+                      "description": "Whether the transition can be executed now. Not present on every entry — the vendor's own examples omit it — so absence is not `false`",
+                      "type": "boolean"
+                    },
+                    "isConditional": {
+                      "type": "boolean"
+                    },
+                    "isGlobal": {
+                      "type": "boolean"
+                    },
+                    "isInitial": {
+                      "type": "boolean"
+                    },
+                    "looped": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "description": "The transition's label as the workflow names it, e.g. `Done` or `Start Progress`. Match on this rather than hard-coding an id",
+                      "type": "string"
+                    },
+                    "to": {
+                      "description": "The status the issue would land in: `{id, name, description, statusCategory}`, where `statusCategory` is `{id, key, name, colorName}` and its `key` is the coarse `new`/`indeterminate`/`done` grouping a flow can branch on",
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "transitions"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "jira.api_token"
@@ -7322,7 +9606,45 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "data": {
+                "description": "One entry per model the key can reach, each `{id, object: \"model\", created, owned_by}`. Unpaginated — this is the whole list",
+                "items": {
+                  "properties": {
+                    "created": {
+                      "description": "Unix seconds",
+                      "type": "integer"
+                    },
+                    "id": {
+                      "description": "The model id to pass as `model` elsewhere, e.g. `gpt-4o`",
+                      "type": "string"
+                    },
+                    "object": {
+                      "const": "model"
+                    },
+                    "owned_by": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "object"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "object": {
+                "const": "list"
+              }
+            },
+            "required": [
+              "object",
+              "data"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "openai.api_key"
@@ -7379,7 +9701,30 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "created": {
+                "description": "Unix seconds at which the model was created",
+                "type": "integer"
+              },
+              "id": {
+                "description": "The model id, echoed back",
+                "type": "string"
+              },
+              "object": {
+                "const": "model"
+              },
+              "owned_by": {
+                "description": "The owning organization, e.g. `openai` or `system`",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "object"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "openai.api_key"
@@ -7474,7 +9819,65 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "choices": {
+                "description": "One entry per completion; this connector never sets `n`, so there is exactly one",
+                "items": {
+                  "properties": {
+                    "finish_reason": {
+                      "description": "Why generation stopped: `stop` (the model finished), `length` (the token budget ran out and `content` is truncated), `tool_calls`, `content_filter` or `function_call`",
+                      "type": "string"
+                    },
+                    "index": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "description": "The assistant's turn: `role`, and `content` — which is null when the model answered with `tool_calls` or set `refusal` instead",
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "message",
+                    "finish_reason"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "created": {
+                "description": "Unix seconds",
+                "type": "integer"
+              },
+              "id": {
+                "description": "The completion's id, `chatcmpl-…`",
+                "type": "string"
+              },
+              "model": {
+                "description": "The model that actually ran, which may name a dated snapshot of the alias that was requested",
+                "type": "string"
+              },
+              "object": {
+                "const": "chat.completion"
+              },
+              "system_fingerprint": {
+                "type": "string"
+              },
+              "usage": {
+                "description": "What the call cost, in tokens: `prompt_tokens`, `completion_tokens`, `total_tokens`, plus `completion_tokens_details` (which is where reasoning tokens are reported)",
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "object",
+              "created",
+              "model",
+              "choices"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "openai.api_key"
@@ -7569,7 +9972,54 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "data": {
+                "description": "One embedding per input, in input order — including for a single string input",
+                "items": {
+                  "properties": {
+                    "embedding": {
+                      "description": "The vector, as floats. Its length is the model's dimension — 1536 for `text-embedding-3-small`, 3072 for `-large` — unless `dimensions` was set, which this connector does not send",
+                      "items": {
+                        "type": "number"
+                      },
+                      "type": "array"
+                    },
+                    "index": {
+                      "description": "The position of the input this vector belongs to",
+                      "type": "integer"
+                    },
+                    "object": {
+                      "const": "embedding"
+                    }
+                  },
+                  "required": [
+                    "object",
+                    "index",
+                    "embedding"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "model": {
+                "type": "string"
+              },
+              "object": {
+                "const": "list"
+              },
+              "usage": {
+                "description": "`prompt_tokens` and `total_tokens`; an embedding call generates nothing, so the two are equal",
+                "type": "object"
+              }
+            },
+            "required": [
+              "object",
+              "data",
+              "model"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "openai.api_key"
@@ -7662,7 +10112,21 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "data": {
+                "description": "One entry per model, each carrying at least `id` (`<author>/<slug>`), `name`, `created`, `description`, `context_length`, an `architecture` object and a `pricing` object whose per-token prices are decimal strings, not numbers",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "openrouter.api_key"
@@ -7735,7 +10199,18 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "data": {
+                "description": "The model, with an `endpoints` array nested inside it — one entry per upstream provider serving it, each carrying its own `name`/`provider_name`, `context_length`, `pricing`, `quantization` and `supported_parameters`. This is a single object, not an array",
+                "type": "object"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "openrouter.api_key"
@@ -7830,7 +10305,64 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "choices": {
+                "description": "One entry per completion; this connector never sets `n`, so there is exactly one",
+                "items": {
+                  "properties": {
+                    "error": {
+                      "description": "Present when the upstream provider failed *after* routing succeeded: `{code, message, metadata}`, delivered with HTTP 200 and no content. Check for it before reading `message`",
+                      "type": "object"
+                    },
+                    "finish_reason": {
+                      "description": "The normalized reason generation stopped — `stop`, `length`, `tool_calls`, `content_filter`. Branch on this one",
+                      "type": "string"
+                    },
+                    "message": {
+                      "description": "The assistant's turn: `role`, `content`, and `tool_calls` when the model called a tool",
+                      "type": "object"
+                    },
+                    "native_finish_reason": {
+                      "description": "The upstream provider's own unmapped reason, whose vocabulary varies by provider",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "created": {
+                "description": "Unix seconds",
+                "type": "integer"
+              },
+              "id": {
+                "description": "The generation's id, which is also what `GET /api/v1/generation` would be queried by — an operation this connector cannot express (C-30)",
+                "type": "string"
+              },
+              "model": {
+                "description": "The model that actually served the request. It can differ from the one asked for when routing falls back",
+                "type": "string"
+              },
+              "object": {
+                "const": "chat.completion"
+              },
+              "provider": {
+                "description": "The upstream provider that served it, e.g. `Anthropic` or `Together`. OpenRouter's own addition to the OpenAI shape and not part of the documented response schema, so it is recorded as optional",
+                "type": "string"
+              },
+              "usage": {
+                "description": "`prompt_tokens`, `completion_tokens`, `total_tokens`, and OpenRouter's own `cost` — what the call charged in credits, the same unit `openrouter-credits-get` reports",
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "model",
+              "choices"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "openrouter.api_key"
@@ -7868,7 +10400,31 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "data": {
+                "properties": {
+                  "total_credits": {
+                    "description": "Credits ever purchased on this account — a cumulative total, not a remaining balance",
+                    "type": "number"
+                  },
+                  "total_usage": {
+                    "description": "Credits ever spent. The remaining balance is `total_credits - total_usage`",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "total_credits",
+                  "total_usage"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "openrouter.api_key"
@@ -8000,7 +10556,116 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "assignedTo": {
+                "description": "Who owns it: `{type: \"user\"|\"team\", id, name, email}`, or null when unassigned",
+                "type": "object"
+              },
+              "count": {
+                "description": "How many events are grouped in this issue — **a STRING, not a number**, per Sentry's own schema (its example is `\"150\"`). Compare it as a number only after converting",
+                "type": "string"
+              },
+              "culprit": {
+                "description": "Where Sentry attributes it — a function or transaction name. Null when it cannot attribute one",
+                "type": "string"
+              },
+              "firstSeen": {
+                "description": "When the first event of this group arrived",
+                "format": "date-time",
+                "type": "string"
+              },
+              "hasSeen": {
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The issue's numeric id, as a string",
+                "type": "string"
+              },
+              "isBookmarked": {
+                "type": "boolean"
+              },
+              "isSubscribed": {
+                "type": "boolean"
+              },
+              "isUnhandled": {
+                "description": "True when the error was not caught by application code",
+                "type": "boolean"
+              },
+              "lastSeen": {
+                "description": "When the most recent one did. This, not `count`, is what says whether the issue is still live",
+                "format": "date-time",
+                "type": "string"
+              },
+              "level": {
+                "description": "The severity of the grouped events",
+                "enum": [
+                  "sample",
+                  "debug",
+                  "info",
+                  "warning",
+                  "error",
+                  "fatal",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              "metadata": {
+                "description": "Sentry's own grouping metadata — typically `{type, value, filename, function}`. Free-form in the vendor's schema, so no member is declared",
+                "type": "object"
+              },
+              "numComments": {
+                "type": "integer"
+              },
+              "permalink": {
+                "description": "The issue's page in Sentry — the link to give a human",
+                "format": "uri",
+                "type": "string"
+              },
+              "priority": {
+                "description": "`low`, `medium`, `high` or null — Sentry's own computed priority, distinct from `level`",
+                "type": "string"
+              },
+              "project": {
+                "description": "Which project it belongs to: `{id, name, slug, platform}`. Its `slug` is what `sentry-project-get` takes",
+                "type": "object"
+              },
+              "shortId": {
+                "description": "The human-facing id shown in Sentry's UI and in alert emails, e.g. `ACME-INC-7F`. It is not accepted by this connector's `issue_id` parameter",
+                "type": "string"
+              },
+              "status": {
+                "description": "The triage state. Note the last three: an issue can be mid-deletion, mid-merge or reprocessing, which is neither open nor closed",
+                "enum": [
+                  "resolved",
+                  "ignored",
+                  "unresolved",
+                  "pending_deletion",
+                  "pending_merge",
+                  "reprocessing"
+                ],
+                "type": "string"
+              },
+              "substatus": {
+                "description": "Why it is in that state: `new`, `ongoing`, `regressed`, `escalating`, `archived_until_escalating`, `archived_until_condition_met`, `archived_forever`, or null. `regressed` is the one that matters in a triage flow — it means a resolved issue came back",
+                "type": "string"
+              },
+              "title": {
+                "description": "The grouped error's title, e.g. `TypeError: undefined is not a function`",
+                "type": "string"
+              },
+              "userCount": {
+                "description": "How many distinct users hit it — an integer, unlike `count` beside it",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "status"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "sentry.auth_token"
@@ -8101,7 +10766,99 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "assignedTo": {
+                "description": "`{type, id, name, email}`, or null",
+                "type": "object"
+              },
+              "count": {
+                "description": "Event count, a STRING here as on the read",
+                "type": "string"
+              },
+              "culprit": {
+                "type": "string"
+              },
+              "firstSeen": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "hasSeen": {
+                "type": "boolean"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isBookmarked": {
+                "type": "boolean"
+              },
+              "isSubscribed": {
+                "type": "boolean"
+              },
+              "lastSeen": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "level": {
+                "enum": [
+                  "sample",
+                  "debug",
+                  "info",
+                  "warning",
+                  "error",
+                  "fatal",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              "permalink": {
+                "format": "uri",
+                "type": "string"
+              },
+              "priority": {
+                "description": "`low`, `medium`, `high` or null",
+                "type": "string"
+              },
+              "project": {
+                "description": "`{id, name, slug, platform}`",
+                "type": "object"
+              },
+              "shortId": {
+                "type": "string"
+              },
+              "status": {
+                "description": "The state **after** this call — read it to confirm the transition applied",
+                "enum": [
+                  "resolved",
+                  "ignored",
+                  "unresolved",
+                  "pending_deletion",
+                  "pending_merge",
+                  "reprocessing"
+                ],
+                "type": "string"
+              },
+              "statusDetails": {
+                "description": "How the status was reached — which release resolved it, or the conditions an archive is waiting on. Free-form in the vendor's schema",
+                "type": "object"
+              },
+              "substatus": {
+                "description": "`new`, `ongoing`, `regressed`, `escalating`, `archived_until_escalating`, `archived_until_condition_met`, `archived_forever`, or null. An `ignored` issue lands in one of the `archived_*` values, which is how the mute's terms are visible",
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "userCount": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "status"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "sentry.auth_token"
@@ -8178,7 +10935,106 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "access": {
+                "description": "The permission scopes the token holds on this project",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "dateCreated": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "features": {
+                "description": "Enabled feature flags, as opaque strings",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "firstEvent": {
+                "description": "When this project first received an event, or null if it never has — which is the signal that an SDK was never wired up",
+                "format": "date-time",
+                "type": "string"
+              },
+              "hasAccess": {
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The project's numeric id, as a string",
+                "type": "string"
+              },
+              "isInternal": {
+                "type": "boolean"
+              },
+              "isMember": {
+                "description": "Whether the token's own user is a member of the project",
+                "type": "boolean"
+              },
+              "isPublic": {
+                "type": "boolean"
+              },
+              "latestRelease": {
+                "description": "`{version}` of the most recent release seen, or null. Useful for deciding whether an error predates a deploy",
+                "type": "object"
+              },
+              "name": {
+                "description": "The display name, which is not the slug",
+                "type": "string"
+              },
+              "options": {
+                "description": "Per-project settings, keyed by option name. Free-form in the vendor's schema",
+                "type": "object"
+              },
+              "organization": {
+                "description": "The owning organization, itself a large object; its `slug` is what every other operation here takes",
+                "type": "object"
+              },
+              "platform": {
+                "description": "The SDK platform, e.g. `python`, `javascript-react`, or null",
+                "type": "string"
+              },
+              "platforms": {
+                "description": "Every platform that has actually sent events to this project",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "processingIssues": {
+                "description": "How many processing problems the project has, e.g. missing debug symbols",
+                "type": "integer"
+              },
+              "slug": {
+                "description": "The URL slug, e.g. `backend-api` — what an issue's `project.slug` names and what this operation takes",
+                "type": "string"
+              },
+              "status": {
+                "description": "The project's own lifecycle state — `active`, `disabled`, `pending_deletion`, `deletion_in_progress`. A non-active project explains an issue that stopped updating",
+                "type": "string"
+              },
+              "team": {
+                "description": "`{id, name, slug}` — the owning team, or null. Deprecated in favour of `teams`",
+                "type": "object"
+              },
+              "teams": {
+                "description": "All owning teams, each `{id, name, slug}`. This is who to notify",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "slug",
+              "name"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "sentry.auth_token"
@@ -8255,7 +11111,114 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "contexts": {
+                "description": "Runtime context keyed by name (`browser`, `os`, `device`, `trace`). Free-form in the vendor's schema",
+                "type": "object"
+              },
+              "culprit": {
+                "type": "string"
+              },
+              "dateCreated": {
+                "description": "When the event occurred",
+                "format": "date-time",
+                "type": "string"
+              },
+              "dateReceived": {
+                "description": "When Sentry ingested it. Late-arriving events make these differ",
+                "format": "date-time",
+                "type": "string"
+              },
+              "entries": {
+                "description": "THE INTERESTING PART, and undocumented: the stack trace, breadcrumbs, HTTP request and message are all entries here, each shown in Sentry's examples as `{type, data}` with `type` naming which (`exception`, `stacktrace`, `breadcrumbs`, `request`, `message`). The vendor's schema declares the item as an empty schema, so nothing is asserted about `data`",
+                "items": {},
+                "type": "array"
+              },
+              "errors": {
+                "description": "Ingest-time problems with the event itself — a missing source map, an unparseable frame — each `{type, message, data}`. Not the error the event is about",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "eventID": {
+                "description": "The same event id again, under Sentry's other spelling",
+                "type": "string"
+              },
+              "groupID": {
+                "description": "The issue this event belongs to — the `issue_id` that fetched it. Nullable in the vendor's schema",
+                "type": "string"
+              },
+              "id": {
+                "description": "The event's id",
+                "type": "string"
+              },
+              "message": {
+                "description": "The log message, or null for an exception-only event",
+                "type": "string"
+              },
+              "nextEventID": {
+                "description": "The next event in the same issue, or null when this is the latest — which it is for this operation",
+                "type": "string"
+              },
+              "platform": {
+                "description": "The SDK platform that sent it",
+                "type": "string"
+              },
+              "previousEventID": {
+                "description": "The preceding event in the same issue, or null",
+                "type": "string"
+              },
+              "projectID": {
+                "type": "string"
+              },
+              "release": {
+                "description": "The release the event came from, or null",
+                "type": "object"
+              },
+              "sdk": {
+                "description": "`{name, version}` of the SDK that reported it, or null",
+                "type": "object"
+              },
+              "size": {
+                "description": "The stored event's size in bytes, or null",
+                "type": "integer"
+              },
+              "tags": {
+                "description": "The event's tags as `{key, value}` pairs — **an array, not a map**. `environment`, `release`, `server_name`, `url` and `level` all arrive here, so finding the environment means searching the array for `key == \"environment\"`",
+                "items": {
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "title": {
+                "description": "The event's title, usually the same as the issue's",
+                "type": "string"
+              },
+              "user": {
+                "description": "Who hit it: `{id, email, username, ip_address, name, geo, data}`, or null. **Personal data** — an IP address and an email — so read it only when the task needs it",
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "eventID"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "sentry.auth_token"
@@ -8369,7 +11332,108 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "order": {
+                "properties": {
+                  "billing_address": {
+                    "description": "Same shape. Personal data",
+                    "type": "object"
+                  },
+                  "cancelled_at": {
+                    "description": "When the order was cancelled, or null. This, not a status value, is how a cancelled order is identified",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "closed_at": {
+                    "description": "When the order was archived, or null",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "description": "ISO 8601 with the shop's UTC offset, not a Unix timestamp",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "currency": {
+                    "description": "ISO 4217 code the amounts are in. Read it before rendering money — a shop may sell in several",
+                    "type": "string"
+                  },
+                  "customer": {
+                    "description": "The buyer, or null on a guest checkout with no customer record. Personal data",
+                    "type": "object"
+                  },
+                  "email": {
+                    "description": "The buyer's email — personal data",
+                    "type": "string"
+                  },
+                  "financial_status": {
+                    "description": "`pending`, `authorized`, `partially_paid`, `paid`, `partially_refunded`, `refunded` or `voided`",
+                    "type": "string"
+                  },
+                  "fulfillment_status": {
+                    "description": "`fulfilled`, `partial`, `restocked` — or **null**, which is Shopify's spelling for unfulfilled. Null is the common case on a new order, so test for it explicitly",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "The order's numeric id — what this operation takes",
+                    "type": "integer"
+                  },
+                  "line_items": {
+                    "description": "What was ordered: each entry carries `id`, `title`, `quantity`, `price` (a decimal string), `sku`, `variant_id` and `product_id`",
+                    "items": {
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "name": {
+                    "description": "The merchant-facing order name, e.g. `#1001`. This is what a human recognises and it does NOT address this endpoint",
+                    "type": "string"
+                  },
+                  "note": {
+                    "description": "The merchant's own note on the order, or null",
+                    "type": "string"
+                  },
+                  "order_number": {
+                    "description": "The number inside that name, without the prefix",
+                    "type": "integer"
+                  },
+                  "shipping_address": {
+                    "description": "Where it ships: `{name, address1, address2, city, province, country, zip, phone}`. Personal data, and null for a digital order",
+                    "type": "object"
+                  },
+                  "subtotal_price": {
+                    "description": "Decimal string, as above",
+                    "type": "string"
+                  },
+                  "tags": {
+                    "description": "A COMMA-SEPARATED STRING, not an array — e.g. `\"imported, vip\"`. Split it yourself",
+                    "type": "string"
+                  },
+                  "total_price": {
+                    "description": "The order total **as a decimal string**, e.g. `\"409.94\"`. Shopify's properties table states no JSON type for it and its example shows a quoted value; convert before comparing",
+                    "type": "string"
+                  },
+                  "total_tax": {
+                    "description": "Decimal string, as above",
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "order"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "shopify.access_token"
@@ -8436,7 +11500,86 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "product": {
+                "properties": {
+                  "body_html": {
+                    "description": "The description as HTML, or null",
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "handle": {
+                    "description": "The URL slug on the storefront. Derived from the title, and it does NOT address this endpoint",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "The product's numeric id",
+                    "type": "integer"
+                  },
+                  "images": {
+                    "description": "Each `{id, src, alt, width, height, position, variant_ids}`",
+                    "items": {
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "options": {
+                    "description": "The variant axes, each `{id, name, position, values}`",
+                    "items": {
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "product_type": {
+                    "type": "string"
+                  },
+                  "published_at": {
+                    "description": "When it was published to the online store, or **null** for an active-but-unpublished product that no shopper can see",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "`active`, `draft` or `archived`. Only `active` can be sold, but see `published_at`",
+                    "type": "string"
+                  },
+                  "tags": {
+                    "description": "A COMMA-SEPARATED STRING, not an array",
+                    "type": "string"
+                  },
+                  "title": {
+                    "description": "The storefront title — what `shopify-product-update` overwrites",
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "variants": {
+                    "description": "The purchasable variants, each with `id`, `title`, `price` (a decimal string), `sku`, `inventory_item_id` and `inventory_quantity`. `inventory_item_id` is what `shopify-inventory-level-list` reports stock against",
+                    "items": {
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "vendor": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "product"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "shopify.access_token"
@@ -8519,7 +11662,82 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "product": {
+                "properties": {
+                  "body_html": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "handle": {
+                    "description": "The storefront slug, which is not re-derived by a rename and so still reflects the previous title",
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "images": {
+                    "items": {
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "options": {
+                    "items": {
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "product_type": {
+                    "type": "string"
+                  },
+                  "published_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "`active`, `draft` or `archived` — unchanged by this call",
+                    "type": "string"
+                  },
+                  "tags": {
+                    "description": "A comma-separated string, not an array",
+                    "type": "string"
+                  },
+                  "title": {
+                    "description": "The title **after** the update. Compare it against what was sent — a 200 alone does not prove the change applied",
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "description": "Moves on an accepted update",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "variants": {
+                    "description": "Unchanged by this call. Note that each variant's `title` is the variant's own, not the product's",
+                    "items": {
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "vendor": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "product"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "shopify.access_token"
@@ -8586,7 +11804,85 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "customer": {
+                "properties": {
+                  "addresses": {
+                    "description": "Every saved address, each `{id, address1, city, province, country, zip, phone, default}`. Personal data",
+                    "items": {
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "created_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "default_address": {
+                    "description": "The one marked default, in the same shape. Null when the customer has none",
+                    "type": "object"
+                  },
+                  "email": {
+                    "description": "Personal data. Null for a customer created without one",
+                    "type": "string"
+                  },
+                  "email_marketing_consent": {
+                    "description": "`{state, opt_in_level, consent_updated_at}` — whether this person may be marketed to. `state` is `subscribed`, `not_subscribed`, `pending` or `unsubscribed`, and it is the field to check before any send",
+                    "type": "object"
+                  },
+                  "first_name": {
+                    "description": "Personal data",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "The customer's numeric id",
+                    "type": "integer"
+                  },
+                  "last_name": {
+                    "description": "Personal data",
+                    "type": "string"
+                  },
+                  "last_order_id": {
+                    "description": "The id of their most recent order, or null. Documented, unlike the aggregate counts this schema omits",
+                    "type": "integer"
+                  },
+                  "note": {
+                    "description": "The merchant's own note, or null",
+                    "type": "string"
+                  },
+                  "phone": {
+                    "description": "E.164, or null. Personal data",
+                    "type": "string"
+                  },
+                  "state": {
+                    "description": "The customer's account state — `disabled`, `invited`, `enabled` or `declined`. It is about the storefront account, not about marketing consent",
+                    "type": "string"
+                  },
+                  "tags": {
+                    "description": "A COMMA-SEPARATED STRING, not an array",
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "verified_email": {
+                    "description": "Whether the address was confirmed. False does not mean invalid",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "customer"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "shopify.access_token"
@@ -8653,7 +11949,39 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "inventory_levels": {
+                "description": "One entry per inventory item stocked at this location. First page only — a location with more items than one page holds is reported incompletely, and nothing in the body says so",
+                "items": {
+                  "properties": {
+                    "available": {
+                      "description": "Units available to sell now. Can be negative when the shop oversold, and **null** for an item whose inventory is not tracked",
+                      "type": "integer"
+                    },
+                    "inventory_item_id": {
+                      "description": "The join key back to a product variant's `inventory_item_id`. This response carries no product or variant name",
+                      "type": "integer"
+                    },
+                    "location_id": {
+                      "description": "Echoes the location asked for",
+                      "type": "integer"
+                    },
+                    "updated_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "inventory_levels"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "shopify.access_token"
@@ -8817,7 +12145,34 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "channel": {
+                "description": "The channel the message landed in, always as an id (`C0123ABCDEF`) even when the request named it",
+                "type": "string"
+              },
+              "error": {
+                "description": "Present only when `ok` is false: Slack's machine-readable failure code, such as `channel_not_found`, `not_in_channel` or `msg_too_long`",
+                "type": "string"
+              },
+              "message": {
+                "description": "The message as Slack stored it: `text`, `type`, `subtype`, `ts`, `bot_id`, `username`, and `attachments` when there are any",
+                "type": "object"
+              },
+              "ok": {
+                "description": "False on failure, with HTTP still 200. Branch on this before reading anything else — it is the only member present in both outcomes",
+                "type": "boolean"
+              },
+              "ts": {
+                "description": "The posted message's timestamp id, e.g. `1503435956.000247`. This is what addresses the message afterwards — `slack-reactions-add`'s `timestamp`, and `thread_ts` to reply under it",
+                "type": "string"
+              }
+            },
+            "required": [
+              "ok"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "slack.bot_token"
@@ -8919,7 +12274,40 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "error": {
+                "description": "Present only when `ok` is false: `channel_not_found`, `not_in_channel` or `invalid_arguments`",
+                "type": "string"
+              },
+              "has_more": {
+                "description": "True when the channel holds older messages than this page returned. This connector cannot page — see the header comment on the missing cursor — so a true here means the caller is seeing a window, not the history",
+                "type": "boolean"
+              },
+              "messages": {
+                "description": "The messages, newest first. Each carries at least `type`, `ts` and `text`; a user message also carries `user`, and a bot or system message carries a `subtype` instead",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "ok": {
+                "description": "False on failure, with HTTP still 200. Branch on this first",
+                "type": "boolean"
+              },
+              "pin_count": {
+                "type": "integer"
+              },
+              "response_metadata": {
+                "description": "Carries `next_cursor`, the cursor for the following page. It cannot be sent back by this connector (C-30)",
+                "type": "object"
+              }
+            },
+            "required": [
+              "ok"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "slack.bot_token"
@@ -8991,7 +12379,26 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "error": {
+                "description": "Present only when `ok` is false: typically `user_not_found`",
+                "type": "string"
+              },
+              "ok": {
+                "description": "False on failure, with HTTP still 200. Branch on this first",
+                "type": "boolean"
+              },
+              "user": {
+                "description": "The user: `id`, `team_id`, `name`, `real_name`, `deleted`, `tz`, `tz_label`, `tz_offset`, `is_bot`, `is_admin`, `is_owner`, `updated`, and `profile` — which holds the display name, status and, with `users:read.email`, the email address",
+                "type": "object"
+              }
+            },
+            "required": [
+              "ok"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "slack.bot_token"
@@ -9080,7 +12487,22 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "error": {
+                "description": "Present only when `ok` is false, with HTTP still 200: `already_reacted`, `message_not_found`, `invalid_name`, `channel_not_found` or `thread_locked`",
+                "type": "string"
+              },
+              "ok": {
+                "description": "True when the reaction was added. There is no other member on success — Slack returns no id for a reaction",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "ok"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "slack.bot_token"
@@ -10418,7 +13840,69 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "user": {
+                "properties": {
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "authenticity_token": {
+                    "description": "A CSRF token for Zendesk's own web session, returned only by this endpoint. It is not a credential for this API and must not be stored or logged",
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "The authenticated user's id",
+                    "type": "integer"
+                  },
+                  "locale": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "organization_id": {
+                    "type": "integer"
+                  },
+                  "role": {
+                    "description": "`admin`, `agent` or `end-user`. An end-user token authenticates successfully and can read almost nothing",
+                    "type": "string"
+                  },
+                  "suspended": {
+                    "type": "boolean"
+                  },
+                  "time_zone": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "verified": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "user"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "zendesk.api_token"
@@ -10517,7 +14001,36 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "count": {
+                "description": "Total matches across all pages, not the size of this page",
+                "type": "integer"
+              },
+              "facets": {
+                "description": "Present in every response and effectively unusable: Zendesk's own field table types it as a string while its example shows null, so no type is declared here rather than one of the two being guessed at"
+              },
+              "next_page": {
+                "description": "URL of the following page, or null on the last page",
+                "type": "string"
+              },
+              "previous_page": {
+                "description": "URL of the preceding page, or null on the first page",
+                "type": "string"
+              },
+              "results": {
+                "description": "The matches, heterogeneous: each item carries a `result_type` naming what it is — `ticket`, `user`, `group` or `organization` — and its remaining fields are that resource's. Read `result_type` before reading anything else",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "results"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "zendesk.api_token"
@@ -10592,7 +14105,84 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "ticket": {
+                "properties": {
+                  "assignee_id": {
+                    "description": "The agent it is assigned to, absent when unassigned",
+                    "type": "integer"
+                  },
+                  "created_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "custom_fields": {
+                    "description": "An array of `{id, value}` pairs — NOT an object keyed by field name. The `id` is the numeric ticket-field id, which is per-account",
+                    "items": {
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "description": {
+                    "description": "The first comment's text, as plain text. It is the ticket's opening message and does not change when later comments are added",
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "organization_id": {
+                    "type": "integer"
+                  },
+                  "priority": {
+                    "description": "One of `urgent`, `high`, `normal`, `low`. May be absent on a ticket that never had one set",
+                    "type": "string"
+                  },
+                  "requester_id": {
+                    "description": "The end user who asked",
+                    "type": "integer"
+                  },
+                  "status": {
+                    "description": "One of `new`, `open`, `pending`, `hold`, `solved`, `closed`. `closed` is terminal — a closed ticket cannot be updated, which is what `zendesk-ticket-update` fails on",
+                    "type": "string"
+                  },
+                  "subject": {
+                    "type": "string"
+                  },
+                  "tags": {
+                    "description": "The ticket's tags. Zendesk's own field table leaves this type blank; every documented example shows an array of strings, so no `items` is declared here",
+                    "type": "array"
+                  },
+                  "type": {
+                    "description": "One of `problem`, `incident`, `question`, `task`",
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "via": {
+                    "description": "How the ticket reached Zendesk: `{channel, source}`, where channel is `email`, `web`, `api`, `voice` and so on",
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "ticket"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "zendesk.api_token"
@@ -10695,7 +14285,75 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "comments": {
+                "description": "The ticket's comments, oldest first. The first entry is the ticket's `description`",
+                "items": {
+                  "properties": {
+                    "attachments": {
+                      "description": "Uploaded files, each with `file_name`, `content_type`, `content_url` and `size`",
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "audit_id": {
+                      "type": "integer"
+                    },
+                    "author_id": {
+                      "description": "Who wrote it — an agent or the requester",
+                      "type": "integer"
+                    },
+                    "body": {
+                      "description": "The comment as plain text",
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "html_body": {
+                      "description": "The same comment as HTML",
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "metadata": {
+                      "description": "Zendesk's own audit metadata for the comment — the submitter's IP, client and custom flags",
+                      "type": "object"
+                    },
+                    "plain_body": {
+                      "description": "The comment with quoted-reply chains and signatures stripped, which is usually the text worth summarizing",
+                      "type": "string"
+                    },
+                    "public": {
+                      "description": "False for an internal note the end user cannot see. Check it before repeating a comment to a requester",
+                      "type": "boolean"
+                    },
+                    "type": {
+                      "description": "`Comment`, or `VoiceComment` for a call recording",
+                      "type": "string"
+                    },
+                    "via": {
+                      "description": "How the comment arrived: `{channel, source}`",
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "comments"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "zendesk.api_token"
@@ -10861,7 +14519,23 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "audit": {
+                "description": "What this call actually did. Its `events` array holds one entry per change, each `{id, type, field_name, value}` — and `value` is polymorphic across entries, a string for `status` and an integer for an id. An update that was accepted but changed nothing is visible here and nowhere else",
+                "type": "object"
+              },
+              "ticket": {
+                "description": "The ticket **after** the update, in the same shape `zendesk-ticket-show` returns — including the new `updated_at`, which is the stamp a following safe update must send",
+                "type": "object"
+              }
+            },
+            "required": [
+              "ticket",
+              "audit"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "zendesk.api_token"
@@ -10989,7 +14663,23 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "audit": {
+                "description": "The change this call made. The added comment is an event inside `events`, carrying its own `id` and `body` — it is not returned as a top-level member",
+                "type": "object"
+              },
+              "ticket": {
+                "description": "The ticket after the comment was added, in the shape `zendesk-ticket-show` returns",
+                "type": "object"
+              }
+            },
+            "required": [
+              "ticket",
+              "audit"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "zendesk.api_token"
@@ -11110,7 +14800,23 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "audit": {
+                "description": "The change this call made, with the tag change as an event in `events`",
+                "type": "object"
+              },
+              "ticket": {
+                "description": "The ticket after tagging. Its `tags` member is the full resulting set — read it to confirm the existing tags survived, which is the entire behaviour `additional_tags` buys",
+                "type": "object"
+              }
+            },
+            "required": [
+              "ticket",
+              "audit"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "zendesk.api_token"
@@ -11535,7 +15241,117 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "properties": {
+              "account_id": {
+                "type": "string"
+              },
+              "company": {
+                "type": "string"
+              },
+              "created_at": {
+                "description": "ISO 8601, not Unix seconds. For a `pending` user Zoom's docs warn this reflects the time of the API call rather than account creation",
+                "format": "date-time",
+                "type": "string"
+              },
+              "dept": {
+                "type": "string"
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "email": {
+                "description": "Personal data",
+                "format": "email",
+                "type": "string"
+              },
+              "first_name": {
+                "type": "string"
+              },
+              "id": {
+                "description": "The user's Zoom id — what `me` resolves to, and the `user_id` a meeting is created under",
+                "type": "string"
+              },
+              "job_title": {
+                "type": "string"
+              },
+              "language": {
+                "type": "string"
+              },
+              "last_client_version": {
+                "type": "string"
+              },
+              "last_login_time": {
+                "description": "ISO 8601, or absent for a user who never signed in",
+                "format": "date-time",
+                "type": "string"
+              },
+              "last_name": {
+                "type": "string"
+              },
+              "personal_meeting_url": {
+                "description": "The join URL for the PMI. A participant link, not a host link — contrast `start_url` on a meeting",
+                "type": "string"
+              },
+              "phone_numbers": {
+                "description": "Each `{code, country, label, number, verified}`, where `label` is `Mobile`, `Office`, `Home` or `Fax` and `verified` here IS a boolean. Personal data. The flat `phone_number`/`phone_country` members are deprecated and are not declared",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "pmi": {
+                "description": "The personal meeting id — a standing meeting room. Reusing it means every past participant can rejoin",
+                "format": "int64",
+                "type": "integer"
+              },
+              "role_id": {
+                "type": "string"
+              },
+              "role_name": {
+                "description": "The Zoom role, e.g. `Owner`, `Admin`, `Member`",
+                "type": "string"
+              },
+              "status": {
+                "description": "`pending` means the person has never activated the account — a meeting created for them still exists, but they cannot host it",
+                "enum": [
+                  "pending",
+                  "active",
+                  "inactive"
+                ],
+                "type": "string"
+              },
+              "timezone": {
+                "description": "IANA name, e.g. `Europe/Berlin`. A meeting created without an explicit timezone uses this one",
+                "type": "string"
+              },
+              "type": {
+                "description": "THE LICENCE, AS AN INTEGER: 1 Basic, 2 Licensed, 4 Unassigned without Meetings Basic. A Basic user's group meetings are time-capped, so this is what to check before scheduling one",
+                "enum": [
+                  1,
+                  2,
+                  4
+                ],
+                "type": "integer"
+              },
+              "use_pmi": {
+                "description": "Whether new meetings default to the PMI rather than a fresh id",
+                "type": "boolean"
+              },
+              "verified": {
+                "description": "AN INTEGER, not a boolean: 1 verified, 0 not. The `verified` inside a `phone_numbers` entry *is* a boolean",
+                "enum": [
+                  0,
+                  1
+                ],
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
           "credentials": [
             [
               "zoom.access_token"

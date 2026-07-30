@@ -7,6 +7,40 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A signature scheme that verified forgeries (C-141).** `signed = "{timestamp}"` with a selector and a
+  tolerance **loaded cleanly** and signed a body-independent string — so one captured signature verified
+  any forged payload for the whole window. Reachable with no typo at all, unlike the unterminated-brace
+  bug C-60 fixed. The failing-first test *demonstrates* the forgery rather than asserting the refusal.
+
+  Reworked once, and the rework matters: `parse_tolerance` scaled with `*`, unchecked. In debug that
+  panicked inside `provider::load`; in **release** `i64::MAX * 60` wrapped to `Ok(-60)` — a negative
+  window that satisfies both bounds and therefore **loaded**. That is the same defect the story exists to
+  close, reintroduced for the overflow class. Now `checked_mul`, verified in both profiles, and the test
+  asserts the *property* — any accepted window falls in `1..=MAX` — rather than the two spellings found.
+
+  Also: `tolerance` is parsed rather than accepted as any string, a body-sourced verification timestamp
+  is refused (honouring it would require parsing before verifying), and `HmacSpec` gained a timestamp
+  *format* axis so the verifier reads the spelling instead of sniffing it.
+
+### Added
+
+- **A measured floor under response-shape coverage (C-126).** Re-measured on entry at **29 of 110**, not
+  the design's 16 of 97 — that figure predated Stripe and Notion. Now **92 of 110 (83%)**, with 63 new
+  schemas across 13 providers, each citing the vendor reference it came from and nothing fetched.
+
+  The floor is the deliverable. **Two** floors, because a count cannot see the regression that actually
+  happened between the design's measurement and this story — operations *arriving* without shapes — so a
+  ratio floor sits beside it. A third guard stops a floor nobody raises from quietly ceasing to measure,
+  and a fourth refuses `{}` or `true` or any schema with no members, so absence stays absence by
+  enforcement rather than by an author remembering.
+
+  Eighteen are deliberately absent, each with its reason recorded — including nine babelforce operations
+  whose only authoritative reference cannot be vendored, because the response examples are where
+  credential-shaped values live.
+
+
 ### Added
 
 - **A connector can now authenticate (C-116).** A `CredentialStore` port is bound when the pack is
