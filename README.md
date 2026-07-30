@@ -8,7 +8,7 @@ Compile SaaS API descriptions into typed [Flux-Lang](https://github.com/codewand
 operations, capability manifests, and a queryable Rust catalogue.
 
 > [!WARNING]
-> **v0.1.0 is a compiler and catalogue preview, not a live connector runtime.** The build works end
+> **v0.2.0 is a compiler and catalogue preview, not a live connector runtime.** The build works end
 > to end, but none of the generated providers can authenticate and make a live API call yet. See
 > [Current limitations](#current-limitations).
 

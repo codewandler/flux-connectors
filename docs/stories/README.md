@@ -42,10 +42,20 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-56 — Omit an optional body field instead of sending an explicit null](C-56-omit-optional-body-fields.md) · Codegen · query params get a `when` guard; body fields do not
 - [C-30 — Refuse query values the emitter cannot encode safely](C-30-refuse-unencodable-query.md) · Codegen · **security** · a model-supplied query value can inject request parameters today
 - [C-55 — Let a provider declare a constant request header](C-55-constant-request-headers.md) · Codegen · GitHub's Accept header is undeclarable today; `const` on a header silently does nothing
+- [C-67 — Declare the scopes an operation requires](C-67-required-scopes.md) · Spec · least privilege, and mechanical 403 diagnosis
+- [C-68 — Bind a service's endpoint to operator configuration](C-68-endpoint-binding.md) · Spec · closes the SCHEMA GAP every shipped provider records in a comment
 - [C-10 — Emit the $auth marker and the connector manifest](C-10-auth-injection-and-manifest.md) · Codegen · pairs with C-16 · the second generated artifact
 - [C-57 — Let the quirk model describe a success predicate and a body-carried cursor](C-57-quirks-beyond-http-shape.md) · Spec · Slack answers `{"ok": false}` with HTTP 200; its cursor is a body field
 - [C-11 — Prove every generated module parses and analyzes](C-11-parse-and-analyze-gate.md) · Codegen · **load-bearing** · without it invalid Flux can be committed
 - [C-17 — Author provider configs for zendesk, freshdesk and babelforce](C-17-provider-configs.md) · Spec · **the goal** · three configs that compile to executable .flux
+
+### inbound events — the reverse call direction
+_A connector today compiles a vendor spec into **outbound** ops: flux calls Zendesk, GitHub, Slack._
+- [C-58 — Inbound events — connectors define the reverse call direction (epic)](C-58-inbound-events-epic.md) · Spec · EPIC — a connector today compiles only outbound ops; this adds the half where the vendor calls US. Verification is a declarable matrix (4 vendors, 1 parameterized HMAC), so it compiles rather than interprets — and flux's webhook channel has NO signature verification today, which is the blocking cross-repo seam
+- [C-59 — An `[inbound]` section in the provider TOML and the IR](C-59-inbound-ir-and-toml.md) · Spec · pure functions from bytes to IR, no network: transport, verification, discriminator, delivery id, per-event `when` narrowing and payload schema refs
+- [C-60 — Verification conformance — one parameterized HMAC against real vendor vectors](C-60-verification-conformance-matrix.md) · Spec · the load-bearing test of the inbound half: 4 vendors' 'unique' schemes collapse to one algorithm over {digest, encoding, signed-template, tolerance} — proven with signature vectors from vendor docs, not self-generated fixtures
+- [C-64 — Design the flux-side verified-webhook seam and file its flux stories](C-64-design-verified-webhook-seam.md) · Bridge · the C-16 pattern repeated: flux's webhook channel has NO signature verification (bearer token only), so generated verification has nowhere to run — design the seam here, file the stories on flux's board, and let every other inbound story proceed without it
+- [C-66 — Put inbound events under a service, and admit AsyncAPI as their front-end](C-66-members-under-services.md) · Spec · provider → service → (operation | event) · the two gaps C-58's epic leaves open
 
 ### rendered provider documentation
 _A connector's operations are currently legible only by reading `providers/<name>.toml` or the_
@@ -82,6 +92,13 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-24 — Verify generated connectors against recorded HTTP fixtures](C-24-fixture-verification.md) · Build · proves a connector *works*, not merely that it parses — without live credentials
 - [C-46 — Generic connectors — http, a2a, mcp and friends](C-46-generic-connectors.md) · Spec · extends the charter — a provider need not be a vendor · **not** mysql, see Notes
 - [C-50 — Offer AWS as a provider with s3 and bedrock as services](C-50-aws-services.md) · Spec · first multi-service provider · SigV4 signs the request, not a header
+
+### inbound events — the reverse call direction
+_A connector today compiles a vendor spec into **outbound** ops: flux calls Zendesk, GitHub, Slack._
+- [C-61 — Codegen — event declarations and the manifest `[inbound]` block](C-61-codegen-event-declarations.md) · Codegen · emits into the EXISTING <name>.flux + <name>.connector.toml — no new artifact kind; the manifest declares what the host must route and which credential verification needs, and does not self-install
+- [C-62 — Codegen — webhook subscription ops from the vendor spec](C-62-codegen-subscription-ops.md) · Codegen · registering a webhook is an ordinary outbound op, so it needs no new machinery — and it correctly inherits the authorization → approval → guarded-IO envelope instead of being a build-time side effect
+- [C-63 — A `poll` transport — inbound for vendors with no webhook, no flux blocker](C-63-poll-transport.md) · Codegen · compiles to a journey flux's existing `schedule` channel drives, presenting the SAME event surface — proves inbound is an abstraction over transports rather than a synonym for webhook, and ships with zero cross-repo dependency
+- [C-65 — Prove inbound end to end on two vendors against a live flux](C-65-inbound-two-vendors-live.md) · Build · the epic's closing proof, mirroring C-15: two vendors chosen to exercise different halves — one spec-published webhook API with a simple scheme, one whose scheme carries a timestamp window
 
 ### rendered provider documentation
 _A connector's operations are currently legible only by reading `providers/<name>.toml` or the_
