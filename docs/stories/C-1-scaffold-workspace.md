@@ -2,8 +2,8 @@
 id: C-1
 title: Scaffold the Cargo workspace and the gate
 pillar: Foundation
-status: ready
-priority: 1
+status: done
+priority:
 design: docs/designs/connectors-v1.md
 epic: connectors-v1
 areas: [connector-spec, connector-flux, connector-cli]
@@ -13,16 +13,15 @@ note: everything else builds on this
 # Scaffold the Cargo workspace and the gate
 
 ## Goal
-Stand up the three-crate workspace, the flux-lang git pin, and a CI gate, so every later story lands
+Stand up the three-crate workspace, the flux-lang pin, and a CI gate, so every later story lands
 in a repo that already compiles and lints clean.
 
 ## Acceptance
 - [x] Root `Cargo.toml` declares a workspace with `crates/connector-spec`, `crates/connector-flux`,
       and `crates/connector-cli` (bin `flux-connectors`).
-- [x] `connector-flux` depends on `codewandler-flux-lang` (lib `flux_lang`) as a git dependency
-      pinned to a flux tag, and a smoke test proves the dependency resolves by parsing a trivial
+- [x] `connector-flux` depends on `codewandler-flux-lang` (lib `flux_lang`) pinned to a published
+      crates.io version, and a smoke test proves the dependency resolves by parsing a trivial
       `.flux` source through `flux_lang::program::Module::parse_str`.
-      **Pinned to crates.io `0.37`, not a git tag** — see the deviation in Progress below.
 - [x] Workspace lints: `clippy` clean under `-D warnings`; `cargo fmt --all --check` clean.
 - [x] Dual MIT/Apache-2.0 licence files, matching `../flux`.
 - [x] `.gitignore` covers `target/` and local artifacts.
@@ -60,4 +59,6 @@ in a repo that already compiles and lints clean.
 ## Notes
 - `connector-spec` must have **no network dependency** — that constraint is load-bearing for its
   testability and is stated in [AGENTS.md](../../AGENTS.md).
-- flux tag to pin: `v0.37.0` was latest at scaffold time; confirm before pinning.
+- Dependency form settled during implementation: **crates.io** `codewandler-flux-lang = "0.37"`.
+  A git dep fails in CI (the flux remote uses a developer-only SSH host alias) and a `../flux` path
+  dep is absent from a fresh clone. Rationale is recorded at the pin in the root `Cargo.toml`.

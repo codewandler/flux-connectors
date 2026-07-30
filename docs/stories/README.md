@@ -28,13 +28,15 @@ _None._
 
 ### Connectors v1 — spec to Flux
 _Prove the whole thesis on two real providers, end to end against a live flux._
-- [C-1 — Scaffold the Cargo workspace and the gate](C-1-scaffold-workspace.md) · Foundation · everything else builds on this
 - [C-16 — Design the $auth seam and file its stories on flux's board](C-16-design-auth-seam.md) · Bridge · **critical path** · ships in ../flux, longest lead time
 - [C-2 — Define the Connector IR](C-2-connector-ir.md) · Spec · the contract every other crate speaks
 - [C-3 — Load and validate provider TOML](C-3-provider-toml-loader.md) · Spec
-- [C-4 — Ingest OpenAPI 3.x into the IR](C-4-openapi-ingest.md) · Spec
-- [C-5 — Extract auth methods from securitySchemes](C-5-auth-extraction.md) · Spec
-- [C-6 — Build the patch/overlay layer](C-6-overlay-layer.md) · Spec · the real bet — if patching is harder than hand-writing, the thesis fails
+- [C-8 — Emit a Flux op for a GET with path and query params](C-8-flux-op-emitter.md) · Codegen · first end-to-end slice of codegen
+- [C-9 — Emit request bodies, headers, and response handling](C-9-bodies-and-responses.md) · Codegen
+- [C-10 — Emit the $auth marker and the connector manifest](C-10-auth-injection-and-manifest.md) · Codegen · pairs with C-16 · the second generated artifact
+- [C-11 — Prove every generated module parses and analyzes](C-11-parse-and-analyze-gate.md) · Codegen · **load-bearing** · without it invalid Flux can be committed
+- [C-13 — Build and diff from the vendored spec cache](C-13-cli-build-and-diff.md) · Build
+- [C-17 — Author provider configs for zendesk, freshdesk and babelforce](C-17-provider-configs.md) · Spec · **the goal** · three configs that compile to executable .flux
 - [C-7 — Record provenance and write connectors.lock](C-7-provenance-lockfile.md) · Spec
 
 ## Blocked
@@ -44,15 +46,15 @@ _None._
 
 ### Connectors v1 — spec to Flux
 _Prove the whole thesis on two real providers, end to end against a live flux._
-- [C-8 — Emit a Flux op for a GET with path and query params](C-8-flux-op-emitter.md) · Codegen · first end-to-end slice of codegen
-- [C-9 — Emit request bodies, headers, and response handling](C-9-bodies-and-responses.md) · Codegen
-- [C-10 — Emit the $auth marker and the connector manifest](C-10-auth-injection-and-manifest.md) · Codegen · pairs with C-16 · the second generated artifact
-- [C-11 — Prove every generated module parses and analyzes](C-11-parse-and-analyze-gate.md) · Codegen · **load-bearing** · without it invalid Flux can be committed
+- [C-4 — Ingest OpenAPI 3.x into the IR](C-4-openapi-ingest.md) · Spec
+- [C-5 — Extract auth methods from securitySchemes](C-5-auth-extraction.md) · Spec
+- [C-6 — Build the patch/overlay layer](C-6-overlay-layer.md) · Spec · the real bet — if patching is harder than hand-writing, the thesis fails
 - [C-12 — Compile quirks into Flux control flow](C-12-quirks-as-control-flow.md) · Codegen · the payoff for targeting a real language
-- [C-13 — Build and diff from the vendored spec cache](C-13-cli-build-and-diff.md) · Build
 - [C-14 — Fetch specs and detect upstream drift](C-14-fetch-and-drift-check.md) · Build
 - [C-15 — Install into flux and prove milestone 1 end to end](C-15-install-and-live-e2e.md) · Build · milestone 1 · needs the $auth seam released in ../flux
 
 ## Done
-_None yet._
+- [C-1 — Scaffold the Cargo workspace and the gate](C-1-scaffold-workspace.md) · Foundation · everything else builds on this
+
+_See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->
