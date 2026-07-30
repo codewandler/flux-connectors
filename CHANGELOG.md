@@ -7,6 +7,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **An operation can declare its request-body encoding (C-144).** A closed `BodyEncoding { Json, Form }`
+  on `ParamSet`; `json` remains the default and its serialization is skipped, so the lockfile hash
+  domain, every manifest, the catalogue and all 256 artifacts are unchanged — now asserted against the
+  committed per-operation renderings rather than assumed.
+
+  Three shapes are refused rather than emitted, each because the alternative is a request a vendor
+  answers `200` to and ignores: a nested field under `form`, a braced wire name, and a `body_encoding`
+  on an operation that sends no body.
+
+  **`PARTIAL`, for a measured reason.** flux had no form encoder and was not close: `parse`'s `as_type`
+  is restricted by flux-lang's own analyzer, so `as: "form"` failed *analysis* rather than runtime, and
+  all three percent-encoders in that tree are private Rust unreachable from a Flux program. So form
+  values are interpolated verbatim for now — the same class as the already-recorded query-encoding gap,
+  in a second request position. Nothing ships as `form`, so nothing is exposed.
+
+  The missing encoder was implemented upstream as flux's `L-101` and is committed there; it reaches this
+  repository only when flux publishes, since the flux-lang pin must stay a crates.io release.
+
+
 ### Fixed
 
 - **A credential the redactor will not hold is now refused rather than sent (C-152).** flux's

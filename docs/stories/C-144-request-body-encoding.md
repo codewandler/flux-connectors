@@ -2,8 +2,7 @@
 id: C-144
 title: "No connector can send a non-JSON request body"
 pillar: Spec
-status: in-progress
-priority: 2
+status: done
 areas: [connector-spec, connector-flux]
 note: "found shipping Stripe: op.rs binds application/json unconditionally and the IR has no content_type key anywhere. Blocks every form-encoded vendor — and OAuth2 token endpoints are form-encoded BY SPEC, so C-135's oauth2.login needs this too"
 ---
@@ -129,3 +128,25 @@ yet. Stripe's full-amount-only capture and refund, and its charge-nested refund 
 selected them — switching them over is a provider story, and it should wait for the flux-side encoder
 above. [C-135](C-135-authentication-role.md)'s recorded dependency on this story is satisfied on the
 declaration side: a token grant can now be declared as `form`, with the same value-encoding caveat.
+
+### Coordinator notes at integration
+
+- **The one unchecked box was my error, not a shortfall.** I wrote an acceptance item saying
+  `AGENTS.md`'s *Intentional gaps* list should drop the entry this closes. **There was no such entry** —
+  the form-body gap lived in `providers/stripe.toml`, in C-106 and in this story, never in `AGENTS.md`.
+  The implementor did the right thing: rather than leave that list untrue in the other direction, it made
+  the entry `AGENTS.md` *does* own name the residual gap.
+
+- **The flux-side encoder is committed** at `c5c69fed` in `../flux` — `parse($record, as: "form")`, with
+  its own story `L-101`, four tested wire decisions, docs and changelog. I verified flux's gate myself
+  before committing to another repository's `main` rather than taking the report's word for it.
+
+  **It does not help this repository yet.** `codewandler-flux-lang` is pinned to a crates.io release and
+  must stay one (C-1's reasoning), so the encoder arrives only after flux publishes. Until then form
+  values are interpolated verbatim.
+
+- **Follow-up owed before any provider is switched to `form`:** the residual gap means a value carrying
+  `&` or `=` corrupts the body and can inject a field. That is the same class as the pinned
+  query-encoding gap, now in a second request position. Nothing ships as `form` today, so nothing is
+  exposed — but the provider story that switches Stripe to the canonical `POST /v1/refunds` must wait for
+  a published flux-lang, not merely for this axis.
