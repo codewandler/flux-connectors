@@ -47,9 +47,26 @@ use serde_json::json;
 fn param(name: &str, description: &str, required: bool, schema: serde_json::Value) -> Param {
     Param {
         name: name.to_string(),
+        wire: None,
         description: description.to_string(),
         required,
         schema,
+    }
+}
+
+/// A parameter whose vendor spelling differs from its caller-facing name — a body field's JSON path
+/// (`ticket.comment.body`) or a query alias (`req_id` → `requester_id`). One field, both cases; see
+/// [`connector_spec::Param::wire`].
+fn wired(
+    name: &str,
+    wire: &str,
+    description: &str,
+    required: bool,
+    schema: serde_json::Value,
+) -> Param {
+    Param {
+        wire: Some(wire.to_string()),
+        ..param(name, description, required, schema)
     }
 }
 
@@ -103,6 +120,7 @@ fn zendesk_comment_list() -> Connector {
                 ],
                 header: Vec::new(),
                 body: Vec::new(),
+                body_schema: None,
             },
             response_schema: None,
             quirks: Default::default(),
@@ -148,6 +166,7 @@ fn zendesk_ticket_search() -> Connector {
                 ],
                 header: Vec::new(),
                 body: Vec::new(),
+                body_schema: None,
             },
             response_schema: None,
             quirks: Default::default(),
@@ -200,6 +219,7 @@ fn babelforce_call_list() -> Connector {
                 ],
                 header: Vec::new(),
                 body: Vec::new(),
+                body_schema: None,
             },
             response_schema: None,
             quirks: Default::default(),
@@ -283,6 +303,7 @@ fn freshdesk_note_add() -> Connector {
                         json!({"type": "array", "items": {"type": "string", "format": "email"}}),
                     ),
                 ],
+                body_schema: None,
             },
             response_schema: None,
             quirks: Default::default(),
@@ -430,6 +451,8 @@ fn emitted_text_is_a_fixed_point_of_the_flux_formatter() {
         zendesk_ticket_show(),
         headered_operation(),
         constant_body_operation(),
+        zendesk_comment_add(),
+        babelforce_session_set(),
     ] {
         let emitted = emit_only_operation(&connector);
         let parsed = flux_lang::parser::parse_cst(&emitted);
@@ -609,6 +632,7 @@ fn headered_operation() -> Connector {
                     true,
                     json!({"type": "string"}),
                 )],
+                body_schema: None,
             },
             response_schema: None,
             quirks: Default::default(),
@@ -842,11 +866,12 @@ fn constant_body_operation() -> Connector {
     connector
 }
 
-/// A nested JSON body — Zendesk's `ticket.comment.body` (inventory §3.2 op 6) — has no IR
-/// representation: `ParamSet::body` is a flat field list. Emitting the dotted name as a literal key
-/// would produce a request Zendesk silently ignores, so it is refused instead.
+/// A body field whose *name* is dotted and which declares no `wire` is still refused: the dotted
+/// spelling means either one field literally called `ticket.comment.body` or a path, and the two
+/// produce different requests. Declaring `wire` is what decides it — see
+/// [`golden_zendesk_ticket_comment_add`].
 #[test]
-fn a_body_field_the_ir_cannot_nest_is_refused() {
+fn a_dotted_body_name_without_a_wire_path_is_refused() {
     let mut connector = freshdesk_note_add();
     connector.operations[0].params.body = vec![param(
         "ticket.comment.body",
@@ -856,9 +881,269 @@ fn a_body_field_the_ir_cannot_nest_is_refused() {
     )];
 
     let err = emit_operation(&connector, &connector.operations[0])
-        .expect_err("a nested body field is not representable");
+        .expect_err("a dotted body name with no `wire` is undecidable");
     assert!(
-        err.to_string().contains("ticket.comment.body"),
-        "the refusal must name the field, got: {err}"
+        err.to_string().contains("ticket.comment.body") && err.to_string().contains("wire"),
+        "the refusal must name the field and the field that fixes it, got: {err}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// C-29 — wire paths and wire aliases
+// ---------------------------------------------------------------------------
+
+/// `zendesk-ticket-comment-add` — **the nested-body fixture**, transcribed from
+/// `providers/zendesk.toml` so the golden is the text a real build emits. Zendesk's wire body is
+/// `{"ticket": {"updated_stamp": …, "safe_update": true, "comment": {"body": …, "public": …}}}`
+/// (inventory §3.3.1). A flat body is not an error Zendesk reports — it answers 200 and applies
+/// nothing — which is why this shape is pinned by a golden rather than by a `contains`.
+fn zendesk_comment_add() -> Connector {
+    connector(
+        "zendesk",
+        "https://example.zendesk.com",
+        Operation {
+            id: "zendesk-ticket-comment-add".to_string(),
+            method: HttpMethod::Put,
+            path: "/api/v2/tickets/{ticket_id}.json".to_string(),
+            description:
+                "Add a comment to a ticket; the comment is an internal note unless public is \
+                 explicitly true"
+                    .to_string(),
+            risk: Risk::Medium,
+            // Optimistic concurrency: replaying the call after the ticket moved is rejected by
+            // Zendesk rather than applied, so repeating is safe only under the caller's stamp.
+            idempotency: Idempotency::Conditional,
+            auth: None,
+            params: ParamSet {
+                path: vec![param(
+                    "ticket_id",
+                    "The ticket id",
+                    true,
+                    json!({"type": "integer", "format": "uint64", "minimum": 1}),
+                )],
+                body: vec![
+                    wired(
+                        "updated_stamp",
+                        "ticket.updated_stamp",
+                        "Optimistic-concurrency stamp",
+                        true,
+                        json!({"type": "string"}),
+                    ),
+                    wired(
+                        "safe_update",
+                        "ticket.safe_update",
+                        "Constant `true` — not caller-supplied",
+                        true,
+                        json!({"type": "boolean", "const": true}),
+                    ),
+                    wired(
+                        "body",
+                        "ticket.comment.body",
+                        "The comment text; must not be blank",
+                        true,
+                        json!({"type": "string", "minLength": 1}),
+                    ),
+                    wired(
+                        "public",
+                        "ticket.comment.public",
+                        "False (an internal note) unless explicitly set true",
+                        false,
+                        json!({"type": "boolean", "default": false}),
+                    ),
+                ],
+                ..ParamSet::default()
+            },
+            response_schema: None,
+            quirks: Default::default(),
+        },
+    )
+}
+
+/// `babelforce-call-session-set` — the **free-form body** fixture.
+/// `SetCallSessionVariablesRequest` is `{"type": "object"}` with no properties (inventory §6.5), so
+/// there are no named fields to assemble: the caller supplies the whole body.
+fn babelforce_session_set() -> Connector {
+    connector(
+        "babelforce",
+        "https://services.babelforce.com",
+        Operation {
+            id: "babelforce-call-session-set".to_string(),
+            method: HttpMethod::Put,
+            path: "/api/v2/calls/{id}/session/set".to_string(),
+            description: "Set session variables on a live call.".to_string(),
+            risk: Risk::Medium,
+            idempotency: Idempotency::Idempotent,
+            auth: None,
+            params: ParamSet {
+                path: vec![param("id", "The call id", true, json!({"type": "string"}))],
+                body_schema: Some(json!({
+                    "type": "object",
+                    "description": "The session variables to set, as a JSON object.",
+                })),
+                ..ParamSet::default()
+            },
+            response_schema: None,
+            quirks: Default::default(),
+        },
+    )
+}
+
+/// **The golden this story exists for.** A real Zendesk write, with a real nested body.
+#[test]
+fn golden_zendesk_ticket_comment_add() {
+    assert_golden(
+        "zendesk-ticket-comment-add.flux",
+        &emit_only_operation(&zendesk_comment_add()),
+    );
+}
+
+#[test]
+fn golden_babelforce_call_session_set() {
+    assert_golden(
+        "babelforce-call-session-set.flux",
+        &emit_only_operation(&babelforce_session_set()),
+    );
+}
+
+/// The op declares the **caller-facing** names and the payload nests under the **wire** paths.
+/// Neither name is derivable from the other, which is why the IR carries both.
+#[test]
+fn a_body_field_travels_at_the_json_path_its_wire_names() {
+    let emitted = emit_only_operation(&zendesk_comment_add());
+    assert!(
+        emitted.contains(
+            "$payload = { ticket: { comment: { body: $body, public: $public }, \
+             safe_update: $safe_update, updated_stamp: $updated_stamp } }"
+        ),
+        "the body must nest under its wire paths:\n{emitted}"
+    );
+    let signature = emitted.lines().next().expect("a declaration line");
+    assert!(
+        signature.contains("body: String") && signature.contains("public: Bool"),
+        "the caller-facing names are what the op declares: {signature}"
+    );
+    assert!(
+        !signature.contains("ticket.comment"),
+        "a wire path is not a parameter name: {signature}"
+    );
+    assert!(
+        !signature.contains("safe_update"),
+        "a constant stays out of the signature even when it nests: {signature}"
+    );
+}
+
+/// A free-form body is re-bound through `parse(…, as: "json")` rather than handed to
+/// `http.request` directly. That is a correctness requirement, not a style: a composite op's
+/// parameter is stored with `Value::from_json` (flux-lang `runtime.rs:313-331`), so a
+/// caller-supplied record arrives as a `Value::Struct`; `http.request` reads its `body` argument
+/// with `Value::as_str` (`../flux/crates/flux-web/src/http.rs:182-186`) and would send **no body at
+/// all**. `parse` canonicalizes a record and validates a JSON string, storing text either way.
+#[test]
+fn a_free_form_body_is_canonicalized_before_it_is_sent() {
+    let emitted = emit_only_operation(&babelforce_session_set());
+    assert!(
+        emitted.contains(r#"$payload = parse($body, as: "json")"#),
+        "the caller's body must be canonicalized to text:\n{emitted}"
+    );
+    assert!(
+        emitted.contains("body: $payload"),
+        "the payload must reach the request by symbol:\n{emitted}"
+    );
+    assert!(
+        !emitted.contains("body: $body,") && !emitted.contains("body: $body }"),
+        "passing the parameter straight through would send no body at all:\n{emitted}"
+    );
+    assert!(
+        emitted.contains(r#"$content_type = "application/json""#),
+        "a free-form body still describes itself:\n{emitted}"
+    );
+    let signature = emitted.lines().next().expect("a declaration line");
+    assert!(
+        signature.contains("body: Any"),
+        "the whole body is one declared parameter: {signature}"
+    );
+}
+
+/// "The body is these fields" and "the body is this schema" are two answers to one question, and
+/// nothing states how to merge them — so an operation that declares both is refused rather than
+/// having one of the two silently dropped.
+#[test]
+fn a_body_that_is_both_a_schema_and_a_field_list_is_refused() {
+    let mut connector = babelforce_session_set();
+    connector.operations[0].params.body = vec![param(
+        "label",
+        "A named field alongside a free-form body.",
+        true,
+        json!({"type": "string"}),
+    )];
+
+    let err = emit_operation(&connector, &connector.operations[0])
+        .expect_err("a body cannot be assembled and supplied whole at once");
+    assert!(
+        err.to_string().contains("body_schema"),
+        "the refusal must name both declarations, got: {err}"
+    );
+}
+
+/// A query parameter's `wire` is a plain alias: Freshdesk's requester filter is `req_id` to a
+/// caller and `requester_id` on the wire (inventory §4.2 op 2). The op declares the name a model
+/// reads; the query string carries the vendor's.
+#[test]
+fn a_query_alias_travels_under_its_wire_name() {
+    let mut connector = zendesk_ticket_search();
+    connector.operations[0].params.query = vec![
+        wired(
+            "q",
+            "query",
+            "A Zendesk search expression.",
+            true,
+            json!({"type": "string"}),
+        ),
+        wired(
+            "req_id",
+            "requester_id",
+            "Filter by requester.",
+            false,
+            json!({"type": "string"}),
+        ),
+    ];
+
+    let emitted = emit_only_operation(&connector);
+    assert!(
+        emitted.contains(r#"$url = fmt("{base}/api/v2/search.json?query={q}")"#),
+        "a required alias must reach the vendor under its wire name:\n{emitted}"
+    );
+    assert!(
+        emitted.contains(r#"fmt("{url}{sep}requester_id={req_id}")"#),
+        "an optional alias must too:\n{emitted}"
+    );
+    let signature = emitted.lines().next().expect("a declaration line");
+    assert!(
+        signature.contains("q: String") && signature.contains("req_id: String"),
+        "the op declares the caller-facing names: {signature}"
+    );
+}
+
+/// The same field on a header, where the wire name is also what `http.request` validates as an HTTP
+/// token.
+#[test]
+fn a_header_alias_travels_under_its_wire_name() {
+    let mut connector = headered_operation();
+    connector.operations[0].params.header = vec![wired(
+        "idempotency_key",
+        "Idempotency-Key",
+        "A caller-chosen key that makes a retry safe.",
+        true,
+        json!({"type": "string"}),
+    )];
+
+    let emitted = emit_only_operation(&connector);
+    assert!(
+        emitted.contains(r#""Idempotency-Key": $idempotency_key"#),
+        "the header must keep the vendor's spelling:\n{emitted}"
+    );
+    assert!(
+        emitted.contains("idempotency_key: String"),
+        "the op declares the caller-facing name:\n{emitted}"
     );
 }

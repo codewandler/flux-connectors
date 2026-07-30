@@ -206,11 +206,13 @@ description = "Update an agent's status. Supply at least one of enabled or prese
 risk = "medium"
 idempotency = "idempotent"
 
-# SCHEMA GAP, twice over. `UpdateAgentStatusRequest` is declared `required: false` with every
-# property optional (§6.5), which is the same class of problem as Zendesk's empty update — and
-# `Quirks` has no precondition field to record it in, so the constraint lives in the description
-# above. And `presence.name` is a *nested* body field: `ParamSet.body` is a flat `Vec<Param>` with a
-# single `name`, so the JSON path a body parameter occupies has no representation.
+# SCHEMA GAP, still open: `UpdateAgentStatusRequest` is declared `required: false` with every
+# property optional (§6.5), which is the same class of problem as Zendesk's empty update, and
+# `Quirks` has no precondition field to record it in — so the constraint lives in the description
+# above.
+#
+# The presence label is a *nested* body field, and it declares its JSON path with `wire` (C-29).
+# Emitted flat it would be the literal key `"presence.name"`, which babelforce accepts and ignores.
 [[operations.params.path]]
 name = "id"
 description = "The agent id"
@@ -224,8 +226,9 @@ required = false
 schema = { type = "boolean" }
 
 [[operations.params.body]]
-name = "presence.name"
-description = "Presence label to set; wire path `presence.name`"
+name = "presence_name"
+wire = "presence.name"
+description = "Presence label to set"
 required = false
 schema = { type = "string" }
 
@@ -420,11 +423,14 @@ description = "Set session variables on a live call. Variable keys must start wi
 risk = "medium"
 idempotency = "idempotent"
 
-# SCHEMA GAP: `SetCallSessionVariablesRequest` is `{"type": "object"}` with **no properties** — a
-# free-form map. `ParamSet.body` is a list of named fields, so there is no way to say "the body is
-# this one schema". No body parameter is declared, and C-9 needs a free-form-object body
-# representation before this operation can be emitted at all (§6.5). The `app` key prefix rule is
-# unenforceable from the schema and is a C-12 quirk candidate; for now it is in the description.
+# `SetCallSessionVariablesRequest` is `{"type": "object"}` with **no properties** — a free-form map
+# (§6.5). `body_schema` says "the body *is* this schema" rather than "the body is these named
+# fields" (C-29); without it the operation declared no body at all and emitted a bodiless PUT,
+# which is indistinguishable from a write that legitimately sends nothing. The `app` key prefix rule
+# is unenforceable from the schema and is a C-12 quirk candidate; for now it is in the description.
+[operations.params]
+body_schema = { type = "object", description = "The session variables to set, as a JSON object. Every key must start with `app`" }
+
 [[operations.params.path]]
 name = "id"
 description = "The call id"
@@ -457,9 +463,12 @@ description = "Update the user-scoped variables of a session"
 risk = "medium"
 idempotency = "idempotent"
 
-# Same free-form-body gap as `babelforce-call-session-set`: `UpdateSessionVariablesRequest` is
+# Same free-form body as `babelforce-call-session-set`: `UpdateSessionVariablesRequest` is
 # `{"type": "object"}` with no properties. Two of the nine selected operations have completely
-# untyped bodies.
+# untyped bodies, and both are declared with `body_schema`.
+[operations.params]
+body_schema = { type = "object", description = "The user-scoped session variables to update, as a JSON object" }
+
 [[operations.params.path]]
 name = "id"
 description = "The session id"

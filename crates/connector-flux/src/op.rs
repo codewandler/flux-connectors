@@ -57,29 +57,34 @@
 //! **No credential is emitted.** Auth is C-10 and is deliberately absent rather than stubbed: an
 //! invented placeholder marker would be a second thing to migrate.
 //!
-//! # What the IR cannot yet say about a request body
+//! # How a request body is shaped
 //!
-//! Three shapes in `providers/*.toml` have no representation in
-//! [`connector_spec::ParamSet`]`::body`, which is a flat `Vec<Param>` carrying one `name` each.
-//! Where the gap is *detectable* this module refuses; where it is not, it is recorded here.
+//! A vendor's body is rarely the flat map of a parameter list, and the three shapes that matter are
+//! all expressible now (C-29). What each one costs is worth stating, because the failure mode they
+//! share is that the *wrong* answer succeeds: a body a vendor does not recognize is not rejected,
+//! it is accepted and ignored, and the caller sees a 200.
 //!
-//! 1. **Nested body paths — refused.** Zendesk's wire body is
+//! 1. **Nested body paths — emitted.** Zendesk's wire body is
 //!    `{"ticket": {"comment": {"body": …}}}` and babelforce's agent-status update writes
-//!    `presence.name`. A dotted body field name is refused ([`Error::NestedBodyField`]) rather than
-//!    emitted as the literal key `"presence.name"`, which the vendor accepts and ignores. **This
-//!    check is not complete**, and cannot be: `providers/zendesk.toml` records the caller-facing
-//!    name in `name` and the wire path in the parameter's *description*, so those fields look flat
-//!    and emit flat. Closing it needs an additive field on `Param` — a wire path such as
-//!    `wire = "ticket.comment.body"`, which would serve the vendor-alias case (Freshdesk's
-//!    `req_id` → `requester_id`) with the same field.
+//!    `presence.name`. [`connector_spec::Param::wire`] carries the JSON path a body field occupies,
+//!    and [`body_tree`] assembles those paths into one nested record. A body field whose *name* is
+//!    dotted but which declares no `wire` is still refused ([`Error::NestedBodyField`]): whether it
+//!    is a path or a literal key is exactly the thing that cannot be guessed.
 //! 2. **Constant body fields — handled.** Zendesk always sends `ticket.safe_update = true`, and
 //!    `providers/zendesk.toml` pins it with a JSON Schema `const` for want of anywhere better.
 //!    `const` already means "this value and no other", so [`constant`] reads it: the field is sent
 //!    and does not become a parameter a model has to guess.
-//! 3. **Free-form object bodies — undetectable.** `babelforce-call-session-set` and
-//!    `babelforce-session-update` take `{"type": "object"}` bodies with no properties, so they
-//!    declare no body parameters at all and emit a request with no body. `ParamSet` cannot say "the
-//!    body is this one schema"; a `body_schema: Option<JsonSchema>` alongside `body` would.
+//! 3. **Free-form object bodies — emitted through `parse`.** `babelforce-call-session-set` and
+//!    `babelforce-session-update` take `{"type": "object"}` bodies with no properties, which
+//!    [`connector_spec::ParamSet::body_schema`] declares. The caller supplies the whole body as one
+//!    parameter — and it is **re-bound through `parse($body, as: "json")` rather than passed
+//!    straight to `http.request`**. That is load-bearing: a composite op's parameter is stored with
+//!    `Value::from_json` (flux-lang `runtime.rs:313-331`), so a caller-supplied record arrives as a
+//!    `Value::Struct`, `http.request` reads its `body` argument with `Value::as_str`
+//!    (`../flux/crates/flux-web/src/http.rs:182-186`), and the whole body is dropped without a
+//!    word. `parse(…, as: "json")` canonicalizes a record *and* validates a JSON string
+//!    (flux-lang `runtime.rs:4005-4010`), storing text either way — so both spellings of "here is
+//!    my body" reach the vendor.
 //!
 //! # Two constraints on the *response* side, for the same reason
 //!
@@ -125,6 +130,13 @@ const SEP: &str = "sep";
 const CONTENT_TYPE: &str = "content_type";
 /// The symbol holding the assembled JSON request body.
 const PAYLOAD: &str = "payload";
+/// The caller-facing name of the one parameter a free-form body travels in.
+///
+/// A convention rather than an IR field: [`connector_spec::ParamSet::body_schema`] says the body
+/// *is* a schema and names nothing, so the parameter needs a name from somewhere. It is allocated
+/// through [`Symbols`] like any other, so an operation that already has a `body` elsewhere gets a
+/// disambiguated symbol rather than a silently shadowed one.
+const FREE_FORM_BODY: &str = "body";
 /// The symbol holding the HTTP response.
 const RESPONSE: &str = "response";
 /// The one media type this emitter sends. Every launch provider is JSON over HTTP — Freshdesk sends
@@ -139,9 +151,10 @@ const JSON_MEDIA_TYPE: &str = "application/json";
 /// # Scope
 ///
 /// An HTTP call whose parameters travel in the path, the query string, the request headers and a
-/// JSON request body, whose response is returned whole. Auth (C-10) and quirks compiled into
-/// control flow (C-12) are omitted; the body shapes the IR cannot express are refused rather than
-/// half-emitted. See the module documentation and [`Error`].
+/// JSON request body — nested at the JSON paths [`connector_spec::Param::wire`] declares, or
+/// supplied whole by the caller — whose response is returned whole. Auth (C-10) and quirks compiled
+/// into control flow (C-12) are omitted; a body declaration that could be read two ways is refused
+/// rather than resolved by guesswork. See the module documentation and [`Error`].
 pub fn emit_operation(connector: &Connector, operation: &Operation) -> Result<String> {
     Ok(flux_lang::format::format_composite_op(&lower(
         connector, operation,
@@ -151,6 +164,19 @@ pub fn emit_operation(connector: &Connector, operation: &Operation) -> Result<St
 /// A parameter paired with the Flux symbol that carries it.
 struct Bound<'a> {
     param: &'a Param,
+    symbol: String,
+}
+
+/// The spelling the vendor sees: [`Param::wire`] when it is declared, the caller-facing name
+/// otherwise. Every request position reads the name through this, so a declared alias cannot be
+/// honored in one place and forgotten in another.
+fn wire_name(param: &Param) -> &str {
+    param.wire.as_deref().unwrap_or(&param.name)
+}
+
+/// A free-form body: the schema the caller's whole body must satisfy, and the symbol it arrives in.
+struct FreeFormBody<'a> {
+    schema: &'a connector_spec::JsonSchema,
     symbol: String,
 }
 
@@ -199,11 +225,27 @@ fn lower<'a>(connector: &Connector, operation: &'a Operation) -> Result<Composit
         .map(&mut bind)
         .collect::<Result<_>>()?;
 
+    // Two answers to one question. Merging them would need a rule nothing states — see
+    // `Error::AmbiguousBody`.
+    if operation.params.body_schema.is_some() && !body.is_empty() {
+        return Err(Error::AmbiguousBody {
+            operation: operation.id.clone(),
+        });
+    }
+    let free_form = match &operation.params.body_schema {
+        Some(schema) => Some(FreeFormBody {
+            schema,
+            symbol: symbols.allocate(&operation.id, FREE_FORM_BODY)?,
+        }),
+        None => None,
+    };
+
     for bound in &header {
         // `http.request` builds a `HeaderName` from this and errors on anything that is not an HTTP
         // token (`../flux/crates/flux-web/src/http.rs:172-174`). Catching it here turns a request
-        // that could never be sent into a build failure.
-        if !is_http_token(&bound.param.name) {
+        // that could never be sent into a build failure. The check is on the *wire* name, which is
+        // the one that reaches `HeaderName`.
+        if !is_http_token(wire_name(bound.param)) {
             return Err(Error::BadParamName {
                 operation: operation.id.clone(),
                 name: bound.param.name.clone(),
@@ -212,7 +254,8 @@ fn lower<'a>(connector: &Connector, operation: &'a Operation) -> Result<Composit
         }
     }
     for bound in &body {
-        if bound.param.name.contains('.') {
+        // A dotted name with no `wire` cannot be read either way — see `Error::NestedBodyField`.
+        if bound.param.wire.is_none() && bound.param.name.contains('.') {
             return Err(Error::NestedBodyField {
                 operation: operation.id.clone(),
                 name: bound.param.name.clone(),
@@ -232,6 +275,10 @@ fn lower<'a>(connector: &Connector, operation: &'a Operation) -> Result<Composit
             name: SymbolName(b.symbol.clone()),
             ty: flux_type(&b.param.schema),
         })
+        .chain(free_form.iter().map(|free| FluxParam {
+            name: SymbolName(free.symbol.clone()),
+            ty: flux_type(free.schema),
+        }))
         .collect();
 
     Ok(CompositeOpDecl {
@@ -240,7 +287,15 @@ fn lower<'a>(connector: &Connector, operation: &'a Operation) -> Result<Composit
         returns: Some(TypeRef::Any),
         meta: metadata(operation)?,
         body: DraftAst {
-            body: request_body(connector, operation, &path, &query, &header, &body)?,
+            body: request_body(
+                connector,
+                operation,
+                &path,
+                &query,
+                &header,
+                &body,
+                free_form.as_ref(),
+            )?,
             ..DraftAst::default()
         },
     })
@@ -363,6 +418,7 @@ fn request_body(
     query: &[Bound<'_>],
     header: &[Bound<'_>],
     body_params: &[Bound<'_>],
+    free_form: Option<&FreeFormBody<'_>>,
 ) -> Result<Vec<Node>> {
     let (required, optional): (Vec<_>, Vec<_>) = query.iter().partition(|b| b.param.required);
 
@@ -370,7 +426,7 @@ fn request_body(
     template.push_str(&path_template(operation, path)?);
     for (i, bound) in required.iter().enumerate() {
         template.push(if i == 0 { '?' } else { '&' });
-        template.push_str(&format!("{}={{{}}}", bound.param.name, bound.symbol));
+        template.push_str(&format!("{}={{{}}}", wire_name(bound.param), bound.symbol));
     }
 
     let mut body = vec![
@@ -392,7 +448,8 @@ fn request_body(
                 URL,
                 format!(
                     "{{{URL}}}{{{SEP}}}{}={{{}}}",
-                    bound.param.name, bound.symbol
+                    wire_name(bound.param),
+                    bound.symbol
                 ),
             )];
             // The last parameter never needs to hand a separator on.
@@ -421,13 +478,17 @@ fn request_body(
 
     // Headers: the media type the payload is encoded in, plus whatever the caller supplies. Auth
     // headers are deliberately absent — C-10 adds the credential reference.
+    let has_body = !body_params.is_empty() || free_form.is_some();
     let mut headers: BTreeMap<String, Box<Node>> = BTreeMap::new();
-    if !body_params.is_empty() {
+    if has_body {
         body.push(bind_string(CONTENT_TYPE, JSON_MEDIA_TYPE));
         headers.insert("content-type".to_string(), Box::new(symbol(CONTENT_TYPE)));
     }
     for bound in header {
-        headers.insert(bound.param.name.clone(), Box::new(symbol(&bound.symbol)));
+        headers.insert(
+            wire_name(bound.param).to_string(),
+            Box::new(symbol(&bound.symbol)),
+        );
     }
     if !headers.is_empty() {
         request.insert(
@@ -442,16 +503,30 @@ fn request_body(
     // and is silently dropped, whereas a bound record is stored as canonical JSON *text* and
     // arrives intact.
     if !body_params.is_empty() {
-        let mut fields: BTreeMap<String, Box<Node>> = BTreeMap::new();
         for bound in body_params {
             if let Some(value) = constant(bound.param) {
                 body.push(bind_lit(&bound.symbol, value.clone()));
             }
-            fields.insert(bound.param.name.clone(), Box::new(symbol(&bound.symbol)));
         }
         body.push(Node::Bind {
             name: SymbolName(PAYLOAD.to_string()),
-            value: Box::new(Node::Obj { fields }),
+            value: Box::new(body_tree(operation, body_params)?.into_node()),
+            ty: None,
+            effect: None,
+        });
+        request.insert("body".to_string(), Box::new(symbol(PAYLOAD)));
+    } else if let Some(free) = free_form {
+        // Re-bound rather than passed straight through, and that is the whole point: a parameter
+        // holding a record is stored as a `Value::Struct` (flux-lang `runtime.rs:313-331`) and
+        // `http.request` reads `body` with `Value::as_str`, so `body: $body` would send *no body at
+        // all*. `parse(…, as: "json")` canonicalizes a record and validates a JSON string, storing
+        // text either way — see the module documentation.
+        body.push(Node::Bind {
+            name: SymbolName(PAYLOAD.to_string()),
+            value: Box::new(Node::Parse {
+                value: Box::new(symbol(&free.symbol)),
+                as_type: "json".to_string(),
+            }),
             ty: None,
             effect: None,
         });
@@ -480,6 +555,111 @@ fn request_body(
     Ok(body)
 }
 
+/// The request body under construction: a JSON object tree, keyed by wire path segment.
+///
+/// A tree rather than a flat map because a vendor's body nests — Zendesk's comment text lives at
+/// `ticket.comment.body` — and the flat spelling `{"ticket.comment.body": …}` is a request Zendesk
+/// accepts and ignores. `BTreeMap` at every level is what makes the emitted record deterministic
+/// without sorting anything at emit time.
+#[derive(Debug)]
+enum BodyNode {
+    /// A caller-supplied (or constant) value, carried by this Flux symbol.
+    Leaf(String),
+    /// An object of further paths.
+    Branch(BTreeMap<String, BodyNode>),
+}
+
+impl BodyNode {
+    /// Place `symbol_name` at `segments`.
+    ///
+    /// `Err(depth)` reports that the first `depth` segments of the path are contested — either they
+    /// already hold a value this field would have to live *inside*, or another field already claimed
+    /// exactly them. The caller turns that into [`Error::BodyPathConflict`]; reporting the depth
+    /// rather than a message is what lets one recursive step stay ignorant of the whole path.
+    fn insert(&mut self, segments: &[&str], symbol_name: &str) -> std::result::Result<(), usize> {
+        let BodyNode::Branch(children) = self else {
+            // This node already holds a value, so the path that reached it cannot also be an
+            // object. The caller adds the depth it was reached at.
+            return Err(0);
+        };
+        let (head, rest) = segments.split_first().expect("a wire path has a segment");
+        if rest.is_empty() {
+            if children.contains_key(*head) {
+                return Err(1);
+            }
+            children.insert((*head).to_string(), BodyNode::Leaf(symbol_name.to_string()));
+            return Ok(());
+        }
+        children
+            .entry((*head).to_string())
+            .or_insert_with(|| BodyNode::Branch(BTreeMap::new()))
+            .insert(rest, symbol_name)
+            .map_err(|depth| depth + 1)
+    }
+
+    /// Lower the tree into the nested Flux record the payload is bound to.
+    fn into_node(self) -> Node {
+        match self {
+            BodyNode::Leaf(symbol_name) => symbol(&symbol_name),
+            BodyNode::Branch(children) => Node::Obj {
+                fields: children
+                    .into_iter()
+                    .map(|(key, child)| (key, Box::new(child.into_node())))
+                    .collect(),
+            },
+        }
+    }
+}
+
+/// Assemble every body field into one tree, each at the JSON path its [`Param::wire`] names.
+///
+/// Both ways a path set can be incoherent are refused rather than resolved, because either
+/// resolution silently drops a field the author declared: an empty segment
+/// ([`Error::BadWirePath`]), and a path that needs to be both a value and an object
+/// ([`Error::BodyPathConflict`]).
+fn body_tree(operation: &Operation, body_params: &[Bound<'_>]) -> Result<BodyNode> {
+    let mut root = BodyNode::Branch(BTreeMap::new());
+    // Every path placed so far, so a conflict can name *both* fields rather than only the one that
+    // arrived second.
+    let mut placed: Vec<(&str, &str)> = Vec::new();
+
+    for bound in body_params {
+        let wire = wire_name(bound.param);
+        let segments: Vec<&str> = wire.split('.').collect();
+        if segments.iter().any(|segment| segment.is_empty()) {
+            return Err(Error::BadWirePath {
+                operation: operation.id.clone(),
+                name: bound.param.name.clone(),
+                wire: wire.to_string(),
+            });
+        }
+
+        match root.insert(&segments, &bound.symbol) {
+            Ok(()) => placed.push((wire, bound.param.name.as_str())),
+            Err(depth) => {
+                let path = segments[..depth].join(".");
+                // The field already occupying that path is the one whose own path is it, or lies
+                // under it.
+                let first = placed
+                    .iter()
+                    .find(|(placed_wire, _)| {
+                        *placed_wire == path || placed_wire.starts_with(&format!("{path}."))
+                    })
+                    .map(|(_, name)| *name)
+                    .unwrap_or(bound.param.name.as_str());
+                return Err(Error::BodyPathConflict {
+                    operation: operation.id.clone(),
+                    first: first.to_string(),
+                    second: bound.param.name.clone(),
+                    path,
+                });
+            }
+        }
+    }
+
+    Ok(root)
+}
+
 /// The vendor path template with each `{wire_name}` rewritten to `{symbol_name}`, so the `fmt`
 /// interpolation resolves against the symbols the op actually declares.
 ///
@@ -504,7 +684,7 @@ fn path_template(operation: &Operation, path: &[Bound<'_>]) -> Result<String> {
         let wire = &after[..close];
         let index = path
             .iter()
-            .position(|b| b.param.name == wire)
+            .position(|b| wire_name(b.param) == wire)
             .ok_or_else(|| Error::UndeclaredPathParam {
                 operation: operation.id.clone(),
                 path: operation.path.clone(),
@@ -642,10 +822,35 @@ mod tests {
     fn path_param(name: &str) -> Param {
         Param {
             name: name.to_string(),
+            wire: None,
             description: String::new(),
             required: true,
             schema: json!({"type": "string"}),
         }
+    }
+
+    fn body_param(name: &str, wire: Option<&str>) -> Param {
+        Param {
+            name: name.to_string(),
+            wire: wire.map(str::to_string),
+            description: String::new(),
+            required: true,
+            schema: json!({"type": "string"}),
+        }
+    }
+
+    /// One `Bound` per body parameter, with the symbol the allocator would hand out.
+    fn bind_all<'a>(operation: &'a Operation, params: &'a [Param]) -> Vec<Bound<'a>> {
+        let mut symbols = Symbols::new();
+        params
+            .iter()
+            .map(|param| Bound {
+                param,
+                symbol: symbols
+                    .allocate(&operation.id, &param.name)
+                    .expect("a test parameter name is spellable"),
+            })
+            .collect()
     }
 
     fn connector(base_url: &str, operation: Operation) -> Connector {
@@ -721,6 +926,115 @@ mod tests {
             path_template(&op, &bound),
             Err(Error::UnusedPathParam { .. })
         ));
+    }
+
+    /// The tree is what turns a set of wire paths into one nested record. Asserted on the AST
+    /// rather than on emitted text, so a formatting change cannot make this pass or fail.
+    #[test]
+    fn wire_paths_assemble_into_one_nested_record() {
+        let op = operation("/a", Vec::new());
+        let params = vec![
+            body_param("body", Some("ticket.comment.body")),
+            body_param("public", Some("ticket.comment.public")),
+            body_param("updated_stamp", Some("ticket.updated_stamp")),
+        ];
+        let bound = bind_all(&op, &params);
+        let record = body_tree(&op, &bound)
+            .expect("a coherent path set")
+            .into_node();
+
+        let Node::Obj { fields: root } = &record else {
+            panic!("a body is a record");
+        };
+        assert_eq!(root.keys().collect::<Vec<_>>(), ["ticket"]);
+        let Node::Obj { fields: ticket } = root["ticket"].as_ref() else {
+            panic!("`ticket` holds an object");
+        };
+        assert_eq!(
+            ticket.keys().collect::<Vec<_>>(),
+            ["comment", "updated_stamp"]
+        );
+        let Node::Obj { fields: comment } = ticket["comment"].as_ref() else {
+            panic!("`ticket.comment` holds an object");
+        };
+        assert_eq!(comment.keys().collect::<Vec<_>>(), ["body", "public"]);
+        assert!(matches!(
+            comment["body"].as_ref(),
+            Node::Var { name } if name.0 == "body"
+        ));
+    }
+
+    /// A field with no `wire` keeps sitting at the root of the body — the existing encoding, and the
+    /// one every provider that does not nest still relies on.
+    #[test]
+    fn a_field_without_a_wire_path_stays_at_the_root() {
+        let op = operation("/a", Vec::new());
+        let params = vec![body_param("subject", None)];
+        let bound = bind_all(&op, &params);
+        let BodyNode::Branch(children) = body_tree(&op, &bound).expect("a flat body") else {
+            panic!("the root of a body is an object");
+        };
+        assert!(children.contains_key("subject"), "{:?}", children.keys());
+    }
+
+    /// `ticket.comment` and `ticket.comment.body` cannot both exist: `comment` would have to be a
+    /// value and an object at once, so one field would be dropped from the request.
+    #[test]
+    fn two_fields_that_need_one_path_to_be_two_things_are_refused() {
+        let op = operation("/a", Vec::new());
+        for order in [
+            vec![
+                body_param("comment", Some("ticket.comment")),
+                body_param("body", Some("ticket.comment.body")),
+            ],
+            vec![
+                body_param("body", Some("ticket.comment.body")),
+                body_param("comment", Some("ticket.comment")),
+            ],
+        ] {
+            let bound = bind_all(&op, &order);
+            let error = body_tree(&op, &bound).expect_err("a contested path is not emittable");
+            assert!(
+                matches!(&error, Error::BodyPathConflict { path, .. } if path == "ticket.comment"),
+                "the refusal must name the contested path, got: {error}"
+            );
+            // Both sides are named, so an author does not have to find the other one.
+            let rendered = error.to_string();
+            assert!(
+                rendered.contains("comment") && rendered.contains("body"),
+                "{rendered}"
+            );
+        }
+    }
+
+    /// Two fields claiming exactly the same path is the same failure without the nesting.
+    #[test]
+    fn two_fields_claiming_one_path_are_refused() {
+        let op = operation("/a", Vec::new());
+        let params = vec![
+            body_param("stamp", Some("ticket.updated_stamp")),
+            body_param("updated_stamp", Some("ticket.updated_stamp")),
+        ];
+        let bound = bind_all(&op, &params);
+        assert!(matches!(
+            body_tree(&op, &bound),
+            Err(Error::BodyPathConflict { .. })
+        ));
+    }
+
+    /// An empty segment is not a JSON key any vendor means, and left alone it would emit
+    /// `{"a": {"": …}}` — accepted and ignored, like every other body mistake here.
+    #[test]
+    fn an_empty_wire_path_segment_is_refused() {
+        let op = operation("/a", Vec::new());
+        for wire in ["", ".a", "a.", "a..b"] {
+            let params = vec![body_param("field", Some(wire))];
+            let bound = bind_all(&op, &params);
+            assert!(
+                matches!(body_tree(&op, &bound), Err(Error::BadWirePath { .. })),
+                "`{wire}` must be refused"
+            );
+        }
     }
 
     /// A trailing slash on the connector's base URL must not become a double slash in the request.

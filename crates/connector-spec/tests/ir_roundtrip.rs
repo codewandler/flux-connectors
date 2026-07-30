@@ -243,28 +243,33 @@ fn parameter_and_response_schemas_survive_the_round_trip() {
     operation.params = ParamSet {
         path: vec![Param {
             name: "call_id".into(),
+            wire: None,
             description: "The call id".into(),
             required: true,
             schema: json!({"type": "string", "format": "uuid"}),
         }],
         query: vec![Param {
             name: "limit".into(),
+            wire: None,
             description: "Page size".into(),
             required: false,
             schema: json!({"type": "integer", "minimum": 1, "maximum": 200}),
         }],
         header: vec![Param {
             name: "X-Request-Id".into(),
+            wire: None,
             description: String::new(),
             required: false,
             schema: json!({"type": "string"}),
         }],
         body: vec![Param {
             name: "notes".into(),
+            wire: None,
             description: String::new(),
             required: false,
             schema: json!({"type": "array", "items": {"type": "string"}}),
         }],
+        body_schema: None,
     };
     operation.response_schema = Some(json!({
         "type": "object",

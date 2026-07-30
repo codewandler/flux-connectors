@@ -150,21 +150,19 @@ page = { page_param = "page", size_param = "per_page", page_size = 100, max_page
 
 # ---------------------------------------------------------------------------------------------
 # Operations 5, 6 and 7 are all `PUT /api/v2/tickets/{ticket_id}.json`, distinguished *only* by
-# request body (inventory §3.3.1). Three schema gaps bite all three of them, and none is worked
-# around here:
+# request body (inventory §3.3.1). The wire body nests —
+# `{"ticket": {"updated_stamp": …, "comment": {"body": …}}}` — and every field below declares the
+# JSON path it occupies with `wire` (C-29). That is a contract codegen compiles, not prose: before
+# `wire` existed the path lived in each `description` and all three operations emitted a **flat**
+# body, which Zendesk accepts, ignores, and answers 200 to.
 #
-#   1. Body fields nest. The wire body is `{"ticket": {"updated_stamp": …, "comment": {"body": …}}}`,
-#      but `ParamSet.body` is a flat `Vec<Param>` with a single `name` — there is no field for the
-#      JSON path a body parameter occupies. The caller-facing name is recorded here and the wire
-#      path is stated in each `description`, which is documentation rather than a contract C-9 can
-#      compile.
-#   2. `ticket.safe_update = true` is a *constant* the plugin always sends, not a caller-supplied
-#      parameter (§3.3.2). `Param` has no way to say "always emitted, never in the op signature",
-#      so it is declared as a required boolean pinned by JSON Schema `const` — which still leaks it
-#      into the generated op's parameter list. See the report.
-#   3. The plugin's preflight — at least one mutable field must be non-null (`main.rs:201-209`) —
-#      has no representation. `Quirks` carries pagination, rate limits and error envelopes, not
-#      preconditions.
+# `ticket.safe_update = true` is a *constant* the plugin always sends, not a caller-supplied
+# parameter (§3.3.2). It is pinned with a JSON Schema `const`, which already means "this value and
+# no other": codegen sends it and keeps it out of the op signature, so no model has to guess it.
+#
+# SCHEMA GAP, still open: the plugin's preflight — at least one mutable field must be non-null
+# (`main.rs:201-209`) — has no representation. `Quirks` carries pagination, rate limits and error
+# envelopes, not preconditions.
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
@@ -185,43 +183,50 @@ schema = { type = "integer", format = "uint64", minimum = 1 }
 
 [[operations.params.body]]
 name = "updated_stamp"
-description = "Wire path `ticket.updated_stamp`. Optimistic-concurrency stamp: Zendesk rejects the update if the ticket moved since this stamp"
+wire = "ticket.updated_stamp"
+description = "Optimistic-concurrency stamp: Zendesk rejects the update if the ticket moved since this stamp"
 required = true
 schema = { type = "string" }
 
 [[operations.params.body]]
 name = "safe_update"
-description = "Wire path `ticket.safe_update`. Constant `true` — not caller-supplied; it is what makes updated_stamp binding. Dropping it turns every write into a last-write-wins race"
+wire = "ticket.safe_update"
+description = "Constant `true` — not caller-supplied; it is what makes updated_stamp binding. Dropping it turns every write into a last-write-wins race"
 required = true
 schema = { type = "boolean", const = true }
 
 [[operations.params.body]]
 name = "status"
-description = "Wire path `ticket.status`"
+wire = "ticket.status"
+description = "The ticket's status"
 required = false
 schema = { type = "string" }
 
 [[operations.params.body]]
 name = "priority"
-description = "Wire path `ticket.priority`"
+wire = "ticket.priority"
+description = "The ticket's priority"
 required = false
 schema = { type = "string" }
 
 [[operations.params.body]]
 name = "assignee_id"
-description = "Wire path `ticket.assignee_id`"
+wire = "ticket.assignee_id"
+description = "The agent the ticket is assigned to"
 required = false
 schema = { type = "integer", format = "uint64" }
 
 [[operations.params.body]]
 name = "group_id"
-description = "Wire path `ticket.group_id`"
+wire = "ticket.group_id"
+description = "The group the ticket belongs to"
 required = false
 schema = { type = "integer", format = "uint64" }
 
 [[operations.params.body]]
 name = "type"
-description = "Wire path `ticket.type`"
+wire = "ticket.type"
+description = "The ticket's type"
 required = false
 schema = { type = "string" }
 
@@ -243,19 +248,22 @@ schema = { type = "integer", format = "uint64", minimum = 1 }
 
 [[operations.params.body]]
 name = "updated_stamp"
-description = "Wire path `ticket.updated_stamp`. Optimistic-concurrency stamp"
+wire = "ticket.updated_stamp"
+description = "Optimistic-concurrency stamp"
 required = true
 schema = { type = "string" }
 
 [[operations.params.body]]
 name = "safe_update"
-description = "Wire path `ticket.safe_update`. Constant `true` — not caller-supplied"
+wire = "ticket.safe_update"
+description = "Constant `true` — not caller-supplied"
 required = true
 schema = { type = "boolean", const = true }
 
 [[operations.params.body]]
 name = "body"
-description = "Wire path `ticket.comment.body`. The comment text; must not be blank"
+wire = "ticket.comment.body"
+description = "The comment text; must not be blank"
 required = true
 schema = { type = "string", minLength = 1 }
 
@@ -263,7 +271,8 @@ schema = { type = "string", minLength = 1 }
 # default of `true` would leak internal notes to end users (inventory §3.3.4).
 [[operations.params.body]]
 name = "public"
-description = "Wire path `ticket.comment.public`. False (an internal note) unless explicitly set true"
+wire = "ticket.comment.public"
+description = "False (an internal note) unless explicitly set true"
 required = false
 schema = { type = "boolean", default = false }
 
@@ -285,20 +294,24 @@ schema = { type = "integer", format = "uint64", minimum = 1 }
 
 [[operations.params.body]]
 name = "updated_stamp"
-description = "Wire path `ticket.updated_stamp`. Optimistic-concurrency stamp"
+wire = "ticket.updated_stamp"
+description = "Optimistic-concurrency stamp"
 required = true
 schema = { type = "string" }
 
 [[operations.params.body]]
 name = "safe_update"
-description = "Wire path `ticket.safe_update`. Constant `true` — not caller-supplied"
+wire = "ticket.safe_update"
+description = "Constant `true` — not caller-supplied"
 required = true
 schema = { type = "boolean", const = true }
 
-# `additional_tags`, never `tags`: sending `tags` *replaces* the ticket's tags, which silently
-# destroys data (inventory §3.3.3). The additive field is the whole point of this operation.
+# `ticket.additional_tags`, never `ticket.tags`: sending `tags` *replaces* the ticket's tags, which
+# silently destroys data (inventory §3.3.3). The additive field is the whole point of this
+# operation, and the `wire` path below is the only thing that makes it so.
 [[operations.params.body]]
 name = "tags"
-description = "Wire path `ticket.additional_tags` — additive, so existing tags survive. Must be non-empty with no blank entries"
+wire = "ticket.additional_tags"
+description = "Tags to add; additive, so existing tags survive. Must be non-empty with no blank entries"
 required = true
 schema = { type = "array", minItems = 1, items = { type = "string", minLength = 1 } }

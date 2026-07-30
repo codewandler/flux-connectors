@@ -443,7 +443,11 @@ fn validate_operations(connector: &Connector, problems: &mut Vec<String>) {
             }
         }
         for param in &operation.params.path {
-            let placeholder = format!("{{{}}}", param.name);
+            // The placeholder is written in the vendor's spelling, so a parameter that declares a
+            // `wire` alias is looked up under that — matching on the caller-facing name would
+            // reject `{requester_id}` for a parameter a caller knows as `req_id`.
+            let wire = param.wire.as_deref().unwrap_or(&param.name);
+            let placeholder = format!("{{{wire}}}");
             if !operation.path.contains(&placeholder) {
                 problems.push(format!(
                     "operation {id:?} declares path parameter {:?}, but its path {:?} has no \
