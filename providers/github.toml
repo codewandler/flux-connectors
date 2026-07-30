@@ -1,0 +1,306 @@
+# GitHub REST API — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER, even though an excellent OpenAPI document exists.
+# GitHub publishes `github/rest-api-description` — a generated, versioned OpenAPI 3.x description of
+# the whole REST API (`descriptions/api.github.com/api.github.com.json`). Nothing is vendored under
+# `specs/` for it here because ingest (C-4) and the overlay (C-6) do not exist yet, and the document
+# describes roughly a thousand operations: without a selection mechanism, pointing at it would be
+# pointing at a thousand LLM tools. When C-14's fetch and C-4's ingest land, this file becomes
+# `[spec]` plus a `[[patch.operations]]` selection, and **the five operations below are the selection
+# to reproduce** — by `operationId`: `repos/get`, `issues/get`, `issues/create`,
+# `issues/create-comment`, `pulls/get`.
+#
+# Until then drift is undetectable by machine, exactly as for zendesk and freshdesk
+# (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: the required `Accept: application/vnd.github+json` header cannot be declared.
+#
+# GitHub asks every client to send `Accept: application/vnd.github+json`. **No field in this schema
+# can express a constant, non-credential request header**, so it is not declared here, and this
+# comment is the only place the requirement survives.
+#
+# This was checked against the loader and the emitter rather than assumed, and the whole schema was
+# enumerated (`connector_spec::provider::accepted_keys`):
+#
+#   provider  → id, vendor, base_url, description, auth, default_auth, operations, spec, patch
+#   operation → id, method, path, description, risk, idempotency, auth, params, response_schema,
+#               quirks
+#   paramSet  → path, query, header, body, body_schema
+#   param     → name, wire, description, required, schema
+#   quirks    → pagination, rate_limit, error_envelope
+#
+# There is no `headers` key at provider or operation level, and no `value`/`const` field on `param`.
+# `params.header` is the only header mechanism, and the IR documents it as "Request headers the
+# caller supplies" — which is precisely what it emits. Pinning such a param with a JSON Schema
+# `const`, the trick that works for a constant *body* field (`ticket.safe_update` in
+# `providers/zendesk.toml`), does **not** work here: `crates/connector-flux/src/op.rs` filters
+# `constant(...)` out of the declared parameter list for `body` params only, so a `const`-pinned
+# header stays a caller-supplied parameter. Emitting the probe produces
+#
+#   op probe-get(accept: String) -> Any
+#     …
+#     $response = http.request({ headers: { accept: $accept }, method: "GET", url: $url })
+#
+# — a required argument every caller must pass and any caller may set to anything, with the `const`
+# dropped entirely. That is a caller-overridable parameter wearing a constant's clothes, so C-52
+# declares nothing rather than smuggling it in. The one constant header the pipeline does send,
+# `content-type: application/json`, is hard-coded in the emitter (`JSON_MEDIA_TYPE`) and is not
+# declarable either.
+#
+# **Impact, stated honestly:** this is not what makes the connector non-functional. GitHub serves
+# requests with no `Accept` header by defaulting to `application/vnd.github+json`, so the five
+# operations below are well-formed as emitted. What is lost is *version pinning* — the explicit
+# header is what protects a client from a future change to that default — plus every other
+# vendor-constant header a connector might need (an API version, a `User-Agent`). Closing it needs
+# either a `headers` table on the connector and the operation, or a constant-value field on `param`
+# that the emitter binds as a literal the way it already binds a constant body field. Filed here
+# with C-52; it is the same class of gap as the `base_url`-to-env binding the other three providers
+# record.
+# ---------------------------------------------------------------------------------------------
+
+id = "github"
+vendor = "GitHub"
+
+# One tenant-independent host, so no templating and no endpoint override: `api.github.com` serves
+# every user and organisation. (GitHub Enterprise Server lives at a customer host under a `/api/v3`
+# prefix, which is a different connector rather than an override of this one — the paths differ, not
+# just the authority.) `http_hosts` derives from this single value and is therefore exactly
+# `api.github.com`, never widened.
+base_url = "https://api.github.com"
+
+description = "GitHub REST API: read repositories, issues and pull requests, and write issues and issue comments"
+
+# One credential covers the whole selection. GitHub Apps' installation tokens, fine-grained personal
+# access tokens and classic PATs all present identically as `Authorization: Bearer <token>`, so the
+# token *type* is operator configuration rather than connector shape; what differs between them is
+# which scopes the token carries, which is not something this file can or should assert.
+default_auth = [{ credentials = ["github.token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "github.token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; never read here.
+env = ["GITHUB_TOKEN"]
+description = "GitHub token sent as a bearer — a GitHub App installation token, a fine-grained PAT, or a classic PAT"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 5, all addressed by path parameters only
+#
+# WHY THERE IS NOT A SINGLE QUERY PARAMETER, and why the most-wanted GitHub operations are missing.
+# Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim into a
+# `fmt` template and flux registers no URL-encoding op (C-30 is unimplemented;
+# `crates/connector-flux/src/op.rs`). `zendesk-ticket-search` is the standing demonstration and
+# AGENTS.md lists it under *Intentional gaps* — a value carrying `&` does not filter, it injects a
+# parameter. GitHub's listing and search endpoints are exactly that shape: `GET /issues` filters on
+# `state`, `labels` and `assignee`, and `GET /search/issues` takes a free-form `q` full of the
+# colons and spaces that make the gap bite. Shipping them would be shipping five more
+# `zendesk-ticket-search`es, so `github-issue-list`, `github-pull-list` and every search endpoint are
+# **deliberately excluded pending C-30** and named in the story's Notes.
+#
+# The path surface, by contrast, is genuinely safe rather than merely untested: `{owner}` and
+# `{repo}` are GitHub names restricted to `[A-Za-z0-9._-]`, and `{issue_number}` / `{pull_number}`
+# are integers. None of those can carry a character that changes the shape of the request. That
+# asymmetry is the whole selection principle for this connector.
+#
+# `crates/connector-flux/tests/github_connector.rs` asserts the absence — both on the IR and on the
+# emitted URL — so this stays a property of the connector rather than of this comment.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only (C-8, C-23).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "github-repo-get"
+method = "GET"
+path = "/repos/{owner}/{repo}"
+description = "Get one repository's metadata, including its default branch, visibility and permissions"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "owner"
+description = "The repository owner — a user or organisation login"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "repo"
+description = "The repository name, without the owner prefix"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "github-issue-get"
+method = "GET"
+path = "/repos/{owner}/{repo}/issues/{issue_number}"
+# Worth stating on the contract a model reads: GitHub models a pull request as an issue, so this
+# endpoint answers for a PR number too, returning the issue view of it (with a `pull_request` key).
+# It is not an error and not a redirect — `github-pull-get` is the endpoint that returns the diff,
+# merge state and review metadata.
+description = "Get one issue by number. GitHub treats a pull request as an issue, so a PR number returns that PR's issue view; use github-pull-get for its merge and review state"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "owner"
+description = "The repository owner — a user or organisation login"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "repo"
+description = "The repository name, without the owner prefix"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "issue_number"
+description = "The issue number within the repository — the number in its URL, not its global id"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "github-pull-get"
+method = "GET"
+path = "/repos/{owner}/{repo}/pulls/{pull_number}"
+description = "Get one pull request by number, with its merge state, head and base refs and review counts"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "owner"
+description = "The repository owner — a user or organisation login"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "repo"
+description = "The repository name, without the owner prefix"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "pull_number"
+description = "The pull request number within the repository"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+# ---------------------------------------------------------------------------------------------
+# The two writes. **Both publish to a surface the world can read**, and their `risk` says so.
+#
+# `risk = "high"` — "writes a reviewer would want to see first" — rather than the `medium` the
+# zendesk writes carry, and the difference is not cosmetic. A zendesk comment defaults to an
+# internal note (`public = false`); a GitHub issue or comment is visible to anyone who can see the
+# repository the moment it is created, is attributed to whoever owns the token, and immediately
+# emails and notifies every subscriber and every account it mentions. Deleting it afterwards does
+# not unsend that. On a public repository the audience is everyone. flux's approval gate reads this
+# field, so `medium` here would mean an agent posting publicly under a maintainer's name without a
+# human seeing it first; `high` is the honest setting and the fail-safe direction.
+#
+# `idempotency = "non_idempotent"` because it is the truth and because a retry around either of
+# these would otherwise be sound-looking and wrong: replaying a create makes a second issue, not the
+# same one. GitHub offers no idempotency key on these endpoints, so `conditional` would be a claim
+# with nothing behind it. (The emitter also refuses a `POST` that declares itself `idempotent`, and
+# refuses any state-changing method declaring `risk = "low"` — `check_write_metadata`.)
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "github-issue-create"
+method = "POST"
+path = "/repos/{owner}/{repo}/issues"
+description = "Open a new issue on a repository. The issue is immediately visible to everyone who can see the repository and notifies its subscribers"
+risk = "high"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "owner"
+description = "The repository owner — a user or organisation login"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "repo"
+description = "The repository name, without the owner prefix"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# The body is flat — GitHub takes these at the root of the JSON object — so no `wire` path is needed
+# on any of them. Contrast zendesk, whose every write field declares one.
+[[operations.params.body]]
+name = "title"
+description = "The issue title; the only required field"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "body"
+description = "The issue body as GitHub-flavoured Markdown"
+required = false
+schema = { type = "string" }
+
+# GitHub accepts `labels` as either an array of names or an array of objects, and `assignees` as an
+# array of logins. Only the array-of-names form is declared: it is the one a caller means, and a
+# `oneOf` would land on Flux's `Any` (`crates/connector-flux/src/types.rs`), which would type the
+# parameter as "anything at all" in the op signature for no gain. A label that does not exist on the
+# repository is created by this call rather than rejected.
+[[operations.params.body]]
+name = "labels"
+description = "Label names to apply; a name the repository does not have yet is created"
+required = false
+schema = { type = "array", items = { type = "string", minLength = 1 } }
+
+[[operations.params.body]]
+name = "assignees"
+description = "User logins to assign; GitHub silently drops any login without push access to the repository"
+required = false
+schema = { type = "array", items = { type = "string", minLength = 1 } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "github-issue-comment-add"
+method = "POST"
+path = "/repos/{owner}/{repo}/issues/{issue_number}/comments"
+# The same endpoint comments on a pull request, for the same reason `github-issue-get` reads one:
+# GitHub's issue and PR numbering is one sequence and PR conversation comments *are* issue comments.
+# A review comment on a specific line is a different endpoint and is not in this selection.
+description = "Add a comment to an issue or pull request. The comment is public to everyone who can see the repository and notifies its participants; GitHub has no private or internal comment here"
+risk = "high"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "owner"
+description = "The repository owner — a user or organisation login"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "repo"
+description = "The repository name, without the owner prefix"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "issue_number"
+description = "The issue or pull request number to comment on"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+# No `public` flag and no default to get wrong: unlike zendesk's comment-add, which defaults to an
+# internal note, GitHub has no non-public comment on this endpoint. The description says so because
+# a model that assumed a zendesk-like default would be assuming a privacy setting that does not
+# exist.
+[[operations.params.body]]
+name = "body"
+description = "The comment text as GitHub-flavoured Markdown; must not be blank"
+required = true
+schema = { type = "string", minLength = 1 }

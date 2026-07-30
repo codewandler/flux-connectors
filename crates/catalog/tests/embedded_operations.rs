@@ -30,11 +30,15 @@ fn all() -> Vec<&'static Operation> {
 /// An empty catalog would satisfy every `for` loop below without saying a word.
 #[test]
 fn the_catalog_is_not_empty() {
-    assert_eq!(catalog::providers().len(), 3, "three providers ship (C-17)");
+    assert_eq!(
+        catalog::providers().len(),
+        4,
+        "the three C-17 providers plus github (C-52)"
+    );
     assert_eq!(
         all().len(),
-        25,
-        "25 operations ship today; if this changed deliberately, change the number"
+        30,
+        "30 operations ship today; if this changed deliberately, change the number"
     );
 }
 

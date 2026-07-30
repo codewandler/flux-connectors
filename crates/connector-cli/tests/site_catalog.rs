@@ -27,8 +27,8 @@ mod common;
 
 use common::Fixture;
 
-/// The three providers this repository ships, in the order C-17 names them.
-const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce"];
+/// Every provider this repository ships: the three C-17 names, then one per connector story.
+const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce", "github"];
 
 /// The document's path, relative to the repository root. Chosen by C-42, moved into the site's own
 /// `public/` tree by C-44, and named here so a change to it is a change to a test rather than a
