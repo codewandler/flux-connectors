@@ -11,7 +11,16 @@ import { withBase } from 'vitepress'
 import { operationHref, ownIssues, ownsDefect, type Operation } from '../../../data/catalog.mts'
 import StatusBadge from './StatusBadge.vue'
 
-const props = defineProps<{ operation: Operation; vendor: string }>()
+const props = defineProps<{
+  operation: Operation
+  vendor: string
+  /**
+   * The service this operation belongs to, when its connector addresses more than one surface and
+   * the vendor alone therefore does not say where the operation lives. `null` otherwise, and a null
+   * service renders no attribute and no text rather than a placeholder.
+   */
+  service?: string | null
+}>()
 
 const own = computed(() => ownIssues(props.operation))
 </script>
@@ -21,6 +30,7 @@ const own = computed(() => ownIssues(props.operation))
     class="row"
     :class="{ 'row--defect': ownsDefect(operation) }"
     :data-operation="operation.id"
+    :data-service="service ?? undefined"
     :data-defect="ownsDefect(operation) ? 'own' : 'none'"
   >
     <div class="row__head">
@@ -32,6 +42,7 @@ const own = computed(() => ownIssues(props.operation))
 
     <p class="row__meta">
       <span class="row__vendor">{{ vendor }}</span>
+      <code v-if="service" class="row__service">{{ service }}</code>
       <span class="row__method">{{ operation.method }}</span>
       <code>{{ operation.path }}</code>
       <span>risk: {{ operation.risk }}</span>
@@ -92,6 +103,11 @@ const own = computed(() => ownIssues(props.operation))
 .row__vendor,
 .row__method {
   font-weight: 600;
+  color: var(--vp-c-text-1);
+}
+
+.row__service {
+  font-size: 12px;
   color: var(--vp-c-text-1);
 }
 
