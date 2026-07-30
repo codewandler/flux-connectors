@@ -49,6 +49,16 @@ not here. This boundary is the first question to ask about any new provider.
 - **No credential ever enters a provider TOML, a generated `.flux` file, or the lockfile.** The
   generated call carries an auth *reference*; flux resolves it, applies the scheme, and registers the
   value with its redactor.
+- **Auth is modelled on three orthogonal axes — source × acquisition × placement** — never as a flat
+  list of scheme variants. A flat enum goes combinatorial: it needs a new variant for every
+  (assembly × placement) pair, which is what forced action-proxy into bespoke `base64` template
+  functions. flux's four `AuthScheme` variants are *presets* of this model, so a connector using only
+  them serializes to exactly what flux understands. See
+  [docs/designs/unified-auth.md](docs/designs/unified-auth.md).
+- **Credential assembly never happens in generated Flux.** No prefixes, no base64, no token refresh
+  in a `.flux` file — the module names a *purpose* and nothing more. Effectful acquisition (OAuth2,
+  session login) is declared in the connector manifest and executed by the host; putting it in Flux
+  would land the raw token in a model-visible symbol and defeat redaction.
 - **`connector-spec` performs no network IO.** Ingest takes bytes so it stays fully unit-testable.
   The network lives in `connector-cli` alone.
 - **Errors** use `thiserror` in library crates; the `flux-connectors` binary uses `anyhow`. No
