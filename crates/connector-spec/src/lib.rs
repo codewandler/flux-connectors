@@ -10,15 +10,22 @@
 //! # The shape
 //!
 //! ```text
-//! Connector { id, vendor, base_url, auth: [AuthMethod], default_auth: [AuthRequirement],
-//!             operations: [Operation { id, method, path, params, response_schema,
+//! Connector { id, authority, api_version, vendor, base_url,
+//!             services: [Service { name, description, base_url, api_version }],
+//!             auth: [AuthMethod], default_auth: [AuthRequirement],
+//!             operations: [Operation { id, service, method, path, params, response_schema,
 //!                                      risk, idempotency, description,
 //!                                      auth: Option<[AuthRequirement]>, quirks }],
 //!             provenance }
 //! ```
 //!
-//! Two things about it are worth reading the docs on before using it:
+//! Three things about it are worth reading the docs on before using it:
 //!
+//! - **A service is a level, not a label.** Every [`Operation`] belongs to exactly one [`Service`],
+//!   the services partition the operation set, and an operation that names none belongs to the
+//!   reserved [`DEFAULT_SERVICE`] — which is elided from every rendered [`address`]. A service owns
+//!   its base URL and its API version, because AWS versions `s3` and `bedrock-runtime` separately.
+//!   See [`Connector::service_names`] and `docs/designs/provider-services.md`.
 //! - **Auth is many-to-many.** A connector declares several [`AuthMethod`]s; each [`Operation`]
 //!   selects among them with a list of [`AuthRequirement`]s — AND within a requirement, OR across
 //!   the list — and distinguishes *unset* (inherit the connector default) from *explicitly none*.
@@ -44,15 +51,17 @@
 //! file byte for byte — see the [`lock`] module docs for what is hashed, what is deliberately not,
 //! and why no timestamp appears anywhere in it.
 
+pub mod address;
 mod auth;
 mod ir;
 pub mod lock;
 pub mod provider;
 
+pub use address::{Gid, Oip, Pid};
 pub use auth::{AuthMethod, AuthRequirement, AuthScheme, OAuth2Spec, OAuthGrant, OAuthRedirect};
 pub use ir::{
     Connector, ErrorEnvelope, HttpMethod, Idempotency, JsonSchema, Operation, Pagination, Param,
-    ParamSet, Provenance, Quirks, RateLimit, Risk,
+    ParamSet, Provenance, Quirks, RateLimit, Risk, Service, DEFAULT_SERVICE,
 };
 pub use lock::{sha256_hex, LockEntry, Lockfile, LOCKFILE_NAME, LOCKFILE_VERSION};
 pub use provider::{
@@ -90,6 +99,17 @@ pub enum Error {
         name: String,
         /// One line per problem, each naming the operation or credential it is about.
         problems: Vec<String>,
+    },
+    /// A global address (pid, gid or oip) is not well-formed — see [`address`].
+    ///
+    /// Carries the text and the reason separately so a caller can report the offending string
+    /// verbatim; an address a user typed is worth echoing back exactly as they typed it.
+    #[error("`{address}` is not a valid address: {reason}")]
+    InvalidAddress {
+        /// The address as it was given.
+        address: String,
+        /// Why it is not one.
+        reason: String,
     },
     /// The IR could not be encoded — see [`Connector::canonical_json`].
     #[error("cannot serialize the connector IR: {0}")]

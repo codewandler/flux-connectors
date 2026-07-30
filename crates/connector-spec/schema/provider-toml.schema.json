@@ -15,6 +15,19 @@
           "type": "string",
           "description": "The connector id, e.g. `zendesk`. Prefixes every operation id and names the generated `<id>.flux` and `<id>.connector.toml`."
         },
+        "authority": {
+          "type": "string",
+          "description": "The reverse-DNS authority this provider publishes under, e.g. `com.amazonaws`. The leading component of every service address (`com.amazonaws/s3:2006-03-01`). Optional: a provider that declares none simply has no rendered address yet."
+        },
+        "api_version": {
+          "type": "string",
+          "description": "The vendor's API version, as the DEFAULT for this provider's services. A single-surface provider states it once here; a multi-service provider overrides it per `[[services]]`, because AWS dates `s3` at `2006-03-01` and `bedrock-runtime` at `2023-09-30`. This is the vendor's version, never ours."
+        },
+        "services": {
+          "type": "array",
+          "description": "The API surfaces this provider exposes. Omit the block entirely for a provider with one surface: its operations then belong to the reserved `default` service, which no entry may declare and which is elided from every published address.\n\nDeclare services and every operation must name one — there is no implicit `default` sitting beside them.",
+          "items": { "$ref": "#/$defs/service" }
+        },
         "vendor": {
           "type": "string",
           "description": "The vendor's display name, e.g. `Zendesk`."
@@ -49,6 +62,32 @@
         "patch": {
           "$ref": "#/$defs/patch",
           "description": "Corrections applied over the ingested spec. Only meaningful alongside `[spec]`."
+        }
+      }
+    },
+
+    "service": {
+      "type": "object",
+      "title": "One API surface of the provider",
+      "description": "The unit you address, version, select and install: `s3` and `bedrock-runtime` under AWS, `support` under Zendesk. Every operation belongs to exactly one, and the per-service operation sets partition the whole set — which is what makes `install the whole s3 service` a well-defined request.\n\nThis is deliberately not a free-form tag: a tag cannot partition an operation set, cannot carry a version, and cannot carry a host.",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The service name, e.g. `s3`. Lowercase letters, digits and `-`. Names the emitted `<provider>-<name>.flux`, is the middle segment of the service address, and is what an operation's `service` references. `default` is reserved and may not be declared."
+        },
+        "description": {
+          "type": "string",
+          "description": "What the service is for, in one line."
+        },
+        "base_url": {
+          "type": "string",
+          "description": "The service's own API base URL, when it differs from the connector's. AWS is the case: `s3.amazonaws.com` and `bedrock-runtime.<region>.amazonaws.com` share an authority and not a host. Each emitted manifest carries its own service's base URL, so a service's egress surface is never widened to the union."
+        },
+        "api_version": {
+          "type": "string",
+          "description": "The vendor's API version for THIS service, overriding the connector-level default. `s3` is `2006-03-01`; `bedrock-runtime` is `2023-09-30`."
         }
       }
     },
@@ -344,6 +383,10 @@
         "id": {
           "type": "string",
           "description": "The op name, e.g. `zendesk.ticket.show`. A stable public contract: users and models call it by name, so it must survive regeneration."
+        },
+        "service": {
+          "type": "string",
+          "description": "The `[[services]]` entry this operation belongs to — exactly one, and one it must actually declare. Omit it for a provider with a single API surface: the operation then belongs to the reserved `default` service. In a provider that declares named services, omitting it is an error rather than an implicit `default`."
         },
         "method": {
           "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],

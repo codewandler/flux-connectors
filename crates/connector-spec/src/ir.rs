@@ -323,6 +323,50 @@ pub struct Provenance {
     pub toml_sha256: Option<String>,
 }
 
+/// The name of the implicit service every operation belongs to unless it names another.
+///
+/// **Reserved.** No `[[services]]` entry may declare it (the loader refuses one), because it is the
+/// name of the service that exists without being declared — a declaration of it would be a second,
+/// contradictable definition. It is also **elided from every rendered address**
+/// ([`crate::address::Gid`]): `default` is an internal name for "this provider has one API surface",
+/// and an address is a promise that would have to be broken the day the provider grows a second one.
+pub const DEFAULT_SERVICE: &str = "default";
+
+/// One API surface of a provider: the unit you address, version, select and install.
+///
+/// `s3` and `bedrock-runtime` under AWS; `support` under Zendesk. A service is the middle level of
+/// C-37's address scheme, promoted from an anonymous path segment to a named thing with an owner —
+/// see [`docs/designs/provider-services.md`](../../../docs/designs/provider-services.md).
+///
+/// **This is not a tag.** A free-form label cannot do the three things this level exists for: it
+/// cannot *partition* (so "install the whole s3 service" would not denote a set), it cannot carry a
+/// *version* (so `s3:2006-03-01` would have to be repeated on every operation and could disagree with
+/// itself), and it cannot carry a *host* (so a service could not have its own egress surface).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Service {
+    /// The service name, e.g. `s3`. Names the emitted `<provider>-<name>.flux`, is the first path
+    /// segment of the service's gid, and is what [`Operation::service`] references.
+    pub name: String,
+    /// What the service is for, in one line.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
+    /// The service's own API base URL, when it differs from the connector's.
+    ///
+    /// AWS is the motivating case: `s3.amazonaws.com` and `bedrock-runtime.<region>.amazonaws.com`
+    /// share an authority and not a host. Resolve it with [`Connector::base_url_of`] rather than
+    /// reading this directly — the connector's value is the default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    /// The vendor's API version for *this* service, when it differs from the connector's.
+    ///
+    /// AWS versions each service on its own date (`s3:2006-03-01`,
+    /// `bedrock-runtime:2023-09-30`), which is why a single connector-level version cannot describe a
+    /// multi-service provider. Resolve it with [`Connector::api_version_of`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_version: Option<String>,
+}
+
 /// One operation: a single HTTP call, and everything a Flux `op` declaration needs to wrap it.
 ///
 /// `description`, `risk` and `idempotency` map straight onto the metadata a Flux composite op
@@ -335,6 +379,22 @@ pub struct Operation {
     /// models call it by name, so it must survive regeneration and must not be derived from a
     /// volatile spec field like `operationId` without a pinned override.
     pub id: String,
+    /// The [`Service`] this operation belongs to — **exactly one**, always a concrete name.
+    ///
+    /// A `String` rather than an `Option<String>`: `None` and `Some("default")` would be two
+    /// spellings of one meaning, which is the objection [`AuthRequirement`] already records against an
+    /// empty mechanism inside a non-empty alternatives list. "Unset" exists in the *file*, where it
+    /// deserializes to [`DEFAULT_SERVICE`]; the IR always names a service.
+    ///
+    /// Not a set, either. A set would leave the gid ambiguous (which segment renders?) and would make
+    /// selection non-partitioning, so "the s3 service" would stop being answerable by set membership.
+    /// An operation that genuinely serves two services is duplicated deliberately with two ids —
+    /// which is visible in a diff — rather than resolved by a rule nobody can see.
+    #[serde(
+        default = "default_service",
+        skip_serializing_if = "is_default_service"
+    )]
+    pub service: String,
     /// The HTTP method.
     pub method: HttpMethod,
     /// The path template, relative to the connector's base URL (`/v2/calls/{call_id}`).
@@ -386,6 +446,28 @@ pub struct Connector {
     /// The connector id, e.g. `babelforce`. Prefixes every operation id and names the generated
     /// `<id>.flux` and `<id>.connector.toml`.
     pub id: String,
+    /// The reverse-DNS authority this provider publishes under (`com.amazonaws`) — the `pid` of
+    /// C-37's address scheme, and the leading component of every service gid.
+    ///
+    /// Optional: a connector that declares none has no rendered address yet, which is the state all
+    /// six shipped providers are in. See [`crate::address`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authority: Option<String>,
+    /// The vendor's API version for this connector, as the *default* for its services.
+    ///
+    /// A multi-service provider overrides it per [`Service`]; a single-surface provider states it
+    /// once here. It is the vendor's version, never ours — our own connector version lives in
+    /// `connectors.lock` — so an address stays stable across our regenerations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_version: Option<String>,
+    /// The API surfaces this provider exposes, each owning its operations.
+    ///
+    /// Empty means the provider has exactly one surface, the reserved [`DEFAULT_SERVICE`], which no
+    /// entry declares and which is elided from every rendered address. A provider that declares any
+    /// service must place **every** operation in one of them — an operation that omits `service` in
+    /// such a file is a loader error, not an implicit `default` sitting beside the declared ones.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub services: Vec<Service>,
     /// The vendor's display name.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub vendor: String,
@@ -420,6 +502,20 @@ fn provenance_is_empty(provenance: &Provenance) -> bool {
     *provenance == Provenance::default()
 }
 
+/// `serde(default)` for [`Operation::service`]: an operation that names none belongs to the reserved
+/// [`DEFAULT_SERVICE`].
+fn default_service() -> String {
+    DEFAULT_SERVICE.to_owned()
+}
+
+/// `skip_serializing_if` for [`Operation::service`], so that omitting the key and writing
+/// `service = "default"` produce **identical bytes**. One meaning, one encoding — and the encoding of
+/// every operation shipped before services existed is unchanged, which is what keeps
+/// `connectors.lock` from churning for a connector nobody edited.
+fn is_default_service(service: &str) -> bool {
+    service == DEFAULT_SERVICE
+}
+
 impl Connector {
     /// The auth alternatives that actually apply to an operation, resolving the inheritance rule.
     ///
@@ -447,6 +543,97 @@ impl Connector {
         self.operations.iter().find(|op| op.id == id)
     }
 
+    /// Every service name this connector has, in declaration order.
+    ///
+    /// A connector that declares none has exactly one service, the reserved [`DEFAULT_SERVICE`]. This
+    /// is the set an operation's [`service`](Operation::service) must be a member of — the loader
+    /// enforces it — and therefore the set that makes the partition below total.
+    pub fn service_names(&self) -> Vec<&str> {
+        if self.services.is_empty() {
+            vec![DEFAULT_SERVICE]
+        } else {
+            self.services
+                .iter()
+                .map(|service| service.name.as_str())
+                .collect()
+        }
+    }
+
+    /// The declared [`Service`] of that name, or `None`.
+    ///
+    /// `None` for [`DEFAULT_SERVICE`] on a connector that declares no services: the implicit service
+    /// has no declaration by construction. Use [`service_names`](Self::service_names) to ask *which*
+    /// services exist and the resolvers below to ask about their fields.
+    pub fn service(&self, name: &str) -> Option<&Service> {
+        self.services.iter().find(|service| service.name == name)
+    }
+
+    /// Whether this connector has exactly one service and it is the reserved [`DEFAULT_SERVICE`].
+    ///
+    /// The shape of every provider shipped today, and the shape whose emitted artifacts are named
+    /// `<provider>.flux` rather than `<provider>-<service>.flux`.
+    pub fn is_default_only(&self) -> bool {
+        self.services.is_empty()
+    }
+
+    /// The operations belonging to one service, in IR order.
+    ///
+    /// Together with [`service_names`](Self::service_names) this is the partition: the sets are
+    /// pairwise disjoint because [`Operation::service`] holds one name, and their union is every
+    /// operation because the loader refuses an operation naming a service that does not exist.
+    pub fn operations_of<'a>(&'a self, service: &'a str) -> impl Iterator<Item = &'a Operation> {
+        self.operations
+            .iter()
+            .filter(move |operation| operation.service == service)
+    }
+
+    /// The base URL a call to that service reaches: the service's own override, else the connector's.
+    pub fn base_url_of(&self, service: &str) -> &str {
+        self.service(service)
+            .and_then(|service| service.base_url.as_deref())
+            .unwrap_or(&self.base_url)
+    }
+
+    /// The vendor API version of that service: the service's own, else the connector's.
+    ///
+    /// `None` when neither states one, in which case the service has no renderable
+    /// [`gid`](Self::gid_of) — stated at the accessor rather than papered over with a placeholder
+    /// version that would become part of a published address.
+    pub fn api_version_of(&self, service: &str) -> Option<&str> {
+        self.service(service)
+            .and_then(|service| service.api_version.as_deref())
+            .or(self.api_version.as_deref())
+    }
+
+    /// The provider's `pid` — C-37's top address level — when it declares an authority.
+    pub fn pid(&self) -> Option<crate::address::Pid> {
+        Some(crate::address::Pid::new(self.authority.as_deref()?))
+    }
+
+    /// One service's `gid`: `com.amazonaws/s3:2006-03-01`, with [`DEFAULT_SERVICE`] elided.
+    ///
+    /// `None` unless the connector declares an authority *and* the service resolves an API version:
+    /// an address missing either half is not an address, and inventing one is how a wrong identifier
+    /// gets published under a stability contract that forbids reusing it.
+    pub fn gid_of(&self, service: &str) -> Option<crate::address::Gid> {
+        Some(crate::address::Gid::new(
+            self.authority.as_deref()?,
+            service,
+            self.api_version_of(service)?,
+        ))
+    }
+
+    /// One operation's `oip`: `com.amazonaws/s3:2006-03-01#object-get`.
+    ///
+    /// The fragment is [`Operation::id`], which stays the declarable Flux symbol — C-37's design
+    /// records why the two identifiers are separate rather than one richer one.
+    pub fn oip_of(&self, operation: &Operation) -> Option<crate::address::Oip> {
+        Some(crate::address::Oip {
+            gid: self.gid_of(&operation.service)?,
+            operation: operation.id.clone(),
+        })
+    }
+
     /// The connector's canonical JSON encoding: compact, and byte-identical for equal values.
     ///
     /// This is the connector's **complete** encoding, provenance included, and it is what a round
@@ -463,9 +650,11 @@ impl Connector {
     ///
     /// # What is in it
     ///
-    /// The connector's *compiled meaning*: `id`, `vendor`, `base_url`, `description`, `auth`,
-    /// `default_auth`, `operations`. Change any of those and the generated `.flux` module changes,
-    /// so the hash must move.
+    /// The connector's *compiled meaning*: `id`, `authority`, `api_version`, `services`, `vendor`,
+    /// `base_url`, `description`, `auth`, `default_auth`, `operations` — and, inside each operation,
+    /// its `service`. Change any of those and the generated `.flux` module changes, so the hash must
+    /// move. C-49's service fields are in for exactly this reason: a service owns the base URL a call
+    /// reaches and names the module it is emitted into.
     ///
     /// # What is out of it, and why
     ///
@@ -504,9 +693,22 @@ impl Connector {
 /// Borrowed rather than cloned so that hashing is allocation-cheap, and with no
 /// `skip_serializing_if` of its own — the fields it names are always present, and the types it
 /// borrows already encode canonically.
+/// The three service fields carry `skip_serializing_if`, which is the one exception to the rule
+/// above, and it exists for the same reason [`Provenance`] is excluded altogether: a connector that
+/// declares no service, no authority and no version must hash to what it hashed *before* services
+/// existed. Otherwise landing C-49 moves every `ir_sha256` in the repository and every
+/// `connectors.lock` entry churns for a provider nobody edited — phantom drift, which is precisely
+/// what the lockfile exists to rule out. [`Operation::service`] holds the same property through its
+/// own `skip_serializing_if`.
 #[derive(Serialize)]
 struct HashDomain<'a> {
     id: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    authority: &'a Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    api_version: &'a Option<String>,
+    #[serde(skip_serializing_if = "<[Service]>::is_empty")]
+    services: &'a [Service],
     vendor: &'a str,
     base_url: &'a str,
     description: &'a str,
@@ -523,6 +725,9 @@ impl<'a> HashDomain<'a> {
         // inheriting the decision is how `fetched_at` got into the hash in the first place.
         let Connector {
             id,
+            authority,
+            api_version,
+            services,
             vendor,
             base_url,
             description,
@@ -537,6 +742,9 @@ impl<'a> HashDomain<'a> {
 
         Self {
             id,
+            authority,
+            api_version,
+            services,
             vendor,
             base_url,
             description,

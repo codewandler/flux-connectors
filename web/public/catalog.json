@@ -4,11 +4,26 @@
   "providers": [
     {
       "id": "babelforce",
+      "authority": null,
       "vendor": "Babelforce",
       "description": "Babelforce voice platform: agent availability, live and reported calls, and the session variables a flow reads and writes",
       "base_url": "https://services.babelforce.com",
+      "api_version": null,
       "hosts": [
         "services.babelforce.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://services.babelforce.com",
+          "hosts": [
+            "services.babelforce.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 9
+        }
       ],
       "auth": {
         "schemes": [
@@ -41,6 +56,7 @@
         {
           "id": "babelforce-agent-list",
           "provider": "babelforce",
+          "service": "default",
           "description": "List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint",
           "risk": "low",
           "idempotency": "idempotent",
@@ -229,6 +245,7 @@
         {
           "id": "babelforce-agent-get",
           "provider": "babelforce",
+          "service": "default",
           "description": "Get one agent",
           "risk": "low",
           "idempotency": "idempotent",
@@ -272,6 +289,7 @@
         {
           "id": "babelforce-agent-status-update",
           "provider": "babelforce",
+          "service": "default",
           "description": "Update an agent's status. Supply at least one of enabled or presence.name — the request body's properties are all optional, so an empty PUT is schema-valid and does nothing",
           "risk": "medium",
           "idempotency": "idempotent",
@@ -335,6 +353,7 @@
         {
           "id": "babelforce-call-list",
           "provider": "babelforce",
+          "service": "default",
           "description": "List and filter calls from the reporting view",
           "risk": "low",
           "idempotency": "idempotent",
@@ -601,6 +620,7 @@
         {
           "id": "babelforce-call-get",
           "provider": "babelforce",
+          "service": "default",
           "description": "Get one call",
           "risk": "low",
           "idempotency": "idempotent",
@@ -644,6 +664,7 @@
         {
           "id": "babelforce-call-hangup",
           "provider": "babelforce",
+          "service": "default",
           "description": "Hang up a live call",
           "risk": "destructive",
           "idempotency": "non_idempotent",
@@ -687,6 +708,7 @@
         {
           "id": "babelforce-call-session-set",
           "provider": "babelforce",
+          "service": "default",
           "description": "Set session variables on a live call. Variable keys must start with `app` — babelforce rejects other keys, and states the rule only in prose",
           "risk": "medium",
           "idempotency": "idempotent",
@@ -733,6 +755,7 @@
         {
           "id": "babelforce-session-get",
           "provider": "babelforce",
+          "service": "default",
           "description": "Get the IVR variables for a session",
           "risk": "low",
           "idempotency": "idempotent",
@@ -776,6 +799,7 @@
         {
           "id": "babelforce-session-update",
           "provider": "babelforce",
+          "service": "default",
           "description": "Update the user-scoped variables of a session",
           "risk": "medium",
           "idempotency": "idempotent",
@@ -823,11 +847,26 @@
     },
     {
       "id": "freshdesk",
+      "authority": null,
       "vendor": "Freshdesk",
       "description": "Freshdesk ticketing: list, read, create and update tickets and the contacts they belong to",
       "base_url": "https://{domain}/api/v2",
+      "api_version": null,
       "hosts": [
         "{domain}"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://{domain}/api/v2",
+          "hosts": [
+            "{domain}"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 9
+        }
       ],
       "auth": {
         "schemes": [],
@@ -839,6 +878,7 @@
         {
           "id": "freshdesk-test",
           "provider": "freshdesk",
+          "service": "default",
           "description": "Verify credentials with a bounded contact read",
           "risk": "low",
           "idempotency": "idempotent",
@@ -886,6 +926,7 @@
         {
           "id": "freshdesk-ticket-list",
           "provider": "freshdesk",
+          "service": "default",
           "description": "List and filter tickets",
           "risk": "low",
           "idempotency": "idempotent",
@@ -974,6 +1015,7 @@
         {
           "id": "freshdesk-ticket-get",
           "provider": "freshdesk",
+          "service": "default",
           "description": "View one ticket",
           "risk": "low",
           "idempotency": "idempotent",
@@ -1019,6 +1061,7 @@
         {
           "id": "freshdesk-ticket-create",
           "provider": "freshdesk",
+          "service": "default",
           "description": "Create a ticket. The requester must be identified either by requester_id, or by phone together with name — Freshdesk states this only in prose and its required flags do not capture it",
           "risk": "medium",
           "idempotency": "non_idempotent",
@@ -1251,6 +1294,7 @@
         {
           "id": "freshdesk-ticket-update",
           "provider": "freshdesk",
+          "service": "default",
           "description": "Update a ticket's fields",
           "risk": "medium",
           "idempotency": "idempotent",
@@ -1468,6 +1512,7 @@
         {
           "id": "freshdesk-ticket-note-add",
           "provider": "freshdesk",
+          "service": "default",
           "description": "Add a note to a ticket; the note is private unless explicitly made public",
           "risk": "medium",
           "idempotency": "non_idempotent",
@@ -1560,6 +1605,7 @@
         {
           "id": "freshdesk-contact-list",
           "provider": "freshdesk",
+          "service": "default",
           "description": "List and filter contacts, e.g. to resolve a caller before filing a ticket",
           "risk": "low",
           "idempotency": "idempotent",
@@ -1664,6 +1710,7 @@
         {
           "id": "freshdesk-contact-get",
           "provider": "freshdesk",
+          "service": "default",
           "description": "Get one contact",
           "risk": "low",
           "idempotency": "idempotent",
@@ -1709,6 +1756,7 @@
         {
           "id": "freshdesk-contact-create",
           "provider": "freshdesk",
+          "service": "default",
           "description": "Create a contact",
           "risk": "medium",
           "idempotency": "non_idempotent",
@@ -1776,11 +1824,26 @@
     },
     {
       "id": "github",
+      "authority": null,
       "vendor": "GitHub",
       "description": "GitHub REST API: read repositories, issues and pull requests, and write issues and issue comments",
       "base_url": "https://api.github.com",
+      "api_version": null,
       "hosts": [
         "api.github.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.github.com",
+          "hosts": [
+            "api.github.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 5
+        }
       ],
       "auth": {
         "schemes": [
@@ -1813,6 +1876,7 @@
         {
           "id": "github-repo-get",
           "provider": "github",
+          "service": "default",
           "description": "Get one repository's metadata, including its default branch, visibility and permissions",
           "risk": "low",
           "idempotency": "idempotent",
@@ -1868,6 +1932,7 @@
         {
           "id": "github-issue-get",
           "provider": "github",
+          "service": "default",
           "description": "Get one issue by number. GitHub treats a pull request as an issue, so a PR number returns that PR's issue view; use github-pull-get for its merge and review state",
           "risk": "low",
           "idempotency": "idempotent",
@@ -1935,6 +2000,7 @@
         {
           "id": "github-pull-get",
           "provider": "github",
+          "service": "default",
           "description": "Get one pull request by number, with its merge state, head and base refs and review counts",
           "risk": "low",
           "idempotency": "idempotent",
@@ -2002,6 +2068,7 @@
         {
           "id": "github-issue-create",
           "provider": "github",
+          "service": "default",
           "description": "Open a new issue on a repository. The issue is immediately visible to everyone who can see the repository and notifies its subscribers",
           "risk": "high",
           "idempotency": "non_idempotent",
@@ -2106,6 +2173,7 @@
         {
           "id": "github-issue-comment-add",
           "provider": "github",
+          "service": "default",
           "description": "Add a comment to an issue or pull request. The comment is public to everyone who can see the repository and notifies its participants; GitHub has no private or internal comment here",
           "risk": "high",
           "idempotency": "non_idempotent",
@@ -2185,11 +2253,26 @@
     },
     {
       "id": "openai",
+      "authority": null,
       "vendor": "OpenAI",
       "description": "OpenAI platform: list models, and create chat completions and embeddings",
       "base_url": "https://api.openai.com",
+      "api_version": null,
       "hosts": [
         "api.openai.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.openai.com",
+          "hosts": [
+            "api.openai.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 4
+        }
       ],
       "auth": {
         "schemes": [
@@ -2222,6 +2305,7 @@
         {
           "id": "openai-models-list",
           "provider": "openai",
+          "service": "default",
           "description": "List the models available to this API key, with their ids and owners",
           "risk": "low",
           "idempotency": "idempotent",
@@ -2254,6 +2338,7 @@
         {
           "id": "openai-model-get",
           "provider": "openai",
+          "service": "default",
           "description": "Retrieve one model by id, with its ownership and permissions",
           "risk": "low",
           "idempotency": "idempotent",
@@ -2298,6 +2383,7 @@
         {
           "id": "openai-chat-completion",
           "provider": "openai",
+          "service": "default",
           "description": "Create a chat completion. Billed per input and output token, so the caller must state a token budget via max_completion_tokens",
           "risk": "medium",
           "idempotency": "non_idempotent",
@@ -2367,6 +2453,7 @@
         {
           "id": "openai-embeddings-create",
           "provider": "openai",
+          "service": "default",
           "description": "Create embedding vectors for one or more input texts. Billed per input token",
           "risk": "medium",
           "idempotency": "non_idempotent",
@@ -2434,11 +2521,26 @@
     },
     {
       "id": "slack",
+      "authority": null,
       "vendor": "Slack",
       "description": "Slack messaging: post messages, read conversation history, look up users, react",
       "base_url": "https://slack.com",
+      "api_version": null,
       "hosts": [
         "slack.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://slack.com",
+          "hosts": [
+            "slack.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 4
+        }
       ],
       "auth": {
         "schemes": [
@@ -2471,6 +2573,7 @@
         {
           "id": "slack-chat-post-message",
           "provider": "slack",
+          "service": "default",
           "description": "Post a message to a Slack channel, visible to everyone in it. Slack answers HTTP 200 even on failure: check `ok` in the response body before treating the message as sent",
           "risk": "high",
           "idempotency": "non_idempotent",
@@ -2536,6 +2639,7 @@
         {
           "id": "slack-conversations-history",
           "provider": "slack",
+          "service": "default",
           "description": "Read recent messages from a Slack channel, newest first. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `channel_not_found` appears at `error`",
           "risk": "medium",
           "idempotency": "non_idempotent",
@@ -2613,6 +2717,7 @@
         {
           "id": "slack-users-info",
           "provider": "slack",
+          "service": "default",
           "description": "Look up one Slack user by id — display name, real name, time zone and whether they are a bot. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `user_not_found` appears at `error`",
           "risk": "medium",
           "idempotency": "non_idempotent",
@@ -2668,6 +2773,7 @@
         {
           "id": "slack-reactions-add",
           "provider": "slack",
+          "service": "default",
           "description": "Add an emoji reaction to a message, visible to everyone in the channel. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `already_reacted` appears at `error`",
           "risk": "medium",
           "idempotency": "non_idempotent",
@@ -2735,11 +2841,26 @@
     },
     {
       "id": "zendesk",
+      "authority": null,
       "vendor": "Zendesk",
       "description": "Zendesk Support ticketing: search, read, update tickets and their comments",
       "base_url": "https://{subdomain}.zendesk.com",
+      "api_version": null,
       "hosts": [
         "{subdomain}.zendesk.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://{subdomain}.zendesk.com",
+          "hosts": [
+            "{subdomain}.zendesk.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 7
+        }
       ],
       "auth": {
         "schemes": [
@@ -2774,6 +2895,7 @@
         {
           "id": "zendesk-test",
           "provider": "zendesk",
+          "service": "default",
           "description": "Verify credentials by fetching the authenticated Zendesk user",
           "risk": "low",
           "idempotency": "idempotent",
@@ -2812,6 +2934,7 @@
         {
           "id": "zendesk-ticket-search",
           "provider": "zendesk",
+          "service": "default",
           "description": "Search tickets with Zendesk search syntax, e.g. `type:ticket status:new`",
           "risk": "low",
           "idempotency": "idempotent",
@@ -2894,6 +3017,7 @@
         {
           "id": "zendesk-ticket-show",
           "provider": "zendesk",
+          "service": "default",
           "description": "Show one ticket",
           "risk": "low",
           "idempotency": "idempotent",
@@ -2945,6 +3069,7 @@
         {
           "id": "zendesk-ticket-comment-list",
           "provider": "zendesk",
+          "service": "default",
           "description": "List a ticket's comments",
           "risk": "low",
           "idempotency": "idempotent",
@@ -3021,6 +3146,7 @@
         {
           "id": "zendesk-ticket-update",
           "provider": "zendesk",
+          "service": "default",
           "description": "Safe-update selected ticket fields against the caller's updated_stamp; at least one of status, priority, assignee_id, group_id or type must be supplied",
           "risk": "medium",
           "idempotency": "conditional",
@@ -3145,6 +3271,7 @@
         {
           "id": "zendesk-ticket-comment-add",
           "provider": "zendesk",
+          "service": "default",
           "description": "Add a comment to a ticket; the comment is an internal note unless public is explicitly true",
           "risk": "medium",
           "idempotency": "conditional",
@@ -3239,6 +3366,7 @@
         {
           "id": "zendesk-ticket-tag-add",
           "provider": "zendesk",
+          "service": "default",
           "description": "Add tags to a ticket without replacing the tags it already has",
           "risk": "medium",
           "idempotency": "conditional",

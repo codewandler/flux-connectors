@@ -171,8 +171,10 @@ pub fn of(connector: &Connector, operation: &Operation) -> Status {
         });
     }
 
-    // 3. The base URL names a tenant nobody has bound.
-    if let Some(variable) = first_template_variable(&connector.base_url) {
+    // 3. The base URL names a tenant nobody has bound. Read through the operation's **service**
+    //    (C-49): a service may override the connector's base URL, and it is the URL the call
+    //    actually reaches that decides whether the destination is bound.
+    if let Some(variable) = first_template_variable(connector.base_url_of(&operation.service)) {
         issues.push(Issue {
             code: UNBOUND_BASE_URL_TEMPLATE,
             scope: Scope::Provider,
@@ -247,6 +249,7 @@ mod tests {
     fn operation(id: &str) -> Operation {
         Operation {
             id: id.to_string(),
+            service: connector_spec::DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Get,
             path: "/v2/things".to_string(),
             description: "Do a thing".to_string(),
@@ -264,6 +267,9 @@ mod tests {
     fn connector() -> Connector {
         Connector {
             id: "acme".to_string(),
+            authority: None,
+            api_version: None,
+            services: Vec::new(),
             vendor: "Acme".to_string(),
             base_url: "https://api.acme.example".to_string(),
             description: "Acme".to_string(),

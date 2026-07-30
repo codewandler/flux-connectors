@@ -102,17 +102,31 @@ impl ProviderInputs {
 /// unchanged in role, and per-operation renderings are *additional*, never a substitution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Artifacts {
-    /// The `.flux` module: the `op` declarations flux loads.
-    pub module: String,
-    /// The `.connector.toml` manifest: what the connector needs in order to run.
-    pub manifest: String,
+    /// One module and one manifest **per service** (C-49), in the connector's service order.
+    ///
+    /// A `default`-only provider yields exactly one entry, whose files are named `<provider>.flux`
+    /// and `<provider>.connector.toml` — byte for byte what it emitted before services existed.
+    pub services: Vec<ServiceArtifacts>,
     /// One `.flux` rendering per operation, in IR order — the catalog's unit (C-38).
     ///
-    /// The same strings [`module`](Self::module) is concatenated from, so the two cannot disagree.
+    /// The same strings the service modules are concatenated from, so the two cannot disagree. Kept
+    /// provider-wide rather than split per service, because the catalog's unit is the provider.
     pub operations: Vec<OperationRendering>,
     /// `crates/catalog/src/generated/<name>.rs`: the generated table embedding those renderings
     /// alongside the metadata a caller needs to decide whether to use an operation.
     pub catalog: String,
+}
+
+/// What one service of one connector compiles to: the pair of files that install together.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ServiceArtifacts {
+    /// The service name — [`connector_spec::DEFAULT_SERVICE`] for a single-surface provider.
+    pub service: String,
+    /// The `.flux` module: the `op` declarations flux loads for this service.
+    pub module: String,
+    /// The `.connector.toml` manifest: what this service needs in order to run, including **its own**
+    /// base URL rather than the union of the provider's.
+    pub manifest: String,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -172,15 +186,83 @@ pub fn load(inputs: &ProviderInputs) -> Result<Connector> {
 ///   tree behind.
 pub fn emit(connector: &Connector) -> Result<Artifacts> {
     let operations = renderings(connector)?;
-    let module = module(connector, &operations);
-    let manifest = manifest(connector)?;
+
+    let mut services = Vec::new();
+    for service in connector.service_names() {
+        services.push(ServiceArtifacts {
+            service: service.to_owned(),
+            module: module(connector, service, &operations),
+            manifest: manifest(connector, service)?,
+        });
+    }
+
     let catalog = catalog::render(connector, &operations)?;
     Ok(Artifacts {
-        module,
-        manifest,
+        services,
         operations,
         catalog,
     })
+}
+
+/// Narrow a connector to one whole service: every operation belonging to it, and nothing else.
+///
+/// `selector` is a service name (`s3`) or a rendered gid (`com.amazonaws/s3:2006-03-01`). The gid form
+/// is what lets an external reference name a slice without knowing our local provider spelling.
+///
+/// Narrowing the **IR** rather than filtering at emission time is deliberate: every backend then sees
+/// a connector that simply has one service, so "the other service's operations are absent" holds for
+/// the module, the manifest, the catalog and the site document at once, with no per-backend filter to
+/// forget.
+///
+/// # Errors
+///
+/// An unknown service, naming the ones that exist — the same loudness `--provider` already has.
+pub fn select_service(connector: &Connector, selector: &str) -> Result<Connector> {
+    let available = connector.service_names();
+    let matched = available
+        .iter()
+        .copied()
+        .find(|name| *name == selector)
+        .or_else(|| {
+            available.iter().copied().find(|name| {
+                connector
+                    .gid_of(name)
+                    .is_some_and(|gid| gid.to_string() == selector)
+            })
+        });
+
+    let Some(service) = matched else {
+        bail!(
+            "connector `{}` has no service `{selector}`; {}",
+            connector.id,
+            describe_services(connector)
+        );
+    };
+
+    Ok(Connector {
+        services: connector
+            .services
+            .iter()
+            .filter(|declared| declared.name == service)
+            .cloned()
+            .collect(),
+        operations: connector.operations_of(service).cloned().collect(),
+        ..connector.clone()
+    })
+}
+
+/// The services a connector has, with their addresses when it declares an authority — so the error
+/// names both spellings a `--service` selector may use.
+fn describe_services(connector: &Connector) -> String {
+    let described: Vec<String> = connector
+        .service_names()
+        .into_iter()
+        .map(|name| match connector.gid_of(name) {
+            Some(gid) => format!("{name} ({gid})"),
+            None => name.to_owned(),
+        })
+        .collect();
+    format!("available services: {}", described.join(", "))
 }
 
 /// Every operation's `op` declaration, emitted **once**.
@@ -206,15 +288,30 @@ fn renderings(connector: &Connector) -> Result<Vec<OperationRendering>> {
 /// The header is `#` comments. Flux's comment character is `#` — `//` is not a comment and does not
 /// parse — and comment-only lines are trivia the lexer drops, so the header cannot affect what the
 /// module declares.
-fn module(connector: &Connector, operations: &[OperationRendering]) -> String {
+/// A `default`-only provider's header is unchanged from before services existed — the byte-identity
+/// property this story is asserted against. A named service adds one `# Service:` line, because a
+/// reviewer opening `aws-s3.flux` should not have to infer which surface it is from the file name.
+fn module(connector: &Connector, service: &str, operations: &[OperationRendering]) -> String {
     let mut module = format!(
-        "# Generated by {} — do not edit.\n# Provider: {}\n# Regenerate with `flux-connectors build`.\n",
+        "# Generated by {} — do not edit.\n# Provider: {}\n",
         generator(),
         connector.id
     );
+    if service != connector_spec::DEFAULT_SERVICE {
+        module.push_str(&format!("# Service: {service}\n"));
+    }
+    module.push_str("# Regenerate with `flux-connectors build`.\n");
+    // Walked in rendering order, which is IR order, so a service's declarations appear in the module
+    // in the order the provider file declares them. A rendering whose operation is missing is refused
+    // by `catalog::render` and `site::provider_entry`, so it cannot be quietly dropped here.
     for rendering in operations {
-        module.push('\n');
-        module.push_str(&rendering.source);
+        if connector
+            .operation(&rendering.id)
+            .is_some_and(|operation| operation.service == service)
+        {
+            module.push('\n');
+            module.push_str(&rendering.source);
+        }
     }
     module
 }
@@ -226,32 +323,55 @@ fn module(connector: &Connector, operations: &[OperationRendering]) -> String {
 /// all of which is C-10's Acceptance, and none of which can be written honestly before auth is
 /// modelled. What is here is what the IR already knows and a reviewer needs in order to read a
 /// diff: which connector this is, where it points, and which operations it publishes.
-fn manifest(connector: &Connector) -> Result<String> {
+fn manifest(connector: &Connector, service: &str) -> Result<String> {
     /// The manifest's wire shape. Field order is the emitted order, which is what makes the output
     /// deterministic without sorting anything at runtime.
+    ///
+    /// `service`, `authority` and `api_version` are skipped when they are absent or reserved, so a
+    /// `default`-only provider's manifest is byte for byte what it was before C-49 — see the story's
+    /// byte-identity item.
     #[derive(Serialize)]
     struct Manifest<'a> {
         generator: String,
         connector: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        service: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        gid: Option<String>,
         #[serde(skip_serializing_if = "str::is_empty")]
         vendor: &'a str,
         #[serde(skip_serializing_if = "str::is_empty")]
         description: &'a str,
+        /// **This service's** base URL, never the union of the provider's. A service's egress surface
+        /// is its own; C-10's `http_hosts` allowlist derives from exactly this value.
         base_url: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        api_version: Option<&'a str>,
         module: String,
         operations: Vec<&'a str>,
     }
 
+    let named = service != connector_spec::DEFAULT_SERVICE;
     let manifest = Manifest {
         generator: generator(),
         connector: &connector.id,
+        service: named.then_some(service),
+        gid: connector.gid_of(service).map(|gid| gid.to_string()),
         vendor: &connector.vendor,
         description: &connector.description,
-        base_url: &connector.base_url,
-        module: format!("{}.{}", connector.id, crate::workspace::MODULE_EXT),
+        base_url: connector.base_url_of(service),
+        api_version: connector.api_version_of(service),
+        module: format!(
+            "{}.{}",
+            if named {
+                format!("{}-{service}", connector.id)
+            } else {
+                connector.id.clone()
+            },
+            crate::workspace::MODULE_EXT
+        ),
         operations: connector
-            .operations
-            .iter()
+            .operations_of(service)
             .map(|operation| operation.id.as_str())
             .collect(),
     };
@@ -287,6 +407,54 @@ required = true
 schema = { type = "integer" }
 "#;
 
+    /// A two-service provider, AWS-shaped: one authority, two hosts, one API date each.
+    const TWO_SERVICE: &str = r#"
+id = "aws"
+vendor = "Amazon Web Services"
+authority = "com.amazonaws"
+base_url = "https://amazonaws.com"
+
+[[services]]
+name = "s3"
+description = "Object storage."
+base_url = "https://s3.amazonaws.com"
+api_version = "2006-03-01"
+
+[[services]]
+name = "bedrock-runtime"
+description = "Model inference."
+base_url = "https://bedrock-runtime.us-east-1.amazonaws.com"
+api_version = "2023-09-30"
+
+[[operations]]
+id = "aws-object-get"
+service = "s3"
+method = "GET"
+path = "/objects/{key}"
+description = "Fetch one object."
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "key"
+required = true
+schema = { type = "string" }
+
+[[operations]]
+id = "aws-model-invoke"
+service = "bedrock-runtime"
+method = "POST"
+path = "/model/{model_id}/invoke"
+description = "Invoke a model."
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "model_id"
+required = true
+schema = { type = "string" }
+"#;
+
     fn inputs(definition: &str) -> ProviderInputs {
         ProviderInputs {
             name: "acme".to_string(),
@@ -309,8 +477,24 @@ schema = { type = "integer" }
             .replace("https://api.acme.example", "https://api.acme.test")
             .replace(r#"vendor = "Acme""#, r#"vendor = "Acme Inc.""#);
         let second = emit(&load(&inputs(&changed)).unwrap()).unwrap();
-        assert_ne!(first.module, second.module);
-        assert_ne!(first.manifest, second.manifest);
+        assert_ne!(default_unit(&first).module, default_unit(&second).module);
+        assert_ne!(
+            default_unit(&first).manifest,
+            default_unit(&second).manifest
+        );
+    }
+
+    /// The single unit a `default`-only provider emits. Every fixture here is one, which is also the
+    /// shape of every provider the repository ships.
+    fn default_unit(artifacts: &Artifacts) -> &ServiceArtifacts {
+        assert_eq!(
+            artifacts.services.len(),
+            1,
+            "a `default`-only provider emits exactly one service unit"
+        );
+        let unit = &artifacts.services[0];
+        assert_eq!(unit.service, connector_spec::DEFAULT_SERVICE);
+        unit
     }
 
     #[test]
@@ -349,13 +533,99 @@ path = \"specs/acme/v1.json\"
     #[test]
     fn the_module_declares_the_operation() {
         let artifacts = emit(&load(&inputs(HAND_AUTHORED)).unwrap()).unwrap();
+        let module = &default_unit(&artifacts).module;
         assert!(
-            artifacts
-                .module
-                .contains("op acme-ticket-show(ticket_id: Number) -> Any"),
-            "{}",
-            artifacts.module
+            module.contains("op acme-ticket-show(ticket_id: Number) -> Any"),
+            "{module}"
         );
+    }
+
+    /// A two-service provider emits one unit per service, each carrying only its own operations and
+    /// its own base URL. This is the emitted-unit half of C-49, at the seam that produces the bytes.
+    #[test]
+    fn a_multi_service_provider_emits_one_unit_per_service() {
+        let artifacts = emit(&load(&inputs(TWO_SERVICE)).unwrap()).unwrap();
+
+        let names: Vec<&str> = artifacts
+            .services
+            .iter()
+            .map(|unit| unit.service.as_str())
+            .collect();
+        assert_eq!(names, vec!["s3", "bedrock-runtime"]);
+
+        let s3 = &artifacts.services[0];
+        assert!(s3.module.contains("# Service: s3"), "{}", s3.module);
+        assert!(s3.module.contains("op aws-object-get"), "{}", s3.module);
+        assert!(
+            !s3.module.contains("op aws-model-invoke"),
+            "the s3 module carries bedrock's operation:\n{}",
+            s3.module
+        );
+        assert!(
+            s3.manifest
+                .contains("base_url = \"https://s3.amazonaws.com\""),
+            "the manifest must carry the service's own base URL, never the provider's:\n{}",
+            s3.manifest
+        );
+        assert!(
+            s3.manifest
+                .contains("gid = \"com.amazonaws/s3:2006-03-01\""),
+            "{}",
+            s3.manifest
+        );
+        assert!(
+            s3.manifest.contains("module = \"aws-s3.flux\""),
+            "{}",
+            s3.manifest
+        );
+        assert!(
+            !s3.manifest.contains('*'),
+            "a service's host claim is never widened:\n{}",
+            s3.manifest
+        );
+
+        let bedrock = &artifacts.services[1];
+        assert!(
+            bedrock.manifest.contains("api_version = \"2023-09-30\""),
+            "each service versions itself:\n{}",
+            bedrock.manifest
+        );
+    }
+
+    /// Selecting a service yields a connector holding that service and nothing else — the property
+    /// that makes `--service s3` mean "the whole s3 service".
+    #[test]
+    fn selecting_a_service_drops_every_other_operation() {
+        let connector = load(&inputs(TWO_SERVICE)).unwrap();
+
+        for selector in ["s3", "com.amazonaws/s3:2006-03-01"] {
+            let selected = select_service(&connector, selector)
+                .unwrap_or_else(|error| panic!("`{selector}` must select the s3 service: {error}"));
+            assert_eq!(selected.service_names(), vec!["s3"]);
+            let ids: Vec<&str> = selected
+                .operations
+                .iter()
+                .map(|operation| operation.id.as_str())
+                .collect();
+            assert_eq!(ids, vec!["aws-object-get"]);
+
+            let artifacts = emit(&selected).unwrap();
+            assert_eq!(artifacts.services.len(), 1);
+            assert!(!artifacts.services[0].module.contains("aws-model-invoke"));
+        }
+    }
+
+    #[test]
+    fn an_unknown_service_is_an_error_that_names_what_exists() {
+        let connector = load(&inputs(TWO_SERVICE)).unwrap();
+        let error = select_service(&connector, "s4").expect_err("`s4` is not a service");
+        let rendered = format!("{error:#}");
+        assert!(rendered.contains("s4"), "{rendered}");
+        assert!(
+            rendered.contains("s3 (com.amazonaws/s3:2006-03-01)"),
+            "{rendered}"
+        );
+        assert!(rendered.contains("bedrock-runtime"), "{rendered}");
     }
 
     /// An operation the emitter cannot spell must fail the whole call, not yield a module missing

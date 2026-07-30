@@ -1,0 +1,23 @@
+# C-49: an operation names a service no `[[services]]` entry declares. The error must list the
+# services that do exist, the way a duplicate op id names the id it collided with.
+id = "aws"
+vendor = "Amazon Web Services"
+authority = "com.amazonaws"
+base_url = "https://amazonaws.com"
+
+[[services]]
+name = "s3"
+api_version = "2006-03-01"
+
+[[services]]
+name = "bedrock-runtime"
+api_version = "2023-09-30"
+
+[[operations]]
+id = "aws-object-get"
+service = "s4"
+method = "GET"
+path = "/objects"
+description = "Fetch one object."
+risk = "low"
+idempotency = "idempotent"

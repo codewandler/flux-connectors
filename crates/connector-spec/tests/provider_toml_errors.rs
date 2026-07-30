@@ -150,6 +150,10 @@ fn every_required_rejection_has_a_fixture() {
         "credential-env-typo",
         // C-2's review: no second spelling of "no auth".
         "empty-mechanism",
+        // C-49: a service is a partition, so an operation outside every declared one is refused —
+        // and the reserved `default` may not be redeclared.
+        "undeclared-service",
+        "reserved-default-service",
     ];
 
     let cases = cases();

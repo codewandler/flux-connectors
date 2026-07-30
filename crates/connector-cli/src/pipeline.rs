@@ -76,12 +76,26 @@ impl Plan {
 ///
 /// Performs no writes and no network IO.
 pub fn plan(workspace: &Workspace, only: Option<&str>) -> Result<Plan> {
+    plan_selected(workspace, only, None)
+}
+
+/// [`plan`], narrowed to one whole service of each provider it covers (C-49).
+///
+/// `service` is a service name or a rendered gid; an unknown one is a loud error naming what exists,
+/// per provider. A service selection restricts the *contents* of every artifact to that service's
+/// operations, so — exactly like a `--provider` run — it must not rewrite the repository-wide
+/// documents, which are a function of a full run.
+pub fn plan_selected(
+    workspace: &Workspace,
+    only: Option<&str>,
+    service: Option<&str>,
+) -> Result<Plan> {
     let providers = discovery::discover(workspace, only)?;
 
     let mut artifacts = Vec::new();
     let mut entries = Vec::new();
     for provider in &providers {
-        let compiled = compile(workspace, provider)?;
+        let compiled = compile(workspace, provider, service)?;
         artifacts.extend(compiled.artifacts);
         entries.push(compiled.site);
     }
@@ -91,7 +105,7 @@ pub fn plan(workspace: &Workspace, only: Option<&str>) -> Result<Plan> {
     // it leaves the committed document alone instead — neither rewritten nor reported stale. This
     // is the same reasoning `crates/catalog/src/generated.rs` records for keeping its provider
     // index by hand, reached from the other direction.
-    if only.is_none() {
+    if only.is_none() && service.is_none() {
         artifacts.push(planned(
             workspace.site_catalog_path(),
             site::document(entries)?,
@@ -155,22 +169,33 @@ struct Compiled {
 /// The site entry rides along rather than being recomputed: it needs the same `Connector` and the
 /// same renderings, and compiling twice is how a document comes to describe an operation the module
 /// no longer carries.
-fn compile(workspace: &Workspace, provider: &Provider) -> Result<Compiled> {
+fn compile(workspace: &Workspace, provider: &Provider, service: Option<&str>) -> Result<Compiled> {
     let context = || format!("provider `{}`", provider.name);
 
     let inputs = ProviderInputs::read(provider).with_context(context)?;
-    let connector = seam::load(&inputs).with_context(context)?;
+    let mut connector = seam::load(&inputs).with_context(context)?;
+    if let Some(selector) = service {
+        connector = seam::select_service(&connector, selector).with_context(context)?;
+    }
     let emitted = seam::emit(&connector).with_context(context)?;
     let site = site::provider_entry(&connector, &emitted.operations).with_context(context)?;
 
-    let mut artifacts = vec![
-        planned(workspace.module_path(&provider.name), emitted.module)?,
-        planned(workspace.manifest_path(&provider.name), emitted.manifest)?,
-        planned(
-            workspace.catalog_module_path(&provider.name),
-            emitted.catalog,
-        )?,
-    ];
+    let mut artifacts = vec![planned(
+        workspace.catalog_module_path(&provider.name),
+        emitted.catalog,
+    )?];
+    // One module and one manifest per service — the emitted unit (C-49). A `default`-only provider
+    // yields exactly the two files it always did.
+    for unit in emitted.services {
+        artifacts.push(planned(
+            workspace.service_module_path(&provider.name, &unit.service),
+            unit.module,
+        )?);
+        artifacts.push(planned(
+            workspace.service_manifest_path(&provider.name, &unit.service),
+            unit.manifest,
+        )?);
+    }
     for rendering in emitted.operations {
         artifacts.push(planned(
             workspace.catalog_op_path(&provider.name, &rendering.id),

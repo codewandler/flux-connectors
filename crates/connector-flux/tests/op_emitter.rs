@@ -36,7 +36,7 @@
 use connector_flux::emit_operation;
 use connector_spec::{
     Connector, ErrorEnvelope, HttpMethod, Idempotency, Operation, Param, ParamSet, Provenance,
-    Quirks, Risk,
+    Quirks, Risk, DEFAULT_SERVICE,
 };
 use serde_json::json;
 
@@ -73,6 +73,9 @@ fn wired(
 fn connector(id: &str, base_url: &str, operation: Operation) -> Connector {
     Connector {
         id: id.to_string(),
+        authority: None,
+        api_version: None,
+        services: Vec::new(),
         vendor: String::new(),
         base_url: base_url.to_string(),
         description: String::new(),
@@ -91,6 +94,7 @@ fn zendesk_comment_list() -> Connector {
         "https://example.zendesk.com",
         Operation {
             id: "zendesk-ticket-comment-list".to_string(),
+            service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Get,
             path: "/api/v2/tickets/{ticket_id}/comments.json".to_string(),
             description: "List one Zendesk ticket's comments.".to_string(),
@@ -136,6 +140,7 @@ fn zendesk_ticket_search() -> Connector {
         "https://example.zendesk.com",
         Operation {
             id: "zendesk-ticket-search".to_string(),
+            service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Get,
             path: "/api/v2/search.json".to_string(),
             description: "Search Zendesk tickets with Zendesk search syntax.".to_string(),
@@ -183,6 +188,7 @@ fn babelforce_call_list() -> Connector {
         "https://services.babelforce.com",
         Operation {
             id: "babelforce-call-list".to_string(),
+            service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Get,
             path: "/api/v2/calls/reporting".to_string(),
             description: "List and filter calls, in the reporting view.".to_string(),
@@ -235,6 +241,7 @@ fn zendesk_test() -> Connector {
         "https://example.zendesk.com",
         Operation {
             id: "zendesk-test".to_string(),
+            service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Get,
             path: "/api/v2/users/me.json".to_string(),
             description: "Verify Zendesk credentials by fetching the authenticated user."
@@ -260,6 +267,7 @@ fn freshdesk_note_add() -> Connector {
         "https://example.freshdesk.com/api/v2",
         Operation {
             id: "freshdesk-ticket-note-add".to_string(),
+            service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Post,
             path: "/tickets/{id}/notes".to_string(),
             description:
@@ -321,6 +329,7 @@ fn zendesk_ticket_show() -> Connector {
         "https://example.zendesk.com",
         Operation {
             id: "zendesk-ticket-show".to_string(),
+            service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Get,
             path: "/api/v2/tickets/{ticket_id}.json".to_string(),
             description: "Show one ticket".to_string(),
@@ -611,6 +620,7 @@ fn headered_operation() -> Connector {
         "https://api.example.com",
         Operation {
             id: "vendor-thing-create".to_string(),
+            service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Post,
             path: "/v1/things".to_string(),
             description: "Create a thing.".to_string(),
@@ -903,6 +913,7 @@ fn zendesk_comment_add() -> Connector {
         "https://example.zendesk.com",
         Operation {
             id: "zendesk-ticket-comment-add".to_string(),
+            service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Put,
             path: "/api/v2/tickets/{ticket_id}.json".to_string(),
             description:
@@ -968,6 +979,7 @@ fn babelforce_session_set() -> Connector {
         "https://services.babelforce.com",
         Operation {
             id: "babelforce-call-session-set".to_string(),
+            service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Put,
             path: "/api/v2/calls/{id}/session/set".to_string(),
             description: "Set session variables on a live call.".to_string(),

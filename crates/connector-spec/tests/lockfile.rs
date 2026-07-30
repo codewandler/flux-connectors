@@ -102,6 +102,9 @@ fn render(inputs: &Inputs) -> String {
 fn bare(provenance: Provenance) -> Connector {
     Connector {
         id: "zendesk".into(),
+        authority: None,
+        api_version: None,
+        services: Vec::new(),
         vendor: "Zendesk".into(),
         base_url: "https://acme.zendesk.com".into(),
         description: String::new(),

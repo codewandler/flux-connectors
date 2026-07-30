@@ -87,13 +87,33 @@ never a tuple or a positional array.
 | Field | Type | Notes |
 |---|---|---|
 | `id` | string | `zendesk`. Names `connectors/<id>.flux`. |
+| `authority` | string \| null | The reverse-DNS authority the provider publishes under (`com.amazonaws`), or `null` when it declares none — every provider shipped today. |
 | `vendor` | string | Display name. |
 | `description` | string | One line. |
-| `base_url` | string | Templating included: `https://{subdomain}.zendesk.com`. |
+| `base_url` | string | Templating included: `https://{subdomain}.zendesk.com`. A service may override it. |
+| `api_version` | string \| null | The vendor's API version, as the default for this provider's services. |
 | `hosts` | array\<string\> | Hosts reached, templating intact. An array because C-10's `http_hosts` allowlist will hold more than one. |
+| `services` | array\<Service\> | The provider's API surfaces (C-49). **Always at least one**, so a consumer groups by service unconditionally rather than special-casing the providers that have not been split. |
 | `auth` | Auth | See below. |
 | `operation_count` | number | So a provider list renders without walking `operations`. |
 | `operations` | array\<Operation\> | In the order the provider declares them, which is the order `connectors/<id>.flux` carries them. |
+
+### Service
+
+One API surface of a provider: the unit a consumer addresses, versions and installs
+([C-49](../stories/C-49-provider-services.md), `provider-services.md`). Every operation belongs to
+exactly one, and the services partition the operation set — so the per-service `operation_count`s sum
+to the provider's.
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | string | `s3`, or `default` for a provider with a single API surface. |
+| `description` | string | One line. Empty for the implicit `default` service, which has no declaration to carry one. |
+| `base_url` | string | The URL calls to this service reach — its own override, else the provider's. |
+| `hosts` | array\<string\> | The hosts those calls reach. A service's egress surface is its own and is never widened to the union of the provider's. |
+| `api_version` | string \| null | The vendor's version for **this** service. AWS dates `s3` at `2006-03-01` and `bedrock-runtime` at `2023-09-30`. |
+| `gid` | string \| null | The service's rendered address, `com.amazonaws/s3:2006-03-01`, or `null` when the provider declares no authority or version. `default` is **elided** from it, never spelled out. |
+| `operation_count` | number | How many operations belong to it. |
 
 ### Auth
 
@@ -125,6 +145,7 @@ changes with its value would force every consumer to write a discriminated union
 |---|---|---|
 | `id` | string | `zendesk-ticket-search`. The Flux symbol; unique across the catalogue. |
 | `provider` | string | The owning `Provider.id`. |
+| `service` | string | The owning `Service.name` — exactly one, `default` for a single-surface provider. This is the grouping a consumer wants once a provider is more than one API. |
 | `description` | string | The same text a model sees as the tool description. |
 | `risk` | string | `low` \| `medium` \| `high` \| `destructive` — flux's own vocabulary. |
 | `idempotency` | string | `idempotent` \| `non_idempotent` \| `conditional`. |
@@ -134,7 +155,7 @@ changes with its value would force every consumer to write a discriminated union
 | `body_schema` | object \| null | Set when the body **is** a schema rather than assembled from named fields (babelforce's free-form session bodies). Mutually exclusive with `in: "body"` parameters. |
 | `response_schema` | object \| null | The vendor's success schema, when it publishes one. |
 | `credentials` | array\<array\<string\>\> | See **Credentials are OR-of-AND**. |
-| `hosts` | array\<string\> | As on the provider. |
+| `hosts` | array\<string\> | The hosts this call reaches — its **service's**, which for a multi-service provider is not the provider's. |
 | `flux` | string | **The generated Flux, verbatim** — byte for byte the `op` declaration `connectors/<provider>.flux` carries for this operation. |
 | `status` | Status | See below. |
 
@@ -239,6 +260,7 @@ One operation, elided to the fields that matter:
 {
   "id": "zendesk-ticket-search",
   "provider": "zendesk",
+  "service": "default",
   "risk": "low",
   "idempotency": "idempotent",
   "method": "GET",
