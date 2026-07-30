@@ -35,7 +35,20 @@ sends a body the API will take rather than a flat approximation of one.
       `description` string.
 
 ## Progress
-- (not started)
+- **The exact fields are now known**, named by C-9 after running all 25 real operations through the
+  emitter:
+  - **`Param::wire: Option<String>`** — `#[serde(default, skip_serializing_if = "Option::is_none")]`.
+    A dot-separated JSON path for a body field (`ticket.comment.body`), and a plain alias for query
+    and header parameters. **One field closes gaps 1 and 4 together.**
+  - **`ParamSet::body_schema: Option<JsonSchema>`** — for "the body *is* this schema" (gap 3).
+- **Gap 2 is already closed** without an IR change: C-9 reads a JSON Schema `const` on a body field
+  as a constant — emitted into the payload, kept out of the op signature.
+- **Gap 1 is silently wrong for Zendesk today, and that is the urgent part.** C-9's emitter refuses
+  `babelforce-agent-status-update` loudly because `presence.name` *looks* like a path. It cannot
+  refuse Zendesk: `providers/zendesk.toml` carries the caller-facing name in `name` and the wire path
+  only in `description`, so `zendesk-ticket-update`, `zendesk-ticket-comment-add` and
+  `zendesk-tag-add` would emit a **flat body Zendesk ignores** — a silent wrong result, not an error.
+  Nothing in the IR distinguishes that from a genuinely flat body.
 
 ## Notes
 - **Found by C-17 while transcribing the three real providers** — these are not hypotheticals, they
