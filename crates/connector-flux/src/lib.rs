@@ -27,7 +27,7 @@ mod op;
 mod types;
 
 pub use graph::emit_graph;
-pub use op::emit_operation;
+pub use op::{emit_operation, parameter_symbols};
 
 /// flux-lang's own token classification, re-exported so a consumer can name it without depending on
 /// flux-lang directly — `connector-cli` in particular does not, deliberately.

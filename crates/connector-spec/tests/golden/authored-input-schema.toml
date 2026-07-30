@@ -1,0 +1,19 @@
+# `input_schema` is derived from the parameters and never authored, the same rule `Level` follows in
+# the configuration model. A file that states one would be a second source of truth for a value the
+# compiler already computes, so the key does not exist and writing it is a load error (C-125).
+id = "zendesk"
+base_url = "https://acme.zendesk.com"
+
+[[operations]]
+id = "zendesk.ticket.show"
+method = "GET"
+path = "/api/v2/tickets/{ticket_id}.json"
+risk = "low"
+idempotency = "idempotent"
+auth = []
+input_schema = { type = "object" }
+
+[[operations.params.path]]
+name = "ticket_id"
+required = true
+schema = { type = "integer" }

@@ -38,6 +38,28 @@
 //! asserted over the whole catalogue by `the_description_extends_the_catalogue_summary_and_nothing_else`
 //! below, so the extension can only ever be the emitter's and never this crate's.
 //!
+//! ## `input_schema` is the declaration's, and the catalogue composes its own
+//!
+//! There is a second answer to "what does this operation receive":
+//! `connector_spec::Operation::input_schema` composes one from the IR's declared parameters, and it
+//! is what `web/public/catalog.json` publishes (C-125). This one stays the declaration's, and the
+//! two are held together by a test rather than merged, because neither can be the other:
+//!
+//! - **This crate cannot key by the IR's names.** A composite op declares *symbols*, so babelforce's
+//!   `time.start` is `time_start` here — and the name→symbol mapping lives in `connector-flux`,
+//!   which this crate deliberately does not depend on (its input is the catalogue, not the loader).
+//!   Keying a `ToolSpec` by the IR's spelling would hand a model an argument name
+//!   [`crate::request`] then refuses.
+//! - **This crate cannot key by the vendor's `required`.** Flux has no optional composite-op
+//!   parameter and [`crate::request::build`] refuses a call that omits one, so *every* declared
+//!   parameter is required here. The composed schema states what the **vendor** requires. Both are
+//!   true of the same operation; they answer different questions.
+//!
+//! `crates/connector-flux/tests/input_schema_agreement.rs` asserts over every shipped operation that
+//! the two describe the same parameter set modulo that symbol mapping, and that the composed
+//! `required` is a subset of it. That is the anti-drift device here, in the same spirit as reading
+//! the declaration in the first place.
+//!
 //! ## `access` is derived from `effects`, because flux refuses the spec otherwise
 //!
 //! A `CompositeOpMeta` has no access field, so there is nothing in the declaration to copy — and

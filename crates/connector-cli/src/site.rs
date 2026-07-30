@@ -394,6 +394,19 @@ struct OperationEntry {
     path: String,
     /// Every named parameter, in request-position order, each carrying its JSON Schema verbatim.
     parameters: Vec<ParameterEntry>,
+    /// **One JSON Schema for everything the operation receives**, composed from the parameters
+    /// above and [`Self::body_schema`] — [`Operation::input_schema`].
+    ///
+    /// Both are published, and they answer different questions. `parameters` is the *authoring*
+    /// view: it keeps each parameter's request position and wire spelling, which a form renderer
+    /// and a request builder need. This is the *calling* view, the single object a caller passes and
+    /// the thing `ToolSpec.input_schema` requires — which is exactly why it is composed once here
+    /// rather than by each consumer, who would each disagree at the corners (C-125).
+    ///
+    /// Never `null`: an operation that takes nothing composes an empty object schema, because
+    /// "takes nothing" is a derived answer. Absence is reserved for the output side, where "we do
+    /// not know" genuinely is the state of things.
+    input_schema: JsonSchema,
     /// The schema of a free-form body, when the body *is* a schema rather than assembled from
     /// named fields. Mutually exclusive with body parameters; `null` in the common case.
     body_schema: Option<JsonSchema>,
@@ -648,6 +661,7 @@ fn operation_entry(
         method: operation.method,
         path: operation.path.clone(),
         parameters: parameters(operation),
+        input_schema: operation.input_schema(),
         body_schema: operation.params.body_schema.clone(),
         response_schema: operation.response_schema.clone(),
         credentials: catalog::credential_mechanisms(connector, operation)
@@ -877,6 +891,46 @@ mod tests {
         assert_eq!(
             parameter["schema"],
             json!({"type": "string", "format": "uuid"})
+        );
+    }
+
+    /// **The composed input schema is published beside the parameters, not instead of them.**
+    ///
+    /// It is the IR's composition verbatim — the point of C-125 is that there is one derivation, so
+    /// this projection must not become a second one. Keyed by the caller-facing `req_id` rather than
+    /// the wire `requester_id`: the vendor's spelling stays in the parameter entry, where a request
+    /// builder reads it, and a caller passing `requester_id` would be passing an argument the
+    /// operation does not have.
+    #[test]
+    fn an_operation_publishes_one_composed_input_schema() {
+        let document = rendered();
+        let operation = &document["providers"][0]["operations"][0];
+
+        assert_eq!(
+            operation["input_schema"],
+            json!({
+                "type": "object",
+                "properties": {"req_id": {"type": "string", "format": "uuid"}},
+                "required": [],
+            })
+        );
+        assert_eq!(operation["input_schema"], self::operation().input_schema());
+    }
+
+    /// An operation that takes nothing publishes an **empty object schema**, not `null`. The
+    /// asymmetry with `response_schema` next door is deliberate: "takes nothing" is derived, while
+    /// "returns we-do-not-know" is not, and a permissive placeholder there would be
+    /// indistinguishable from a real declaration.
+    #[test]
+    fn an_operation_that_takes_nothing_still_publishes_a_schema() {
+        let mut connector = connector();
+        connector.operations[0].params = ParamSet::default();
+        let entry = provider_entry(&connector, &renderings()).unwrap();
+        let document: Value = serde_json::from_str(&self::document(vec![entry]).unwrap()).unwrap();
+
+        assert_eq!(
+            document["providers"][0]["operations"][0]["input_schema"],
+            json!({"type": "object", "properties": {}, "required": []})
         );
     }
 

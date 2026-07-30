@@ -2127,6 +2127,20 @@ fn validate_operations(connector: &Connector, problems: &mut Vec<String>) {
                 ));
             }
         }
+
+        // Two answers to one question, refused rather than merged. "The body is these named fields"
+        // and "the body *is* this schema" cannot both hold, and nothing states how they would
+        // combine — so an operation declaring both has no derivable request body and no derivable
+        // `input_schema` (C-125). `connector-flux` refuses it again at emission, which is the
+        // narrower gate: this one also covers a definition nobody has emitted yet.
+        if operation.params.body_schema.is_some() && !operation.params.body.is_empty() {
+            problems.push(format!(
+                "operation {id:?} declares both named `params.body` fields and a free-form \
+                 `params.body_schema`. Those are two answers to one question — what the request \
+                 body is — and there is no rule for merging them, so declare either the fields or \
+                 the schema"
+            ));
+        }
         for param in &operation.params.path {
             // The placeholder is written in the vendor's spelling, so a parameter that declares a
             // `wire` alias is looked up under that — matching on the caller-facing name would

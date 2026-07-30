@@ -169,6 +169,11 @@ fn every_required_rejection_has_a_fixture() {
         // an event filling a role slot publishes a capability nothing can call.
         "default-service-beside-a-named-one",
         "role-slot-filled-by-an-event",
+        // C-125: the composed `input_schema` is derived and never authored, and the one question it
+        // could not answer is now answered by refusal — a body declared twice has no merge rule, so
+        // it does not load.
+        "authored-input-schema",
+        "body-declared-twice",
     ];
 
     let cases = cases();

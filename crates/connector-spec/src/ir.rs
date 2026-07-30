@@ -151,6 +151,19 @@ pub struct Param {
     pub schema: JsonSchema,
 }
 
+/// The caller-facing name of the one parameter a free-form body travels in.
+///
+/// A convention rather than an IR field: [`ParamSet::body_schema`] says the body *is* a schema and
+/// names nothing, so the parameter needs a name from somewhere. It lives here, on the IR, because
+/// two surfaces now have to agree on it — `connector-flux` declares the emitted `op`'s body
+/// parameter under this name, and [`Operation::input_schema`] composes the property under it. A
+/// second spelling of the constant would be the two surfaces asking for one body by two names.
+///
+/// It is a *starting* name on the Flux side: the emitter allocates symbols through one allocator,
+/// so an operation that already binds `body` elsewhere gets a disambiguated symbol rather than a
+/// silently shadowed one.
+pub const FREE_FORM_BODY: &str = "body";
+
 /// An operation's parameters, grouped by where they travel on the request.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -575,6 +588,78 @@ pub struct Operation {
     /// The ways this endpoint departs from its spec.
     #[serde(default, skip_serializing_if = "Quirks::is_empty")]
     pub quirks: Quirks,
+}
+
+impl Operation {
+    /// **One JSON Schema describing everything the operation receives.**
+    ///
+    /// Derived, never authored: there is no `input_schema` key in a provider file, and one is a
+    /// load error — `Operation` is `deny_unknown_fields` and the editor-facing
+    /// [`crate::PROVIDER_TOML_JSON_SCHEMA`] closes the operation object as well. The same rule
+    /// `Level` follows in `docs/designs/connector-configuration.md`, for the same reason: a value
+    /// that is both derived and writable is two sources of truth waiting to disagree.
+    ///
+    /// # Why this exists at all
+    ///
+    /// The data was already here — [`Param::schema`] on every parameter, plus
+    /// [`ParamSet::body_schema`] — but split across four request positions with nothing saying what
+    /// the operation *receives*. Every consumer therefore composed its own, and each disagreed at
+    /// the corners: whether a path parameter belongs in the same object as a body field, what
+    /// `required` means, how a free-form body merges with named ones. One composition settles it.
+    ///
+    /// # The rules, each of which was a corner someone got wrong
+    ///
+    /// - **Keyed by the caller-facing [`Param::name`], never the wire name.** The vendor's own
+    ///   spelling stays exactly where it already lives, in [`Param::wire`]; a schema keyed by it
+    ///   would name arguments no caller passes. Where the caller-facing name is not a spellable
+    ///   Flux symbol — babelforce's `time.start` — the emitted `op` declares a normalized symbol
+    ///   instead, and that mapping stays in `connector-flux`'s `names` module, which owns it.
+    /// - **Each property is the declared schema, verbatim.** This composes; it does not enrich.
+    ///   Folding [`Param::description`] in would be this function improving a vendor's declaration,
+    ///   and raising declaration quality is its own work.
+    /// - **A free-form [`ParamSet::body_schema`] is one property, [`FREE_FORM_BODY`]** — the same
+    ///   name the emitted `op` declares it under, so both surfaces ask for the body by one name.
+    ///   It is required: the body *is* the request for the operations that declare one.
+    /// - **`required` is exactly the parameters marked [`Param::required`].** Not everything (which
+    ///   is what a consumer reading the emitted Flux must say, since flux has no optional
+    ///   composite-op parameter) and not nothing.
+    /// - **[`ParamSet::const_headers`] are absent.** They are not parameters and nothing about them
+    ///   is caller-supplied, exactly as [`ParamSet::iter`] already has it.
+    /// - **An operation with no parameters composes an empty object schema, not absence.** "This
+    ///   takes nothing" is a derived answer and deserves to be stated; the output side publishes
+    ///   absence instead precisely because "we do not know" is *not* an answer
+    ///   (`docs/designs/member-io-schemas.md`).
+    ///
+    /// # The merge rule for a body declared twice
+    ///
+    /// Named [`ParamSet::body`] fields and a free-form [`ParamSet::body_schema`] are two answers to
+    /// one question, and **the answer is that an operation declaring both is refused at load**
+    /// (`provider::load`; `connector-flux` refuses it a second time at emission). So the case does
+    /// not arise for any connector that came through the loader, and this function does not invent
+    /// a merge for it. An IR assembled in memory can still carry both, and then both appear here —
+    /// stated so it is not a surprise, and deliberately *not* a rule that drops one silently, which
+    /// would make the refusal look optional.
+    pub fn input_schema(&self) -> JsonSchema {
+        let mut properties = serde_json::Map::new();
+        let mut required: Vec<JsonSchema> = Vec::new();
+
+        for param in self.params.iter() {
+            properties.insert(param.name.clone(), param.schema.clone());
+            if param.required {
+                required.push(JsonSchema::String(param.name.clone()));
+            }
+        }
+        if let Some(schema) = &self.params.body_schema {
+            properties.insert(FREE_FORM_BODY.to_owned(), schema.clone());
+            required.push(JsonSchema::String(FREE_FORM_BODY.to_owned()));
+        }
+
+        serde_json::json!({
+            "type": "object",
+            "properties": JsonSchema::Object(properties),
+            "required": JsonSchema::Array(required),
+        })
+    }
 }
 
 /// A whole connector: the normalized form of one provider, whether it came from a vendor OpenAPI

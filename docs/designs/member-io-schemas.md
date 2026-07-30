@@ -36,6 +36,50 @@ mechanical work with a clear right answer, and it has an immediate consumer: `To
 is **required**, not optional (`crates/flux-spec/src/lib.rs`), so [C-114](../stories/C-114-tool-spec-projection.md)
 needs exactly this. Composing it once here is strictly better than the pack inventing its own.
 
+### 1.1 · The merge rule, now stated: a body declared twice is refused at load
+
+`ir.rs` recorded the ambiguity and left it open. C-125 closes it by **refusing**, not by merging:
+an operation declaring both named `params.body` fields and a free-form `params.body_schema` does not
+load (`connector_spec::provider::load`; the golden fixture is
+`crates/connector-spec/tests/golden/body-declared-twice.toml`).
+
+Refusal rather than a merge, for the reason every other refusal in this repository exists: there is
+no rule to write down. "The body is these fields" and "the body *is* this schema" describe the same
+bytes two ways, and any merge — fields win, schema wins, fields nest inside the schema — is a
+decision no vendor document supports, taken silently, whose failure mode is a request the vendor
+answers `200` and ignores. `connector-flux` already refused it at *emission*; moving the same
+refusal to the **loader** is what makes it an invariant of the IR rather than of one back-end, so
+`Operation::input_schema()` composes a shape that cannot be ambiguous and no future consumer has to
+re-decide.
+
+Refusal is also cheap: no shipped provider declares both, and the two babelforce operations that
+declare a `body_schema` declare no body field, so the rule costs nothing and buys the invariant.
+
+### 1.2 · Two derivations of one schema, and which one is authoritative
+
+`connector-pack` composes an input schema too, and it landed first: it parses the operation's
+**emitted Flux** and lowers the declaration through flux's own `OpSpec::lower`, deliberately, so the
+pack's answer *is* the module's answer. That makes two derivations of one thing — the drift
+`AGENTS.md` warns about. Neither can consume the other, and the reasons are structural:
+
+- **The pack cannot key by the IR's names.** A Flux composite op declares symbols, and babelforce's
+  `time.start` is not one (`$time.start` reparses as field access), so the declaration says
+  `time_start`. The name→symbol mapping lives in `connector-flux`, one dependency edge *downstream*
+  of the IR, so `connector-spec` cannot compute it. It also cannot be consumed the other way:
+  `connector-pack` takes the catalogue as its input and deliberately never sees `providers/*.toml`.
+- **The pack cannot key by the vendor's `required`.** flux has no optional composite-op parameter,
+  and the pack's own request builder refuses a call that omits one, so its `required` is necessarily
+  *every* parameter. The composed schema states what the **vendor** requires. Both are true; they
+  answer different questions, and collapsing them would make one surface lie.
+
+So the resolution is the third one: **they are held together by a test over every shipped
+operation** — `crates/connector-flux/tests/input_schema_agreement.rs` — which asserts that the two
+describe the same parameter set modulo the symbol mapping (through the now-public
+`connector_flux::parameter_symbols`, the same allocation the emitter used) and that the composed
+`required` is always a subset of it. The one documented exception is a `const`-pinned body field,
+which is sent but never declared. A provider that broke the correspondence fails there rather than
+in a host, where the symptom is a model passing an argument the tool does not have.
+
 ## 2 · Output: the trap, and the most important thing in this document
 
 `response_schema` (`ir.rs:435`) describes **the vendor's JSON response body**. It is tempting to
