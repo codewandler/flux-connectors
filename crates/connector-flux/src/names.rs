@@ -16,15 +16,10 @@ use std::collections::BTreeSet;
 
 use crate::Error;
 
-/// Symbols the emitter binds inside an op body. A vendor parameter that would map onto one of these
-/// is disambiguated instead of being allowed to shadow it — a parameter named `url` must not quietly
-/// overwrite the URL the request is built from.
-///
-/// The list is reserved unconditionally, not per operation: a `GET` binds neither `payload` nor
-/// `content_type`, but reserving them everywhere keeps a parameter's symbol independent of which
-/// other parameters its operation happens to declare, so adding a body field later cannot rename a
-/// symbol that already travelled.
-const RESERVED: &[&str] = &["base", "url", "sep", "content_type", "payload", "response"];
+/// Symbols the emitter binds inside every op body. A vendor parameter that would map onto one of
+/// these is disambiguated instead of being allowed to shadow it — a parameter named `url` must not
+/// quietly overwrite the URL the request is built from.
+const RESERVED: &[&str] = &["base", "url", "sep"];
 
 /// Hands out a unique Flux symbol name for each vendor parameter name, in declaration order.
 pub(crate) struct Symbols {
@@ -129,12 +124,6 @@ mod tests {
         assert_eq!(symbols.allocate("op", "url").unwrap(), "url_2");
         assert_eq!(symbols.allocate("op", "base").unwrap(), "base_2");
         assert_eq!(symbols.allocate("op", "sep").unwrap(), "sep_2");
-        assert_eq!(symbols.allocate("op", "payload").unwrap(), "payload_2");
-        assert_eq!(symbols.allocate("op", "response").unwrap(), "response_2");
-        assert_eq!(
-            symbols.allocate("op", "content_type").unwrap(),
-            "content_type_2"
-        );
     }
 
     #[test]

@@ -13,5 +13,4 @@ op zendesk-ticket-comment-list(ticket_id: Number, page: Number, per_page: Number
     $sep = "&"
   when $per_page
     $url = fmt("{url}{sep}per_page={per_page}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  do http.request { method: "GET", url: $url }

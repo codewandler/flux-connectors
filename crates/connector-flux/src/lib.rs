@@ -25,75 +25,14 @@ pub use op::emit_operation;
 /// that silently drops something the vendor needs.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// The operation uses something this emitter does not cover yet — auth is C-10, and compiling
-    /// quirks (pagination, rate limits) into control flow is C-12.
+    /// The operation uses something this emitter does not cover yet — request bodies and response
+    /// handling are C-9, auth is C-10, quirks are C-12.
     #[error("operation `{operation}`: {feature} are outside this emitter's slice")]
     OutOfSlice {
         /// The operation id.
         operation: String,
         /// What could not be emitted.
         feature: &'static str,
-    },
-
-    /// A body field whose name is a **JSON path** rather than a key at the root of the body.
-    ///
-    /// babelforce's `presence.name` and Zendesk's `ticket.comment.body` both nest
-    /// (`providers/babelforce.toml`, `providers/zendesk.toml`), but [`connector_spec::ParamSet`]'s
-    /// `body` is a flat `Vec<Param>` carrying one `name` — there is no field recording the path a
-    /// body field occupies. Emitting the dotted name as a literal JSON key produces
-    /// `{"presence.name": …}`, which is a request the vendor accepts and ignores: the worst
-    /// possible failure, because it succeeds.
-    ///
-    /// So it is refused. Closing this needs an additive field on `Param` — see the crate docs.
-    #[error(
-        "operation `{operation}`: body field `{name}` names a nested JSON path, and the IR cannot \
-         express one — `ParamSet::body` is a flat field list, so this would be emitted as the \
-         literal key `\"{name}\"` and silently ignored by the vendor. `Param` needs an additive \
-         wire-path field before this operation can be emitted"
-    )]
-    NestedBodyField {
-        /// The operation id.
-        operation: String,
-        /// The dotted body field name.
-        name: String,
-    },
-
-    /// A request-changing method declared the risk of a read.
-    ///
-    /// flux's approval gate reads `risk`, and `low` is the tier that passes without a human. A
-    /// `POST`/`PUT`/`PATCH`/`DELETE` changes state the vendor owns, which is not something this
-    /// emitter can certify as unsurprising — [`connector_spec::Risk::Low`] is documented as "reads,
-    /// and writes that cannot surprise anyone". Refused rather than quietly raised: a silent
-    /// correction would hide the authoring mistake that produced it, and the IR omits `Default` on
-    /// both fields precisely so neither is decided by silence.
-    #[error(
-        "operation `{operation}`: a {method} changes state the vendor owns and may not declare \
-         `risk = \"low\"` — flux's approval gate waves `low` through without a human. Declare the \
-         risk this write actually carries"
-    )]
-    WriteDeclaredLowRisk {
-        /// The operation id.
-        operation: String,
-        /// The HTTP method, as `http.request` spells it.
-        method: &'static str,
-    },
-
-    /// A `POST` or `PATCH` declared itself idempotent.
-    ///
-    /// Neither method is idempotent under RFC 9110 §9.2.2, and `idempotency` is what tells flux
-    /// whether wrapping the call in a `retry` is sound — the field's own IR documentation puts it
-    /// as "guessing is how a retry turns one charge into three". `PUT` and `DELETE` *are* idempotent
-    /// by RFC and are left alone.
-    #[error(
-        "operation `{operation}`: a {method} is not an idempotent method (RFC 9110 §9.2.2) and may \
-         not declare `idempotency = \"idempotent\"` — flux would treat a retry around it as safe. \
-         Use `non_idempotent`, or `conditional` when the caller supplies a key or stamp"
-    )]
-    WriteDeclaredIdempotent {
-        /// The operation id.
-        operation: String,
-        /// The HTTP method, as `http.request` spells it.
-        method: &'static str,
     },
 
     /// The operation id cannot be spelled as a Flux composite-op **declaration** name.

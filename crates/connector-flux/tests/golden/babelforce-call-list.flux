@@ -25,5 +25,4 @@ op babelforce-call-list(page: Number, max: Number, agentId: Any, time_start: Num
     $sep = "&"
   when $q
     $url = fmt("{url}{sep}q={q}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  do http.request { method: "GET", url: $url }
