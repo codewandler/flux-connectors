@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generator": "flux-connectors 0.2.0",
+  "generator": "flux-connectors 0.3.0",
   "providers": [
     {
       "id": "airtable",
@@ -5771,11 +5771,11 @@
     },
     {
       "id": "slack",
-      "authority": null,
+      "authority": "com.slack.api",
       "vendor": "Slack",
       "description": "Slack messaging: post messages, read conversation history, look up users, react",
       "base_url": "https://slack.com",
-      "api_version": null,
+      "api_version": "v1",
       "hosts": [
         "slack.com"
       ],
@@ -5787,14 +5787,15 @@
           "hosts": [
             "slack.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v1",
+          "gid": "com.slack.api:v1",
           "operation_count": 4
         }
       ],
       "auth": {
         "schemes": [
-          "bearer"
+          "bearer",
+          "signing"
         ],
         "credentials": [
           {
@@ -5806,6 +5807,20 @@
             "description": "Slack bot user OAuth token (xoxb-…) with chat:write, channels:history, users:read and reactions:write",
             "env": [
               "SLACK_BOT_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          },
+          {
+            "name": "slack.signing_secret",
+            "scheme": {
+              "kind": "signing",
+              "name": null
+            },
+            "description": "Slack app signing secret, used to verify inbound Events API requests. Never sent to Slack",
+            "env": [
+              "SLACK_SIGNING_SECRET"
             ],
             "user_env": [],
             "user_suffix": null,

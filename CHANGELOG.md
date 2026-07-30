@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-07-30
+
+Sixteen providers, and a service level beneath them. **No provider can make a live API call yet** —
+see the README's *Known limits*.
+
 ### Added
 - **C-49** — a provider's **services** are the middle addressing level: `provider → service →
   operations`. A `Service` owns its own base URL and API version, an operation belongs to exactly one
