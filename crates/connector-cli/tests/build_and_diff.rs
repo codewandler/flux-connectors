@@ -18,7 +18,7 @@ fn run(args: &[&str]) -> anyhow::Result<String> {
 #[test]
 fn build_writes_both_artifacts_for_every_discovered_provider() {
     let fixture = Fixture::with_provider("build-writes", "zendesk");
-    fixture.write_provider("freshdesk", "id = \"freshdesk\"\n");
+    fixture.write_provider("freshdesk", &common::definition("freshdesk"));
 
     run(&["build", "--root", fixture.root().to_str().unwrap()]).expect("build succeeds");
 
@@ -55,7 +55,7 @@ fn build_twice_is_a_byte_identical_no_op() {
 #[test]
 fn provider_flag_restricts_the_build_to_one_connector() {
     let fixture = Fixture::with_provider("provider-flag", "zendesk");
-    fixture.write_provider("freshdesk", "id = \"freshdesk\"\n");
+    fixture.write_provider("freshdesk", &common::definition("freshdesk"));
 
     run(&[
         "build",
@@ -168,7 +168,8 @@ fn changing_an_input_changes_the_artifact() {
     run(&["build", "--root", &root]).expect("build succeeds");
     let first = fixture.read("connectors/zendesk.connector.toml");
 
-    fixture.write_provider("zendesk", "id = \"zendesk\"\nvendor = \"Zendesk\"\n");
+    let edited = common::definition("zendesk").replace("zendesk Inc.", "Zendesk, Inc.");
+    fixture.write_provider("zendesk", &edited);
     run(&["build", "--root", &root]).expect("rebuild succeeds");
     let second = fixture.read("connectors/zendesk.connector.toml");
 
@@ -183,7 +184,7 @@ fn changing_an_input_changes_the_artifact() {
 #[test]
 fn a_failing_run_writes_no_partial_artifacts() {
     let fixture = Fixture::with_provider("atomic-run", "zendesk");
-    // An empty definition is the one thing the placeholder loader rejects today.
+    // An empty file declares no `id`, which `connector-spec`'s loader refuses.
     fixture.write_provider("broken", "");
     let before = fixture.snapshot();
 
@@ -201,7 +202,7 @@ fn a_failing_run_writes_no_partial_artifacts() {
 fn a_provider_needs_no_vendored_spec() {
     // "Two front-ends, one IR": a hand-authored connector has no spec file at all.
     let fixture = Fixture::new("no-spec");
-    fixture.write_provider("ollama", "id = \"ollama\"\n");
+    fixture.write_provider("ollama", &common::definition("ollama"));
 
     run(&["build", "--root", fixture.root().to_str().unwrap()]).expect("build succeeds");
 
