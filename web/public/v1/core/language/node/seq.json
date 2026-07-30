@@ -1,0 +1,15 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/language/node/seq.json",
+  "schema_version": 1,
+  "kind": "node",
+  "name": "seq",
+  "title": "Seq",
+  "description": "A sequential block; runs its body in order. Optionally binds the block's final result.",
+  "category": [
+    "language",
+    "node"
+  ],
+  "availability": "available",
+  "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-seq"
+}

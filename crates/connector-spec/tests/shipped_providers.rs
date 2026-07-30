@@ -95,6 +95,10 @@ fn operation_selection_stays_curated() {
         ("zendesk", 7),
         ("freshdesk", 9),
         ("babelforce", 9),
+        // C-111 curates the generally available Machines lifecycle surface: regions, list/get/event
+        // history and create/start/stop/restart/delete. Optional filters, force deletion and signal
+        // bodies wait for C-30/C-56, and the event history is not misrepresented as a channel.
+        ("fly", 9),
         // C-52 curates 5 of roughly a thousand operations in `github/rest-api-description`, and the
         // cut is the query-encoding gap rather than taste: every listing and search endpoint is
         // excluded pending C-30. See the header comment in `providers/github.toml`.

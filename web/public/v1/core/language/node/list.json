@@ -1,0 +1,15 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/language/node/list.json",
+  "schema_version": 1,
+  "kind": "node",
+  "name": "list",
+  "title": "List",
+  "description": "Build a **list value** from sub-expressions — the list constructor `[ expr, … ]`. Each item is itself a node (`[ $a, $b, 3 ]`). Pure, same leaf rules as [`Node::Obj`]; the array twin of the record constructor.",
+  "category": [
+    "language",
+    "node"
+  ],
+  "availability": "available",
+  "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-list"
+}

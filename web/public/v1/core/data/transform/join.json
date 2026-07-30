@@ -1,0 +1,43 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/data/transform/join.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "join",
+  "title": "Join",
+  "description": "Stringify each element (strings as-is, others compact JSON) and join with separator (default \"\\n\"). Returns plain text, not JSON.",
+  "category": [
+    "data",
+    "transform"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [],
+    "description": "Stringify each element (strings as-is, others compact JSON) and join with separator (default \"\\n\"). Returns plain text, not JSON.",
+    "effects": [],
+    "group": "cognition",
+    "idempotency": "idempotent",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": true,
+          "type": "array"
+        },
+        "sep": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "name": "join",
+    "risk": "low"
+  }
+}

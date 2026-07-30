@@ -1,0 +1,38 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/data/transform/has.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "has",
+  "title": "Has",
+  "description": "Test if an array contains a value (JSON equality). Returns \"true\" or \"false\".",
+  "category": [
+    "data",
+    "transform"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [],
+    "description": "Test if an array contains a value (JSON equality). Returns \"true\" or \"false\".",
+    "effects": [],
+    "group": "cognition",
+    "idempotency": "idempotent",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": true,
+          "type": "array"
+        },
+        "value": true
+      },
+      "required": [
+        "items",
+        "value"
+      ],
+      "type": "object"
+    },
+    "name": "has",
+    "risk": "low"
+  }
+}

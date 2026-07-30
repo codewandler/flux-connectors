@@ -1,0 +1,37 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/data/transform/merge_obj.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "merge_obj",
+  "title": "Merge Obj",
+  "description": "Shallow-merge an array of objects left-to-right (later keys win). Returns one merged object. Distinct from the list-concat `merge` tool.",
+  "category": [
+    "data",
+    "transform"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [],
+    "description": "Shallow-merge an array of objects left-to-right (later keys win). Returns one merged object. Distinct from the list-concat `merge` tool.",
+    "effects": [],
+    "group": "cognition",
+    "idempotency": "idempotent",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "objects": {
+          "description": "Array of objects to shallow-merge (later keys win)",
+          "items": true,
+          "type": "array"
+        }
+      },
+      "required": [
+        "objects"
+      ],
+      "type": "object"
+    },
+    "name": "merge_obj",
+    "risk": "low"
+  }
+}

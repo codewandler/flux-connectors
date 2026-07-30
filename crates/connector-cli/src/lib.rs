@@ -32,6 +32,7 @@
 pub mod artifact;
 pub mod catalog;
 pub mod cli;
+pub mod core_catalog;
 pub mod diff;
 pub mod discovery;
 pub mod net;

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/data/transform/all.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "all",
+  "title": "All",
+  "description": "Returns \"true\" if all elements satisfy the predicate, \"false\" otherwise. With `where`, evaluates the formula per element with `it` bound. Without `where`, checks if all elements are truthy. Empty list → vacuously \"true\" (documented).",
+  "category": [
+    "data",
+    "transform"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [],
+    "description": "Returns \"true\" if all elements satisfy the predicate, \"false\" otherwise. With `where`, evaluates the formula per element with `it` bound. Without `where`, checks if all elements are truthy. Empty list → vacuously \"true\" (documented).",
+    "effects": [],
+    "group": "cognition",
+    "idempotency": "idempotent",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": true,
+          "type": "array"
+        },
+        "vars": {
+          "additionalProperties": true,
+          "default": null,
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "where": {
+          "default": null,
+          "format": "flux-expr",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "name": "all",
+    "risk": "low"
+  }
+}

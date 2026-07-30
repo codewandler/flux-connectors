@@ -1,0 +1,18 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/network/application/http.json",
+  "schema_version": 1,
+  "kind": "capability",
+  "name": "http",
+  "title": "HTTP",
+  "description": "Typed HTTP requests through Flux's guarded web egress boundary.",
+  "category": [
+    "network",
+    "application"
+  ],
+  "availability": "available",
+  "callable": true,
+  "operation_ids": [
+    "https://flux.codewandler.org/v1/core/network/application/http/request.json"
+  ]
+}

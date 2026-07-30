@@ -12,16 +12,17 @@ note: extends the charter — a provider need not be a vendor · **not** mysql, 
 # Generic connectors — http, a2a, mcp and friends
 
 ## Goal
-Let a provider describe a **protocol** rather than a vendor, so one connector serves any endpoint
-speaking it — a generic `http` connector, an `a2a` connector for remote agents, an `mcp` connector
-for tool servers.
+Let a provider describe a **higher protocol** rather than a vendor, so one connector serves any
+endpoint speaking it — an `a2a` connector for remote agents or an `mcp` connector for tool servers.
+Raw HTTP itself is already Flux's `http.request` core operation and is published by C-112; compiling
+a second copy here would create two authorities for one primitive.
 
 ## Acceptance
 - [ ] The IR expresses a connector whose **endpoint is caller- or operator-supplied** rather than
       baked into `base_url`. Today `base_url` is a fixed string with unbound template variables and
       no declared binding — this is the same gap C-17 found, surfacing again.
-- [ ] `providers/http.toml` — a generic request operation: caller supplies URL, method, headers and
-      body. The thin case, and the one that proves the endpoint model.
+- [ ] Raw HTTP is explicitly **not** implemented as `providers/http.toml`; C-112 exposes the real
+      `http.request` `ToolSpec` in the explorer and this story does not duplicate it.
 - [ ] `providers/a2a.toml` — JSON-RPC 2.0 over HTTP against a remote agent: send a message, poll a
       task, fetch the agent card.
 - [ ] `providers/mcp.toml` — **HTTP/SSE transport only** (see Notes). Tool list and tool call.
@@ -49,7 +50,7 @@ vendor does. But it must be written down, or the boundary stops deciding anythin
 
 | Candidate | Verdict | Why |
 |---|---|---|
-| **http** | ✅ fits | The thinnest possible connector; the endpoint *is* the parameter. |
+| **http** | ↗ core | Already the native `http.request` operation; C-112 publishes its real schema rather than recompiling a weaker copy. |
 | **a2a** | ✅ fits | JSON-RPC 2.0 over HTTP (`../flux/crates/flux-a2a/src/lib.rs:2`), so it is ordinary HTTP with a structured body. |
 | **mcp** | ⚠️ partly | Expressible over its **HTTP/SSE** transport. Its **stdio** transport is not — there is no process spawning in generated Flux, by design. Ship the HTTP half, say the stdio half is out of scope. |
 | **mysql** | ⛔ blocked, not impossible | A **binary wire protocol**, not HTTP — unreachable with **today's** op catalogue. See the correction below. |

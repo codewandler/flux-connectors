@@ -1,0 +1,56 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/network/application/http/request.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "http.request",
+  "title": "Http Request",
+  "description": "Make an arbitrary HTTP(S) request (any method, headers, and body) and return the status, response headers, and body. Use this for APIs and raw protocol access; to read a web page as a readable document prefer `web.fetch`. Private/loopback addresses are blocked unless the `web` egress scope grants them. A header value may be a secret reference `{\"$secret\": \"ENV_NAME\"}`, resolved from the environment and never shown — but only for env-var names the operator has allowlisted; any other name is refused.",
+  "category": [
+    "network",
+    "application",
+    "http"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [
+      "network"
+    ],
+    "description": "Make an arbitrary HTTP(S) request (any method, headers, and body) and return the status, response headers, and body. Use this for APIs and raw protocol access; to read a web page as a readable document prefer `web.fetch`. Private/loopback addresses are blocked unless the `web` egress scope grants them. A header value may be a secret reference `{\"$secret\": \"ENV_NAME\"}`, resolved from the environment and never shown — but only for env-var names the operator has allowlisted; any other name is refused.",
+    "effects": [
+      "network"
+    ],
+    "idempotency": "non_idempotent",
+    "input_schema": {
+      "properties": {
+        "body": {
+          "description": "Request body, for methods that take one (POST/PUT/PATCH/…).",
+          "type": "string"
+        },
+        "headers": {
+          "additionalProperties": true,
+          "description": "Request headers. A value may be a string or a secret reference {\"$secret\": \"ENV_NAME\"}.",
+          "type": "object"
+        },
+        "method": {
+          "description": "HTTP method (default GET).",
+          "type": "string"
+        },
+        "timeout": {
+          "description": "Timeout in seconds (default 30, max 300).",
+          "type": "number"
+        },
+        "url": {
+          "description": "The absolute http(s) URL to request.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    },
+    "name": "http.request",
+    "risk": "medium"
+  }
+}

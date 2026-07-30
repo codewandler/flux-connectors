@@ -32,8 +32,8 @@ change to a story's `status`, `priority`, `title`, `epic`, or `note`, run `/trac
 
 ## Current project boundary
 
-**Snapshot: v0.3.0.** `cargo run -p connector-cli -- build` compiles 16 providers and 88 curated
-operations into 143 artifacts. The compiler, embedded Rust catalogue, JSON catalogue, and public
+**Snapshot: v0.3.0.** `cargo run -p connector-cli -- build` compiles 17 providers and 97 curated
+connector operations plus 77 Flux core entries into 236 artifacts. The compiler, embedded Rust catalogue, JSON catalogue, and public
 explorer work. **No generated provider can make a live API call yet.** Read
 [Intentional gaps](#intentional-gaps) before changing code that appears broken.
 
@@ -74,7 +74,7 @@ cargo run -p connector-cli -- build
 cargo run -p connector-cli -- diff
 ```
 
-`diff` must finish with `143 artifacts up to date (16 providers checked)` for the current catalogue.
+`diff` must finish with `236 artifacts up to date (17 providers checked)` for the current catalogue.
 The artifact count may legitimately change when providers or operations change; do not encode it as
 a permanent invariant.
 
@@ -83,7 +83,8 @@ a permanent invariant.
 | `connectors/*.flux`, `connectors/*.connector.toml` | `providers/`, vendored `specs/`, compiler code |
 | `crates/catalog/ops/<provider>/*.flux` | Emitted provider operations |
 | `crates/catalog/src/generated/<provider>.rs` | Connector IR and catalogue emitter |
-| `web/public/catalog.json` | Connector IR and public-catalogue emitter |
+| `web/public/catalog.json` | Connector IR, `specs/flux/core-v1.json`, and public-catalogue emitter |
+| `web/public/v1/**/*.json` | `specs/flux/core-v1.json` and core-catalogue publisher |
 | `assets/readme-snippet-{light,dark}.svg` | `assets/readme-snippet.flux` and flux highlighter |
 
 Two nearby files are intentionally hand-maintained:
@@ -129,6 +130,145 @@ Putting acquisition in Flux would expose raw tokens in model-visible symbols.
 
 Flux's four existing `AuthScheme` variants are presets of the three-axis model. A connector using
 only those presets must serialize exactly what flux already understands.
+
+`Signing` is the **one deliberate divergence** from flux's vocabulary. Every other variant answers
+"where does this secret go on the way out"; a webhook signing secret has no answer, because it never
+goes out — it verifies bytes that arrived. It is declared in `[[auth]]` like any other credential so
+that one namespace covers both directions and the manifest names everything a connector requires. The
+two rules that keep the directions apart are enforced at the loader: a verification secret must be
+`scheme = "signing"`, and no operation may authenticate with one.
+
+## Configuration contract
+
+A connector declares **what a human must supply** before it can run — see
+[docs/designs/connector-configuration.md](docs/designs/connector-configuration.md). The boundary is:
+**this repository declares; flux resolves; a UI renders.** Nothing here holds a value, a URL, or a
+callback address.
+
+- **Configuration has two levels, and `Level` is derived, never authored.** *Operator* level is set
+  once per vendor by whoever runs the product (the OAuth app registration); *connection* level is set
+  once per tenant by each end user (the subdomain, the token). Conflating them is a real defect both
+  ways: asking an end user for a client secret hands them the product's own credential. The level is a
+  consequence of what a field `binds`, so an author cannot state it wrongly.
+- **`secret` must agree with `binds`.** flux partitions secret from non-secret **by type** —
+  `AuthMethod` versus `ConfigSpec` — and enforces it host-side. A field claiming otherwise would put a
+  contradicting source of truth in front of that enforcement. The loader refuses it.
+- **Do not duplicate flux's resolution.** `EndpointSpec::template` already composes a URL from
+  `{placeholder}` values host-side. A `ConfigField` names the *destination*; it never re-implements the
+  templating, and it never introduces a second secret model.
+- **A connector asks for everything it needs and nothing it cannot use.** Every `{variable}` in a base
+  URL is bound by exactly one field; every endpoint, credential and OAuth reference resolves.
+- **A field must be renderable.** `label` and `help` are mandatory. Defaulting a label to the field
+  name ships `zendesk.api_token` into a form as user-facing copy.
+- **`format` is a closed enum, not a regex.** A renderer given a raw pattern can reject a value and
+  cannot explain why. `example` is validated against `format`, because a placeholder that fails its own
+  field is worse than none — a user copies it.
+- **`description` is not UI copy.** Every `description` in this repository is the text a *model*
+  receives as a tool contract. Presentation belongs in `label`/`help`, and overloading `description`
+  is how one string comes to serve two audiences badly.
+- **A `verify` operation is a read.** It is the "Test connection" button, and it runs unattended
+  whenever someone opens a settings page; a `high` or `destructive` operation is refused.
+- **A `webhook` binding says how it is registered** — `[channels.subscription]` or
+  `[channels.setup]`. A product that knows a callback URL and nothing about what to do with it cannot
+  finish an installation.
+
+## Flow graph contract
+
+A connector may compose its own members into a flow that lowers to **one Flux `op`** — see
+[docs/designs/flow-graph.md](docs/designs/flow-graph.md).
+
+- **No node ever carries a formula.** This is the line principle 2 actually draws: every rejection in
+  this repository's history was an *expression* language (a template DSL, JSONPath, a vendor's remote
+  expression evaluator); every acceptance was declarative structure. A gate's `Condition` is a port
+  reference, one of seven operators and a literal — **this repository generates the Flux expression,
+  the author never writes one.** `NodeKind::free_text` is the exhaustive tripwire, and there is no
+  `Formula` role to classify a new field as. Needing one means stop and re-read the north star.
+- **A graph is a projection of Flux, not a layer over it.** `flux_lang::ast::Node` has 43 kinds and
+  this repository constructs nine; every node kind must name the existing variant it *is*. Inventing a
+  node with no Flux counterpart is inventing semantics.
+- **Boundary nodes declare and are emitted nowhere.** flux lifts only `op` declarations; `channel` and
+  `trigger` are Program members an operator writes. So `trigger`, `schedule` and `endpoint` take no
+  inputs, sit in no region, and reach no `.flux` — the same split channel bindings hold.
+- **Control flow must nest; data flow need not.** Flux has no `goto`, so a cycle is refused outright.
+  Data convergence is free — a statement may read any bound symbol — but a value leaves a region only
+  through a port the region declares.
+- **A `gate` exports nothing.** It lowers to `when`, which has no else here, so a symbol bound inside
+  is *unbound* on the false path and reading it later fails at runtime. A value escaping a conditional
+  needs a branch with a default. `retry`, `throttle` and `approval` always run their body or fail, so
+  they may export.
+- **Edges are symbols the compiler owns.** An author never sees or names one. This is what makes
+  action-proxy's silent `$emit` shadowing unrepresentable, and it is worth keeping that way.
+- **Node ids are author-stable**, deliberately unlike flux's positional `NodeId`. A saved graph must
+  survive re-ordering.
+
+## Credential addressing contract
+
+A connector derives **where a tenant's credential is kept** — the address, never the value and never
+the store. See [docs/designs/credential-addressing.md](docs/designs/credential-addressing.md).
+
+```
+tenants/<tenant>/<authority>/<service>/<credential>
+```
+
+- **This repository owns the address; a host library owns the client.** The address is pure and
+  derived from facts this repo already validates. Anything that opens a socket belongs in
+  `connector-secrets`, which `connector-cli` must not depend on — that dependency edge is what keeps
+  `crates/connector-cli/tests/no_network.rs` a true statement about the build.
+- **The API version is deliberately absent.** A credential path is `pid` + service, never the `gid`,
+  because a token must survive the vendor's v2 migration. Adding the version would force every tenant
+  to re-provision on a change that did not affect their credential.
+- **A tenant id is untrusted input.** `CredentialRef::new` returns a `Result` and no construction can
+  render a traversing path. But validation is not provenance: deriving the tenant from an
+  authenticated principal — never from request input — is the host's job. Do not write anything that
+  implies otherwise.
+- **`default` never reaches a path**, and spelling it out explicitly does not parse. Two spellings of
+  one address is how a store holds the same credential twice with nothing to say which is current.
+- **The leaf drops the vendor prefix.** `zendesk.api_token` is the flat-namespace name; the path
+  already carries the authority, so the leaf is `api_token`. A prefix disagreeing with the connector
+  id is refused — it would render a plausible path under the wrong vendor.
+- **Validate any new path segment at construction**, the same way a service name is validated at the
+  loader. The cautionary case is real and close: action-proxy puts two client-supplied headers
+  straight into a Vault path with no validation.
+
+## Member contract
+
+A service has **three member kinds**, and they share **one name namespace**:
+
+| kind | direction | emitted into the module? |
+|---|---|---|
+| `[[operations]]` | outbound — flux calls the vendor | yes, as an `op` |
+| `[[events]]` | inbound — the vendor calls flux | **no** |
+| `[[channels]]` | a binding composing the two | **no** |
+| `[[config]]` | what a human supplies before any of it runs | **no** |
+| `[[graphs]]` | a flow composing the members above | **yes**, as one `op` |
+
+See [docs/designs/channel-bindings.md](docs/designs/channel-bindings.md).
+
+- **A channel binding declares; it never installs.** It reaches the manifest and the catalogue and
+  emits nothing into the module — flux lifts `op` declarations only, while `channel` and `trigger` are
+  Program members an operator writes. The tempting wrong output is an event dressed up as a pollable
+  op; refuse it.
+- **A binding is a composition, not a primitive.** Its inbound half names declared events of its own
+  service; its outbound half names a declared **operation** of the same connector. Do not grow a
+  parallel reply mechanism — if a binding cannot answer with an operation the pipeline already emits,
+  the binding is wrong, not the model.
+- **One namespace per service.** They render into the same address (`…#name`) and into flux's
+  declaration namespace, so a cross-kind collision is a loud error. A *within-kind* duplicate is
+  reported by that kind's own pass, so one problem produces one line. A configuration field is not
+  addressable in the same sense — nothing calls it — but it shares the namespace anyway, because it
+  shares the *host's*: a config value and an operation resolving to one name would be ambiguous
+  wherever a host looked either up.
+- **A member name is wider than an operation id.** It admits `-`, `_` and `.`, because an event keeps
+  its vendor spelling (`app_mention`, `issues.opened`). The narrower declarable-symbol rule stays with
+  the emitter: this validator guards the *address*, `connector-flux` guards the *declaration*.
+- **A binding holds completely or is refused.** A dangling reply, an unbound required parameter, a
+  webhook that states no verification, a poll with no cursor — each would build, ship, pass every
+  artifact check, and fail on an operator's first real delivery.
+- **Silence is never a verification answer.** A `webhook` binding states an HMAC scheme or states
+  `verification = "none"` deliberately. Never present an unverified event as trusted.
+- **A `poll` binding requires a cursor.** flux's schedule channel drops ticks across a restart and
+  replays none of them, so the cursor — not the interval — is what makes a poll correct. `interval` is
+  advisory.
 
 ## Service contract
 

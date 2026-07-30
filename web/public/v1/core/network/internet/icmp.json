@@ -1,0 +1,16 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/network/internet/icmp.json",
+  "schema_version": 1,
+  "kind": "capability",
+  "name": "icmp",
+  "title": "ICMP",
+  "description": "Portable guarded reachability checks; planned where host privilege permits.",
+  "category": [
+    "network",
+    "internet"
+  ],
+  "availability": "planned",
+  "callable": false,
+  "operation_ids": []
+}

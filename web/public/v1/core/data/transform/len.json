@@ -1,0 +1,49 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/data/transform/len.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "len",
+  "title": "Len",
+  "description": "Return the number of items in an array (or the character count of a string). Use with `when`/`expr` to branch on list size without shelling out.",
+  "category": [
+    "data",
+    "transform"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [],
+    "description": "Return the number of items in an array (or the character count of a string). Use with `when`/`expr` to branch on list size without shelling out.",
+    "effects": [],
+    "group": "cognition",
+    "idempotency": "idempotent",
+    "input_schema": {
+      "$defs": {
+        "LenItems": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": true,
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "$ref": "#/$defs/LenItems",
+          "description": "An array (length) or a string (character count)"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "name": "len",
+    "risk": "low"
+  }
+}

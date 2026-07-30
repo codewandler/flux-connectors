@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitepress'
 
 const repo = 'https://github.com/codewandler/flux-connectors'
-const base = '/flux-connectors/'
+const base = '/'
 
 export default defineConfig({
   lang: 'en-US',
@@ -10,16 +10,14 @@ export default defineConfig({
 
   head: [['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}brand/icon.svg` }]],
 
-  // A *project* Pages site is served from https://codewandler.github.io/flux-connectors/, and every
-  // asset URL and root-relative link is resolved against this prefix. It must match the repository
-  // name exactly: with the default '/' the deployed site loads its own JS from the wrong origin path
-  // and renders a blank page. Change this only alongside a rename or a custom domain.
+  // The committed CNAME publishes this site at flux.codewandler.org, so assets and specification
+  // URLs resolve from the origin root rather than from a GitHub project-pages prefix.
   base,
 
   cleanUrls: true,
 
   // web/README.md documents how to build this site for a contributor; it is not a published page.
-  // Without this it renders at /flux-connectors/README.
+  // Without this it renders at /README.
   srcExclude: ['README.md'],
 
   // Dead internal links fail the build rather than shipping. Combined with the Pages workflow, that
@@ -45,7 +43,7 @@ export default defineConfig({
         text: 'flux-connectors',
         items: [
           { text: 'Overview', link: '/' },
-          { text: 'Connector & operation explorer', link: '/explorer' },
+          { text: 'Connector & core explorer', link: '/explorer' },
         ],
       },
     ],

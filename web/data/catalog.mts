@@ -95,10 +95,86 @@ export interface Provider {
   operations: Operation[]
 }
 
+export type CoreAvailability = 'available' | 'planned'
+
+export interface ToolSpec {
+  name: string
+  description: string
+  input_schema: Record<string, unknown>
+  effects: string[]
+  risk: string
+  idempotency: string
+  access: string[]
+  group?: string
+}
+
+export interface CoreEntryBase {
+  $schema: string
+  $id: string
+  schema_version: number
+  name: string
+  title: string
+  description: string
+  category: string[]
+  availability: CoreAvailability
+}
+
+export interface CoreOperation extends CoreEntryBase {
+  kind: 'operation'
+  tool_spec: ToolSpec
+}
+
+export interface CoreNode extends CoreEntryBase {
+  kind: 'node'
+  schema_ref: string
+}
+
+export interface CoreCapability extends CoreEntryBase {
+  kind: 'capability'
+  callable: boolean
+  operation_ids: string[]
+}
+
+export type CoreEntry = CoreOperation | CoreNode | CoreCapability
+
+export interface CoreSchemas {
+  catalog: Record<string, unknown>
+  entry: Record<string, unknown>
+  flux_ast: Record<string, unknown>
+}
+
+export interface CoreCatalog {
+  $schema: string
+  $id: string
+  schema_version: number
+  generator: string
+  operations: CoreOperation[]
+  nodes: CoreNode[]
+  capabilities: CoreCapability[]
+  schemas: CoreSchemas
+}
+
 export interface Catalog {
   schema_version: number
   generator: string
   providers: Provider[]
+  core: CoreCatalog | null
+}
+
+/** Every Flux-owned core entry in its declared kind order. */
+export function allCoreEntries(core: CoreCatalog): CoreEntry[] {
+  return [...core.operations, ...core.nodes, ...core.capabilities]
+}
+
+/** The stable explorer page for a Flux-owned core entry. */
+export function coreEntryHref(entry: CoreEntry): string {
+  const section = entry.kind === 'capability' ? 'capabilities' : `${entry.kind}s`
+  return `/core/${section}/${encodeURIComponent(entry.name)}`
+}
+
+/** Resolve a canonical core specification id to the entry that owns it. */
+export function coreEntryById(core: CoreCatalog, id: string): CoreEntry | undefined {
+  return allCoreEntries(core).find((entry) => entry.$id === id)
 }
 
 /**

@@ -11,6 +11,21 @@ note: a new provider shape must fail at the model, not at request time
 
 # Auth conformance matrix across provider archetypes
 
+> **Amendment ([C-86](C-86-connector-configuration-epic.md)).** **Landed as
+> `crates/connector-spec/tests/auth_archetypes.rs`**, with the question sharpened: it is not enough
+> that the model can *express* an archetype, it must be able to say **what form that archetype
+> generates**. Each case names the real provider it is drawn from, as this story required.
+>
+> Covered: prefixed header (slack), basic join with a vendor marker (zendesk) *and* without one (jira,
+> which proves the difference is declared rather than assumed), raw-value header (shopify), no
+> credential at all (freshdesk), AND-sets and OR-alternatives (babelforce), and the signing secret.
+>
+> **The explicit failing case this story asked for is OAuth2**, not `hmac` as predicted:
+> `no_shipped_provider_exercises_oauth_yet` asserts that `OAuth2Spec` is a landed type no provider
+> uses, and its failure message says what to replace it with. [C-88](C-88-prove-oauth2.md) closes it.
+> `hmac` turned out to be expressible after all — as `AuthScheme::Signing` plus a channel binding's
+> verification block — though only in the inbound direction; SigV4 remains open.
+
 ## Goal
 Pin the unified model against one case per real-world archetype, so an unsupported credential shape
 fails loudly in a test rather than silently at the first live request.

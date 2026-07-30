@@ -1,0 +1,15 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/language/node/jq.json",
+  "schema_version": 1,
+  "kind": "node",
+  "name": "jq",
+  "title": "Jq",
+  "description": "Pure JSON path extraction. `path` is a dot-path string (e.g. `\".bitcoin.usd\"` or `\"results[0].value\"`) applied to the JSON content of `input` (a `Var` or `Lit` node). No IO, no approval gate. Example: `jq(\".bitcoin.usd\", $raw)`.  `optional` selects the traversal-through-missing-data policy. When `false` — the default for native `$x.field` sugar — an absent object key, an out-of-range index, or a field access on a non-object is a loud error, so a typo'd field name fails fast instead of silently reading empty. When `true` — native `$x.field?` sugar, or a legacy JSON AST that omitted the flag — such a miss yields `null`. A present-but-`null` field is never an error in either mode.",
+  "category": [
+    "language",
+    "node"
+  ],
+  "availability": "available",
+  "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-jq"
+}

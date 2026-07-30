@@ -98,6 +98,11 @@ fn babelforce() -> Connector {
                 ])]),
             ),
         ],
+        events: Vec::new(),
+        channels: Vec::new(),
+        config: Vec::new(),
+        verify: None,
+        graphs: Vec::new(),
         provenance: Provenance::default(),
     }
 }

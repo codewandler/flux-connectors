@@ -1,0 +1,40 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/data/transform/group_by.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "group_by",
+  "title": "Group By",
+  "description": "Group array items by a field. Returns `[{key, items}]` in first-seen key order.",
+  "category": [
+    "data",
+    "transform"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [],
+    "description": "Group array items by a field. Returns `[{key, items}]` in first-seen key order.",
+    "effects": [],
+    "group": "cognition",
+    "idempotency": "idempotent",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": true,
+          "type": "array"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "items",
+        "path"
+      ],
+      "type": "object"
+    },
+    "name": "group_by",
+    "risk": "low"
+  }
+}

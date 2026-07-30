@@ -1,0 +1,43 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/data/transform/omit.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "omit",
+  "title": "Omit",
+  "description": "Remove the listed keys from an object (or per element of an array of objects), keeping everything else. Returns an object if `items` is an object, or an array if `items` is an array.",
+  "category": [
+    "data",
+    "transform"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [],
+    "description": "Remove the listed keys from an object (or per element of an array of objects), keeping everything else. Returns an object if `items` is an object, or an array if `items` is an array.",
+    "effects": [],
+    "group": "cognition",
+    "idempotency": "idempotent",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "description": "One object or an array of objects"
+        },
+        "keys": {
+          "description": "Field names to remove",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items",
+        "keys"
+      ],
+      "type": "object"
+    },
+    "name": "omit",
+    "risk": "low"
+  }
+}

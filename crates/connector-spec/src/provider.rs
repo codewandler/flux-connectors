@@ -34,6 +34,12 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::config::{parse_binding, template_variables, Binding, ConfigField};
+use crate::graph::{Graph, GraphNode, NodeKind, PortRef};
+use crate::inbound::{
+    signed_placeholders, validate_path, validate_symbol, ChannelBinding, EventDecl, HmacSpec,
+    ManualSetup, Reply, Selector, Subscription, Transport, VerificationScheme, SIGNED_PLACEHOLDERS,
+};
 use crate::lock::sha256_hex;
 use crate::{
     AuthMethod, AuthRequirement, AuthScheme, Connector, Idempotency, JsonSchema, Operation, Param,
@@ -238,6 +244,16 @@ struct ProviderFile {
     #[serde(default)]
     operations: Vec<Operation>,
     #[serde(default)]
+    events: Vec<EventDecl>,
+    #[serde(default)]
+    channels: Vec<ChannelBinding>,
+    #[serde(default)]
+    config: Vec<ConfigField>,
+    #[serde(default)]
+    verify: Option<String>,
+    #[serde(default)]
+    graphs: Vec<Graph>,
+    #[serde(default)]
     spec: Option<SpecSource>,
     #[serde(default)]
     patch: Patch,
@@ -301,6 +317,11 @@ fn assemble(file: ProviderFile, source: &str) -> LoadedProvider {
             auth: file.auth,
             default_auth: file.default_auth,
             operations: file.operations,
+            events: file.events,
+            channels: file.channels,
+            config: file.config,
+            verify: file.verify,
+            graphs: file.graphs,
             provenance,
         },
         spec,
@@ -355,9 +376,1136 @@ fn validate(loaded: &LoadedProvider) -> Vec<String> {
     validate_services(connector, &mut problems);
     validate_credentials(connector, &mut problems);
     validate_operations(connector, &mut problems);
+    validate_events(connector, &mut problems);
+    validate_channels(connector, &mut problems);
+    validate_config(connector, &mut problems);
+    validate_verify(connector, &mut problems);
+    validate_graphs(connector, &mut problems);
+    validate_member_namespace(connector, &mut problems);
     validate_patch(loaded, &mut problems);
 
     problems
+}
+
+/// Checks the configuration surface — what a human is asked for, and where each answer goes.
+///
+/// Two properties, and the first is the one that closes a defect every templated provider records in
+/// a comment: **a connector must ask for everything it needs**, and **it must not ask for anything it
+/// cannot use**. A template variable nobody declares is a connector that silently cannot be
+/// configured; a field binding nothing real is a question whose answer is discarded.
+fn validate_config(connector: &Connector, problems: &mut Vec<String>) {
+    let mut seen: Vec<&str> = Vec::new();
+
+    for field in &connector.config {
+        let name = field.name.as_str();
+        if name.trim().is_empty() {
+            problems.push("a configuration field has an empty `name`".to_owned());
+            continue;
+        }
+        if seen.contains(&name) {
+            problems.push(format!(
+                "configuration field {name:?} is declared more than once; the name is the key a host \
+                 stores the collected value under"
+            ));
+        }
+        seen.push(name);
+
+        if let Err(reason) = crate::address::validate_member_name(name) {
+            problems.push(format!(
+                "configuration field {name:?} has an invalid `name`: {reason}"
+            ));
+        }
+        validate_member_service(
+            connector,
+            "configuration field",
+            name,
+            &field.service,
+            problems,
+        );
+
+        // A field with no label or no help cannot be rendered into a form that anyone can answer.
+        // Defaulting either to `name` would ship `zendesk.api_token` as user-facing copy.
+        if field.label.trim().is_empty() {
+            problems.push(format!(
+                "configuration field {name:?} has an empty `label`; it is the text a form shows \
+                 beside the input, and there is no sensible default for it — {name:?} is an \
+                 identifier, not a label"
+            ));
+        }
+        if field.help.trim().is_empty() {
+            problems.push(format!(
+                "configuration field {name:?} has an empty `help`; a field a user cannot answer is a \
+                 field that stops the installation"
+            ));
+        }
+
+        // The example is a placeholder a user will copy, so it has to satisfy the field's own rule.
+        if let Some(example) = &field.example {
+            if let Err(reason) = field.format.validate(example) {
+                problems.push(format!(
+                    "configuration field {name:?} declares `format = \"{}\"` but an `example` that \
+                     does not satisfy it: {reason}. A placeholder that would fail the field's own \
+                     validation is worse than none, because a user copies it",
+                    field.format.word()
+                ));
+            }
+        }
+
+        validate_binding(connector, field, problems);
+    }
+
+    validate_every_template_variable_is_asked_for(connector, problems);
+}
+
+/// Checks one field's `binds`: that it parses, that it resolves, and that `secret` agrees with it.
+fn validate_binding(connector: &Connector, field: &ConfigField, problems: &mut Vec<String>) {
+    let name = field.name.as_str();
+    let binding = match parse_binding(&field.binds) {
+        Ok(binding) => binding,
+        Err(reason) => {
+            problems.push(format!("configuration field {name:?}: {reason}"));
+            return;
+        }
+    };
+
+    match binding {
+        Binding::Endpoint { variable } => {
+            let declared: Vec<&str> = connector
+                .service_names()
+                .into_iter()
+                .flat_map(|service| template_variables(connector.base_url_of(service)))
+                .collect();
+            if !declared.contains(&variable) {
+                problems.push(format!(
+                    "configuration field {name:?} binds `{{{variable}}}`, which no service's \
+                     `base_url` carries. This provider's templates offer: {}",
+                    if declared.is_empty() {
+                        "nothing — every base URL is literal".to_owned()
+                    } else {
+                        declared.join(", ")
+                    }
+                ));
+            }
+        }
+        Binding::Credential { name: credential } | Binding::Username { name: credential } => {
+            match connector.auth_method(credential) {
+                None => problems.push(format!(
+                    "configuration field {name:?} binds credential {credential:?}, which no \
+                     `[[auth]]` block declares"
+                )),
+                Some(method) => {
+                    // Only `basic` has a username half; for every other scheme the whole credential
+                    // is the secret, so a username field would collect a value with nowhere to go.
+                    if matches!(binding, Binding::Username { .. })
+                        && method.scheme != AuthScheme::Basic
+                    {
+                        problems.push(format!(
+                            "configuration field {name:?} binds the username half of credential \
+                             {credential:?}, which uses the `{}` scheme. Only `basic` sends a \
+                             username — it is `base64(<user>:<secret>)`, and every other scheme \
+                             sends the secret alone",
+                            scheme_word(&method.scheme)
+                        ));
+                    }
+                }
+            }
+        }
+        Binding::OAuthClientId | Binding::OAuthClientSecret => {
+            if !connector.auth.iter().any(|method| method.oauth2.is_some()) {
+                problems.push(format!(
+                    "configuration field {name:?} binds an OAuth app registration, but no `[[auth]]` \
+                     block declares an `[auth.oauth2]` spec. There is no OAuth flow for a client id \
+                     to belong to"
+                ));
+            }
+        }
+    }
+
+    // The agreement that keeps this from becoming a second source of truth. flux partitions secret
+    // from non-secret BY TYPE — an `AuthMethod` versus a `ConfigSpec` — and enforces it host-side.
+    // A field that disagreed would put a contradicting claim in front of that enforcement.
+    let expected = binding.is_secret();
+    if field.secret != expected {
+        problems.push(if expected {
+            format!(
+                "configuration field {name:?} binds {} but declares `secret = false`. That value is \
+                 a credential: it must be masked on input, kept out of logs, and stored where a \
+                 secret is stored",
+                field.binds
+            )
+        } else {
+            format!(
+                "configuration field {name:?} binds {} but declares `secret = true`. That value is \
+                 configuration, not a credential — marking it secret hides it from an operator who \
+                 needs to read it back, and claims gating this repository does not provide",
+                field.binds
+            )
+        });
+    }
+}
+
+/// **Every template variable is asked for.** This is the rule that closes the `SCHEMA GAP:` comment
+/// four shipped providers have carried since C-17.
+///
+/// A `{subdomain}` nobody declares is not a cosmetic omission: the connector has no valid destination
+/// URL and no way to tell anyone what is missing. `catalog.json` already publishes an
+/// `unbound-base-url-template` issue for exactly this, which is a diagnosis with no remedy attached.
+fn validate_every_template_variable_is_asked_for(
+    connector: &Connector,
+    problems: &mut Vec<String>,
+) {
+    for service in connector.service_names() {
+        for variable in template_variables(connector.base_url_of(service)) {
+            let bound = connector.config_of(service).any(|field| {
+                matches!(field.binding(), Some(Binding::Endpoint { variable: v }) if v == variable)
+            });
+            if !bound {
+                let where_ = if service == DEFAULT_SERVICE {
+                    String::new()
+                } else {
+                    format!(" of service {service:?}")
+                };
+                problems.push(format!(
+                    "the base URL{where_} carries `{{{variable}}}`, which no `[[config]]` field \
+                     binds. Until something asks a user for it the connector has no valid \
+                     destination URL — declare a field with `binds = \"endpoint.{variable}\"`"
+                ));
+            }
+        }
+    }
+}
+
+/// Checks the declared verification operation — a host's "Test connection".
+fn validate_verify(connector: &Connector, problems: &mut Vec<String>) {
+    let Some(verify) = &connector.verify else {
+        return;
+    };
+    match connector.operation(verify) {
+        None => problems.push(format!(
+            "`verify` names operation {verify:?}, which no `[[operations]]` block declares"
+        )),
+        // A "Test connection" button that could create a ticket is a button nobody dares press. The
+        // check is on declared risk rather than on the HTTP method, because this provider's own
+        // metadata is the thing a host will reason about.
+        Some(operation) if operation.risk == Risk::High || operation.risk == Risk::Destructive => {
+            problems.push(format!(
+                "`verify` names operation {verify:?}, which declares `risk = \"{}\"`. A \
+                 connection test runs unattended whenever someone opens a settings page, so it must \
+                 be a read a user would not mind being repeated",
+                match operation.risk {
+                    Risk::High => "high",
+                    _ => "destructive",
+                }
+            ));
+        }
+        Some(_) => {}
+    }
+}
+
+/// Checks the inbound half of a service's members.
+///
+/// Name spelling and service membership only — an event declares no behaviour of its own, so there is
+/// nothing else here to be wrong. What *uses* an event is a [`ChannelBinding`], and the
+/// cross-references are checked there.
+fn validate_events(connector: &Connector, problems: &mut Vec<String>) {
+    let mut seen: Vec<&str> = Vec::new();
+
+    for event in &connector.events {
+        let name = event.name.as_str();
+        if name.trim().is_empty() {
+            problems.push("an event has an empty `name`".to_owned());
+            continue;
+        }
+        if seen.contains(&name) {
+            problems.push(format!(
+                "event {name:?} is declared more than once; the event name is the trigger label a \
+                 program matches on, so it must denote one event"
+            ));
+        }
+        seen.push(name);
+
+        if let Err(reason) = crate::address::validate_member_name(name) {
+            problems.push(format!("event {name:?} has an invalid `name`: {reason}"));
+        }
+        validate_member_service(connector, "event", name, &event.service, problems);
+    }
+}
+
+/// Checks that a member's service is one this provider has.
+///
+/// The operation-side equivalent is [`validate_operation_service`], which stays separate because its
+/// error text names the multi-service trap specifically; this is the shorter form the other two
+/// kinds need.
+fn validate_member_service(
+    connector: &Connector,
+    kind: &str,
+    name: &str,
+    service: &str,
+    problems: &mut Vec<String>,
+) {
+    let available = connector.service_names();
+    if available.contains(&service) {
+        return;
+    }
+    problems.push(format!(
+        "{kind} {name:?} names service {service:?}, which no `[[services]]` entry declares. This \
+         provider declares: {}",
+        available.join(", ")
+    ));
+}
+
+/// Checks every channel binding: its transport's own rules, and every reference it makes.
+///
+/// **Every rule here is a refusal, never a degradation.** A binding is a promise that an event can
+/// reach a flow and that a reply can go back; a binding that half-holds is the plausible-but-wrong
+/// artifact `AGENTS.md` requires the pipeline to refuse rather than emit.
+fn validate_channels(connector: &Connector, problems: &mut Vec<String>) {
+    let mut seen: Vec<&str> = Vec::new();
+
+    for channel in &connector.channels {
+        let name = channel.name.as_str();
+        if name.trim().is_empty() {
+            problems.push("a channel binding has an empty `name`".to_owned());
+            continue;
+        }
+        if seen.contains(&name) {
+            problems.push(format!(
+                "channel binding {name:?} is declared more than once; the binding name is what an \
+                 operator's `channel` declaration selects, so it must denote one surface"
+            ));
+        }
+        seen.push(name);
+
+        if let Err(reason) = crate::address::validate_member_name(name) {
+            problems.push(format!(
+                "channel binding {name:?} has an invalid `name`: {reason}"
+            ));
+        }
+        validate_member_service(
+            connector,
+            "channel binding",
+            name,
+            &channel.service,
+            problems,
+        );
+
+        validate_channel_events(connector, channel, problems);
+        validate_channel_verification(connector, channel, problems);
+        validate_channel_payload(channel, problems);
+        validate_channel_reply(connector, channel, problems);
+        validate_channel_transport(connector, channel, problems);
+        validate_channel_setup(connector, channel, problems);
+
+        for (label, selector) in [
+            ("discriminator", &channel.discriminator),
+            ("delivery_id", &channel.delivery_id),
+        ] {
+            if let Some(selector) = selector {
+                validate_selector(name, label, selector, problems);
+            }
+        }
+    }
+}
+
+/// Every event a binding carries must exist **in the binding's own service**.
+fn validate_channel_events(
+    connector: &Connector,
+    channel: &ChannelBinding,
+    problems: &mut Vec<String>,
+) {
+    let name = channel.name.as_str();
+
+    // A push binding that carries no events delivers nothing: the transport would connect, hold, and
+    // route every arrival to a label no trigger can name. A poll binding is different — its cursor
+    // operation is what it carries.
+    if channel.events.is_empty() && channel.transport != Transport::Poll {
+        problems.push(format!(
+            "channel binding {name:?} lists no `events`, so nothing it receives could reach a \
+             trigger. A binding names the events it carries; only a `poll` binding may omit them, \
+             because its `cursor` operation is what it carries"
+        ));
+    }
+
+    for event in &channel.events {
+        match connector.event(event) {
+            None => problems.push(format!(
+                "channel binding {name:?} carries event {event:?}, which no `[[events]]` block \
+                 declares"
+            )),
+            Some(declared) if declared.service != channel.service => problems.push(format!(
+                "channel binding {name:?} is in service {:?} but carries event {event:?}, which is \
+                 in service {:?}. A binding carries the events of its own service — the two version \
+                 and address independently",
+                channel.service, declared.service
+            )),
+            Some(_) => {}
+        }
+    }
+}
+
+/// The tri-state on [`ChannelBinding::verification`], and the HMAC parameters when there are any.
+fn validate_channel_verification(
+    connector: &Connector,
+    channel: &ChannelBinding,
+    problems: &mut Vec<String>,
+) {
+    let name = channel.name.as_str();
+
+    match (&channel.verification, channel.transport) {
+        // Silence on an open endpoint is how an unverified event gets presented as a trusted one.
+        // The author must say something, even if what they say is "this vendor publishes nothing".
+        (None, Transport::Webhook) => problems.push(format!(
+            "channel binding {name:?} uses the `webhook` transport and states no `verification`. An \
+             endpoint anyone can POST to must say how it proves the caller is the vendor — write a \
+             `[[channels]].verification.hmac` table, or `verification = \"none\"` to state \
+             deliberately that the vendor publishes no signature"
+        )),
+        (Some(scheme), transport) if transport != Transport::Webhook => {
+            let _ = scheme;
+            problems.push(format!(
+                "channel binding {name:?} states `verification`, which only the `webhook` transport \
+                 uses. A `{}` binding is authenticated by the credential that opens the connection",
+                transport_word(transport)
+            ));
+        }
+        _ => {}
+    }
+
+    if let Some(VerificationScheme::Hmac(hmac)) = &channel.verification {
+        validate_hmac(connector, name, hmac, problems);
+    }
+}
+
+/// The HMAC matrix's own consistency: a fillable template, a bounded replay window, and a secret that
+/// resolves to a credential declared for exactly this purpose.
+fn validate_hmac(
+    connector: &Connector,
+    channel: &str,
+    hmac: &HmacSpec,
+    problems: &mut Vec<String>,
+) {
+    if hmac.header.trim().is_empty() {
+        problems.push(format!(
+            "channel binding {channel:?} declares an HMAC scheme with an empty `header`; it names \
+             the header carrying the signature"
+        ));
+    }
+
+    let placeholders = signed_placeholders(&hmac.signed);
+    if placeholders.is_empty() {
+        problems.push(format!(
+            "channel binding {channel:?} has `signed = {:?}`, which interpolates nothing. The signed \
+             string is a template over {{body}} and {{timestamp}}; a constant template signs the \
+             same bytes for every request",
+            hmac.signed
+        ));
+    }
+    for placeholder in &placeholders {
+        if !SIGNED_PLACEHOLDERS.contains(&placeholder.as_str()) {
+            problems.push(format!(
+                "channel binding {channel:?} has `signed = {:?}`, which interpolates \
+                 {{{placeholder}}}; the host can fill only {{body}} and {{timestamp}}",
+                hmac.signed
+            ));
+        }
+    }
+
+    let timestamped = placeholders.iter().any(|p| p == "timestamp");
+
+    match (&hmac.timestamp, timestamped) {
+        (None, true) => problems.push(format!(
+            "channel binding {channel:?} signs over {{timestamp}} but declares no `timestamp` \
+             selector. The template says the value is signed; it cannot say where the value is \
+             read from, and a host left to guess would fall back to its own clock — which verifies \
+             nothing"
+        )),
+        (Some(_), false) => problems.push(format!(
+            "channel binding {channel:?} declares a `timestamp` selector, but its `signed` template \
+             does not interpolate {{timestamp}} — the value would be read and never used"
+        )),
+        (Some(selector), true) => validate_selector(channel, "verification timestamp", selector, problems),
+        (None, false) => {}
+    }
+
+    // A timestamped scheme with no window is a signature that replays forever — strictly worse than
+    // not timestamping at all, because it reads as though replay had been handled.
+    if timestamped && hmac.tolerance.is_none() {
+        problems.push(format!(
+            "channel binding {channel:?} signs over {{timestamp}} but declares no `tolerance`. A \
+             timestamped signature with no window replays forever; state how old a request may be, \
+             as in `tolerance = \"5m\"`"
+        ));
+    }
+    if !timestamped && hmac.tolerance.is_some() {
+        problems.push(format!(
+            "channel binding {channel:?} declares a `tolerance`, but its `signed` template does not \
+             interpolate {{timestamp}} — there is no timestamp to bound"
+        ));
+    }
+
+    match connector.auth_method(&hmac.secret) {
+        None => problems.push(format!(
+            "channel binding {channel:?} names webhook secret {:?}, which no `[[auth]]` block \
+             declares. An inbound secret is a credential like any other, so that the manifest names \
+             every credential this connector requires",
+            hmac.secret
+        )),
+        Some(method) if method.scheme != AuthScheme::Signing => problems.push(format!(
+            "channel binding {channel:?} names webhook secret {:?}, which is declared with the \
+             `{}` scheme. A verification secret is never placed in an outgoing request, so it is \
+             declared `scheme = \"signing\"` — using an outbound credential here would spend the \
+             same value in both directions",
+            hmac.secret,
+            scheme_word(&method.scheme)
+        )),
+        Some(_) => {}
+    }
+}
+
+/// A payload map binds Flux symbols to dotted paths, and both halves have to be spellable.
+fn validate_channel_payload(channel: &ChannelBinding, problems: &mut Vec<String>) {
+    let name = channel.name.as_str();
+    for (symbol, path) in &channel.payload {
+        if let Err(reason) = validate_symbol(symbol) {
+            problems.push(format!("channel binding {name:?}: {reason}"));
+        }
+        if let Err(reason) = validate_path(path) {
+            problems.push(format!(
+                "channel binding {name:?} maps {symbol:?} to an invalid source path: {reason}"
+            ));
+        }
+    }
+}
+
+/// The reply must resolve, and it must be **completely** bound.
+///
+/// The completeness rule is the one that earns its keep. A reply missing a required parameter builds,
+/// ships, passes every artifact check, and then fails on the first real delivery — at which point the
+/// failure is in an operator's production channel rather than in a build they were reading.
+fn validate_channel_reply(
+    connector: &Connector,
+    channel: &ChannelBinding,
+    problems: &mut Vec<String>,
+) {
+    let name = channel.name.as_str();
+    let Some(Reply {
+        operation,
+        result,
+        bind,
+    }) = &channel.reply
+    else {
+        return;
+    };
+
+    let Some(target) = connector.operation(operation) else {
+        problems.push(format!(
+            "channel binding {name:?} replies with operation {operation:?}, which no \
+             `[[operations]]` block declares. A binding's reply is an ordinary operation of this \
+             same connector — that is what makes it a composition rather than a second code path"
+        ));
+        return;
+    };
+
+    if target.service != channel.service {
+        problems.push(format!(
+            "channel binding {name:?} is in service {:?} but replies with operation {operation:?}, \
+             which is in service {:?}",
+            channel.service, target.service
+        ));
+    }
+
+    for (param, symbol) in bind {
+        if !target.params.iter().any(|p| &p.name == param) {
+            problems.push(format!(
+                "channel binding {name:?} binds reply parameter {param:?}, which operation \
+                 {operation:?} does not declare"
+            ));
+        }
+        if !channel.payload.contains_key(symbol) {
+            problems.push(format!(
+                "channel binding {name:?} binds reply parameter {param:?} to {symbol:?}, which its \
+                 `payload` map does not declare. A reply is filled from the inbound payload, so \
+                 every bound value has to be something the payload produced"
+            ));
+        }
+    }
+
+    if let Some(result) = result {
+        if !target.params.iter().any(|p| &p.name == result) {
+            problems.push(format!(
+                "channel binding {name:?} sends its journey result to reply parameter {result:?}, \
+                 which operation {operation:?} does not declare"
+            ));
+        }
+        if bind.contains_key(result) {
+            problems.push(format!(
+                "channel binding {name:?} both binds reply parameter {result:?} from the payload \
+                 and sends the journey result to it. One parameter carries one value — decide which"
+            ));
+        }
+    }
+
+    for param in target.params.iter().filter(|p| p.required) {
+        let covered =
+            bind.contains_key(&param.name) || result.as_deref() == Some(param.name.as_str());
+        if !covered {
+            problems.push(format!(
+                "channel binding {name:?} replies with operation {operation:?} but leaves its \
+                 required parameter {:?} unbound. Bind it from the `payload` map, or name it as \
+                 `result` if it carries the journey's own output — every required parameter is \
+                 settled at build time, or the reply fails on the first delivery instead of in this \
+                 diff",
+                param.name
+            ));
+        }
+    }
+}
+
+/// `cursor` and `interval` belong to `poll`, and `poll` cannot do without a cursor.
+///
+/// See [`crate::inbound`] for the reasoning: flux's cron drops ticks across a restart and replays
+/// none of them, so a poll that cannot resume from a recorded position loses events silently.
+fn validate_channel_transport(
+    connector: &Connector,
+    channel: &ChannelBinding,
+    problems: &mut Vec<String>,
+) {
+    let name = channel.name.as_str();
+
+    if channel.transport == Transport::Poll {
+        match &channel.cursor {
+            None => problems.push(format!(
+                "channel binding {name:?} uses the `poll` transport and declares no `cursor`. flux's \
+                 schedule channel is best-effort — a restart drops ticks and replays none of them — \
+                 so the cursor operation, not the interval, is what makes a poll correct. Name the \
+                 operation that reads forward from a recorded position"
+            )),
+            Some(cursor) => match connector.operation(cursor) {
+                None => problems.push(format!(
+                    "channel binding {name:?} names cursor operation {cursor:?}, which no \
+                     `[[operations]]` block declares"
+                )),
+                Some(target) if target.service != channel.service => problems.push(format!(
+                    "channel binding {name:?} is in service {:?} but names cursor operation \
+                     {cursor:?}, which is in service {:?}",
+                    channel.service, target.service
+                )),
+                Some(_) => {}
+            },
+        }
+    } else {
+        for (field, present) in [
+            ("cursor", channel.cursor.is_some()),
+            ("interval", channel.interval.is_some()),
+        ] {
+            if present {
+                problems.push(format!(
+                    "channel binding {name:?} declares `{field}`, which only the `poll` transport \
+                     uses. A `{}` binding is woken by the vendor, not by a schedule",
+                    transport_word(channel.transport)
+                ));
+            }
+        }
+    }
+}
+
+/// How a binding gets registered — and the rule that a webhook must say.
+///
+/// A product that knows a callback URL and nothing about what to do with it cannot finish an
+/// installation. That is the same shape as the verification rule: an open endpoint has to state
+/// something, and silence is not one of the options.
+fn validate_channel_setup(
+    connector: &Connector,
+    channel: &ChannelBinding,
+    problems: &mut Vec<String>,
+) {
+    let name = channel.name.as_str();
+
+    if channel.transport == Transport::Webhook
+        && channel.subscription.is_none()
+        && channel.setup.is_none()
+    {
+        problems.push(format!(
+            "channel binding {name:?} uses the `webhook` transport and says neither how to register \
+             it nor what a human must do. A product can show a callback URL, but with no \
+             `[channels.subscription]` naming the operation that registers it and no \
+             `[channels.setup]` steps to follow, nobody can finish connecting it"
+        ));
+    }
+
+    // Registration belongs to a transport a vendor delivers to. A socket we opened has nothing to
+    // register, and a poll is driven by our own schedule.
+    for (field, present) in [
+        ("subscription", channel.subscription.is_some()),
+        ("setup", channel.setup.is_some()),
+    ] {
+        if present && channel.transport != Transport::Webhook {
+            problems.push(format!(
+                "channel binding {name:?} declares `{field}`, which only the `webhook` transport \
+                 uses. A `{}` binding has no endpoint for the vendor to register",
+                transport_word(channel.transport)
+            ));
+        }
+    }
+
+    if let Some(Subscription {
+        subscribe,
+        unsubscribe,
+        list,
+        callback_param,
+    }) = &channel.subscription
+    {
+        for (label, id) in [
+            ("subscribe", Some(subscribe)),
+            ("unsubscribe", unsubscribe.as_ref()),
+            ("list", list.as_ref()),
+        ] {
+            let Some(id) = id else { continue };
+            match connector.operation(id) {
+                None => problems.push(format!(
+                    "channel binding {name:?} names `{label}` operation {id:?}, which no \
+                     `[[operations]]` block declares. Registering a webhook is an ordinary \
+                     authorized write, so it is an ordinary operation"
+                )),
+                Some(target) if target.service != channel.service => problems.push(format!(
+                    "channel binding {name:?} is in service {:?} but names `{label}` operation \
+                     {id:?}, which is in service {:?}",
+                    channel.service, target.service
+                )),
+                Some(_) => {}
+            }
+        }
+
+        // The callback URL is the product's, and this names where to put it. A parameter that does
+        // not exist means the URL would be assembled into a request that drops it.
+        if let Some(target) = connector.operation(subscribe) {
+            if !target.params.iter().any(|p| &p.name == callback_param) {
+                problems.push(format!(
+                    "channel binding {name:?} sends its callback URL to parameter \
+                     {callback_param:?}, which operation {subscribe:?} does not declare"
+                ));
+            }
+        }
+    }
+
+    if let Some(ManualSetup { steps, .. }) = &channel.setup {
+        if steps.is_empty() {
+            problems.push(format!(
+                "channel binding {name:?} declares `[channels.setup]` with no `steps`. An empty \
+                 instruction list is the same as no instructions, stated more confidently"
+            ));
+        }
+        for step in steps {
+            if step.trim().is_empty() {
+                problems.push(format!("channel binding {name:?} has an empty setup step"));
+            }
+        }
+    }
+}
+
+/// A selector reads one named value off an inbound request; a body selector addresses it by path.
+fn validate_selector(channel: &str, label: &str, selector: &Selector, problems: &mut Vec<String>) {
+    if selector.name.trim().is_empty() {
+        problems.push(format!(
+            "channel binding {channel:?} has a `{label}` with an empty `name`"
+        ));
+        return;
+    }
+    if selector.source == crate::inbound::FieldSource::Body {
+        if let Err(reason) = validate_path(&selector.name) {
+            problems.push(format!(
+                "channel binding {channel:?} has a `{label}` reading an invalid body path: {reason}"
+            ));
+        }
+    }
+}
+
+/// Checks every flow graph: that its references resolve, and that it has a lowering at all.
+///
+/// **The structural rules are not style.** Flux has no `goto`, so a cyclic graph and a graph whose
+/// control regions overlap have no expressible form — a compiler that accepted them would have to
+/// guess, and guessing produces plausible-but-wrong Flux, which is the one output this pipeline
+/// refuses everywhere else.
+fn validate_graphs(connector: &Connector, problems: &mut Vec<String>) {
+    let mut seen: Vec<&str> = Vec::new();
+
+    for graph in &connector.graphs {
+        let name = graph.name.as_str();
+        if name.trim().is_empty() {
+            problems.push("a graph has an empty `name`".to_owned());
+            continue;
+        }
+        if seen.contains(&name) {
+            problems.push(format!(
+                "graph {name:?} is declared more than once; the name becomes an emitted `op`, so it \
+                 must denote one flow"
+            ));
+        }
+        seen.push(name);
+
+        if let Err(reason) = crate::address::validate_member_name(name) {
+            problems.push(format!("graph {name:?} has an invalid `name`: {reason}"));
+        }
+        validate_member_service(connector, "graph", name, &graph.service, problems);
+
+        validate_graph_nodes(connector, graph, problems);
+        validate_graph_structure(graph, problems);
+        validate_graph_edges(graph, problems);
+    }
+}
+
+/// Every node's references resolve, in the graph's own service.
+fn validate_graph_nodes(connector: &Connector, graph: &Graph, problems: &mut Vec<String>) {
+    let name = graph.name.as_str();
+    let mut ids: Vec<&str> = Vec::new();
+
+    for node in &graph.nodes {
+        let id = node.id.as_str();
+        if id.trim().is_empty() {
+            problems.push(format!("graph {name:?} has a node with an empty `id`"));
+            continue;
+        }
+        if ids.contains(&id) {
+            problems.push(format!(
+                "graph {name:?} declares node {id:?} more than once; a node id is the stable \
+                 identity an editor and a diagnostic both key on"
+            ));
+        }
+        ids.push(id);
+
+        match &node.kind {
+            NodeKind::Operation { operation } => {
+                resolve_member(
+                    connector,
+                    graph,
+                    name,
+                    id,
+                    "operation",
+                    operation,
+                    connector
+                        .operation(operation)
+                        .map(|target| target.service.as_str()),
+                    problems,
+                );
+            }
+            NodeKind::Trigger { event } => {
+                resolve_member(
+                    connector,
+                    graph,
+                    name,
+                    id,
+                    "event",
+                    event,
+                    connector.event(event).map(|target| target.service.as_str()),
+                    problems,
+                );
+            }
+            NodeKind::Endpoint { binding } => {
+                resolve_member(
+                    connector,
+                    graph,
+                    name,
+                    id,
+                    "channel binding",
+                    binding,
+                    connector
+                        .channel(binding)
+                        .map(|target| target.service.as_str()),
+                    problems,
+                );
+            }
+            NodeKind::Select { path } => {
+                if let Err(reason) = crate::inbound::validate_path(path) {
+                    problems.push(format!(
+                        "graph {name:?} node {id:?} selects an invalid path: {reason}"
+                    ));
+                }
+            }
+            NodeKind::Object { fields } => {
+                for (field, port) in fields {
+                    if !node.inputs.iter().any(|p| &p.name == port) {
+                        problems.push(format!(
+                            "graph {name:?} node {id:?} builds field {field:?} from port {port:?}, \
+                             which it does not declare as an input"
+                        ));
+                    }
+                }
+            }
+            NodeKind::Retry { max, .. } if *max == 0 => problems.push(format!(
+                "graph {name:?} node {id:?} retries 0 times. flux's analyzer rejects unbounded loops \
+                 and a zero bound is not a loop at all — remove the node or give it a real maximum"
+            )),
+            NodeKind::Throttle { max, window_ms } if *max == 0 || *window_ms == 0 => {
+                problems.push(format!(
+                    "graph {name:?} node {id:?} throttles to {max} per {window_ms}ms, which admits \
+                     nothing. A throttle bounds a rate; it is not a way to disable a branch"
+                ));
+            }
+            _ => {}
+        }
+
+        // A boundary node declares what wakes the flow. It is emitted nowhere, so it can neither
+        // consume a value nor sit inside a region that only exists at runtime.
+        if node.kind.is_boundary() {
+            if !node.inputs.is_empty() {
+                problems.push(format!(
+                    "graph {name:?} node {id:?} is a `{}` boundary and declares inputs. A boundary \
+                     says what wakes the flow; nothing inside the flow can feed it",
+                    node.kind.word()
+                ));
+            }
+            if node.region.is_some() {
+                problems.push(format!(
+                    "graph {name:?} node {id:?} is a `{}` boundary inside a region. A boundary is \
+                     emitted nowhere, so it cannot be conditional, retried or rate-limited",
+                    node.kind.word()
+                ));
+            }
+        }
+
+        // The rule with teeth. See the module docs on `graph`.
+        if matches!(node.kind, NodeKind::Gate { .. }) && !node.outputs.is_empty() {
+            problems.push(format!(
+                "graph {name:?} node {id:?} is a gate declaring outputs. A gate lowers to Flux's \
+                 `when`, which has no else branch here — a symbol bound inside it is *unbound* when \
+                 the condition is false, and reading it afterwards fails at runtime. A value that \
+                 must escape a conditional needs a branch with a default"
+            ));
+        }
+        if !node.kind.is_region() && !node.outputs.is_empty() && node.region.is_some() {
+            // Non-region nodes may have outputs; this only checks that they are reachable, which
+            // `validate_graph_edges` covers. Nothing to add here.
+        }
+    }
+}
+
+/// One member reference: it exists, and it belongs to this graph's service.
+#[allow(clippy::too_many_arguments)]
+fn resolve_member(
+    _connector: &Connector,
+    graph: &Graph,
+    name: &str,
+    id: &str,
+    kind: &str,
+    reference: &str,
+    found: Option<&str>,
+    problems: &mut Vec<String>,
+) {
+    match found {
+        None => problems.push(format!(
+            "graph {name:?} node {id:?} names {kind} {reference:?}, which this connector does not \
+             declare"
+        )),
+        Some(service) if service != graph.service => problems.push(format!(
+            "graph {name:?} is in service {:?} but node {id:?} names {kind} {reference:?}, which is \
+             in service {service:?}",
+            graph.service
+        )),
+        Some(_) => {}
+    }
+}
+
+/// No cycles, and every region containment resolves.
+fn validate_graph_structure(graph: &Graph, problems: &mut Vec<String>) {
+    let name = graph.name.as_str();
+
+    for node in &graph.nodes {
+        let Some(region) = node.region.as_deref() else {
+            continue;
+        };
+        match graph.node(region) {
+            None => problems.push(format!(
+                "graph {name:?} node {:?} names region {region:?}, which is not a node of this graph",
+                node.id
+            )),
+            Some(container) if !container.kind.is_region() => problems.push(format!(
+                "graph {name:?} node {:?} is inside {region:?}, which is a `{}` and contains nothing",
+                node.id,
+                container.kind.word()
+            )),
+            Some(_) => {}
+        }
+        if graph.enclosing(&node.id).is_none() {
+            problems.push(format!(
+                "graph {name:?} node {:?} is contained in itself, directly or through a chain of \
+                 regions",
+                node.id
+            ));
+        }
+    }
+
+    if graph.topological_order().is_none() {
+        problems.push(format!(
+            "graph {name:?} has a cycle. Flux has no `goto` and its control flow is strictly nested, \
+             so a cyclic graph has no lowering at all — an iteration is a bounded loop node, not an \
+             edge pointing backwards"
+        ));
+    }
+}
+
+/// Every edge connects declared ports, and no edge crosses a region boundary.
+fn validate_graph_edges(graph: &Graph, problems: &mut Vec<String>) {
+    let name = graph.name.as_str();
+
+    for edge in &graph.edges {
+        let from = endpoint(graph, name, &edge.from, Side::Output, problems);
+        let to = endpoint(graph, name, &edge.to, Side::Input, problems);
+        let (Some(from), Some(to)) = (from, to) else {
+            continue;
+        };
+
+        // A value may enter a region freely — an inner statement reads an outer symbol, which Flux
+        // allows. It may only *leave* through a port the region declares, because that is the one
+        // place a bound symbol is guaranteed to exist after the block closes.
+        let (Some(source_regions), Some(sink_regions)) =
+            (graph.enclosing(&from.id), graph.enclosing(&to.id))
+        else {
+            continue; // a containment cycle, already reported
+        };
+
+        for region in &source_regions {
+            if sink_regions.contains(region) {
+                continue; // the sink is inside the same region; nothing escapes
+            }
+            let Some(container) = graph.node(region) else {
+                continue;
+            };
+            let escapes_through = container
+                .outputs
+                .iter()
+                .any(|port| port.name == edge.from.port);
+            if !escapes_through {
+                problems.push(format!(
+                    "graph {name:?} has an edge from {:?}.{:?} out of region {region:?} to {:?}, but \
+                     {region:?} declares no output port {:?}. A value leaves a region only through a \
+                     port the region declares — otherwise the symbol it lowers to may not be bound \
+                     when the block closes",
+                    from.id, edge.from.port, to.id, edge.from.port
+                ));
+            }
+        }
+    }
+
+    if let Some(output) = &graph.output {
+        endpoint(graph, name, output, Side::Output, problems);
+    }
+}
+
+enum Side {
+    Input,
+    Output,
+}
+
+/// Resolve one end of an edge, reporting a missing node or a missing port.
+fn endpoint<'a>(
+    graph: &'a Graph,
+    name: &str,
+    reference: &PortRef,
+    side: Side,
+    problems: &mut Vec<String>,
+) -> Option<&'a GraphNode> {
+    let Some(node) = graph.node(&reference.node) else {
+        problems.push(format!(
+            "graph {name:?} has an edge naming node {:?}, which it does not declare",
+            reference.node
+        ));
+        return None;
+    };
+    let (ports, word) = match side {
+        Side::Input => (&node.inputs, "input"),
+        Side::Output => (&node.outputs, "output"),
+    };
+    if !ports.iter().any(|port| port.name == reference.port) {
+        problems.push(format!(
+            "graph {name:?} node {:?} has no {word} port {:?}",
+            reference.node, reference.port
+        ));
+    }
+    Some(node)
+}
+
+/// The three member kinds share one namespace per service — see [`Connector::member_names_of`].
+///
+/// **Cross-kind collisions only.** A name repeated *within* one kind is already reported by that
+/// kind's own pass, in its own vocabulary ("the op id is the public name callers and models use"),
+/// and reporting it twice would make an author fix one problem and see two. What no single pass can
+/// see is an operation and an event that happen to share a name — neither list has a duplicate, and
+/// only the union does.
+fn validate_member_namespace(connector: &Connector, problems: &mut Vec<String>) {
+    for service in connector.service_names() {
+        // (name, kind), in the order `member_names_of` yields them.
+        let mut seen: Vec<(&str, &str)> = Vec::new();
+        let mut reported: Vec<&str> = Vec::new();
+
+        let members = connector
+            .operations_of(service)
+            // The labels carry their own article, because they are interpolated into a sentence that
+            // reads "names both {other} and {kind}" — "a operation" and "a event" otherwise.
+            .map(|operation| (operation.id.as_str(), "an operation"))
+            .chain(
+                connector
+                    .events_of(service)
+                    .map(|event| (event.name.as_str(), "an event")),
+            )
+            .chain(
+                connector
+                    .channels_of(service)
+                    .map(|channel| (channel.name.as_str(), "a channel binding")),
+            )
+            .chain(
+                connector
+                    .config_of(service)
+                    .map(|field| (field.name.as_str(), "a configuration field")),
+            )
+            .chain(
+                connector
+                    .graphs_of(service)
+                    .map(|graph| (graph.name.as_str(), "a graph")),
+            );
+
+        for (name, kind) in members {
+            if let Some((_, other)) = seen
+                .iter()
+                .find(|(seen_name, seen_kind)| *seen_name == name && *seen_kind != kind)
+            {
+                if !reported.contains(&name) {
+                    let where_ = if service == DEFAULT_SERVICE {
+                        String::new()
+                    } else {
+                        format!(" of service {service:?}")
+                    };
+                    problems.push(format!(
+                        "{name:?} names both {other} and {kind}{where_}. The three member kinds \
+                         share one namespace: all of them render into the same address \
+                         (`…#{name}`) and into flux's declaration namespace, so a name has to \
+                         denote exactly one thing"
+                    ));
+                    reported.push(name);
+                }
+            }
+            seen.push((name, kind));
+        }
+    }
+}
+
+/// The `kind` word for a transport, for error text.
+fn transport_word(transport: Transport) -> &'static str {
+    match transport {
+        Transport::Webhook => "webhook",
+        Transport::Socket => "socket",
+        Transport::Poll => "poll",
+    }
+}
+
+/// The `scheme` word for a credential, for error text.
+fn scheme_word(scheme: &AuthScheme) -> &'static str {
+    match scheme {
+        AuthScheme::Bearer => "bearer",
+        AuthScheme::Basic => "basic",
+        AuthScheme::Header { .. } => "header",
+        AuthScheme::Query { .. } => "query",
+        AuthScheme::Signing => "signing",
+    }
 }
 
 /// Checks the connector's address components and its `[[services]]` declarations — C-49.
@@ -625,11 +1773,20 @@ fn validate_requirements(
             continue;
         }
         for credential in mechanism {
-            if connector.auth_method(credential).is_none() {
-                problems.push(format!(
+            match connector.auth_method(credential) {
+                None => problems.push(format!(
                     "{context}: auth mechanism {index} names credential {credential:?}, which no \
                      `[[auth]]` block declares"
-                ));
+                )),
+                // The complement of the rule in `validate_hmac`: a signing secret has no placement
+                // on an outgoing request, so an operation naming one is asking the host to inject a
+                // value that has nowhere to go — and to spend an inbound secret outbound.
+                Some(method) if method.scheme == AuthScheme::Signing => problems.push(format!(
+                    "{context}: auth mechanism {index} names credential {credential:?}, which is \
+                     declared `scheme = \"signing\"`. A signing secret verifies an inbound request \
+                     and is never placed in an outgoing one, so no operation can authenticate with it"
+                )),
+                Some(_) => {}
             }
         }
     }
@@ -718,6 +1875,20 @@ pub fn accepted_keys() -> Vec<(&'static str, Vec<String>)> {
         ("oauthRedirect", probe::<crate::OAuthRedirect>()),
         ("authRequirement", probe::<AuthRequirement>()),
         ("operation", probe::<Operation>()),
+        ("event", probe::<EventDecl>()),
+        ("channel", probe::<ChannelBinding>()),
+        ("configField", probe::<ConfigField>()),
+        ("graph", probe::<Graph>()),
+        ("graphNode", probe::<GraphNode>()),
+        ("port", probe::<crate::graph::Port>()),
+        ("portRef", probe::<PortRef>()),
+        ("edge", probe::<crate::graph::Edge>()),
+        ("condition", probe::<crate::graph::Condition>()),
+        ("subscription", probe::<Subscription>()),
+        ("manualSetup", probe::<ManualSetup>()),
+        ("hmac", probe::<HmacSpec>()),
+        ("selector", probe::<Selector>()),
+        ("reply", probe::<Reply>()),
         ("paramSet", probe::<ParamSet>()),
         ("param", probe::<Param>()),
         ("quirks", probe::<Quirks>()),

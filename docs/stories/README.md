@@ -23,12 +23,29 @@ Gate: `cargo build --workspace && cargo test --workspace && cargo clippy --works
 
 ## Now (in progress)
 - [C-9 — Emit request bodies, headers, and response handling](C-9-bodies-and-responses.md) · Codegen
+- [C-82 — Channel bindings — generalize a flux channel over a connector (epic)](C-82-channel-bindings-epic.md) · Spec · EPIC — flux's channel dispatch is a closed match with one arm per vendor, and its slack arm hand-builds a chat.postMessage this repo already compiles. A binding is a COMPOSITION of an event and a reply operation, not a new primitive. IR + loader landed; codegen and the flux seam remain
+- [C-86 — The connector configuration surface — enough declared data to generate the UI (epic)](C-86-connector-configuration-epic.md) · Spec · EPIC — the repo modelled how a credential reaches the wire and nothing about how a human supplies it. Configuration has TWO levels (operator: the OAuth app; connection: the tenant), and conflating them leaks the product's own credential to every customer. IR + loader landed; codegen and OAuth remain
+- [C-90 — Credential addressing and the secret-store seam (epic)](C-90-credential-addressing-epic.md) · Spec · EPIC — a hosted product needs two customers' Zendesk tokens in two places, and neither repo could say where. This repo owns the ADDRESS (pure, derived from pid + service, version deliberately omitted); a host library owns the client. Pure layer landed
+- [C-94 — The flow graph — connector members composed into one Flux op (epic)](C-94-flow-graph-epic.md) · Spec · EPIC — four waves built the vocabulary (Operation=call node, EventDecl=source, oip=node id, wire paths=edges); this is the graph. NOT a second language: every past rejection was an EXPRESSION language, every acceptance was declarative structure. IR landed
+- [C-111 — Ship the Fly.io Machines connector](C-111-ship-the-fly-machines-connector.md) · Spec · A deliberately narrow machine-lifecycle surface: nine typed operations, one named service, and no invented channel contract
+- [C-112 — Publish Flux core specifications in the connector explorer](C-112-publish-flux-core-specifications-in-the-explorer.md) · UX · Built-ins and language nodes become searchable beside connectors, with canonical JSON identities rather than fake providers
 
 ## Next (ready — take the top one unless the user named a story)
+
+### channel bindings — generalize a flux `channel` over a connector
+_[inbound-events.md](inbound-events.md) models an **event** — the vendor calls us — and stops there._
+- [C-83 — Publish events and channel bindings into the manifest and the catalogue](C-83-channel-binding-codegen.md) · Codegen · the strict split: bindings reach the manifest and catalog.json and NOTHING reaches the module. The emitter must refuse to dress a binding up as a pollable op
+- [C-84 — Design the flux-side generic connector channel kind and file its flux stories](C-84-flux-connector-channel-seam.md) · Bridge · this is what retires adapters/slack.rs — one generic `connector` arm in build_channels instead of one arm per vendor. Cross-repo handoff, per the C-16/C-64 precedent
+- [C-85 — The delivery envelope — flux's Event carries no id, source or verified flag](C-85-delivery-envelope.md) · Bridge · flux_app::Event is {label, payload} and nothing else, so 'delivery id in the payload' stuffs envelope into payload — and seed_payload binds every top-level payload field as a flow symbol, so a vendor key can silently shadow it
 
 ### the connector bundle
 _A connector is more than a set of callable operations. It also has **schemas** (what goes in, what_
 - [C-39 — Emit synthetic describe and schema operations](C-39-synthetic-introspection-ops.md) · Codegen · metadata reachable from inside a flux session, via the mechanism that already exists
+
+### Connector Config
+- [C-87 — Publish the configuration surface into the manifest and the catalogue](C-87-configuration-codegen.md) · Codegen · includes a BREAKING change to settle — site.rs flattens the whole OAuth2Spec to `oauth2: bool`, so a hosted product cannot build an authorize URL at all
+- [C-88 — Prove OAuth2 on one provider — the operator level is currently unexercised](C-88-prove-oauth2.md) · Spec · OAuth2Spec is a landed type NO shipped provider uses, so half the configuration model is proven only by a fixture. tests/auth_archetypes.rs asserts that gap and fails the day this lands
+- [C-89 — The hosted OAuth redirect has no home — OAuthRedirect is loopback-only](C-89-hosted-oauth-redirect.md) · Bridge · OAuthRedirect is {port, path} — a CLI shape. A hosted callback is https://app.example.com/oauth/callback, supplied by the host, and often must be pre-registered in the vendor's dashboard before the flow works at all
 
 ### the connectors proxy — server-side credential injection
 _Every credential problem in this repo has the same shape: **the caller must not hold the secret, but_
@@ -50,18 +67,45 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-11 — Prove every generated module parses and analyzes](C-11-parse-and-analyze-gate.md) · Codegen · **load-bearing** · without it invalid Flux can be committed
 - [C-17 — Author provider configs for zendesk, freshdesk and babelforce](C-17-provider-configs.md) · Spec · **the goal** · three configs that compile to executable .flux
 
+### credential addressing, and the secret-store seam
+_The [configuration surface](connector-configuration.md) modelled *what a human supplies*. It stopped_
+- [C-91 — `connector-secrets` — the store trait and a Vault implementation](C-91-connector-secrets-crate.md) · Bridge · a HOST LIBRARY, outside the compile path — connector-cli must not depend on it, asserted by test, so no_network.rs keeps meaning what it means
+- [C-92 — Declare an authority for every shipped provider](C-92-authorities-for-every-provider.md) · Spec · 15 of 16 declare none, so no gid and no credential path renders for them. Its own story because an authority is published under a never-reused contract — this is a decision, not a chore
+- [C-93 — The flux adapter — a tenant-scoped store behind flux's CredentialStore](C-93-flux-credential-store-adapter.md) · Bridge · the trap: flux's CLI write path is hard-wired to the file backend, so an injected store is READ-ONLY in practice until flux changes. Say so before anyone deploys it
+
+### the explorer at fleet scale
+_The explorer was designed against **6 providers and 25 operations** (C-42–C-45). It now indexes_
+- [C-99 — The explorer at fleet scale — wider, and legible at 16 connectors (epic)](C-99-explorer-ux-epic.md) · Surfaces · EPIC — the explorer was designed for 6 providers and 25 operations; it now indexes 16, 18 services and 88. VPDoc caps content at 688px, so the provider grid renders exactly two columns
+- [C-103 — Card and row density for a 16-connector, 88-operation catalogue](C-103-explorer-information-density.md) · Surfaces · the UI treatment a tripled catalogue needs — and the story most at risk of removing the scope-based honesty by accident
+
+### the flow graph — connector members composed into one Flux op
+_Four waves built this vocabulary without naming it:_
+- [C-95 — Lower a flow graph to a composite Flux op](C-95-graph-lowering.md) · Codegen · owns symbol generation and region nesting. MUST refuse a Select wired to an Operation output until http.request returns a record — today the response is one flat string
+- [C-96 — Map graph node ids to Flux AST paths, so a diagnostic lands on a canvas node](C-96-graph-node-path-map.md) · Bridge · flux ALREADY shipped this seam — D-139 added Diagnostic.node_path because a downstream graph canvas was parsing message text. Reuse it rather than reinventing
+- [C-97 — The boundary program pattern — what an operator writes around a generated flow](C-97-graph-boundary-program.md) · Bridge · flux lifts only `op`; channel and trigger are Program members an operator writes. So a boundary node is DOCUMENTED, never emitted — the same split C-63 uses for poll
+- [C-98 — The node kinds flux-lang already has — parallel, match, each, saga, fallback](C-98-richer-node-kinds.md) · Spec · exposure, not invention — all of these are existing flux_lang::ast::Node variants this repo has never constructed. Match is what finally lets a value escape a conditional
+
 ### inbound events — the reverse call direction
 _A connector today compiles a vendor spec into **outbound** ops: flux calls Zendesk, GitHub, Slack._
 - [C-58 — Inbound events — connectors define the reverse call direction (epic)](C-58-inbound-events-epic.md) · Spec · EPIC — a connector today compiles only outbound ops; this adds the half where the vendor calls US. Verification is a declarable matrix (4 vendors, 1 parameterized HMAC), so it compiles rather than interprets — and flux's webhook channel has NO signature verification today, which is the blocking cross-repo seam
 - [C-59 — An `[inbound]` section in the provider TOML and the IR](C-59-inbound-ir-and-toml.md) · Spec · pure functions from bytes to IR, no network: transport, verification, discriminator, delivery id, per-event `when` narrowing and payload schema refs
 - [C-60 — Verification conformance — one parameterized HMAC against real vendor vectors](C-60-verification-conformance-matrix.md) · Spec · the load-bearing test of the inbound half: 4 vendors' 'unique' schemes collapse to one algorithm over {digest, encoding, signed-template, tolerance} — proven with signature vectors from vendor docs, not self-generated fixtures
 - [C-64 — Design the flux-side verified-webhook seam and file its flux stories](C-64-design-verified-webhook-seam.md) · Bridge · the C-16 pattern repeated: flux's webhook channel has NO signature verification (bearer token only), so generated verification has nowhere to run — design the seam here, file the stories on flux's board, and let every other inbound story proceed without it
-- [C-66 — Put inbound events under a service, and admit AsyncAPI as their front-end](C-66-members-under-services.md) · Spec · provider → service → (operation | event) · the two gaps C-58's epic leaves open
+- [C-66 — Put inbound events under a service, and admit AsyncAPI as their front-end](C-66-members-under-services.md) · Spec · provider → service → (operation | event | channel) · the two gaps C-58's epic leaves open. AMENDED by C-82: a third member kind, one shared namespace, `#name` reused — that half has landed
 
 ### rendered provider documentation
 _A connector's operations are currently legible only by reading `providers/<name>.toml` or the_
 - [C-31 — Render a provider markdown page from the IR](C-31-render-provider-page.md) · Codegen · also decides the tab dialect — hard to reverse once pages are committed
 - [C-32 — Emit a curl form for each operation](C-32-curl-tab.md) · Codegen
+
+### Provider Fleet 2
+- [C-104 — Make whole-catalogue artifacts coordinator-owned, so provider stories can run in parallel](C-104-parallel-provider-fanout.md) · Build · the fan-out cap is ONE file — crates/catalog/src/generated.rs carries two hand-maintained lists every provider story appends to, so any two collide and the wave size is 1
+- [C-105 — Provider fleet 2 — the next connectors, shipped in parallel (epic)](C-105-provider-fleet-2-epic.md) · Spec · EPIC — the first fleet (C-69..C-78) is fully drained. Each connector here is chosen to exercise something the model has not yet met, not just to add a row
+- [C-106 — Ship the Stripe connector](C-106-provider-stripe.md) · Spec · the second vendor in C-60's HMAC matrix — inbound-events.md already tabulates Stripe-Signature with its t=/v1= pairs and tolerance, and nothing has ever exercised that row
+- [C-107 — Ship the Notion connector](C-107-provider-notion.md) · Spec · forces C-55 — Notion REJECTS a request without a Notion-Version header, so this connector cannot ship until a provider can declare a constant request header
+- [C-108 — Ship the Microsoft Graph connector](C-108-provider-microsoft-graph.md) · Spec · the second multi-service provider after Google — and the first where the services share a host, so it tests whether a service is a real level or just Google's URL problem
+- [C-109 — Ship the Twilio connector](C-109-provider-twilio.md) · Spec · third basic-join vendor, and the one whose username half is an account identifier rather than an email — so it tests whether the config model generalises past the zendesk/jira shape
+- [C-110 — Ship the Linear connector — or record why a GraphQL vendor cannot be one](C-110-provider-linear.md) · Spec · GraphQL-only. The pipeline is REST-shaped; this either proves it stretches or produces a documented refusal. Either outcome is worth more than another REST connector
 
 ### unified auth — one model for every provider's credentials
 _Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._
@@ -98,7 +142,7 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 _A connector today compiles a vendor spec into **outbound** ops: flux calls Zendesk, GitHub, Slack._
 - [C-61 — Codegen — inbound events into the manifest and catalogue, nothing into the module](C-61-codegen-inbound-manifest.md) · Codegen · a connector module carries `op` declarations ONLY (flux lifts nothing else from ~/.flux/flows), so an event emits into the manifest + catalogue and the emitter REFUSES to fake one as a pollable op — the correction C-66 forced on this story
 - [C-62 — Codegen — webhook subscription ops from the vendor spec](C-62-codegen-subscription-ops.md) · Codegen · registering a webhook is an ordinary outbound op, so it needs no new machinery — and it correctly inherits the authorization → approval → guarded-IO envelope instead of being a build-time side effect
-- [C-63 — A `poll` transport — inbound for vendors with no webhook, no flux blocker](C-63-poll-transport.md) · Codegen · a cursor `op` (emitted) plus a documented `schedule`-channel program pattern (not emitted) — proves inbound is an abstraction over transports rather than a synonym for webhook, and ships with zero cross-repo dependency
+- [C-63 — A `poll` transport — inbound for vendors with no webhook, no flux blocker](C-63-poll-transport.md) · Codegen · a cursor `op` (emitted) plus a documented `schedule`-channel program pattern (not emitted) — proves inbound is an abstraction over transports rather than a synonym for webhook, and ships with zero cross-repo dependency. AMENDED by C-82: the cursor is MANDATORY, because flux's cron drops ticks and replays none
 - [C-65 — Prove inbound end to end on two vendors against a live flux](C-65-inbound-two-vendors-live.md) · Build · the epic's closing proof, mirroring C-15: two vendors chosen to exercise different halves — one spec-published webhook API with a simple scheme, one whose scheme carries a timestamp window
 
 ### rendered provider documentation
@@ -144,6 +188,9 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-76 — Ship the OpenRouter connector](C-76-provider-openrouter.md) · Spec · bearer · OpenAI-compatible · charter-named
 - [C-77 — Ship the Sentry connector](C-77-provider-sentry.md) · Spec · bearer · trailing slashes are load-bearing
 - [C-78 — Ship the Zoom connector](C-78-provider-zoom.md) · Spec · bearer · nested meeting settings
+- [C-100 — Render the explorer full-width](C-100-explorer-full-width.md) · Surfaces · the largest visible gain for the smallest diff — VPDoc.vue:191 caps content at 688px, so 16 provider cards render in two columns on a page allowed to be 1440px
+- [C-101 — Make services a visible, filterable dimension](C-101-services-in-the-explorer.md) · Surfaces · 18 services are published with base_url, api_version, gid and operation counts — the explorer mentions none of them, so Google's three read as one
+- [C-102 — Make a filtered view shareable, and let the list be sorted](C-102-shareable-explorer-views.md) · Surfaces · the page promises 'every operation has a stable page you can share' — true of an operation, false of a view. 'Every destructive Shopify operation' cannot be sent to anyone
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

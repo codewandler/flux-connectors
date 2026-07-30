@@ -1,0 +1,4415 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-catalog.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/index.json",
+  "schema_version": 1,
+  "generator": "flux 0.39.0",
+  "operations": [
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/all.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "all",
+      "title": "All",
+      "description": "Returns \"true\" if all elements satisfy the predicate, \"false\" otherwise. With `where`, evaluates the formula per element with `it` bound. Without `where`, checks if all elements are truthy. Empty list → vacuously \"true\" (documented).",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "all",
+        "description": "Returns \"true\" if all elements satisfy the predicate, \"false\" otherwise. With `where`, evaluates the formula per element with `it` bound. Without `where`, checks if all elements are truthy. Empty list → vacuously \"true\" (documented).",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": true,
+              "type": "array"
+            },
+            "vars": {
+              "additionalProperties": true,
+              "default": null,
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "where": {
+              "default": null,
+              "format": "flux-expr",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/any.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "any",
+      "title": "Any",
+      "description": "Returns \"true\" if any element satisfies the predicate, \"false\" otherwise. With `where`, evaluates the formula per element with `it` bound. Without `where`, checks if any element is truthy. Empty list → \"false\".",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "any",
+        "description": "Returns \"true\" if any element satisfies the predicate, \"false\" otherwise. With `where`, evaluates the formula per element with `it` bound. Without `where`, checks if any element is truthy. Empty list → \"false\".",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": true,
+              "type": "array"
+            },
+            "vars": {
+              "additionalProperties": true,
+              "default": null,
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "where": {
+              "default": null,
+              "format": "flux-expr",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/coalesce.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "coalesce",
+      "title": "Coalesce",
+      "description": "Return the first value that is not `null` and not `\"\"` (empty string). Zero and false ARE kept. If nothing qualifies, return `default` if provided, else `null`.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "coalesce",
+        "description": "Return the first value that is not `null` and not `\"\"` (empty string). Zero and false ARE kept. If nothing qualifies, return `default` if provided, else `null`.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "default": {
+              "default": null,
+              "description": "Optional default if nothing qualifies"
+            },
+            "values": {
+              "description": "Array of candidate values",
+              "items": true,
+              "type": "array"
+            }
+          },
+          "required": [
+            "values"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/compare.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "compare",
+      "title": "Compare",
+      "description": "Compare two arrays by JSON equality, returning `{ added, removed, common }`: items in `b` but not `a`, in `a` but not `b`, and in both (each de-duplicated, first-seen order).",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "compare",
+        "description": "Compare two arrays by JSON equality, returning `{ added, removed, common }`: items in `b` but not `a`, in `a` but not `b`, and in both (each de-duplicated, first-seen order).",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "a": {
+              "description": "Baseline list",
+              "items": true,
+              "type": "array"
+            },
+            "b": {
+              "description": "Candidate list",
+              "items": true,
+              "type": "array"
+            }
+          },
+          "required": [
+            "a",
+            "b"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/count_by.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "count_by",
+      "title": "Count By",
+      "description": "Group array items by a field and count each group. Returns `[{key, count}]` sorted by count descending, then key ascending (deterministic).",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "count_by",
+        "description": "Group array items by a field and count each group. Returns `[{key, count}]` sorted by count descending, then key ascending (deterministic).",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": true,
+              "type": "array"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "items",
+            "path"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/dedupe.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "dedupe",
+      "title": "Dedupe",
+      "description": "Remove duplicates from an array, preserving first-seen order. Pass `by` (dotted path) to de-duplicate on that field.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "dedupe",
+        "description": "Remove duplicates from an array, preserving first-seen order. Pass `by` (dotted path) to de-duplicate on that field.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "by": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "items": {
+              "items": true,
+              "type": "array"
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/filter.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "filter",
+      "title": "Filter",
+      "description": "Keep array items that satisfy a predicate. With `where` (formula with `it` bound), keeps elements where the formula is truthy. With `by` (dotted path), inspects that field; with `equals`, matches value. `where` and `by`/`equals` are mutually exclusive.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "filter",
+        "description": "Keep array items that satisfy a predicate. With `where` (formula with `it` bound), keeps elements where the formula is truthy. With `by` (dotted path), inspects that field; with `equals`, matches value. `where` and `by`/`equals` are mutually exclusive.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "by": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "equals": {
+              "default": null
+            },
+            "items": {
+              "items": true,
+              "type": "array"
+            },
+            "vars": {
+              "additionalProperties": true,
+              "default": null,
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "where": {
+              "default": null,
+              "format": "flux-expr",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/first.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "first",
+      "title": "First",
+      "description": "Return the first item of an array (or `null` if the array is empty).",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "first",
+        "description": "Return the first item of an array (or `null` if the array is empty).",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": true,
+              "type": "array"
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/flatten.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "flatten",
+      "title": "Flatten",
+      "description": "Flatten nested arrays `depth` levels (default 1, max 8). Non-array elements pass through; string elements that are JSON arrays re-parse first.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "flatten",
+        "description": "Flatten nested arrays `depth` levels (default 1, max 8). Non-array elements pass through; string elements that are JSON arrays re-parse first.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "depth": {
+              "default": null,
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "items": {
+              "items": true,
+              "type": "array"
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/group_by.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "group_by",
+      "title": "Group By",
+      "description": "Group array items by a field. Returns `[{key, items}]` in first-seen key order.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "group_by",
+        "description": "Group array items by a field. Returns `[{key, items}]` in first-seen key order.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": true,
+              "type": "array"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "items",
+            "path"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/has.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "has",
+      "title": "Has",
+      "description": "Test if an array contains a value (JSON equality). Returns \"true\" or \"false\".",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "has",
+        "description": "Test if an array contains a value (JSON equality). Returns \"true\" or \"false\".",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": true,
+              "type": "array"
+            },
+            "value": true
+          },
+          "required": [
+            "items",
+            "value"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/network/application/http/request.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "http.request",
+      "title": "Http Request",
+      "description": "Make an arbitrary HTTP(S) request (any method, headers, and body) and return the status, response headers, and body. Use this for APIs and raw protocol access; to read a web page as a readable document prefer `web.fetch`. Private/loopback addresses are blocked unless the `web` egress scope grants them. A header value may be a secret reference `{\"$secret\": \"ENV_NAME\"}`, resolved from the environment and never shown — but only for env-var names the operator has allowlisted; any other name is refused.",
+      "category": [
+        "network",
+        "application",
+        "http"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "http.request",
+        "description": "Make an arbitrary HTTP(S) request (any method, headers, and body) and return the status, response headers, and body. Use this for APIs and raw protocol access; to read a web page as a readable document prefer `web.fetch`. Private/loopback addresses are blocked unless the `web` egress scope grants them. A header value may be a secret reference `{\"$secret\": \"ENV_NAME\"}`, resolved from the environment and never shown — but only for env-var names the operator has allowlisted; any other name is refused.",
+        "input_schema": {
+          "properties": {
+            "body": {
+              "description": "Request body, for methods that take one (POST/PUT/PATCH/…).",
+              "type": "string"
+            },
+            "headers": {
+              "additionalProperties": true,
+              "description": "Request headers. A value may be a string or a secret reference {\"$secret\": \"ENV_NAME\"}.",
+              "type": "object"
+            },
+            "method": {
+              "description": "HTTP method (default GET).",
+              "type": "string"
+            },
+            "timeout": {
+              "description": "Timeout in seconds (default 30, max 300).",
+              "type": "number"
+            },
+            "url": {
+              "description": "The absolute http(s) URL to request.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ],
+          "type": "object"
+        },
+        "effects": [
+          "network"
+        ],
+        "risk": "medium",
+        "idempotency": "non_idempotent",
+        "access": [
+          "network"
+        ]
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/join.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "join",
+      "title": "Join",
+      "description": "Stringify each element (strings as-is, others compact JSON) and join with separator (default \"\\n\"). Returns plain text, not JSON.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "join",
+        "description": "Stringify each element (strings as-is, others compact JSON) and join with separator (default \"\\n\"). Returns plain text, not JSON.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": true,
+              "type": "array"
+            },
+            "sep": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/keys.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "keys",
+      "title": "Keys",
+      "description": "Return the keys of an object as a JSON array of strings, in deterministic order.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "keys",
+        "description": "Return the keys of an object as a JSON array of strings, in deterministic order.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "item": {
+              "description": "An object"
+            }
+          },
+          "required": [
+            "item"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/last.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "last",
+      "title": "Last",
+      "description": "Return the last item of an array (or `null` if the array is empty).",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "last",
+        "description": "Return the last item of an array (or `null` if the array is empty).",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": true,
+              "type": "array"
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/len.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "len",
+      "title": "Len",
+      "description": "Return the number of items in an array (or the character count of a string). Use with `when`/`expr` to branch on list size without shelling out.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "len",
+        "description": "Return the number of items in an array (or the character count of a string). Use with `when`/`expr` to branch on list size without shelling out.",
+        "input_schema": {
+          "$defs": {
+            "LenItems": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": true,
+                  "type": "array"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "$ref": "#/$defs/LenItems",
+              "description": "An array (length) or a string (character count)"
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/map.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "map",
+      "title": "Map",
+      "description": "Project each element: `path` plucks a dotted field (missing -> `null`); `expr` evaluates a formula with `it` bound to the element. Exactly one of `path` or `expr` required.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "map",
+        "description": "Project each element: `path` plucks a dotted field (missing -> `null`); `expr` evaluates a formula with `it` bound to the element. Exactly one of `path` or `expr` required.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "expr": {
+              "default": null,
+              "format": "flux-expr",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "items": {
+              "items": true,
+              "type": "array"
+            },
+            "path": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "vars": {
+              "additionalProperties": true,
+              "default": null,
+              "type": [
+                "object",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/merge.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "merge",
+      "title": "Merge",
+      "description": "Concatenate an array-of-arrays into a single array, in order.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "merge",
+        "description": "Concatenate an array-of-arrays into a single array, in order.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "lists": {
+              "description": "The lists to concatenate, in order",
+              "items": {
+                "items": true,
+                "type": "array"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "lists"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/merge_obj.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "merge_obj",
+      "title": "Merge Obj",
+      "description": "Shallow-merge an array of objects left-to-right (later keys win). Returns one merged object. Distinct from the list-concat `merge` tool.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "merge_obj",
+        "description": "Shallow-merge an array of objects left-to-right (later keys win). Returns one merged object. Distinct from the list-concat `merge` tool.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "objects": {
+              "description": "Array of objects to shallow-merge (later keys win)",
+              "items": true,
+              "type": "array"
+            }
+          },
+          "required": [
+            "objects"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/omit.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "omit",
+      "title": "Omit",
+      "description": "Remove the listed keys from an object (or per element of an array of objects), keeping everything else. Returns an object if `items` is an object, or an array if `items` is an array.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "omit",
+        "description": "Remove the listed keys from an object (or per element of an array of objects), keeping everything else. Returns an object if `items` is an object, or an array if `items` is an array.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "description": "One object or an array of objects"
+            },
+            "keys": {
+              "description": "Field names to remove",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "items",
+            "keys"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/pick.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "pick",
+      "title": "Pick",
+      "description": "Keep only the listed keys from an object (or per element of an array of objects). Missing keys simply don't appear. Returns an object if `items` is an object, or an array if `items` is an array.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "pick",
+        "description": "Keep only the listed keys from an object (or per element of an array of objects). Missing keys simply don't appear. Returns an object if `items` is an object, or an array if `items` is an array.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "description": "One object or an array of objects"
+            },
+            "keys": {
+              "description": "Field names to keep",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "items",
+            "keys"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/regex_extract.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "regex_extract",
+      "title": "Regex Extract",
+      "description": "Extract text from a string using a regex pattern. Returns the first match as a string, or `null` if no match. With `group` (default 0 = whole match), extracts that capture group. With `all: true`, returns a JSON array of all matches. Missing capture group index yields a clear error.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "regex_extract",
+        "description": "Extract text from a string using a regex pattern. Returns the first match as a string, or `null` if no match. With `group` (default 0 = whole match), extracts that capture group. With `all: true`, returns a JSON array of all matches. Missing capture group index yields a clear error.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "all": {
+              "default": null,
+              "description": "Extract all matches instead of just the first (default false)",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "group": {
+              "default": null,
+              "description": "Capture group index to extract (default 0 = whole match)",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "pattern": {
+              "description": "The regex pattern to match against",
+              "type": "string"
+            },
+            "s": {
+              "description": "The string to search in",
+              "type": "string"
+            }
+          },
+          "required": [
+            "s",
+            "pattern"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/regex_match.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "regex_match",
+      "title": "Regex Match",
+      "description": "Test if a string matches a regex pattern, returning \"true\" or \"false\" (strings, matching the boolean-emitter convention). Uses Rust's `regex` crate (Thompson NFA, linear-time, ReDoS-free). Pattern length > 512 chars or invalid patterns yield clear errors.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "regex_match",
+        "description": "Test if a string matches a regex pattern, returning \"true\" or \"false\" (strings, matching the boolean-emitter convention). Uses Rust's `regex` crate (Thompson NFA, linear-time, ReDoS-free). Pattern length > 512 chars or invalid patterns yield clear errors.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "pattern": {
+              "description": "The regex pattern to match against",
+              "type": "string"
+            },
+            "s": {
+              "description": "The string to search in",
+              "type": "string"
+            }
+          },
+          "required": [
+            "s",
+            "pattern"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/skip.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "skip",
+      "title": "Skip",
+      "description": "Drop first `n` items (mirror of `top`); `n <= 0` returns unchanged; `n >= len` returns `[]`.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "skip",
+        "description": "Drop first `n` items (mirror of `top`); `n <= 0` returns unchanged; `n >= len` returns `[]`.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": true,
+              "type": "array"
+            },
+            "n": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "items",
+            "n"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/sort.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "sort",
+      "title": "Sort",
+      "description": "Stably sort an array. Pass `by` (dotted path) to sort on a field, and `order` (\"asc\" | \"desc\", default \"asc\").",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "sort",
+        "description": "Stably sort an array. Pass `by` (dotted path) to sort on a field, and `order` (\"asc\" | \"desc\", default \"asc\").",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "by": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "items": {
+              "items": true,
+              "type": "array"
+            },
+            "order": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/split.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "split",
+      "title": "Split",
+      "description": "Split string on separator (default \"\\n\"). If `trim` is true, trim each part. Empty input returns `[]`. Returns JSON array of strings.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "split",
+        "description": "Split string on separator (default \"\\n\"). If `trim` is true, trim each part. Empty input returns `[]`. Returns JSON array of strings.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "s": {
+              "type": "string"
+            },
+            "sep": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "trim": {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "s"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/sum.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "sum",
+      "title": "Sum",
+      "description": "Sum numeric values in an array. If `path` is provided, extracts that dotted field from each element and sums the extracted values. Non-numeric elements yield a clear error.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "sum",
+        "description": "Sum numeric values in an array. If `path` is provided, extracts that dotted field from each element and sums the extracted values. Non-numeric elements yield a clear error.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": true,
+              "type": "array"
+            },
+            "path": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/top.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "top",
+      "title": "Top",
+      "description": "Return the first `n` items of an array (fewer if the array is shorter).",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "top",
+        "description": "Return the first `n` items of an array (fewer if the array is shorter).",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": true,
+              "type": "array"
+            },
+            "n": {
+              "description": "Number of leading items to keep",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "items",
+            "n"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/data/transform/values.json",
+      "schema_version": 1,
+      "kind": "operation",
+      "name": "values",
+      "title": "Values",
+      "description": "Return the values of an object as a JSON array, in the same order as `keys`.",
+      "category": [
+        "data",
+        "transform"
+      ],
+      "availability": "available",
+      "tool_spec": {
+        "name": "values",
+        "description": "Return the values of an object as a JSON array, in the same order as `keys`.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "item": {
+              "description": "An object"
+            }
+          },
+          "required": [
+            "item"
+          ],
+          "type": "object"
+        },
+        "effects": [],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "access": [],
+        "group": "cognition"
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/call.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "call",
+      "title": "Call",
+      "description": "Invoke a registered operation with argument expressions.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-call"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/bind.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "bind",
+      "title": "Bind",
+      "description": "Bind the result of an expression to a symbol.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-bind"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/when.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "when",
+      "title": "When",
+      "description": "Conditional control flow.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-when"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/repeat.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "repeat",
+      "title": "Repeat",
+      "description": "A bounded loop (`max` is required; the analyzer rejects unbounded loops).",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-repeat"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/each.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "each",
+      "title": "Each",
+      "description": "Map a list value through a body (list-driven loop; `repeat` stays counter-driven). Each element is bound to `as`; an optional `collect` symbol gathers the per-iteration results into a list.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-each"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/assert.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "assert",
+      "title": "Assert",
+      "description": "A boolean guard: aborts the flow with an error if the condition is falsey.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-assert"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/pipe.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "pipe",
+      "title": "Pipe",
+      "description": "A chain of calls where each step's output is fed as the first argument of the next.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-pipe"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/seq.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "seq",
+      "title": "Seq",
+      "description": "A sequential block; runs its body in order. Optionally binds the block's final result.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-seq"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/memo.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "memo",
+      "title": "Memo",
+      "description": "Like `bind`, but pinned across turns: if the symbol is already resolved for this session, skip execution and reuse the cached value (compute-once-per-session, keyed on symbol name).",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-memo"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/parallel.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "parallel",
+      "title": "Parallel",
+      "description": "Concurrent fan-out: run independent branches, binding each branch's result to its name.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-parallel"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/await.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "await",
+      "title": "Await",
+      "description": "Pause until an external event/input arrives.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-await"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/retry.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "retry",
+      "title": "Retry",
+      "description": "Retry a body on failure with optional backoff. Fatal errors (policy denial, unknown op) are never retried. `backoff` may be `\"none\"` | `\"linear\"` | `\"exponential\"`.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-retry"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/try.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "try",
+      "title": "Try",
+      "description": "Structured error handling: run `body`; on failure bind the error string to `catch` and run `handler`. If the handler also errors, propagate that error.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-try"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/confirm.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "confirm",
+      "title": "Confirm",
+      "description": "Explicit human-in-the-loop gate. Calls the existing `Approver` — `--yes` and TUI modal handle it automatically. Body only runs on approval; on denial the node errors. `risk` may be `\"low\"` | `\"medium\"` | `\"high\"` | `\"critical\"`.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-confirm"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/loop.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "loop",
+      "title": "Loop",
+      "description": "Time-bounded iteration. `for_ms` is required (the analyzer rejects unbounded loops). `every_ms` is the inter-iteration sleep (0 = tight). `until` is an early-exit condition.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-loop"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/race.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "race",
+      "title": "Race",
+      "description": "First-wins concurrency: run branches in parallel and return as soon as the first succeeds. `timeout_ms` is required; if no branch succeeds within it the node errors. `bind` names the symbol that receives the winning branch's result.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-race"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/throttle.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "throttle",
+      "title": "Throttle",
+      "description": "Rate-limit body execution: at most `max` dispatches per `window_ms` sliding window. The token bucket is tracked in the session store keyed by `name`; plan authors declare intent, runtime enforces. `name` must be unique within a session to avoid bucket collisions.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-throttle"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/debounce.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "debounce",
+      "title": "Debounce",
+      "description": "Coalesce rapid re-invocations: wait `wait_ms` after the last trigger before running body. In a `loop`/`watch` context the body only executes when things have settled. `name` is used as a stable key so debounce state survives across turns.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-debounce"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/unless.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "unless",
+      "title": "Unless",
+      "description": "Negated conditional: run `body` only when `cond` is falsey. Sugar for `when !cond`; the body may contain any nodes (reads, writes, sub-plans — anything).",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-unless"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/verify.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "verify",
+      "title": "Verify",
+      "description": "Run a command and assert its output contains an expected substring; abort the flow with a structured error if it does not. `cmd` is any node that produces a string (typically a `bash` call); `expect` is the substring the output must contain.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-verify"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/return.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "return",
+      "title": "Return",
+      "description": "End the flow with a value.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-return"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/peek.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "peek",
+      "title": "Peek",
+      "description": "Read the current in-session value of a named symbol without any filesystem IO. Returns the symbol's stored value, or an empty string if the symbol is not yet bound.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-peek"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/var.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "var",
+      "title": "Var",
+      "description": "Reference a bound symbol.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-var"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/lit.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "lit",
+      "title": "Lit",
+      "description": "A literal value (raw JSON, as written in the AST by the compiler front-end).",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-lit"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/thing.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "thing",
+      "title": "Thing",
+      "description": "A reference to an external thing.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-thing"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/expr.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "expr",
+      "title": "Expr",
+      "description": "Pure inline computation. `formula` is a safe whitelist expression over named variables: arithmetic (`+ - * /`, `round(x,n)`, `abs`, `min`, `max`, `sum`), comparison (`== != < <= > >=`), boolean (`&& || !`, `true`/`false`, `any`, `all`, `has`), string functions (`len/lower/upper/trim/replace/repeat/reverse/contains/concat/join/split`), list helpers (`first`/`last`), string literals (`'…'`/`\"…\"`), lists, and objects. Dotted names such as `it.author.name` descend object fields leniently (missing/null/non-object hops read as `\"\"`). `+` adds when both sides are numeric and concatenates otherwise. Because it yields a bool, an `expr` is also a valid `when`/`unless`/`until`/`assert` condition. `vars` maps variable names to node expressions (only `Lit` and `Var` are valid). No IO, no approval gate. Examples: `expr(\"price * 2\", {\"price\": $btc})`, `expr(\"it.state == 'ok' && len(tags) > 0\", …)`.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-expr"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/fmt.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "fmt",
+      "title": "Fmt",
+      "description": "Pure string interpolation. `template` is a string with `{name}` placeholders substituted from already-bound session symbols (same `{name}`/`{{name}}` syntax as `Lit` interpolation). No IO, no approval gate. Example: `fmt(\"BTC: {price} | Double: {doubled}\")`.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-fmt"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/jq.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "jq",
+      "title": "Jq",
+      "description": "Pure JSON path extraction. `path` is a dot-path string (e.g. `\".bitcoin.usd\"` or `\"results[0].value\"`) applied to the JSON content of `input` (a `Var` or `Lit` node). No IO, no approval gate. Example: `jq(\".bitcoin.usd\", $raw)`.  `optional` selects the traversal-through-missing-data policy. When `false` — the default for native `$x.field` sugar — an absent object key, an out-of-range index, or a field access on a non-object is a loud error, so a typo'd field name fails fast instead of silently reading empty. When `true` — native `$x.field?` sugar, or a legacy JSON AST that omitted the flag — such a miss yields `null`. A present-but-`null` field is never an error in either mode.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-jq"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/parse.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "parse",
+      "title": "Parse",
+      "description": "Pure type coercion. Converts the string result of a `jq` or `fmt` node into a typed value. `as_type` is one of `\"f64\"`, `\"i64\"`, `\"bool\"`, `\"json\"`, `\"string\"`. No IO, no approval gate. Example: `parse(jq(\".price\", $raw), as: \"f64\")`.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-parse"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/ctx.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "ctx",
+      "title": "Ctx",
+      "description": "Build a bounded, budgeted **context pack** from existing symbols. Resolves `include` (minus `exclude`) to its members, then — when `budget` is set — shrinks the pack *at evaluation* by visibility tier then declared order until within the char budget, recording any dropped members in the run trace. Produces a `Ctx` value bound to `name`. Pure: it selects and labels existing values, performing no IO (the load-bearing elevation of PRD §13 explicit context management).",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-ctx"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/ctx_append.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "ctx_append",
+      "title": "Ctx Append",
+      "description": "Accrete more symbols into an existing context pack (the `+=` marker). Immutably rebinds `ctx` to a *new* `Ctx` value (preserving the audit chain `$pack@1 → @2`) with `add` appended, then re-applies the pack's budget. Pure.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-ctx_append"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/match.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "match",
+      "title": "Match",
+      "description": "Multi-way **exhaustive** branch: evaluate `subject` (a literal or bound symbol), then run the body of the first `case` whose `value` equals it — by JSON equality, so a *string* subject does not equal a *numeric* literal. If none match, run `default`. A deterministic replacement for chains of `when`. To branch on an op's result, bind it first (`$s = call(); match $s {…}`) or use `route`. The analyzer requires at least one case; at runtime an unmatched subject with no `default` is an error — the exhaustiveness guard-rail.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-match"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/route.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "route",
+      "title": "Route",
+      "description": "Model-routed branch — the signature *bounded non-determinism* primitive. Run `selector` (typically a `!model` op) to produce a label, then run the `case` whose `label` it names. The cases are fixed and analyzer-validated: the model chooses *which* declared branch runs, never *what*. Falls back to `default` when the label matches no case (an error if `default` is empty).",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-route"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/fallback.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "fallback",
+      "title": "Fallback",
+      "description": "Ordered \"first that succeeds wins\" selector: run each branch in `branches` in turn; the first that completes without error and yields a non-empty result wins and becomes the node's result. On a branch error (or empty result) the next is tried — so a *side-effecting* branch that returns empty will still fall through and the next branch also runs (attempts stream live, as in `try`/`retry`). If every branch errors, the last error propagates. Lighter than `try` for graceful degradation (cheap path → else expensive path). `bind` names the winning result.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-fallback"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/timeout.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "timeout",
+      "title": "Timeout",
+      "description": "Bound the wall-clock of a sub-flow: run `body` with a `ms` deadline. If it does not finish in time the node errors (an enclosing `try`/`retry` may catch it). A general reliability guard-rail you can wrap around anything. `bind` names the body's result.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-timeout"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/budget.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "budget",
+      "title": "Budget",
+      "description": "Cap the cost of a scope: run `body` but allow at most `limit` op dispatches within it (checked at statement boundaries; a nested statement can consume more than one dispatch before the next check). A first-class cost guard-rail; v1 counts dispatches (token/money budgets are a later refinement). `bind` names the body's result.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-budget"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/cap_scope.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "cap_scope",
+      "title": "Cap Scope",
+      "description": "**Capability scope**: run `body`, but restrict op dispatch to the tool names in `tools` — a call to anything outside that allowlist fails closed at the runtime's dispatch gate, even when the outer session policy would allow it. Capabilities only ever narrow on descent: a nested `with_tools` is intersected with the scope it's nested in, so an inner block can never re-grant a tool an outer one removed. This is the runtime-enforced counterpart of an advisory tool restriction — the analyzer also flags a literal-op `call` here that provably names a tool absent from `tools` (a static echo of the same rule dispatch enforces dynamically). `bind` names the body's result. Native text: `with_tools [\"read\", \"grep\"]` + an indented body.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-cap_scope"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/scope.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "scope",
+      "title": "Scope",
+      "description": "RAII-style **acquire → use → release** with guaranteed cleanup. Optionally run `acquire` first (binding its result to `bind`, so `body` and `finally` can name the resource), then run `body`; `finally` **always** runs afterward — on normal completion, an early `return`, or an error — so a lock is freed / a handle closed / a temp removed no matter how the body exits. The body's result, `return`, or error then propagates; a `finally` failure surfaces only when the body itself succeeded (it never masks the body's own error). If `acquire` errors the resource was never taken, so `finally` does not run. The deterministic resource-lifecycle guard-rail (RAII for flows).",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-scope"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/saga.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "saga",
+      "title": "Saga",
+      "description": "Saga / **compensating transaction**: run each `step` in order; after a step's `body` succeeds, its `undo` is registered. If a *later* step fails, the runtime unwinds by running the registered `undo` bodies in **reverse** order (best-effort — an `undo` failure is recorded but does not stop the unwind), then propagates the original error. The strongest guard-rail for non-transactional external side effects (charge→refund, create→delete, reserve→release): partial work is rolled back rather than left dangling. A `return` inside a step is a successful early exit and does not compensate (use `scope` for guaranteed cleanup on every exit).",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-saga"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/once.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "once",
+      "title": "Once",
+      "description": "**At-most-once side effect** across re-runs — an effect-level `memo`. `label` is an explicit idempotency key: the first time the body runs to success in a session its result is recorded durably; later re-runs in the same session skip the body and reuse the stored result. A failed body records nothing and is retried. `bind` optionally names the body's result. Safety under re-execution (`send_email`/`charge` never fire twice). With no durable store wired (a throwaway interpreter) it degrades to running every time. Requires a non-empty literal label.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-once"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/checkpoint.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "checkpoint",
+      "title": "Checkpoint",
+      "description": "**Durable resume point** for long-running / resumable flows. A **top-level-only** marker (like `await`): the first time a run reaches it, the position is recorded durably; a later re-run of the *same* flow in the *same* session fast-forwards past the already-completed prefix (its symbols are still durably bound and its side effects are not repeated) and continues from here. `label` is a human-readable name for the phase it closes. Pairs with `once` for finer-grained idempotency; a no-op when no durable store is wired. Requires a non-empty literal label.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-checkpoint"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/obj.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "obj",
+      "title": "Obj",
+      "description": "Build an **object value** from sub-expressions — the record constructor `{ k: expr, … }`. Each field value is itself a node, so a record can mix literals and variables: `{ ok: true, n: $count, intent: $extract.intent }`. Pure: it assembles a value, performing no IO and no op dispatch. Leaves must be pure value nodes (`var`/`lit`/`jq`/`expr`/`fmt`/`obj`/ `list`); a call or control-flow leaf is rejected by the analyzer so templates stay side-effect free. This is what lets `return { … }` assemble a result from computed symbols.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-obj"
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/language/node/list.json",
+      "schema_version": 1,
+      "kind": "node",
+      "name": "list",
+      "title": "List",
+      "description": "Build a **list value** from sub-expressions — the list constructor `[ expr, … ]`. Each item is itself a node (`[ $a, $b, 3 ]`). Pure, same leaf rules as [`Node::Obj`]; the array twin of the record constructor.",
+      "category": [
+        "language",
+        "node"
+      ],
+      "availability": "available",
+      "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-list"
+    }
+  ],
+  "capabilities": [
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/network/application/dns.json",
+      "schema_version": 1,
+      "kind": "capability",
+      "name": "dns",
+      "title": "DNS",
+      "description": "Explicit DNS resolution; planned pending a guarded resolver contract.",
+      "category": [
+        "network",
+        "application"
+      ],
+      "availability": "planned",
+      "callable": false,
+      "operation_ids": []
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/network/application/http.json",
+      "schema_version": 1,
+      "kind": "capability",
+      "name": "http",
+      "title": "HTTP",
+      "description": "Typed HTTP requests through Flux's guarded web egress boundary.",
+      "category": [
+        "network",
+        "application"
+      ],
+      "availability": "available",
+      "callable": true,
+      "operation_ids": [
+        "https://flux.codewandler.org/v1/core/network/application/http/request.json"
+      ]
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/network/internet/icmp.json",
+      "schema_version": 1,
+      "kind": "capability",
+      "name": "icmp",
+      "title": "ICMP",
+      "description": "Portable guarded reachability checks; planned where host privilege permits.",
+      "category": [
+        "network",
+        "internet"
+      ],
+      "availability": "planned",
+      "callable": false,
+      "operation_ids": []
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/network/transport/tcp.json",
+      "schema_version": 1,
+      "kind": "capability",
+      "name": "tcp",
+      "title": "TCP",
+      "description": "Guarded TCP stream access; planned pending connection-lifetime and authority rules.",
+      "category": [
+        "network",
+        "transport"
+      ],
+      "availability": "planned",
+      "callable": false,
+      "operation_ids": []
+    },
+    {
+      "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$id": "https://flux.codewandler.org/v1/core/network/transport/udp.json",
+      "schema_version": 1,
+      "kind": "capability",
+      "name": "udp",
+      "title": "UDP",
+      "description": "Guarded datagram access; planned pending destination and reply-source rules.",
+      "category": [
+        "network",
+        "transport"
+      ],
+      "availability": "planned",
+      "callable": false,
+      "operation_ids": []
+    }
+  ],
+  "schemas": {
+    "catalog": {
+      "$defs": {
+        "AccessKind": {
+          "description": "A host capability the tool needs access to.",
+          "enum": [
+            "auth",
+            "secret",
+            "network",
+            "connection",
+            "datasource",
+            "provider",
+            "process",
+            "browser",
+            "filesystem",
+            "local_system"
+          ],
+          "type": "string"
+        },
+        "Availability": {
+          "enum": [
+            "available",
+            "planned"
+          ],
+          "type": "string"
+        },
+        "CapabilityKind": {
+          "enum": [
+            "capability"
+          ],
+          "type": "string"
+        },
+        "CoreCapability": {
+          "properties": {
+            "$id": {
+              "type": "string"
+            },
+            "$schema": {
+              "type": "string"
+            },
+            "availability": {
+              "$ref": "#/$defs/Availability"
+            },
+            "callable": {
+              "type": "boolean"
+            },
+            "category": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "$ref": "#/$defs/CapabilityKind"
+            },
+            "name": {
+              "type": "string"
+            },
+            "operation_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "schema_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "$schema",
+            "$id",
+            "schema_version",
+            "kind",
+            "name",
+            "title",
+            "description",
+            "category",
+            "availability",
+            "callable",
+            "operation_ids"
+          ],
+          "type": "object"
+        },
+        "CoreNode": {
+          "properties": {
+            "$id": {
+              "type": "string"
+            },
+            "$schema": {
+              "type": "string"
+            },
+            "availability": {
+              "$ref": "#/$defs/Availability"
+            },
+            "category": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "$ref": "#/$defs/NodeKind"
+            },
+            "name": {
+              "type": "string"
+            },
+            "schema_ref": {
+              "type": "string"
+            },
+            "schema_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "$schema",
+            "$id",
+            "schema_version",
+            "kind",
+            "name",
+            "title",
+            "description",
+            "category",
+            "availability",
+            "schema_ref"
+          ],
+          "type": "object"
+        },
+        "CoreOperation": {
+          "properties": {
+            "$id": {
+              "type": "string"
+            },
+            "$schema": {
+              "type": "string"
+            },
+            "availability": {
+              "$ref": "#/$defs/Availability"
+            },
+            "category": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "$ref": "#/$defs/OperationKind"
+            },
+            "name": {
+              "type": "string"
+            },
+            "schema_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "title": {
+              "type": "string"
+            },
+            "tool_spec": {
+              "$ref": "#/$defs/ToolSpec"
+            }
+          },
+          "required": [
+            "$schema",
+            "$id",
+            "schema_version",
+            "kind",
+            "name",
+            "title",
+            "description",
+            "category",
+            "availability",
+            "tool_spec"
+          ],
+          "type": "object"
+        },
+        "CoreSchemas": {
+          "properties": {
+            "catalog": true,
+            "entry": true,
+            "flux_ast": true
+          },
+          "required": [
+            "catalog",
+            "entry",
+            "flux_ast"
+          ],
+          "type": "object"
+        },
+        "Effect": {
+          "description": "A side effect a tool may have.",
+          "enum": [
+            "read",
+            "write",
+            "network",
+            "process",
+            "browser",
+            "filesystem",
+            "local_system"
+          ],
+          "type": "string"
+        },
+        "Idempotency": {
+          "description": "Whether repeating the operation is safe.",
+          "enum": [
+            "idempotent",
+            "non_idempotent",
+            "conditional"
+          ],
+          "type": "string"
+        },
+        "NodeKind": {
+          "enum": [
+            "node"
+          ],
+          "type": "string"
+        },
+        "OperationKind": {
+          "enum": [
+            "operation"
+          ],
+          "type": "string"
+        },
+        "Risk": {
+          "description": "Coarse risk classification, driving approval thresholds.",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "destructive"
+          ],
+          "type": "string"
+        },
+        "ToolSpec": {
+          "description": "The inert specification of a tool/operation.",
+          "properties": {
+            "access": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/AccessKind"
+              },
+              "type": "array"
+            },
+            "description": {
+              "type": "string"
+            },
+            "effects": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/Effect"
+              },
+              "type": "array"
+            },
+            "group": {
+              "description": "The evidence-gated tool group this op belongs to. `None` means *core* — always advertised to\nthe model. A named group is only surfaced into the model-facing catalog when the workspace\nshows evidence the group is relevant (see `flux-runtime`'s group resolver).",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "idempotency": {
+              "$ref": "#/$defs/Idempotency"
+            },
+            "input_schema": {
+              "description": "JSON Schema for the tool's input object."
+            },
+            "name": {
+              "type": "string"
+            },
+            "output_schema": true,
+            "risk": {
+              "$ref": "#/$defs/Risk"
+            }
+          },
+          "required": [
+            "name",
+            "description",
+            "input_schema",
+            "risk",
+            "idempotency"
+          ],
+          "type": "object"
+        }
+      },
+      "$id": "https://flux.codewandler.org/v1/schema/core-catalog.schema.json",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "$id": {
+          "type": "string"
+        },
+        "$schema": {
+          "type": "string"
+        },
+        "capabilities": {
+          "items": {
+            "$ref": "#/$defs/CoreCapability"
+          },
+          "type": "array"
+        },
+        "generator": {
+          "type": "string"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/CoreNode"
+          },
+          "type": "array"
+        },
+        "operations": {
+          "items": {
+            "$ref": "#/$defs/CoreOperation"
+          },
+          "type": "array"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schemas": {
+          "$ref": "#/$defs/CoreSchemas"
+        }
+      },
+      "required": [
+        "$schema",
+        "$id",
+        "schema_version",
+        "generator",
+        "operations",
+        "nodes",
+        "capabilities",
+        "schemas"
+      ],
+      "title": "CoreCatalog",
+      "type": "object"
+    },
+    "entry": {
+      "$defs": {
+        "AccessKind": {
+          "description": "A host capability the tool needs access to.",
+          "enum": [
+            "auth",
+            "secret",
+            "network",
+            "connection",
+            "datasource",
+            "provider",
+            "process",
+            "browser",
+            "filesystem",
+            "local_system"
+          ],
+          "type": "string"
+        },
+        "Availability": {
+          "enum": [
+            "available",
+            "planned"
+          ],
+          "type": "string"
+        },
+        "CapabilityKind": {
+          "enum": [
+            "capability"
+          ],
+          "type": "string"
+        },
+        "CoreCapability": {
+          "properties": {
+            "$id": {
+              "type": "string"
+            },
+            "$schema": {
+              "type": "string"
+            },
+            "availability": {
+              "$ref": "#/$defs/Availability"
+            },
+            "callable": {
+              "type": "boolean"
+            },
+            "category": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "$ref": "#/$defs/CapabilityKind"
+            },
+            "name": {
+              "type": "string"
+            },
+            "operation_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "schema_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "$schema",
+            "$id",
+            "schema_version",
+            "kind",
+            "name",
+            "title",
+            "description",
+            "category",
+            "availability",
+            "callable",
+            "operation_ids"
+          ],
+          "type": "object"
+        },
+        "CoreNode": {
+          "properties": {
+            "$id": {
+              "type": "string"
+            },
+            "$schema": {
+              "type": "string"
+            },
+            "availability": {
+              "$ref": "#/$defs/Availability"
+            },
+            "category": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "$ref": "#/$defs/NodeKind"
+            },
+            "name": {
+              "type": "string"
+            },
+            "schema_ref": {
+              "type": "string"
+            },
+            "schema_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "$schema",
+            "$id",
+            "schema_version",
+            "kind",
+            "name",
+            "title",
+            "description",
+            "category",
+            "availability",
+            "schema_ref"
+          ],
+          "type": "object"
+        },
+        "CoreOperation": {
+          "properties": {
+            "$id": {
+              "type": "string"
+            },
+            "$schema": {
+              "type": "string"
+            },
+            "availability": {
+              "$ref": "#/$defs/Availability"
+            },
+            "category": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "$ref": "#/$defs/OperationKind"
+            },
+            "name": {
+              "type": "string"
+            },
+            "schema_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "title": {
+              "type": "string"
+            },
+            "tool_spec": {
+              "$ref": "#/$defs/ToolSpec"
+            }
+          },
+          "required": [
+            "$schema",
+            "$id",
+            "schema_version",
+            "kind",
+            "name",
+            "title",
+            "description",
+            "category",
+            "availability",
+            "tool_spec"
+          ],
+          "type": "object"
+        },
+        "Effect": {
+          "description": "A side effect a tool may have.",
+          "enum": [
+            "read",
+            "write",
+            "network",
+            "process",
+            "browser",
+            "filesystem",
+            "local_system"
+          ],
+          "type": "string"
+        },
+        "Idempotency": {
+          "description": "Whether repeating the operation is safe.",
+          "enum": [
+            "idempotent",
+            "non_idempotent",
+            "conditional"
+          ],
+          "type": "string"
+        },
+        "NodeKind": {
+          "enum": [
+            "node"
+          ],
+          "type": "string"
+        },
+        "OperationKind": {
+          "enum": [
+            "operation"
+          ],
+          "type": "string"
+        },
+        "Risk": {
+          "description": "Coarse risk classification, driving approval thresholds.",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "destructive"
+          ],
+          "type": "string"
+        },
+        "ToolSpec": {
+          "description": "The inert specification of a tool/operation.",
+          "properties": {
+            "access": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/AccessKind"
+              },
+              "type": "array"
+            },
+            "description": {
+              "type": "string"
+            },
+            "effects": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/Effect"
+              },
+              "type": "array"
+            },
+            "group": {
+              "description": "The evidence-gated tool group this op belongs to. `None` means *core* — always advertised to\nthe model. A named group is only surfaced into the model-facing catalog when the workspace\nshows evidence the group is relevant (see `flux-runtime`'s group resolver).",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "idempotency": {
+              "$ref": "#/$defs/Idempotency"
+            },
+            "input_schema": {
+              "description": "JSON Schema for the tool's input object."
+            },
+            "name": {
+              "type": "string"
+            },
+            "output_schema": true,
+            "risk": {
+              "$ref": "#/$defs/Risk"
+            }
+          },
+          "required": [
+            "name",
+            "description",
+            "input_schema",
+            "risk",
+            "idempotency"
+          ],
+          "type": "object"
+        }
+      },
+      "$id": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CoreOperation"
+        },
+        {
+          "$ref": "#/$defs/CoreNode"
+        },
+        {
+          "$ref": "#/$defs/CoreCapability"
+        }
+      ],
+      "title": "CoreEntry"
+    },
+    "flux_ast": {
+      "$defs": {
+        "Branch": {
+          "description": "One branch of a [`Node::Parallel`] fan-out: a named sub-flow whose final result is bound to\n`name` after the branch completes. Branches should bind distinct names (the analyzer rejects\nduplicates).",
+          "properties": {
+            "body": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/Node"
+              },
+              "type": "array"
+            },
+            "name": {
+              "$ref": "#/$defs/SymbolName"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        "FallbackBranch": {
+          "description": "One branch of a [`Node::Fallback`]: a body tried in declared order until one succeeds.",
+          "properties": {
+            "body": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/Node"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "FlowEffect": {
+          "description": "A first-class *semantic* effect, declared on operations. Distinct from the host-resource\n[`Effect`] (Read/Write/Network/…): a `FlowEffect` expresses execution *meaning* (this op sends\nmail, costs money, irreversibly deletes) and lowers onto the host effect + a policy action via\n[`FlowEffect::lower`]. Policy decides allow / deny / require-approval.\n\n**Vocabulary invariant (C-184):** a variant names a *consequence class* — what could go wrong,\nwho sees it, whether it can be undone — never an application domain. \"Books a meeting\",\n\"updates a CRM record\", \"changes DNS\" are all `send_external`/`write_db`-class consequences of\nspecific domains; giving each domain its own variant would grow an unbounded catalog on a\nfrozen wire enum. (`Calendar` predates this rule and is deprecated for exactly this reason.)\n\nLives here rather than in `flux-lang` because it is part of the **plugin wire vocabulary**\n(`PluginManifest`'s `semantic_effects`), and a guest plugin must be able to name it without\ncompiling the language front-end (C-141). `flux_lang::ast` re-exports it, so the\n`flux_lang::ast::FlowEffect` path used across the codebase keeps working.",
+          "oneOf": [
+            {
+              "const": "pure",
+              "description": "No effect — deterministic, side-effect free.",
+              "type": "string"
+            },
+            {
+              "const": "read",
+              "description": "Reads external state.",
+              "type": "string"
+            },
+            {
+              "const": "model",
+              "description": "Invokes a model (non-deterministic unless cached).",
+              "type": "string"
+            },
+            {
+              "const": "network",
+              "description": "General network egress.",
+              "type": "string"
+            },
+            {
+              "const": "write_file",
+              "description": "Writes to the filesystem.",
+              "type": "string"
+            },
+            {
+              "const": "write_db",
+              "description": "Writes to a database / persistent store.",
+              "type": "string"
+            },
+            {
+              "const": "send_external",
+              "description": "Sends something externally (email, message, webhook).",
+              "type": "string"
+            },
+            {
+              "const": "delete",
+              "description": "Irreversibly deletes.",
+              "type": "string"
+            },
+            {
+              "const": "money",
+              "description": "Moves money.",
+              "type": "string"
+            },
+            {
+              "const": "calendar",
+              "deprecated": true,
+              "description": "Mutates a calendar.\n\nThe one application-domain noun in a consequence-class vocabulary (see the enum docs), with\nzero declaration sites since day one — kept only because removing a wire enum variant fails\ndeserialization of any manifest that declares it, a protocol-major event.",
+              "type": "string"
+            },
+            {
+              "const": "human_visible",
+              "description": "Produces output a human will see.",
+              "type": "string"
+            }
+          ]
+        },
+        "MatchCase": {
+          "description": "One arm of a [`Node::Match`]: run `body` when the subject equals `value` (by JSON equality).",
+          "properties": {
+            "body": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/Node"
+              },
+              "type": "array"
+            },
+            "value": {
+              "$ref": "#/$defs/Node"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "type": "object"
+        },
+        "Node": {
+          "description": "A node in an authored or host-derived Draft AST. Expressions and statements share one enum; the\nanalyzer enforces where each may appear. Agent models call native operation schemas and do not\ngenerate this executable representation.",
+          "oneOf": [
+            {
+              "$anchor": "node-call",
+              "description": "Invoke a registered operation with argument expressions.",
+              "properties": {
+                "args": {
+                  "default": [],
+                  "description": "Call argument expressions. For an operation with multiple declared parameters, this\narray contains exactly one named object: prefer an `obj` node shaped like\n`{\"kind\":\"obj\",\"fields\":{\"parameter\": <value node>}}`; an object-valued `lit` is\nalso accepted. Never put multiple positional value nodes in this array. An operation\nwith exactly one required parameter may use one bare value node as shorthand.",
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "call",
+                  "type": "string"
+                },
+                "op": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "op"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-bind",
+              "description": "Bind the result of an expression to a symbol.",
+              "properties": {
+                "effect": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/FlowEffect"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "kind": {
+                  "const": "bind",
+                  "type": "string"
+                },
+                "name": {
+                  "$ref": "#/$defs/SymbolName"
+                },
+                "ty": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/TypeRef"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "value": {
+                  "$ref": "#/$defs/Node"
+                }
+              },
+              "required": [
+                "kind",
+                "name",
+                "value"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-when",
+              "description": "Conditional control flow.",
+              "properties": {
+                "cond": {
+                  "$ref": "#/$defs/Node"
+                },
+                "kind": {
+                  "const": "when",
+                  "type": "string"
+                },
+                "otherwise": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "then": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "kind",
+                "cond"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-repeat",
+              "description": "A bounded loop (`max` is required; the analyzer rejects unbounded loops).",
+              "properties": {
+                "body": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "collect": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SymbolName"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Optional symbol bound to a [`Value::List`] of each iteration's last result.\nMirrors `each`'s `collect` field for counter-driven loops."
+                },
+                "kind": {
+                  "const": "repeat",
+                  "type": "string"
+                },
+                "max": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "until": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Node"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "max"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-each",
+              "description": "Map a list value through a body (list-driven loop; `repeat` stays counter-driven). Each element\nis bound to `as`; an optional `collect` symbol gathers the per-iteration results into a list.",
+              "properties": {
+                "as": {
+                  "$ref": "#/$defs/SymbolName",
+                  "description": "The symbol bound to each element inside the body."
+                },
+                "body": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "collect": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SymbolName"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Optional symbol bound to a [`Value::List`] of each iteration's result.\nWhen `flat` is `true` the collected values are flattened one level\n(each iteration must produce a list; the results are concatenated)."
+                },
+                "flat": {
+                  "description": "If `true` and `collect` is set, flatten the per-iteration results\n(each must be a list) into one combined list instead of a list-of-lists.",
+                  "type": "boolean"
+                },
+                "in": {
+                  "$ref": "#/$defs/Node",
+                  "description": "The list to iterate (an expression yielding a [`Value::List`])."
+                },
+                "kind": {
+                  "const": "each",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "in",
+                "as"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-assert",
+              "description": "A boolean guard: aborts the flow with an error if the condition is falsey.",
+              "properties": {
+                "cond": {
+                  "$ref": "#/$defs/Node"
+                },
+                "kind": {
+                  "const": "assert",
+                  "type": "string"
+                },
+                "message": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "cond"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-pipe",
+              "description": "A chain of calls where each step's output is fed as the first argument of the next.",
+              "properties": {
+                "bind": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SymbolName"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Optional symbol bound to the chain's final result."
+                },
+                "kind": {
+                  "const": "pipe",
+                  "type": "string"
+                },
+                "steps": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-seq",
+              "description": "A sequential block; runs its body in order. Optionally binds the block's final result.",
+              "properties": {
+                "bind": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SymbolName"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "body": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "seq",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-memo",
+              "description": "Like `bind`, but pinned across turns: if the symbol is already resolved for this session, skip\nexecution and reuse the cached value (compute-once-per-session, keyed on symbol name).",
+              "properties": {
+                "effect": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/FlowEffect"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "kind": {
+                  "const": "memo",
+                  "type": "string"
+                },
+                "name": {
+                  "$ref": "#/$defs/SymbolName"
+                },
+                "ty": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/TypeRef"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "value": {
+                  "$ref": "#/$defs/Node"
+                }
+              },
+              "required": [
+                "kind",
+                "name",
+                "value"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-parallel",
+              "description": "Concurrent fan-out: run independent branches, binding each branch's result to its name.",
+              "properties": {
+                "branches": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Branch"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "parallel",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-await",
+              "description": "Pause until an external event/input arrives.",
+              "properties": {
+                "as_type": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/TypeRef"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "binding": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SymbolName"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "condition": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Node"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Optional pure condition. A false condition skips this top-level suspension point; this\nkeeps decision points authored and durable without nesting `await` inside control flow."
+                },
+                "kind": {
+                  "const": "await",
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "source"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-retry",
+              "description": "Retry a body on failure with optional backoff. Fatal errors (policy denial, unknown op) are\nnever retried. `backoff` may be `\"none\"` | `\"linear\"` | `\"exponential\"`.",
+              "properties": {
+                "backoff": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "bind": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SymbolName"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "body": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "delay_ms": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "kind": {
+                  "const": "retry",
+                  "type": "string"
+                },
+                "max": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "kind",
+                "max"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-try",
+              "description": "Structured error handling: run `body`; on failure bind the error string to `catch` and run\n`handler`. If the handler also errors, propagate that error.",
+              "properties": {
+                "body": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "catch": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SymbolName"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "handler": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "try",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-confirm",
+              "description": "Explicit human-in-the-loop gate. Calls the existing `Approver` — `--yes` and TUI modal\nhandle it automatically. Body only runs on approval; on denial the node errors.\n`risk` may be `\"low\"` | `\"medium\"` | `\"high\"` | `\"critical\"`.",
+              "properties": {
+                "body": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "confirm",
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "risk": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "message"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-loop",
+              "description": "Time-bounded iteration. `for_ms` is required (the analyzer rejects unbounded loops).\n`every_ms` is the inter-iteration sleep (0 = tight). `until` is an early-exit condition.",
+              "properties": {
+                "bind": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SymbolName"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "body": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "every_ms": {
+                  "default": 0,
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "for_ms": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "kind": {
+                  "const": "loop",
+                  "type": "string"
+                },
+                "until": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Node"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "for_ms"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-race",
+              "description": "First-wins concurrency: run branches in parallel and return as soon as the first\nsucceeds. `timeout_ms` is required; if no branch succeeds within it the node errors.\n`bind` names the symbol that receives the winning branch's result.",
+              "properties": {
+                "bind": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SymbolName"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "branches": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Branch"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "race",
+                  "type": "string"
+                },
+                "timeout_ms": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "kind",
+                "timeout_ms"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-throttle",
+              "description": "Rate-limit body execution: at most `max` dispatches per `window_ms` sliding window.\nThe token bucket is tracked in the session store keyed by `name`; plan authors declare intent,\nruntime enforces. `name` must be unique within a session to avoid bucket collisions.",
+              "properties": {
+                "body": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "throttle",
+                  "type": "string"
+                },
+                "max": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "name": {
+                  "description": "Stable bucket name — keyed in the session store so the limit persists across turns.",
+                  "type": "string"
+                },
+                "window_ms": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "kind",
+                "name",
+                "max",
+                "window_ms"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-debounce",
+              "description": "Coalesce rapid re-invocations: wait `wait_ms` after the last trigger before running body.\nIn a `loop`/`watch` context the body only executes when things have settled.\n`name` is used as a stable key so debounce state survives across turns.",
+              "properties": {
+                "body": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "debounce",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Stable key name for this debounce site.",
+                  "type": "string"
+                },
+                "wait_ms": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "kind",
+                "name",
+                "wait_ms"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-unless",
+              "description": "Negated conditional: run `body` only when `cond` is falsey. Sugar for `when !cond`;\nthe body may contain any nodes (reads, writes, sub-plans — anything).",
+              "properties": {
+                "body": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "cond": {
+                  "$ref": "#/$defs/Node"
+                },
+                "kind": {
+                  "const": "unless",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "cond"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-verify",
+              "description": "Run a command and assert its output contains an expected substring; abort the flow with a\nstructured error if it does not. `cmd` is any node that produces a string (typically a\n`bash` call); `expect` is the substring the output must contain.",
+              "properties": {
+                "cmd": {
+                  "$ref": "#/$defs/Node"
+                },
+                "expect": {
+                  "$ref": "#/$defs/Node"
+                },
+                "kind": {
+                  "const": "verify",
+                  "type": "string"
+                },
+                "message": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "cmd",
+                "expect"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-return",
+              "description": "End the flow with a value.",
+              "properties": {
+                "kind": {
+                  "const": "return",
+                  "type": "string"
+                },
+                "value": {
+                  "$ref": "#/$defs/Node"
+                }
+              },
+              "required": [
+                "kind",
+                "value"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-peek",
+              "description": "Read the current in-session value of a named symbol without any filesystem IO.\nReturns the symbol's stored value, or an empty string if the symbol is not yet bound.",
+              "properties": {
+                "kind": {
+                  "const": "peek",
+                  "type": "string"
+                },
+                "name": {
+                  "$ref": "#/$defs/SymbolName"
+                }
+              },
+              "required": [
+                "kind",
+                "name"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-var",
+              "description": "Reference a bound symbol.",
+              "properties": {
+                "kind": {
+                  "const": "var",
+                  "type": "string"
+                },
+                "name": {
+                  "$ref": "#/$defs/SymbolName"
+                }
+              },
+              "required": [
+                "kind",
+                "name"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-lit",
+              "description": "A literal value (raw JSON, as written in the AST by the compiler front-end).",
+              "properties": {
+                "kind": {
+                  "const": "lit",
+                  "type": "string"
+                },
+                "value": true
+              },
+              "required": [
+                "kind",
+                "value"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-thing",
+              "description": "A reference to an external thing.",
+              "properties": {
+                "kind": {
+                  "const": "thing",
+                  "type": "string"
+                },
+                "thing": {
+                  "$ref": "#/$defs/ThingRef"
+                }
+              },
+              "required": [
+                "kind",
+                "thing"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-expr",
+              "description": "Pure inline computation. `formula` is a safe whitelist expression over named variables:\narithmetic (`+ - * /`, `round(x,n)`, `abs`, `min`, `max`, `sum`), comparison\n(`== != < <= > >=`), boolean (`&& || !`, `true`/`false`, `any`, `all`, `has`), string\nfunctions (`len/lower/upper/trim/replace/repeat/reverse/contains/concat/join/split`), list\nhelpers (`first`/`last`), string literals (`'…'`/`\"…\"`), lists, and objects. Dotted names\nsuch as `it.author.name` descend object fields leniently (missing/null/non-object hops read\nas `\"\"`). `+` adds when both sides are numeric and concatenates otherwise. Because it yields a\nbool, an `expr` is also a valid `when`/`unless`/`until`/`assert` condition. `vars` maps\nvariable names to node expressions (only `Lit` and `Var` are valid). No IO, no approval gate.\nExamples: `expr(\"price * 2\", {\"price\": $btc})`, `expr(\"it.state == 'ok' && len(tags) > 0\", …)`.",
+              "properties": {
+                "formula": {
+                  "type": "string"
+                },
+                "kind": {
+                  "const": "expr",
+                  "type": "string"
+                },
+                "vars": {
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "default": {},
+                  "type": "object"
+                }
+              },
+              "required": [
+                "kind",
+                "formula"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-fmt",
+              "description": "Pure string interpolation. `template` is a string with `{name}` placeholders substituted\nfrom already-bound session symbols (same `{name}`/`{{name}}` syntax as `Lit` interpolation).\nNo IO, no approval gate. Example: `fmt(\"BTC: {price} | Double: {doubled}\")`.",
+              "properties": {
+                "kind": {
+                  "const": "fmt",
+                  "type": "string"
+                },
+                "template": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "template"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-jq",
+              "description": "Pure JSON path extraction. `path` is a dot-path string (e.g. `\".bitcoin.usd\"` or\n`\"results[0].value\"`) applied to the JSON content of `input` (a `Var` or `Lit` node).\nNo IO, no approval gate. Example: `jq(\".bitcoin.usd\", $raw)`.\n\n`optional` selects the traversal-through-missing-data policy. When `false` — the\ndefault for native `$x.field` sugar — an absent object key, an out-of-range index, or a field\naccess on a non-object is a loud error, so a typo'd field name fails fast instead of silently\nreading empty. When `true` — native `$x.field?` sugar, or a legacy JSON AST that omitted the\nflag — such a miss yields `null`. A present-but-`null` field is never an error in either mode.",
+              "properties": {
+                "input": {
+                  "$ref": "#/$defs/Node"
+                },
+                "kind": {
+                  "const": "jq",
+                  "type": "string"
+                },
+                "optional": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "path",
+                "input"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-parse",
+              "description": "Pure type coercion. Converts the string result of a `jq` or `fmt` node into a typed\nvalue. `as_type` is one of `\"f64\"`, `\"i64\"`, `\"bool\"`, `\"json\"`, `\"string\"`.\nNo IO, no approval gate. Example: `parse(jq(\".price\", $raw), as: \"f64\")`.",
+              "properties": {
+                "as": {
+                  "type": "string"
+                },
+                "kind": {
+                  "const": "parse",
+                  "type": "string"
+                },
+                "value": {
+                  "$ref": "#/$defs/Node"
+                }
+              },
+              "required": [
+                "kind",
+                "value",
+                "as"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-ctx",
+              "description": "Build a bounded, budgeted **context pack** from existing symbols. Resolves `include` (minus\n`exclude`) to its members, then — when `budget` is set — shrinks the pack *at evaluation* by\nvisibility tier then declared order until within the char budget, recording any dropped members\nin the run trace. Produces a `Ctx` value bound to `name`. Pure: it selects and labels existing\nvalues, performing no IO (the load-bearing elevation of PRD §13 explicit context management).",
+              "properties": {
+                "budget": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "exclude": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/SymbolName"
+                  },
+                  "type": "array"
+                },
+                "include": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/SymbolName"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "ctx",
+                  "type": "string"
+                },
+                "name": {
+                  "$ref": "#/$defs/SymbolName"
+                },
+                "purpose": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "name"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-ctx_append",
+              "description": "Accrete more symbols into an existing context pack (the `+=` marker). Immutably rebinds `ctx`\nto a *new* `Ctx` value (preserving the audit chain `$pack@1 → @2`) with `add` appended, then\nre-applies the pack's budget. Pure.",
+              "properties": {
+                "add": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/SymbolName"
+                  },
+                  "type": "array"
+                },
+                "ctx": {
+                  "$ref": "#/$defs/SymbolName"
+                },
+                "kind": {
+                  "const": "ctx_append",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "ctx"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-match",
+              "description": "Multi-way **exhaustive** branch: evaluate `subject` (a literal or bound symbol), then run the\nbody of the first `case` whose `value` equals it — by JSON equality, so a *string* subject does\nnot equal a *numeric* literal. If none match, run `default`. A deterministic replacement for\nchains of `when`. To branch on an op's result, bind it first (`$s = call(); match $s {…}`) or\nuse `route`. The analyzer requires at least one case; at runtime an unmatched subject with no\n`default` is an error — the exhaustiveness guard-rail.",
+              "properties": {
+                "cases": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/MatchCase"
+                  },
+                  "type": "array"
+                },
+                "default": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "match",
+                  "type": "string"
+                },
+                "subject": {
+                  "$ref": "#/$defs/Node"
+                }
+              },
+              "required": [
+                "kind",
+                "subject"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-route",
+              "description": "Model-routed branch — the signature *bounded non-determinism* primitive. Run `selector`\n(typically a `!model` op) to produce a label, then run the `case` whose `label` it names. The\ncases are fixed and analyzer-validated: the model chooses *which* declared branch runs, never\n*what*. Falls back to `default` when the label matches no case (an error if `default` is empty).",
+              "properties": {
+                "cases": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/RouteCase"
+                  },
+                  "type": "array"
+                },
+                "default": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "route",
+                  "type": "string"
+                },
+                "selector": {
+                  "$ref": "#/$defs/Node"
+                }
+              },
+              "required": [
+                "kind",
+                "selector"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-fallback",
+              "description": "Ordered \"first that succeeds wins\" selector: run each branch in `branches` in turn; the first\nthat completes without error and yields a non-empty result wins and becomes the node's result.\nOn a branch error (or empty result) the next is tried — so a *side-effecting* branch that\nreturns empty will still fall through and the next branch also runs (attempts stream live, as\nin `try`/`retry`). If every branch errors, the last error propagates. Lighter than `try` for\ngraceful degradation (cheap path → else expensive path). `bind` names the winning result.",
+              "properties": {
+                "bind": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SymbolName"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "branches": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/FallbackBranch"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "fallback",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-timeout",
+              "description": "Bound the wall-clock of a sub-flow: run `body` with a `ms` deadline. If it does not finish in\ntime the node errors (an enclosing `try`/`retry` may catch it). A general reliability\nguard-rail you can wrap around anything. `bind` names the body's result.",
+              "properties": {
+                "bind": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SymbolName"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "body": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "timeout",
+                  "type": "string"
+                },
+                "ms": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "kind",
+                "ms"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-budget",
+              "description": "Cap the cost of a scope: run `body` but allow at most `limit` op dispatches within it (checked\nat statement boundaries; a nested statement can consume more than one dispatch before the next\ncheck). A first-class cost guard-rail; v1 counts dispatches (token/money budgets are a later\nrefinement). `bind` names the body's result.",
+              "properties": {
+                "bind": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SymbolName"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "body": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "budget",
+                  "type": "string"
+                },
+                "limit": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "kind",
+                "limit"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-cap_scope",
+              "description": "**Capability scope**: run `body`, but restrict op dispatch to the tool names in `tools` — a\ncall to anything outside that allowlist fails closed at the runtime's dispatch gate, even when\nthe outer session policy would allow it. Capabilities only ever narrow on descent: a nested\n`with_tools` is intersected with the scope it's nested in, so an inner block can never re-grant\na tool an outer one removed. This is the runtime-enforced counterpart of an advisory tool\nrestriction — the analyzer also flags a literal-op `call` here that provably names a tool absent\nfrom `tools` (a static echo of the same rule dispatch enforces dynamically). `bind` names the\nbody's result. Native text: `with_tools [\"read\", \"grep\"]` + an indented body.",
+              "properties": {
+                "bind": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SymbolName"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "body": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "cap_scope",
+                  "type": "string"
+                },
+                "tools": {
+                  "default": [],
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-scope",
+              "description": "RAII-style **acquire → use → release** with guaranteed cleanup. Optionally run `acquire`\nfirst (binding its result to `bind`, so `body` and `finally` can name the resource), then run\n`body`; `finally` **always** runs afterward — on normal completion, an early `return`, or an\nerror — so a lock is freed / a handle closed / a temp removed no matter how the body exits.\nThe body's result, `return`, or error then propagates; a `finally` failure surfaces only when\nthe body itself succeeded (it never masks the body's own error). If `acquire` errors the\nresource was never taken, so `finally` does not run. The deterministic resource-lifecycle\nguard-rail (RAII for flows).",
+              "properties": {
+                "acquire": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Node"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "bind": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SymbolName"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "body": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "finally": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "scope",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-saga",
+              "description": "Saga / **compensating transaction**: run each `step` in order; after a step's `body` succeeds,\nits `undo` is registered. If a *later* step fails, the runtime unwinds by running the registered\n`undo` bodies in **reverse** order (best-effort — an `undo` failure is recorded but does not stop\nthe unwind), then propagates the original error. The strongest guard-rail for non-transactional\nexternal side effects (charge→refund, create→delete, reserve→release): partial work is rolled\nback rather than left dangling. A `return` inside a step is a successful early exit and does not\ncompensate (use `scope` for guaranteed cleanup on every exit).",
+              "properties": {
+                "kind": {
+                  "const": "saga",
+                  "type": "string"
+                },
+                "steps": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/SagaStep"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-once",
+              "description": "**At-most-once side effect** across re-runs — an effect-level `memo`. `label` is an explicit\nidempotency key: the first time the body runs to success in a session its result is recorded\ndurably; later re-runs in the same session skip the body and reuse the stored result. A failed\nbody records nothing and is retried. `bind` optionally names the body's result. Safety under\nre-execution (`send_email`/`charge` never fire twice). With no durable store wired (a throwaway\ninterpreter) it degrades to running every time. Requires a non-empty literal label.",
+              "properties": {
+                "bind": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SymbolName"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "body": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "once",
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "label"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-checkpoint",
+              "description": "**Durable resume point** for long-running / resumable flows. A **top-level-only** marker (like\n`await`): the first time a run reaches it, the position is recorded durably; a later re-run of\nthe *same* flow in the *same* session fast-forwards past the already-completed prefix (its\nsymbols are still durably bound and its side effects are not repeated) and continues from here.\n`label` is a human-readable name for the phase it closes. Pairs with `once` for finer-grained\nidempotency; a no-op when no durable store is wired. Requires a non-empty literal label.",
+              "properties": {
+                "kind": {
+                  "const": "checkpoint",
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "label"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-obj",
+              "description": "Build an **object value** from sub-expressions — the record constructor `{ k: expr, … }`. Each\nfield value is itself a node, so a record can mix literals and variables:\n`{ ok: true, n: $count, intent: $extract.intent }`. Pure: it assembles a value, performing no\nIO and no op dispatch. Leaves must be pure value nodes (`var`/`lit`/`jq`/`expr`/`fmt`/`obj`/\n`list`); a call or control-flow leaf is rejected by the analyzer so templates stay side-effect\nfree. This is what lets `return { … }` assemble a result from computed symbols.",
+              "properties": {
+                "fields": {
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "default": {},
+                  "type": "object"
+                },
+                "kind": {
+                  "const": "obj",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "$anchor": "node-list",
+              "description": "Build a **list value** from sub-expressions — the list constructor `[ expr, … ]`. Each item is\nitself a node (`[ $a, $b, 3 ]`). Pure, same leaf rules as [`Node::Obj`]; the array twin of the\nrecord constructor.",
+              "properties": {
+                "items": {
+                  "default": [],
+                  "items": {
+                    "$ref": "#/$defs/Node"
+                  },
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "list",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "Param": {
+          "description": "A typed flow parameter (`$ticket: Ticket`).",
+          "properties": {
+            "name": {
+              "$ref": "#/$defs/SymbolName"
+            },
+            "ty": {
+              "$ref": "#/$defs/TypeRef"
+            }
+          },
+          "required": [
+            "name",
+            "ty"
+          ],
+          "type": "object"
+        },
+        "RouteCase": {
+          "description": "One arm of a [`Node::Route`]: run `body` when the selector yields the string `label`.",
+          "properties": {
+            "body": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/Node"
+              },
+              "type": "array"
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "label"
+          ],
+          "type": "object"
+        },
+        "SagaStep": {
+          "description": "One step of a [`Node::Saga`]: a `body` of forward work plus the `undo` that compensates it if a\n*later* step fails. `undo` may be empty — an irreversible or read-only step registers no\ncompensation and is simply skipped during an unwind.",
+          "properties": {
+            "body": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/Node"
+              },
+              "type": "array"
+            },
+            "undo": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/Node"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "Selector": {
+          "description": "How a thing is addressed before resolution.",
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "query": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "query"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "SymbolName": {
+          "description": "A session symbol name (the `$draft` in source is stored without the `$`).",
+          "type": "string"
+        },
+        "ThingKind": {
+          "description": "The kind of an addressable external object.",
+          "oneOf": [
+            {
+              "enum": [
+                "context",
+                "file",
+                "person",
+                "ticket",
+                "email",
+                "repo",
+                "dataset",
+                "calendar_event",
+                "url",
+                "secret"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "description": "A domain-specific kind.",
+              "properties": {
+                "custom": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "custom"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "ThingRef": {
+          "description": "An unresolved reference to an external object.",
+          "properties": {
+            "kind": {
+              "$ref": "#/$defs/ThingKind"
+            },
+            "selector": {
+              "$ref": "#/$defs/Selector"
+            }
+          },
+          "required": [
+            "kind",
+            "selector"
+          ],
+          "type": "object"
+        },
+        "TypeRef": {
+          "description": "A (deliberately small) type reference. The analyzer checks op signatures against these; richer\nstructural typing can grow here later.",
+          "oneOf": [
+            {
+              "enum": [
+                "bool",
+                "number",
+                "string"
+              ],
+              "type": "string"
+            },
+            {
+              "const": "any",
+              "description": "The top type — matches anything (used before inference).",
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "description": "A homogeneous list.",
+              "properties": {
+                "list": {
+                  "$ref": "#/$defs/TypeRef"
+                }
+              },
+              "required": [
+                "list"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "A named/registered type (struct schema, op output type, …).",
+              "properties": {
+                "named": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "named"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$id": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "The Draft AST: an optionally-named, parameterized flow with a body. May contain unresolved\nsymbols and thing references until the analyzer runs.",
+      "properties": {
+        "body": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Node"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "params": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Param"
+          },
+          "type": "array"
+        },
+        "returns": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TypeRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "title": "DraftAst",
+      "type": "object"
+    }
+  }
+}

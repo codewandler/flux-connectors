@@ -8,6 +8,7 @@ import './custom.css'
 
 import CatalogExplorer from './components/CatalogExplorer.vue'
 import CatalogSnapshot from './components/CatalogSnapshot.vue'
+import CoreDetail from './components/CoreDetail.vue'
 import OperationDetail from './components/OperationDetail.vue'
 
 export default {
@@ -15,6 +16,7 @@ export default {
   enhanceApp({ app }) {
     app.component('CatalogExplorer', CatalogExplorer)
     app.component('CatalogSnapshot', CatalogSnapshot)
+    app.component('CoreDetail', CoreDetail)
     app.component('OperationDetail', OperationDetail)
   },
 } satisfies Theme

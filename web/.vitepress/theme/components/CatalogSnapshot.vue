@@ -5,6 +5,13 @@ import { allOperations, type Catalog } from '../../../data/catalog.mts'
 
 const props = defineProps<{ catalog: Catalog }>()
 const operationCount = computed(() => allOperations(props.catalog).length)
+const coreCount = computed(() =>
+  props.catalog.core
+    ? props.catalog.core.operations.length +
+      props.catalog.core.nodes.length +
+      props.catalog.core.capabilities.length
+    : 0
+)
 
 function availability(provider: Catalog['providers'][number]): string {
   const live = provider.operations.filter((operation) => operation.status.works).length
@@ -18,7 +25,10 @@ function availability(provider: Catalog['providers'][number]): string {
   <section class="snapshot">
     <p class="snapshot__count">
       <strong>{{ catalog.providers.length }}</strong> connectors ·
-      <strong>{{ operationCount }}</strong> operations
+      <strong>{{ operationCount }}</strong> connector operations
+      <template v-if="catalog.core">
+        · <strong>{{ coreCount }}</strong> Flux core entries
+      </template>
     </p>
     <ul class="snapshot__providers">
       <li v-for="provider in catalog.providers" :key="provider.id">

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/language/node/await.json",
+  "schema_version": 1,
+  "kind": "node",
+  "name": "await",
+  "title": "Await",
+  "description": "Pause until an external event/input arrives.",
+  "category": [
+    "language",
+    "node"
+  ],
+  "availability": "available",
+  "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-await"
+}

@@ -53,6 +53,7 @@ use connector_spec::{
 };
 
 use crate::catalog::{self, OperationRendering};
+use crate::core_catalog::CoreCatalog;
 use crate::status::{self, Status};
 
 /// The document's format version.
@@ -71,6 +72,9 @@ struct Document {
     generator: String,
     /// Every provider, ordered by id — discovery's order, and the order `crates/catalog` publishes.
     providers: Vec<ProviderEntry>,
+    /// Flux-owned built-ins and language nodes. `null` only in minimal test fixtures that do not
+    /// carry the optional vendored snapshot.
+    core: Option<CoreCatalog>,
 }
 
 /// One connector, and everything it publishes.
@@ -324,10 +328,19 @@ pub fn provider_entry(
 /// diff. Two-space indentation is `serde_json`'s own default, so the fixed point costs nothing to
 /// maintain.
 pub fn document(providers: Vec<ProviderEntry>) -> Result<String> {
+    document_with_core(providers, None)
+}
+
+/// Serialize the public catalogue with the independently owned Flux core projection.
+pub fn document_with_core(
+    providers: Vec<ProviderEntry>,
+    core: Option<CoreCatalog>,
+) -> Result<String> {
     let document = Document {
         schema_version: SCHEMA_VERSION,
         generator: crate::seam::generator(),
         providers,
+        core,
     };
     Ok(format!("{}\n", serde_json::to_string_pretty(&document)?))
 }
@@ -437,20 +450,26 @@ fn provider_auth(connector: &Connector) -> ProviderAuth {
 /// An exhaustive match, deliberately, and for the reason [`crate::catalog`] gives for its own: a
 /// variant added to the IR is a compile error here rather than a silent gap in the published
 /// document. The spellings are the IR's own `rename_all = "snake_case"` encoding, which is in turn
-/// flux's plugin-protocol vocabulary — this repository does not get to rename it.
+/// flux's plugin-protocol vocabulary — this repository does not get to rename it, with the one
+/// exception [`AuthScheme::Signing`] documents.
 fn scheme_kind(scheme: &AuthScheme) -> &'static str {
     match scheme {
         AuthScheme::Bearer => "bearer",
         AuthScheme::Basic => "basic",
         AuthScheme::Header { .. } => "header",
         AuthScheme::Query { .. } => "query",
+        AuthScheme::Signing => "signing",
     }
 }
 
 /// The header or query-parameter name the scheme carries, if it carries one.
 fn scheme_name(scheme: &AuthScheme) -> Option<String> {
     match scheme {
-        AuthScheme::Bearer | AuthScheme::Basic => None,
+        // `Signing` is here rather than folded in with the two above only to make the reason
+        // explicit: it carries no name because it is never placed on a request at all. The header a
+        // signature *arrives* in belongs to the channel binding that verifies it, not to the
+        // credential — the same secret can verify two bindings that spell their header differently.
+        AuthScheme::Bearer | AuthScheme::Basic | AuthScheme::Signing => None,
         AuthScheme::Header { name } | AuthScheme::Query { name } => Some(name.clone()),
     }
 }
@@ -508,6 +527,11 @@ mod tests {
                 "acme.access_token",
             ])],
             operations: vec![operation()],
+            events: Vec::new(),
+            channels: Vec::new(),
+            config: Vec::new(),
+            verify: None,
+            graphs: Vec::new(),
             provenance: Default::default(),
         }
     }

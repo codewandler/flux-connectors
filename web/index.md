@@ -3,22 +3,22 @@ layout: home
 
 hero:
   name: flux-connectors
-  text: SaaS operations for Flux
-  tagline: Browse typed operations, understand what each call needs, and see safety and availability information before you use it.
+  text: Operations and core contracts for Flux
+  tagline: Browse SaaS connectors, built-in transformations, language nodes, and versioned network specifications.
   image:
     src: /brand/mark.svg
     alt: ''
   actions:
     - theme: brand
-      text: Browse connectors
+      text: Browse the catalogue
       link: /explorer
     - theme: alt
       text: Current availability
       link: '#availability'
 
 features:
-  - title: Find the right operation
-    details: Explore connectors by service, then filter operations by risk, idempotency, method, and known limitations.
+  - title: One explorer, distinct layers
+    details: Explore Flux core operations and nodes separately from generated SaaS connector operations.
   - title: Know what a call needs
     details: Every operation page shows its typed parameters, request path, credentials, destination hosts, and exact Flux source.
   - title: Limits are part of the contract
@@ -29,28 +29,31 @@ features:
 import { data as catalog } from './data/catalog.data.mts'
 </script>
 
-## The connector catalogue
+## The Flux catalogue
 
-flux-connectors is a growing catalogue of SaaS operations designed for
-[Flux](https://github.com/codewandler/flux). It gives people and agents a consistent way to discover
-what a service can do, what inputs an operation accepts, how risky it is, whether it is safe to
-retry, which credentials it requires, and where the request goes.
+flux-connectors publishes a growing catalogue for [Flux](https://github.com/codewandler/flux). It
+combines generated SaaS operations with Flux-owned core contracts while keeping their ownership and
+execution models explicit.
 
 <CatalogSnapshot :catalog="catalog" />
 
 ## What you can evaluate today
 
-The catalogue is useful before live execution is enabled. For every operation you can inspect:
+The catalogue is useful before live connector execution is enabled. You can inspect:
 
-- a stable operation name and plain-language description;
+- built-in transformations and their complete tool schemas;
+- language nodes and their anchored Flux AST schemas;
+- available and planned network capabilities, including whether each is callable;
+- a stable connector operation name and plain-language description;
 - HTTP method, request path, typed parameters, and published schemas;
 - risk and idempotency metadata for approval and retry decisions;
 - required credentials and destination hosts;
 - the exact Flux operation source; and
 - shared constraints plus any limitation specific to that operation.
 
-Open the [connector and operation explorer](/explorer) to compare the current surface or deep-link
-directly to one operation.
+Open the [connector and Flux core explorer](/explorer) to compare the current surface or deep-link
+directly to an entry. Canonical JSON specifications are published under
+`https://flux.codewandler.org/v1/`.
 
 ## Availability {#availability}
 

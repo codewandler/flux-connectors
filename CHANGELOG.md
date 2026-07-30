@@ -7,6 +7,240 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The Fly.io connector**, the seventeenth provider — nine Machines operations under a `machines`
+  service, authority `io.fly.api`, bearer token. *(Landed concurrently by another session; this entry
+  is derived from `providers/fly.toml` and the generated artifacts rather than from its author, so
+  treat the wording as descriptive rather than authoritative.)*
+
+- **A core-catalogue projection.** `flux-connectors` now validates and republishes Flux's own
+  vendored core operations from `specs/flux/core-v1.json` to `web/public/v1/`, alongside three JSON
+  schemas — 81 files, 77 core entries. The module states its boundary explicitly: *"Flux owns these
+  records. This crate checks and republishes the inert JSON; it does not register, execute,
+  reinterpret, or mirror the built-in operations in `connector-catalog`."* *(Also landed
+  concurrently; same caveat.)*
+
+- **C-102** — **a filtered view is a shareable URL.** The explorer promised "every operation has a
+  stable page you can share" — true of an operation, false of a *view*. Filter state now lives in the
+  query string, so "every destructive Shopify operation" is a link someone can send. The list can also
+  be sorted by catalogue order, id, or declared risk, with the risk order declared rather than
+  alphabetical (`destructive` would otherwise sort between `default` and `high`).
+  - Changing a filter **replaces** rather than pushes, so the back button leaves the explorer instead
+    of walking back through every keystroke of a search. VitePress ships its own router whose only
+    navigation method pushes, so this uses `history.replaceState`, passing `history.state` through
+    untouched — that object holds the scroll position the router restores.
+  - An unknown or stale parameter degrades to a wider view rather than erroring, so a shared link
+    outlives a renamed connector.
+
+- **C-100** — **the explorer renders outside the prose column.** It was designed against 6 providers
+  and 25 operations and now indexes 16, 18 services and 88, inside a content column VitePress caps at
+  688px — so sixteen cards rendered two-across and the filter bar wrapped to two rows. The cap is a
+  rule keyed on `has-aside`, so the page that must be wide is the page that must not carry an aside:
+  content column 688px → 1025px, provider grid 2 → 3 columns, filter bar 2 rows → 1. Prose pages are
+  deliberately untouched — the doc column is right for paragraphs.
+  - Four columns is **not** delivered and moved to C-103: a fourth track needs a 248px minimum and
+    the card header measures 273px min-content because it does not wrap, so it needs a card
+    restructure rather than a layout change.
+
+- **C-101** — **the explorer surfaces services.** The catalogue publishes 18 services across 16
+  connectors and the site showed none of them, so Google Workspace's three read as one. A provider
+  card now lists the services it publishes with their operation counts and their `api_version` where
+  it differs from the connector's; the operation list gains a service filter derived from the
+  catalogue; and an operation row names its service where the connector has more than one.
+  - The reserved `default` service is still rendered **nowhere** — it is elided from every published
+    address by design, and a UI that named it would contradict that. Fifteen single-surface cards
+    therefore grow no services list.
+  - `slack` gains an `Address` row carrying its published `com.slack.api:v1`. That gid *is* the
+    reserved service's, with `default` already elided by the address grammar, so the name is still
+    unrendered — and the strict alternative would have satisfied the requirement with zero instances
+    against today's catalogue, which is the vacuous pass the suite's own discipline exists to prevent.
+  - The hand-maintained-data guard was widened to forbid service names and addresses in explorer
+    sources, so the filter cannot silently start naming a vendor's service.
+
+- **C-94** — **the flow graph**: a connector can compose its own members into a flow — an event wakes
+  it, an operation reads, a gate guards, an operation writes — which lowers to **one Flux `op`**. Four
+  waves had already built the vocabulary without naming it: an operation is a call node, an event is a
+  source node, an `oip` is a global node id, and the dotted `wire` grammar is an edge.
+  `crates/connector-spec/src/graph.rs`.
+  - **It is not the second language the north star forbids, and the evidence is the repository's own
+    history.** Every past rejection was an *expression* language — a template DSL, JSONPath, a
+    vendor's remote expression evaluator. Every acceptance was declarative structure that compiles to
+    Flux. So **no node carries a formula**: a gate's condition is a port reference, one of seven
+    operators and a literal, and *this repository generates the Flux expression*.
+    `NodeKind::free_text` destructures every variant exhaustively, so a field added later fails to
+    compile until somebody classifies it — and there is deliberately no `Formula` role.
+  - **A projection, not a layer.** `flux_lang::ast::Node` has 43 kinds and this repository constructs
+    nine; every node names the existing variant it is — `Throttle`, `Confirm`, `Retry`, `When`, `Jq`,
+    `Fmt`, `Obj`, `Lit`.
+  - **Structural rules Flux's semantics dictate, not style.** A cycle is refused because Flux has no
+    `goto`. Data convergence is free — a diamond is legal, since a statement may read any bound symbol
+    — but a value leaves a control region only through a port the region declares.
+  - **A `gate` exports nothing.** It lowers to `when`, which has no else here, so a symbol bound
+    inside is *unbound* on the false path and reading it afterwards fails at runtime, long after the
+    build passed. `retry`/`throttle`/`approval` always run their body or fail, so they may export —
+    the contrast that shows the rule is about semantics rather than a blanket ban.
+  - **Boundary nodes** — `trigger`, `schedule`, `endpoint` — declare what wakes a flow, take no
+    inputs, sit in no region, and are emitted nowhere. flux lifts only `op` declarations; the operator
+    writes the two-line program, as C-63 already establishes for the poll transport.
+  - **Edges are symbols the compiler owns**, so an author never sees or names one — which is what
+    makes action-proxy's silent `$emit` shadowing unrepresentable here. Node ids are author-stable,
+    deliberately unlike flux's positional `NodeId`, which any edit invalidates.
+
+- **C-90** — **credential addressing**: a tenant's credential for a connector now has a stable,
+  derivable address, so a secret store can be wrapped in a convention instead of every deployment
+  inventing one. `crates/connector-spec/src/credential.rs`.
+  ```
+  tenants/9f3a…/com.slack.api/signing_secret          # `default` service elided
+  tenants/9f3a…/com.zendesk.api/support/api_token
+  ```
+  - **A convention, not a client.** The address is pure and derived from `pid` + service; anything
+    that opens a socket is a host library outside the compile path (C-91). `Layout` is the seam —
+    "wrap a simple Vault store with some conventions" is a decorator, and `TenantLayout` is the
+    blessed default so two deployments cannot quietly diverge.
+  - **The API version is deliberately absent.** A credential path is never the `gid`, because a token
+    must survive the vendor's v2 migration — putting the version in the path would force every tenant
+    to re-provision on a change that did not affect their credential.
+  - **The leaf drops the vendor prefix**: `zendesk.api_token` is the flat-namespace name and the path
+    already carries the authority. A prefix disagreeing with the connector id is refused, since it
+    would render a plausible path under the wrong vendor.
+  - `Connector::credential_ref_for` keeps its three outcomes distinguishable, because they have
+    different owners: a bad tenant is the caller's error, a missing authority is `Ok(None)` (the same
+    answer `gid_of` gives), and a path is neither.
+
+- **C-86** — **the connector configuration surface**: a connector now declares what a *human* must
+  supply before it can run, so a product can generate a working "Connect this integration" form from
+  the connector alone. Everything else in this repository models how a credential reaches the wire;
+  nothing modelled how it gets there in the first place.
+  - **Configuration has two levels**, and neither this repository nor flux had the distinction:
+    *operator* (set once per vendor — the OAuth app registration) and *connection* (set once per
+    tenant — the subdomain, the token). Conflating them leaks the product's own credential to every
+    customer, or serves exactly one of them. `Level` is **derived** from what a field binds, never
+    authored, so an author cannot get it wrong.
+  - A `[[config]]` field carries `label`, `help`, `example`, `format`, `required`, `secret` and
+    `docs_url`, and `binds` says where the answer goes — `endpoint.<var>`, `credential.<name>`,
+    `username.<name>`, `oauth.client_id`, `oauth.client_secret`.
+  - **`format` is a closed enum rather than a regex**, so a renderer knows the rule, the message *and*
+    the example. `example` is validated against it: a placeholder that would fail its own field is
+    worse than none, because a user copies it.
+  - A `verify` operation is declarable — the "Test connection" button. The convention already existed
+    invisibly in three providers (`freshdesk-test`, `zendesk-test`, `babelforce-agent-list`) with
+    nothing to make it findable.
+  - **Webhooks became a full exposure**: `[channels.subscription]` links a binding to the operations
+    that register it and names which parameter takes the product's callback URL; `[channels.setup]`
+    carries the manual steps for vendors with no registration API. A `webhook` binding must declare
+    one of the two. `[[events]]` gained `default` and `group`, so Slack's `message` firehose warning
+    is finally machine-readable instead of prose only a model reads.
+
+- **The auth archetype matrix** (`tests/auth_archetypes.rs`) — C-22, asked from the configuration
+  side: *what form does each kind of authentication generate?* Prefixed header, basic join with a
+  vendor marker and without one, raw-value header, no credential at all, AND/OR requirement sets, and
+  the signing secret — each drawn from a real shipped provider.
+
+- **C-82** — **channel bindings**: a connector can now describe a flux ingress surface instead of flux
+  hand-writing one per vendor. A service gains two more member kinds, so the model is
+  `provider → service → (operation | event | channel)`:
+  - An **event** is the inbound direction, keeping the vendor's own name (`app_mention`,
+    `issues.opened`).
+  - A **channel binding is a composition, not a primitive**: it names declared events for inbound and
+    a declared **operation** of the same connector for the reply. flux's Slack adapter ends by
+    hand-building a `chat.postMessage` whose three fields are the three body params of
+    `slack-chat-post-message` — an operation this repository already compiles. That is the 218 lines
+    a binding is meant to retire.
+  - Three transports — `webhook`, `socket`, `poll` — which is what makes inbound an abstraction over
+    transports rather than a synonym for webhook. `providers/slack.toml` ships **both** Socket Mode
+    and the Events API over one event set, one payload map and one reply.
+  - `Reply::result` names the parameter carrying the **journey's own output**, which no path into the
+    triggering event can reach. `HmacSpec::timestamp` says *where* a signed `{timestamp}` is read
+    from — a template can say the value is signed but not where it comes from, and a host left to
+    guess would fall back to its own clock.
+  - Payload maps reuse the existing `wire` dotted-path grammar (`event.thread_ts`), not JSONPath. One
+    path language in the repository, not two.
+  - The three kinds share **one name namespace per service** and one `#name` address fragment, which
+    settles C-66's open question. A cross-kind collision is refused; a within-kind duplicate is
+    reported by its own pass, so one problem yields one line.
+
+- **`AuthScheme::Signing`** — a credential never placed in a request, only used to verify an inbound
+  one. The one deliberate divergence from `flux_plugin_protocol::AuthScheme`, so that a webhook secret
+  is an ordinary `[[auth]]` entry and the manifest keeps naming every credential a connector requires.
+
+### Changed
+
+- **The four templated providers declare their tenant field** and lost the `SCHEMA GAP:` comment they
+  had carried since C-17 — `zendesk` `{subdomain}`, `jira` `{site}`, `shopify` `{shop}`, `freshdesk`
+  `{domain}`. The loader now **refuses** a template variable no `[[config]]` field binds, so the gap
+  cannot reopen: a connector that cannot learn its own host is one nobody can configure.
+  This closes [C-68](docs/stories/C-68-endpoint-binding.md)'s central acceptance, though in a
+  different shape than it assumed — a hosted product has no environment variables per tenant, so what
+  a connector declares is the *question to ask*, not the env var to read.
+
+- Zendesk is the fullest form the fleet has: subdomain, agent email and API token, spanning three
+  binding forms. Its help text tells a user not to type the `/token` marker Zendesk appends itself.
+
+- No generated artifact changed except `catalog.json`'s `params` field (see **Fixed**): the configuration
+  surface is in the IR and in the hash domain and reaches no artifact until
+  [C-87](docs/stories/C-87-configuration-codegen.md).
+
+- `providers/slack.toml` declares `authority = "com.slack.api"` and `api_version = "v1"`, which it had
+  none of, so its binding's reply can render as an oip. The emitted `slack.flux` is **byte-identical**
+  — the proof that a binding declares and never reaches the module. Only the slack manifest and
+  `catalog.json` moved.
+
+- `connectors.lock` entries are unaffected for the 15 providers that declare no inbound members: the
+  new `Connector` fields carry `skip_serializing_if` inside the hash domain, so nothing churns for a
+  provider nobody edited.
+
+- A test that asserted "no shipped provider declares an authority yet, so `gid` is always null" now
+  derives the expectation from the connector instead of hardcoding it.
+
+### Fixed
+
+- **A horizontal page overflow the narrow column had been hiding.** The provider card renders one
+  `<code>` per host with **no whitespace between them**, so adjacent hostnames form a single
+  unbreakable inline box. A 609px single-column card absorbed it; the two-column layout did not, and
+  it escaped the page — measured 0 → 26px at 1280 and 0 → 4px at 1366, back to 0 with the fix. The
+  hosts cell now wraps, which also gives the values the visual separation the markup never had.
+  A separate, **pre-existing** overflow at phone widths (178px, identical before and after, caused by
+  the operation list's grid) is untouched and belongs to C-103.
+
+- **`first_template_variable` reported one variable of however many.** A base URL like
+  `https://{region}.{tenant}.example` published an `unbound-base-url-template` issue naming `{region}`
+  and left `{tenant}` invisible to every consumer of `catalog.json`. Replaced with
+  `config::template_variables`, and the issue now names all of them in `params`, which was empty.
+
+### Security
+
+- **A tenant id is treated as untrusted input.** No construction can render a traversing path —
+  empty, `.`, `..` anywhere, a leading or trailing `.`, any `/`, whitespace, control characters and
+  anything over 128 characters are refused, and `validate_tenant` is public so a host can check before
+  it builds. The precedent is close to home: action-proxy puts `x-babelforce-customer-id` and
+  `x-babelforce-integration-id` — both client headers — straight into a Vault path with no validation.
+  **Validation is not provenance**, and the design says so: deriving the tenant from an authenticated
+  principal remains the host's job.
+
+- **An explicitly-spelled `default` service no longer parses.** Found while testing: it would have
+  been a second spelling of one address, and two paths for one credential is how a store ends up
+  holding it twice with nothing to say which is current. `Gid::parse` refuses it for the same reason.
+
+- **`secret` must agree with `binds`**, enforced at the loader in both directions. flux partitions
+  secret from non-secret **by type** (`AuthMethod` versus `ConfigSpec`) and enforces it host-side, so
+  a field claiming otherwise would put a contradicting source of truth in front of that enforcement.
+  A credential field declared non-secret would be logged and echoed back; a subdomain declared secret
+  would be hidden from an operator who needs to read it.
+
+- **A `verify` operation cannot be a write.** A connection test runs unattended whenever someone opens
+  a settings page, so a `high` or `destructive` operation is refused.
+
+- **A `webhook` binding cannot stay silent about verification.** It must declare an HMAC scheme or
+  state `verification = "none"` deliberately; an unset one is refused. Silence on an open endpoint is
+  how an unverified event gets presented to a flow as trusted.
+
+- **Replay is bounded by construction.** A `signed` template interpolating `{timestamp}` requires both
+  a `tolerance` and a selector naming where the timestamp is read from.
+
+- **The two directions cannot share a credential.** A verification secret must be `scheme =
+  "signing"`, and no operation may authenticate with one — enforced in both directions at the loader.
+
 ## [0.3.0] — 2026-07-30
 
 Sixteen providers, and a service level beneath them. **No provider can make a live API call yet** —

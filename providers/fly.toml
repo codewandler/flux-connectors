@@ -1,0 +1,255 @@
+# Fly.io Machines API — curated from the official OpenAPI document published at
+# https://docs.machines.dev/openapi.json (checked 2026-07-30).
+#
+# The document describes 98 operations across Apps, Machines, Organizations, Postgres, Secrets,
+# TLS certificates, Tokens and Volumes. This connector deliberately selects nine from the stable
+# machine-lifecycle path: discover regions, inspect machines and their event history, then create,
+# start, stop, restart or delete one. Account administration and adjacent resource families are not
+# smuggled into a connector whose name and service promise Machines.
+#
+# Every optional query parameter is omitted. The compiler still cannot percent-encode query values
+# (C-30), and keeping even the safe-looking numeric/boolean subset would make one provider's surface
+# depend on which characters happen to occur. The consequence worth stating is delete: Fly's
+# `force=true` is unavailable, so deleting a running Machine fails rather than killing it implicitly.
+#
+# Every optional body field is omitted too (C-56). Create exposes only `config.image`, the minimum
+# useful Machine configuration. Stop has no signal or timeout body. Start/restart send no body. The
+# generated signatures therefore never invite a caller to pass null for a field the vendor means to
+# be absent.
+#
+# There is no channel declaration. `GET .../events` is useful history but has only an optional limit,
+# no durable cursor, and cannot satisfy the repository's poll-channel contract. Fly's outbound
+# machine-event webhook belongs to its partner Extensions API rather than this generally available
+# API, so dressing it up as a public subscription would be false.
+
+id = "fly"
+vendor = "Fly.io"
+authority = "io.fly.api"
+base_url = "https://api.machines.dev/v1"
+description = "Fly.io Machines: discover regions and inspect, create, start, stop, restart or delete Machines"
+default_auth = [{ credentials = ["fly.api_token"] }]
+verify = "fly-regions-list"
+
+[[services]]
+name = "machines"
+description = "Fly Machines lifecycle and event history"
+api_version = "v1"
+
+[[auth]]
+name = "fly.api_token"
+scheme = "bearer"
+env = ["FLY_API_TOKEN"]
+description = "Fly access token, preferably scoped to the app or organization this connection manages"
+
+[[operations]]
+id = "fly-regions-list"
+service = "machines"
+method = "GET"
+path = "/platform/regions"
+description = "List Fly's available regions and identify the nearest one; also verifies the configured access token"
+risk = "low"
+idempotency = "idempotent"
+response_schema = { type = "object", properties = { nearest = { type = "string" }, regions = { type = "array", items = { type = "object" } } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error"
+code_pointer = "/status"
+
+[[operations]]
+id = "fly-machines-list"
+service = "machines"
+method = "GET"
+path = "/apps/{app_name}/machines"
+description = "List every Machine in one Fly app, without optional state filters or lease details"
+risk = "low"
+idempotency = "idempotent"
+response_schema = { type = "array", items = { type = "object", properties = { id = { type = "string" }, name = { type = "string" }, state = { type = "string" }, region = { type = "string" }, private_ip = { type = "string" } } } }
+
+[[operations.params.path]]
+name = "app_name"
+description = "Fly app name whose Machines to list"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error"
+code_pointer = "/status"
+
+[[operations]]
+id = "fly-machine-get"
+service = "machines"
+method = "GET"
+path = "/apps/{app_name}/machines/{machine_id}"
+description = "Get one Fly Machine's current configuration, state, region, addresses and recent events"
+risk = "low"
+idempotency = "idempotent"
+response_schema = { type = "object", properties = { id = { type = "string" }, name = { type = "string" }, state = { type = "string" }, region = { type = "string" }, private_ip = { type = "string" }, config = { type = "object" }, events = { type = "array", items = { type = "object" } } } }
+
+[[operations.params.path]]
+name = "app_name"
+description = "Fly app containing the Machine"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "machine_id"
+description = "Fly Machine id"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error"
+code_pointer = "/status"
+
+[[operations]]
+id = "fly-machine-events-list"
+service = "machines"
+method = "GET"
+path = "/apps/{app_name}/machines/{machine_id}/events"
+description = "List the recorded lifecycle events for one Fly Machine; this is history, not a durable event subscription"
+risk = "low"
+idempotency = "idempotent"
+response_schema = { type = "array", items = { type = "object", properties = { id = { type = "string" }, type = { type = "string" }, status = { type = "string" }, source = { type = "string" }, timestamp = { type = "integer" } } } }
+
+[[operations.params.path]]
+name = "app_name"
+description = "Fly app containing the Machine"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "machine_id"
+description = "Fly Machine id whose event history to read"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error"
+code_pointer = "/status"
+
+[[operations]]
+id = "fly-machine-create"
+service = "machines"
+method = "POST"
+path = "/apps/{app_name}/machines"
+description = "Create and launch a Fly Machine from one image using Fly's generated name and region placement; this begins billable compute"
+risk = "high"
+idempotency = "non_idempotent"
+response_schema = { type = "object", properties = { id = { type = "string" }, name = { type = "string" }, state = { type = "string" }, region = { type = "string" }, private_ip = { type = "string" }, config = { type = "object" } } }
+
+[[operations.params.path]]
+name = "app_name"
+description = "Fly app in which to create the Machine"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "image"
+wire = "config.image"
+description = "OCI image reference for the Machine, such as registry.fly.io/example:deployment-01"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error"
+code_pointer = "/status"
+
+[[operations]]
+id = "fly-machine-start"
+service = "machines"
+method = "POST"
+path = "/apps/{app_name}/machines/{machine_id}/start"
+description = "Start a stopped Fly Machine, restoring service and beginning billable compute"
+risk = "high"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "app_name"
+description = "Fly app containing the Machine"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "machine_id"
+description = "Fly Machine id to start"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error"
+code_pointer = "/status"
+
+[[operations]]
+id = "fly-machine-stop"
+service = "machines"
+method = "POST"
+path = "/apps/{app_name}/machines/{machine_id}/stop"
+description = "Stop a running Fly Machine using the API's default signal and timeout, interrupting its service"
+risk = "high"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "app_name"
+description = "Fly app containing the Machine"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "machine_id"
+description = "Fly Machine id to stop"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error"
+code_pointer = "/status"
+
+[[operations]]
+id = "fly-machine-restart"
+service = "machines"
+method = "POST"
+path = "/apps/{app_name}/machines/{machine_id}/restart"
+description = "Restart a Fly Machine using the API's default signal and timeout, causing a service interruption"
+risk = "high"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "app_name"
+description = "Fly app containing the Machine"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "machine_id"
+description = "Fly Machine id to restart"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error"
+code_pointer = "/status"
+
+[[operations]]
+id = "fly-machine-delete"
+service = "machines"
+method = "DELETE"
+path = "/apps/{app_name}/machines/{machine_id}"
+description = "Permanently delete a stopped Fly Machine. Forced deletion is intentionally unavailable, so a running Machine is refused instead of killed implicitly"
+risk = "destructive"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "app_name"
+description = "Fly app containing the Machine"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "machine_id"
+description = "Fly Machine id to delete permanently"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error"
+code_pointer = "/status"

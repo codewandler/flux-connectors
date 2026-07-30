@@ -1,0 +1,41 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/data/transform/skip.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "skip",
+  "title": "Skip",
+  "description": "Drop first `n` items (mirror of `top`); `n <= 0` returns unchanged; `n >= len` returns `[]`.",
+  "category": [
+    "data",
+    "transform"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [],
+    "description": "Drop first `n` items (mirror of `top`); `n <= 0` returns unchanged; `n >= len` returns `[]`.",
+    "effects": [],
+    "group": "cognition",
+    "idempotency": "idempotent",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": true,
+          "type": "array"
+        },
+        "n": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "n"
+      ],
+      "type": "object"
+    },
+    "name": "skip",
+    "risk": "low"
+  }
+}

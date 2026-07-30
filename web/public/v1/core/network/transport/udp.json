@@ -1,0 +1,16 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/network/transport/udp.json",
+  "schema_version": 1,
+  "kind": "capability",
+  "name": "udp",
+  "title": "UDP",
+  "description": "Guarded datagram access; planned pending destination and reply-source rules.",
+  "category": [
+    "network",
+    "transport"
+  ],
+  "availability": "planned",
+  "callable": false,
+  "operation_ids": []
+}

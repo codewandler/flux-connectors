@@ -36,6 +36,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{AuthMethod, AuthRequirement};
+use crate::config::ConfigField;
+use crate::graph::Graph;
+use crate::inbound::{ChannelBinding, EventDecl};
 
 /// A JSON Schema, carried verbatim.
 ///
@@ -449,8 +452,9 @@ pub struct Connector {
     /// The reverse-DNS authority this provider publishes under (`com.amazonaws`) — the `pid` of
     /// C-37's address scheme, and the leading component of every service gid.
     ///
-    /// Optional: a connector that declares none has no rendered address yet, which is the state all
-    /// six shipped providers are in. See [`crate::address`].
+    /// Optional: a connector that declares none has no rendered address at all. Every shipped
+    /// provider was in that state until `slack` needed one — a channel binding's reply renders as an
+    /// oip, and an address missing its authority is not an address. See [`crate::address`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authority: Option<String>,
     /// The vendor's API version for this connector, as the *default* for its services.
@@ -489,9 +493,44 @@ pub struct Connector {
     /// list means the connector is unauthenticated by default.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub default_auth: Vec<AuthRequirement>,
-    /// The operations this connector exposes.
+    /// The operations this connector exposes — the **outbound** call direction.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub operations: Vec<Operation>,
+    /// The events this connector receives — the **inbound** call direction.
+    ///
+    /// An operation is flux calling the vendor; an [`EventDecl`] is the vendor calling flux. Both are
+    /// members of a [`Service`], and both share one name namespace within it — see
+    /// [`member_names_of`](Self::member_names_of).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub events: Vec<EventDecl>,
+    /// The ingress surfaces this connector describes, each composing events with a reply operation.
+    ///
+    /// The third member kind, and the one that is not a primitive: see [`crate::inbound`] for why a
+    /// [`ChannelBinding`] is a composition of the two above rather than a thing of its own.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub channels: Vec<ChannelBinding>,
+    /// What a **human** must supply before any of the above can run — see [`crate::config`].
+    ///
+    /// Not a member kind in the addressing sense: a configuration field is not something a program
+    /// calls or a trigger matches, it is a question a settings page asks. It shares the member
+    /// namespace anyway, because it shares the *host's* namespace — a config value and an operation
+    /// resolving to one name would be ambiguous wherever a host looks either up.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub config: Vec<ConfigField>,
+    /// The flows this connector composes from its own members — see [`crate::graph`].
+    ///
+    /// A graph is the only member kind that is itself a *composition of members*: its nodes name
+    /// operations, events and channel bindings this connector already declares. It lowers to one Flux
+    /// `op`, which is the only declaration flux lifts from a module.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub graphs: Vec<Graph>,
+    /// The operation a host calls to prove the configuration works — a "Test connection" button.
+    ///
+    /// Read-shaped and cheap by construction: `freshdesk-test` is a bounded contact read,
+    /// `babelforce-agent-list` doubles as one. Both already existed as a convention nothing declared,
+    /// so nothing could use them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verify: Option<String>,
     /// Where this connector came from.
     #[serde(default, skip_serializing_if = "provenance_is_empty")]
     pub provenance: Provenance,
@@ -503,8 +542,9 @@ fn provenance_is_empty(provenance: &Provenance) -> bool {
 }
 
 /// `serde(default)` for [`Operation::service`]: an operation that names none belongs to the reserved
-/// [`DEFAULT_SERVICE`].
-fn default_service() -> String {
+/// [`DEFAULT_SERVICE`]. Shared with the two other member kinds in [`crate::inbound`], which carry the
+/// same field for the same reason.
+pub(crate) fn default_service() -> String {
     DEFAULT_SERVICE.to_owned()
 }
 
@@ -512,7 +552,7 @@ fn default_service() -> String {
 /// `service = "default"` produce **identical bytes**. One meaning, one encoding — and the encoding of
 /// every operation shipped before services existed is unchanged, which is what keeps
 /// `connectors.lock` from churning for a connector nobody edited.
-fn is_default_service(service: &str) -> bool {
+pub(crate) fn is_default_service(service: &str) -> bool {
     service == DEFAULT_SERVICE
 }
 
@@ -587,6 +627,80 @@ impl Connector {
             .filter(move |operation| operation.service == service)
     }
 
+    /// The events belonging to one service, in IR order. The inbound half of the partition
+    /// [`operations_of`](Self::operations_of) documents.
+    pub fn events_of<'a>(&'a self, service: &'a str) -> impl Iterator<Item = &'a EventDecl> {
+        self.events
+            .iter()
+            .filter(move |event| event.service == service)
+    }
+
+    /// The channel bindings belonging to one service, in IR order.
+    pub fn channels_of<'a>(&'a self, service: &'a str) -> impl Iterator<Item = &'a ChannelBinding> {
+        self.channels
+            .iter()
+            .filter(move |channel| channel.service == service)
+    }
+
+    /// The configuration fields belonging to one service, in IR order.
+    pub fn config_of<'a>(&'a self, service: &'a str) -> impl Iterator<Item = &'a ConfigField> {
+        self.config
+            .iter()
+            .filter(move |field| field.service == service)
+    }
+
+    /// A configuration field by name.
+    pub fn config_field(&self, name: &str) -> Option<&ConfigField> {
+        self.config.iter().find(|field| field.name == name)
+    }
+
+    /// The graphs belonging to one service, in IR order.
+    pub fn graphs_of<'a>(&'a self, service: &'a str) -> impl Iterator<Item = &'a Graph> {
+        self.graphs.iter().filter(move |g| g.service == service)
+    }
+
+    /// A graph by name.
+    pub fn graph(&self, name: &str) -> Option<&Graph> {
+        self.graphs.iter().find(|g| g.name == name)
+    }
+
+    /// Every member name of one service — operations, then events, then channels, then config.
+    ///
+    /// **The three kinds share one namespace**, which is why this returns them together rather than
+    /// leaving a caller to concatenate three lists and get the rule wrong. Two reasons it has to be
+    /// one namespace, and the second is the load-bearing one:
+    ///
+    /// 1. All three project into the same address space. `com.slack.api:v1#slack` must denote one
+    ///    thing, and an [`Oip`](crate::Oip) carries no kind discriminator to tell two apart.
+    /// 2. All three project into flux's declaration namespace. An operation is an `op` a model calls
+    ///    by name and an event is a trigger label; a collision would resolve differently depending on
+    ///    which surface asked, which is the kind of ambiguity that is cheap to forbid now and
+    ///    impossible to fix after publication.
+    ///
+    /// The loader refuses a duplicate, so on a loaded connector this list has no repeats.
+    pub fn member_names_of<'a>(&'a self, service: &'a str) -> Vec<&'a str> {
+        self.operations_of(service)
+            .map(|operation| operation.id.as_str())
+            .chain(self.events_of(service).map(|event| event.name.as_str()))
+            .chain(
+                self.channels_of(service)
+                    .map(|channel| channel.name.as_str()),
+            )
+            .chain(self.config_of(service).map(|field| field.name.as_str()))
+            .chain(self.graphs_of(service).map(|graph| graph.name.as_str()))
+            .collect()
+    }
+
+    /// An event by name.
+    pub fn event(&self, name: &str) -> Option<&EventDecl> {
+        self.events.iter().find(|event| event.name == name)
+    }
+
+    /// A channel binding by name.
+    pub fn channel(&self, name: &str) -> Option<&ChannelBinding> {
+        self.channels.iter().find(|channel| channel.name == name)
+    }
+
     /// The base URL a call to that service reaches: the service's own override, else the connector's.
     pub fn base_url_of(&self, service: &str) -> &str {
         self.service(service)
@@ -628,9 +742,90 @@ impl Connector {
     /// The fragment is [`Operation::id`], which stays the declarable Flux symbol — C-37's design
     /// records why the two identifiers are separate rather than one richer one.
     pub fn oip_of(&self, operation: &Operation) -> Option<crate::address::Oip> {
+        self.oip_of_member(&operation.service, &operation.id)
+    }
+
+    /// One member's `oip`, whatever its kind: `com.slack.api:v1#app-mention`.
+    ///
+    /// Operations, events and channel bindings share one namespace per service
+    /// ([`member_names_of`](Self::member_names_of)), so they share one address form and the `#`
+    /// fragment needs no kind discriminator. `name` is assumed to be a member of `service` — the
+    /// loader has already refused one that is not.
+    pub fn oip_of_member(&self, service: &str, name: &str) -> Option<crate::address::Oip> {
         Some(crate::address::Oip {
-            gid: self.gid_of(&operation.service)?,
-            operation: operation.id.clone(),
+            gid: self.gid_of(service)?,
+            operation: name.to_owned(),
+        })
+    }
+
+    /// Where one tenant's value for one of this connector's credentials is kept.
+    ///
+    /// ```text
+    /// tenants/<tenant>/com.zendesk.api/api_token
+    /// ```
+    ///
+    /// The three outcomes are distinct on purpose, because they have different owners:
+    ///
+    /// - `Err` — **the caller's tenant id is unusable.** It is untrusted input, so this is the
+    ///   expected failure and it names what is wrong with it.
+    /// - `Ok(None)` — **this connector has no `authority`**, so no address renders. The same answer
+    ///   [`gid_of`](Self::gid_of) gives, for the same reason: inventing one publishes a wrong
+    ///   identifier under a contract that forbids reusing it. Fifteen of the sixteen shipped
+    ///   providers are in this state.
+    /// - `Ok(Some)` — the address.
+    ///
+    /// # The service segment
+    ///
+    /// A credential is declared at **provider** level ([`Connector::auth`]), so this always renders
+    /// the reserved [`DEFAULT_SERVICE`] — which is elided, giving the three-segment form above. The
+    /// path *can* carry a service ([`CredentialRef::new`]), and that is deliberate headroom: a vendor
+    /// whose surfaces authenticate separately is expressible the day one appears, without moving
+    /// every path that already exists. Nothing today needs it, because credential names are unique
+    /// within a provider and already distinguish the case.
+    ///
+    /// # Errors
+    ///
+    /// A reason string when the tenant id is unusable, or when `credential` is not one this connector
+    /// declares.
+    pub fn credential_ref_for(
+        &self,
+        tenant: &str,
+        credential: &str,
+    ) -> crate::Result<Option<crate::credential::CredentialRef>> {
+        let leaf = self.local_credential_name(credential)?;
+        let Some(authority) = self.authority.as_deref() else {
+            return Ok(None);
+        };
+        crate::credential::CredentialRef::new(tenant, authority, DEFAULT_SERVICE, leaf)
+            .map(Some)
+            .map_err(crate::Error::Invalid)
+    }
+
+    /// The local part of a declared credential's name — `api_token` from `zendesk.api_token`.
+    ///
+    /// Credential names are vendor-prefixed because they live in **one flat namespace** across the
+    /// connector. A path does not need the prefix: the authority above it already says which vendor,
+    /// so carrying it would say the same thing twice and put a `.` inside what must be one segment.
+    ///
+    /// # Errors
+    ///
+    /// When nothing declares `credential`, or when its prefix disagrees with the connector id — the
+    /// latter is an authoring slip that would otherwise produce a plausible path pointing at the
+    /// wrong vendor's namespace.
+    pub fn local_credential_name<'a>(&self, credential: &'a str) -> crate::Result<&'a str> {
+        if self.auth_method(credential).is_none() {
+            return Err(crate::Error::Invalid(format!(
+                "credential {credential:?} is not declared by connector {:?}",
+                self.id
+            )));
+        }
+        let prefix = format!("{}.", self.id);
+        credential.strip_prefix(&prefix).ok_or_else(|| {
+            crate::Error::Invalid(format!(
+                "credential {credential:?} is not prefixed {prefix:?}, so its local name cannot be \
+                 derived. A credential name is `<connector>.<name>` because credentials share one \
+                 flat namespace; a disagreeing prefix would render a path under the wrong vendor"
+            ))
         })
     }
 
@@ -651,10 +846,17 @@ impl Connector {
     /// # What is in it
     ///
     /// The connector's *compiled meaning*: `id`, `authority`, `api_version`, `services`, `vendor`,
-    /// `base_url`, `description`, `auth`, `default_auth`, `operations` — and, inside each operation,
-    /// its `service`. Change any of those and the generated `.flux` module changes, so the hash must
-    /// move. C-49's service fields are in for exactly this reason: a service owns the base URL a call
-    /// reaches and names the module it is emitted into.
+    /// `base_url`, `description`, `auth`, `default_auth`, `operations`, `events`, `channels` — and,
+    /// inside each member, its `service`. Change any of those and a generated artifact changes, so
+    /// the hash must move. C-49's service fields are in for exactly this reason: a service owns the
+    /// base URL a call reaches and names the module it is emitted into.
+    ///
+    /// The inbound members are in even though **nothing about them reaches the `.flux` module** — a
+    /// channel binding is declared into the manifest and the catalogue, never emitted as code. The
+    /// hash domain is the connector's compiled meaning, not the module's bytes, and a binding whose
+    /// reply operation or verification scheme moved is a connector that changed. Leaving them out
+    /// would make `flux-connectors check` blind to a drifting event schema, which is the one thing
+    /// the lockfile exists to catch.
     ///
     /// # What is out of it, and why
     ///
@@ -715,6 +917,28 @@ struct HashDomain<'a> {
     auth: &'a [AuthMethod],
     default_auth: &'a [AuthRequirement],
     operations: &'a [Operation],
+    /// Inbound members carry `skip_serializing_if` for the same reason the service fields do: a
+    /// connector that declares none must hash to what it hashed *before* they existed, or landing
+    /// them moves every `ir_sha256` in the repository and churns `connectors.lock` for 14 providers
+    /// nobody edited.
+    #[serde(skip_serializing_if = "<[EventDecl]>::is_empty")]
+    events: &'a [EventDecl],
+    #[serde(skip_serializing_if = "<[ChannelBinding]>::is_empty")]
+    channels: &'a [ChannelBinding],
+    /// In the domain, and the reasoning is worth stating because it is not obvious: a configuration
+    /// field is presentation, and presentation usually is not compiled meaning. But a field's `binds`
+    /// decides *where a value goes* — a changed binding sends a token to a different place — and its
+    /// `secret` flag decides whether a value is masked. Both are behaviour. Splitting the struct so
+    /// that only those two hashed would make `flux-connectors check` silent about a label that had
+    /// drifted from the vendor's own name for the field, which is a change a user sees.
+    #[serde(skip_serializing_if = "<[ConfigField]>::is_empty")]
+    config: &'a [ConfigField],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    verify: &'a Option<String>,
+    /// In the domain without argument: a graph *is* compiled meaning — it becomes an emitted `op`,
+    /// so a changed edge is a changed module.
+    #[serde(skip_serializing_if = "<[Graph]>::is_empty")]
+    graphs: &'a [Graph],
 }
 
 impl<'a> HashDomain<'a> {
@@ -734,6 +958,11 @@ impl<'a> HashDomain<'a> {
             auth,
             default_auth,
             operations,
+            events,
+            channels,
+            config,
+            verify,
+            graphs,
             provenance,
         } = connector;
 
@@ -751,6 +980,11 @@ impl<'a> HashDomain<'a> {
             auth,
             default_auth,
             operations,
+            events,
+            channels,
+            config,
+            verify,
+            graphs,
         }
     }
 }

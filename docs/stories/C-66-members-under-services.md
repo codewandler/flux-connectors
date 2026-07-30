@@ -7,10 +7,31 @@ priority: 5
 design: docs/designs/inbound-events.md
 epic: inbound-events
 areas: [connector-spec, connector-cli]
-note: provider → service → (operation | event) · the two gaps C-58's epic leaves open
+note: "provider → service → (operation | event | channel) · the two gaps C-58's epic leaves open. AMENDED by C-82: a third member kind, one shared namespace, `#name` reused — that half has landed"
 ---
 
 # Put inbound events under a service, and admit AsyncAPI as their front-end
+
+> **Amendment ([C-82](C-82-channel-bindings-epic.md), [channel-bindings.md](../designs/channel-bindings.md)).**
+> The member model is `provider → service → (operation | **event** | **channel**)` — a third kind,
+> because a channel binding composes an event with a reply operation and needs a home of its own.
+> Three of this story's acceptance bullets are consequently **settled and landed**:
+>
+> - **`[inbound]` under the service** — landed as a `service` field on `EventDecl` and
+>   `ChannelBinding`, defaulting to and eliding the reserved `default`, exactly as `Operation::service`
+>   does.
+> - **One name namespace per service** — landed, and widened to all three kinds. A cross-kind
+>   collision is refused; a within-kind duplicate is reported by that kind's own pass so one problem
+>   yields one line. See `Connector::member_names_of`.
+> - **How an event is addressed** — it **reuses `#name`**, which the shared namespace implies: an
+>   `Oip` carries no kind discriminator and needs none. `Connector::oip_of_member` renders all three.
+>   One caveat this story should carry forward: a member name is *wider* than an operation id (it
+>   admits `_` and `.`, so `app_mention` and `issues.opened` keep their vendor spelling), and the
+>   narrower declarable-symbol rule stays with the emitter.
+>
+> **What remains here is the AsyncAPI front-end** — the last two bullets — plus the `--service`
+> selection bullet, which now belongs to [C-83](C-83-channel-binding-codegen.md) since selection is a
+> codegen act.
 
 ## Goal
 Close the two seams between the [inbound-events epic](C-58-inbound-events-epic.md) and the rest of the

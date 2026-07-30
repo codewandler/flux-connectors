@@ -16,10 +16,15 @@ vendor = "Freshdesk"
 # `FRESHDESK_DOMAIN`, e.g. `my-company.freshdesk.com` (§4.1). The `/api/v2` prefix is part of the
 # base URL, so operation paths below are collection-relative.
 #
-# SCHEMA GAP: as with zendesk, nothing binds `{domain}` to `FRESHDESK_DOMAIN`. Reported with C-17.
+# `{domain}` is bound by the `[[config]]` field at the end of this file. Unlike zendesk, freshdesk
+# templates the *whole host* rather than one label, so the field's format is `hostname`.
 base_url = "https://{domain}/api/v2"
 
 description = "Freshdesk ticketing: list, read, create and update tickets and the contacts they belong to"
+
+# The "Test connection" operation. Its description already said so — *"Verify credentials with a
+# bounded contact read"* — in a field only a model reads.
+verify = "freshdesk-test"
 
 # ---------------------------------------------------------------------------------------------
 # Credentials — DELIBERATELY ABSENT. Read this before adding one.
@@ -497,3 +502,23 @@ name = "phone"
 description = "Contact phone number"
 required = false
 schema = { type = "string" }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration
+#
+# One field, and its absence of a companion is the point: this connector declares no credential at
+# all (see the header), so there is nothing to ask for beyond the host. A form generated from this
+# is a single input, and the connector then fails closed with a 401 — which is honest, and visible,
+# rather than a form that collects a key nothing would gate.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "domain"
+label = "Freshdesk domain"
+help = "Your full Freshdesk host, as it appears in the address bar — `acme.freshdesk.com`, including the `.freshdesk.com` part"
+example = "acme.freshdesk.com"
+# `hostname`, not `subdomain`: freshdesk templates the whole host, so a user who typed only `acme`
+# would produce `https://acme/api/v2`. The format is what lets a form catch that before a request.
+format = "hostname"
+docs_url = "https://support.freshdesk.com/en/support/solutions/articles/50000004820"
+binds = "endpoint.domain"

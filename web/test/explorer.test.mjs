@@ -47,6 +47,12 @@ function operations(document) {
   return document.providers.flatMap((provider) => provider.operations)
 }
 
+/** Every Flux-owned entry, kept separate from vendor connector operations. */
+function coreEntries(document) {
+  assert.ok(document.core, 'the generated catalogue has no Flux core section')
+  return [...document.core.operations, ...document.core.nodes, ...document.core.capabilities]
+}
+
 /** The issues an operation owns itself, as opposed to the ones it inherits. */
 function ownIssues(operation) {
   return operation.status.issues.filter((issue) => issue.scope === 'operation')
@@ -195,6 +201,81 @@ test('every operation has its own deep-linkable page', () => {
   for (const operation of operations(catalog())) {
     page('operations', `${operation.id}.html`)
   }
+})
+
+test('the Flux core catalogue is complete, versioned, and does not invent a noop', () => {
+  const document = catalog()
+  const core = document.core
+  assert.ok(core, 'catalog.json has no Flux-owned core catalogue')
+  assert.equal(core.schema_version, 1)
+  assert.ok(core.operations.length > 0, 'the core catalogue names no operations')
+  assert.ok(core.nodes.length > 0, 'the core catalogue names no language nodes')
+  assert.ok(core.capabilities.length > 0, 'the core catalogue names no network capabilities')
+  assert.ok(!coreEntries(document).some((entry) => entry.name === 'noop'))
+
+  const ids = coreEntries(document).map((entry) => entry.$id)
+  assert.equal(new Set(ids).size, ids.length, 'two core entries publish the same canonical id')
+
+  for (const entry of coreEntries(document)) {
+    assert.ok(entry.$id.startsWith('https://flux.codewandler.org/v1/'))
+    const relative = entry.$id.slice('https://flux.codewandler.org/'.length)
+    const published = path.join(webRoot, 'public', relative)
+    assert.ok(existsSync(published), `${entry.$id} has no published JSON document`)
+    assert.deepEqual(JSON.parse(readFileSync(published, 'utf-8')), entry)
+  }
+
+  for (const schema of Object.values(core.schemas)) {
+    const relative = schema.$id.slice('https://flux.codewandler.org/'.length)
+    assert.deepEqual(
+      JSON.parse(readFileSync(path.join(webRoot, 'public', relative), 'utf-8')),
+      schema
+    )
+  }
+})
+
+test('every Flux core entry has a static detail page with its contract and canonical spec', () => {
+  const document = catalog()
+  for (const entry of coreEntries(document)) {
+    const kind = entry.kind === 'capability' ? 'capabilities' : `${entry.kind}s`
+    const body = text(page('core', kind, `${entry.name}.html`))
+    assert.ok(body.includes(entry.description), `${entry.kind} ${entry.name} loses its description`)
+    assert.ok(body.includes(entry.$id), `${entry.kind} ${entry.name} loses its canonical JSON id`)
+
+    if (entry.kind === 'operation') {
+      assert.ok(body.includes(entry.tool_spec.risk), `${entry.name} loses its risk`)
+      assert.ok(body.includes(entry.tool_spec.idempotency), `${entry.name} loses its idempotency`)
+      assert.ok(body.includes(JSON.stringify(entry.tool_spec.input_schema, null, 2)))
+    } else if (entry.kind === 'node') {
+      assert.ok(body.includes(entry.schema_ref), `${entry.name} loses its AST schema anchor`)
+    } else {
+      assert.ok(body.includes(entry.callable ? 'callable' : 'not callable'))
+      for (const id of entry.operation_ids) assert.ok(body.includes(id))
+    }
+  }
+})
+
+test('planned network capabilities are clearly non-callable everywhere they appear', () => {
+  const document = catalog()
+  const planned = document.core.capabilities.filter((entry) => entry.availability === 'planned')
+  assert.ok(planned.length > 0, 'the planned capability state is not exercised')
+
+  const explorer = page('explorer.html')
+  for (const entry of planned) {
+    assert.equal(entry.callable, false)
+    assert.deepEqual(entry.operation_ids, [])
+    assert.match(
+      explorer,
+      new RegExp(`data-core-name="${entry.name}"[^>]*data-availability="planned"[^>]*data-callable="false"`)
+    )
+    assert.ok(text(page('core', 'capabilities', `${entry.name}.html`)).includes('not callable'))
+  }
+})
+
+test('the custom domain serves the catalogue and versioned specs from the origin root', () => {
+  assert.equal(readFileSync(path.join(webRoot, 'public', 'CNAME'), 'utf-8').trim(), 'flux.codewandler.org')
+  const config = readFileSync(path.join(webRoot, '.vitepress', 'config.mts'), 'utf-8')
+  assert.match(config, /const base = '\/'/)
+  assert.doesNotMatch(config, /const base = '\/flux-connectors\/'/)
 })
 
 test('an operation that owns a defect says so wherever it appears', () => {
@@ -381,7 +462,7 @@ test('the explorer is outside the content column that constrains the prose pages
 
   // Dropping the outline is only acceptable because the section headings remain link targets; they
   // are linked from elsewhere.
-  for (const anchor of ['providers', 'operations']) {
+  for (const anchor of ['core', 'providers', 'operations']) {
     assert.match(
       page('explorer.html'),
       new RegExp(`id="${anchor}"`),
@@ -751,8 +832,8 @@ test('a published service address is shown, and an absent one is shown as nothin
     .filter((service) => service.gid === null)
   assert.ok(absent.length > 0, 'every service publishes an address; the null case is untested')
   assert.doesNotMatch(
-    body,
-    /\bnull\b/,
+    explorer,
+    />\s*null\s*</,
     'the explorer renders a null the catalogue does not publish'
   )
 })

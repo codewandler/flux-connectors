@@ -11,6 +11,16 @@ note: "registering a webhook is an ordinary outbound op, so it needs no new mach
 
 # Codegen — webhook subscription ops from the vendor spec
 
+> **Amendment ([C-86](C-86-connector-configuration-epic.md)).** Subscription operations now have a
+> **declared home**: `[channels.subscription]` on the binding names `subscribe`, `unsubscribe`, `list`
+> and the `callback_param` that receives the product's public URL. Before this, a connector could emit
+> the ops and nothing linked them to the binding they registered, so a product could not offer a
+> Connect button that did anything.
+>
+> A `webhook` binding must now declare either `[channels.subscription]` or `[channels.setup]` — so a
+> vendor with no registration API (Slack) states the manual steps instead. What remains here is
+> *generating* the ops from a vendor spec; the wiring is done.
+
 ## Goal
 
 Emit the operations that register, list and remove a vendor's webhook subscription, so the inbound half

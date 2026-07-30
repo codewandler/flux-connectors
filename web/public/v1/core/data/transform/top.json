@@ -1,0 +1,43 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/data/transform/top.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "top",
+  "title": "Top",
+  "description": "Return the first `n` items of an array (fewer if the array is shorter).",
+  "category": [
+    "data",
+    "transform"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [],
+    "description": "Return the first `n` items of an array (fewer if the array is shorter).",
+    "effects": [],
+    "group": "cognition",
+    "idempotency": "idempotent",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": true,
+          "type": "array"
+        },
+        "n": {
+          "description": "Number of leading items to keep",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "n"
+      ],
+      "type": "object"
+    },
+    "name": "top",
+    "risk": "low"
+  }
+}

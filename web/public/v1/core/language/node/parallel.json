@@ -1,0 +1,15 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/language/node/parallel.json",
+  "schema_version": 1,
+  "kind": "node",
+  "name": "parallel",
+  "title": "Parallel",
+  "description": "Concurrent fan-out: run independent branches, binding each branch's result to its name.",
+  "category": [
+    "language",
+    "node"
+  ],
+  "availability": "available",
+  "schema_ref": "https://flux.codewandler.org/v1/schema/flux-ast.schema.json#node-parallel"
+}

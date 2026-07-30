@@ -1,0 +1,45 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/data/transform/flatten.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "flatten",
+  "title": "Flatten",
+  "description": "Flatten nested arrays `depth` levels (default 1, max 8). Non-array elements pass through; string elements that are JSON arrays re-parse first.",
+  "category": [
+    "data",
+    "transform"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [],
+    "description": "Flatten nested arrays `depth` levels (default 1, max 8). Non-array elements pass through; string elements that are JSON arrays re-parse first.",
+    "effects": [],
+    "group": "cognition",
+    "idempotency": "idempotent",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "depth": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "items": {
+          "items": true,
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "name": "flatten",
+    "risk": "low"
+  }
+}

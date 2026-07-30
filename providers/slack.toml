@@ -104,6 +104,13 @@
 id = "slack"
 vendor = "Slack"
 
+# The address components. Absent until the channel binding below needed them: a binding's `reply`
+# renders as an oip (`com.slack.api:v1#slack-chat-post-message`), and an address missing either half
+# is not an address. `v1` is Slack's own spelling — the Web API has carried no version segment since
+# it launched, and `slack.com/api/<method>` is v1 in the only sense the vendor uses.
+authority = "com.slack.api"
+api_version = "v1"
+
 # One host for every workspace. Unlike zendesk there is no per-tenant subdomain, so `base_url`
 # carries no `{placeholder}` for an operator to bind and `status.rs` reports no
 # `unbound-base-url-template` issue: the connector already has a valid destination URL.
@@ -138,6 +145,21 @@ scheme = "bearer"
 # runs no grant, the same provenance babelforce's bearer has.
 env = ["SLACK_BOT_TOKEN"]
 description = "Slack bot user OAuth token (xoxb-…) with chat:write, channels:history, users:read and reactions:write"
+
+[[auth]]
+name = "slack.signing_secret"
+# `signing` — the one scheme that never reaches an outgoing request. It exists so that a webhook
+# secret is a credential like any other and appears in the manifest's credential list, rather than
+# living in a second namespace an operator would have to know about separately.
+#
+# Declared here even though the binding below uses Socket Mode and does not verify signatures, and
+# that is deliberate rather than an oversight: an operator who runs Slack over the Events API instead
+# needs exactly this credential, and the request-signing scheme (`v0:{timestamp}:{body}`, HMAC-SHA256,
+# hex, `v0=`) is the row this repository's verification matrix was derived from. It is unreferenced
+# until an `events-api` binding lands, which is why nothing yet points at it.
+scheme = "signing"
+env = ["SLACK_SIGNING_SECRET"]
+description = "Slack app signing secret, used to verify inbound Events API requests. Never sent to Slack"
 
 # ---------------------------------------------------------------------------------------------
 # Operations — 4 of ~200 Web API methods
@@ -301,3 +323,152 @@ schema = { type = "string", minLength = 1 }
 
 [operations.quirks.error_envelope]
 message_pointer = "/error"
+
+# ---------------------------------------------------------------------------------------------
+# Inbound — the events Slack sends us
+#
+# Names are Slack's own (`app_mention`, not `app-mention`). An event keeps its vendor name for the
+# same reason an operation does: respelling it would be this repository renaming someone else's API,
+# and the name is what an operator writes in `trigger on "…"`.
+#
+# Only the two message-shaped events are declared. Slack publishes ~80 event types, and the same
+# selection principle that takes 4 of ~200 Web API methods applies here — an event nobody triggers on
+# is a schema to maintain and a drift check to satisfy for nothing.
+# ---------------------------------------------------------------------------------------------
+
+[[events]]
+name = "app_mention"
+description = "Someone @-mentioned the app in a channel it is a member of"
+group = "Messages"
+# Slack's Events API wraps every event in an envelope: `{type: "event_callback", event: {…}}`. The
+# schema below describes the inner `event` object, which is what the payload map addresses.
+schema = { type = "object", properties = { type = { const = "app_mention" }, user = { type = "string" }, text = { type = "string" }, channel = { type = "string" }, ts = { type = "string" }, thread_ts = { type = "string" } }, required = [
+  "type",
+  "user",
+  "text",
+  "channel",
+  "ts",
+] }
+
+[[events]]
+name = "message"
+description = "A message was posted in a channel the app is a member of. Fires for every human message, so a program that triggers on it should expect volume"
+# Off by default, and this is the field that finally makes the volume warning above actionable rather
+# than decorative: a product that defaulted this on would turn every connection into a firehose, and
+# until now the only place that risk was recorded was the prose a model reads.
+default = false
+group = "Messages"
+# `bot_id` and `subtype` are the loop guard: flux's Slack adapter drops any message carrying either,
+# because replying to our own post would recurse. They are declared here so that the condition is
+# visible in the schema rather than only in adapter code.
+schema = { type = "object", properties = { type = { const = "message" }, subtype = { type = "string" }, bot_id = { type = "string" }, user = { type = "string" }, text = { type = "string" }, channel = { type = "string" }, ts = { type = "string" }, thread_ts = { type = "string" } }, required = [
+  "type",
+  "channel",
+  "ts",
+] }
+
+# ---------------------------------------------------------------------------------------------
+# Channel bindings — the two ways Slack delivers those events
+#
+# Slack offers both, and which one an operator runs is a deployment decision: Socket Mode needs no
+# public URL and no signature, the Events API needs both. Declaring both is what makes "inbound is an
+# abstraction over transports" a claim this file demonstrates rather than asserts — same two events,
+# same payload map, same reply, two transports.
+#
+# SCHEMA GAP: the conversation fallback is not expressible. flux keys a session on `thread_ts` when
+# present and on `channel` otherwise (`conversation_id` in its Slack adapter). A payload map binds one
+# symbol to one path and has no `coalesce`, so `conversation` below names `event.thread_ts` and a
+# channel-level message binds it to nothing. Adding a fallback spelling is a real gap; inventing one
+# here without deciding it in the IR would be the homegrown DSL the north star forbids.
+# ---------------------------------------------------------------------------------------------
+
+[[channels]]
+name = "socket"
+transport = "socket"
+description = "Socket Mode — flux opens an outbound WebSocket and Slack pushes events down it. No public URL, and no signature: the connection is authenticated by the app-level token that opened it"
+events = ["app_mention", "message"]
+# No `verification`: nothing arrives unsolicited over a socket we opened and authenticated.
+discriminator = { source = "body", name = "event.type" }
+delivery_id = { source = "body", name = "event_id" }
+
+[channels.payload]
+text = "event.text"
+user = "event.user"
+channel = "event.channel"
+thread = "event.thread_ts"
+conversation = "event.thread_ts"
+
+[channels.reply]
+operation = "slack-chat-post-message"
+# `text` carries what the journey computed, which no path into the inbound event can reach. This one
+# line is `flux-channels/src/adapters/slack.rs` joining its `JourneyRun` results and passing them to
+# `with_text` — the hand-written half of that adapter, declared.
+result = "text"
+
+[channels.reply.bind]
+channel = "channel"
+thread_ts = "thread"
+
+# ---------------------------------------------------------------------------------------------
+
+[[channels]]
+name = "events-api"
+transport = "webhook"
+description = "The Events API — Slack POSTs to an endpoint the operator exposes, signing each request. Use it when an outbound WebSocket is not an option; it needs a public URL and the signing secret"
+events = ["app_mention", "message"]
+discriminator = { source = "body", name = "event.type" }
+# `event_id` is Slack's own delivery identifier and is stable across its retries, which is what makes
+# it usable for dedupe. `X-Slack-Retry-Num` counts attempts and is deliberately not used here: it
+# distinguishes the retries of one delivery rather than identifying the delivery.
+delivery_id = { source = "body", name = "event_id" }
+
+# The row this repository's verification matrix was derived from, in the vendor's own parameters
+# (docs.slack.dev/authentication/verifying-requests-from-slack). Every value here is published by
+# Slack; none of it is a convention this repository invented.
+[channels.verification.hmac]
+algorithm = "sha256"
+encoding = "hex"
+header = "X-Slack-Signature"
+prefix = "v0="
+# `v0` is Slack's signature-version marker, part of the signed string itself and not a separator.
+signed = "v0:{timestamp}:{body}"
+timestamp = { source = "header", name = "X-Slack-Request-Timestamp" }
+secret = "slack.signing_secret"
+# Slack documents five minutes, and states the reason plainly: a captured request older than that is
+# assumed to be a replay.
+tolerance = "5m"
+
+[channels.payload]
+text = "event.text"
+user = "event.user"
+channel = "event.channel"
+thread = "event.thread_ts"
+conversation = "event.thread_ts"
+
+[channels.reply]
+operation = "slack-chat-post-message"
+result = "text"
+
+[channels.reply.bind]
+channel = "channel"
+thread_ts = "thread"
+
+# Slack publishes **no Web API method that registers an Events API endpoint** — there is no
+# `events.subscribe`. Somebody opens the app configuration page and pastes a URL, and that work does
+# not stop existing because nothing declared it; it just moves into a support article that goes stale.
+# So this binding carries `[channels.setup]` rather than `[channels.subscription]`, and the loader
+# requires one of the two: a product that knows a callback URL and nothing about what to do with it
+# cannot finish an installation.
+#
+# The socket binding above needs none of this, which is the clearest statement of the tradeoff
+# between the two transports that this file can make.
+[channels.setup]
+docs_url = "https://docs.slack.dev/apis/events-api/"
+steps = [
+  "Open your app at api.slack.com/apps, or create one for this workspace",
+  "Under Event Subscriptions, turn on Enable Events",
+  "Paste the Request URL shown above and wait for Slack's `url_verification` challenge to pass",
+  "Under Subscribe to bot events, add the events you selected here",
+  "Copy the Signing Secret from Basic Information into this connection's signing secret field",
+  "Reinstall the app to the workspace so the new event scopes take effect",
+]

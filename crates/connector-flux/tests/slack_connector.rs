@@ -73,10 +73,22 @@ fn the_slack_connector_loads_and_authenticates_with_a_bearer_bot_token() {
     // stands.
     assert_eq!(connector.base_url, "https://slack.com");
 
+    // Two credentials, and each needs its own reason — that was this assertion's point when it read
+    // `1`, and it keeps it by naming them rather than by counting looser. They travel in opposite
+    // directions: the bot token authenticates every outgoing call, and the signing secret verifies
+    // incoming Events API requests and is never sent anywhere.
+    let declared: Vec<(&str, &AuthScheme)> = connector
+        .auth
+        .iter()
+        .map(|method| (method.name.as_str(), &method.scheme))
+        .collect();
     assert_eq!(
-        connector.auth.len(),
-        1,
-        "slack authenticates with one credential; a second would need a reason"
+        declared,
+        vec![
+            (CREDENTIAL, &AuthScheme::Bearer),
+            ("slack.signing_secret", &AuthScheme::Signing),
+        ],
+        "slack declares one outbound credential and one inbound one; a third would need a reason"
     );
     let method = connector
         .auth_method(CREDENTIAL)

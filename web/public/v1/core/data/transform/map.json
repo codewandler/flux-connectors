@@ -1,0 +1,59 @@
+{
+  "$schema": "https://flux.codewandler.org/v1/schema/core-entry.schema.json",
+  "$id": "https://flux.codewandler.org/v1/core/data/transform/map.json",
+  "schema_version": 1,
+  "kind": "operation",
+  "name": "map",
+  "title": "Map",
+  "description": "Project each element: `path` plucks a dotted field (missing -> `null`); `expr` evaluates a formula with `it` bound to the element. Exactly one of `path` or `expr` required.",
+  "category": [
+    "data",
+    "transform"
+  ],
+  "availability": "available",
+  "tool_spec": {
+    "access": [],
+    "description": "Project each element: `path` plucks a dotted field (missing -> `null`); `expr` evaluates a formula with `it` bound to the element. Exactly one of `path` or `expr` required.",
+    "effects": [],
+    "group": "cognition",
+    "idempotency": "idempotent",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "expr": {
+          "default": null,
+          "format": "flux-expr",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "items": {
+          "items": true,
+          "type": "array"
+        },
+        "path": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vars": {
+          "additionalProperties": true,
+          "default": null,
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "name": "map",
+    "risk": "low"
+  }
+}
