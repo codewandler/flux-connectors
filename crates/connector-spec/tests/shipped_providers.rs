@@ -104,6 +104,14 @@ fn operation_selection_stays_curated() {
         // `providers/openai.toml`.
         ("openai", 4),
         ("slack", 4),
+        // C-69 curates 8 across **three services** — gmail (message get, message send, labels list),
+        // calendar (event get, event insert, calendar get) and drive (file get, file metadata
+        // update). The cut is the query-encoding gap once more, and it bites hardest here: Gmail's
+        // and Drive's `q` search syntaxes, every `pageToken` and every `fields=` projection are
+        // excluded, which is also why the one listing that survives — `labels.list` — is the one
+        // Google gives no parameters at all. C-56 is why every declared body field is required. See
+        // the header comment in `providers/google.toml`.
+        ("google", 8),
         // C-71 curates 5 of some 300 operations in `Asana/openapi`: task get, create, update, a
         // comment, and project get. The cut is the same query-encoding gap — `opt_fields`,
         // `limit`/`offset` paging and task search are all query values. See `providers/asana.toml`.

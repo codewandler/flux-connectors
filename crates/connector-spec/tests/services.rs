@@ -347,11 +347,32 @@ fn a_default_only_connector_hashes_no_service_fields() {
     }
 }
 
-/// Today's whole catalogue is single-service, which is why this story can be meaning-preserving for
-/// it. Derived from the directory rather than a hard-coded list: a provider added tomorrow is covered
-/// without anyone remembering to add it here.
+/// **What every shipped provider must hold now that one of them declares services.**
+///
+/// C-49 pinned that *no* shipped provider declared any (`every_shipped_provider_is_single_service`).
+/// C-69 ships `google` — gmail, calendar and drive under one vendor — so that pin is now false by
+/// design, and deleting it without a replacement would leave the shipped catalogue unchecked at
+/// exactly the level this story exercises. What is asserted instead is the pair of claims the old test
+/// was standing in for, one per shape:
+///
+/// - **A declared service name is spellable**, and that is a safety property rather than a tidiness
+///   one: the name reaches the emitted `<provider>-<service>.flux` — so an unvalidated one lets a
+///   provider file choose where a build writes — and it is the middle segment of every address the
+///   service publishes. The loader enforces it (`an_unspellable_service_name_is_refused` above, over
+///   the hostile spellings); this is the claim over what ships. It also refuses the reserved name and
+///   requires that a declared service actually own operations, so no provider can ship a service that
+///   emits an empty module.
+/// - **A single-service provider still declares nothing at all**, which is the byte-identity property
+///   the reshape rests on: eleven of the twelve shipped providers encode no `services`, no `service`,
+///   and therefore hash exactly what they hashed before services existed.
+///
+/// Derived from the directory rather than a hard-coded list, and it fails when *no* provider declares
+/// services: without a multi-service one shipping, the first half of this test would pass vacuously
+/// and the emitted-per-service path would be covered by fixtures only.
 #[test]
-fn every_shipped_provider_is_single_service() {
+fn every_shipped_service_is_spellable_and_a_single_service_provider_declares_none() {
+    let mut multi_service = Vec::new();
+
     for path in shipped() {
         let source = std::fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
@@ -359,16 +380,57 @@ fn every_shipped_provider_is_single_service() {
         let connector = provider::load(&format!("providers/{name}"), &source)
             .unwrap_or_else(|error| panic!("providers/{name} does not load: {error}"))
             .connector;
-        let encoded = connector.canonical_json().expect("the IR encodes");
-        assert!(
-            !encoded.contains("\"services\""),
-            "providers/{name} declares services; this test pins that today's catalogue does not"
-        );
-        assert!(
-            !encoded.contains("\"service\""),
-            "providers/{name} places an operation outside the `default` service"
-        );
+
+        if connector.is_default_only() {
+            let encoded = connector.canonical_json().expect("the IR encodes");
+            for absent in ["services", "service"] {
+                assert!(
+                    !encoded.contains(&format!("\"{absent}\"")),
+                    "providers/{name} has one API surface, so it must encode no `{absent}` — \
+                     otherwise its lockfile entry and every artifact keyed by it churn for a \
+                     provider nobody edited:\n{encoded}"
+                );
+            }
+            continue;
+        }
+        multi_service.push(name.clone());
+
+        for service in connector.service_names() {
+            if let Err(reason) = connector_spec::address::validate_service_name(service) {
+                panic!(
+                    "providers/{name} declares service {service:?}, which the address grammar \
+                     refuses: {reason}. The name reaches `connectors/*-{service}.flux`"
+                );
+            }
+            assert_ne!(
+                service,
+                connector_spec::DEFAULT_SERVICE,
+                "providers/{name} declares the reserved service name"
+            );
+            assert!(
+                connector.operations_of(service).next().is_some(),
+                "providers/{name} declares service {service:?} with no operation in it, so a build \
+                 emits an empty module and manifest for it"
+            );
+        }
+
+        for operation in &connector.operations {
+            assert_ne!(
+                operation.service,
+                connector_spec::DEFAULT_SERVICE,
+                "providers/{name} declares named services, so operation `{}` cannot fall into the \
+                 reserved one",
+                operation.id
+            );
+        }
     }
+
+    assert!(
+        !multi_service.is_empty(),
+        "no shipped provider declares services, so the spelling and per-service claims above are \
+         vacuous and only fixtures cover the emitted-per-service path — C-69's `google` is the one \
+         that keeps them honest"
+    );
 }
 
 fn shipped() -> Vec<PathBuf> {

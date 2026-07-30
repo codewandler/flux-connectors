@@ -1,0 +1,526 @@
+# Google Workspace — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER, even though machine-readable descriptions exist.
+# Google publishes a *discovery document* per API — `gmail.googleapis.com/$discovery/rest?version=v1`
+# and the same for `calendar:v3` and `drive:v3` — plus community-maintained OpenAPI conversions. None
+# is vendored under `specs/` here because ingest (C-4) and the overlay (C-6) do not exist yet, and
+# these three documents together describe several hundred methods across every resource Workspace has:
+# without a selection mechanism, pointing at them would be pointing at several hundred LLM tools.
+# Google's discovery format is also not OpenAPI, so C-4 would need a second front-end for it — a
+# decision that belongs with C-4 rather than with this file.
+#
+# When C-14's fetch and C-4's ingest land, this file becomes one `[spec]` per service plus a
+# `[[patch.operations]]` selection, and **the eight operations below are the selection to reproduce** —
+# by discovery method id: `gmail.users.messages.get`, `gmail.users.messages.send`,
+# `gmail.users.labels.list`, `calendar.events.get`, `calendar.events.insert`, `calendar.calendars.get`,
+# `drive.files.get`, `drive.files.update`.
+#
+# Until then drift is undetectable by machine, exactly as for zendesk, freshdesk, github, openai,
+# slack, asana, hubspot, jira, intercom and shopify
+# (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# THIS IS THE FIRST MULTI-SERVICE PROVIDER, AND THAT IS THE POINT (C-69, C-49).
+# ---------------------------------------------------------------------------------------------
+#
+# Gmail, Calendar and Drive are one vendor, one authentication story and one billing relationship —
+# and three unrelated APIs. They are the case `docs/designs/provider-services.md` was written for, so
+# each is declared as a `[[services]]` entry and every operation below names exactly one:
+#
+#   google  ──►  gmail     ──►  message get, message send, labels list
+#               calendar   ──►  event get, event insert, calendar get
+#               drive      ──►  file get, file metadata update
+#
+# Three consequences, and each is a fact about *this* file rather than a general one:
+#
+# 1. **A build emits one module and one manifest per service** — `google-gmail.flux`,
+#    `google-calendar.flux`, `google-drive.flux` and their `.connector.toml` siblings — never a
+#    `google.flux`. Installing "Google" is not a thing anyone wants; installing Drive is.
+# 2. **Each service states its own `api_version`.** Gmail is served at `v1` while Calendar and Drive
+#    are at `v3`, which is exactly the disagreement that put `api_version` on the service instead of
+#    the connector: a single connector-level version would be right about one service and wrong about
+#    two.
+# 3. **Every operation names its service explicitly.** A provider that declares named services has no
+#    implicit `default` for an operation to fall into, so omitting `service` here is a loud loader
+#    error rather than an operation quietly emitted into a `google-default.flux` nobody asked for.
+#
+# No `authority` is declared, and therefore no address renders — `gid` is `null` in
+# `web/public/catalog.json`, the state every other shipped provider is in. That is deliberate
+# restraint rather than an omission: C-37's contract is that an address, once published, is never
+# repointed, so choosing the reverse-DNS spelling of Google's authority is a permanent decision and it
+# is not this story's to make. The per-service `api_version` values below are what an address would be
+# built from when it is.
+#
+# ---------------------------------------------------------------------------------------------
+# HOSTS: each service's own, and never a wildcard.
+# ---------------------------------------------------------------------------------------------
+#
+# Google's current documentation serves Gmail from `gmail.googleapis.com` and Calendar and Drive from
+# the shared `www.googleapis.com`. So `gmail` declares a `base_url` override and the other two inherit
+# the connector's. `http_hosts` derives from the *service's* resolved value
+# (`crates/connector-cli/src/catalog.rs`, `host_of`), which is why the manifests read
+# `gmail.googleapis.com` and `www.googleapis.com` respectively and never `*.googleapis.com`: a
+# wildcard would authorize every Google API — including the ones that spend money — from a connector
+# that reads eight endpoints.
+#
+# ---------------------------------------------------------------------------------------------
+# THE ACCESS TOKEN IS SHORT-LIVED, AND REFRESHING IT IS NOT THIS CONNECTOR'S JOB.
+# ---------------------------------------------------------------------------------------------
+#
+# A Google OAuth2 access token expires in about an hour. This file declares a bearer credential
+# sourced from `GOOGLE_ACCESS_TOKEN` and nothing else: the token arrives already minted, exactly as
+# babelforce's, slack's and asana's do.
+#
+# Refresh is *effectful acquisition* — a POST to `oauth2.googleapis.com/token` with a refresh token, a
+# client id and a client secret — and it belongs to the host, which is C-21's subject
+# (`docs/designs/unified-auth.md`, `docs/designs/auth-seam.md` §7). It must never appear in generated
+# Flux: a refresh performed inside a module would put the refresh token *and* the client secret into
+# model-visible symbols, which is the exact failure the three-axis auth model exists to prevent. The
+# operational consequence is that a long-running flow re-reads the environment variable and a stale
+# token fails closed with a 401, which is the better of the two available failures.
+#
+# Per-operation OAuth **scopes** — `gmail.readonly`, `gmail.send`, `calendar.events`,
+# `drive.metadata` and friends — are C-67's subject and there is no field for them yet. Google
+# enforces them server-side, so a token minted without `gmail.send` fails closed on
+# `google-gmail-message-send` with a 403 rather than sending anything. What is missing is the
+# *declaration*: nothing here tells an operator which scopes to ask for, so the scope list lives in
+# each operation's `description` prose until C-67 gives it a field.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: no query parameter, so every list, filter, projection and download is excluded (C-30).
+# ---------------------------------------------------------------------------------------------
+#
+# Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim into a
+# `fmt` template and flux registers no encoding op (`crates/connector-flux/src/op.rs`).
+# `zendesk-ticket-search` is the standing demonstration and AGENTS.md lists it under *Intentional
+# gaps* — a value carrying `&` does not filter, it injects a parameter. Google is the worst vendor in
+# this fleet for that gap, because its query surface is where all the power is. Excluded pending C-30:
+#
+# - **Every search.** `gmail.users.messages.list` takes `q` in Gmail's own search syntax
+#   (`from:x is:unread`, colon- and space-heavy); `drive.files.list` takes `q` in Drive's query
+#   language (`name contains 'report' and trashed = false`, quote-heavy). Shipping either would be
+#   shipping another `zendesk-ticket-search`, and Drive's would be worse: a `q` that failed to escape
+#   could widen a listing to the whole drive.
+# - **All paging**, and with it every collection endpoint. `pageToken` is an opaque server-issued
+#   string that a caller must never construct — the same shape as a Slack cursor and just as
+#   unencodable here. `gmail.users.labels.list` survives the cut precisely because it is the one
+#   listing in this selection that takes **no** parameters at all: a mailbox's labels are a bounded set
+#   and Google pages none of them.
+# - **Response projection and format switching**, which is the subtler exclusion because it changes
+#   what an operation *returns* rather than which records it selects. `fields=` (Google's partial
+#   response syntax, comma-and-parenthesis-heavy) is unavailable everywhere, so each operation returns
+#   the API's default representation. Two specific consequences:
+#     - `google-gmail-message-get` cannot pass `format=metadata|raw`, so it returns Gmail's `full`
+#       default: the parsed MIME structure with base64url body parts.
+#     - `google-drive-file-get` cannot pass `alt=media`, so it returns **file metadata, never file
+#       content**. A content download is a different operation with a different risk profile and it is
+#       not shippable until C-30; the operation's `description` says so, because a model that assumed
+#       otherwise would report an empty document rather than fail.
+# - **Calendar's time window** (`timeMin`/`timeMax` on `events.list`) and its notification switch
+#   (`sendUpdates` on `events.insert`). The second exclusion is a safety *win*: `sendUpdates` defaults
+#   to no notification, so the event insert below cannot email anybody.
+#
+# The path surface, by contrast, is genuinely safe rather than merely untested — a path value is
+# interpolated with the same unencoded `fmt`, so it earns that claim per parameter rather than by
+# category. Every path parameter below declares a `pattern` that admits no `/`, `?`, `#` or `&`, which
+# are the four characters that could change the shape of the request. Google's own identifier
+# alphabets make that easy: a Drive file id and a Calendar event id are base64url/base32hex strings, a
+# Gmail message id is hex, and the two addressable "special" values are the literals `me` and
+# `primary`. The `pattern` is a contract a model reads and a future validator can check — **the
+# emitted Flux does not enforce it** — and that asymmetry between path and query is the whole
+# selection principle for this connector.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: no optional request-body field can be declared (C-56), so several fields are missing.
+# ---------------------------------------------------------------------------------------------
+#
+# The emitter binds every declared body field into the payload record unconditionally, so a caller who
+# leaves an optional field alone sends an explicit `null`. Google's JSON APIs type-check the members of
+# a resource and reject `null` where they expect a string or an object — and `drive.files.update` is
+# worse than a rejection, because a nullable field *is cleared* by one. A connector that offered
+# `description` on a file update would therefore erase the description because the caller did not
+# mention it, which is the worst available failure mode. Until C-56 teaches the emitter to omit an
+# absent field, this file declares required fields only, and what that costs is:
+#
+# - `google-gmail-message-send`: `threadId` (send as a reply inside an existing thread). Without it
+#   every send starts a new thread, even when its `In-Reply-To` header names one.
+# - `google-calendar-event-insert`: `description`, `location`, `attendees`, `recurrence`, `reminders`,
+#   `colorId`, and the `timeZone` half of both `EventDateTime` objects. Losing `attendees` is what
+#   makes the created event quiet — see that operation's `risk`. Losing `timeZone` is why both
+#   timestamps below must carry a UTC offset: an offset-less `dateTime` with no `timeZone` is the one
+#   combination Google rejects.
+# - `google-drive-file-update`: `description`, `mimeType`, `starred`, `trashed`,
+#   `modifiedTime`. `trashed` is the interesting omission — it would make the operation able to bin a
+#   file, which is a `destructive` risk tier this operation deliberately does not enter.
+#
+# A second, narrower facet of the same gap: `required` is documented as *"Whether the vendor requires
+# the parameter"*, and two fields below are marked required that Google does not itself require —
+# `summary` on the event insert and `name` on the file update. Each says so at its declaration. The
+# alternative was an operation with no caller-settable field at all, which is not an operation.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: `RateLimit` cannot express a shared per-project quota.
+# ---------------------------------------------------------------------------------------------
+#
+# Google meters these APIs as *quota units per project per user per 100 seconds* — Gmail counts 5
+# units for a `messages.get` and 100 for a `messages.send`, so the limit depends on which operations a
+# flow mixes, not on a per-endpoint request rate. `RateLimit` carries one `requests`/`per_seconds` pair
+# per operation and no notion of a weighted shared budget, so no `rate_limit` is declared: a number
+# invented here would be wrong for every mix. What *is* declared is the error envelope, so a 429 or a
+# 403 `rateLimitExceeded` at least surfaces its message rather than a bare status.
+#
+# The envelope is Google's standard one — `{"error": {"code": 403, "message": "…", "status":
+# "PERMISSION_DENIED", "errors": [{"reason": "rateLimitExceeded", …}]}}` — and it is uniform across all
+# three services, which is the one thing about this provider that does not vary per service.
+# `code_pointer` names `/error/status`, the canonical string code (`PERMISSION_DENIED`,
+# `NOT_FOUND`), rather than `/error/code`, which merely repeats the HTTP status a caller already has.
+# ---------------------------------------------------------------------------------------------
+
+id = "google"
+vendor = "Google Workspace"
+
+# The shared Google API front door, and the host Calendar and Drive are documented on. It is also the
+# default a service inherits when it declares no `base_url` of its own — `gmail` is the one that does.
+#
+# No tenant templating: unlike zendesk's `{subdomain}` and freshdesk's `{domain}` this is a bound
+# literal, so `status.rs` reports no `unbound-base-url-template` issue and the connector already has a
+# valid destination URL.
+base_url = "https://www.googleapis.com"
+
+description = "Google Workspace: read and send Gmail messages, read and create Calendar events, read and rename Drive files"
+
+# Every operation of every service authenticates the same way — one bearer token, whichever service it
+# is addressed to.
+default_auth = [{ credentials = ["google.access_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Services — three API surfaces, three versions, two hosts
+# ---------------------------------------------------------------------------------------------
+
+[[services]]
+name = "gmail"
+description = "Gmail: read a message, send a message, list a mailbox's labels"
+# Gmail's current documented endpoint. Calls to `www.googleapis.com/gmail/v1` are still answered, but
+# the vendor's reference is what a reviewer checks this file against, and it names this host.
+base_url = "https://gmail.googleapis.com"
+api_version = "v1"
+
+[[services]]
+name = "calendar"
+description = "Google Calendar: read a calendar and its events, create an event"
+api_version = "v3"
+
+[[services]]
+name = "drive"
+description = "Google Drive: read and rename a file's metadata"
+api_version = "v3"
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "google.access_token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; its value is never read here
+# and never reaches a generated artifact.
+#
+# An OAuth2 user token and a service-account token are the same thing on the wire —
+# `Authorization: Bearer <token>` — so which one an operator supplies is configuration rather than
+# connector shape. That is why no `[auth.oauth2]` block appears: flux is handed an already-minted
+# token through the environment and runs no grant. What differs between the two is the scopes the
+# token carries and how long it lives (see the header comment), neither of which this file can assert.
+env = ["GOOGLE_ACCESS_TOKEN"]
+description = "Google OAuth2 access token sent as a bearer; short-lived, and refreshed by the host rather than by generated Flux"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 8: three Gmail, three Calendar, two Drive
+#
+# Curated to what a mail-and-calendar-shaped flow executes at runtime: read a message, send one, see
+# what labels a mailbox has; read an event, create one, read the calendar it lives on; read a file's
+# metadata and rename it. Everything administrative — Admin SDK, Directory, licensing, Drive
+# permissions and sharing, Gmail filters, delegation and settings — is excluded, and so is every
+# delete: the same selection principle babelforce's 9-of-163 follows
+# (`docs/designs/provider-operation-inventory.md` §5.2).
+#
+# Each operation's `service` is stated explicitly; there is no implicit `default` to inherit.
+#
+# Op ids carry the service — `google-drive-file-get`, not `google-file-get`. Two reasons: a file, an
+# event and a message are all "get one thing by id" and would collide on shorter names, and the op id
+# is what a model sees as a tool name, so naming the surface it reaches is information rather than
+# noise. Ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only, so `op google.drive.files.get` is undeclarable (C-8, C-23).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "google-gmail-message-get"
+service = "gmail"
+method = "GET"
+path = "/gmail/v1/users/{userId}/messages/{id}"
+description = "Get one Gmail message by id, in Gmail's default `full` format: headers plus the parsed MIME structure, whose body parts are base64url-encoded. Needs the `gmail.readonly` scope (or `gmail.modify`)"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "user_id"
+wire = "userId"
+description = "The mailbox to read: the literal `me` for the token's own mailbox, or the user's email address. `me` is what a flow should use — an address here must be one the token is authorized for, and domain-wide delegation is the only way that happens"
+required = true
+schema = { type = "string", pattern = "^(me|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$", minLength = 2 }
+
+[[operations.params.path]]
+name = "message_id"
+wire = "id"
+description = "The message's id, the hex string Gmail's own listings and its `X-GM-MSGID` header report. It is not the RFC 2822 `Message-ID`"
+required = true
+schema = { type = "string", pattern = "^[A-Za-z0-9_-]+$", minLength = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/status"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "google-gmail-message-send"
+service = "gmail"
+method = "POST"
+path = "/gmail/v1/users/{userId}/messages/send"
+description = "Send a Gmail message, supplied as a complete base64url-encoded RFC 2822 message. It is delivered immediately from the token owner's mailbox and cannot be recalled. Needs the `gmail.send` scope"
+# The highest tier this connector reaches, and the reason is delivery rather than the HTTP method: the
+# message leaves the organization, is attributed to whoever owns the token, lands in a recipient's
+# inbox within seconds and cannot be un-sent. That is the "a reviewer would want to see this first"
+# case, and it is the same reasoning `github-issue-comment-add` carries — wider, because a mail
+# recipient need not be inside any workspace at all.
+risk = "high"
+# Google documents no idempotency key and no idempotency guarantee on `messages.send`: the same `raw`
+# posted twice delivers two mails with two message ids. A retry duplicates, so flux must forgo the
+# safe-retry it would otherwise wrap this in.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "user_id"
+wire = "userId"
+description = "The sending mailbox: the literal `me` for the token's own mailbox, or an email address the token is authorized to send as"
+required = true
+schema = { type = "string", pattern = "^(me|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$", minLength = 2 }
+
+# The whole message as one value, which is what Gmail's JSON send takes. The alternative — a
+# multipart/related upload with the MIME body as a second part — is a media-upload endpoint on a
+# different host path and is not expressible here at all.
+#
+# The caller assembles and encodes the RFC 2822 message, including `To`, `Subject` and the body. That
+# is a real burden and it is the vendor's design, not this connector's: Gmail has no
+# "to/subject/body" send endpoint. It is also why the `pattern` matters — base64url is
+# `[A-Za-z0-9_-]` with optional `=` padding, and a value carrying `+` or `/` is standard base64,
+# which Gmail rejects with `400 Invalid value for ByteString`.
+[[operations.params.body]]
+name = "raw"
+description = "The complete RFC 2822 message, base64url-encoded (`-` and `_` rather than `+` and `/`). Must include at least a `To` header and a body"
+required = true
+schema = { type = "string", pattern = "^[A-Za-z0-9_-]+={0,2}$", minLength = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/status"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "google-gmail-labels-list"
+service = "gmail"
+method = "GET"
+path = "/gmail/v1/users/{userId}/labels"
+description = "List every label in a mailbox — the system labels (`INBOX`, `SENT`, `SPAM`) and the user's own — as `{\"labels\": [...]}`. Needs the `gmail.readonly` scope (or `gmail.labels`)"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "user_id"
+wire = "userId"
+description = "The mailbox whose labels to list: the literal `me` for the token's own mailbox, or an authorized email address"
+required = true
+schema = { type = "string", pattern = "^(me|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$", minLength = 2 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/status"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "google-calendar-event-get"
+service = "calendar"
+method = "GET"
+path = "/calendar/v3/calendars/{calendarId}/events/{eventId}"
+description = "Get one calendar event: its summary, start and end, organizer, attendee list and status. Needs the `calendar.events.readonly` scope (or `calendar.readonly`)"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "calendar_id"
+wire = "calendarId"
+description = "The calendar the event is on: the literal `primary` for the token owner's own calendar, or a calendar address such as `team@group.calendar.google.com`"
+required = true
+schema = { type = "string", pattern = "^(primary|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$", minLength = 3 }
+
+[[operations.params.path]]
+name = "event_id"
+description = "The event's id, as Calendar's own listings report it. A recurring event's single instance carries a `_`-suffixed id (`abc123_20260130T090000Z`)"
+wire = "eventId"
+required = true
+schema = { type = "string", pattern = "^[A-Za-z0-9_-]+$", minLength = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/status"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "google-calendar-event-insert"
+service = "calendar"
+method = "POST"
+path = "/calendar/v3/calendars/{calendarId}/events"
+description = "Create a timed event on a calendar. No attendees can be declared yet, so nobody is invited and no notification is sent; invite people in Calendar afterwards. Needs the `calendar.events` scope"
+# A new object on a calendar other people may be watching, but a quiet one: with no `attendees`
+# declarable (C-56) and `sendUpdates` unavailable (C-30) the event notifies nobody, appears only on the
+# named calendar, and is trivially deletable by a human. `medium` — "writes with limited blast radius"
+# — rather than the `high` that the mail send carries.
+#
+# WHEN C-56 LANDS AND `attendees` BECOMES DECLARABLE, REVISIT THIS. Adding an attendee emails an
+# invitation, which turns this into the `high` case.
+risk = "medium"
+# Calendar documents no idempotency key on `events.insert` — the request-scoped `iCalUID` de-duplication
+# it does support belongs to `events.import`, not here — so the same body posted twice creates two
+# events. A retry duplicates.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "calendar_id"
+wire = "calendarId"
+description = "The calendar to create the event on: the literal `primary` for the token owner's own calendar, or a calendar address the token can write to"
+required = true
+schema = { type = "string", pattern = "^(primary|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$", minLength = 3 }
+
+# Not vendor-required: Calendar accepts an event with no summary and renders it as "(No title)". It is
+# declared required here because C-56 forbids an optional body field, and an event nobody can identify
+# in a calendar grid is not worth creating. See the header comment.
+[[operations.params.body]]
+name = "summary"
+description = "The event's title, as it appears in the calendar grid"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# `start` and `end` are the two fields Calendar genuinely requires, and each is an `EventDateTime`
+# object rather than a scalar — hence the `wire` paths. The `timeZone` half of each is not declarable
+# (C-56), which is why both values must carry a UTC offset: `dateTime` with no offset *and* no
+# `timeZone` is the one combination Google rejects, with `400 Missing time zone definition`.
+#
+# An all-day event uses `start.date`/`end.date` instead, which would be a second pair of body fields
+# for the same wire object and therefore a second operation. Not shipped: the two cannot coexist here,
+# because both would be required and Calendar rejects an `EventDateTime` carrying both.
+[[operations.params.body]]
+name = "start_time"
+wire = "start.dateTime"
+description = "When the event starts, RFC 3339 **with a UTC offset** — `2026-01-30T09:00:00+01:00` or `2026-01-30T08:00:00Z`. An offset-less value is rejected, because the `timeZone` field that would resolve it is not declarable yet"
+required = true
+schema = { type = "string", format = "date-time" }
+
+[[operations.params.body]]
+name = "end_time"
+wire = "end.dateTime"
+description = "When the event ends, RFC 3339 with a UTC offset. Must be after `start_time`; Calendar rejects an end that precedes its start"
+required = true
+schema = { type = "string", format = "date-time" }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/status"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "google-calendar-calendar-get"
+service = "calendar"
+method = "GET"
+path = "/calendar/v3/calendars/{calendarId}"
+description = "Get one calendar's own metadata — its summary, description, location and time zone. This is the calendar, not its events: use `google-calendar-event-get` for one of those. Needs the `calendar.readonly` scope"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "calendar_id"
+wire = "calendarId"
+description = "The calendar to read: the literal `primary` for the token owner's own calendar, or a calendar address"
+required = true
+schema = { type = "string", pattern = "^(primary|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$", minLength = 3 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/status"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "google-drive-file-get"
+service = "drive"
+method = "GET"
+path = "/drive/v3/files/{fileId}"
+description = "Get one Drive file's metadata — its id, name and MIME type. This never returns file content: downloading needs `alt=media`, which is a query parameter and therefore unavailable (C-30). Needs the `drive.metadata.readonly` scope (or `drive.readonly`)"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "file_id"
+wire = "fileId"
+description = "The file's id — the base64url-ish string in its Drive URL after `/d/`. A folder is a file too, with the folder MIME type"
+required = true
+schema = { type = "string", pattern = "^[A-Za-z0-9_-]+$", minLength = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/status"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "google-drive-file-update"
+service = "drive"
+method = "PATCH"
+path = "/drive/v3/files/{fileId}"
+description = "Rename a Drive file: sets its name and changes nothing else. It does not move, share, trash or replace the file's content. Needs the `drive.file` scope for files this token created, or `drive` for any other"
+# A write everyone with access to the file sees, and the old name is not kept anywhere a caller can
+# read it back — so it is not `low`. It is not `destructive` either: the file, its content, its
+# sharing and its revision history all survive, and a human can rename it back. `medium`.
+#
+# WHEN C-56 LANDS, `trashed` BECOMES DECLARABLE AND WOULD CHANGE THIS TIER. A field that can bin a
+# file belongs to a `destructive` operation, which means a second operation rather than a wider body
+# on this one.
+risk = "medium"
+# Drive documents no idempotency guarantee on `files.update`, and the call is observably not
+# idempotent even when it is semantically repeatable: each PATCH bumps the file's `version` and
+# `modifiedTime` and writes a revision-history entry, so a retried rename is visible as two edits.
+# `idempotent` would be a claim Google does not make (C-69's acceptance rules that out), so the
+# direction is fail-closed: flux forgoes a safe retry.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "file_id"
+wire = "fileId"
+description = "The file to rename"
+required = true
+schema = { type = "string", pattern = "^[A-Za-z0-9_-]+$", minLength = 1 }
+
+# Not vendor-required — `files.update` accepts an empty body and changes nothing — but an operation
+# with no settable field is not an operation, and `name` is the one field a rename needs. C-56 forbids
+# declaring it optional. See the header comment.
+[[operations.params.body]]
+name = "name"
+description = "The file's new name. Drive does not require names to be unique within a folder, so this can collide with a sibling"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/status"

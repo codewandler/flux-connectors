@@ -432,7 +432,21 @@ fn request_body(
     let mut body = vec![
         // A literal today. When the endpoint moves into operator config (C-10) this one statement
         // is what changes; every URL downstream of it is already written against `{base}`.
-        bind_string(BASE, connector.base_url.trim_end_matches('/')),
+        //
+        // **The operation's own service's base URL**, not the connector's (C-49). For a
+        // `default`-only provider the two are the same string, which is why every shipped module was
+        // byte-identical when services landed; for a multi-service one they differ — Google serves
+        // Gmail from `gmail.googleapis.com` and Calendar from `www.googleapis.com` — and binding the
+        // connector's would send the request to a host that does not serve it, while the manifest
+        // that installs alongside this module named the right one. The two artifacts of one service
+        // must not disagree about where the traffic goes, and the manifest already resolves through
+        // `base_url_of`.
+        bind_string(
+            BASE,
+            connector
+                .base_url_of(&operation.service)
+                .trim_end_matches('/'),
+        ),
         bind_fmt(URL, template),
     ];
 
@@ -1050,6 +1064,38 @@ mod tests {
         assert!(
             emitted.contains(r#"$base = "https://api.example.com""#),
             "{emitted}"
+        );
+    }
+
+    /// **A service's own base URL is what its operations request** (C-49).
+    ///
+    /// The manifest a service installs with already carries `base_url_of(service)`, so an op body that
+    /// bound the *connector's* value would make the two halves of one installable unit disagree: the
+    /// module would call a host the manifest does not list, which is also the host C-10's `http_hosts`
+    /// will be derived from. Google is the shipped case — Gmail on `gmail.googleapis.com`, Calendar on
+    /// `www.googleapis.com` — and the override is honored here, at the emitter, rather than by every
+    /// provider having to repeat its host per operation.
+    #[test]
+    fn an_operations_service_base_url_overrides_the_connectors() {
+        let mut op = operation("/gmail/v1/users/me/labels", Vec::new());
+        op.service = "gmail".to_string();
+
+        let mut connector = connector("https://www.googleapis.com", op.clone());
+        connector.services = vec![connector_spec::Service {
+            name: "gmail".to_string(),
+            description: String::new(),
+            base_url: Some("https://gmail.googleapis.com/".to_string()),
+            api_version: Some("v1".to_string()),
+        }];
+
+        let emitted = emit_operation(&connector, &op).expect("a bare GET is inside the slice");
+        assert!(
+            emitted.contains(r#"$base = "https://gmail.googleapis.com""#),
+            "the op must request its own service's host, trailing slash trimmed:\n{emitted}"
+        );
+        assert!(
+            !emitted.contains("www.googleapis.com"),
+            "the connector's default host must not survive the override:\n{emitted}"
         );
     }
 }

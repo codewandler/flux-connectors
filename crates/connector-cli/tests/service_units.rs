@@ -2,14 +2,18 @@
 //!
 //! Two claims, and they pull in opposite directions, which is why they are tested together:
 //!
-//! 1. **Nothing moved.** Every provider this repository ships is single-service, so every committed
-//!    `.flux`, `.connector.toml`, per-operation rendering and generated catalogue table is a fixed
-//!    point of a rebuild *after* the reshape. This is the regression proof for the whole story: an
-//!    IR-level change that leaves 59 artifacts byte-identical is meaning-preserving for the existing
-//!    catalogue by construction rather than by inspection.
-//! 2. **Services really are the unit.** A two-service provider emits one module and one manifest per
+//! 1. **Nothing moved.** Every committed `.flux`, `.connector.toml`, per-operation rendering and
+//!    generated catalogue table is a fixed point of a rebuild. This is the regression proof for the
+//!    whole story: an IR-level change that leaves the shipped artifacts byte-identical is
+//!    meaning-preserving for the existing catalogue by construction rather than by inspection.
+//! 2. **Services really are the unit.** A multi-service provider emits one module and one manifest per
 //!    service, each carrying only its own operations and its own base URL, and one whole service can
 //!    be selected.
+//!
+//! When C-49 landed, every shipped provider was `default`-only and claim 1 was a claim about *all* of
+//! them. C-69's `google` is the first that is not, so the per-shape assertions below read each
+//! provider's own declaration rather than assuming the single-surface shape — while claim 1 still
+//! covers the whole committed tree, google included.
 //!
 //! Everything here goes through [`connector_cli::run`] or [`connector_cli::pipeline::plan`], so what
 //! is exercised is what the binary does.
@@ -51,6 +55,19 @@ fn shipped() -> Vec<String> {
     names
 }
 
+/// One shipped provider definition, through the real loader — so a claim about its *shape* is made
+/// against what ships rather than against a fixture.
+fn load(provider: &str) -> connector_spec::Connector {
+    let path = repo_root()
+        .join("providers")
+        .join(format!("{provider}.toml"));
+    let source = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
+    connector_spec::provider::load(&format!("providers/{provider}.toml"), &source)
+        .unwrap_or_else(|error| panic!("providers/{provider}.toml does not load: {error}"))
+        .connector
+}
+
 /// **The byte-identity item, stated as a test.** Every installable and catalogue artifact this
 /// repository commits is unchanged by a rebuild under services.
 ///
@@ -76,11 +93,18 @@ fn the_shipped_artifacts_are_byte_identical() {
     );
 }
 
+/// **Each shipped provider emits the pair its shape calls for, and no other.**
+///
 /// A `default`-only provider emits `<provider>.flux`, exactly as before — never a
-/// `<provider>-default.flux`. The reserved service is elided from the file name for the same reason
-/// it is elided from an address.
+/// `<provider>-default.flux`. The reserved service is elided from the file name for the same reason it
+/// is elided from an address.
+///
+/// A provider that declares services emits one suffixed pair per service and **no unsuffixed one**:
+/// `google.flux` would be an installable unit no service owns, carrying three unrelated APIs. Derived
+/// from each provider's own declaration rather than from a list here, so the two shapes are asserted
+/// against the same plan.
 #[test]
-fn every_shipped_provider_emits_its_unsuffixed_pair() {
+fn every_shipped_provider_emits_the_pair_its_shape_calls_for() {
     let workspace = Workspace::new(repo_root());
     let plan = pipeline::plan(&workspace, None).expect("every shipped provider compiles");
 
@@ -91,13 +115,41 @@ fn every_shipped_provider_emits_its_unsuffixed_pair() {
         .collect();
 
     for provider in shipped() {
-        for expected in [
+        let connector = load(&provider);
+
+        if connector.is_default_only() {
+            for expected in [
+                format!("connectors/{provider}.flux"),
+                format!("connectors/{provider}.connector.toml"),
+            ] {
+                assert!(
+                    paths.contains(&expected),
+                    "a build must still plan {expected}; it planned {paths:?}"
+                );
+            }
+            continue;
+        }
+
+        for service in connector.service_names() {
+            for expected in [
+                format!("connectors/{provider}-{service}.flux"),
+                format!("connectors/{provider}-{service}.connector.toml"),
+            ] {
+                assert!(
+                    paths.contains(&expected),
+                    "{provider} declares service `{service}`, so a build must plan {expected}; it \
+                     planned {paths:?}"
+                );
+            }
+        }
+        for unowned in [
             format!("connectors/{provider}.flux"),
             format!("connectors/{provider}.connector.toml"),
         ] {
             assert!(
-                paths.contains(&expected),
-                "a build must still plan {expected}; it planned {paths:?}"
+                !paths.contains(&unowned),
+                "{provider} declares named services, so {unowned} would be an installable unit no \
+                 service owns"
             );
         }
     }
@@ -329,6 +381,13 @@ fn an_unknown_service_is_an_error_that_names_the_available_ones() {
 /// The published catalogue carries the service, so a consumer can group by it — C-42's schema, written
 /// back to as the story requires. `default` appears here, unlike in an address: this is data about the
 /// catalogue, not a published identifier.
+///
+/// Checked against each provider's **own declaration** rather than against a fixed expectation, because
+/// the shapes now differ: eleven providers publish the single reserved service and `google` publishes
+/// three, each with its own version and — for `gmail` — its own host. A hard-coded "one service, named
+/// `default`" would have to be edited by every multi-service provider that lands, and the interesting
+/// half of the claim is per-service *agreement* with the connector anyway: a catalogue that reported
+/// the provider's base URL for a service that overrides it would send a reader to the wrong host.
 #[test]
 fn the_published_catalogue_carries_the_service() {
     let document: serde_json::Value = serde_json::from_str(
@@ -340,21 +399,52 @@ fn the_published_catalogue_carries_the_service() {
     let providers = document["providers"]
         .as_array()
         .expect("the catalogue lists providers");
-    assert!(!providers.is_empty());
+    assert_eq!(
+        providers.len(),
+        shipped().len(),
+        "the published catalogue and `providers/` disagree about which providers exist"
+    );
 
     for provider in providers {
+        let id = provider["id"]
+            .as_str()
+            .expect("a provider publishes its id");
+        let connector = load(id);
+
         let services = provider["services"]
             .as_array()
             .expect("every provider publishes its services");
+        let published: Vec<&str> = services
+            .iter()
+            .map(|service| service["name"].as_str().expect("a service is named"))
+            .collect();
         assert_eq!(
-            services.len(),
-            1,
-            "provider `{}` is single-service today",
-            provider["id"]
+            published,
+            connector.service_names(),
+            "the catalogue's services for `{id}` are not the ones it declares"
         );
-        assert_eq!(services[0]["name"], serde_json::json!("default"));
-        // No authority is declared yet, so no address renders — stated as `null`, never invented.
-        assert_eq!(services[0]["gid"], serde_json::Value::Null);
+
+        for service in services {
+            let name = service["name"].as_str().expect("a service is named");
+            assert_eq!(
+                service["base_url"].as_str(),
+                Some(connector.base_url_of(name)),
+                "`{id}`/`{name}` publishes a base URL that is not the one its calls reach"
+            );
+            assert_eq!(
+                service["api_version"].as_str(),
+                connector.api_version_of(name),
+                "`{id}`/`{name}` publishes an API version that is not the one it resolves to"
+            );
+            assert_eq!(
+                service["operation_count"].as_u64().unwrap_or_default() as usize,
+                connector.operations_of(name).count(),
+                "`{id}`/`{name}` publishes an operation count its declaration does not support"
+            );
+            // No authority is declared by any shipped provider yet, so no address renders — stated as
+            // `null`, never invented.
+            assert_eq!(service["gid"], serde_json::Value::Null);
+        }
         assert_eq!(provider["authority"], serde_json::Value::Null);
 
         let operations = provider["operations"]
@@ -371,7 +461,13 @@ fn the_published_catalogue_carries_the_service() {
              operation set"
         );
         for operation in operations {
-            assert_eq!(operation["service"], serde_json::json!("default"));
+            let service = operation["service"]
+                .as_str()
+                .expect("every operation publishes its service");
+            assert!(
+                published.contains(&service),
+                "`{id}` publishes an operation in service `{service}`, which it does not declare"
+            );
         }
     }
 }

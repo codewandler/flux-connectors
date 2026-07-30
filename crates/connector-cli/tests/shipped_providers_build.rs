@@ -85,6 +85,28 @@ fn plans(artifacts: &[PlannedArtifact], path: &str) -> bool {
         .any(|artifact| artifact.path.ends_with(&wanted))
 }
 
+/// The file name of the module one service installs — `<provider>-<service>.flux`, or
+/// `<provider>.flux` for the reserved `default` service (C-49).
+///
+/// Derived from the workspace's own path helper rather than restating the elision rule here: a second
+/// spelling of it is a second thing to keep in step, and this file would then disagree with the
+/// build about which file it is asserting on.
+fn module_file(provider: &str, service: &str) -> String {
+    file_name(workspace().service_module_path(provider, service))
+}
+
+/// The file name of the manifest that installs alongside [`module_file`].
+fn manifest_file(provider: &str, service: &str) -> String {
+    file_name(workspace().service_manifest_path(provider, service))
+}
+
+fn file_name(path: PathBuf) -> String {
+    path.file_name()
+        .expect("an artifact path names a file")
+        .to_string_lossy()
+        .into_owned()
+}
+
 /// The planned contents of one artifact path.
 fn planned(provider: &str, file: &str) -> String {
     let artifacts = plan_for(provider);
@@ -106,19 +128,27 @@ fn every_shipped_provider_compiles() {
     for provider in shipped() {
         let provider = provider.as_str();
         let artifacts = plan_for(provider);
-        let operations = load(provider).operations.len();
+        let connector = load(provider);
+        let operations = connector.operations.len();
+        let services = connector.service_names();
 
-        // The two that ship. A connector is a module *plus* a manifest, never one of them.
-        assert!(
-            plans(&artifacts, &format!("connectors/{provider}.flux")),
-            "a build of {provider} must plan connectors/{provider}.flux"
-        );
-        assert!(
-            plans(&artifacts, &format!("connectors/{provider}.connector.toml")),
-            "a build of {provider} must plan connectors/{provider}.connector.toml"
-        );
+        // The pair that ships, **once per service** (C-49): a connector is a module *plus* a
+        // manifest, never one of them, and for a multi-service provider that pair is per surface
+        // rather than per vendor.
+        for service in &services {
+            for expected in [
+                module_file(provider, service),
+                manifest_file(provider, service),
+            ] {
+                assert!(
+                    plans(&artifacts, &format!("connectors/{expected}")),
+                    "a build of {provider} must plan connectors/{expected} for service `{service}`"
+                );
+            }
+        }
 
-        // The catalog's half (C-38): the generated table, plus one rendering per operation.
+        // The catalog's half (C-38) is provider-unit rather than per service: the generated table,
+        // plus one rendering per operation.
         assert!(
             plans(
                 &artifacts,
@@ -128,9 +158,11 @@ fn every_shipped_provider_compiles() {
         );
         assert_eq!(
             artifacts.len(),
-            3 + operations,
-            "{provider} publishes {operations} operations, so a build plans its module, its \
-             manifest, its catalog table and one rendering each; it planned {} artifacts",
+            2 * services.len() + 1 + operations,
+            "{provider} publishes {operations} operations across {} service(s), so a build plans a \
+             module and a manifest per service, one catalog table, and one rendering per operation; \
+             it planned {} artifacts",
+            services.len(),
             artifacts.len()
         );
     }
@@ -138,24 +170,41 @@ fn every_shipped_provider_compiles() {
 
 /// Every generated module declares every operation its provider does — an emitter that dropped one
 /// would still produce a module that parses.
+///
+/// **In its own service's module** (C-49). The services partition the operation set, so each module
+/// carries exactly its own service's operations; asserting only that the operation appears *somewhere*
+/// under the provider would still pass if it were emitted into a sibling service's installable unit,
+/// which is a wrong `http_hosts` and a wrong address away from correct.
 #[test]
 fn every_shipped_operation_reaches_its_module() {
     for provider in shipped() {
         let provider = provider.as_str();
-        let module = planned(provider, &format!("{provider}.flux"));
-        let source =
-            std::fs::read_to_string(workspace().providers_dir().join(format!("{provider}.toml")))
-                .expect("the shipped provider file is readable");
-        let loaded = connector_spec::provider::load(&format!("providers/{provider}.toml"), &source)
-            .expect("the shipped provider file loads");
+        let connector = load(provider);
 
-        for operation in &loaded.connector.operations {
-            assert!(
-                module.contains(&format!("op {}(", operation.id))
-                    || module.contains(&format!("op {} ", operation.id)),
-                "connectors/{provider}.flux does not declare `{}`:\n{module}",
-                operation.id
-            );
+        for service in connector.service_names() {
+            let module = planned(provider, &module_file(provider, service));
+
+            for operation in connector.operations_of(service) {
+                assert!(
+                    module.contains(&format!("op {}(", operation.id))
+                        || module.contains(&format!("op {} ", operation.id)),
+                    "connectors/{} does not declare `{}`:\n{module}",
+                    module_file(provider, service),
+                    operation.id
+                );
+            }
+            for other in &connector.operations {
+                if other.service == service {
+                    continue;
+                }
+                assert!(
+                    !module.contains(&format!("op {}", other.id)),
+                    "connectors/{} declares `{}`, which belongs to service `{}`",
+                    module_file(provider, service),
+                    other.id,
+                    other.service
+                );
+            }
         }
     }
 }
@@ -294,6 +343,92 @@ fn intercom_publishes_one_host_and_no_credential_in_its_module() {
             .is_some_and(|method| method.env == [TOKEN_ENV]),
         "the connector must reference `{TOKEN_ENV}` by name, or the absence check above passes \
          vacuously"
+    );
+}
+
+/// **Google's per-service egress is narrow and no credential value reaches any artifact** (C-69).
+///
+/// Two claims the IR-level test in `crates/connector-flux/tests/google_connector.rs` cannot make,
+/// because both are properties of what the *pipeline* derives rather than of what the provider file
+/// declares:
+///
+/// - **Each service's manifest names its own host and nothing wider.** `http_hosts` is C-10's and does
+///   not exist yet; the manifest's `base_url` is the value it will derive from, so a widened one — a
+///   `*.googleapis.com`, or the union of the provider's hosts — would enlarge one service's egress
+///   allow-list to cover APIs it never calls. Google is the first shipped provider where "the union"
+///   is even a different string, so it is the first that can regress this way.
+/// - **No credential value reaches a module, a manifest, or the published catalogue.** Not the value,
+///   which does not exist in this repository, and — in generated Flux — not even the environment
+///   variable: the bearer is applied by the host at the `$auth` seam
+///   (`docs/designs/auth-seam.md`). `GOOGLE_ACCESS_TOKEN` therefore belongs in the credential
+///   *reference* the catalogue publishes and must never appear in Flux a model can read. Asserting the
+///   name is present there is what keeps the absence check from passing vacuously.
+#[test]
+fn google_publishes_one_host_per_service_and_no_credential_value() {
+    const TOKEN_ENV: &str = "GOOGLE_ACCESS_TOKEN";
+    /// The prefixes a real Google credential carries: an OAuth2 access token, an API key, and the
+    /// client-secret key name that a leaked OAuth client would travel under.
+    const VALUE_SHAPES: [&str; 3] = ["ya29.", "AIza", "client_secret"];
+
+    let connector = load("google");
+    assert!(
+        !connector.is_default_only(),
+        "this test is about a multi-service provider's per-service egress; google declaring one \
+         surface would make every claim below vacuous"
+    );
+
+    for service in connector.service_names() {
+        let expected = connector.base_url_of(service);
+        let manifest = planned("google", &manifest_file("google", service));
+        assert!(
+            manifest.contains(&format!("base_url = \"{expected}\"")),
+            "the `{service}` manifest must name its own host, never the provider's union:\n{manifest}"
+        );
+        assert!(
+            !manifest.contains('*'),
+            "no Google manifest may carry a wildcard host:\n{manifest}"
+        );
+
+        let module = planned("google", &module_file("google", service));
+        assert!(
+            module.contains(&format!("$base = \"{expected}\"")),
+            "every request in the `{service}` module must address {expected} — the host its manifest \
+             declares:\n{module}"
+        );
+        assert!(
+            !module.contains(TOKEN_ENV) && !module.contains("access_token"),
+            "the `{service}` module names a credential; the bearer is applied by the host at the \
+             `$auth` seam and generated Flux must name nothing:\n{module}"
+        );
+
+        for text in [&manifest, &module] {
+            for shape in VALUE_SHAPES {
+                assert!(
+                    !text.contains(shape),
+                    "a `{service}` artifact carries something shaped like a Google credential \
+                     (`{shape}`):\n{text}"
+                );
+            }
+        }
+    }
+
+    let catalogue = std::fs::read_to_string(workspace().root().join("web/public/catalog.json"))
+        .expect("the committed public catalogue is readable");
+    for shape in VALUE_SHAPES {
+        assert!(
+            !catalogue.contains(shape),
+            "the published catalogue carries something shaped like a Google credential (`{shape}`)"
+        );
+    }
+    assert!(
+        catalogue.contains(TOKEN_ENV),
+        "the catalogue must reference `{TOKEN_ENV}` by name, or the value checks above pass vacuously"
+    );
+    assert!(
+        connector
+            .auth_method("google.access_token")
+            .is_some_and(|method| method.env == [TOKEN_ENV]),
+        "the connector must reference `{TOKEN_ENV}` by name, so an operator knows what to set"
     );
 }
 

@@ -14,6 +14,7 @@ pub(crate) mod asana;
 pub(crate) mod babelforce;
 pub(crate) mod freshdesk;
 pub(crate) mod github;
+pub(crate) mod google;
 pub(crate) mod hubspot;
 pub(crate) mod intercom;
 pub(crate) mod jira;
@@ -31,6 +32,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &babelforce::PROVIDER,
     &freshdesk::PROVIDER,
     &github::PROVIDER,
+    &google::PROVIDER,
     &hubspot::PROVIDER,
     &intercom::PROVIDER,
     &jira::PROVIDER,
