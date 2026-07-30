@@ -55,6 +55,7 @@ _`codewandler/flux-connectors` is public as of v0.0.1, and right now the only wa
 
 ### unified auth — one model for every provider's credentials
 _Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._
+- [C-47 — Design a db.open seam so connectors can reach databases](C-47-db-open-seam.md) · Bridge · the $auth argument applied to a second transport · unblocks mysql-class connectors
 - [C-19 — Model credentials as source x acquisition x placement](C-19-unified-credential-model.md) · Bridge · extends C-2's AuthMethod · the axis split that keeps auth from going combinatorial
 
 ## Blocked

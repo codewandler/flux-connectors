@@ -52,12 +52,22 @@ vendor does. But it must be written down, or the boundary stops deciding anythin
 | **http** | ✅ fits | The thinnest possible connector; the endpoint *is* the parameter. |
 | **a2a** | ✅ fits | JSON-RPC 2.0 over HTTP (`../flux/crates/flux-a2a/src/lib.rs:2`), so it is ordinary HTTP with a structured body. |
 | **mcp** | ⚠️ partly | Expressible over its **HTTP/SSE** transport. Its **stdio** transport is not — there is no process spawning in generated Flux, by design. Ship the HTTP half, say the stdio half is out of scope. |
-| **mysql** | ❌ does not fit | A **binary wire protocol**, not HTTP. Everything this repo emits goes through `http.request`; there is no primitive a generated `.flux` could use to speak MySQL. It is also exactly what flux's existing **`sql` plugin** is for (`../flux/plugins/sql/`). |
+| **mysql** | ⛔ blocked, not impossible | A **binary wire protocol**, not HTTP — unreachable with **today's** op catalogue. See the correction below. |
 
-**mysql is the useful negative result.** It is not a matter of effort — the emitter targets
-`http.request` and a database speaks a different wire protocol entirely. A connector cannot reach it
-at all. That is precisely the line the charter boundary was drawn along, and it holds: databases are
-technology adapters and flux already ships one.
+**Correction — the original mysql verdict here was too strong.** It said a connector "cannot reach a
+database at all". That reasoning was wrong: the emitter is bound to **whatever operations flux
+registers**, not to HTTP intrinsically. A `db.open` op — abstracting the engine and resolving
+credentials host-side, exactly as the `$auth` marker does for HTTP — makes a database reachable from
+generated Flux. That seam is [C-47](C-47-db-open-seam.md).
+
+So mysql is **blocked on a missing primitive**, not impossible. Two separate questions remain, and
+both need answering before a `mysql` provider is written:
+
+1. **Technical** — does `db.open` exist? (C-47.) flux already has the pieces: a `sql` plugin
+   declaring an `sql.endpoint` and a `dsn` credential, and a `sqlite_query` builtin.
+2. **Charter** — *should* a database live here at all, given `AGENTS.md` puts technology adapters in
+   flux and flux already ships the `sql` plugin? That question is this story's, and it is unaffected
+   by C-47.
 
 ### What this needs first
 
