@@ -125,10 +125,37 @@ depends on it.** Filing it keeps the option open and honest instead of half-buil
 
 Start with two, because two is what the shipped catalogue can actually check:
 
-| role | required members | shipped candidates |
+**A slot is a set of accepted spellings, not one string.** That is a correction, and the reason is
+measured against the shipped catalogue rather than reasoned about:
+
+- `show` matches **one operation, in zendesk alone**. `get` matches **37 operations across 17
+  providers** — `jira-issue-get`, `freshdesk-ticket-get`, `intercom-conversation-get`. There is no
+  single verb the ticketing candidates share; zendesk says `show` and everyone else says `get`.
+- Renaming an operation to fix that is the worst option available. `AGENTS.md`'s service contract says
+  an address, once published, is never repointed — so `jira-issue-get → jira-issue-show` mints a new
+  address and deprecates one, to make the 17-provider majority match the single outlier.
+
+So a required member is `&[&str]` — a set any one of which fills the slot — and `required_members`
+returns a slice of those.
+
+| role | required members | providers that satisfy it |
 |---|---|---|
-| `llm_catalogue` | `list` (models), optional `get` | `openai`, `openrouter`, + `anthropic` (C-122) |
-| `ticketing` | `show`, `search`, `comment.list` | `zendesk`, `freshdesk`, `intercom`, `jira` |
+| `llm_catalogue` | `models.list` | `openai`, `openrouter` — and `anthropic` (C-122) |
+| `ticketing` | `show`\|`get`, plus `comment.list` | `zendesk`, `jira` |
+
+Two further corrections fall out of the same measurement:
+
+- **`llm_catalogue` requires `models.list`, not a bare `list`.** A bare `list` is filled by a trailing
+  `list` segment in **9 of 19** providers, only two of them legitimately. `models.list` matches
+  exactly `openai` and `openrouter`. The looseness was never in the matcher — C-120's `fills_slot`
+  is tight for multi-segment slots and was left alone on that finding — it was in the slot's spelling.
+- **`ticketing` drops `search`.** It matches zendesk only, so requiring it would make the role
+  single-vendor again. `freshdesk` and `intercom` have a `get` but publish no comment list, so they do
+  not satisfy `ticketing` today and should not be listed as though they do.
+
+Two satisfying providers per role is the floor that makes a role a contract rather than a description
+of one vendor. Both roles now clear it; neither clears it by much, which is worth knowing before a
+third role is added on the same reasoning.
 
 `ticketing` is included deliberately: a role mechanism validated by exactly one role is a mechanism
 designed around one case. Four shipped providers already fit this shape, and flux's retained
