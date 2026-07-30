@@ -12,44 +12,56 @@ defineProps<{ parameters: Parameter[] }>()
 </script>
 
 <template>
-  <table v-if="parameters.length" class="params">
-    <thead>
-      <tr>
-        <th>Parameter</th>
-        <th>In</th>
-        <th>Type</th>
-        <th>Required</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr v-for="parameter in parameters" :key="parameter.name">
-        <td>
-          <code>{{ parameter.name }}</code>
-          <div v-if="parameter.wire" class="params__wire">
-            sent as <code>{{ parameter.wire }}</code>
-          </div>
-        </td>
-        <td>{{ parameter.in }}</td>
-        <td>
-          <code>{{ schemaType(parameter.schema) }}</code>
-          <details class="params__schema">
-            <summary>JSON Schema</summary>
-            <pre><code>{{ JSON.stringify(parameter.schema, null, 2) }}</code></pre>
-          </details>
-        </td>
-        <td>{{ parameter.required ? 'required' : 'optional' }}</td>
-        <td>{{ parameter.description }}</td>
-      </tr>
-    </tbody>
-  </table>
+  <div
+    v-if="parameters.length"
+    class="params-scroll"
+    tabindex="0"
+    aria-label="Operation parameters"
+  >
+    <table class="params">
+      <thead>
+        <tr>
+          <th>Parameter</th>
+          <th>Location</th>
+          <th>Type</th>
+          <th>Required</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="parameter in parameters" :key="parameter.name">
+          <td>
+            <code>{{ parameter.name }}</code>
+            <div v-if="parameter.wire" class="params__wire">
+              sent as <code>{{ parameter.wire }}</code>
+            </div>
+          </td>
+          <td>{{ parameter.in }}</td>
+          <td>
+            <code>{{ schemaType(parameter.schema) }}</code>
+            <details class="params__schema">
+              <summary>JSON Schema</summary>
+              <pre><code>{{ JSON.stringify(parameter.schema, null, 2) }}</code></pre>
+            </details>
+          </td>
+          <td>{{ parameter.required ? 'required' : 'optional' }}</td>
+          <td>{{ parameter.description }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
   <p v-else class="params__none">This operation takes no parameters.</p>
 </template>
 
 <style scoped>
-.params {
-  display: table;
+.params-scroll {
   width: 100%;
+  overflow-x: auto;
+}
+
+.params {
+  width: 100%;
+  min-width: 720px;
   margin: 0;
 }
 

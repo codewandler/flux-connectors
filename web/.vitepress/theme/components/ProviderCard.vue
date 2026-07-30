@@ -55,7 +55,7 @@ const headline = computed(() => {
       <div>
         <dt>Auth</dt>
         <dd v-if="provider.auth.schemes.length">{{ provider.auth.schemes.join(', ') }}</dd>
-        <dd v-else class="card__warn">no credential declared</dd>
+        <dd v-else class="card__warn">not configured</dd>
       </div>
       <div>
         <dt>Base URL</dt>
@@ -76,7 +76,7 @@ const headline = computed(() => {
     </dl>
 
     <IssueNotice
-      title="Affects every operation of this provider"
+      title="Connector-wide availability limitation"
       tone="inherited"
       banner="provider"
       :provider="provider.id"

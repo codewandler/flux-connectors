@@ -1,5 +1,5 @@
 ---
-title: Provider & operation explorer
+title: Connector & operation explorer
 outline: [2, 2]
 ---
 
@@ -9,7 +9,7 @@ import { data as catalog } from './data/catalog.data.mts'
 
 # Connector & operation explorer
 
-Browse the available connectors, filter operations by provider, risk, and idempotency, then open any
+Browse the available connectors, filter operations by connector, risk, and idempotency, then open any
 operation to inspect its parameters, request path, credentials, hosts, safety metadata, and Flux
 source. Every operation has a stable page you can share directly.
 

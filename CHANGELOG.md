@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **C-48** — rewrote the root README for human evaluators, front-loaded the agent workflow and
+  generated-file boundaries in `AGENTS.md`, and recast the public site as a branded,
+  consumer-facing connector catalogue. Public catalogue schema v2 no longer publishes internal
+  design or story pointers; tests enforce that boundary and keep public logo assets in sync.
+
 ## [0.1.0] — 2026-07-30
 
 The catalogue becomes public and browsable. **No provider can make a live API call yet** — see the

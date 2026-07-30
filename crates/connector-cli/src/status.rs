@@ -136,10 +136,7 @@ pub fn of(connector: &Connector, operation: &Operation) -> Status {
             scope: Scope::Provider,
             story: "C-17",
             summary: format!(
-                "`{}` declares no credential for this operation, so the request goes out \
-                 unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's \
-                 auth shape cannot yet be expressed without routing a live secret outside flux's \
-                 secret gating.",
+                "{} has no safe credential configuration for this operation yet. Live calls are disabled rather than sending a credential outside Flux's secret protection.",
                 connector.id
             ),
             params: Vec::new(),
@@ -149,13 +146,8 @@ pub fn of(connector: &Connector, operation: &Operation) -> Status {
             code: CREDENTIAL_NOT_INJECTED,
             scope: Scope::Catalog,
             story: "C-10",
-            summary:
-                "The operation names the credential it needs, but the generated Flux does not \
-                      yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a \
-                      whole-value replacement and can compose neither a `Bearer ` prefix nor a \
-                      base64-joined Basic pair. No provider can make a live call until the auth \
-                      seam lands in flux."
-                    .to_string(),
+            summary: "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls."
+                .to_string(),
             params: Vec::new(),
         });
     }
@@ -173,23 +165,8 @@ pub fn of(connector: &Connector, operation: &Operation) -> Status {
             code: UNENCODABLE_QUERY_VALUE,
             scope: Scope::Operation,
             story: "C-30",
-            summary: format!(
-                "Query {} {} carr{} free-form text, and the generated Flux interpolates query \
-                 values verbatim — flux registers no percent-encoding op and `http.request` has no \
-                 structured `query` parameter. `&`, `#` and `+` corrupt the request, and a value \
-                 such as `x&per_page=1` injects query parameters.",
-                if unencodable.len() == 1 {
-                    "parameter"
-                } else {
-                    "parameters"
-                },
-                unencodable
-                    .iter()
-                    .map(|name| format!("`{name}`"))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                if unencodable.len() == 1 { "ies" } else { "y" },
-            ),
+            summary: "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled."
+                .to_string(),
             params: unencodable,
         });
     }
@@ -201,10 +178,7 @@ pub fn of(connector: &Connector, operation: &Operation) -> Status {
             scope: Scope::Provider,
             story: "C-17",
             summary: format!(
-                "The base URL `{}` carries the placeholder `{{{variable}}}`, and nothing yet \
-                 declares which operator setting resolves it, so the emitted URL is not a URL. The \
-                 tenant is the operator's to choose; substituting one here would invent it.",
-                connector.base_url
+                "This connector needs an operator-supplied {{{variable}}} value before it has a valid destination URL."
             ),
             params: Vec::new(),
         });

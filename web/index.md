@@ -7,7 +7,7 @@ hero:
   tagline: Browse typed operations, understand what each call needs, and see safety and availability information before you use it.
   image:
     src: /brand/mark.svg
-    alt: flux-connectors
+    alt: ''
   actions:
     - theme: brand
       text: Browse connectors

@@ -1,5 +1,7 @@
 ---
 outline: [2, 2]
+prev: false
+next: false
 ---
 
 <script setup>
@@ -13,7 +15,7 @@ const { params } = useData()
 
 <OperationDetail :catalog="catalog" :id="params.operation" />
 
-<p class="op-back"><a href="../explorer">← All providers and operations</a></p>
+<p class="op-back"><a href="../explorer">← All connectors and operations</a></p>
 
 <style scoped>
 .op-back {

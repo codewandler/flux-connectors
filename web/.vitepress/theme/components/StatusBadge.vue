@@ -15,7 +15,7 @@ const own = computed(() => ownIssues(props.operation))
 
 <template>
   <span v-if="own.length" class="badge badge--defect" :title="own[0].summary">
-    Known defect
+    Known limitation
     <span v-if="own.length > 1">&times;{{ own.length }}</span>
   </span>
   <span v-else class="badge badge--clear" title="No limitation specific to this operation">

@@ -53,7 +53,7 @@ const inherited = computed(() => (operation.value ? inheritedIssues(operation.va
 
 <template>
   <p v-if="!operation" class="missing">
-    No operation with the id <code>{{ id }}</code> is in the generated catalogue.
+    No operation with the id <code>{{ id }}</code> is in the connector catalogue.
   </p>
 
   <article
@@ -77,7 +77,7 @@ const inherited = computed(() => (operation.value ? inheritedIssues(operation.va
     </p>
 
     <IssueNotice
-      title="This operation has a defect of its own"
+      title="Known limitation for this operation"
       tone="defect"
       :issues="own"
     />
@@ -109,7 +109,7 @@ const inherited = computed(() => (operation.value ? inheritedIssues(operation.va
 
     <h2>Credentials</h2>
     <p v-if="!operation.credentials.length" class="op__note">
-      This operation names no credential, so the request goes out unauthenticated.
+      No safe credential configuration is available for this operation. Live calls are disabled.
     </p>
     <template v-else>
       <p class="op__note">
@@ -160,7 +160,7 @@ const inherited = computed(() => (operation.value ? inheritedIssues(operation.va
     </p>
 
     <IssueNotice
-      title="Conditions this operation inherits"
+      title="Current availability constraints"
       tone="inherited"
       :issues="inherited"
     />

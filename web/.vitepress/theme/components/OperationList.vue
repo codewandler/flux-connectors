@@ -76,7 +76,7 @@ function reset() {
     </label>
 
     <label class="filters__field">
-      <span>Provider</span>
+      <span>Connector</span>
       <select v-model="provider">
         <option :value="ANY">Any</option>
         <option v-for="owner in providers" :key="owner.id" :value="owner.id">
@@ -102,11 +102,11 @@ function reset() {
     </label>
 
     <label class="filters__field">
-      <span>Defects</span>
+      <span>Operation issues</span>
       <select v-model="defect">
         <option :value="ANY">Any</option>
-        <option value="own">Owns a known defect</option>
-        <option value="none">No known defect</option>
+        <option value="own">Has a known limitation</option>
+        <option value="none">No operation-specific issue</option>
       </select>
     </label>
 

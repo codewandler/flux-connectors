@@ -34,7 +34,7 @@ export default defineConfig({
   // language's rules.
 
   themeConfig: {
-    logo: { src: '/brand/icon.svg', alt: 'flux-connectors' },
+    logo: { src: '/brand/icon.svg', alt: '' },
     nav: [
       { text: 'Connectors', link: '/explorer' },
       { text: 'v0.1.0', link: `${repo}/releases` },

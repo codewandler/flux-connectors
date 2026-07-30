@@ -5,6 +5,13 @@ import { allOperations, type Catalog } from '../../../data/catalog.mts'
 
 const props = defineProps<{ catalog: Catalog }>()
 const operationCount = computed(() => allOperations(props.catalog).length)
+
+function availability(provider: Catalog['providers'][number]): string {
+  const live = provider.operations.filter((operation) => operation.status.works).length
+  if (live === 0) return 'Not live yet'
+  if (live === provider.operation_count) return 'Live'
+  return `${live} operations live`
+}
 </script>
 
 <template>
@@ -17,9 +24,7 @@ const operationCount = computed(() => allOperations(props.catalog).length)
       <li v-for="provider in catalog.providers" :key="provider.id">
         <a :href="withBase(`/explorer#${provider.id}`)">{{ provider.vendor }}</a>
         <span>{{ provider.operation_count }} operations</span>
-        <span class="snapshot__status">
-          {{ provider.operations.some((operation) => operation.status.works) ? 'Preview' : 'Not live yet' }}
-        </span>
+        <span class="snapshot__status">{{ availability(provider) }}</span>
       </li>
     </ul>
   </section>

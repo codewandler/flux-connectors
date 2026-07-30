@@ -4,6 +4,7 @@
 
 import DefaultTheme from 'vitepress/theme'
 import type { Theme } from 'vitepress'
+import './custom.css'
 
 import CatalogExplorer from './components/CatalogExplorer.vue'
 import CatalogSnapshot from './components/CatalogSnapshot.vue'

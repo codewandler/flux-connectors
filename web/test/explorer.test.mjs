@@ -122,6 +122,12 @@ test('the public catalogue and pages do not expose internal project documents', 
   for (const operation of operations(document)) {
     for (const issue of operation.status.issues) {
       assert.ok(!('story' in issue), `issue ${issue.code} publishes its internal story`)
+      for (const internal of ['http.request', '$secret', 'auth seam', 'owning story']) {
+        assert.ok(
+          !issue.summary.includes(internal),
+          `issue ${issue.code} exposes implementation detail ${internal}`
+        )
+      }
     }
   }
 
@@ -132,6 +138,11 @@ test('the public catalogue and pages do not expose internal project documents', 
   const source = publicHtml.join('\n')
   for (const internal of ['docs/designs/', 'docs/roadmap.md', 'docs/stories/', 'AGENTS.md']) {
     assert.ok(!source.includes(internal), `the public site exposes internal path ${internal}`)
+  }
+
+  for (const operation of operations(document)) {
+    const detail = page('operations', `${operation.id}.html`)
+    assert.doesNotMatch(detail, /Previous page|Next page/, `${operation.id} has an unrelated pager`)
   }
 })
 

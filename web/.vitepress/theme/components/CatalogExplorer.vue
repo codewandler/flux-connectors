@@ -39,7 +39,7 @@ const wide = computed(() => catalogIssues(props.catalog))
   </p>
 
   <IssueNotice
-    title="Affects every operation in the catalogue"
+    title="Catalogue-wide availability limitation"
     tone="inherited"
     banner="catalog"
     :issues="wide"

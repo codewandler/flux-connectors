@@ -205,13 +205,13 @@
               {
                 "code": "credential-not-injected",
                 "scope": "catalog",
-                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
               },
               {
                 "code": "unencodable-query-value",
                 "scope": "operation",
-                "summary": "Query parameters `q`, `name`, `number`, `sourceId`, `source`, `state`, `groupIds`, `groups` carry free-form text, and the generated Flux interpolates query values verbatim — flux registers no percent-encoding op and `http.request` has no structured `query` parameter. `&`, `#` and `+` corrupt the request, and a value such as `x&per_page=1` injects query parameters.",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
                 "params": [
                   "q",
                   "name",
@@ -263,7 +263,7 @@
               {
                 "code": "credential-not-injected",
                 "scope": "catalog",
-                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
               }
             ]
@@ -326,7 +326,7 @@
               {
                 "code": "credential-not-injected",
                 "scope": "catalog",
-                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
               }
             ]
@@ -575,13 +575,13 @@
               {
                 "code": "credential-not-injected",
                 "scope": "catalog",
-                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
               },
               {
                 "code": "unencodable-query-value",
                 "scope": "operation",
-                "summary": "Query parameters `id`, `sessionId`, `conversationId`, `agentId`, `fromNumber`, `toNumber`, `type`, `state`, `finishReason`, `q` carry free-form text, and the generated Flux interpolates query values verbatim — flux registers no percent-encoding op and `http.request` has no structured `query` parameter. `&`, `#` and `+` corrupt the request, and a value such as `x&per_page=1` injects query parameters.",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
                 "params": [
                   "id",
                   "sessionId",
@@ -635,7 +635,7 @@
               {
                 "code": "credential-not-injected",
                 "scope": "catalog",
-                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
               }
             ]
@@ -678,7 +678,7 @@
               {
                 "code": "credential-not-injected",
                 "scope": "catalog",
-                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
               }
             ]
@@ -724,7 +724,7 @@
               {
                 "code": "credential-not-injected",
                 "scope": "catalog",
-                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
               }
             ]
@@ -767,7 +767,7 @@
               {
                 "code": "credential-not-injected",
                 "scope": "catalog",
-                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
               }
             ]
@@ -813,7 +813,7 @@
               {
                 "code": "credential-not-injected",
                 "scope": "catalog",
-                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
               }
             ]
@@ -871,13 +871,13 @@
               {
                 "code": "no-credential",
                 "scope": "provider",
-                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "summary": "freshdesk has no safe credential configuration for this operation yet. Live calls are disabled rather than sending a credential outside Flux's secret protection.",
                 "params": []
               },
               {
                 "code": "unbound-base-url-template",
                 "scope": "provider",
-                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "summary": "This connector needs an operator-supplied {domain} value before it has a valid destination URL.",
                 "params": []
               }
             ]
@@ -948,13 +948,13 @@
               {
                 "code": "no-credential",
                 "scope": "provider",
-                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "summary": "freshdesk has no safe credential configuration for this operation yet. Live calls are disabled rather than sending a credential outside Flux's secret protection.",
                 "params": []
               },
               {
                 "code": "unencodable-query-value",
                 "scope": "operation",
-                "summary": "Query parameters `requester_id`, `email`, `company_id`, `updated_since` carry free-form text, and the generated Flux interpolates query values verbatim — flux registers no percent-encoding op and `http.request` has no structured `query` parameter. `&`, `#` and `+` corrupt the request, and a value such as `x&per_page=1` injects query parameters.",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
                 "params": [
                   "requester_id",
                   "email",
@@ -965,7 +965,7 @@
               {
                 "code": "unbound-base-url-template",
                 "scope": "provider",
-                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "summary": "This connector needs an operator-supplied {domain} value before it has a valid destination URL.",
                 "params": []
               }
             ]
@@ -1004,13 +1004,13 @@
               {
                 "code": "no-credential",
                 "scope": "provider",
-                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "summary": "freshdesk has no safe credential configuration for this operation yet. Live calls are disabled rather than sending a credential outside Flux's secret protection.",
                 "params": []
               },
               {
                 "code": "unbound-base-url-template",
                 "scope": "provider",
-                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "summary": "This connector needs an operator-supplied {domain} value before it has a valid destination URL.",
                 "params": []
               }
             ]
@@ -1236,13 +1236,13 @@
               {
                 "code": "no-credential",
                 "scope": "provider",
-                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "summary": "freshdesk has no safe credential configuration for this operation yet. Live calls are disabled rather than sending a credential outside Flux's secret protection.",
                 "params": []
               },
               {
                 "code": "unbound-base-url-template",
                 "scope": "provider",
-                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "summary": "This connector needs an operator-supplied {domain} value before it has a valid destination URL.",
                 "params": []
               }
             ]
@@ -1453,13 +1453,13 @@
               {
                 "code": "no-credential",
                 "scope": "provider",
-                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "summary": "freshdesk has no safe credential configuration for this operation yet. Live calls are disabled rather than sending a credential outside Flux's secret protection.",
                 "params": []
               },
               {
                 "code": "unbound-base-url-template",
                 "scope": "provider",
-                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "summary": "This connector needs an operator-supplied {domain} value before it has a valid destination URL.",
                 "params": []
               }
             ]
@@ -1545,13 +1545,13 @@
               {
                 "code": "no-credential",
                 "scope": "provider",
-                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "summary": "freshdesk has no safe credential configuration for this operation yet. Live calls are disabled rather than sending a credential outside Flux's secret protection.",
                 "params": []
               },
               {
                 "code": "unbound-base-url-template",
                 "scope": "provider",
-                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "summary": "This connector needs an operator-supplied {domain} value before it has a valid destination URL.",
                 "params": []
               }
             ]
@@ -1637,13 +1637,13 @@
               {
                 "code": "no-credential",
                 "scope": "provider",
-                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "summary": "freshdesk has no safe credential configuration for this operation yet. Live calls are disabled rather than sending a credential outside Flux's secret protection.",
                 "params": []
               },
               {
                 "code": "unencodable-query-value",
                 "scope": "operation",
-                "summary": "Query parameters `phone`, `email`, `mobile`, `company_id`, `state` carry free-form text, and the generated Flux interpolates query values verbatim — flux registers no percent-encoding op and `http.request` has no structured `query` parameter. `&`, `#` and `+` corrupt the request, and a value such as `x&per_page=1` injects query parameters.",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
                 "params": [
                   "phone",
                   "email",
@@ -1655,7 +1655,7 @@
               {
                 "code": "unbound-base-url-template",
                 "scope": "provider",
-                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "summary": "This connector needs an operator-supplied {domain} value before it has a valid destination URL.",
                 "params": []
               }
             ]
@@ -1694,13 +1694,13 @@
               {
                 "code": "no-credential",
                 "scope": "provider",
-                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "summary": "freshdesk has no safe credential configuration for this operation yet. Live calls are disabled rather than sending a credential outside Flux's secret protection.",
                 "params": []
               },
               {
                 "code": "unbound-base-url-template",
                 "scope": "provider",
-                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "summary": "This connector needs an operator-supplied {domain} value before it has a valid destination URL.",
                 "params": []
               }
             ]
@@ -1760,13 +1760,13 @@
               {
                 "code": "no-credential",
                 "scope": "provider",
-                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "summary": "freshdesk has no safe credential configuration for this operation yet. Live calls are disabled rather than sending a credential outside Flux's secret protection.",
                 "params": []
               },
               {
                 "code": "unbound-base-url-template",
                 "scope": "provider",
-                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "summary": "This connector needs an operator-supplied {domain} value before it has a valid destination URL.",
                 "params": []
               }
             ]
@@ -1838,13 +1838,13 @@
               {
                 "code": "credential-not-injected",
                 "scope": "catalog",
-                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
               },
               {
                 "code": "unbound-base-url-template",
                 "scope": "provider",
-                "summary": "The base URL `https://{subdomain}.zendesk.com` carries the placeholder `{subdomain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "summary": "This connector needs an operator-supplied {subdomain} value before it has a valid destination URL.",
                 "params": []
               }
             ]
@@ -1912,13 +1912,13 @@
               {
                 "code": "credential-not-injected",
                 "scope": "catalog",
-                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
               },
               {
                 "code": "unencodable-query-value",
                 "scope": "operation",
-                "summary": "Query parameter `query` carries free-form text, and the generated Flux interpolates query values verbatim — flux registers no percent-encoding op and `http.request` has no structured `query` parameter. `&`, `#` and `+` corrupt the request, and a value such as `x&per_page=1` injects query parameters.",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
                 "params": [
                   "query"
                 ]
@@ -1926,7 +1926,7 @@
               {
                 "code": "unbound-base-url-template",
                 "scope": "provider",
-                "summary": "The base URL `https://{subdomain}.zendesk.com` carries the placeholder `{subdomain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "summary": "This connector needs an operator-supplied {subdomain} value before it has a valid destination URL.",
                 "params": []
               }
             ]
@@ -1971,13 +1971,13 @@
               {
                 "code": "credential-not-injected",
                 "scope": "catalog",
-                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
               },
               {
                 "code": "unbound-base-url-template",
                 "scope": "provider",
-                "summary": "The base URL `https://{subdomain}.zendesk.com` carries the placeholder `{subdomain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "summary": "This connector needs an operator-supplied {subdomain} value before it has a valid destination URL.",
                 "params": []
               }
             ]
@@ -2047,13 +2047,13 @@
               {
                 "code": "credential-not-injected",
                 "scope": "catalog",
-                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
               },
               {
                 "code": "unbound-base-url-template",
                 "scope": "provider",
-                "summary": "The base URL `https://{subdomain}.zendesk.com` carries the placeholder `{subdomain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "summary": "This connector needs an operator-supplied {subdomain} value before it has a valid destination URL.",
                 "params": []
               }
             ]
@@ -2171,13 +2171,13 @@
               {
                 "code": "credential-not-injected",
                 "scope": "catalog",
-                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
               },
               {
                 "code": "unbound-base-url-template",
                 "scope": "provider",
-                "summary": "The base URL `https://{subdomain}.zendesk.com` carries the placeholder `{subdomain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "summary": "This connector needs an operator-supplied {subdomain} value before it has a valid destination URL.",
                 "params": []
               }
             ]
@@ -2265,13 +2265,13 @@
               {
                 "code": "credential-not-injected",
                 "scope": "catalog",
-                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
               },
               {
                 "code": "unbound-base-url-template",
                 "scope": "provider",
-                "summary": "The base URL `https://{subdomain}.zendesk.com` carries the placeholder `{subdomain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "summary": "This connector needs an operator-supplied {subdomain} value before it has a valid destination URL.",
                 "params": []
               }
             ]
@@ -2352,13 +2352,13 @@
               {
                 "code": "credential-not-injected",
                 "scope": "catalog",
-                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
               },
               {
                 "code": "unbound-base-url-template",
                 "scope": "provider",
-                "summary": "The base URL `https://{subdomain}.zendesk.com` carries the placeholder `{subdomain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "summary": "This connector needs an operator-supplied {subdomain} value before it has a valid destination URL.",
                 "params": []
               }
             ]
