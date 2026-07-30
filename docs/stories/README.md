@@ -23,8 +23,6 @@ Gate: `cargo build --workspace && cargo test --workspace && cargo clippy --works
 
 ## Now (in progress)
 - [C-9 — Emit request bodies, headers, and response handling](C-9-bodies-and-responses.md) · Codegen
-- [C-29 — Close the request-body modelling gaps in the IR](C-29-body-modelling-gaps.md) · Spec · found by C-17 transcribing real providers · blocks correct write operations
-- [C-45 — Render Flux to SVG and PNG using flux's own highlighter](C-45-use-flux-highlighter.md) · Codegen · replaces a regex script that duplicates grammar flux already owns
 
 ## Next (ready — take the top one unless the user named a story)
 
@@ -38,6 +36,10 @@ _Every credential problem in this repo has the same shape: **the caller must not
 
 ### Connectors v1 — spec to Flux
 _Prove the whole thesis on two real providers, end to end against a live flux._
+- [C-51 — Ship the OpenAI connector](C-51-provider-openai.md) · Spec · bearer · JSON in and out · no query strings
+- [C-52 — Ship the GitHub connector](C-52-provider-github.md) · Spec · bearer · path-and-body surface only · listing ops wait on C-30
+- [C-53 — Ship the Slack connector](C-53-provider-slack.md) · Spec · bearer · POST+JSON throughout, which is what avoids the query gap
+- [C-49 — Model a provider's services as the middle addressing level](C-49-provider-services.md) · Spec · provider → service → operations · one service per operation · unset means `default`
 - [C-37 — Give providers and operations stable global addresses](C-37-global-addressing.md) · Spec · pid / gid / oip · the global half; C-23 stays the local half
 - [C-30 — Refuse query values the emitter cannot encode safely](C-30-refuse-unencodable-query.md) · Codegen · **security** · a model-supplied query value can inject request parameters today
 - [C-10 — Emit the $auth marker and the connector manifest](C-10-auth-injection-and-manifest.md) · Codegen · pairs with C-16 · the second generated artifact
@@ -78,6 +80,7 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-23 — Make operation names a stable public contract](C-23-operation-naming-contract.md) · Codegen · op names are what users and models call — renaming one silently breaks callers
 - [C-24 — Verify generated connectors against recorded HTTP fixtures](C-24-fixture-verification.md) · Build · proves a connector *works*, not merely that it parses — without live credentials
 - [C-46 — Generic connectors — http, a2a, mcp and friends](C-46-generic-connectors.md) · Spec · extends the charter — a provider need not be a vendor · **not** mysql, see Notes
+- [C-50 — Offer AWS as a provider with s3 and bedrock as services](C-50-aws-services.md) · Spec · first multi-service provider · SigV4 signs the request, not a header
 
 ### rendered provider documentation
 _A connector's operations are currently legible only by reading `providers/<name>.toml` or the_
@@ -90,7 +93,6 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-22 — Auth conformance matrix across provider archetypes](C-22-auth-conformance-matrix.md) · Bridge · a new provider shape must fail at the model, not at request time
 
 ## Done
-- [C-48 — Make the root documentation current and audience-specific](C-48-audience-specific-root-docs.md) · Surfaces · README for humans · AGENTS for agents
 - [C-1 — Scaffold the Cargo workspace and the gate](C-1-scaffold-workspace.md) · Foundation · everything else builds on this
 - [C-2 — Define the Connector IR](C-2-connector-ir.md) · Spec · the contract every other crate speaks
 - [C-3 — Load and validate provider TOML](C-3-provider-toml-loader.md) · Spec
@@ -101,10 +103,13 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-18 — Vendor the babelforce spec and curate the provider operation inventory](C-18-vendor-specs-and-inventory.md) · Spec · inventory delivered · spec vendoring split to C-25 (credential literals)
 - [C-27 — Wire the CLI seams to the loader and the emitter](C-27-wire-cli-seams.md) · Build · two functions · mechanical once C-3 and C-8 land
 - [C-28 — Resolve percent-encoding for query values](C-28-query-percent-encoding.md) · Codegen · blocks zendesk ticket search · flux has no urlencode op at all
+- [C-29 — Close the request-body modelling gaps in the IR](C-29-body-modelling-gaps.md) · Spec · found by C-17 transcribing real providers · blocks correct write operations
 - [C-38 — Render Flux per operation and embed it in a catalog crate](C-38-operation-catalog-crate.md) · Build · **the goal** · one .flux per expanded op, consumable as a Rust crate
 - [C-42 — Emit catalog.json for the public site](C-42-catalog-json.md) · Codegen · the site's data must be generated, never hand-maintained
 - [C-43 — Scaffold the VitePress site and deploy to GitHub Pages](C-43-vitepress-pages.md) · Surfaces · first Node toolchain in a Rust repo — keep it contained
 - [C-44 — Build the provider and operation explorer](C-44-operation-explorer.md) · Surfaces · the reason the site exists · needs C-42 and C-43
+- [C-45 — Render Flux to SVG and PNG using flux's own highlighter](C-45-use-flux-highlighter.md) · Codegen · replaces a regex script that duplicates grammar flux already owns
+- [C-48 — Make the root documentation current and audience-specific](C-48-audience-specific-root-docs.md) · Surfaces · README for humans · AGENTS for agents
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->
