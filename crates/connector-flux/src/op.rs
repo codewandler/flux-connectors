@@ -180,21 +180,17 @@ struct FreeFormBody<'a> {
     symbol: String,
 }
 
-/// Every parameter of one operation, paired with the Flux symbol the emitted `op` declares for it.
-struct Bindings<'a> {
-    path: Vec<Bound<'a>>,
-    query: Vec<Bound<'a>>,
-    header: Vec<Bound<'a>>,
-    body: Vec<Bound<'a>>,
-    free_form: Option<FreeFormBody<'a>>,
-}
+/// Lower one IR operation into the composite-op declaration flux-lang formats.
+fn lower<'a>(connector: &Connector, operation: &'a Operation) -> Result<CompositeOpDecl> {
+    // Checked before anything else: `format_composite_op` writes the name verbatim, so an
+    // undeclarable id would produce text that does not parse rather than an error.
+    if !flux_lang::ast::is_valid_decl_name(&operation.id) {
+        return Err(Error::UnspellableOperationId {
+            operation: operation.id.clone(),
+        });
+    }
+    check_write_metadata(operation)?;
 
-/// Allocate one Flux symbol per parameter, in the IR's own request-position order.
-///
-/// Extracted from [`lower`] because a **call site** needs the same answer: a graph node feeding an
-/// operation (`graph.rs`) has to spell each argument with the symbol the operation's own declaration
-/// uses, and a second copy of this order would drift the first time a request position moved.
-fn bind_parameters<'a>(operation: &'a Operation) -> Result<Bindings<'a>> {
     // Path, query, header, body — the IR's own request-position order, so the declared parameter
     // list is stable across regeneration.
     let mut symbols = Symbols::new();
@@ -243,57 +239,6 @@ fn bind_parameters<'a>(operation: &'a Operation) -> Result<Bindings<'a>> {
         }),
         None => None,
     };
-
-    Ok(Bindings {
-        path,
-        query,
-        header,
-        body,
-        free_form,
-    })
-}
-
-/// The **caller-facing** name of every parameter a caller supplies, mapped to the Flux symbol the
-/// emitted `op` declares for it.
-///
-/// A constant body field is deliberately absent: it is sent but never declared (see [`constant`]),
-/// so naming it at a call site would pass an argument the operation does not have.
-pub(crate) fn parameter_symbols(operation: &Operation) -> Result<BTreeMap<String, String>> {
-    let bound = bind_parameters(operation)?;
-    Ok(bound
-        .path
-        .iter()
-        .chain(&bound.query)
-        .chain(&bound.header)
-        .chain(bound.body.iter().filter(|b| constant(b.param).is_none()))
-        .map(|b| (b.param.name.clone(), b.symbol.clone()))
-        .chain(
-            bound
-                .free_form
-                .iter()
-                .map(|free| (FREE_FORM_BODY.to_string(), free.symbol.clone())),
-        )
-        .collect())
-}
-
-/// Lower one IR operation into the composite-op declaration flux-lang formats.
-fn lower(connector: &Connector, operation: &Operation) -> Result<CompositeOpDecl> {
-    // Checked before anything else: `format_composite_op` writes the name verbatim, so an
-    // undeclarable id would produce text that does not parse rather than an error.
-    if !flux_lang::ast::is_valid_decl_name(&operation.id) {
-        return Err(Error::UnspellableOperationId {
-            operation: operation.id.clone(),
-        });
-    }
-    check_write_metadata(operation)?;
-
-    let Bindings {
-        path,
-        query,
-        header,
-        body,
-        free_form,
-    } = bind_parameters(operation)?;
 
     for bound in &header {
         // `http.request` builds a `HeaderName` from this and errors on anything that is not an HTTP
@@ -827,7 +772,7 @@ fn bind_fmt(name: &str, template: String) -> Node {
 /// reading those tags back through serde. The *values* still come from the IR; only the spelling
 /// travels as text, and `metadata_tags_are_the_ones_flux_lang_accepts` pins every tag this crate
 /// can produce, so the error below is unreachable in practice rather than merely unlikely.
-pub(crate) fn from_tag<T: serde::de::DeserializeOwned>(tag: &'static str) -> Result<T> {
+fn from_tag<T: serde::de::DeserializeOwned>(tag: &'static str) -> Result<T> {
     serde_json::from_value(serde_json::Value::String(tag.to_string()))
         .map_err(|source| Error::UnknownMetadataTag { tag, source })
 }
