@@ -252,8 +252,12 @@ impl Quirks {
 ///
 /// **`ir_sha256` is deliberately absent.** The pipeline design lists it under provenance, but it is
 /// computed *from* the serialized IR — storing it inside the value being hashed would make the hash
-/// depend on itself. It belongs in `connectors.lock` alongside the generated-artifact hash and the
-/// generator version, which is where C-7 writes it.
+/// depend on itself. It belongs in `connectors.lock` alongside the generated-artifact hashes and
+/// the generator version, and that is where [`LockEntry::ir_sha256`](crate::lock::LockEntry) keeps
+/// it.
+///
+/// Note that **none of these fields is in the IR hash domain** — see [`Connector::hash_domain`].
+/// They are inputs to the build, recorded and verified one by one, not part of what was compiled.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Provenance {
@@ -402,10 +406,100 @@ impl Connector {
 
     /// The connector's canonical JSON encoding: compact, and byte-identical for equal values.
     ///
-    /// This is the form C-7 hashes into `connectors.lock`. Every ordering decision in this module
-    /// exists to make this function total in the mathematical sense — the same value in, the same
+    /// This is the connector's **complete** encoding, provenance included, and it is what a round
+    /// trip through disk must preserve. It is deliberately *not* what `connectors.lock` hashes —
+    /// see [`hash_domain`](Self::hash_domain) for why. Every ordering decision in this module
+    /// exists to make this function total in the mathematical sense: the same value in, the same
     /// bytes out, on every machine and every run.
     pub fn canonical_json(&self) -> crate::Result<String> {
         Ok(serde_json::to_string(self)?)
+    }
+
+    /// The exact bytes [`ir_sha256`](Self::ir_sha256) hashes — the **hash domain**, stated as a
+    /// value rather than left implicit in whatever `Serialize` happens to emit.
+    ///
+    /// # What is in it
+    ///
+    /// The connector's *compiled meaning*: `id`, `vendor`, `base_url`, `description`, `auth`,
+    /// `default_auth`, `operations`. Change any of those and the generated `.flux` module changes,
+    /// so the hash must move.
+    ///
+    /// # What is out of it, and why
+    ///
+    /// **All of [`Provenance`]** — including `fetched_at`, which C-2's review caught leaking into
+    /// [`canonical_json`](Self::canonical_json). Provenance records *where the bytes came from*;
+    /// this hash records *what was compiled from them*. Two reasons, and the first is the one the
+    /// story exists for:
+    ///
+    /// 1. `fetched_at` moves on every re-fetch of a byte-identical document, so hashing it would
+    ///    report drift where nothing drifted — phantom drift on every build, which is precisely
+    ///    what `connectors.lock` is supposed to rule out.
+    /// 2. `source_url`, `upstream_version`, `spec_sha256` and `toml_sha256` are recorded verbatim
+    ///    as their own fields of the lockfile entry
+    ///    ([`LockEntry`](crate::lock::LockEntry)), and `check` (C-14) verifies each of them
+    ///    directly. Folding them in here would hash the same facts twice and would make a
+    ///    comment-only edit to a provider TOML — which changes `toml_sha256` and not one generated
+    ///    byte — move the IR hash as well. Each recorded hash covers exactly one input; that is
+    ///    what lets `check` name *which* input moved.
+    ///
+    /// A [`Connector`] field added later is a compile error inside this function until someone
+    /// decides which side of that line it falls on.
+    pub fn hash_domain(&self) -> crate::Result<String> {
+        Ok(serde_json::to_string(&HashDomain::of(self))?)
+    }
+
+    /// Lowercase-hex SHA-256 of [`hash_domain`](Self::hash_domain) — the `ir_sha256` of a
+    /// [`LockEntry`](crate::lock::LockEntry).
+    pub fn ir_sha256(&self) -> crate::Result<String> {
+        Ok(crate::lock::sha256_hex(self.hash_domain()?.as_bytes()))
+    }
+}
+
+/// The serialized shape of the hash domain: an explicit projection of [`Connector`], not the
+/// connector itself. See [`Connector::hash_domain`] for what it includes and why.
+///
+/// Borrowed rather than cloned so that hashing is allocation-cheap, and with no
+/// `skip_serializing_if` of its own — the fields it names are always present, and the types it
+/// borrows already encode canonically.
+#[derive(Serialize)]
+struct HashDomain<'a> {
+    id: &'a str,
+    vendor: &'a str,
+    base_url: &'a str,
+    description: &'a str,
+    auth: &'a [AuthMethod],
+    default_auth: &'a [AuthRequirement],
+    operations: &'a [Operation],
+}
+
+impl<'a> HashDomain<'a> {
+    fn of(connector: &'a Connector) -> Self {
+        // The exhaustive destructuring is the tripwire, and it is the whole reason this is a
+        // separate type instead of a `serde` attribute: a field added to `Connector` fails to
+        // compile here until someone states whether it belongs in the hash domain. Silently
+        // inheriting the decision is how `fetched_at` got into the hash in the first place.
+        let Connector {
+            id,
+            vendor,
+            base_url,
+            description,
+            auth,
+            default_auth,
+            operations,
+            provenance,
+        } = connector;
+
+        // Deliberately excluded — see `Connector::hash_domain`.
+        let _excluded = provenance;
+
+        Self {
+            id,
+            vendor,
+            base_url,
+            description,
+            auth,
+            default_auth,
+            operations,
+        }
     }
 }

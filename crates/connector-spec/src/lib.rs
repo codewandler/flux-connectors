@@ -23,8 +23,8 @@
 //!   selects among them with a list of [`AuthRequirement`]s — AND within a requirement, OR across
 //!   the list — and distinguishes *unset* (inherit the connector default) from *explicitly none*.
 //!   See [`Operation::auth`] and [`Connector::effective_auth`].
-//! - **The encoding is canonical.** Equal values produce identical bytes, because
-//!   [`Connector::canonical_json`] is what `connectors.lock` hashes.
+//! - **The encoding is canonical.** Equal values produce identical bytes — the property
+//!   [`Connector::hash_domain`] and therefore `connectors.lock` rest on.
 //! - **The types are strict.** Every one of them denies unknown fields, because the provider loader
 //!   parses `providers/*.toml` straight into them and a typo'd key must not be discarded before the
 //!   loader can object. `src/ir.rs`'s module docs record the two failures C-2's review
@@ -36,9 +36,17 @@
 //! both roles the file plays — a complete hand-authored connector, or a pointer at a vendored spec
 //! plus the patch set the overlay applies. `schema/provider-toml.schema.json`
 //! ([`PROVIDER_TOML_JSON_SCHEMA`]) documents the file format and is kept in sync by a test.
+//!
+//! # Recording what produced an artifact
+//!
+//! [`Lockfile`] renders `connectors.lock`: one [`LockEntry`] per provider, holding the hashes and
+//! versions `flux-connectors check` recomputes. Its contract is that unchanged inputs reproduce the
+//! file byte for byte — see the [`lock`] module docs for what is hashed, what is deliberately not,
+//! and why no timestamp appears anywhere in it.
 
 mod auth;
 mod ir;
+pub mod lock;
 pub mod provider;
 
 pub use auth::{AuthMethod, AuthRequirement, AuthScheme, OAuth2Spec, OAuthGrant, OAuthRedirect};
@@ -46,6 +54,7 @@ pub use ir::{
     Connector, ErrorEnvelope, HttpMethod, Idempotency, JsonSchema, Operation, Pagination, Param,
     ParamSet, Provenance, Quirks, RateLimit, Risk,
 };
+pub use lock::{sha256_hex, LockEntry, Lockfile, LOCKFILE_NAME, LOCKFILE_VERSION};
 pub use provider::{
     LoadedProvider, OperationPatch, ParamPatch, ParamPosition, Patch, SpecSource,
     PROVIDER_TOML_JSON_SCHEMA,
@@ -85,6 +94,16 @@ pub enum Error {
     /// The IR could not be encoded — see [`Connector::canonical_json`].
     #[error("cannot serialize the connector IR: {0}")]
     Serialize(#[from] serde_json::Error),
+    /// `connectors.lock` could not be rendered — see [`Lockfile::to_toml`].
+    #[error("cannot serialize connectors.lock: {0}")]
+    SerializeLock(#[from] Box<toml::ser::Error>),
+    /// A `connectors.lock` is not well-formed — see [`Lockfile::parse`].
+    ///
+    /// As with [`ParseProvider`](Self::ParseProvider), `toml`'s message is kept verbatim: it names
+    /// the offending key with a line, a column and a snippet, which no rewording improves on. Boxed
+    /// for the same reason, too: the error is large and this enum is returned by value everywhere.
+    #[error("connectors.lock is not a valid lockfile: {0}")]
+    ParseLock(#[from] Box<toml::de::Error>),
 }
 
 /// Renders [`Error::InvalidProvider`] as a heading plus one bullet per problem.
