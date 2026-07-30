@@ -62,3 +62,22 @@ half-built toward, and it produces a written answer rather than code.
 - Do not start any `llm_inference` implementation before this closes. That is the whole point of the
   story, and it is the same discipline [C-34](C-34-decide-proxy-charter.md) applies to the proxy.
 - The decision should name **who** it binds: this repo's charter, not flux's roadmap.
+
+## Progress
+
+- **This question has now been asked three times, in three shapes**, which is why it is worth one
+  written answer rather than three ad-hoc ones:
+
+  1. The LLM pool ([C-119](C-119-provider-roles-epic.md)) — resolved by splitting at the plane boundary:
+     connectors inform the pool, flux serves it.
+  2. This story — may a connector *serve* inference at all.
+  3. [C-157](C-157-ollama-model-catalogue.md) — an ollama inference provider choosable as `ollama/…`.
+
+  C-157 turned out to be **already shipped**: `flux-providers`' `KNOWN_PROVIDERS` (`spec.rs:16-25`)
+  already lists `"ollama"` and `"ollama-anthropic"`, so `ollama/llama3` resolves today. What is missing
+  there is only *discovery* of locally installed models.
+
+- **C-157 adds a second charter axis this decision should cover.** Ollama is a **local process**, so it
+  meets `vision.md`'s *"Connectors are paid SaaS services"* head-on — the first time a connector would
+  describe something on the user's own machine. Deciding only the inference half would leave that open,
+  and the two will keep arriving together. Answer both here.
