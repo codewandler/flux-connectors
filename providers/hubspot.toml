@@ -217,6 +217,43 @@ description = "The contact's HubSpot record id (`hs_object_id`), e.g. 512"
 required = true
 schema = { type = "integer", format = "uint64", minimum = 1 }
 
+# ---------------------------------------------------------------------------------------------
+# RESPONSE SHAPES (C-126) — from the CRM v3 reference at
+# `developers.hubspot.com/docs/api-reference/crm-contacts-v3/basic/…`, whose rendered schemas are
+# generated from HubSpot's own OpenAPI document (`SimplePublicObjectWithAssociations` for a read,
+# `SimplePublicObject` for a create).
+#
+# **EVERY PROPERTY VALUE IS A STRING, AND HUBSPOT'S SCHEMA SAYS SO STRUCTURALLY:** `properties` is
+# declared `{"type": "object", "additionalProperties": {"type": "string"}}`. It is not a prose
+# footnote and it is not "usually" — a number arrives as `"17"`, a checkbox as `"false"`, a date as
+# the epoch-milliseconds string `"1572480000000"`, and HubSpot's own documented example shows exactly
+# those three. That is the single most consequential thing this connector can publish about its
+# responses: a flow comparing `properties.amount > 1000` is comparing strings, and a flow that reads
+# `properties.hs_lead_status` expecting a boolean-ish value gets `"false"`, which is truthy nearly
+# everywhere.
+#
+# It is also the fact that makes the `additionalProperties` form the right declaration rather than an
+# enumeration. The *keys* of that map are the portal's own property set — every HubSpot account
+# defines its own — so no key list would be true of two accounts, while the value type is true of all
+# of them.
+#
+# The record id is a **string** here, while this connector's path parameters are integers. Both are
+# deliberate: the vendor returns `"id": "512"` and accepts either spelling in a URL, and the integer
+# parameter is what keeps a path safe (see the comment above). A caller piping `id` straight from a
+# response into the next call is handing a string to a `Number` parameter, and that is worth knowing
+# from the schema rather than from a type error.
+# ---------------------------------------------------------------------------------------------
+
+# `SimplePublicObjectWithAssociations`.
+#
+# Note what a "not found" is on this endpoint: HubSpot answers a non-2xx with
+# `category: "OBJECT_NOT_FOUND"` — the error envelope below — rather than a 200 carrying an empty
+# record, so there is no "did I get a real contact" check to write against this schema.
+[operations.response_schema]
+type = "object"
+required = ["id", "properties", "createdAt", "updatedAt"]
+properties = { id = { type = "string", description = "The record id (`hs_object_id`) **as a string**, even though this operation takes it as a number" }, properties = { type = "object", additionalProperties = { type = "string" }, description = "The contact's property values, keyed by HubSpot's internal property name (`email`, `firstname`, `lastname`, `createdate`, `lastmodifieddate`, `hs_object_id`). EVERY VALUE IS A STRING regardless of the property's configured type — a number is `\"17\"`, a checkbox `\"false\"`, a date the epoch-milliseconds string `\"1572480000000\"`. Which keys are present depends on the portal's own property set and on the `properties` projection this connector cannot send" }, createdAt = { type = "string", format = "date-time", description = "When the record was created — an ISO timestamp here, unlike the epoch-milliseconds string the equivalent `createdate` property carries" }, updatedAt = { type = "string", format = "date-time" }, archived = { type = "boolean", description = "True for a record in the recycle bin" }, archivedAt = { type = "string", format = "date-time", description = "Present only on an archived record" }, propertiesWithHistory = { type = "object", additionalProperties = { type = "array", items = { type = "object" } }, description = "Previous values per property, each an array of `{value, timestamp, sourceType}`. Returned only when asked for, which this connector cannot do" }, associations = { type = "object", description = "Related records — companies, deals, tickets — keyed by object type. Returned only when asked for. Present on this read schema and absent from the create's" } }
+
 # HubSpot reports failure with a non-2xx status *and* a body carrying the detail, which is what
 # `ErrorEnvelope` is for. `category` is the machine code — `OBJECT_NOT_FOUND`, `VALIDATION_ERROR`,
 # `RATE_LIMIT` — and `message` the human half. Declared on every operation because it is a property of
@@ -271,6 +308,18 @@ description = "The contact's email address — HubSpot's unique identifier for a
 required = true
 schema = { type = "string", minLength = 3 }
 
+# `SimplePublicObject`, `201`. **A different schema from the read**, and the difference is exactly one
+# member: there is no `associations` here, because a record created in one call is associated with
+# nothing. `warnings` is the addition in the other direction.
+#
+# `id` is what this operation exists to produce: the two-call form the comment above describes —
+# create with an email, then `hubspot-contact-update` for the name — has no other way to learn the
+# record id.
+[operations.response_schema]
+type = "object"
+required = ["id", "properties", "createdAt", "updatedAt", "archived"]
+properties = { id = { type = "string", description = "The new record's id, as a string. This is the `contact_id` for a following update — and the update's parameter is a number, so it has to be converted" }, properties = { type = "object", additionalProperties = { type = "string" }, description = "The created record's properties, keyed by internal name, EVERY VALUE A STRING. HubSpot fills in more than was sent — `createdate`, `lastmodifieddate` and `hs_object_id` at minimum" }, createdAt = { type = "string", format = "date-time" }, updatedAt = { type = "string", format = "date-time" }, archived = { type = "boolean" }, warnings = { type = "array", description = "Non-fatal complaints about the create — a property HubSpot ignored, for instance. Present only on the create schema, and worth reading: the call still succeeded", items = { type = "object" } } }
+
 [operations.quirks.error_envelope]
 message_pointer = "/message"
 code_pointer = "/category"
@@ -313,6 +362,19 @@ description = "The contact's last name; written on every call"
 required = true
 schema = { type = "string" }
 
+# NO `response_schema`, DELIBERATELY (C-126). **HubSpot documents no response for this endpoint at
+# all** — the `PATCH …/contacts/{contactId}` reference page renders no Responses section: no status
+# code, no schema, no example, on any of the URL forms that serve it.
+#
+# It plainly returns *something* — the sibling create returns `SimplePublicObject` and this almost
+# certainly does too — and that "almost certainly" is the whole reason nothing is declared. A schema
+# copied from the create would look exactly as authoritative as the ones above it in this file while
+# resting on an inference rather than on a document, and the failure it invites is silent: a consumer
+# reading `properties.firstname` back to confirm the write, on a response that may not carry it.
+#
+# So this operation is one of the eighteen the coverage table counts as absent, and the absence is the
+# record. Confirm an update by reading the contact back with `hubspot-contact-get`.
+
 [operations.quirks.error_envelope]
 message_pointer = "/message"
 code_pointer = "/category"
@@ -333,6 +395,15 @@ description = "The company's HubSpot record id (`hs_object_id`)"
 required = true
 schema = { type = "integer", format = "uint64", minimum = 1 }
 
+# The same `SimplePublicObjectWithAssociations` envelope as the contact read — HubSpot's v3 object API
+# is uniform across object types, and the reference documents companies with the identical field list.
+# Only the property *keys* differ, and they are the portal's, which is why the map is declared by its
+# value type rather than by its keys.
+[operations.response_schema]
+type = "object"
+required = ["id", "properties", "createdAt", "updatedAt"]
+properties = { id = { type = "string", description = "The company's record id, as a string" }, properties = { type = "object", additionalProperties = { type = "string" }, description = "The company's property values, keyed by internal name (`name`, `domain`, `createdate`, `hs_lastmodifieddate`, `hs_object_id`). EVERY VALUE IS A STRING — including numeric properties such as `numberofemployees` and `annualrevenue`" }, createdAt = { type = "string", format = "date-time" }, updatedAt = { type = "string", format = "date-time" }, archived = { type = "boolean" }, archivedAt = { type = "string", format = "date-time" }, propertiesWithHistory = { type = "object", additionalProperties = { type = "array", items = { type = "object" } }, description = "Returned only when asked for, which this connector cannot do" }, associations = { type = "object", description = "Related contacts, deals and tickets. Returned only when asked for" } }
+
 [operations.quirks.error_envelope]
 message_pointer = "/message"
 code_pointer = "/category"
@@ -352,6 +423,16 @@ name = "deal_id"
 description = "The deal's HubSpot record id (`hs_object_id`)"
 required = true
 schema = { type = "integer", format = "uint64", minimum = 1 }
+
+# The same envelope again — and this is the operation where the string-valued property map bites
+# hardest, so it is called out on the member itself: **`amount` is a string.** A deal's money value
+# arrives as `"1500.00"`, and HubSpot's own documented deal example shows exactly that. A flow gating
+# on deal size is comparing text unless it converts first, and `"900.00" > "1500.00"` is true as a
+# string comparison.
+[operations.response_schema]
+type = "object"
+required = ["id", "properties", "createdAt", "updatedAt"]
+properties = { id = { type = "string", description = "The deal's record id, as a string" }, properties = { type = "object", additionalProperties = { type = "string" }, description = "The deal's property values, keyed by internal name (`dealname`, `amount`, `dealstage`, `pipeline`, `closedate`, `hs_object_id`). EVERY VALUE IS A STRING — `amount` arrives as `\"1500.00\"` and `closedate` as an ISO string, so a numeric or date comparison has to convert first. `dealstage` and `pipeline` are per-portal internal ids, not display names" }, createdAt = { type = "string", format = "date-time" }, updatedAt = { type = "string", format = "date-time" }, archived = { type = "boolean" }, archivedAt = { type = "string", format = "date-time" }, propertiesWithHistory = { type = "object", additionalProperties = { type = "array", items = { type = "object" } }, description = "Returned only when asked for" }, associations = { type = "object", description = "The contacts and companies on the deal. Returned only when asked for" } }
 
 [operations.quirks.error_envelope]
 message_pointer = "/message"

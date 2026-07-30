@@ -41,6 +41,20 @@ scheme = "bearer"
 env = ["FLY_API_TOKEN"]
 description = "Fly access token, preferably scoped to the app or organization this connection manages"
 
+# THE FIVE READS BELOW DECLARE A `response_schema`; THE FOUR LIFECYCLE WRITES DO NOT (C-126).
+#
+# That split is the vendor's, not a gap in this file. Fly's own OpenAPI document
+# (`docs.machines.dev/spec/openapi3.json`) declares a `200` for `machines_start`, `machines_stop`,
+# `machines_restart` and `machines_delete` **with no body schema at all** — an empty content object,
+# unlike the machine reads, which are fully typed. So there is nothing to derive a schema from, and
+# the two ways of appearing to have one are both worse than absence: `{}` and `{"type": "object"}`
+# each satisfy a coverage count while telling a consumer nothing
+# (`crates/connector-spec/tests/response_schema_coverage.rs` refuses them outright).
+#
+# The practical consequence is worth stating where a flow author will see it: **confirm a lifecycle
+# call with `fly-machine-get` rather than by reading its response.** The machine's `state` is the
+# authority on whether it started, and `fly-machine-events-list` is the audit trail.
+
 [[operations]]
 id = "fly-regions-list"
 service = "machines"

@@ -193,6 +193,39 @@ description = "The contact's Intercom id — a 24-character lowercase hexadecima
 required = true
 schema = { type = "string", minLength = 1 }
 
+# ---------------------------------------------------------------------------------------------
+# RESPONSE SHAPES (C-126) — from the REST reference at
+# `developers.intercom.com/docs/references/rest-api/api.intercom.io/…` (contacts/showcontact,
+# contacts/createcontact, conversations/retrieveconversation, conversations/replyconversation,
+# notes/createnote), whose schemas are generated from Intercom's own document.
+#
+# Three vendor-wide facts shape every schema below, and each one is a mistake waiting to be made:
+#
+# 1. **Every timestamp is a Unix integer**, not an ISO string. `created_at` is an integer;
+#    `last_seen_at`, `signed_up_at` and `waiting_since` are integer-or-null. A consumer that rendered
+#    one as a date string gets `1674589321`.
+# 2. **`tags`, `companies` and `notes` are OBJECTS, not arrays.** Each is a paginated wrapper —
+#    `{type, data, url, total_count, has_more}` — so the list is one level down at `.data`, and it is
+#    truncated. Reading `contact.tags[0]` finds nothing; reading `contact.tags.data[0]` finds the first
+#    of possibly many more than were returned.
+# 3. **Every POST here answers `200`, not `201`.** Contact create, conversation reply and note create
+#    all document `200` as their only success code. Nothing in this file claims a 201.
+#
+# `type` is pinned with `const` where the vendor documents a fixed discriminator, because that is the
+# member a polymorphic consumer switches on.
+# ---------------------------------------------------------------------------------------------
+
+# The contact, at the top level with no envelope.
+#
+# **This is personal data about a named individual** — email, phone, name, location and the IP-derived
+# fields Intercom keeps. Said here because `risk` cannot say it: `Risk` grades what a call *changes*,
+# so a read of a person's contact record grades `low` on the same scale as reading a conversation's
+# state. The same gap `providers/stripe.toml` records for its customer read.
+[operations.response_schema]
+type = "object"
+required = ["type", "id"]
+properties = { type = { const = "contact" }, id = { type = "string", description = "The 24-character Intercom id, which is what this operation takes" }, workspace_id = { type = "string", description = "The workspace the contact belongs to — Intercom's app id" }, external_id = { type = "string", description = "Your own id for this person, or null. Intercom's identity model treats this and `email` as the two identifiers" }, role = { type = "string", description = "`user` for an identified person or `lead` for an unidentified visitor. A lead can be merged into a user later, which changes the id a flow should hold" }, email = { type = "string", format = "email" }, phone = { type = "string", description = "Null unless set" }, name = { type = "string", description = "Null unless set" }, avatar = { type = "object", description = "`{type, image_url}` or null — an object, not a URL string" }, owner_id = { type = "integer", description = "The admin who owns the contact, or null" }, created_at = { type = "integer", description = "Unix seconds — an integer, not an ISO string" }, updated_at = { type = "integer", description = "Unix seconds" }, signed_up_at = { type = "integer", description = "Unix seconds, or null for a contact that never signed up" }, last_seen_at = { type = "integer", description = "Unix seconds of the last time Intercom saw this person, or null. This is the field that says whether a contact is live" }, last_replied_at = { type = "integer", description = "Unix seconds, or null" }, last_contacted_at = { type = "integer", description = "Unix seconds, or null" }, unsubscribed_from_emails = { type = "boolean", description = "TRUE MEANS DO NOT EMAIL THIS PERSON. Check it before a flow sends anything" }, has_hard_bounced = { type = "boolean", description = "Their address bounced permanently; mail to it will not arrive" }, marked_email_as_spam = { type = "boolean" }, custom_attributes = { type = "object", description = "The workspace's own attributes, keyed by name. Which keys exist is per workspace, so none is declared" }, tags = { type = "object", description = "A PAGINATED WRAPPER, not an array: `{type, data, url, total_count, has_more}`. The tags are at `.data`, and `has_more` true means there are more than were returned" }, companies = { type = "object", description = "The same wrapper shape — companies at `.data`" }, notes = { type = "object", description = "The same wrapper shape — notes at `.data`" }, location = { type = "object", description = "Intercom's IP-derived guess: `{type, country, region, city}`" }, social_profiles = { type = "object", description = "The same wrapper shape" } }
+
 [operations.quirks.error_envelope]
 # See the header comment: this names the *first* error of a list, which is all the model can hold.
 message_pointer = "/errors/0/message"
@@ -234,6 +267,17 @@ description = "The contact's email address, which is how this operation identifi
 required = true
 schema = { type = "string", format = "email", minLength = 1 }
 
+# The created contact — the same shape the read returns, and with `200` rather than `201`: Intercom
+# documents `200` and `401` as this endpoint's only responses.
+#
+# `id` is the point. This operation's own description warns that creating twice creates two contacts,
+# and the returned `id` is the only thing that distinguishes them; it is also what a following
+# `intercom-contact-note-create` addresses.
+[operations.response_schema]
+type = "object"
+required = ["type", "id"]
+properties = { type = { const = "contact" }, id = { type = "string", description = "The new contact's id — the only handle on the record this call created, and what a following note addresses" }, workspace_id = { type = "string" }, external_id = { type = "string" }, role = { type = "string", description = "Echoes back `user` or `lead` as sent" }, email = { type = "string", format = "email" }, phone = { type = "string" }, name = { type = "string" }, avatar = { type = "object", description = "`{type, image_url}` or null" }, created_at = { type = "integer", description = "Unix seconds — an integer, not an ISO string" }, updated_at = { type = "integer", description = "Unix seconds" }, signed_up_at = { type = "integer", description = "Null on a contact created this way" }, last_seen_at = { type = "integer", description = "Null until Intercom sees the person" }, unsubscribed_from_emails = { type = "boolean" }, custom_attributes = { type = "object" }, tags = { type = "object", description = "The paginated wrapper shape, empty on a new contact" }, companies = { type = "object", description = "The paginated wrapper shape" }, notes = { type = "object", description = "The paginated wrapper shape" } }
+
 [operations.quirks.error_envelope]
 message_pointer = "/errors/0/message"
 code_pointer = "/errors/0/code"
@@ -253,6 +297,20 @@ name = "conversation_id"
 description = "The conversation's Intercom id — a decimal string such as `123`, as it appears in the inbox URL"
 required = true
 schema = { type = "string", minLength = 1 }
+
+# The conversation. **`state` and `open` are two answers to overlapping questions and a flow needs
+# both**: `state` is `open`, `closed` or `snoozed`, while `open` is a boolean that is true for a
+# snoozed conversation too — a snoozed conversation is still open, it is merely hidden until
+# `snoozed_until`. Branching on `open` alone treats a snoozed conversation as live; branching on
+# `state == "open"` alone treats it as handled. Neither is right on its own, and no consumer could
+# infer that from either member's name.
+#
+# `conversation_parts` is where the messages are, one level down at `.conversation_parts` and then
+# `.conversation_parts` again — Intercom's own nesting, and the reason this schema names it explicitly.
+[operations.response_schema]
+type = "object"
+required = ["type", "id", "state"]
+properties = { type = { const = "conversation" }, id = { type = "string", description = "The conversation id, a decimal string" }, title = { type = "string", description = "The subject, or null — most conversations have none" }, state = { type = "string", enum = ["open", "closed", "snoozed"], description = "The inbox state. `snoozed` is a *kind of open*: see `open` beside it" }, open = { type = "boolean", description = "True while the conversation is unresolved — **including while it is snoozed**. Use with `state` rather than instead of it" }, read = { type = "boolean", description = "Whether a teammate has read it" }, priority = { type = "string", description = "`priority` or `not_priority` — Intercom's own two-valued flag, not a severity scale" }, created_at = { type = "integer", description = "Unix seconds" }, updated_at = { type = "integer", description = "Unix seconds" }, waiting_since = { type = "integer", description = "Unix seconds since the customer has been waiting for a reply, or null when they are not. This is the SLA-relevant field" }, snoozed_until = { type = "integer", description = "Unix seconds when a snoozed conversation reopens, or null" }, source = { type = "object", description = "How it started: `{type, id, delivered_as, subject, body, author, attachments}` — the first message, and `author` is who sent it" }, contacts = { type = "object", description = "The customers on the conversation, as `{type, contacts: […]}` — a wrapper, not an array" }, teammates = { type = "object", description = "The admins on it, same wrapper shape, or null" }, admin_assignee_id = { type = "integer", description = "The assigned admin, or null when unassigned" }, team_assignee_id = { type = "integer", description = "The assigned team, or null" }, tags = { type = "object", description = "The paginated wrapper shape — tags at `.data`" }, conversation_rating = { type = "object", description = "The customer's rating of the conversation, or null: `{rating, remark, created_at, contact, teammate}`" }, statistics = { type = "object", description = "Timing aggregates — first response time, last close time and so on — or null" }, conversation_parts = { type = "object", description = "THE MESSAGES, nested twice: `{type, conversation_parts: […], total_count}`. Each part carries `part_type` (`comment`, `note`, `assignment`, `close`), `body` as HTML, `author` and `created_at`. Only a page of them is returned — check `total_count`" }, custom_attributes = { type = "object" }, ai_agent_participated = { type = "boolean", description = "Whether Intercom's own AI agent replied in this conversation, which is worth knowing before a second automation replies too" } }
 
 [operations.quirks.error_envelope]
 message_pointer = "/errors/0/message"
@@ -321,6 +379,21 @@ description = "The reply text as HTML; must not be blank. Intercom renders it in
 required = true
 schema = { type = "string", minLength = 1 }
 
+# **THE WHOLE CONVERSATION COMES BACK, NOT THE REPLY.** Intercom answers a reply with the conversation
+# object — the same shape `intercom-conversation-get` returns — at `200`, not `201`. So there is no
+# top-level id for the message that was just sent: it is the last entry inside
+# `conversation_parts.conversation_parts`, and a consumer that expected `{type: "conversation_part",
+# id: …}` finds a conversation instead.
+#
+# That is worth stating precisely because of what this operation does: a `comment` reply reaches a real
+# customer and cannot be un-sent, so "did my reply land, and as which audience" is a question someone
+# will ask of this response. The answer is in the last conversation part's `part_type` — `comment` or
+# `note` — not at the top level.
+[operations.response_schema]
+type = "object"
+required = ["type", "id", "state"]
+properties = { type = { const = "conversation" }, id = { type = "string", description = "The conversation's id, unchanged by the reply" }, state = { type = "string", enum = ["open", "closed", "snoozed"], description = "The state after the reply. An admin comment on a closed conversation reopens it" }, open = { type = "boolean", description = "True while unresolved, including while snoozed" }, read = { type = "boolean" }, priority = { type = "string" }, created_at = { type = "integer", description = "Unix seconds — of the conversation, not of this reply" }, updated_at = { type = "integer", description = "Unix seconds, moved by this reply" }, waiting_since = { type = "integer", description = "Null after an admin reply, since the customer is no longer waiting" }, snoozed_until = { type = "integer" }, source = { type = "object", description = "The conversation's first message, not this reply" }, contacts = { type = "object", description = "`{type, contacts: […]}` — who the reply went to, when `message_type` was `comment`" }, admin_assignee_id = { type = "integer" }, team_assignee_id = { type = "integer" }, conversation_parts = { type = "object", description = "WHERE THE SENT REPLY IS: `{type, conversation_parts: […], total_count}`, and the reply is the last entry. Its `part_type` is `comment` (delivered to the customer) or `note` (internal), which is the only confirmation of which audience was written to" }, statistics = { type = "object" }, tags = { type = "object" }, custom_attributes = { type = "object" } }
+
 [operations.quirks.error_envelope]
 message_pointer = "/errors/0/message"
 code_pointer = "/errors/0/code"
@@ -360,6 +433,17 @@ name = "admin_id"
 description = "The id of the admin the note is attributed to. Intercom treats this as optional; this operation requires it so every note has an author"
 required = true
 schema = { type = "string", minLength = 1 }
+
+# The created note, at `200` — Intercom documents `200` and `404` here, and no `201`.
+#
+# `contact` is the member to check: it is nullable in the vendor's schema, so a note can come back
+# attached to nothing identifiable. And `author` is the confirmation that the required `admin_id`
+# above did what it exists for — an unauthored note is the contract this operation deliberately
+# refuses to produce.
+[operations.response_schema]
+type = "object"
+required = ["type", "id"]
+properties = { type = { const = "note" }, id = { type = "string", description = "The note's own id" }, created_at = { type = "integer", description = "Unix seconds — an integer, e.g. 1674589321" }, body = { type = "string", description = "The note as stored, HTML" }, author = { type = "object", description = "The admin it is attributed to: `{type, id, name, email, job_title, away_mode_enabled}`. This is what the required `admin_id` produced" }, contact = { type = "object", description = "The contact it was attached to, as `{type, id}` — **nullable** in Intercom's schema, so confirm it rather than assuming the note landed on a person" } }
 
 [operations.quirks.error_envelope]
 message_pointer = "/errors/0/message"

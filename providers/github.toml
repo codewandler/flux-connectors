@@ -113,6 +113,42 @@ required = true
 schema = { type = "string", minLength = 1 }
 
 # ---------------------------------------------------------------------------------------------
+# RESPONSE SHAPES (C-126) — from GitHub's own REST reference, per endpoint:
+#
+#   docs.github.com/en/rest/repos/repos#get-a-repository
+#   docs.github.com/en/rest/issues/issues#get-an-issue
+#   docs.github.com/en/rest/issues/issues#create-an-issue
+#   docs.github.com/en/rest/pulls/pulls#get-a-pull-request
+#   docs.github.com/en/rest/issues/comments#create-an-issue-comment
+#
+# Every field declared below is in the schema those pages publish (`full-repository`, `issue`,
+# `pull-request`, `issue-comment`). Three deliberate omissions, because each one would be an
+# invention:
+#
+# - **`assignee`, singular.** The live API returns it and the *webhook* payload schema documents it,
+#   but the REST issue schema on the page above does not, so only the documented `assignees` array is
+#   declared. This is the smallest and most tempting guess in the file, and it is the one to refuse.
+# - **A closed enum on `visibility`.** The page documents `public` and `private` only, while an
+#   enterprise repository is `internal`. A closed enum built from an incomplete list would reject a
+#   real value, so the member is typed `string` and the values live in its description.
+# - **Nullability of `pushed_at` and `merge_commit_sha`.** Not stated on either page. Left unstated
+#   here rather than asserted in either direction.
+#
+# GitHub returns very large objects — a repository has upwards of a hundred members — so what is
+# enumerated is the identity, the state and the fields a flow branches on. A JSON Schema `properties`
+# map does not claim to be exhaustive, and none of these declares `additionalProperties: false`.
+# ---------------------------------------------------------------------------------------------
+
+# The repository. `default_branch` and `permissions` are what a flow actually needs before it acts:
+# the first is where a change would land, and the second is whether this token could make one at all —
+# a token with `pull` only reads, and finding that out from `permissions.push` is cheaper than finding
+# it out from a 403 on a write.
+[operations.response_schema]
+type = "object"
+required = ["id", "name", "full_name", "private", "owner"]
+properties = { id = { type = "integer", description = "The repository's global id, stable across renames" }, node_id = { type = "string" }, name = { type = "string" }, full_name = { type = "string", description = "`owner/repo`, which is how every other operation here addresses it" }, private = { type = "boolean" }, visibility = { type = "string", description = "`public` or `private` per the reference; an enterprise repository can also be `internal`, so this is deliberately not a closed enum" }, owner = { type = "object", description = "The owning user or organisation: `login`, `id`, `type` (`User` or `Organization`), `avatar_url`, `html_url`" }, html_url = { type = "string", format = "uri" }, description = { type = "string", description = "Null when the repository has none" }, fork = { type = "boolean" }, archived = { type = "boolean", description = "An archived repository is read-only — a write against it fails, so check this before `github-issue-create`" }, disabled = { type = "boolean" }, default_branch = { type = "string" }, language = { type = "string", description = "The dominant language, or null" }, open_issues_count = { type = "integer", description = "Open issues **and** open pull requests, since GitHub counts a PR as an issue" }, stargazers_count = { type = "integer" }, pushed_at = { type = "string", format = "date-time" }, permissions = { type = "object", description = "What the authenticated token can do here: `admin`, `push` and `pull` are always present, `maintain` and `triage` only sometimes. Absent entirely for an unauthenticated read" } }
+
+# ---------------------------------------------------------------------------------------------
 
 [[operations]]
 id = "github-issue-get"
@@ -144,6 +180,24 @@ description = "The issue number within the repository — the number in its URL,
 required = true
 schema = { type = "integer", format = "uint64", minimum = 1 }
 
+# `pull_request` IS THE MEMBER THAT MATTERS HERE, and GitHub documents it in those terms: "'Issues'
+# endpoints may return both issues and pull requests in the response. You can identify pull requests
+# by the `pull_request` key. Be aware that the id of a pull request returned from 'Issues' endpoints
+# will be an issue id."
+#
+# So the response is a **discriminated** shape and the discriminator is the *presence* of an optional
+# member — which is exactly the fact this operation's `description` states in prose and which nothing
+# machine-readable said until now. A flow that treats every answer as an issue will treat a PR as one
+# too, and will do it while holding an `id` that addresses neither the PR resource nor anything else
+# useful.
+#
+# `state` plus `state_reason` is the other pair worth having: `closed` alone does not say whether the
+# issue was fixed or dismissed, and `not_planned` versus `completed` is the difference.
+[operations.response_schema]
+type = "object"
+required = ["id", "number", "state", "title", "labels"]
+properties = { id = { type = "integer", description = "The issue's global id. For a pull request read through this endpoint it is an **issue** id and does not address the PR resource" }, node_id = { type = "string" }, number = { type = "integer", description = "The per-repository number — what this operation's `issue_number` takes" }, state = { type = "string", description = "`open` or `closed`" }, state_reason = { type = "string", description = "Why it closed: `completed`, `not_planned`, `duplicate` or `reopened`. Null on an open issue, and the difference between a fixed issue and a dismissed one" }, title = { type = "string" }, body = { type = "string", description = "The issue body as Markdown; null when the author wrote none" }, user = { type = "object", description = "Who opened it: `login`, `id`, `type`" }, labels = { type = "array", description = "The applied labels, each `{id, name, color, description}`", items = { type = "object" } }, assignees = { type = "array", description = "Everyone assigned. The reference's issue schema documents this array and does **not** document a singular `assignee`, so none is declared here even though the API returns one", items = { type = "object" } }, milestone = { type = "object", description = "The milestone, or null" }, comments = { type = "integer", description = "How many comments it has — a count, not the comments" }, locked = { type = "boolean" }, draft = { type = "boolean" }, html_url = { type = "string", format = "uri" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, closed_at = { type = "string", format = "date-time", description = "Null while open" }, pull_request = { type = "object", description = "PRESENT ONLY IF THIS IS A PULL REQUEST — `{url, html_url, diff_url, patch_url, merged_at}`. Its presence is how GitHub says the answer is a PR; read its merge and review state with `github-pull-get`, and note that `merged_at` here is null for an open or closed-unmerged PR" } }
+
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
@@ -171,6 +225,23 @@ name = "pull_number"
 description = "The pull request number within the repository"
 required = true
 schema = { type = "integer", format = "uint64", minimum = 1 }
+
+# `mergeable` IS THREE-VALUED, and the reference says why: "If the value is null, then GitHub has
+# started a background job to compute the mergeability. After giving the job time to complete,
+# resubmit the request."
+#
+# That is the single most consequential fact in this file for a flow author. `null` is not "no": a
+# gate written as `mergeable == false → refuse` and `else → merge` sends the *unknown* case down the
+# merge path on the first read of any recently pushed PR, because the first read is the one that
+# triggers the computation. Publishing the member as a plain boolean would hide that; publishing it
+# with this description is the whole value of the schema.
+#
+# `merged` is the one to branch on for "did this land" — it is a settled boolean, unlike `mergeable`,
+# and unlike `state`, which reads `closed` whether a PR was merged or abandoned.
+[operations.response_schema]
+type = "object"
+required = ["id", "number", "state", "title"]
+properties = { id = { type = "integer", description = "The pull request's own id — distinct from the issue id `github-issue-get` returns for the same number" }, number = { type = "integer" }, state = { type = "string", description = "`open` or `closed`. A merged PR is `closed`, so this cannot distinguish merged from abandoned — read `merged`" }, title = { type = "string" }, body = { type = "string", description = "The description as Markdown, or null" }, draft = { type = "boolean" }, merged = { type = "boolean", description = "Whether it landed. This is the settled answer; `mergeable` below is about whether it *could*" }, mergeable = { type = "boolean", description = "THREE-VALUED: true, false, or **null meaning not yet computed** — GitHub starts a background job on first read and the reference says to resubmit the request. Treat null as unknown, never as false" }, mergeable_state = { type = "string", description = "GitHub's word for the merge situation, e.g. `clean`, `dirty`, `blocked`, `behind`, `unknown`" }, merged_at = { type = "string", format = "date-time", description = "When it merged, or null" }, merge_commit_sha = { type = "string", description = "The resulting commit once merged. Its nullability before a merge is not documented, so nothing is asserted here" }, head = { type = "object", description = "The source of the change: `{ref, sha, label, repo}` — `repo` is a different repository for a fork PR" }, base = { type = "object", description = "Where it would land: `{ref, sha, label, repo}`" }, additions = { type = "integer" }, deletions = { type = "integer" }, changed_files = { type = "integer" }, commits = { type = "integer" }, review_comments = { type = "integer", description = "Line-level review comments. Conversation comments are counted separately and are what `github-issue-comment-add` writes" }, user = { type = "object", description = "Who opened it" }, html_url = { type = "string", format = "uri" } }
 
 # ---------------------------------------------------------------------------------------------
 # The two writes. **Both publish to a surface the world can read**, and their `risk` says so.
@@ -242,6 +313,19 @@ description = "User logins to assign; GitHub silently drops any login without pu
 required = false
 schema = { type = "array", items = { type = "string", minLength = 1 } }
 
+# `201 Created`, and the body is the same issue object `github-issue-get` returns. Two members carry
+# the weight: `number`, which is how everything afterwards addresses the issue — including this
+# connector's own `github-issue-comment-add` — and `html_url`, which is the link a human is given.
+#
+# `assignees` is also the confirmation of a silent failure documented on the parameter above: GitHub
+# drops a login without push access rather than refusing the call, so an issue created "assigned to
+# someone" can arrive assigned to nobody, with HTTP 201 and no error. Reading it back is the only way
+# to know.
+[operations.response_schema]
+type = "object"
+required = ["id", "number", "state", "title"]
+properties = { id = { type = "integer", description = "The new issue's global id" }, node_id = { type = "string" }, number = { type = "integer", description = "The per-repository number to address it by afterwards" }, state = { type = "string", description = "`open` on a freshly created issue" }, title = { type = "string" }, body = { type = "string" }, user = { type = "object", description = "The account the token belongs to — a created issue is attributed to it, not to whoever asked for it" }, labels = { type = "array", description = "The labels that were applied. A name the repository did not have is created by this call and appears here", items = { type = "object" } }, assignees = { type = "array", description = "Who was actually assigned. GitHub silently drops a login without push access, so compare this against what was requested rather than assuming it took", items = { type = "object" } }, comments = { type = "integer" }, html_url = { type = "string", format = "uri", description = "The issue's page — the link to give a human" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" } }
+
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
@@ -282,3 +366,15 @@ name = "body"
 description = "The comment text as GitHub-flavoured Markdown; must not be blank"
 required = true
 schema = { type = "string", minLength = 1 }
+
+# `201 Created`, and the body is the issue-comment object. `html_url` is the deep link to the comment
+# itself rather than to the issue, which is what a flow reports back after posting; `issue_url` is the
+# API URL of what was commented on, and it is the only member that names the target.
+#
+# `author_association` is included because it is the one thing here a reviewer of an automated comment
+# wants: `OWNER`, `MEMBER`, `COLLABORATOR`, `CONTRIBUTOR` or `NONE` says what standing the token's
+# account has in this repository, which is what makes a bot comment read as authoritative or not.
+[operations.response_schema]
+type = "object"
+required = ["id", "body"]
+properties = { id = { type = "integer", description = "The comment's own id — not the issue's" }, node_id = { type = "string" }, body = { type = "string", description = "The comment as posted" }, user = { type = "object", description = "The commenting account, which is whoever the token belongs to" }, author_association = { type = "string", description = "The commenter's standing in the repository: `OWNER`, `MEMBER`, `COLLABORATOR`, `CONTRIBUTOR`, `NONE` and so on" }, html_url = { type = "string", format = "uri", description = "Link to this comment, anchored — not to the issue" }, issue_url = { type = "string", format = "uri", description = "API URL of the issue or pull request that was commented on" }, url = { type = "string", format = "uri" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, reactions = { type = "object", description = "Reaction rollup counts, all zero on a new comment" } }

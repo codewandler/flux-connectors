@@ -375,6 +375,13 @@ description = "The numeric id of the meeting to cancel. As on the get, a meeting
 required = true
 schema = { type = "integer", format = "int64", minimum = 1 }
 
+# NO `response_schema`, DELIBERATELY (C-126). Zoom answers this one **`204`, "Meeting deleted."**, with
+# no content type and no schema under it — unlike every 200 in the same reference document. There is no
+# body, so there is nothing to describe, and `{}` or `{"type": "object"}` would be worse than absence
+# on two counts: each satisfies a coverage count while saying nothing, and each additionally describes
+# an empty JSON document where in fact none arrives. A cancellation is confirmed by the status code, or
+# by `zoom-meeting-get` answering `3001 Meeting does not exist` afterwards.
+
 [operations.quirks.error_envelope]
 message_pointer = "/message"
 code_pointer = "/code"
@@ -394,6 +401,27 @@ name = "user_id"
 description = "`me` for the token's own user, a Zoom user id, or the user's email address"
 required = true
 schema = { type = "string", pattern = "^[A-Za-z0-9@._+-]+$", minLength = 1 }
+
+# The user object (`developers.zoom.us/docs/api/` → users), and the three types below are the reason
+# this schema earns its place — every one of them is a field a reader would assume wrongly:
+#
+# - **`type` is an integer plan code**, not a string: `1` Basic, `2` Licensed, `4` Unassigned without
+#   Meetings Basic. It is what this operation exists to resolve before `zoom-meeting-create`, because a
+#   Basic user's meetings are capped at 40 minutes.
+# - **`verified` is an integer**, `1` verified and `0` not — while the `verified` inside a
+#   `phone_numbers` entry is a genuine boolean. Two members, one name, two types.
+# - **timestamps are ISO 8601 strings**, not the Unix integers Intercom's sibling connector returns.
+#
+# `phone_number` and `phone_country` are documented as deprecated in favour of `phone_numbers`, so only
+# the latter is declared. And Zoom's schema for this response is `allOf`-composed from two subschemas,
+# which is why the flat member list below is a flattening rather than a transcription.
+#
+# This is personal data about a named individual — email, name, department and phone numbers — and
+# `risk` has no axis for what a read discloses.
+[operations.response_schema]
+type = "object"
+required = ["id"]
+properties = { id = { type = "string", description = "The user's Zoom id — what `me` resolves to, and the `user_id` a meeting is created under" }, email = { type = "string", format = "email", description = "Personal data" }, first_name = { type = "string" }, last_name = { type = "string" }, display_name = { type = "string" }, type = { type = "integer", enum = [1, 2, 4], description = "THE LICENCE, AS AN INTEGER: 1 Basic, 2 Licensed, 4 Unassigned without Meetings Basic. A Basic user's group meetings are time-capped, so this is what to check before scheduling one" }, status = { type = "string", enum = ["pending", "active", "inactive"], description = "`pending` means the person has never activated the account — a meeting created for them still exists, but they cannot host it" }, verified = { type = "integer", enum = [0, 1], description = "AN INTEGER, not a boolean: 1 verified, 0 not. The `verified` inside a `phone_numbers` entry *is* a boolean" }, timezone = { type = "string", description = "IANA name, e.g. `Europe/Berlin`. A meeting created without an explicit timezone uses this one" }, pmi = { type = "integer", format = "int64", description = "The personal meeting id — a standing meeting room. Reusing it means every past participant can rejoin" }, use_pmi = { type = "boolean", description = "Whether new meetings default to the PMI rather than a fresh id" }, dept = { type = "string" }, job_title = { type = "string" }, company = { type = "string" }, language = { type = "string" }, role_name = { type = "string", description = "The Zoom role, e.g. `Owner`, `Admin`, `Member`" }, role_id = { type = "string" }, account_id = { type = "string" }, personal_meeting_url = { type = "string", description = "The join URL for the PMI. A participant link, not a host link — contrast `start_url` on a meeting" }, phone_numbers = { type = "array", description = "Each `{code, country, label, number, verified}`, where `label` is `Mobile`, `Office`, `Home` or `Fax` and `verified` here IS a boolean. Personal data. The flat `phone_number`/`phone_country` members are deprecated and are not declared", items = { type = "object" } }, created_at = { type = "string", format = "date-time", description = "ISO 8601, not Unix seconds. For a `pending` user Zoom's docs warn this reflects the time of the API call rather than account creation" }, last_login_time = { type = "string", format = "date-time", description = "ISO 8601, or absent for a user who never signed in" }, last_client_version = { type = "string" } }
 
 [operations.quirks.error_envelope]
 message_pointer = "/message"

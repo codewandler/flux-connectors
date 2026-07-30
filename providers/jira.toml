@@ -206,6 +206,36 @@ required = true
 schema = { type = "string", minLength = 1 }
 
 # ---------------------------------------------------------------------------------------------
+# RESPONSE SHAPES (C-126) — read from `developer.atlassian.com/cloud/jira/platform/swagger.v3.json`,
+# the machine-readable document that generates the v2 reference pages this file was authored against
+# (402 `/rest/api/2/…` paths; the similarly named `swagger-v3.v3.json` is the *v3* spec and describes
+# a different body format — see the ADF discussion in the header).
+#
+# **`fields` IS A FREE-FORM MAP, AND THAT IS WHAT THIS SCHEMA HAS TO SAY.** `IssueBean.fields` is
+# declared `{"type": "object", "additionalProperties": {}}`: Jira documents no member of it at all,
+# because its members *are* the site's configured fields and a custom field is `customfield_10014`.
+# The vendor's own example does not even show `summary` or `status`.
+#
+# So the honest and useful statement is the envelope — the issue's data is one level down, under
+# `fields`, and `id`/`key`/`self` are the only top-level members — and an explicit note that the
+# member set inside is per-site. Enumerating `summary`, `status` and `assignee` there would look
+# authoritative, would be undocumented, and would be wrong on the first site whose administrator
+# renamed or removed one. That distinction is the whole reason C-126 refuses a guessed schema.
+#
+# Nothing in these six schemas is `required` in the vendor's spec and nearly everything is
+# `readOnly`, so `required` below is used only where the reference's own example shows the member on
+# every response.
+# ---------------------------------------------------------------------------------------------
+
+# `IssueBean`: three flat members and the map. `expand` is in the schema but absent from the
+# documented example, so it is declared optional and described as what it is — a hint string, not
+# data.
+[operations.response_schema]
+type = "object"
+required = ["id", "key", "fields"]
+properties = { id = { type = "string", description = "The issue's numeric id, **as a string** — Jira returns ids as strings throughout" }, key = { type = "string", description = "The issue key, e.g. `PROJ-123`. It changes if the issue moves project; the id does not" }, self = { type = "string", format = "uri", description = "The issue's own API URL" }, fields = { type = "object", description = "EVERY FIELD OF THE ISSUE, one level down — `summary`, `description`, `status`, `assignee`, `reporter`, `priority`, `issuetype`, `project`, `created`, `updated`, plus every custom field as `customfield_NNNNN`. Jira's schema declares no member of this map, because the members are whatever the site has configured, so nothing is enumerated here. `status` is a nested object (`{name, statusCategory}`), not a string, and text fields are wiki markup" }, renderedFields = { type = "object", description = "The same fields rendered to HTML, when asked for. Not requested by this operation" }, changelog = { type = "object", description = "Change history, when expanded. Not requested by this operation" }, expand = { type = "string", description = "Comma-separated names of the parts that *could* be expanded — a hint, not data" } }
+
+# ---------------------------------------------------------------------------------------------
 
 [[operations]]
 id = "jira-issue-create"
@@ -247,6 +277,21 @@ description = "Name of the issue type as the project defines it, e.g. `Task`, `B
 required = true
 schema = { type = "string", minLength = 1 }
 
+# `CreatedIssue`, `201 Created`. **The created issue is not returned** — only its identity. A flow that
+# needs the issue's fields has to follow up with `jira-issue-get`, which is the opposite of what
+# github, freshdesk and hubspot do on create and is exactly the kind of per-vendor asymmetry a
+# published response schema exists to state.
+#
+# `transition` and `watchers` are the parts worth declaring beyond `id`/`key`/`self`, and they are the
+# reason this response can report a *partial* success: each is a `NestedResponse` carrying its own
+# `status` and `errorCollection`, so Jira can create the issue, fail to apply an associated transition
+# or watcher, and still answer `201`. The vendor's own example returns `transition` with an embedded
+# `{"status": 200, "errorCollection": …}`.
+[operations.response_schema]
+type = "object"
+required = ["id", "key"]
+properties = { id = { type = "string", description = "The new issue's numeric id, as a string" }, key = { type = "string", description = "The new issue's key, e.g. `PROJ-123`. This is what every following call addresses it by — nothing else in the response identifies it" }, self = { type = "string", format = "uri" }, transition = { type = "object", description = "Present when the create asked for a transition: its own `{status, errorCollection, warningCollection}`. A failure here does not fail the create, so a `201` can still mean the transition did not happen" }, watchers = { type = "object", description = "Same shape, for watchers the create asked to add" } }
+
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
@@ -263,6 +308,15 @@ wire = "issueIdOrKey"
 description = "The issue key, e.g. `PROJ-123`, or its numeric id"
 required = true
 schema = { type = "string", minLength = 1 }
+
+# `PageOfComments` — exactly four members, and the page metadata is the point. This operation cannot
+# send `startAt` or `maxResults` (C-30), so `total` versus `maxResults` is the **only** way a caller
+# learns that it is looking at a truncated discussion: an issue with 300 comments answers with
+# `total: 300` and 50 of them, with no other signal.
+[operations.response_schema]
+type = "object"
+required = ["comments"]
+properties = { comments = { type = "array", description = "The comments, oldest first. Bodies are Jira wiki markup", items = { type = "object", properties = { id = { type = "string", description = "The comment's id, as a string" }, self = { type = "string", format = "uri" }, body = { type = "string", description = "The comment text in wiki markup" }, renderedBody = { type = "string", description = "The same body as HTML, when expanded" }, author = { type = "object", description = "Who wrote it: `{accountId, displayName, active, self}` — an `accountId`, never a username, and `emailAddress` only where the site's privacy settings expose it" }, updateAuthor = { type = "object", description = "Who last edited it, which need not be the author" }, created = { type = "string", description = "Jira's own timestamp format, e.g. `2021-01-17T12:34:00.000+0000` — not RFC 3339 with a colon in the offset" }, updated = { type = "string" }, visibility = { type = "object", description = "Present when the comment is restricted to a role or group: `{type, value, identifier}`. Its absence means everyone who can see the issue can see the comment" }, jsdPublic = { type = "boolean", description = "On Jira Service Management, whether the customer on the portal can see this comment. False is an internal note" } } } }, startAt = { type = "integer", description = "The offset this page starts at — 0 here, since this operation cannot send one" }, maxResults = { type = "integer", description = "How many comments the page could hold, chosen by Jira" }, total = { type = "integer", description = "How many comments the issue has in total. **Greater than the length of `comments` means the discussion is truncated**, and this operation cannot fetch the rest" } }
 
 # ---------------------------------------------------------------------------------------------
 
@@ -294,6 +348,17 @@ description = "The comment text, in Jira wiki markup. Must not be blank"
 required = true
 schema = { type = "string", minLength = 1 }
 
+# `201 Created`, and the body is a **bare `Comment`** — not the page envelope the list returns, and
+# not the issue. A consumer that reused the list's shape and read `comments[0]` would find nothing.
+#
+# `visibility` is the member to read back: this connector cannot *set* a restriction (see the header),
+# so its absence here confirms the comment is visible to everyone who can see the issue — including a
+# customer on a Jira Service Management portal, which is what `jsdPublic` says explicitly.
+[operations.response_schema]
+type = "object"
+required = ["id", "body"]
+properties = { id = { type = "string", description = "The new comment's id, as a string" }, self = { type = "string", format = "uri", description = "The comment's own API URL. There is no browser link in this response — a human-facing link has to be built from the issue key" }, body = { type = "string", description = "The comment as stored, in wiki markup" }, author = { type = "object", description = "The account the token belongs to — a posted comment is attributed to it" }, updateAuthor = { type = "object" }, created = { type = "string", description = "Jira's timestamp format, e.g. `2021-01-17T12:34:00.000+0000`" }, updated = { type = "string" }, visibility = { type = "object", description = "Absent here, because this connector cannot restrict a comment. Absence means everyone who can see the issue can see it" }, jsdPublic = { type = "boolean", description = "On Jira Service Management, whether the portal customer can see it. Read it before treating a comment as internal" } }
+
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
@@ -310,6 +375,21 @@ wire = "issueIdOrKey"
 description = "The issue key, e.g. `PROJ-123`, or its numeric id"
 required = true
 schema = { type = "string", minLength = 1 }
+
+# `Transitions`: the array, under `transitions`. This is the response a flow *has* to destructure —
+# it exists solely to produce the `transition_id` the next operation sends — so it is the one place in
+# this file where enumerating the item is both possible and worth doing, because unlike `IssueBean`
+# the vendor does type `IssueTransition` member by member.
+#
+# Two documented facts shape it. Every member except `id` is `readOnly` and **none is `required`**, and
+# the vendor's own two example transitions carry *different* key sets — so everything here is optional,
+# including `isAvailable`. And `to` is the only place in the whole Jira reference that documents the
+# `{name, statusCategory}` status nesting, which is why the target status is legible here while
+# `fields.status` on the issue read is not.
+[operations.response_schema]
+type = "object"
+required = ["transitions"]
+properties = { transitions = { type = "array", description = "The transitions available from the issue's **current** status. An empty array means the workflow offers none to this user right now — not that the issue is closed", items = { type = "object", properties = { id = { type = "string", description = "The transition id to send as `transition_id`. Per-workflow, not global, and a string" }, name = { type = "string", description = "The transition's label as the workflow names it, e.g. `Done` or `Start Progress`. Match on this rather than hard-coding an id" }, to = { type = "object", description = "The status the issue would land in: `{id, name, description, statusCategory}`, where `statusCategory` is `{id, key, name, colorName}` and its `key` is the coarse `new`/`indeterminate`/`done` grouping a flow can branch on" }, hasScreen = { type = "boolean", description = "True when Jira would show a form for this transition. It may then require fields this connector cannot send, and the call fails" }, isGlobal = { type = "boolean" }, isInitial = { type = "boolean" }, isAvailable = { type = "boolean", description = "Whether the transition can be executed now. Not present on every entry — the vendor's own examples omit it — so absence is not `false`" }, isConditional = { type = "boolean" }, looped = { type = "boolean" }, fields = { type = "object", description = "What a screen would ask for, keyed by field id, each with its own metadata including whether it is required. A required field here is the reason a transition can be listed and still be refused" } } } }, expand = { type = "string", description = "Expansion hint, absent from the vendor's example" } }
 
 # ---------------------------------------------------------------------------------------------
 
@@ -342,6 +422,17 @@ wire = "transition.id"
 description = "Id of the transition to perform, as returned by `jira-issue-transitions-list`, e.g. `31`"
 required = true
 schema = { type = "string", minLength = 1 }
+
+# NO `response_schema`, DELIBERATELY (C-126). Jira answers this one `204 No Content`: the spec's
+# response entry is an empty schema with no example, and there is no body at all.
+#
+# The two available ways to "cover" that are both worse than absence. `{}` and `{"type": "object"}`
+# each satisfy a coverage count while telling a consumer nothing, and both would additionally be
+# *false* here — they describe an empty JSON object, and what arrives is no document. The honest record
+# is the one on the `description` above ("Answers `204` with an empty body on success"), which reaches
+# the tool contract a model reads, plus this note for whoever wonders why the coverage table shows
+# 5 of 6 for jira. Confirming the transition took means reading the issue back with
+# `jira-issue-get`.
 
 # ---------------------------------------------------------------------------------------------
 # Configuration

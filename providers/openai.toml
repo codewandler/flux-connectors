@@ -93,6 +93,22 @@ idempotency = "idempotent"
 # C-30 lands, because a cursor is an opaque string and an opaque string is exactly the query value
 # that cannot be emitted safely today.
 
+# Response shapes in this file are the objects OpenAI's own API reference documents — "The model
+# object" (`platform.openai.com/docs/api-reference/models/object`), "The chat completion object"
+# (`/chat/object`) and "The embedding object" (`/embeddings/object`) — recorded as the vendor states
+# them and nothing more. `object` is pinned with `const` where the vendor documents a fixed value,
+# because that is the member a consumer discriminates on and a `string` there would lose the fact.
+#
+# C-126, and worth stating once for the whole file: this is what OpenAI *sends*. It is not what a
+# caller of the emitted `op` receives — `http.request` returns one flat string
+# (`HTTP {status}\n{headers}\n{body}`), so `.choices[0].message.content` against the generated Flux
+# resolves to nothing today. C-127 owns publishing that distinction; this schema is documentation and
+# UI value, honestly labelled.
+[operations.response_schema]
+type = "object"
+required = ["object", "data"]
+properties = { object = { const = "list" }, data = { type = "array", description = "One entry per model the key can reach, each `{id, object: \"model\", created, owned_by}`. Unpaginated — this is the whole list", items = { type = "object", required = ["id", "object"], properties = { id = { type = "string", description = "The model id to pass as `model` elsewhere, e.g. `gpt-4o`" }, object = { const = "model" }, created = { type = "integer", description = "Unix seconds" }, owned_by = { type = "string" } } } } }
+
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
@@ -116,6 +132,14 @@ name = "model"
 description = "The model id, e.g. `gpt-4o` or `text-embedding-3-small`"
 required = true
 schema = { type = "string", minLength = 1 }
+
+# "The model object", `platform.openai.com/docs/api-reference/models/object`: four members, and the
+# vendor documents no more. The `permissions` array the description above mentions is legacy and is
+# not in the documented object, so it is not declared here.
+[operations.response_schema]
+type = "object"
+required = ["id", "object"]
+properties = { id = { type = "string", description = "The model id, echoed back" }, object = { const = "model" }, created = { type = "integer", description = "Unix seconds at which the model was created" }, owned_by = { type = "string", description = "The owning organization, e.g. `openai` or `system`" } }
 
 # ---------------------------------------------------------------------------------------------
 # The two cost-bearing operations.
@@ -203,6 +227,22 @@ description = "Upper bound on generated tokens, including reasoning tokens. Requ
 required = true
 schema = { type = "integer", minimum = 1 }
 
+# "The chat completion object", `platform.openai.com/docs/api-reference/chat/object`.
+#
+# `choices` is enumerated one level deeper than the reads above, because this is the one operation
+# whose response a flow reads a *value* out of rather than an id: the generated text is at
+# `choices[0].message.content`, three levels down, and a consumer that guessed `text` or `content` at
+# the top level would find nothing. `finish_reason` is the branch that matters — a completion cut off
+# at the caller's required `max_completion_tokens` arrives with `length` and a truncated `content`,
+# HTTP 200, and no other signal that the answer is incomplete.
+#
+# `content` is nullable and the vendor says so: it is null when the model answered with `tool_calls`
+# or a `refusal` instead, both of which are documented members of the message.
+[operations.response_schema]
+type = "object"
+required = ["id", "object", "created", "model", "choices"]
+properties = { id = { type = "string", description = "The completion's id, `chatcmpl-…`" }, object = { const = "chat.completion" }, created = { type = "integer", description = "Unix seconds" }, model = { type = "string", description = "The model that actually ran, which may name a dated snapshot of the alias that was requested" }, system_fingerprint = { type = "string" }, choices = { type = "array", description = "One entry per completion; this connector never sets `n`, so there is exactly one", items = { type = "object", required = ["index", "message", "finish_reason"], properties = { index = { type = "integer" }, finish_reason = { type = "string", description = "Why generation stopped: `stop` (the model finished), `length` (the token budget ran out and `content` is truncated), `tool_calls`, `content_filter` or `function_call`" }, message = { type = "object", description = "The assistant's turn: `role`, and `content` — which is null when the model answered with `tool_calls` or set `refusal` instead" } } } }, usage = { type = "object", description = "What the call cost, in tokens: `prompt_tokens`, `completion_tokens`, `total_tokens`, plus `completion_tokens_details` (which is where reasoning tokens are reported)" } }
+
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
@@ -231,3 +271,15 @@ schema = { oneOf = [
   { type = "string", minLength = 1 },
   { type = "array", minItems = 1, items = { type = "string" } },
 ] }
+
+# "The embedding object", `platform.openai.com/docs/api-reference/embeddings/object`, wrapped in the
+# list envelope the create call returns.
+#
+# The envelope is the whole point of recording this one. A caller that sent a single string still gets
+# a *list* back and has to read `data[0].embedding`; there is no shape in which the vector is at the
+# top level. The entries are in the order the inputs were sent — `index` states it rather than
+# implying it — which is what makes a batch call usable at all.
+[operations.response_schema]
+type = "object"
+required = ["object", "data", "model"]
+properties = { object = { const = "list" }, data = { type = "array", description = "One embedding per input, in input order — including for a single string input", items = { type = "object", required = ["object", "index", "embedding"], properties = { object = { const = "embedding" }, index = { type = "integer", description = "The position of the input this vector belongs to" }, embedding = { type = "array", description = "The vector, as floats. Its length is the model's dimension — 1536 for `text-embedding-3-small`, 3072 for `-large` — unless `dimensions` was set, which this connector does not send", items = { type = "number" } } } } }, model = { type = "string" }, usage = { type = "object", description = "`prompt_tokens` and `total_tokens`; an embedding call generates nothing, so the two are equal" } }

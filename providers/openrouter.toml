@@ -297,6 +297,24 @@ idempotency = "idempotent"
 # documents 400, 403 and 500 for it and no 401 — it is a public catalogue — so a bad key would not
 # reliably fail here. `openrouter-credits-get` is the verification operation.
 
+# WHY THIS SCHEMA RECORDS THE ENVELOPE AND STOPS THERE (C-126).
+#
+# The catalogue is under `data`, and that is the fact a consumer cannot infer — OpenAI's equivalent
+# also answers `{"object": "list", "data": […]}`, so "it is an array" is a guess that would be wrong
+# for both. What is deliberately *not* enumerated is the model entry: OpenRouter adds members to it
+# as it adds capabilities (modality lists, tokenizer metadata, per-endpoint guardrail flags and,
+# recently, an opt-in `offset`/`limit` pagination with a sibling `links`), and this repository has no
+# vendored spec to check an enumeration against, so a field list written from today's reference would
+# become a confident description of last year's response. The envelope is stable; the entry is not.
+#
+# The one entry-level fact worth stating is stated in the description, because it is a trap rather
+# than a detail: the per-token prices in `pricing` are decimal **strings**, and the vendor's own
+# reference documents a free feature as the string `"0"`.
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "array", description = "One entry per model, each carrying at least `id` (`<author>/<slug>`), `name`, `created`, `description`, `context_length`, an `architecture` object and a `pricing` object whose per-token prices are decimal strings, not numbers", items = { type = "object" } } }
+
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
@@ -336,6 +354,16 @@ name = "slug"
 description = "The model slug, the part of a model id after the `/` — e.g. `gpt-4`, `claude-3.5-sonnet`"
 required = true
 schema = { type = "string", minLength = 1 }
+
+# The envelope again, and here it is a *different* one, which is exactly why recording it is worth
+# something: `data` holds one **object** — the model — and the providers are nested one level further
+# in, at `data.endpoints`. A consumer that carried the list endpoint's assumption across and read
+# `data[0]` would get nothing. The endpoint entries are not enumerated, for the reason the list
+# operation gives above.
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "object", description = "The model, with an `endpoints` array nested inside it — one entry per upstream provider serving it, each carrying its own `name`/`provider_name`, `context_length`, `pricing`, `quantization` and `supported_parameters`. This is a single object, not an array" } }
 
 # ---------------------------------------------------------------------------------------------
 # The one cost-bearing operation.
@@ -395,6 +423,27 @@ description = "Upper bound on generated tokens, including reasoning tokens. Requ
 required = true
 schema = { type = "integer", minimum = 1 }
 
+# OpenRouter's documented non-streaming response (`openrouter.ai/docs/api-reference/overview`), which
+# is OpenAI's chat completion object plus three members of its own. Two of the three matter enough to
+# be declared rather than described:
+#
+# - **`choices[].error`.** OpenRouter documents an optional error *inside a choice*, which is how an
+#   upstream provider's failure arrives after routing has already succeeded: HTTP 200, a well-formed
+#   completion object, and no content. Slack's `ok: false` is the same class of half-truth and this
+#   file's sibling connector records it the same way. A schema modelling only the success case would
+#   send a consumer to `message.content` on a response that has none.
+# - **`native_finish_reason`.** The upstream provider's own reason, unmapped, next to the normalized
+#   `finish_reason`. It exists because OpenRouter routes to providers whose vocabularies differ, and a
+#   consumer branching on stop-vs-truncation should read the normalized one.
+#
+# `usage.cost` is the third: OpenRouter reports the credit cost of the call in the response, which is
+# the per-request accounting `GET /api/v1/generation` would otherwise be needed for — see the
+# operation comment below.
+[operations.response_schema]
+type = "object"
+required = ["id", "model", "choices"]
+properties = { id = { type = "string", description = "The generation's id, which is also what `GET /api/v1/generation` would be queried by — an operation this connector cannot express (C-30)" }, object = { const = "chat.completion" }, created = { type = "integer", description = "Unix seconds" }, model = { type = "string", description = "The model that actually served the request. It can differ from the one asked for when routing falls back" }, provider = { type = "string", description = "The upstream provider that served it, e.g. `Anthropic` or `Together`. OpenRouter's own addition to the OpenAI shape and not part of the documented response schema, so it is recorded as optional" }, choices = { type = "array", description = "One entry per completion; this connector never sets `n`, so there is exactly one", items = { type = "object", properties = { finish_reason = { type = "string", description = "The normalized reason generation stopped — `stop`, `length`, `tool_calls`, `content_filter`. Branch on this one" }, native_finish_reason = { type = "string", description = "The upstream provider's own unmapped reason, whose vocabulary varies by provider" }, message = { type = "object", description = "The assistant's turn: `role`, `content`, and `tool_calls` when the model called a tool" }, error = { type = "object", description = "Present when the upstream provider failed *after* routing succeeded: `{code, message, metadata}`, delivered with HTTP 200 and no content. Check for it before reading `message`" } } } }, usage = { type = "object", description = "`prompt_tokens`, `completion_tokens`, `total_tokens`, and OpenRouter's own `cost` — what the call charged in credits, the same unit `openrouter-credits-get` reports" } }
+
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
@@ -413,3 +462,13 @@ idempotency = "idempotent"
 # cost accounting is what `GET /api/v1/generation` would give, and that is the operation §2 excludes
 # for its required query parameter — so until C-30 lands, this is the account-level substitute for it,
 # not an equivalent.
+
+# `openrouter.ai/docs/api/api-reference/credits/get-remaining-credits`: two numbers, nested under
+# `data`, and **neither of them is the balance**. The vendor documents the balance as
+# `total_credits - total_usage`, a subtraction the caller performs, so a consumer reading
+# `data.total_credits` as "what is left" would over-read the account by everything ever spent. That
+# is the entire reason this schema is worth declaring on a two-field response.
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "object", required = ["total_credits", "total_usage"], properties = { total_credits = { type = "number", description = "Credits ever purchased on this account — a cumulative total, not a remaining balance" }, total_usage = { type = "number", description = "Credits ever spent. The remaining balance is `total_credits - total_usage`" } } } }

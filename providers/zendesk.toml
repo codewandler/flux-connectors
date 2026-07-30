@@ -59,6 +59,37 @@ description = "Zendesk API token; the user half is the agent email with Zendesk'
 # form C-8's golden modules already emit.
 # ---------------------------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------------------------
+# RESPONSE SHAPES (C-126) — where they come from, and the one thing they all have in common.
+#
+# Every schema below is read from Zendesk's own API reference, per resource:
+#
+#   users               developer.zendesk.com/api-reference/ticketing/users/users/
+#   search              developer.zendesk.com/api-reference/ticketing/ticket-management/search/
+#   tickets             developer.zendesk.com/api-reference/ticketing/tickets/tickets/
+#   ticket comments     developer.zendesk.com/api-reference/ticketing/tickets/ticket_comments/
+#
+# **Zendesk envelopes everything, and that is what a consumer cannot infer.** A ticket read answers
+# `{"ticket": {…}}`, a comment list answers `{"comments": […]}`, and — the one that actually surprises
+# people — a ticket *update* answers `{"ticket": {…}, "audit": {…}}`. The reference is explicit: "An
+# `audit` object is generated and included in the response when you update a ticket." Every write
+# below is a `PUT` on the same ticket resource, so every one of them returns that pair.
+#
+# Three fields are deliberately declared with a type looser than a reader might expect, because the
+# vendor's own table is looser:
+#
+# - `tags` on a ticket: Zendesk's field table leaves the type cell **empty**. Every documented example
+#   shows an array of strings, so `array` is recorded and `items` is not invented.
+# - `facets` on a search: the table says *string*, the example shows `null`. Recorded as neither —
+#   only that the member exists.
+# - `satisfaction_rating`: documented as an object, but the prose says it may instead hold the state
+#   `"offered"`/`"unoffered"` and is null on plans without CSAT. Left off rather than typed wrongly.
+#
+# These schemas describe what Zendesk *sends*. They are not the operations' output type: `http.request`
+# returns one flat string today, so `.ticket.id` against the emitted Flux resolves to nothing. C-127
+# owns that distinction — see `docs/designs/member-io-schemas.md` §2.
+# ---------------------------------------------------------------------------------------------
+
 [[operations]]
 id = "zendesk-test"
 method = "GET"
@@ -66,6 +97,18 @@ path = "/api/v2/users/me.json"
 description = "Verify credentials by fetching the authenticated Zendesk user"
 risk = "low"
 idempotency = "idempotent"
+
+# `{"user": {…}}`. The reference for this endpoint says it "returns user information and an
+# `authenticity_token`" — a member no other user read carries, and one nothing here should ever log:
+# it is a CSRF token for Zendesk's own web session, not a credential this connector uses.
+#
+# `role` is the field a flow branches on when it needs to know whether the token is an agent's or an
+# end user's, and it is the reason this operation is the verify: a 200 with `role: "end-user"` means
+# the credentials work and cannot read a ticket.
+[operations.response_schema]
+type = "object"
+required = ["user"]
+properties = { user = { type = "object", required = ["id"], properties = { id = { type = "integer", description = "The authenticated user's id" }, name = { type = "string" }, email = { type = "string" }, role = { type = "string", description = "`admin`, `agent` or `end-user`. An end-user token authenticates successfully and can read almost nothing" }, active = { type = "boolean" }, suspended = { type = "boolean" }, verified = { type = "boolean" }, organization_id = { type = "integer" }, time_zone = { type = "string" }, locale = { type = "string" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, url = { type = "string" }, authenticity_token = { type = "string", description = "A CSRF token for Zendesk's own web session, returned only by this endpoint. It is not a credential for this API and must not be stored or logged" } } } }
 
 # ---------------------------------------------------------------------------------------------
 
@@ -101,6 +144,17 @@ description = "Results per page; Zendesk caps this at 100"
 required = false
 schema = { type = "integer", minimum = 1, maximum = 100, default = 100 }
 
+# The search envelope. `results` is the only heterogeneous collection in this connector: Zendesk
+# documents it as "tickets, users, groups, or organizations, as specified by the `result_type`
+# property in each result object", so the discriminator is the thing worth recording. A consumer that
+# assumed tickets — which is what this operation's own `query` is meant to ask for — would be right
+# only for as long as the query says `type:ticket`, and this operation cannot reliably encode a query
+# at all (see above).
+[operations.response_schema]
+type = "object"
+required = ["results"]
+properties = { results = { type = "array", description = "The matches, heterogeneous: each item carries a `result_type` naming what it is — `ticket`, `user`, `group` or `organization` — and its remaining fields are that resource's. Read `result_type` before reading anything else", items = { type = "object" } }, count = { type = "integer", description = "Total matches across all pages, not the size of this page" }, next_page = { type = "string", description = "URL of the following page, or null on the last page" }, previous_page = { type = "string", description = "URL of the preceding page, or null on the first page" }, facets = { description = "Present in every response and effectively unusable: Zendesk's own field table types it as a string while its example shows null, so no type is declared here rather than one of the two being guessed at" } }
+
 [operations.quirks.pagination]
 page = { page_param = "page", size_param = "per_page", page_size = 100, max_pages = 10 }
 
@@ -119,6 +173,18 @@ name = "ticket_id"
 description = "The ticket id"
 required = true
 schema = { type = "integer", format = "uint64", minimum = 1 }
+
+# `{"ticket": {…}}`, from the tickets reference. The enumerated subset is what a support flow reads or
+# branches on; `status` and `priority` carry their documented enums, because a flow gating on
+# "solved" needs to know the vendor's spelling and that `closed` is a different, terminal state.
+#
+# `custom_fields` is an **array** of `{id, value}` pairs, not an object keyed by field name. That is
+# the single most likely thing for a consumer to get wrong here, and reading it wrongly silently
+# yields nothing rather than failing.
+[operations.response_schema]
+type = "object"
+required = ["ticket"]
+properties = { ticket = { type = "object", required = ["id"], properties = { id = { type = "integer" }, subject = { type = "string" }, description = { type = "string", description = "The first comment's text, as plain text. It is the ticket's opening message and does not change when later comments are added" }, status = { type = "string", description = "One of `new`, `open`, `pending`, `hold`, `solved`, `closed`. `closed` is terminal — a closed ticket cannot be updated, which is what `zendesk-ticket-update` fails on" }, priority = { type = "string", description = "One of `urgent`, `high`, `normal`, `low`. May be absent on a ticket that never had one set" }, type = { type = "string", description = "One of `problem`, `incident`, `question`, `task`" }, requester_id = { type = "integer", description = "The end user who asked" }, assignee_id = { type = "integer", description = "The agent it is assigned to, absent when unassigned" }, group_id = { type = "integer" }, organization_id = { type = "integer" }, tags = { type = "array", description = "The ticket's tags. Zendesk's own field table leaves this type blank; every documented example shows an array of strings, so no `items` is declared here" }, custom_fields = { type = "array", description = "An array of `{id, value}` pairs — NOT an object keyed by field name. The `id` is the numeric ticket-field id, which is per-account", items = { type = "object" } }, via = { type = "object", description = "How the ticket reached Zendesk: `{channel, source}`, where channel is `email`, `web`, `api`, `voice` and so on" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, url = { type = "string" } } } }
 
 # ---------------------------------------------------------------------------------------------
 
@@ -147,6 +213,21 @@ name = "per_page"
 description = "Comments per page; Zendesk caps this at 100"
 required = false
 schema = { type = "integer", minimum = 1, maximum = 100, default = 100 }
+
+# `{"comments": […]}`, from the ticket-comments reference — and **only** that key. The reference
+# documents both offset and cursor pagination for this endpoint, yet its response example carries no
+# `next_page`, `count` or `meta`, so none is declared: the page above declares the `page`/`per_page`
+# quirk because the *request* takes them, and a paging consumer that expected a `next_page` here to
+# read back would find nothing. Declaring one on the strength of the sibling endpoints would be
+# exactly the plausible invention this schema exists to prevent.
+#
+# `public` is the field a support flow branches on and the one the connector's own
+# `zendesk-ticket-comment-add` sets deliberately: a `false` comment is an internal note the end user
+# never sees, so a summary that repeats one to a requester leaks agent-only context.
+[operations.response_schema]
+type = "object"
+required = ["comments"]
+properties = { comments = { type = "array", description = "The ticket's comments, oldest first. The first entry is the ticket's `description`", items = { type = "object", required = ["id"], properties = { id = { type = "integer" }, type = { type = "string", description = "`Comment`, or `VoiceComment` for a call recording" }, author_id = { type = "integer", description = "Who wrote it — an agent or the requester" }, body = { type = "string", description = "The comment as plain text" }, html_body = { type = "string", description = "The same comment as HTML" }, plain_body = { type = "string", description = "The comment with quoted-reply chains and signatures stripped, which is usually the text worth summarizing" }, public = { type = "boolean", description = "False for an internal note the end user cannot see. Check it before repeating a comment to a requester" }, audit_id = { type = "integer" }, created_at = { type = "string", format = "date-time" }, attachments = { type = "array", description = "Uploaded files, each with `file_name`, `content_type`, `content_url` and `size`", items = { type = "object" } }, via = { type = "object", description = "How the comment arrived: `{channel, source}`" }, metadata = { type = "object", description = "Zendesk's own audit metadata for the comment — the submitter's IP, client and custom flags" } } } } }
 
 [operations.quirks.pagination]
 page = { page_param = "page", size_param = "per_page", page_size = 100, max_pages = 10 }
@@ -233,6 +314,28 @@ description = "The ticket's type"
 required = false
 schema = { type = "string" }
 
+# THE AUDIT IS THE HALF OF THIS RESPONSE THAT MATTERS, and it is the reason all three writes below
+# declare a response shape at all.
+#
+# The tickets reference states it plainly: "An `audit` object is generated and included in the
+# response when you update a ticket." So a `PUT` answers with **two** top-level keys, `ticket` and
+# `audit`, and a consumer expecting the bare ticket this connector's *read* returns would be reading
+# the wrong document.
+#
+# Its value here is diagnostic. The failure mode this connector's `wire` paths exist to prevent — a
+# **flat** body, which Zendesk accepts, ignores, and answers `200` to (see the block comment above) —
+# produces a success indistinguishable from a real update by status code alone. `audit.events` names
+# the fields that actually changed, so it is the one place in the response where "we changed nothing"
+# and "we changed what you asked" look different.
+#
+# `events[].value` is left untyped deliberately: Zendesk's own example shows it holding a string
+# (`"open"`) for one event and an integer (`123`) for the next, so it is genuinely polymorphic and any
+# declared type here would be wrong half the time.
+[operations.response_schema]
+type = "object"
+required = ["ticket", "audit"]
+properties = { ticket = { type = "object", description = "The ticket **after** the update, in the same shape `zendesk-ticket-show` returns — including the new `updated_at`, which is the stamp a following safe update must send" }, audit = { type = "object", description = "What this call actually did. Its `events` array holds one entry per change, each `{id, type, field_name, value}` — and `value` is polymorphic across entries, a string for `status` and an integer for an id. An update that was accepted but changed nothing is visible here and nowhere else" } }
+
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
@@ -279,6 +382,15 @@ description = "False (an internal note) unless explicitly set true"
 required = false
 schema = { type = "boolean", default = false }
 
+# The same `{ticket, audit}` pair every `PUT` on this resource returns — see the long comment on
+# `zendesk-ticket-update`. Note what is *not* here: the created comment. Zendesk returns the ticket
+# and the audit, and the comment appears only as an event inside `audit.events`, so a caller that
+# needs the comment's id has to read it from there rather than from a top-level member.
+[operations.response_schema]
+type = "object"
+required = ["ticket", "audit"]
+properties = { ticket = { type = "object", description = "The ticket after the comment was added, in the shape `zendesk-ticket-show` returns" }, audit = { type = "object", description = "The change this call made. The added comment is an event inside `events`, carrying its own `id` and `body` — it is not returned as a top-level member" } }
+
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
@@ -318,6 +430,15 @@ wire = "ticket.additional_tags"
 description = "Tags to add; additive, so existing tags survive. Must be non-empty with no blank entries"
 required = true
 schema = { type = "array", minItems = 1, items = { type = "string", minLength = 1 } }
+
+# `{ticket, audit}` again. This is the operation where reading the response actually matters: the
+# additive `ticket.additional_tags` path is what stops this call from *replacing* the ticket's tags,
+# and `ticket.tags` in the response is the only place a caller can confirm the surviving set is the
+# union it expected rather than the two tags it just sent.
+[operations.response_schema]
+type = "object"
+required = ["ticket", "audit"]
+properties = { ticket = { type = "object", description = "The ticket after tagging. Its `tags` member is the full resulting set — read it to confirm the existing tags survived, which is the entire behaviour `additional_tags` buys" }, audit = { type = "object", description = "The change this call made, with the tag change as an event in `events`" } }
 
 # ---------------------------------------------------------------------------------------------
 # Configuration — what a product asks a human for before any of the above can run

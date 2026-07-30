@@ -110,9 +110,29 @@
 # `X-Sentry-Rate-Limit-*` response headers. `RateLimit` carries one `requests`/`per_seconds` pair and
 # no way to say "whatever the response header last told us", so any value here would be invented.
 #
-# No `response_schema` is declared: unlike asana, Sentry returns the resource itself with no
-# envelope, so there is no shape a consumer could not infer and nothing this file could record that
-# the vendor reference does not already say.
+# RESPONSE SHAPES: DECLARED, and this reverses what this comment used to say. C-77 argued that since
+# Sentry returns the resource itself with no envelope, there was "no shape a consumer could not infer".
+# That argument was wrong twice over, and C-126 replaced it with measured schemas read from Sentry's
+# own reference (`docs.sentry.io/api/events/retrieve-an-issue/`, `/update-an-issue/`,
+# `/retrieve-an-issue-event/`, `docs.sentry.io/api/projects/retrieve-a-project/`).
+#
+# It was wrong on the facts. **`count` is a string and `userCount` is an integer** — the vendor's
+# schema declares exactly that, with the example literals `"150"` and `12` — so the two numbers on the
+# same object, meaning the same kind of thing, are not the same JSON type. `count > 100` is true of
+# `"99"` in a language that compares strings and false in one that coerces, and nothing about "the
+# resource itself" tells a consumer which it is holding.
+#
+# And it was wrong about inference in general: an absent envelope makes the *top level* inferable, not
+# the members. Nobody guesses `shortId`, or that `status` has six values of which two are deletion
+# states, or that a `PUT` answers with a **smaller** serializer than the `GET` does — 36 declared
+# properties against 50, dropping `tags`, `stats`, `activity` and ten more.
+#
+# What is *not* declared is equally deliberate, and it is where the old reasoning does hold. Sentry's
+# project response documents 85 properties, several of them (`stats`, `transactionStats`,
+# `sessionStats`, `seerNightshiftTweaks`) declared with **no type at all**, and its event `entries` is
+# `{"type": "array", "items": {}}` — an empty item schema. Those are recorded as untyped rather than
+# given a shape the vendor does not publish. A `properties` map is not a claim of exhaustiveness; no
+# schema here says `additionalProperties: false`.
 # ---------------------------------------------------------------------------------------------
 
 id = "sentry"
@@ -202,6 +222,23 @@ description = "The issue's numeric id — the number in a Sentry issue URL, and 
 required = true
 schema = { type = "string", pattern = "^[0-9]+$", minLength = 1 }
 
+# The issue serializer, of whose 50 documented properties this declares the identity, the triage state
+# and the two counts. `count` as a **string** is the fact worth publishing above all others here — see
+# the header comment.
+#
+# `status` and `substatus` are declared with the vendor's own enums because a triage flow branches on
+# them and two of the six `status` values (`pending_deletion`, `pending_merge`) mean the issue is on
+# its way out rather than open or closed — a case a flow written against "resolved / unresolved /
+# ignored" does not have a branch for.
+#
+# Sentry's `collapse` query parameter can omit `count`, `userCount`, `firstSeen`, `lastSeen`, `tags`
+# and `stats`. This operation does not send it, but they are documented as omittable and so are not in
+# `required`.
+[operations.response_schema]
+type = "object"
+required = ["id", "title", "status"]
+properties = { id = { type = "string", description = "The issue's numeric id, as a string" }, shortId = { type = "string", description = "The human-facing id shown in Sentry's UI and in alert emails, e.g. `ACME-INC-7F`. It is not accepted by this connector's `issue_id` parameter" }, title = { type = "string", description = "The grouped error's title, e.g. `TypeError: undefined is not a function`" }, culprit = { type = "string", description = "Where Sentry attributes it — a function or transaction name. Null when it cannot attribute one" }, level = { type = "string", enum = ["sample", "debug", "info", "warning", "error", "fatal", "unknown"], description = "The severity of the grouped events" }, status = { type = "string", enum = ["resolved", "ignored", "unresolved", "pending_deletion", "pending_merge", "reprocessing"], description = "The triage state. Note the last three: an issue can be mid-deletion, mid-merge or reprocessing, which is neither open nor closed" }, substatus = { type = "string", description = "Why it is in that state: `new`, `ongoing`, `regressed`, `escalating`, `archived_until_escalating`, `archived_until_condition_met`, `archived_forever`, or null. `regressed` is the one that matters in a triage flow — it means a resolved issue came back" }, count = { type = "string", description = "How many events are grouped in this issue — **a STRING, not a number**, per Sentry's own schema (its example is `\"150\"`). Compare it as a number only after converting" }, userCount = { type = "integer", description = "How many distinct users hit it — an integer, unlike `count` beside it" }, firstSeen = { type = "string", format = "date-time", description = "When the first event of this group arrived" }, lastSeen = { type = "string", format = "date-time", description = "When the most recent one did. This, not `count`, is what says whether the issue is still live" }, permalink = { type = "string", format = "uri", description = "The issue's page in Sentry — the link to give a human" }, project = { type = "object", description = "Which project it belongs to: `{id, name, slug, platform}`. Its `slug` is what `sentry-project-get` takes" }, metadata = { type = "object", description = "Sentry's own grouping metadata — typically `{type, value, filename, function}`. Free-form in the vendor's schema, so no member is declared" }, assignedTo = { type = "object", description = "Who owns it: `{type: \"user\"|\"team\", id, name, email}`, or null when unassigned" }, numComments = { type = "integer" }, isSubscribed = { type = "boolean" }, isBookmarked = { type = "boolean" }, hasSeen = { type = "boolean" }, isUnhandled = { type = "boolean", description = "True when the error was not caught by application code" }, priority = { type = "string", description = "`low`, `medium`, `high` or null — Sentry's own computed priority, distinct from `level`" } }
+
 [operations.quirks.error_envelope]
 message_pointer = "/detail"
 
@@ -266,6 +303,23 @@ description = "`resolved` closes the issue, `ignored` mutes it until Sentry's ow
 required = true
 schema = { type = "string", enum = ["resolved", "ignored", "unresolved"] }
 
+# **A SMALLER SERIALIZER THAN THE READ RETURNS**, which is why this is declared separately instead of
+# pointing at `sentry-issue-get`. The vendor documents 36 properties here against the read's 50: the
+# update response is the read's schema truncated after `annotations`, dropping `firstRelease`,
+# `lastRelease`, `tags`, `stats`, `inbox`, `owners`, `forecast`, `integrationIssues`,
+# `sentryAppIssues`, `latestEventHasAttachments`, `activity`, `seenBy`, `userReportCount` and
+# `participants`.
+#
+# So a flow that resolved an issue and then read `stats` off the response would find nothing, having
+# found something on the read a moment earlier. What it *can* read is `status` and `statusDetails`,
+# which is the confirmation that the transition applied.
+#
+# Recorded honestly: the reference renders the SCHEMA for this response but no example body.
+[operations.response_schema]
+type = "object"
+required = ["id", "status"]
+properties = { id = { type = "string" }, shortId = { type = "string" }, title = { type = "string" }, culprit = { type = "string" }, level = { type = "string", enum = ["sample", "debug", "info", "warning", "error", "fatal", "unknown"] }, status = { type = "string", enum = ["resolved", "ignored", "unresolved", "pending_deletion", "pending_merge", "reprocessing"], description = "The state **after** this call — read it to confirm the transition applied" }, substatus = { type = "string", description = "`new`, `ongoing`, `regressed`, `escalating`, `archived_until_escalating`, `archived_until_condition_met`, `archived_forever`, or null. An `ignored` issue lands in one of the `archived_*` values, which is how the mute's terms are visible" }, statusDetails = { type = "object", description = "How the status was reached — which release resolved it, or the conditions an archive is waiting on. Free-form in the vendor's schema" }, count = { type = "string", description = "Event count, a STRING here as on the read" }, userCount = { type = "integer" }, firstSeen = { type = "string", format = "date-time" }, lastSeen = { type = "string", format = "date-time" }, permalink = { type = "string", format = "uri" }, project = { type = "object", description = "`{id, name, slug, platform}`" }, assignedTo = { type = "object", description = "`{type, id, name, email}`, or null" }, isSubscribed = { type = "boolean" }, isBookmarked = { type = "boolean" }, hasSeen = { type = "boolean" }, priority = { type = "string", description = "`low`, `medium`, `high` or null" } }
+
 [operations.quirks.error_envelope]
 message_pointer = "/detail"
 
@@ -295,6 +349,22 @@ description = "The project's slug as it appears in a Sentry URL (`backend-api`),
 required = true
 schema = { type = "string", pattern = "^[a-zA-Z0-9_-]+$", minLength = 1 }
 
+# The project detail. **Sentry documents 85 properties here** — most of them per-project settings
+# (data scrubbing, digest delays, grouping configuration, a dozen `hasInsights*` feature flags) that a
+# triage flow has no use for. What is declared is the identity, the ownership and the two things a
+# flow reads a project for: which service this is, and whether it is still receiving events.
+#
+# `status` is not the issue vocabulary. A project's status is its own — an inactive or pending-deletion
+# project explains an issue that has stopped updating, and nothing in the issue response says so.
+#
+# `stats`, `transactionStats` and `sessionStats` exist and are **declared with no type at all** in the
+# vendor's schema, so they are not declared here: naming them `object` would be inventing the one thing
+# the reference declines to say.
+[operations.response_schema]
+type = "object"
+required = ["id", "slug", "name"]
+properties = { id = { type = "string", description = "The project's numeric id, as a string" }, slug = { type = "string", description = "The URL slug, e.g. `backend-api` — what an issue's `project.slug` names and what this operation takes" }, name = { type = "string", description = "The display name, which is not the slug" }, platform = { type = "string", description = "The SDK platform, e.g. `python`, `javascript-react`, or null" }, platforms = { type = "array", description = "Every platform that has actually sent events to this project", items = { type = "string" } }, status = { type = "string", description = "The project's own lifecycle state — `active`, `disabled`, `pending_deletion`, `deletion_in_progress`. A non-active project explains an issue that stopped updating" }, dateCreated = { type = "string", format = "date-time" }, firstEvent = { type = "string", format = "date-time", description = "When this project first received an event, or null if it never has — which is the signal that an SDK was never wired up" }, isPublic = { type = "boolean" }, isMember = { type = "boolean", description = "Whether the token's own user is a member of the project" }, isInternal = { type = "boolean" }, hasAccess = { type = "boolean" }, access = { type = "array", description = "The permission scopes the token holds on this project", items = { type = "string" } }, features = { type = "array", description = "Enabled feature flags, as opaque strings", items = { type = "string" } }, team = { type = "object", description = "`{id, name, slug}` — the owning team, or null. Deprecated in favour of `teams`" }, teams = { type = "array", description = "All owning teams, each `{id, name, slug}`. This is who to notify", items = { type = "object" } }, organization = { type = "object", description = "The owning organization, itself a large object; its `slug` is what every other operation here takes" }, latestRelease = { type = "object", description = "`{version}` of the most recent release seen, or null. Useful for deciding whether an error predates a deploy" }, processingIssues = { type = "integer", description = "How many processing problems the project has, e.g. missing debug symbols" }, options = { type = "object", description = "Per-project settings, keyed by option name. Free-form in the vendor's schema" } }
+
 [operations.quirks.error_envelope]
 message_pointer = "/detail"
 
@@ -323,6 +393,24 @@ name = "issue_id"
 description = "The issue's numeric id"
 required = true
 schema = { type = "string", pattern = "^[0-9]+$", minLength = 1 }
+
+# The event serializer (38 documented properties), read from the current reference — which addresses
+# this endpoint as `…/events/{event_id}/` where `event_id` is an enum of `latest`, `oldest` and
+# `recommended` **or** a real event id. So the literal `latest` segment this operation hard-codes is
+# the documented spelling, not a shortcut.
+#
+# **`entries` is where the stack trace is, and the vendor declares it `{"type": "array", "items":
+# {}}`** — an empty item schema. Its examples show `{type, data}` entries, and the item shape is
+# genuinely undocumented, so it is declared as an untyped array with the discriminator described in
+# prose. That is the honest form: a consumer learns where to look and is told that what it finds there
+# is not specified, rather than being handed an item schema this repository made up.
+#
+# `id` and `eventID` are both present and both are the event's id — the same value in two members, one
+# of Sentry's own redundancies. `groupID` is the issue, and it is nullable.
+[operations.response_schema]
+type = "object"
+required = ["id", "eventID"]
+properties = { id = { type = "string", description = "The event's id" }, eventID = { type = "string", description = "The same event id again, under Sentry's other spelling" }, groupID = { type = "string", description = "The issue this event belongs to — the `issue_id` that fetched it. Nullable in the vendor's schema" }, projectID = { type = "string" }, title = { type = "string", description = "The event's title, usually the same as the issue's" }, message = { type = "string", description = "The log message, or null for an exception-only event" }, platform = { type = "string", description = "The SDK platform that sent it" }, dateCreated = { type = "string", format = "date-time", description = "When the event occurred" }, dateReceived = { type = "string", format = "date-time", description = "When Sentry ingested it. Late-arriving events make these differ" }, culprit = { type = "string" }, tags = { type = "array", description = "The event's tags as `{key, value}` pairs — **an array, not a map**. `environment`, `release`, `server_name`, `url` and `level` all arrive here, so finding the environment means searching the array for `key == \"environment\"`", items = { type = "object", required = ["key", "value"], properties = { key = { type = "string" }, value = { type = "string" } } } }, entries = { type = "array", description = "THE INTERESTING PART, and undocumented: the stack trace, breadcrumbs, HTTP request and message are all entries here, each shown in Sentry's examples as `{type, data}` with `type` naming which (`exception`, `stacktrace`, `breadcrumbs`, `request`, `message`). The vendor's schema declares the item as an empty schema, so nothing is asserted about `data`", items = {} }, user = { type = "object", description = "Who hit it: `{id, email, username, ip_address, name, geo, data}`, or null. **Personal data** — an IP address and an email — so read it only when the task needs it" }, contexts = { type = "object", description = "Runtime context keyed by name (`browser`, `os`, `device`, `trace`). Free-form in the vendor's schema" }, sdk = { type = "object", description = "`{name, version}` of the SDK that reported it, or null" }, release = { type = "object", description = "The release the event came from, or null" }, size = { type = "integer", description = "The stored event's size in bytes, or null" }, errors = { type = "array", description = "Ingest-time problems with the event itself — a missing source map, an unparseable frame — each `{type, message, data}`. Not the error the event is about", items = { type = "object" } }, nextEventID = { type = "string", description = "The next event in the same issue, or null when this is the latest — which it is for this operation" }, previousEventID = { type = "string", description = "The preceding event in the same issue, or null" } }
 
 [operations.quirks.error_envelope]
 message_pointer = "/detail"
