@@ -233,7 +233,7 @@ fn the_shop_tenant_template_reaches_the_module_unbound() {
 
     for (id, flux) in emitted() {
         assert!(
-            flux.contains(&format!("$base = \"{BASE_URL}\"")),
+            flux.contains(&format!("base = \"{BASE_URL}\"")),
             "`{id}` does not bind `$base` to the tenant-templated base URL, so either the template \
              was resolved somewhere it should not have been or the URL changed:\n{flux}"
         );
@@ -271,28 +271,28 @@ fn no_shopify_operation_declares_a_query_parameter() {
 /// The same claim over the **emitted text**, which is what flux actually loads — and the half that
 /// takes care.
 ///
-/// **Every `$url = ` line is checked, not just the first.** The emitter binds `$url` once for the path
+/// **Every `url = ` line is checked, not just the first.** The emitter binds `$url` once for the path
 /// and the required query parameters, then re-binds it once more per *optional* query parameter inside
 /// a `when` guard (`crates/connector-flux/src/op.rs`, the `optional` loop), and the `?` lives on a
-/// separate `$sep` binding rather than on the `$url` line. `connectors/zendesk.flux` shows the shape:
+/// separate `sep` binding rather than on the `$url` line. `connectors/zendesk.flux` shows the shape:
 ///
 /// ```flux
-/// $url = fmt("{base}/api/v2/tickets/{ticket_id}/comments.json")
-/// $sep = "?"
+/// url = fmt("{base}/api/v2/tickets/{ticket_id}/comments.json")
+/// sep = "?"
 /// when $page
-///   $url = fmt("{url}{sep}page={page}")
+///   url = fmt("{url}{sep}page={page}")
 /// ```
 ///
 /// So inspecting only the first binding, or only looking for a literal `?`, would pass while an
 /// operation quietly appended optional filters. All three are checked: one `$url` binding, no `?`
-/// anywhere, and no `$sep` at all.
+/// anywhere, and no `sep` at all.
 #[test]
 fn no_shopify_operation_emits_a_query_string() {
     for (id, flux) in emitted() {
         let url_lines: Vec<&str> = flux
             .lines()
             .map(str::trim_start)
-            .filter(|line| line.starts_with("$url = "))
+            .filter(|line| line.starts_with("url = "))
             .collect();
         assert!(!url_lines.is_empty(), "`{id}` binds no $url:\n{flux}");
         assert_eq!(
@@ -306,12 +306,12 @@ fn no_shopify_operation_emits_a_query_string() {
             !flux.contains('?'),
             "`{id}` emits a `?`, so a value is reaching the query string unencoded:\n{flux}"
         );
-        // `$sep` exists only to carry the `?`/`&` between query parameters, so an operation that
+        // `sep` exists only to carry the `?`/`&` between query parameters, so an operation that
         // binds it is building a query string even if no single line spells the `?`.
         assert!(
             !flux
                 .lines()
-                .any(|line| line.trim_start().starts_with("$sep = ")),
+                .any(|line| line.trim_start().starts_with("sep = ")),
             "`{id}` binds $sep, which the emitter emits only to separate query parameters:\n{flux}"
         );
     }
@@ -418,7 +418,7 @@ fn no_credential_and_no_widened_host_reaches_a_generated_module() {
              beyond what the base URL derives:\n{flux}"
         );
         assert!(
-            flux.contains(&format!("$base = \"{BASE_URL}\"")),
+            flux.contains(&format!("base = \"{BASE_URL}\"")),
             "`{id}` does not reach `{BASE_URL}`:\n{flux}"
         );
     }

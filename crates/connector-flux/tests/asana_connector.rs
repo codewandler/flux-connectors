@@ -200,13 +200,13 @@ fn every_asana_request_body_is_wrapped_in_the_data_envelope() {
             );
         }
 
-        // The emitted half. `$payload = { data: { … } }` is what a nested body looks like; a
-        // flattened one would bind `$payload = { name: $name, … }`, which parses, analyzes and is
+        // The emitted half. `payload = { data: { … } }` is what a nested body looks like; a
+        // flattened one would bind `payload = { name: $name, … }`, which parses, analyzes and is
         // canonical, so nothing but this assertion would fail.
         let emitted = emit_operation(&connector, operation)
             .unwrap_or_else(|error| panic!("`{}` does not emit: {error}", operation.id));
         assert!(
-            emitted.contains(&format!("$payload = {{ {ENVELOPE}: {{")),
+            emitted.contains(&format!("payload = {{ {ENVELOPE}: {{")),
             "`{}` does not wrap its payload in `{ENVELOPE}`:\n{emitted}",
             operation.id
         );
@@ -325,16 +325,16 @@ fn no_asana_operation_declares_a_query_parameter() {
 
 /// The same claim over the **emitted text**, which is what flux actually loads.
 ///
-/// **Every `$url = ` line is checked, not just the first, and that is the substance of this test.**
+/// **Every `url = ` line is checked, not just the first, and that is the substance of this test.**
 /// The emitter binds `$url` once for the path and the required query parameters, then re-binds it once
-/// more per *optional* query parameter inside a `when` guard, with the `?` on a separate `$sep`
+/// more per *optional* query parameter inside a `when` guard, with the `?` on a separate `sep`
 /// binding — `connectors/zendesk.flux` shows the shape:
 ///
 /// ```flux
-/// $url = fmt("{base}/api/v2/tickets/{ticket_id}/comments.json")
-/// $sep = "?"
+/// url = fmt("{base}/api/v2/tickets/{ticket_id}/comments.json")
+/// sep = "?"
 /// when $page
-///   $url = fmt("{url}{sep}page={page}")
+///   url = fmt("{url}{sep}page={page}")
 /// ```
 ///
 /// So inspecting only the first binding would pass while an operation quietly appended optional
@@ -350,7 +350,7 @@ fn no_asana_module_assembles_a_query_string() {
         let url_lines: Vec<&str> = emitted
             .lines()
             .map(str::trim_start)
-            .filter(|line| line.starts_with("$url = "))
+            .filter(|line| line.starts_with("url = "))
             .collect();
         assert_eq!(
             url_lines.len(),
@@ -367,8 +367,8 @@ fn no_asana_module_assembles_a_query_string() {
             url_lines[0]
         );
         assert!(
-            !emitted.contains("$sep"),
-            "`{}` emits the `$sep` query separator, which exists only to join query parameters:\n\
+            !emitted.contains("sep = "),
+            "`{}` emits the `sep` query separator, which exists only to join query parameters:\n\
              {emitted}",
             operation.id
         );
@@ -456,7 +456,7 @@ fn every_asana_request_targets_one_host_and_carries_no_credential() {
         let emitted = emit_operation(&connector, operation)
             .unwrap_or_else(|error| panic!("`{}` does not emit: {error}", operation.id));
         assert!(
-            emitted.contains(&format!(r#"$base = "{BASE_URL}""#)),
+            emitted.contains(&format!(r#"base = "{BASE_URL}""#)),
             "`{}` does not bind the Asana base URL:\n{emitted}",
             operation.id
         );

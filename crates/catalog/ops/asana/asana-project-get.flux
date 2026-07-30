@@ -5,7 +5,7 @@ op asana-project-get(project_gid: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://app.asana.com"
-  $url = fmt("{base}/api/1.0/projects/{project_gid}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://app.asana.com"
+  url = fmt("{base}/api/1.0/projects/{project_gid}")
+  response = http.request(method: "GET", url)
+  return response

@@ -5,9 +5,9 @@ op intercom-contact-create(role: String, email: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.intercom.io"
-  $url = fmt("{base}/contacts")
-  $content_type = "application/json"
-  $payload = { email: $email, role: $role }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.intercom.io"
+  url = fmt("{base}/contacts")
+  content_type = "application/json"
+  payload = { email, role }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

@@ -9,10 +9,10 @@ op github-repo-get(owner: String, repo: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.github.com"
-  $url = fmt("{base}/repos/{owner}/{repo}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.github.com"
+  url = fmt("{base}/repos/{owner}/{repo}")
+  response = http.request(method: "GET", url)
+  return response
 
 op github-issue-get(owner: String, repo: String, issue_number: Number) -> Any
   description "Get one issue by number. GitHub treats a pull request as an issue, so a PR number returns that PR's issue view; use github-pull-get for its merge and review state"
@@ -21,10 +21,10 @@ op github-issue-get(owner: String, repo: String, issue_number: Number) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.github.com"
-  $url = fmt("{base}/repos/{owner}/{repo}/issues/{issue_number}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.github.com"
+  url = fmt("{base}/repos/{owner}/{repo}/issues/{issue_number}")
+  response = http.request(method: "GET", url)
+  return response
 
 op github-pull-get(owner: String, repo: String, pull_number: Number) -> Any
   description "Get one pull request by number, with its merge state, head and base refs and review counts"
@@ -33,10 +33,10 @@ op github-pull-get(owner: String, repo: String, pull_number: Number) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.github.com"
-  $url = fmt("{base}/repos/{owner}/{repo}/pulls/{pull_number}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.github.com"
+  url = fmt("{base}/repos/{owner}/{repo}/pulls/{pull_number}")
+  response = http.request(method: "GET", url)
+  return response
 
 op github-issue-create(owner: String, repo: String, title: String, body: String, labels: List<String>, assignees: List<String>) -> Any
   description "Open a new issue on a repository. The issue is immediately visible to everyone who can see the repository and notifies its subscribers"
@@ -45,12 +45,12 @@ op github-issue-create(owner: String, repo: String, title: String, body: String,
   effects ["network"]
   expose true
 
-  $base = "https://api.github.com"
-  $url = fmt("{base}/repos/{owner}/{repo}/issues")
-  $content_type = "application/json"
-  $payload = { assignees: $assignees, body: $body, labels: $labels, title: $title }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.github.com"
+  url = fmt("{base}/repos/{owner}/{repo}/issues")
+  content_type = "application/json"
+  payload = { assignees, body, labels, title }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response
 
 op github-issue-comment-add(owner: String, repo: String, issue_number: Number, body: String) -> Any
   description "Add a comment to an issue or pull request. The comment is public to everyone who can see the repository and notifies its participants; GitHub has no private or internal comment here"
@@ -59,9 +59,9 @@ op github-issue-comment-add(owner: String, repo: String, issue_number: Number, b
   effects ["network"]
   expose true
 
-  $base = "https://api.github.com"
-  $url = fmt("{base}/repos/{owner}/{repo}/issues/{issue_number}/comments")
-  $content_type = "application/json"
-  $payload = { body: $body }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.github.com"
+  url = fmt("{base}/repos/{owner}/{repo}/issues/{issue_number}/comments")
+  content_type = "application/json"
+  payload = { body }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

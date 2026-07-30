@@ -5,9 +5,9 @@ op slack-users-info(user: String, include_locale: Bool) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://slack.com"
-  $url = fmt("{base}/api/users.info")
-  $content_type = "application/json"
-  $payload = { include_locale: $include_locale, user: $user }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://slack.com"
+  url = fmt("{base}/api/users.info")
+  content_type = "application/json"
+  payload = { include_locale, user }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

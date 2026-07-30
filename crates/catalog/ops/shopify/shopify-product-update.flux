@@ -5,9 +5,9 @@ op shopify-product-update(product_id: Number, title: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://{shop}.myshopify.com"
-  $url = fmt("{base}/admin/api/2024-10/products/{product_id}.json")
-  $content_type = "application/json"
-  $payload = { product: { title: $title } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "PUT", url: $url })
-  return $response
+  base = "https://{shop}.myshopify.com"
+  url = fmt("{base}/admin/api/2024-10/products/{product_id}.json")
+  content_type = "application/json"
+  payload = { product: { title } }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
+  return response

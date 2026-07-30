@@ -5,7 +5,7 @@ op google-drive-file-get(file_id: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://www.googleapis.com"
-  $url = fmt("{base}/drive/v3/files/{file_id}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://www.googleapis.com"
+  url = fmt("{base}/drive/v3/files/{file_id}")
+  response = http.request(method: "GET", url)
+  return response

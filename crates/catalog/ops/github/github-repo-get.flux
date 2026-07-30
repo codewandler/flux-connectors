@@ -5,7 +5,7 @@ op github-repo-get(owner: String, repo: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.github.com"
-  $url = fmt("{base}/repos/{owner}/{repo}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.github.com"
+  url = fmt("{base}/repos/{owner}/{repo}")
+  response = http.request(method: "GET", url)
+  return response

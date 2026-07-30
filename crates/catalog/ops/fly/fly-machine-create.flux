@@ -5,9 +5,9 @@ op fly-machine-create(app_name: String, image: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.machines.dev/v1"
-  $url = fmt("{base}/apps/{app_name}/machines")
-  $content_type = "application/json"
-  $payload = { config: { image: $image } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://api.machines.dev/v1"
+  url = fmt("{base}/apps/{app_name}/machines")
+  content_type = "application/json"
+  payload = { config: { image } }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

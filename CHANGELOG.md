@@ -7,7 +7,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **flux-lang 0.37 → 0.39, and every generated module is rewritten in the new canonical syntax.**
+  Flux's L-93 changed what canonical source looks like: local bindings lose the `$` sigil, object
+  fields pun when the field and symbol names agree, and calls take direct named arguments. So
+  `$payload = { channel: $channel, text: $text }` / `http.request({ method: "POST", url: $url })`
+  becomes `payload = { channel: $channel, text }` / `http.request(method: "POST", url)`.
+
+  The change is syntactic — no operation's method, host, body shape, or credential handling moved.
+  117 of 236 artifacts were regenerated, and the build is a fixed point again. The compatibility
+  claim is measured rather than assumed: every provider's `…_emits_a_module_that_parses_analyzes_and_is_canonical`
+  test requires the emitted module to parse with no errors, be a **fixed point of flux's own
+  formatter**, and load as a program with exactly one exposed op. All pass under 0.39.
+
+  The sigil survives exactly where a bare name would collide with a Flux keyword — `$channel`,
+  `$include` — which is why some fields pun and their neighbours do not.
+
 ### Fixed
+
+- **A sigil-matching test would have gone vacuous under the upgrade.** Nine assertions checked the
+  *absence* of an emitted symbol by its old spelling — `!module.contains("$sep")`, which pins that no
+  operation assembles a query string. With the sigil gone those became true no matter what the
+  emitter did, so the query-string guard would have passed while asserting nothing. They now match
+  the binding (`sep = `). The same class was fixed in the `$payload` / `body: $body` negative checks,
+  and the dotted-symbol guard now matches the interpolation form `{time.start}` rather than a
+  substring the vendor's own wire name legitimately contains.
 
 - **The published site rendered unstyled.** `web/.vitepress/config.mts` had been set to
   `base = '/'` on the strength of the committed `web/public/CNAME`, but GitHub never accepted that

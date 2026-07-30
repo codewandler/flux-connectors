@@ -125,9 +125,9 @@ checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
 name = "codewandler-flux-core"
-version = "0.37.0"
+version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9b774c5eeec0aa6069a12b2a257154894a1bcd0502707cdaa86df95eaf82617"
+checksum = "7ecbe3bb9c70549c913381780a9a431e8c6574d5a4a2c4db64bb7ba954eb0bd5"
 dependencies = [
  "serde",
  "serde_json",
@@ -146,9 +146,9 @@ dependencies = [
 
 [[package]]
 name = "codewandler-flux-lang"
-version = "0.37.0"
+version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67d76fa42607e5ba234b8e1a63217bab2dedb99172702aff0f501ebdf89b7a1b"
+checksum = "00eae7ee744f5102df5e97b878c162d0be0462f06cba7dd5725898459cfa3253"
 dependencies = [
  "async-trait",
  "codewandler-flux-core",

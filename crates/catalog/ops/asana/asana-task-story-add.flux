@@ -5,9 +5,9 @@ op asana-task-story-add(task_gid: String, text: String) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://app.asana.com"
-  $url = fmt("{base}/api/1.0/tasks/{task_gid}/stories")
-  $content_type = "application/json"
-  $payload = { data: { text: $text } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "POST", url: $url })
-  return $response
+  base = "https://app.asana.com"
+  url = fmt("{base}/api/1.0/tasks/{task_gid}/stories")
+  content_type = "application/json"
+  payload = { data: { text } }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response

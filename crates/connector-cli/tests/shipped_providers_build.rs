@@ -220,19 +220,19 @@ fn zendesk_writes_a_nested_body() {
 
     assert!(
         module.contains(
-            "$payload = { ticket: { comment: { body: $body, public: $public }, \
-             safe_update: $safe_update, updated_stamp: $updated_stamp } }"
+            "payload = { ticket: { comment: { body, public }, safe_update, updated_stamp } }"
         ),
         "`zendesk-ticket-comment-add` must nest its comment under `ticket.comment`:\n{module}"
     );
     assert!(
-        module.contains("$payload = { ticket: { additional_tags: $tags, safe_update: $safe_update, updated_stamp: $updated_stamp } }"),
+        module.contains(
+            "payload = { ticket: { additional_tags: tags, safe_update, updated_stamp } }"
+        ),
         "`zendesk-ticket-tag-add` must write `ticket.additional_tags` — sending `tags` *replaces* \
          the ticket's tags (inventory §3.3.3):\n{module}"
     );
     assert!(
-        !module.contains("$payload = { body:")
-            && !module.contains(", updated_stamp: $updated_stamp }\n"),
+        !module.contains("payload = { body") && !module.contains(", updated_stamp }\n"),
         "no Zendesk payload may put a ticket field at the root of the body — Zendesk ignores it \
          and answers 200:\n{module}"
     );
@@ -245,7 +245,7 @@ fn zendesk_writes_a_nested_body() {
 fn babelforce_nests_the_presence_label() {
     let module = planned("babelforce", "babelforce.flux");
     assert!(
-        module.contains("$payload = { enabled: $enabled, presence: { name: $presence_name } }"),
+        module.contains("payload = { enabled, presence: { name: presence_name } }"),
         "`babelforce-agent-status-update` must nest `presence.name`:\n{module}"
     );
 }
@@ -258,7 +258,7 @@ fn babelforce_sends_its_free_form_session_bodies() {
     let module = planned("babelforce", "babelforce.flux");
     assert_eq!(
         module
-            .matches("$payload = parse($body, as: \"json\")")
+            .matches("payload = parse(body, as: \"json\")")
             .count(),
         2,
         "both session-variable operations must send the caller's body:\n{module}"
@@ -278,18 +278,22 @@ fn slack_sends_its_arguments_in_the_body_and_nothing_in_the_url() {
     let module = planned("slack", "slack.flux");
 
     assert!(
-        module.contains("$payload = { channel: $channel, text: $text, thread_ts: $thread_ts }"),
+        module.contains("payload = { channel: $channel, text, thread_ts }"),
         "`slack-chat-post-message` must send its arguments as a flat JSON body:\n{module}"
     );
     assert!(
-        module.contains(r#"$url = fmt("{base}/api/conversations.history")"#),
+        module.contains(r#"url = fmt("{base}/api/conversations.history")"#),
         "`slack-conversations-history` must address the bare method path, with no query string \
          — an opaque channel id in a query value cannot be percent-encoded (C-30):\n{module}"
     );
-    // The emitter binds `$sep` only to carry a `?`/`&` between query parameters, so its absence is
+    // The emitter binds `sep` only to carry a `?`/`&` between query parameters, so its absence is
     // a structural proof that no value was spliced into any of the four URLs.
+    //
+    // Match the binding, not the bare name: flux-lang 0.39 dropped the `$` sigil from local
+    // bindings, so the old `contains("$sep")` spelling became vacuously true and would have passed
+    // no matter what this emitter did.
     assert!(
-        !module.contains("$sep") && !module.contains('?'),
+        !module.contains("sep = ") && !module.contains('?'),
         "no Slack operation may assemble a query string:\n{module}"
     );
 }
@@ -324,7 +328,7 @@ fn intercom_publishes_one_host_and_no_credential_in_its_module() {
         "the base URL is what the host is derived from, so widening it widens the allow-list"
     );
     assert!(
-        module.contains(r#"$base = "https://api.intercom.io""#),
+        module.contains(r#"base = "https://api.intercom.io""#),
         "every Intercom request must address `api.intercom.io`:\n{module}"
     );
     assert!(
@@ -391,7 +395,7 @@ fn google_publishes_one_host_per_service_and_no_credential_value() {
 
         let module = planned("google", &module_file("google", service));
         assert!(
-            module.contains(&format!("$base = \"{expected}\"")),
+            module.contains(&format!("base = \"{expected}\"")),
             "every request in the `{service}` module must address {expected} — the host its manifest \
              declares:\n{module}"
         );
@@ -663,7 +667,7 @@ fn airtable_publishes_one_host_and_no_credential_in_its_module() {
         "the base URL is what the host is derived from, so widening it widens the allow-list"
     );
     assert!(
-        module.contains(r#"$base = "https://api.airtable.com""#),
+        module.contains(r#"base = "https://api.airtable.com""#),
         "every Airtable request must address `api.airtable.com`:\n{module}"
     );
     assert!(
@@ -714,7 +718,7 @@ fn openrouter_publishes_one_host_and_no_credential_anywhere() {
         "the base URL is what the host is derived from, so widening it widens the allow-list"
     );
     assert!(
-        module.contains(&format!(r#"$base = "{BASE_URL}""#)),
+        module.contains(&format!(r#"base = "{BASE_URL}""#)),
         "every OpenRouter request must address `openrouter.ai`:\n{module}"
     );
     assert!(

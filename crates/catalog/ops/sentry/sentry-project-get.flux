@@ -5,7 +5,7 @@ op sentry-project-get(organization_id_or_slug: String, project_id_or_slug: Strin
   effects ["network"]
   expose true
 
-  $base = "https://sentry.io"
-  $url = fmt("{base}/api/0/projects/{organization_id_or_slug}/{project_id_or_slug}/")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://sentry.io"
+  url = fmt("{base}/api/0/projects/{organization_id_or_slug}/{project_id_or_slug}/")
+  response = http.request(method: "GET", url)
+  return response

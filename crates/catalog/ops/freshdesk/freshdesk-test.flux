@@ -5,10 +5,10 @@ op freshdesk-test(per_page: Number) -> Any
   effects ["network"]
   expose true
 
-  $base = "https://{domain}/api/v2"
-  $url = fmt("{base}/contacts")
-  $sep = "?"
-  when $per_page
-    $url = fmt("{url}{sep}per_page={per_page}")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://{domain}/api/v2"
+  url = fmt("{base}/contacts")
+  sep = "?"
+  when per_page
+    url = fmt("{url}{sep}per_page={per_page}")
+  response = http.request(method: "GET", url)
+  return response

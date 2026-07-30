@@ -5,7 +5,7 @@ op fly-regions-list -> Any
   effects ["network"]
   expose true
 
-  $base = "https://api.machines.dev/v1"
-  $url = fmt("{base}/platform/regions")
-  $response = http.request({ method: "GET", url: $url })
-  return $response
+  base = "https://api.machines.dev/v1"
+  url = fmt("{base}/platform/regions")
+  response = http.request(method: "GET", url)
+  return response
