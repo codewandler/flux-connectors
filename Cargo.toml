@@ -5,6 +5,7 @@ members = [
     "crates/connector-flux",
     "crates/connector-cli",
     "crates/catalog",
+    "crates/connector-pack",
 ]
 
 [workspace.package]
@@ -23,6 +24,10 @@ connector-flux = { version = "0.4.0", path = "crates/connector-flux" }
 # workspace depends on it — it is the leaf the pipeline writes into — but it is listed here so that
 # a consumer inside the workspace picks up the same pin as one outside it.
 connector-catalog = { version = "0.4.0", path = "crates/catalog" }
+# The Tool pack (C-114): the flux interop layer. It is the one crate here that links flux's
+# *runtime* — see the note under `flux-runtime` below for why that does not contradict
+# "this repo compiles; flux executes".
+connector-pack = { version = "0.4.0", path = "crates/connector-pack" }
 
 # Flux-Lang: the emit target. Pinned deliberately — bumping this is a reviewed change, and
 # `flux-connectors check` verifies generated artifacts still match the pin (C-14).
@@ -36,8 +41,22 @@ connector-catalog = { version = "0.4.0", path = "crates/catalog" }
 # everywhere. The lib name stays `flux_lang`; only the *package* carries the vanity prefix.
 flux-lang = { package = "codewandler-flux-lang", version = "0.39" }
 
+# The flux *runtime* seam, used by `connector-pack` alone (C-114). AGENTS.md's "flux-connectors does
+# not depend on the flux runtime" holds for the compiler — `connector-spec`, `connector-flux` and
+# `connector-cli` still link none of this, and `connector-catalog` stays dependency-free. The pack is
+# a **declaration** handed to a host that already runs flux: linking `ToolSpec` and the `Tool` trait
+# is what lets a connector be gated individually by flux's own permission envelope. This repository
+# still ships no runtime of its own.
+#
+# From crates.io for the same reasons flux-lang is. `flux-spec` has its own version line: it is the
+# frozen wire vocabulary a guest plugin compiles against, so it moves independently of the runtime.
+flux-core = { package = "codewandler-flux-core", version = "0.39" }
+flux-runtime = { package = "codewandler-flux-runtime", version = "0.39" }
+flux-spec = { package = "codewandler-flux-spec", version = "1.2" }
+
 # Shared third-party.
 anyhow = "1"
+async-trait = "0.1"
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
