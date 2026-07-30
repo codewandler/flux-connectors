@@ -30,7 +30,6 @@ Gate: `cargo build --workspace && cargo test --workspace && cargo clippy --works
 
 ## Next (ready — take the top one unless the user named a story)
 - [C-144 — No connector can send a non-JSON request body](C-144-request-body-encoding.md) · Spec · found shipping Stripe: op.rs binds application/json unconditionally and the IR has no content_type key anywhere. Blocks every form-encoded vendor — and OAuth2 token endpoints are form-encoded BY SPEC, so C-135's oauth2.login needs this too
-- [C-150 — The integration test harness has the same tmpfs bug, and it is the wider half](C-150-integration-fixture-leak.md) · Core · tests/common/mod.rs:58 builds its fixture root from env::temp_dir() — the identical bug C-143 fixed in artifact.rs, but in the harness EVERY integration binary uses. Two agents independently reproduced it taking down wiring, no_network, service_units and site_catalog
 - [C-155 — An operation cannot say it costs money, and all 110 of them claim only `network`](C-155-semantic-effects.md) · Spec · measured: every one of 110 emitted operations declares `effects [\"network\"]` — including Stripe's refund, which is risk `destructive`. flux has a semantic tier (Money/Delete/SendExternal) and built OpSignature::semantic_effects so 'a downstream visual editor' could see it
 - [C-133 — The brave connector — Brave Talk's room-token HTTP surface](C-133-provider-brave-talk-tokens.md) · Spec · ONLY the three HTTP calls. The XMPP MUC stream stays OUT — vision.md names protocol-rich technology adapters as a non-goal, and flux already has D-205/D-206 with feasibility proven live. Blocked on two real things; read Notes before starting
 
@@ -43,8 +42,6 @@ _Authentication is currently something the **host** does *around* a connector: `
 
 ### Babelforce Ivr
 - [C-129 — babelforce IVR v2 — atomics, not call modules (epic)](C-129-babelforce-ivr-epic.md) · Spec · EPIC — simpleMenu is audioplayer + read + switchnode welded together, so publishing call modules would freeze combinations instead of exposing parts. But an IVR flow's flowEndApplication is a GOTO, and C-94's graph refuses cycles because Flux has none
-- [C-130 — The ivr service and its atomic operation inventory](C-130-ivr-atomics-inventory.md) · Spec · six composable parts beat seventeen frozen combinations — audioplayer, read, switchnode, dial, recording, acd. Scope agentic and realtime out until the plain six land
-- [C-131 — The IVR inbound event set, including the two different invites](C-131-ivr-events.md) · Spec · 'on invite' is NOT the SIP INVITE of an inbound call — in this codebase it is the ACD inviting an AGENT to take a queued call (acd/handler.go:290-297). Both are real; they must not share a name
 - [C-132 — Decide: do composed IVR templates belong here, and in what execution model?](C-132-decide-ivr-templates.md) · Spec · DECISION — an IVR flow's edges are gotos and C-94's graph refuses cycles because Flux has none. And an IVR flow runs in the VENDOR's engine, a third case 'this repo compiles, flux executes' does not cover
 
 ### channel bindings — generalize a flux `channel` over a connector
@@ -155,6 +152,8 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-26 — File the outbound $auth seam stories on flux's board](C-26-file-seam-stories-on-flux.md) · Bridge · **critical path** · 11 paste-ready drafts wait on a decision to write into ../flux
 - [C-35 — Specify the proxy request contract and its guardrails](C-35-proxy-request-contract.md) · Bridge · blocked on C-34
 - [C-36 — Prove the proxy and the Flux emitter build the same request](C-36-proxy-emitter-conformance.md) · Bridge · blocked on C-34 · two backends over one IR will drift without this
+- [C-130 — The ivr service and its atomic operation inventory](C-130-ivr-atomics-inventory.md) · Spec · BLOCKED by its own inventory: the atomics have no wire identity. babelforce's parse_settings.go maps call-module names onto them, there is no endpoint per module, and the one Application CRUD resource is unmounted and already excluded as provisioning. Re-scope onto the six mounted /api/v3 endpoints
+- [C-131 — The IVR inbound event set, including the two different invites](C-131-ivr-events.md) · Spec · 'on invite' is NOT the SIP INVITE of an inbound call — in this codebase it is the ACD inviting an AGENT to take a queued call (acd/handler.go:290-297). Both are real; they must not share a name
 
 ## Backlog
 
@@ -251,6 +250,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-142 — Detach the explorer components from VitePress: a link port and a tier boundary](C-142-reusable-explorer-components.md) · Codegen · measured, not guessed: 6 of 14 components import `vitepress`, and between them they use exactly two symbols. No `useData`, no `useRouter`, no theme internals — so this is a link port and a tier boundary, not a rewrite
 - [C-143 — The artifact tests leak their fixtures and go flaky under load](C-143-artifact-tests-leak-fixtures.md) · Core · found twice during a 7-agent wave, both times attributed to the wrong diff before being measured. 55 stale fixture directories in /tmp, which is a 32G tmpfs — the tests write to env::temp_dir() and do not always clean up
 - [C-149 — The Vault live leg reports ok when it skips, and three smaller gaps beside it](C-149-vault-live-leg-reports-ok-when-it-skips.md) · Core · found by C-91's review. The test's own module doc says 'there is no third path where it reports success without having talked to anything' — and that is exactly what it does today. A skipped leg that prints ok is the failure mode the whole no-simulated-success rule exists to prevent
+- [C-150 — The integration test harness has the same tmpfs bug, and it is the wider half](C-150-integration-fixture-leak.md) · Core · tests/common/mod.rs:58 builds its fixture root from env::temp_dir() — the identical bug C-143 fixed in artifact.rs, but in the harness EVERY integration binary uses. Two agents independently reproduced it taking down wiring, no_network, service_units and site_catalog
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

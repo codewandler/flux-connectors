@@ -2,7 +2,7 @@
 id: C-131
 title: "The IVR inbound event set, including the two different invites"
 pillar: Spec
-status: ready
+status: blocked
 priority: 4
 design: docs/designs/babelforce-ivr-atomics.md
 epic: babelforce-ivr
@@ -46,3 +46,20 @@ agent being offered work, a recording finishing, and the rest.
 - If the platform's real event delivery turns out to be polling rather than webhooks, say so — a poll
   requires a cursor and is refused without one, which is a better outcome than a webhook declaration
   that no platform ever calls.
+
+## Progress
+
+- **Blocked before dispatch, on C-130's finding.** This story assumes events are cleanly per-atomic.
+  [C-130](C-130-ivr-atomics-inventory.md) established from the Go source that **the atomics have no wire
+  identity at all** — `parse_settings.go` maps *call-module* names onto them, and the `v2.*` identifiers
+  appear in no wire document. If the atomics are not addressable outbound, "an event per atomic" needs
+  the same source check before anyone writes TOML.
+- **And the event set has not been located.** C-130 reports the only webhook document in that tree,
+  `adapters/api/webhooksv1/openapi.yaml`, is a **single Ultimate.ai chat callback** — not an IVR event
+  set. So the premise that there *is* a declarable IVR event set is itself unverified.
+- The naming finding still stands and is still worth keeping: "on invite" in that codebase is the ACD
+  inviting an **agent** to take a queued call (`internal/modules/acd/handler.go:290-297`), not the SIP
+  INVITE of an inbound call. Whatever this story becomes, those must not share a name.
+- **What would unblock it:** find where babelforce actually emits IVR events, from the source rather
+  than from a document — and if it does not, this story closes with that recorded, exactly as C-130 did.
+

@@ -78,3 +78,29 @@ ship the first non-text one.
 - If a local TTS model is genuinely wanted, that is a **flux** story and a technology adapter, not a
   connector: `vision.md` reserves protocol-rich local integrations for flux plugins. Say so rather than
   building a connector around a process on the same machine.
+
+## Progress
+
+- **The TTS in question has been found, and it is babelforce's, not flux's.** C-130's inventory of
+  `~/babelforce/projects/ivr/ivr` enumerated what is actually *mounted* at `/api/v3` (behind
+  `webAuth.EchoMiddleware()`), and two of the six endpoints are text-to-speech:
+
+  | endpoint | operation | response |
+  |---|---|---|
+  | `GET /api/v3/tts/voices` | `listTTSVoices` | `TTSVoice[]`, filtered by `provider` |
+  | `POST /api/v3/tts` | `TTSCreate` | **`audio/wav`** from `text` + `provider` + `voice` + `language` |
+
+  So this repository's first `text→audio` operation is not OpenAI's `/v1/audio/speech` after all — it is
+  babelforce's own, on a surface already in the fleet. And `listTTSVoices` is a *catalogue* of voices
+  filtered by provider, which is the same discovery shape as `llm_catalogue`.
+
+- **This changes the story's worked example, not its design.** Both are still one request and one
+  response, so both are connector-shaped, and the honesty problem is unchanged and now sharper:
+  `POST /api/v3/tts` answers **`audio/wav`**, and `http.request` returns one flat string. Binary audio
+  through the composite path is not merely lossy — it is not usable at all. Either the operation
+  declares that plainly, or it does not ship on that path. See
+  [C-127](C-127-truthful-output-typing.md).
+
+- **Sequencing:** these two endpoints belong with C-130's re-scope onto the six mounted `/api/v3`
+  operations, not to a separate story. Take the modality *axis* here and let babelforce's re-scope ship
+  the operations.

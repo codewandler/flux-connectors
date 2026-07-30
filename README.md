@@ -12,7 +12,7 @@ operations, capability manifests, and a queryable Rust catalogue.
 > to end, but none of the generated providers can authenticate and make a live API call yet. See
 > [Current limitations](#current-limitations).
 
-The repository currently contains 97 curated connector operations across 17 providers — **Fly.io**
+The repository currently contains 110 curated connector operations across 19 providers — **Fly.io**
 (9), **Zendesk** (7),
 **Freshdesk** (9), **babelforce** (9), **Google Workspace** (8, across three services), **Jira** (6),
 **GitHub** (5), **HubSpot** (5), **Intercom** (5), **Shopify** (5), **Asana** (5), **OpenAI** (4),
@@ -63,7 +63,7 @@ cargo run -p connector-cli -- build
 On a clean checkout, `diff` reports:
 
 ```text
-237 artifacts up to date (17 providers checked)
+256 artifacts up to date (19 providers checked)
 ```
 
 Then inspect [`connectors/zendesk.flux`](connectors/zendesk.flux), browse the
@@ -156,7 +156,7 @@ fails closed:
   [docs/designs/query-encoding.md](docs/designs/query-encoding.md).
 - **Base URLs can contain unbound template variables**, such as
   `https://{subdomain}.zendesk.com`; environment binding has not landed.
-- **OpenAPI ingest is not wired.** All 17 providers are hand-authored. A `[spec]`-backed provider
+- **OpenAPI ingest is not wired.** All 19 providers are hand-authored. A `[spec]`-backed provider
   is rejected rather than compiled into a plausible but empty module.
 - **`check`, `fetch`, and `install` are not implemented.** Their CLI entries fail explicitly and
   point to their owning stories.

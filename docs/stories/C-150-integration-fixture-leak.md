@@ -2,8 +2,7 @@
 id: C-150
 title: "The integration test harness has the same tmpfs bug, and it is the wider half"
 pillar: Core
-status: in-progress
-priority: 2
+status: done
 areas: [connector-cli]
 note: "tests/common/mod.rs:58 builds its fixture root from env::temp_dir() — the identical bug C-143 fixed in artifact.rs, but in the harness EVERY integration binary uses. Two agents independently reproduced it taking down wiring, no_network, service_units and site_catalog"
 ---

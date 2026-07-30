@@ -9,6 +9,46 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The integration test harness leaked its fixtures into a shared tmpfs (C-150).** `Fixture::new`
+  rooted every fixture at `std::env::temp_dir()` with a `{label}-{pid}-{counter}` name — and `/tmp` here
+  is a 32 GB tmpfs, so a pid plus a process-local counter does not separate two agents running the same
+  binary. **Two agents reproduced it independently in one wave**, one measuring it take down `wiring`,
+  `no_network`, `service_units` and `site_catalog`.
+
+  **This is what made the integration gate untrustworthy twice**, and once cost a good merge that was
+  reverted before the cause was measured. Fixtures now live under the build's own `target/`, follow
+  `CARGO_TARGET_DIR`, carry a run-scoped name, and are removed on every path. Verified over **20 full
+  workspace runs** under two concurrent cold builds on the real disk, zero fixtures surviving.
+
+  The two spellings of this fix — `artifact.rs` from C-143 and the harness here — now derive their root
+  the same way, differing only in directory name so the two harnesses stay distinguishable.
+
+- **`AGENTS.md` and `README.md` were three releases stale**, claiming 17 providers and 237 artifacts
+  against a build that reports 19 and 256. And `AGENTS.md`'s Validation gate omitted `--no-fail-fast`
+  while the same file argues for it two sections earlier — the exact omission that once made it claim a
+  new provider leaves three tests red when it leaves eight.
+
+### Changed
+
+- **The babelforce IVR epic's premise was refuted by its own inventory (C-130).** The epic proposed
+  exposing babelforce's IVR *atomics* — `audioplayer`, `read`, `switchnode`, `dial`, `recording`, `acd` —
+  as operations, since the vendor's call modules are compositions of them.
+
+  Written from the Go source before any TOML, the inventory found **the atomics have no wire identity**:
+  `parse_settings.go` maps *call-module* names onto them and the internal `v2.*` identifiers appear in no
+  wire document, so the composition-vs-primitive split the epic wanted has already happened *inside*
+  babelforce, behind its API. There is no `audioplayer` to address — only `promptPlayer`. The one
+  endpoint carrying a `module` field is an unmounted CRUD resource this repo already excludes as account
+  provisioning, and `dial` places no call: it writes configuration.
+
+  **A connector cannot publish what a vendor does not expose.** What landed instead: the inventory, a
+  fence test proving no operation is named after a call module (verified to have teeth by adding one),
+  and babelforce's first per-provider contract test — it had none. The story is re-scoped onto the six
+  endpoints that *are* mounted at `/api/v3`, two of which are text-to-speech.
+
+
+### Fixed
+
 - **A signature scheme that verified forgeries (C-141).** `signed = "{timestamp}"` with a selector and a
   tolerance **loaded cleanly** and signed a body-independent string — so one captured signature verified
   any forged payload for the whole window. Reachable with no typo at all, unlike the unterminated-brace

@@ -32,8 +32,8 @@ change to a story's `status`, `priority`, `title`, `epic`, or `note`, run `/trac
 
 ## Current project boundary
 
-**Snapshot: v0.3.0.** `cargo run -p connector-cli -- build` compiles 17 providers and 97 curated
-connector operations plus 77 Flux core entries into 237 artifacts. The compiler, embedded Rust catalogue, JSON catalogue, and public
+**Snapshot: v0.5.0.** `cargo run -p connector-cli -- build` compiles 19 providers and 110 curated
+connector operations plus 77 Flux core entries into 256 artifacts. The compiler, embedded Rust catalogue, JSON catalogue, and public
 explorer work. **No generated provider can make a live API call yet.** Read
 [Intentional gaps](#intentional-gaps) before changing code that appears broken.
 
@@ -74,7 +74,7 @@ cargo run -p connector-cli -- build
 cargo run -p connector-cli -- diff
 ```
 
-`diff` must finish with `237 artifacts up to date (17 providers checked)` for the current catalogue.
+`diff` must finish with `256 artifacts up to date (19 providers checked)` for the current catalogue.
 The artifact count may legitimately change when providers or operations change; do not encode it as
 a permanent invariant.
 
@@ -384,7 +384,7 @@ The full repository gate is:
 ```bash
 cargo fmt --all
 cargo build --workspace
-cargo test --workspace
+cargo test --workspace --no-fail-fast
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
