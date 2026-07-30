@@ -542,6 +542,189 @@ test('the explorer lists every provider and every operation without JavaScript',
   }
 })
 
+// ---------------------------------------------------------------------------------------------
+// C-83 — the inbound surface.
+//
+// The site described half of what a connector does: an operation is flux calling the vendor and had
+// a page, a row and a filter, while an event is the vendor calling flux and had nothing, because
+// until C-83 it reached no artifact for a site to read.
+//
+// Both checks below carry a vacuity guard, for the reason every other check here does: a connector
+// with no inbound surface contributes nothing, so without one an edit that dropped every binding
+// would make these pass rather than fail.
+// ---------------------------------------------------------------------------------------------
+
+test('every declared channel binding is rendered on its connector, with what it carries', () => {
+  const document = catalog()
+  const html = page('explorer.html')
+  const body = text(html)
+
+  let rendered = 0
+  for (const provider of document.providers) {
+    assert.ok(
+      Array.isArray(provider.channels) && Array.isArray(provider.events),
+      `\`${provider.id}\` publishes no inbound arrays — an absent value is \`[]\`, never a missing key`
+    )
+
+    for (const channel of provider.channels) {
+      rendered += 1
+      assert.ok(
+        html.includes(`data-channel="${channel.name}"`),
+        `the card for \`${provider.id}\` does not render its binding \`${channel.name}\``
+      )
+      assert.ok(
+        body.includes(channel.transport),
+        `the binding \`${channel.name}\` does not say which transport it rides on`
+      )
+      for (const event of channel.events) {
+        assert.ok(
+          body.includes(event),
+          `the binding \`${channel.name}\` does not name the event \`${event}\` it carries`
+        )
+      }
+      // The reply as the address a consumer copies, falling back to the local id for a connector
+      // that publishes no authority.
+      if (channel.reply) {
+        const address = channel.reply.oip ?? channel.reply.operation
+        assert.ok(
+          body.includes(address),
+          `the binding \`${channel.name}\` does not say what answers it (\`${address}\`)`
+        )
+      }
+    }
+  }
+
+  assert.ok(
+    rendered > 0,
+    'no connector in the catalogue declares a channel binding, so this test asserts nothing'
+  )
+})
+
+test('a binding that cannot be verified is rendered as unverified, from a value and not an absence', () => {
+  const document = catalog()
+  const html = page('explorer.html')
+
+  let checked = 0
+  for (const provider of document.providers) {
+    for (const channel of provider.channels) {
+      checked += 1
+
+      // The catalogue's own contract first: a verification block is always present and always
+      // carries both keys, so telling a signed surface from an open one never means testing for
+      // existence. This is C-82's "silence is never a verification answer" as a property of the
+      // document the site is written against.
+      assert.ok(
+        channel.verification && typeof channel.verification.kind === 'string',
+        `the binding \`${channel.name}\` publishes no verification kind`
+      )
+      assert.equal(
+        channel.verification.verified,
+        channel.verification.kind !== 'none',
+        `the binding \`${channel.name}\` reports \`verified\` out of step with its kind`
+      )
+
+      assert.ok(
+        html.includes(`data-verified="${channel.verification.verified}"`),
+        `the card does not mark \`${channel.name}\` as verified=${channel.verification.verified}`
+      )
+    }
+  }
+
+  assert.ok(checked > 0, 'no binding was checked; this test would pass vacuously')
+
+  // And the selectors agree with the markup, so a component cannot answer this question its own way.
+  for (const provider of document.providers) {
+    assert.deepEqual(
+      selectors.unverifiedChannels(provider).map((channel) => channel.name),
+      provider.channels
+        .filter((channel) => !channel.verification.verified)
+        .map((channel) => channel.name)
+    )
+  }
+})
+
+test('the inbound selectors join a binding to its events and prefer a published address', () => {
+  const verified = { kind: 'hmac', verified: true, hmac: null }
+  const event = (name, rest = {}) => ({
+    name,
+    service: RESERVED_SERVICE,
+    oip: null,
+    description: '',
+    default: true,
+    group: '',
+    when: {},
+    schema: null,
+    ...rest,
+  })
+  const channel = (rest = {}) => ({
+    name: 'binding',
+    service: RESERVED_SERVICE,
+    oip: null,
+    description: '',
+    transport: 'webhook',
+    events: [],
+    verification: verified,
+    discriminator: null,
+    delivery_id: null,
+    payload: {},
+    reply: null,
+    cursor: null,
+    interval: null,
+    subscription: null,
+    setup: null,
+    ...rest,
+  })
+
+  const provider = {
+    id: 'fixture',
+    events: [event('one'), event('two'), event('three')],
+    channels: [channel({ events: ['two', 'one'] })],
+  }
+
+  assert.ok(selectors.hasInboundSurface(provider))
+  assert.ok(!selectors.hasInboundSurface({ ...provider, events: [], channels: [] }))
+
+  // The binding's own order, not the connector's declaration order.
+  assert.deepEqual(
+    selectors.channelEvents(provider, provider.channels[0]).map((carried) => carried.name),
+    ['two', 'one']
+  )
+
+  // A name with no declaration is dropped rather than rendered as a stub: the loader refuses one, so
+  // inventing a placeholder would put a capability on the page the connector does not have.
+  assert.deepEqual(
+    selectors.channelEvents(provider, channel({ events: ['nothing-declares-this'] })),
+    []
+  )
+
+  // The address a consumer copies: the oip when there is one, the local id otherwise, and nothing
+  // at all for a fire-and-forget binding.
+  assert.equal(selectors.replyAddress(channel()), null)
+  assert.equal(
+    selectors.replyAddress(channel({ reply: { operation: 'op', oip: null, result: null, bind: {} } })),
+    'op'
+  )
+  assert.equal(
+    selectors.replyAddress(
+      channel({ reply: { operation: 'op', oip: 'com.acme.api:v1#op', result: null, bind: {} } })
+    ),
+    'com.acme.api:v1#op'
+  )
+
+  // An unknown kind shows the raw token rather than a label that would present it as understood.
+  assert.equal(selectors.verificationLabel(channel()), 'Signed')
+  assert.equal(
+    selectors.verificationLabel(channel({ verification: { kind: 'none', verified: false, hmac: null } })),
+    'Unverified'
+  )
+  assert.equal(
+    selectors.verificationLabel(
+      channel({ verification: { kind: 'a-scheme-this-build-has-not-heard-of', verified: true, hmac: null } })
+    ),
+    'a-scheme-this-build-has-not-heard-of'
+  )
+})
+
 test('the service filter is a facet of the catalogue and narrows to the chosen connector', () => {
   const providers = catalog().providers
 
@@ -905,6 +1088,16 @@ test('nothing about the catalogue is hand-maintained in the explorer sources', (
     for (const operation of provider.operations) {
       forbidden.add(operation.id)
       operation.status.issues.forEach((issue) => forbidden.add(issue.code))
+    }
+    // C-83. A member's rendered address is catalogue data like an operation id, and the inbound
+    // components render one, so hard-coding one is the same failure.
+    //
+    // The bare *names* are deliberately not here, and that is not an oversight: an event keeps its
+    // vendor spelling, and vendors spell them as ordinary English words — one shipped connector
+    // declares an event called `message`. Adding those would fail on any component that used the
+    // word in a comment, which is a false positive by construction rather than a real find.
+    for (const member of [...provider.events, ...provider.channels]) {
+      if (member.oip) forbidden.add(member.oip)
     }
   }
 

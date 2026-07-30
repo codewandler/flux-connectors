@@ -1,0 +1,505 @@
+//! The inbound surface reaches the manifest and the catalogue, and **nothing reaches the module**
+//! (C-83).
+//!
+//! Events and channel bindings landed in the IR and in the hash domain with C-82 and reached no
+//! artifact at all, so a host had no way to read what a connector declares. This file holds the two
+//! halves of publishing them, and they pull in opposite directions on purpose:
+//!
+//! 1. **The declaration is published.** `connectors/<id>.connector.toml` carries `[[events]]` and
+//!    `[[channels]]`, with the transport, the events a binding carries, the verification parameters,
+//!    the discriminator and delivery id, the payload map, and the reply as a **rendered oip**.
+//! 2. **The declaration is emitted nowhere.** Every shipped `.flux` module is byte-identical to one
+//!    emitted from the same connector with its events and bindings deleted, and the emitter
+//!    *refuses* rather than degrades when asked for a rendering of one. flux lifts `op` declarations
+//!    only; `channel` and `trigger` are Program members an operator writes. The tempting wrong
+//!    output is an event dressed up as a pollable op, and `AGENTS.md` forbids exactly that.
+//!
+//! The manifest assertions read the bytes a build **would write** rather than the committed file.
+//! That is not a shortcut: `connectors/*.connector.toml` is a per-provider artifact and is committed
+//! here, but reading the plan keeps every claim below true of the emitter under test rather than of
+//! whatever a previous run happened to leave on disk.
+
+mod common;
+
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+
+use connector_cli::catalog::OperationRendering;
+use connector_cli::workspace::Workspace;
+use connector_cli::{catalog, pipeline, seam, site};
+use connector_spec::Connector;
+
+fn repo_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// Every provider this repository ships, read from the directory rather than listed here (C-54).
+fn shipped() -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(repo_root().join("providers"))
+        .expect("the providers directory must exist")
+        .map(|entry| entry.expect("directory entry").path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "toml"))
+        .map(|path| {
+            path.file_stem()
+                .expect("a provider file has a stem")
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    names.sort();
+    assert!(!names.is_empty(), "no shipped providers found");
+    names
+}
+
+fn load(provider: &str) -> Connector {
+    let path = repo_root()
+        .join("providers")
+        .join(format!("{provider}.toml"));
+    let source = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
+    connector_spec::provider::load(&format!("providers/{provider}.toml"), &source)
+        .unwrap_or_else(|error| panic!("providers/{provider}.toml does not load: {error}"))
+        .connector
+}
+
+/// Every artifact a full build would write, keyed by its repository-relative path.
+fn planned() -> BTreeMap<String, String> {
+    let workspace = Workspace::new(repo_root());
+    let plan = pipeline::plan(&workspace, None).expect("every shipped provider compiles");
+    plan.artifacts
+        .iter()
+        .map(|artifact| {
+            (
+                workspace
+                    .display_path(&artifact.path)
+                    .display()
+                    .to_string()
+                    .replace('\\', "/"),
+                artifact.contents.clone(),
+            )
+        })
+        .collect()
+}
+
+/// One provider's default-service manifest, parsed.
+fn manifest_of(artifacts: &BTreeMap<String, String>, provider: &str) -> toml::Value {
+    let path = format!("connectors/{provider}.connector.toml");
+    let source = artifacts
+        .get(&path)
+        .unwrap_or_else(|| panic!("a build plans no {path}"));
+    toml::from_str(source).unwrap_or_else(|error| panic!("{path} is not valid TOML: {error}"))
+}
+
+fn table<'a>(value: &'a toml::Value, key: &str) -> &'a toml::Value {
+    value
+        .get(key)
+        .unwrap_or_else(|| panic!("expected a `{key}` key in {value}"))
+}
+
+fn text<'a>(value: &'a toml::Value, key: &str) -> &'a str {
+    table(value, key)
+        .as_str()
+        .unwrap_or_else(|| panic!("`{key}` is not a string in {value}"))
+}
+
+/// The connector's `[[channels]]` blocks for the default service, in IR order.
+fn blocks<'a>(manifest: &'a toml::Value, key: &str) -> Vec<&'a toml::Value> {
+    manifest
+        .get(key)
+        .map(|value| {
+            value
+                .as_array()
+                .unwrap_or_else(|| panic!("`{key}` is not an array of tables"))
+                .iter()
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+// ---------------------------------------------------------------------------------------------
+// 1 — the declaration is published
+// ---------------------------------------------------------------------------------------------
+
+/// **Every declared event and binding reaches the manifest**, with the fields a host needs in order
+/// to receive a delivery.
+///
+/// Driven off the provider files rather than a fixture, so it covers whatever the repository ships:
+/// a connector that declares no inbound surface contributes nothing and one that declares two
+/// bindings must publish both. The whole-repository claim it rests on — that at least one shipped
+/// connector *has* an inbound surface — is asserted at the end, so a future edit that dropped every
+/// binding would fail here rather than pass vacuously.
+#[test]
+fn every_shipped_event_and_binding_reaches_its_manifest() {
+    let artifacts = planned();
+    let mut published = 0;
+
+    for provider in shipped() {
+        let connector = load(&provider);
+        if connector.events.is_empty() && connector.channels.is_empty() {
+            continue;
+        }
+        assert!(
+            connector.is_default_only(),
+            "`{provider}` declares services and an inbound surface; this check reads the \
+             default-service manifest only and needs widening"
+        );
+
+        let manifest = manifest_of(&artifacts, &provider);
+
+        let events = blocks(&manifest, "events");
+        assert_eq!(
+            events.len(),
+            connector.events.len(),
+            "`{provider}` declares {} events and publishes {}",
+            connector.events.len(),
+            events.len()
+        );
+        for (block, declared) in events.iter().zip(&connector.events) {
+            assert_eq!(text(block, "name"), declared.name, "events keep IR order");
+        }
+
+        let channels = blocks(&manifest, "channels");
+        assert_eq!(channels.len(), connector.channels.len());
+
+        for (block, declared) in channels.iter().zip(&connector.channels) {
+            published += 1;
+            assert_eq!(text(block, "name"), declared.name);
+
+            // The transport, and the events the binding carries.
+            assert!(!text(block, "transport").is_empty());
+            let carried: Vec<&str> = table(block, "events")
+                .as_array()
+                .expect("`events` is an array")
+                .iter()
+                .map(|event| event.as_str().expect("an event name"))
+                .collect();
+            assert_eq!(carried, declared.events);
+
+            // Verification is *always* here — see the loudness check below.
+            let verification = table(block, "verification");
+            assert!(!text(verification, "kind").is_empty());
+            assert!(verification.get("verified").is_some());
+
+            for (key, present) in [
+                ("discriminator", declared.discriminator.is_some()),
+                ("delivery_id", declared.delivery_id.is_some()),
+                ("payload", !declared.payload.is_empty()),
+            ] {
+                assert_eq!(
+                    block.get(key).is_some(),
+                    present,
+                    "`{provider}` binding `{}` publishes `{key}` out of step with its declaration",
+                    declared.name
+                );
+            }
+
+            // **The reply as a rendered oip.** The local id is what a host resolves against this
+            // same manifest's `operations`; the oip is the address that survives leaving the
+            // repository, and it is the form the design writes a reply in.
+            if let Some(reply) = &declared.reply {
+                let published_reply = table(block, "reply");
+                assert_eq!(text(published_reply, "operation"), reply.operation);
+                let oip = connector
+                    .oip_of_member(&declared.service, &reply.operation)
+                    .map(|oip| oip.to_string());
+                assert_eq!(
+                    published_reply.get("oip").and_then(toml::Value::as_str),
+                    oip.as_deref(),
+                    "`{provider}` binding `{}` does not publish its reply as a rendered oip",
+                    declared.name
+                );
+                assert!(
+                    oip.is_some(),
+                    "`{provider}` declares a reply but renders no address for it, so the check \
+                     above compared two `None`s"
+                );
+            }
+        }
+    }
+
+    assert!(
+        published > 0,
+        "no shipped connector declares a channel binding, so every assertion above passed \
+         vacuously — this file is testing nothing"
+    );
+}
+
+/// **No secret reaches a manifest either.** The verification block names a credential, and that name
+/// is one the same manifest's connector declares with `scheme = \"signing\"`.
+#[test]
+fn a_manifest_verification_block_names_a_declared_signing_credential() {
+    let artifacts = planned();
+
+    for provider in shipped() {
+        let connector = load(&provider);
+        if connector.channels.is_empty() {
+            continue;
+        }
+        let manifest = manifest_of(&artifacts, &provider);
+
+        for block in blocks(&manifest, "channels") {
+            let Some(hmac) = table(block, "verification").get("hmac") else {
+                continue;
+            };
+            let secret = text(hmac, "secret");
+            let method = connector.auth_method(secret).unwrap_or_else(|| {
+                panic!("`{provider}` verifies with `{secret}`, which it does not declare")
+            });
+            assert_eq!(
+                method.scheme,
+                connector_spec::AuthScheme::Signing,
+                "`{provider}` verifies with `{secret}`, which is an outbound credential — the two \
+                 directions never share one"
+            );
+            for env in &method.env {
+                assert!(
+                    !env.is_empty(),
+                    "the published secret must be a credential name resolving to environment \
+                     variable *names*"
+                );
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// 2 — the declaration is emitted nowhere
+// ---------------------------------------------------------------------------------------------
+
+/// **Nothing reaches the `.flux` module.** Every shipped module is byte-identical to one emitted
+/// from the same connector with every event and every channel binding deleted.
+///
+/// Stronger than comparing against the committed file, which would only say the module did not
+/// change *today*: this says the inbound half cannot influence the emitted Flux at all, for any
+/// provider, because deleting it changes nothing. A future emitter that synthesised a poll loop from
+/// a binding would fail here on the provider that has one.
+#[test]
+fn no_event_or_binding_reaches_any_shipped_module() {
+    let mut compared = 0;
+
+    for provider in shipped() {
+        let connector = load(&provider);
+        if connector.events.is_empty() && connector.channels.is_empty() {
+            continue;
+        }
+        compared += 1;
+
+        let with = seam::emit(&connector)
+            .unwrap_or_else(|error| panic!("`{provider}` does not emit: {error}"));
+        let stripped = Connector {
+            events: Vec::new(),
+            channels: Vec::new(),
+            ..connector.clone()
+        };
+        let without = seam::emit(&stripped).unwrap_or_else(|error| {
+            panic!("`{provider}` does not emit without its inbound half: {error}")
+        });
+
+        assert_eq!(
+            with.operations, without.operations,
+            "`{provider}`'s per-operation renderings change when its inbound surface is deleted"
+        );
+        for (unit, bare) in with.services.iter().zip(&without.services) {
+            assert_eq!(
+                unit.module, bare.module,
+                "`{provider}`'s `{}` module is not byte-identical with and without its events and \
+                 bindings — something inbound reached the Flux",
+                unit.service
+            );
+        }
+        assert_eq!(
+            with.catalog, without.catalog,
+            "`{provider}`'s generated catalogue table changes with its inbound surface; the Rust \
+             catalogue embeds `op` renderings only"
+        );
+
+        // The complement, so the check above cannot pass because the manifests are identical too.
+        assert_ne!(
+            with.services[0].manifest, without.services[0].manifest,
+            "`{provider}`'s manifest is unchanged by deleting its inbound surface, so it publishes \
+             nothing and this test compares two empty claims"
+        );
+    }
+
+    assert!(
+        compared > 0,
+        "no shipped connector declares an inbound surface, so this comparison is vacuous"
+    );
+}
+
+/// **The emitter refuses rather than degrades.** A rendering whose id names an event or a channel
+/// binding is not skipped, not published as an operation, and not turned into a pollable op — it
+/// fails the whole call, in both catalogue backends, with an error that names the rule.
+#[test]
+fn a_rendering_for_an_event_or_a_binding_is_refused_by_name() {
+    let connector = load("slack");
+    assert!(
+        !connector.events.is_empty() && !connector.channels.is_empty(),
+        "this check needs a connector with both member kinds"
+    );
+
+    for member in [
+        connector.events[0].name.clone(),
+        connector.channels[0].name.clone(),
+    ] {
+        let dressed_up = vec![OperationRendering {
+            id: member.clone(),
+            source: format!("op {member}() -> Any\n"),
+        }];
+
+        for rendered in [
+            catalog::render(&connector, &dressed_up).err(),
+            site::provider_entry(&connector, &dressed_up).err(),
+        ] {
+            let error = rendered.unwrap_or_else(|| {
+                panic!("`{member}` was published as an operation instead of being refused")
+            });
+            let message = format!("{error:#}");
+            assert!(
+                message.contains(&member),
+                "the refusal does not name the member: {message}"
+            );
+            assert!(
+                message.contains("pollable op"),
+                "the refusal does not name the wrong output it is preventing: {message}"
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// 3 — `--service` selects every member kind, not just the callable one
+// ---------------------------------------------------------------------------------------------
+
+/// A two-service provider whose **each** service declares an operation, an event and a binding.
+///
+/// Written here rather than added to `providers/`: this shape does not exist in the shipped
+/// catalogue, and a selection that silently stayed operations-only would go unnoticed without one.
+const TWO_SERVICE: &str = r#"
+id = "acme"
+vendor = "Acme"
+authority = "com.acme.api"
+base_url = "https://api.acme.example"
+
+[[services]]
+name = "mail"
+description = "Mail."
+api_version = "v1"
+
+[[services]]
+name = "chat"
+description = "Chat."
+api_version = "v2"
+
+[[operations]]
+id = "acme-mail-send"
+service = "mail"
+method = "POST"
+path = "/mail"
+description = "Send mail."
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "body"
+required = true
+schema = { type = "string" }
+
+[[operations]]
+id = "acme-chat-post"
+service = "chat"
+method = "POST"
+path = "/chat"
+description = "Post a message."
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "text"
+required = true
+schema = { type = "string" }
+
+[[events]]
+name = "mail.received"
+service = "mail"
+description = "Mail arrived."
+
+[[events]]
+name = "chat.posted"
+service = "chat"
+description = "Someone posted."
+
+[[channels]]
+name = "mail-socket"
+service = "mail"
+transport = "socket"
+events = ["mail.received"]
+
+[channels.payload]
+body = "message.body"
+
+[channels.reply]
+operation = "acme-mail-send"
+result = "body"
+
+[[channels]]
+name = "chat-socket"
+service = "chat"
+transport = "socket"
+events = ["chat.posted"]
+
+[channels.payload]
+text = "message.text"
+
+[channels.reply]
+operation = "acme-chat-post"
+result = "text"
+"#;
+
+/// **`--service` selects a service's events and bindings along with its operations.**
+///
+/// The failure this guards is a partial success, which is the worst kind here: `--service mail`
+/// would emit a mail manifest that compiles, ships and passes every artifact check while announcing
+/// an ingress surface belonging to a service nobody selected.
+#[test]
+fn selecting_a_service_selects_its_events_and_bindings_too() {
+    let connector = connector_spec::provider::load("providers/acme.toml", TWO_SERVICE)
+        .expect("the fixture loads")
+        .connector;
+
+    let mail = seam::select_service(&connector, "mail").expect("`mail` is a service");
+    assert_eq!(
+        mail.events
+            .iter()
+            .map(|e| e.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["mail.received"]
+    );
+    assert_eq!(
+        mail.channels
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["mail-socket"]
+    );
+
+    let manifest = &seam::emit(&mail).expect("the selection emits").services[0].manifest;
+    assert!(
+        manifest.contains("mail.received") && manifest.contains("mail-socket"),
+        "the selected service's own inbound surface is missing from its manifest:\n{manifest}"
+    );
+    assert!(
+        !manifest.contains("chat.posted") && !manifest.contains("chat-socket"),
+        "a `--service mail` manifest announces the chat service's ingress surface:\n{manifest}"
+    );
+
+    // And the other direction, so the filter is not simply dropping everything.
+    let chat = seam::select_service(&connector, "chat").expect("`chat` is a service");
+    assert_eq!(
+        chat.channels
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["chat-socket"]
+    );
+}

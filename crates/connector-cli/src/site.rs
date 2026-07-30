@@ -45,15 +45,19 @@
 //! it. That is the same reasoning `crates/catalog/src/generated.rs` records for keeping its
 //! provider index by hand, reached from the other direction.
 
+use std::collections::BTreeMap;
+
 use anyhow::Result;
 use serde::Serialize;
 
 use connector_spec::{
-    AuthScheme, Connector, HttpMethod, Idempotency, JsonSchema, Operation, Param, Risk,
+    AuthScheme, ChannelBinding, Connector, EventDecl, HttpMethod, Idempotency, JsonSchema,
+    ManualSetup, Operation, Param, Reply, Risk, Selector, Subscription, VerificationScheme,
 };
 
 use crate::catalog::{self, OperationRendering};
 use crate::core_catalog::CoreCatalog;
+use crate::inbound;
 use crate::status::{self, Status};
 
 /// The document's format version.
@@ -117,6 +121,178 @@ pub struct ProviderEntry {
     /// Every operation, in the order the provider declares them, which is also the order
     /// `connectors/<id>.flux` carries them.
     operations: Vec<OperationEntry>,
+    /// The events this connector **receives** — the inbound half of its surface (C-83).
+    ///
+    /// An operation is flux calling the vendor; an event is the vendor calling flux. Both are
+    /// members of a service and both are published here, in IR order, so a consumer can render what
+    /// a connector listens for without reading a provider TOML. `[]` for the sixteen connectors that
+    /// declare none.
+    events: Vec<EventEntry>,
+    /// The ingress surfaces this connector describes — the third member kind (C-82/C-83).
+    ///
+    /// A binding **declares**; it never installs, and it is emitted into no module at all. Nothing
+    /// here is a URL, a schedule or a secret: the endpoint is the operator's deployment detail and
+    /// every credential is a name the host resolves.
+    channels: Vec<ChannelEntry>,
+}
+
+/// One event a vendor sends, with the vendor's own spelling and its schema intact.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+struct EventEntry {
+    /// The event name, in the vendor's spelling — `app_mention`, `issues.opened`. Never respelled.
+    name: String,
+    /// The [`ServiceEntry::name`] it belongs to — exactly one, like every other member.
+    service: String,
+    /// The rendered address, `com.slack.api:v1#app_mention`, or `null` when the connector declares
+    /// no authority or no API version. Events, operations and bindings share one namespace per
+    /// service, so they share one address form and the `#` fragment carries no kind tag.
+    oip: Option<String>,
+    /// What the event means, in one line.
+    description: String,
+    /// Whether a product should offer this event **on** when a user connects. Slack's `message` is
+    /// the case for `false`: it fires for every human message in every channel the app is in.
+    default: bool,
+    /// An optional grouping label, so a long event list renders as sections. Empty when unset.
+    group: String,
+    /// Field equalities that narrow a coarse vendor event into this one — GitHub's one `issues`
+    /// event with `{"action": {"const": "opened"}}`. `{}` when the discriminator alone identifies it.
+    when: BTreeMap<String, JsonSchema>,
+    /// The vendor's JSON Schema for the payload, carried verbatim, or `null` when it publishes none.
+    schema: Option<JsonSchema>,
+}
+
+/// One ingress surface: a transport, the events it carries, how a delivery is proven, and what
+/// answers it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+struct ChannelEntry {
+    /// The binding name, e.g. `events-api`.
+    name: String,
+    /// The [`ServiceEntry::name`] it belongs to.
+    service: String,
+    /// The rendered address, or `null` when the connector publishes none.
+    oip: Option<String>,
+    /// What the binding is for, in one line.
+    description: String,
+    /// `webhook`, `socket` or `poll` — flux owns the transport, the connector owns the binding.
+    transport: &'static str,
+    /// The [`EventEntry::name`]s this binding carries, all from the same service.
+    events: Vec<String>,
+    /// How a delivery proves it came from the vendor. **Always present**, and always naming its
+    /// kind — see [`crate::inbound`] for why an omitted key would have been the wrong encoding.
+    verification: VerificationEntry,
+    /// Where to read *which event this is*, when the transport carries it out of band.
+    discriminator: Option<SelectorEntry>,
+    /// Where to read the vendor's redelivery id, so a flow can dedupe at-least-once delivery.
+    delivery_id: Option<SelectorEntry>,
+    /// Flow symbol → dotted path into the vendor's envelope, in the grammar `Param::wire` already
+    /// uses. `{}` when the binding maps nothing.
+    payload: BTreeMap<String, String>,
+    /// The operation that answers an event on this binding, or `null` for a fire-and-forget one.
+    reply: Option<ReplyEntry>,
+    /// The cursor operation a `poll` binding calls — required for that transport, `null` otherwise.
+    cursor: Option<String>,
+    /// The **suggested** poll interval. Advisory: this repository runs nothing, and flux's cron
+    /// drops ticks across a restart.
+    interval: Option<String>,
+    /// How the binding is registered with the vendor through its own API, or `null` when it has none.
+    subscription: Option<SubscriptionEntry>,
+    /// What a human does in the vendor's dashboard, when there is no subscription API.
+    setup: Option<SetupEntry>,
+}
+
+/// A binding's verification, published **totally**: a kind, the boolean it implies, and the HMAC
+/// parameters when there are any.
+///
+/// `verified` is `kind != "none"` restated, exactly as `status.works` restates `issues.is_empty()`.
+/// It is what lets a consumer tell a deliberately-unverifiable surface from a verified one without
+/// inspecting the absence of a field — the C-82 invariant that silence is never a verification
+/// answer, carried through to the artifact.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+struct VerificationEntry {
+    /// `hmac`, `none` or `connection`. A stable machine token.
+    kind: &'static str,
+    /// Whether a delivery here can be attributed to the vendor at all. `false` for `none` only.
+    verified: bool,
+    /// The HMAC parameters, or `null` for the two kinds that carry none.
+    hmac: Option<HmacEntry>,
+}
+
+/// The parameters of one HMAC signature scheme, in the vendor's own terms.
+///
+/// Nothing here verifies anything: the comparison runs host-side over the raw request bytes. This
+/// only declares what that comparison uses — and [`secret`](Self::secret) is a **credential name**,
+/// never a value. `site_catalog.rs::no_credential_value_reaches_the_document` builds with the
+/// signing secret's variable set to a sentinel and asserts it appears nowhere.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+struct HmacEntry {
+    /// `sha1` or `sha256`.
+    algorithm: &'static str,
+    /// `hex` or `base64` — how the digest is spelled in the header.
+    encoding: &'static str,
+    /// The header carrying the signature, e.g. `X-Slack-Signature`.
+    header: String,
+    /// A literal prefix the header value carries before the digest (`v0=`), or `null`.
+    prefix: Option<String>,
+    /// The string that is signed, as a template over `{body}` and `{timestamp}`.
+    signed: String,
+    /// Where the `{timestamp}` is read from. Present exactly when `signed` interpolates one.
+    timestamp: Option<SelectorEntry>,
+    /// The **name** of the credential holding the shared secret. Resolve it against
+    /// `provider.auth.credentials[].name`, where it is declared with `scheme: "signing"`.
+    secret: String,
+    /// How old a signed request may be (`5m`), or `null` for an untimestamped scheme.
+    tolerance: Option<String>,
+}
+
+/// Where on an inbound request one named value is read from.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+struct SelectorEntry {
+    /// `header` or `body`.
+    source: &'static str,
+    /// The header name, or the dotted body path.
+    name: String,
+}
+
+/// The outbound half of a binding: which operation answers, and how its parameters are filled.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+struct ReplyEntry {
+    /// The `OperationEntry::id` that answers — always an operation this same connector publishes.
+    operation: String,
+    /// **The reply as a rendered oip**, `com.slack.api:v1#slack-chat-post-message`, or `null` when
+    /// the connector declares no authority or no API version.
+    ///
+    /// The id above is what a host resolves locally; this is the address that survives leaving the
+    /// repository, and it is the form the design writes a reply in.
+    oip: Option<String>,
+    /// The reply parameter carrying the **journey's own output** — the one field no path into the
+    /// triggering event can reach. `null` when every parameter comes off the payload.
+    result: Option<String>,
+    /// Reply parameter name → [`ChannelEntry::payload`] key. `{}` when nothing is bound.
+    bind: BTreeMap<String, String>,
+}
+
+/// How a webhook is registered with the vendor through its own API.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+struct SubscriptionEntry {
+    /// The operation that registers the endpoint.
+    subscribe: String,
+    /// The operation that removes it, or `null` when the vendor offers no removal — worth knowing,
+    /// because it means a disconnect leaves the vendor posting to a dead URL.
+    unsubscribe: Option<String>,
+    /// The operation that lists existing registrations, for reconciling duplicates.
+    list: Option<String>,
+    /// Which parameter of `subscribe` receives the product's public callback URL. The URL itself is
+    /// never here.
+    callback_param: String,
+}
+
+/// What a human does in the vendor's dashboard, for vendors with no subscription API.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+struct SetupEntry {
+    /// The vendor's own page, so a UI links out rather than restating it.
+    docs_url: Option<String>,
+    /// The steps, in order, each one thing a person does.
+    steps: Vec<String>,
 }
 
 /// One API surface of a provider: the unit a consumer addresses, versions and installs (C-49).
@@ -267,13 +443,7 @@ pub fn provider_entry(
 ) -> Result<ProviderEntry> {
     let mut operations = Vec::with_capacity(renderings.len());
     for rendering in renderings {
-        let operation = connector.operation(&rendering.id).ok_or_else(|| {
-            anyhow::anyhow!(
-                "connector `{}` has no operation `{}` to describe",
-                connector.id,
-                rendering.id
-            )
-        })?;
+        let operation = catalog::operation_for(connector, &rendering.id)?;
         // The host the call actually reaches, which is the operation's **service**'s — not the
         // provider's, which for a multi-service provider is a different host entirely.
         let host = catalog::host_of(connector.base_url_of(&operation.service))?.to_string();
@@ -318,7 +488,124 @@ pub fn provider_entry(
         auth: provider_auth(connector),
         operation_count: operations.len(),
         operations,
+        events: connector
+            .events
+            .iter()
+            .map(|event| event_entry(connector, event))
+            .collect(),
+        channels: connector
+            .channels
+            .iter()
+            .map(|channel| channel_entry(connector, channel))
+            .collect(),
     })
+}
+
+/// One declared event, in IR order.
+fn event_entry(connector: &Connector, event: &EventDecl) -> EventEntry {
+    EventEntry {
+        name: event.name.clone(),
+        service: event.service.clone(),
+        oip: member_oip(connector, &event.service, &event.name),
+        description: event.description.clone(),
+        default: event.default,
+        group: event.group.clone(),
+        when: event.when.clone(),
+        schema: event.schema.clone(),
+    }
+}
+
+/// One channel binding, in IR order.
+fn channel_entry(connector: &Connector, channel: &ChannelBinding) -> ChannelEntry {
+    ChannelEntry {
+        name: channel.name.clone(),
+        service: channel.service.clone(),
+        oip: member_oip(connector, &channel.service, &channel.name),
+        description: channel.description.clone(),
+        transport: inbound::transport_token(channel.transport),
+        events: channel.events.clone(),
+        verification: verification_entry(channel),
+        discriminator: channel.discriminator.as_ref().map(selector_entry),
+        delivery_id: channel.delivery_id.as_ref().map(selector_entry),
+        payload: channel.payload.clone(),
+        reply: channel
+            .reply
+            .as_ref()
+            .map(|reply| reply_entry(connector, channel, reply)),
+        cursor: channel.cursor.clone(),
+        interval: channel.interval.clone(),
+        subscription: channel.subscription.as_ref().map(subscription_entry),
+        setup: channel.setup.as_ref().map(setup_entry),
+    }
+}
+
+/// A member's rendered address, or `None` when the connector publishes none.
+///
+/// One helper for all three member kinds, because they share one namespace per service and
+/// therefore one address form — `Connector::oip_of_member` is the IR's own statement of that.
+fn member_oip(connector: &Connector, service: &str, name: &str) -> Option<String> {
+    connector
+        .oip_of_member(service, name)
+        .map(|oip| oip.to_string())
+}
+
+/// The total verification projection — the classification comes from [`crate::inbound`], which the
+/// manifest reads too, so the two artifacts cannot disagree about whether a surface is verified.
+fn verification_entry(channel: &ChannelBinding) -> VerificationEntry {
+    let kind = inbound::verification_of(channel);
+    let hmac = match &channel.verification {
+        Some(VerificationScheme::Hmac(spec)) => Some(HmacEntry {
+            algorithm: inbound::digest_token(spec.algorithm),
+            encoding: inbound::encoding_token(spec.encoding),
+            header: spec.header.clone(),
+            prefix: spec.prefix.clone(),
+            signed: spec.signed.clone(),
+            timestamp: spec.timestamp.as_ref().map(selector_entry),
+            // A credential **name**. Nothing in this module reads the process environment.
+            secret: spec.secret.clone(),
+            tolerance: spec.tolerance.clone(),
+        }),
+        Some(VerificationScheme::None) | None => None,
+    };
+    VerificationEntry {
+        kind: kind.kind(),
+        verified: kind.verified(),
+        hmac,
+    }
+}
+
+fn selector_entry(selector: &Selector) -> SelectorEntry {
+    SelectorEntry {
+        source: inbound::source_token(selector.source),
+        name: selector.name.clone(),
+    }
+}
+
+fn reply_entry(connector: &Connector, channel: &ChannelBinding, reply: &Reply) -> ReplyEntry {
+    ReplyEntry {
+        operation: reply.operation.clone(),
+        // The reply's own service is the binding's: a binding answers with an operation of the same
+        // connector and the same service, which is what the loader enforces.
+        oip: member_oip(connector, &channel.service, &reply.operation),
+        result: reply.result.clone(),
+        bind: reply.bind.clone(),
+    }
+}
+
+fn subscription_entry(subscription: &Subscription) -> SubscriptionEntry {
+    SubscriptionEntry {
+        subscribe: subscription.subscribe.clone(),
+        unsubscribe: subscription.unsubscribe.clone(),
+        list: subscription.list.clone(),
+        callback_param: subscription.callback_param.clone(),
+    }
+}
+
+fn setup_entry(setup: &ManualSetup) -> SetupEntry {
+    SetupEntry {
+        docs_url: setup.docs_url.clone(),
+        steps: setup.steps.clone(),
+    }
 }
 
 /// Serialize the whole catalogue.
