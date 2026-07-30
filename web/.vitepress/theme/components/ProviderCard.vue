@@ -200,8 +200,10 @@ const headline = computed(() => {
   font-size: 12px;
   /* A single value with no break opportunity of its own must break rather than push its grid track
      wider than the card. This is the *within a value* half; `.card__hosts` below is the *between
-     values* half. It sweeps the two `<code>` facts C-101 added — the Address and a service's gid —
-     which are single values and so are not covered by wrapping the hosts cell. */
+     values* half. Its reach is exactly this `<dl>` — so it covers the Address fact, and it does NOT
+     cover a service's gid, which lives in `.card__services` below. That one needs no cover today:
+     `.service` already wraps between its chips, and a review measured no spill from it at 1280,
+     1366 or 1440. If a long gid ever does escape, this is the rule to mirror there. */
   overflow-wrap: anywhere;
 }
 
