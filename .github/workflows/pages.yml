@@ -1,0 +1,79 @@
+name: pages
+
+# Builds the VitePress site in `web/` and publishes it to GitHub Pages.
+#
+# ONE-TIME REPOSITORY SETTING, which this workflow cannot do for itself:
+# Settings → Pages → "Build and deployment" → Source must be set to **GitHub Actions**.
+# Until it is, `build` still runs and still fails on a broken site, but `deploy` errors out with
+# "Get Pages site failed" / "Not Found".
+#
+# The site's `base` is '/flux-connectors/' (see web/.vitepress/config.mts) because a *project* Pages
+# site is served under the repository name. Renaming the repo or moving to a custom domain means
+# changing that value too, or the published site loads its assets from the wrong path.
+
+on:
+  push:
+    branches: [main]
+  # Also on PRs: the build job is a gate, so a change that breaks the site is caught before it can
+  # reach `main` and publish. Only pushes to `main` deploy.
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Install Node toolchain
+        # Pinned rather than floating for the same reason the Rust toolchain is pinned in ci.yml:
+        # a moving version turns someone else's release into our red build.
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # `npm ci`, not `npm install`: it installs exactly the committed lockfile and fails when
+      # package.json and the lockfile disagree, instead of quietly resolving something else.
+      - name: Install dependencies
+        run: npm ci
+        working-directory: web
+
+      - name: Build site
+        run: npm run build
+        working-directory: web
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: web/.vitepress/dist
+
+  deploy:
+    name: deploy to Pages
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+
+    # Serialise deployments without cancelling one mid-flight — a cancelled Pages deployment can
+    # leave the site on a half-published state. Scoped to this job so PR builds never queue behind it.
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

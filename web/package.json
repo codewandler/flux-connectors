@@ -1,0 +1,16 @@
+{
+  "name": "flux-connectors-site",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "The public documentation site for flux-connectors.",
+  "license": "MIT OR Apache-2.0",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4"
+  }
+}
