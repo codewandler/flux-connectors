@@ -8,6 +8,8 @@ import {
   type Catalog,
   type CoreEntry,
 } from '../../../data/catalog.mts'
+import SchemaBlock from './SchemaBlock.vue'
+import SpecChip from './SpecChip.vue'
 
 const props = defineProps<{ catalog: Catalog; kind: string; name: string }>()
 
@@ -55,17 +57,28 @@ function operationHref(id: string): string | undefined {
 
     <template v-if="entry.kind === 'operation'">
       <h2>Tool contract</h2>
-      <dl class="facts">
-        <dt>Risk</dt><dd>{{ entry.tool_spec.risk }}</dd>
-        <dt>Idempotency</dt><dd>{{ entry.tool_spec.idempotency }}</dd>
-        <dt>Effects</dt><dd>{{ entry.tool_spec.effects.join(', ') || 'none' }}</dd>
-        <dt>Access</dt><dd>{{ entry.tool_spec.access.join(', ') || 'none' }}</dd>
+      <dl class="facts facts--chips">
+        <dt>Risk</dt>
+        <dd><SpecChip :value="entry.tool_spec.risk" /></dd>
+        <dt>Idempotency</dt>
+        <dd><SpecChip :value="entry.tool_spec.idempotency" /></dd>
+        <dt>Effects</dt>
+        <dd>
+          <SpecChip v-if="!entry.tool_spec.effects.length" value="none" />
+          <SpecChip v-for="effect in entry.tool_spec.effects" :key="effect" :value="effect" />
+        </dd>
+        <dt>Access</dt>
+        <dd>
+          <SpecChip v-if="!entry.tool_spec.access.length" value="none" />
+          <SpecChip v-for="kind in entry.tool_spec.access" :key="kind" :value="kind" />
+        </dd>
         <template v-if="entry.tool_spec.group">
-          <dt>Group</dt><dd>{{ entry.tool_spec.group }}</dd>
+          <dt>Group</dt>
+          <dd><SpecChip :value="entry.tool_spec.group" /></dd>
         </template>
       </dl>
       <h2>Input schema</h2>
-      <pre><code>{{ JSON.stringify(entry.tool_spec.input_schema, null, 2) }}</code></pre>
+      <SchemaBlock :schema="entry.tool_spec.input_schema" />
     </template>
 
     <template v-else-if="entry.kind === 'node'">
@@ -148,6 +161,21 @@ function operationHref(id: string): string | undefined {
 
 .facts dd {
   margin: 0;
+}
+
+/* A value row holds one chip or several (effects and access are lists), so it wraps rather than
+   widening the grid track and pushing the layout — the min-content failure C-100 spent a round on. */
+.facts--chips {
+  align-items: center;
+  gap: 8px 18px;
+  min-width: 0;
+}
+
+.facts--chips dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
 }
 
 pre {

@@ -7,6 +7,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A tool contract is now readable.** The core explorer rendered `Risk`, `Idempotency`, `Effects`,
+  `Access` and `Group` as bare text and dumped the input schema through an unhighlighted
+  `JSON.stringify`. The safety fields are now chips whose tone is **derived from the value** — so a
+  risk level cannot read calm on one page and alarming on another — and the schema is syntax
+  highlighted with a JSON/YAML toggle and a copy button.
+
+  An unrecognised value stays neutral rather than being guessed at: a wrong colour on a safety field
+  would read as an assurance nobody made.
+
+  The highlighter is hand-rolled and about forty lines, deliberately. Shiki is a *build-time*
+  dependency in VitePress and this content is read from the catalogue at **runtime**, so the built
+  pipeline does not apply; a client-side highlighter would cost more bytes than the catalogue. Tokens
+  render as elements rather than through `v-html`. Every colour is a VitePress token, so light and
+  dark both work and a theme change carries automatically.
+
+
 ### Fixed
 
 - **The explorer set a floor under its own width (C-100, follow-up).** Three symptoms — 193px of

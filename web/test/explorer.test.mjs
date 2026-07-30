@@ -971,3 +971,52 @@ test('nothing in the explorer sets a floor under its own width', () => {
     )
   }
 })
+
+// A tool contract is the page's most information-dense block, and it was rendered as bare text plus
+// an unhighlighted `JSON.stringify`. These assertions pin the two properties that make it readable
+// and that a refactor would silently lose: the safety fields carry a *derived* tone, and the schema
+// is tokenised rather than dumped.
+//
+// Read out of the built HTML, so this also holds the block to the suite's standing rule that the
+// content survives without JavaScript.
+test('a tool contract renders its safety fields as toned chips and its schema highlighted', () => {
+  const document = catalog()
+  const ops = document.core.operations.filter((entry) => entry.tool_spec)
+  assert.ok(ops.length > 0, 'no core operation carries a tool spec; this test would pass vacuously')
+
+  let checked = 0
+  for (const operation of ops) {
+    const html = page('core', 'operations', `${operation.name}.html`)
+    if (!html.includes('Tool contract')) continue
+    checked += 1
+
+    // The tone is derived from the value, never passed in — so a risk level cannot be rendered calm
+    // on one page and alarming on another.
+    const tones = [...html.matchAll(/class="chip chip--([a-z]+)"[^>]*>([^<]+)/g)]
+    assert.ok(
+      tones.length >= 2,
+      `${operation.name} renders its tool contract without chips — the fields are bare text again`
+    )
+    for (const [, tone, value] of tones) {
+      assert.match(tone, /^(alarming|cautionary|reassuring|neutral)$/, `unknown tone on \`${value}\``)
+    }
+
+    // An unrecognised value must stay neutral rather than being guessed at: a wrong colour on a
+    // safety field reads as an assurance nobody made.
+    const riskTone = tones.find(([, , value]) => value.trim() === operation.tool_spec.risk)
+    assert.ok(riskTone, `${operation.name} does not render its declared risk as a chip`)
+
+    // The schema is tokenised, not dumped. Keys and punctuation are present in any JSON object.
+    assert.match(
+      html,
+      /tok tok--key/,
+      `${operation.name}'s input schema is not highlighted — it is a raw JSON dump again`
+    )
+    assert.ok(
+      html.includes('aria-label="Schema format"'),
+      `${operation.name} offers no JSON/YAML choice`
+    )
+  }
+
+  assert.ok(checked > 0, 'no page rendered a tool contract; the selector above is stale')
+})
