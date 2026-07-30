@@ -114,9 +114,10 @@ pub fn render(connector: &Connector, renderings: &[OperationRendering]) -> Resul
 /// and the fleet shipped one connector at a time. Generating it under the full-run rule is what makes
 /// two implementors' write sets disjoint.
 pub fn render_index(providers: &[String]) -> Result<String> {
-    for provider in providers {
-        check_module_name(provider)?;
-    }
+    let idents = providers
+        .iter()
+        .map(|provider| module_ident(provider))
+        .collect::<Result<Vec<_>>>()?;
 
     let mut out = format!(
         "//! The generated catalog data, one module per provider.\n\
@@ -136,8 +137,8 @@ pub fn render_index(providers: &[String]) -> Result<String> {
         crate::seam::generator(),
     );
 
-    for provider in providers {
-        out.push_str(&format!("pub(crate) mod {provider};\n"));
+    for ident in &idents {
+        out.push_str(&format!("pub(crate) mod {ident};\n"));
     }
 
     out.push_str("\nuse crate::Provider;\n\n");
@@ -151,22 +152,54 @@ pub fn render_index(providers: &[String]) -> Result<String> {
     // rediscovering rustfmt's fixed point on every toolchain bump.
     out.push_str("#[rustfmt::skip]\n");
     out.push_str("pub(crate) static PROVIDERS: &[&Provider] = &[\n");
-    for provider in providers {
-        out.push_str(&format!("    &{provider}::PROVIDER,\n"));
+    for ident in &idents {
+        out.push_str(&format!("    &{ident}::PROVIDER,\n"));
     }
     out.push_str("];\n");
 
     Ok(out)
 }
 
-/// Refuse a provider name that cannot be a Rust module name.
+/// Every lowercase Rust keyword that `mod <name>;` rejects.
 ///
-/// `providers/` admits `-` in a file stem — it becomes the artifact file name and the op-id prefix,
-/// where a hyphen is correct — but `pub(crate) mod google-ads;` does not parse. While the index was
-/// hand-written the compile error landed on the human writing the line; generated, it would ship a
-/// `crates/catalog` that does not build from an input that looks entirely ordinary. So it is refused
-/// at emission, the same way the emitter refuses an operation id Flux cannot declare.
-fn check_module_name(provider: &str) -> Result<()> {
+/// **Checked against rustc rather than written from memory**, which is how `union` came to be absent:
+/// it is a *weak* keyword and `mod union {}` compiles, so refusing or escaping it would be wrong. The
+/// probe is `mod <candidate> {}` for each of the strict and reserved keyword lists; anything rustc
+/// answers with "expected identifier, found (reserved) keyword" is here.
+///
+/// `Self` is the one keyword deliberately missing: it is uppercase, and a provider name carrying an
+/// uppercase letter is already refused by the character rule below.
+const RUST_KEYWORDS: &[&str] = &[
+    "abstract", "as", "async", "await", "become", "box", "break", "const", "continue", "crate",
+    "do", "dyn", "else", "enum", "extern", "false", "final", "fn", "for", "if", "impl", "in",
+    "let", "loop", "macro", "match", "mod", "move", "mut", "override", "priv", "pub", "ref",
+    "return", "self", "static", "struct", "super", "trait", "true", "try", "type", "typeof",
+    "unsafe", "unsized", "use", "virtual", "where", "while", "yield",
+];
+
+/// The three keywords a raw identifier cannot rescue — `r#crate`, `r#self` and `r#super` are each
+/// their own error. Verified the same way as [`RUST_KEYWORDS`].
+const UNESCAPABLE_KEYWORDS: &[&str] = &["crate", "self", "super"];
+
+/// The token that names `provider`'s module: the name itself, or `r#name` when it is a keyword.
+///
+/// `providers/` admits `-` in a file stem — correct everywhere else a provider name goes, since it
+/// becomes the artifact file name and the op-id prefix — but `pub(crate) mod google-ads;` does not
+/// parse. While the index was hand-written that compile error landed on the human writing the line;
+/// generated, it would ship a `crates/catalog` that does not build from an input that looks entirely
+/// ordinary.
+///
+/// **A keyword is escaped rather than refused, and that is a deliberate difference.** `box.com` is
+/// squarely inside the charter, and `mod box;` is a compile error — but the fix costs nothing a user
+/// can see: `mod r#box;` resolves to the same `generated/box.rs` the build already writes, and the
+/// provider id stays `box` in every address, file name and catalogue row. Refusing would force
+/// `providers/boxcom.toml` instead, which changes the op-id prefix and the installable artifact
+/// name — a published address rewritten to work around a detail of one generated file, which
+/// AGENTS.md's "an address, once published, is not reused" exists to prevent.
+///
+/// What is still refused is what cannot be expressed at all: a name outside the identifier
+/// character set, and the three keywords no `r#` accepts.
+fn module_ident(provider: &str) -> Result<String> {
     let mut chars = provider.chars();
     let valid = match chars.next() {
         Some(first) if first.is_ascii_lowercase() || first == '_' => {
@@ -174,14 +207,25 @@ fn check_module_name(provider: &str) -> Result<()> {
         }
         _ => false,
     };
-    if !valid {
+    if !valid || provider == "_" {
         bail!(
             "provider `{provider}` cannot name a Rust module, so `crates/catalog/src/generated.rs` \
              would not compile: rename it to lowercase ASCII letters, digits and `_` (a `-` is fine \
              everywhere else a provider name goes, but not here)"
         );
     }
-    Ok(())
+    if UNESCAPABLE_KEYWORDS.contains(&provider) {
+        bail!(
+            "provider `{provider}` cannot name a Rust module: it is one of the three keywords a raw \
+             identifier cannot rescue either, so neither `mod {provider};` nor `mod r#{provider};` \
+             compiles. Rename the provider file"
+        );
+    }
+    if RUST_KEYWORDS.contains(&provider) {
+        // `mod r#box;` still resolves to `generated/box.rs`, so nothing outside this file moves.
+        return Ok(format!("r#{provider}"));
+    }
+    Ok(provider.to_string())
 }
 
 /// One `crate::Operation { … }` literal.
@@ -492,7 +536,7 @@ mod tests {
     /// refuses rather than writing a `crates/catalog` that does not compile.
     #[test]
     fn a_name_that_cannot_be_a_module_is_refused() {
-        for name in ["google-ads", "2fa", "Acme", "acme.core", ""] {
+        for name in ["google-ads", "2fa", "Acme", "acme.core", "", "_"] {
             let error = render_index(&ids(&[name]))
                 .expect_err("a name that cannot be a module must not render");
             assert!(
@@ -501,6 +545,57 @@ mod tests {
             );
         }
         render_index(&ids(&["acme_core2"])).expect("an ordinary identifier renders");
+    }
+
+    /// **A keyword provider name is escaped, not refused.** `box.com` is inside the charter, and
+    /// `mod box;` is a compile error while `mod r#box;` resolves to the same `generated/box.rs`.
+    ///
+    /// Every keyword is exercised rather than a sample: the list is the thing that can be wrong, and
+    /// a spot check of three would not notice a missing entry.
+    #[test]
+    fn a_keyword_provider_name_is_escaped() {
+        for keyword in RUST_KEYWORDS {
+            if UNESCAPABLE_KEYWORDS.contains(keyword) {
+                continue;
+            }
+            let rendered = render_index(&ids(&[keyword])).unwrap_or_else(|error| {
+                panic!("`{keyword}` must render as a raw identifier, not fail: {error:#}")
+            });
+            assert!(
+                rendered.contains(&format!("pub(crate) mod r#{keyword};")),
+                "`{keyword}` was not escaped:\n{rendered}"
+            );
+            assert!(
+                rendered.contains(&format!("&r#{keyword}::PROVIDER,")),
+                "`{keyword}`'s PROVIDERS entry was not escaped:\n{rendered}"
+            );
+        }
+    }
+
+    /// `union` is a *weak* keyword: `mod union {}` compiles, so escaping it would be gratuitous.
+    /// This pins the one name the keyword list must not grow.
+    #[test]
+    fn a_weak_keyword_is_left_alone() {
+        let rendered = render_index(&ids(&["union"])).expect("`union` is a legal module name");
+        assert!(
+            rendered.contains("pub(crate) mod union;"),
+            "`union` should not be escaped:\n{rendered}"
+        );
+    }
+
+    /// The three a raw identifier cannot rescue are still refused, and say so specifically rather
+    /// than rendering `r#crate` — which is its own compile error.
+    #[test]
+    fn a_keyword_that_cannot_be_raw_is_refused() {
+        for keyword in UNESCAPABLE_KEYWORDS {
+            let error = render_index(&ids(&[keyword]))
+                .expect_err("a keyword no raw identifier accepts must be refused");
+            let rendered = format!("{error:#}");
+            assert!(
+                rendered.contains("cannot name a Rust module") && rendered.contains(keyword),
+                "`{keyword}` was refused for the wrong reason: {rendered}"
+            );
+        }
     }
 
     /// A rendering for an operation the connector does not declare would embed a file nothing
