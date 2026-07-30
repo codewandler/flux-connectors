@@ -1,0 +1,303 @@
+//! Auth in the connector IR: the credentials a connector **declares**, and the ones an operation
+//! **requires**.
+//!
+//! Two separate things live here, and conflating them is the mistake this module exists to prevent:
+//!
+//! - an [`AuthMethod`] says *how* one named credential is injected into a request — it is a
+//!   declaration, and it belongs to the connector;
+//! - an [`AuthRequirement`] says *which* of those credentials a given operation needs — it is a
+//!   reference, by credential name, and it belongs to the operation.
+//!
+//! The requirement model is OpenAPI's, deliberately: an operation carries a **list** of
+//! requirements, each requirement is a **set** of credentials that must all be satisfied on the
+//! same request (AND), and the list itself is a set of alternatives any one of which suffices (OR).
+//! Babelforce is why: its manager API declares `oauth2`, `accessId` (`X-Auth-Access-Id`) and
+//! `accessToken` (`X-Auth-Access-Token`), where the two api-key headers travel **together** and are
+//! an alternative to OAuth2 — `security: [{oauth2: [*]}, {accessId: [], accessToken: []}]`. A
+//! requirement collapsed to a single credential could not express that connector at all.
+//!
+//! # Why an AND-group is a *mechanism* and its members are *credentials*
+//!
+//! The naming is load-bearing, and the babelforce pair settles it. Two headers on one request are
+//! **two credentials** making up **one mechanism**:
+//!
+//! ```text
+//! credentials = ["access_id", "access_token"]   // right: two credentials, one mechanism
+//! mechanisms  = ["access_id", "access_token"]   // wrong: that is one mechanism, not two
+//! ```
+//!
+//! So an [`AuthRequirement`] *is* a mechanism, and the names it holds are credential names.
+//! `zendesk.api_token` says what the thing **is**, which is what a name should do.
+//!
+//! # Relationship to flux's `purpose`
+//!
+//! flux's plugin protocol calls the same identifier a `purpose`
+//! (`flux_plugin_protocol::AuthMethod::purpose`,
+//! `../flux/crates/flux-plugin-protocol/src/lib.rs:424`), and the `$auth` marker in generated Flux
+//! spells the key `purpose` because that is flux's wire format, which this repo does not get to
+//! rename. **Our [`AuthMethod::name`] resolves to flux's `purpose` field**: one value, two
+//! spellings, translated at the manifest boundary in C-10. Inside this crate the word is
+//! *credential*, because that describes what the value identifies rather than why someone wanted
+//! it.
+
+use indexmap::IndexSet;
+use serde::{Deserialize, Deserializer, Serialize};
+
+/// How the host injects a resolved secret into an HTTP request.
+///
+/// This is a deliberate mirror of `flux_plugin_protocol::AuthScheme`
+/// (`../flux/crates/flux-plugin-protocol/src/lib.rs:344`): same four variants, same
+/// `rename_all = "snake_case"` externally-tagged encoding, same `Bearer` default. flux already
+/// models exactly these shapes for plugins, and a connector manifest resolves a credential through
+/// the *same* injection logic the plugin host uses — so inventing a second vocabulary here would
+/// mean translating between two spellings of one idea forever (see `docs/designs/auth-seam.md`).
+///
+/// It is a mirror rather than a re-export because flux-connectors depends on `flux-lang` from
+/// crates.io and on nothing else of flux's; `flux-plugin-protocol` is not a dependency of this
+/// workspace. The wire form is therefore pinned by test (`tests/ir_roundtrip.rs`,
+/// `auth_scheme_matches_the_flux_plugin_protocol_vocabulary`) so drift on either side is caught.
+///
+/// **Forward requirement — JWT.** Babelforce ships SSO-issued Bearer today and plans JWT, so its
+/// scheme list keeps growing. This enum expresses JWT without reshaping: a minted JWT reaches the
+/// wire as `Authorization: Bearer <jwt>`, which is [`Bearer`](Self::Bearer), or as a custom header,
+/// which is [`Header`](Self::Header). What a JWT adds is not a new *injection* shape but a new
+/// *acquisition* step — signing claims with a key, refreshing on expiry — and acquisition is
+/// already modelled on the sibling axis, as [`AuthMethod::oauth2`]. So JWT lands as an additive
+/// `Option<JwtSpec>` field next to `oauth2`, and `AuthScheme` stays exactly as it is. The one case
+/// that *would* force a reshape is a scheme whose wire form is neither a header nor a query
+/// parameter — request-body or signature-based auth (AWS SigV4, HMAC over the payload) — and none
+/// of the target providers use one.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthScheme {
+    /// `Authorization: Bearer <secret>`.
+    #[default]
+    Bearer,
+    /// `Authorization: Basic base64(<user>:<secret>)` — `<user>` from the method's `user_env`.
+    Basic,
+    /// A custom header `<name>: <secret>` (e.g. `X-Auth-Access-Id`, `PRIVATE-TOKEN`).
+    Header {
+        /// The header name.
+        name: String,
+    },
+    /// A query parameter `?<name>=<secret>`.
+    Query {
+        /// The query parameter name.
+        name: String,
+    },
+}
+
+/// A token grant an [`OAuth2Spec`] credential allows the host to run. Mirrors
+/// `flux_plugin_protocol::OAuthGrant`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OAuthGrant {
+    /// Browser + loopback-callback PKCE.
+    AuthorizationCode,
+    /// Resource-owner password grant — babelforce's flow.
+    Password,
+    /// Refresh an expired access token from a stored refresh token.
+    RefreshToken,
+    /// Two-legged client-credentials grant (no user).
+    ClientCredentials,
+}
+
+/// The loopback redirect an `authorization_code` login binds. Mirrors
+/// `flux_plugin_protocol::OAuthRedirect`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OAuthRedirect {
+    /// The loopback port to bind.
+    pub port: u16,
+    /// The callback path the browser is redirected to.
+    pub path: String,
+}
+
+/// Declares that an [`AuthMethod`] is OAuth2-backed: the host runs every token grant and injects
+/// only a fresh bearer, so nothing this repo generates ever performs OAuth itself.
+///
+/// Mirrors `flux_plugin_protocol::OAuth2Spec` field for field, including its all-defaulted shape —
+/// a credential with no `oauth2` block is a plain env-to-secret credential and must round-trip
+/// unchanged.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OAuth2Spec {
+    /// The declared endpoint name whose base URL the paths below resolve against — its host
+    /// allow-list is what admits the token exchange through flux's egress gate.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub endpoint: String,
+    /// The authorize endpoint path, joined onto the endpoint base URL.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub authorize_path: String,
+    /// The token endpoint path (every grant and refresh POSTs here).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub token_path: String,
+    /// The OAuth2 client id. Never a secret — the client *secret* is resolved from env like any
+    /// other credential and never appears in a provider TOML or a generated artifact.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub client_id: String,
+    /// Requested scopes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scopes: Vec<String>,
+    /// The grants the host may run for this credential.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub grants: Vec<OAuthGrant>,
+    /// The loopback redirect for the `authorization_code` login flow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub redirect: Option<OAuthRedirect>,
+}
+
+/// One credential a connector declares: its name, and how it reaches the wire.
+///
+/// Mirrors `flux_plugin_protocol::AuthMethod`, except that flux's identifying field is called
+/// `purpose` and ours is [`name`](Self::name) — see this module's docs. The generated Flux carries
+/// only that name, as flux's `{"$auth": {"purpose": "babelforce.access_id"}}` marker, and flux
+/// resolves `env` to a value, applies `scheme`, and registers the result with its redactor.
+///
+/// **No credential value ever appears in this type**, in a provider TOML, in a generated `.flux`
+/// file, or in the lockfile; `env` and `user_env` name environment variables, never their contents.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthMethod {
+    /// The credential name an [`AuthRequirement`] references, e.g. `"babelforce.access_id"`. It
+    /// says what the credential *is*. Resolves to flux's `AuthMethod.purpose` at the manifest
+    /// boundary.
+    pub name: String,
+    /// How the resolved secret is injected into the request.
+    #[serde(default)]
+    pub scheme: AuthScheme,
+    /// Env-var **keys** to resolve the secret from, tried in order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub env: Vec<String>,
+    /// For [`AuthScheme::Basic`]: env-var keys holding the username half, tried in order. These are
+    /// config rather than a gated secret, so they resolve directly from declared env.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub user_env: Vec<String>,
+    /// Human-readable description, surfaced when a user is asked to supply the credential.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
+    /// When set, this credential is OAuth2-backed and the host runs the token grants. `None` for a
+    /// plain env-to-secret credential.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oauth2: Option<OAuth2Spec>,
+}
+
+impl AuthMethod {
+    /// A bearer-token credential: `Authorization: Bearer <env>`.
+    pub fn bearer(name: impl Into<String>, env: Vec<String>) -> Self {
+        Self {
+            name: name.into(),
+            scheme: AuthScheme::Bearer,
+            env,
+            ..Self::default()
+        }
+    }
+
+    /// A custom-header credential: `<header>: <env>`.
+    pub fn header(name: impl Into<String>, header: impl Into<String>, env: Vec<String>) -> Self {
+        Self {
+            name: name.into(),
+            scheme: AuthScheme::Header {
+                name: header.into(),
+            },
+            env,
+            ..Self::default()
+        }
+    }
+}
+
+/// **One mechanism** for authenticating an operation: every credential named here must be
+/// satisfied on the *same* request.
+///
+/// This is the AND half of the model. `AuthRequirement::all(["b.access_id", "b.access_token"])`
+/// means both headers travel together — it is not two alternatives, and it does not collapse to one
+/// credential. The OR half is the surrounding `Vec<AuthRequirement>` on
+/// [`Operation::auth`](crate::Operation::auth) and
+/// [`Connector::default_auth`](crate::Connector::default_auth).
+///
+/// The credentials are held in an [`IndexSet`], whose iteration order is insertion order and
+/// therefore never depends on a hash seed the way a `HashSet` would. On top of that, the set is
+/// **normalized to sorted order** on construction and on deserialization, so the encoding is a
+/// function of the set's *members* alone and not of the order an author happened to type them. That
+/// is stricter than "identical inputs produce identical output" requires, and deliberately so:
+/// `connectors.lock` (C-7) hashes this, and two connectors that are `==` must never hash apart.
+/// Order carries no meaning within a mechanism — all its credentials are sent on one request — so
+/// sorting loses nothing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthRequirement {
+    #[serde(deserialize_with = "deserialize_canonical_credentials")]
+    credentials: IndexSet<String>,
+}
+
+impl AuthRequirement {
+    /// A mechanism satisfied only when **all** the given credentials are (AND). Duplicates collapse
+    /// and the result is held in canonical order.
+    pub fn all<I, S>(credentials: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        Self {
+            credentials: canonicalize(credentials.into_iter().map(Into::into)),
+        }
+    }
+
+    /// A mechanism naming exactly one credential — the common case, and a readable shorthand for
+    /// [`all`](Self::all) with a single element.
+    pub fn single(credential: impl Into<String>) -> Self {
+        Self::all([credential.into()])
+    }
+
+    /// The credentials this mechanism names, in canonical order.
+    pub fn credentials(&self) -> &IndexSet<String> {
+        &self.credentials
+    }
+
+    /// Iterates the credential names in canonical order.
+    pub fn iter(&self) -> indexmap::set::Iter<'_, String> {
+        self.credentials.iter()
+    }
+
+    /// Whether the mechanism names the given credential.
+    pub fn contains(&self, credential: &str) -> bool {
+        self.credentials.contains(credential)
+    }
+
+    /// How many credentials must be satisfied together.
+    pub fn len(&self) -> usize {
+        self.credentials.len()
+    }
+
+    /// Whether the mechanism names no credential at all.
+    ///
+    /// An empty mechanism is degenerate — "no auth" is expressed as an empty *alternatives list*
+    /// (`Some(vec![])` on an operation), not as a list holding one empty mechanism. Rejecting it is
+    /// the provider loader's job (C-3), not the IR's.
+    pub fn is_empty(&self) -> bool {
+        self.credentials.is_empty()
+    }
+}
+
+impl<'a> IntoIterator for &'a AuthRequirement {
+    type Item = &'a String;
+    type IntoIter = indexmap::set::Iter<'a, String>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.credentials.iter()
+    }
+}
+
+/// Sorts and deduplicates into an [`IndexSet`], giving the canonical order described on
+/// [`AuthRequirement`].
+fn canonicalize<I: IntoIterator<Item = String>>(credentials: I) -> IndexSet<String> {
+    let mut sorted: Vec<String> = credentials.into_iter().collect();
+    sorted.sort_unstable();
+    sorted.dedup();
+    sorted.into_iter().collect()
+}
+
+/// Deserializes credential names through [`canonicalize`], so a hand-authored TOML that lists them
+/// in any order still produces the one canonical value.
+fn deserialize_canonical_credentials<'de, D>(deserializer: D) -> Result<IndexSet<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(canonicalize(Vec::<String>::deserialize(deserializer)?))
+}
