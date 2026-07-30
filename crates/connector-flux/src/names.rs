@@ -34,8 +34,18 @@ pub(crate) struct Symbols {
 impl Symbols {
     /// A fresh allocator, pre-seeded with the emitter's own [`RESERVED`] symbols.
     pub(crate) fn new() -> Self {
+        Self::seeded(RESERVED)
+    }
+
+    /// A fresh allocator reserving `words` instead of [`RESERVED`].
+    ///
+    /// The operation emitter binds a fixed set of its own symbols and reserves exactly those; the
+    /// graph lowering binds none of them and instead has to dodge **flux's own reserved words**,
+    /// because a graph's symbols are generated from author-chosen node ids. One allocator, two seed
+    /// sets — the normalization and the collision rule stay in one place.
+    pub(crate) fn seeded(words: &[&str]) -> Self {
         Self {
-            taken: RESERVED.iter().map(|s| s.to_string()).collect(),
+            taken: words.iter().map(|s| (*s).to_string()).collect(),
         }
     }
 
