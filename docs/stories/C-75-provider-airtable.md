@@ -2,7 +2,7 @@
 id: C-75
 title: Ship the Airtable connector
 pillar: Spec
-status: in-progress
+status: done
 priority: 7
 design: docs/designs/provider-operation-inventory.md
 epic: provider-fleet

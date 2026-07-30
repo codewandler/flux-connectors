@@ -23,6 +23,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   transitions list and transition. v2 rather than v3 because v3's comment body is Atlassian Document
   Format — an array of block nodes — and `wire` paths address nested records only, so ADF is
   inexpressible rather than merely awkward. Pinned by a test, so a bulk upgrade to v3 fails loudly.
+- **C-75** — the **Airtable** connector: record get, create, update and delete, with the `fields`
+  envelope declared through a wire path as one opaque cell-value object — Airtable's field keys are a
+  customer's own column names, unknown at compile time. It also settles the unencoded-path-parameter
+  question by argument rather than by charset luck: the caller-facing parameter is `table_id`, and
+  `^tbl[A-Za-z0-9]+$` makes the table-*name* form unrepresentable.
 - **C-77** — the **Sentry** connector: issue get and update, project get, latest event. Every
   operation's emitted URL is pinned character-for-character *including its trailing slash*, because
   Sentry redirects or 404s without one and that is exactly what a later tidy-up removes silently.
