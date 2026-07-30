@@ -3959,6 +3959,251 @@
       ]
     },
     {
+      "id": "openrouter",
+      "authority": null,
+      "vendor": "OpenRouter",
+      "description": "OpenRouter model router: list models and their endpoints, create chat completions, and read credit balance",
+      "base_url": "https://openrouter.ai",
+      "api_version": null,
+      "hosts": [
+        "openrouter.ai"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://openrouter.ai",
+          "hosts": [
+            "openrouter.ai"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 4
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "openrouter.api_key",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "OpenRouter API key, sent as a bearer token",
+            "env": [
+              "OPENROUTER_API_KEY"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "openrouter.api_key"
+          ]
+        ]
+      },
+      "operation_count": 4,
+      "operations": [
+        {
+          "id": "openrouter-models-list",
+          "provider": "openrouter",
+          "service": "default",
+          "description": "List every model OpenRouter routes to, with its context length, modalities and per-token pricing",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v1/models",
+          "parameters": [],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "openrouter.api_key"
+            ]
+          ],
+          "hosts": [
+            "openrouter.ai"
+          ],
+          "flux": "op openrouter-models-list -> Any\n  description \"List every model OpenRouter routes to, with its context length, modalities and per-token pricing\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://openrouter.ai\"\n  $url = fmt(\"{base}/api/v1/models\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "openrouter-model-endpoints-list",
+          "provider": "openrouter",
+          "service": "default",
+          "description": "List the upstream provider endpoints serving one model, with each one's pricing, context length and quantization",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v1/models/{author}/{slug}/endpoints",
+          "parameters": [
+            {
+              "name": "author",
+              "in": "path",
+              "wire": null,
+              "description": "The model's author or organization, the part of a model id before the `/` — e.g. `openai`, `anthropic`, `meta-llama`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "slug",
+              "in": "path",
+              "wire": null,
+              "description": "The model slug, the part of a model id after the `/` — e.g. `gpt-4`, `claude-3.5-sonnet`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "openrouter.api_key"
+            ]
+          ],
+          "hosts": [
+            "openrouter.ai"
+          ],
+          "flux": "op openrouter-model-endpoints-list(author: String, slug: String) -> Any\n  description \"List the upstream provider endpoints serving one model, with each one's pricing, context length and quantization\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://openrouter.ai\"\n  $url = fmt(\"{base}/api/v1/models/{author}/{slug}/endpoints\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "openrouter-chat-completion",
+          "provider": "openrouter",
+          "service": "default",
+          "description": "Create a chat completion through OpenRouter, routed to the named model. Billed per input and output token, so the caller must state a token budget via max_completion_tokens",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/api/v1/chat/completions",
+          "parameters": [
+            {
+              "name": "model",
+              "in": "body",
+              "wire": null,
+              "description": "The model to route to, as `<author>/<slug>` — e.g. `openai/gpt-4o` or `anthropic/claude-3.5-sonnet`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "messages",
+              "in": "body",
+              "wire": null,
+              "description": "The conversation so far: a list of `{role, content}` objects, where role is one of system, developer, user, assistant or tool",
+              "required": true,
+              "schema": {
+                "items": {
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            {
+              "name": "max_completion_tokens",
+              "in": "body",
+              "wire": null,
+              "description": "Upper bound on generated tokens, including reasoning tokens. Required by this connector so that every call states its cost bound",
+              "required": true,
+              "schema": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "openrouter.api_key"
+            ]
+          ],
+          "hosts": [
+            "openrouter.ai"
+          ],
+          "flux": "op openrouter-chat-completion(model: String, messages: List<Any>, max_completion_tokens: Number) -> Any\n  description \"Create a chat completion through OpenRouter, routed to the named model. Billed per input and output token, so the caller must state a token budget via max_completion_tokens\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://openrouter.ai\"\n  $url = fmt(\"{base}/api/v1/chat/completions\")\n  $content_type = \"application/json\"\n  $payload = { max_completion_tokens: $max_completion_tokens, messages: $messages, model: $model }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "openrouter-credits-get",
+          "provider": "openrouter",
+          "service": "default",
+          "description": "Read the account's total purchased credits and total usage, in credit units",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v1/credits",
+          "parameters": [],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "openrouter.api_key"
+            ]
+          ],
+          "hosts": [
+            "openrouter.ai"
+          ],
+          "flux": "op openrouter-credits-get -> Any\n  description \"Read the account's total purchased credits and total usage, in credit units\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://openrouter.ai\"\n  $url = fmt(\"{base}/api/v1/credits\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "shopify",
       "authority": null,
       "vendor": "Shopify",
