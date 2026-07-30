@@ -27,8 +27,9 @@ mod common;
 
 use common::Fixture;
 
-/// The three providers this repository ships, in the order C-17 names them.
-const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce"];
+/// The providers this repository ships: the three C-17 names, in its order, then each one added
+/// since — `openai` by C-51.
+const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce", "openai"];
 
 /// The document's path, relative to the repository root. Chosen by C-42, moved into the site's own
 /// `public/` tree by C-44, and named here so a change to it is a change to a test rather than a

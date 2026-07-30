@@ -12,6 +12,7 @@
 
 pub(crate) mod babelforce;
 pub(crate) mod freshdesk;
+pub(crate) mod openai;
 pub(crate) mod zendesk;
 
 use crate::Provider;
@@ -21,5 +22,6 @@ use crate::Provider;
 pub(crate) static PROVIDERS: &[&Provider] = &[
     &babelforce::PROVIDER,
     &freshdesk::PROVIDER,
+    &openai::PROVIDER,
     &zendesk::PROVIDER,
 ];

@@ -1,0 +1,233 @@
+# OpenAI — hand-authored, and the first connector that is hand-authored *despite* a usable spec.
+#
+# Zendesk and Freshdesk are written out inline because no machine-readable description exists for
+# them (`docs/designs/provider-operation-inventory.md` §1.2). OpenAI is a different case: it publishes
+# a real OpenAPI 3 document at `https://github.com/openai/openai-openapi` (`openapi.yaml`), and the
+# four operations below were checked against it — paths, methods, the absence of query parameters on
+# all four, the `model` path parameter, and bearer security. The reason this file is still inline is
+# only that **C-4's ingest and C-14's fetch do not exist yet**, so there is nothing to vendor into
+# `specs/` and nothing to overlay.
+#
+# When they land this file should become a `[spec]` pointer plus a `[[patch.operations]]` selection
+# over the vendored document, and the operation list below becomes the selection to reproduce. Two
+# things make that conversion worth waiting for rather than faking: the document is large (the whole
+# `components/schemas` section describes assistants, audio, batch, files and fine-tuning, none of
+# which is selected here), and an opt-in `[[patch.operations]]` selection is what keeps a 400-operation
+# vendor spec from becoming 400 LLM tools. Until then drift is undetectable by machine (§6.7),
+# exactly as for the other hand-authored providers.
+#
+# Everything below is JSON in and JSON out. That is the point of shipping OpenAI now — see the
+# query-parameter note before the operations.
+
+id = "openai"
+vendor = "OpenAI"
+
+# One tenant-independent host, so unlike zendesk's `{subdomain}` and freshdesk's `{domain}` there is
+# **no template variable here and nothing to bind**. This is the first connector whose `base_url` is
+# a finished URL, which is why it is also the first that `status.rs` does not flag with
+# `unbound-base-url-template`. Organization and project scoping are per-request headers at OpenAI,
+# not per-tenant hosts — see the excluded-headers note below.
+base_url = "https://api.openai.com"
+
+description = "OpenAI platform: list models, and create chat completions and embeddings"
+
+# Every operation authenticates the same way: one bearer credential, requirement-set shape `single`.
+# OpenAI's spec declares its security scheme once at the root and no operation overrides it.
+default_auth = [{ credentials = ["openai.api_key"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "openai.api_key"
+scheme = "bearer"
+# The sole secret, and the whole credential — `Authorization: Bearer <OPENAI_API_KEY>`. Gated and
+# registered with flux's redactor by the host; never read here. No `user_env`, no `user_suffix`, no
+# `[auth.oauth2]`: the key is minted in OpenAI's dashboard and supplied through the environment, so
+# flux runs no grant for it.
+env = ["OPENAI_API_KEY"]
+description = "OpenAI API key, sent as a bearer token"
+
+# ---------------------------------------------------------------------------------------------
+# NOT EXECUTABLE YET, for the same reason as every other provider in this repository.
+#
+# flux's `http.request` takes `{"$secret": "ENV"}` as a *whole-value* replacement, so it cannot
+# produce the string `Bearer ` followed by a secret (`docs/designs/auth-seam.md`). Bearer is the
+# simplest scheme there is and it is still out of reach, which is worth stating plainly: this
+# connector is the catalogue's proof and the pipeline's, not a working client. The `$auth` seam has
+# to land in flux first.
+#
+# The generated Flux therefore carries no credential at all — not even the env var's name. That is
+# C-10's to add, and is deliberately absent rather than stubbed.
+# ---------------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 4, and ZERO query parameters between them.
+#
+# That is a selection criterion, not an accident. C-30 is not implemented: `connector-flux`
+# interpolates a query value into the URL verbatim and nothing percent-encodes it, so a string-ish
+# query value containing `&`, `#` or `+` corrupts the request and can inject a parameter.
+# `zendesk-ticket-search` is the standing proof and is shipped KNOWN NON-FUNCTIONAL for exactly this
+# reason. OpenAI's selected surface needs no query string at all, so this connector simply does not
+# enter that failure mode, and `crates/connector-flux/tests/openai_connector.rs` holds it to that.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only, so `op openai.models.list` is undeclarable (C-8,
+# `crates/connector-flux/src/names.rs`). C-23 settles the canonical rule.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "openai-models-list"
+method = "GET"
+path = "/v1/models"
+description = "List the models available to this API key, with their ids and owners"
+risk = "low"
+idempotency = "idempotent"
+# No parameters at all — OpenAI's `GET /v1/models` declares none. It is unpaginated and returns the
+# whole list, so it also doubles as the verification operation: cheap, read-only, and it fails loudly
+# on a bad key.
+#
+# The `limit`/`after` cursor parameters named in C-51's Notes belong to OpenAI's *other* list
+# endpoints (assistants, batches, fine-tuning jobs), not to this one. Those endpoints stay out until
+# C-30 lands, because a cursor is an opaque string and an opaque string is exactly the query value
+# that cannot be emitted safely today.
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "openai-model-get"
+method = "GET"
+path = "/v1/models/{model}"
+description = "Retrieve one model by id, with its ownership and permissions"
+risk = "low"
+idempotency = "idempotent"
+
+# SCHEMA GAP: a path parameter is interpolated as verbatim as a query parameter is, and `status.rs`
+# deliberately does **not** flag it — C-30 scopes its refusal to query values, and widening it here
+# would put the catalogue and the emitter out of step
+# (`crates/connector-cli/src/status.rs`, `only_query_parameters_are_examined_for_encoding`). This is
+# safe in practice for this operation and not by luck: OpenAI model ids are drawn from
+# `[A-Za-z0-9._-]` (`gpt-4o`, `gpt-3.5-turbo`, `text-embedding-3-small`), every character of which is
+# already a valid URL path character. A vendor whose ids could contain `/` or `?` would need the
+# encoding gap closed first.
+[[operations.params.path]]
+name = "model"
+description = "The model id, e.g. `gpt-4o` or `text-embedding-3-small`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# ---------------------------------------------------------------------------------------------
+# The two cost-bearing operations.
+#
+# Both are `POST`, both are billed per token, and both are therefore `risk = "medium"` and
+# `idempotency = "non_idempotent"`. Neither value is decoration: flux's approval gate reads `risk`,
+# so a cost-bearing call declaring `low` would be waved through unattended, and a `POST` declaring
+# itself `idempotent` would make a `retry` around it turn one charge into three.
+# `connector-flux`'s `check_write_metadata` refuses both mistakes outright, which is why no shipped
+# provider can regress into them quietly.
+#
+# `medium` rather than `high`: neither operation mutates state that the account's own users can see —
+# nothing is created, updated or deleted at the vendor — and the cost of a single call is bounded.
+# `high` is reserved for a write a reviewer would want to see before it happens.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP, and the one that shaped this whole file: THE EMITTER CANNOT OMIT AN OPTIONAL BODY
+# FIELD.
+#
+# flux has no optional composite-op parameter — every declared parameter is required at call time and
+# "optional" means the caller may pass null (`crates/connector-flux/src/op.rs`, module docs). For a
+# **query** parameter the emitter compiles that into a `when $x` guard, so null genuinely means "not
+# sent". For a **body** field there is no guard: `body_tree` places every declared field into the
+# payload record unconditionally, so a `required = false` body field the caller omits travels as an
+# explicit `{"field": null}`.
+#
+# OpenAI's own documentation describes its optional inference parameters as *omitted* when unset, not
+# as nullable, and this could not be verified either way from the published `openapi.yaml` (its
+# `components/schemas` section is too large to read in one pass). Sending `{"temperature": null}` on
+# every call that does not set a temperature is therefore plausible-but-unverified behaviour, which
+# AGENTS.md says to refuse rather than ship: *"a loud compile-time refusal is better than plausible
+# but incorrect Flux"*.
+#
+# So the two bodies below declare **only fields that are always sent**. Every optional tuning knob —
+# `top_p`, `n`, `stop`, `presence_penalty`, `frequency_penalty`, `seed`, `response_format`,
+# `tools`/`tool_choice`, and embeddings' `dimensions` and `encoding_format` — is deliberately left
+# out, and left out for that one reason rather than because it is uninteresting. Closing the gap (a
+# `when`-guarded body field, mirroring what query parameters already get) is what unblocks all of
+# them at once; it is a `connector-flux` change, not a provider one.
+#
+# `stream` is excluded for an unrelated and permanent-looking reason: `http.request` returns one flat
+# string, so a streamed SSE response could not be consumed by generated Flux even if it arrived.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "openai-chat-completion"
+method = "POST"
+path = "/v1/chat/completions"
+description = "Create a chat completion. Billed per input and output token, so the caller must state a token budget via max_completion_tokens"
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "model"
+description = "The model to run, e.g. `gpt-4o`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# `List<Any>` in the emitted signature, and honestly so: a message is an object, Flux's type surface
+# has no record type, and `types.rs` maps an object to `Any` rather than guessing
+# (`crates/connector-flux/src/types.rs`). `Any` is the top type, so the op still accepts every message
+# shape OpenAI accepts — including the content-part arrays used for images and audio — and the full
+# JSON Schema stays on the IR for C-10 and any later response work to read.
+[[operations.params.body]]
+name = "messages"
+description = "The conversation so far: a list of `{role, content}` objects, where role is one of system, developer, user, assistant or tool"
+required = true
+schema = { type = "array", minItems = 1, items = { type = "object" } }
+
+# REQUIRED HERE, THOUGH OPENAI MARKS IT OPTIONAL — a deliberate narrowing, and the only one in this
+# file. Two reasons, and they reinforce each other:
+#
+# 1. It is the caller's cost bound. This is an operation an LLM can invoke, and output tokens are the
+#    expensive half; an unbounded completion has an unbounded bill. Making the budget a parameter a
+#    caller must state is what makes `risk = "medium"` an honest declaration rather than an
+#    optimistic one.
+# 2. Required means always sent, which sidesteps the null-body gap above entirely instead of relying
+#    on OpenAI tolerating `{"max_completion_tokens": null}`.
+#
+# `max_completion_tokens`, not `max_tokens`: `max_tokens` is deprecated and is rejected outright by
+# the reasoning models, so a connector authored against it would be born broken on current models.
+[[operations.params.body]]
+name = "max_completion_tokens"
+description = "Upper bound on generated tokens, including reasoning tokens. Required by this connector so that every call states its cost bound"
+required = true
+schema = { type = "integer", minimum = 1 }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "openai-embeddings-create"
+method = "POST"
+path = "/v1/embeddings"
+description = "Create embedding vectors for one or more input texts. Billed per input token"
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "model"
+description = "The embedding model to use, e.g. `text-embedding-3-small`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# `oneOf`, so it maps to `Any` — OpenAI accepts a single string, an array of strings, or pre-tokenized
+# integer arrays, and Flux has no sum type to hold that union (`types.rs`, and the same shape as
+# babelforce's scalar-or-array filters, inventory §6.5). Declaring it as `string` would be a
+# narrowing that silently refuses the batch form, which is the form worth having.
+[[operations.params.body]]
+name = "input"
+description = "The text to embed: a string, or an array of strings to embed as a batch"
+required = true
+schema = { oneOf = [
+  { type = "string", minLength = 1 },
+  { type = "array", minItems = 1, items = { type = "string" } },
+] }

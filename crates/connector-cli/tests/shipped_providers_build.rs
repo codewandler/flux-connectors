@@ -22,8 +22,9 @@ use std::path::{Path, PathBuf};
 use connector_cli::pipeline::{self, PlannedArtifact};
 use connector_cli::workspace::Workspace;
 
-/// The three providers this repository ships, in the order C-17 names them.
-const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce"];
+/// The providers this repository ships: the three C-17 names, in its order, then each one added
+/// since — `openai` by C-51.
+const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce", "openai"];
 
 /// The repository root, derived from this crate's manifest directory so the test is independent of
 /// the working directory a runner happens to use.

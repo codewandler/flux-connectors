@@ -13,8 +13,9 @@ use std::path::{Path, PathBuf};
 
 use connector_spec::{provider, AuthScheme};
 
-/// The three providers C-17 ships, in the order the story names them.
-const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce"];
+/// The providers this repository ships: the three C-17 names, in its order, then each one added
+/// since — `openai` by C-51.
+const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce", "openai"];
 
 /// `<repo root>/providers`, derived from this crate's manifest directory so the test is independent
 /// of the working directory a runner happens to use.
