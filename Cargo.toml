@@ -6,6 +6,7 @@ members = [
     "crates/connector-cli",
     "crates/catalog",
     "crates/connector-pack",
+    "crates/connector-secrets",
 ]
 
 [workspace.package]
@@ -28,6 +29,12 @@ connector-catalog = { version = "0.4.0", path = "crates/catalog" }
 # *runtime* — see the note under `flux-runtime` below for why that does not contradict
 # "this repo compiles; flux executes".
 connector-pack = { version = "0.4.0", path = "crates/connector-pack" }
+# The secret store (C-91): a **host library**, not part of the compiler. It is a workspace member so
+# that it is built and tested here, and nothing in the compile path may depend on it —
+# `crates/connector-cli/tests/dependency_fence.rs` asserts that over the resolved dependency graph,
+# because a Vault client reachable from `connector-cli` would quietly end the offline guarantee that
+# `no_network.rs` exists to state.
+connector-secrets = { version = "0.4.0", path = "crates/connector-secrets" }
 
 # Flux-Lang: the emit target. Pinned deliberately — bumping this is a reviewed change, and
 # `flux-connectors check` verifies generated artifacts still match the pin (C-14).
@@ -64,3 +71,11 @@ toml = "0.8"
 sha2 = "0.10"
 indexmap = { version = "2", features = ["serde"] }
 jsonschema = { version = "0.49.2", default-features = false }
+
+# Host-library only, reached exclusively from `connector-secrets` (C-91) and never from the
+# compiler. `reqwest` is optional there and off by default; `default-features = false` keeps the
+# tree to rustls and HTTP/1.1, which is all a Vault KV v2 call needs. `tokio` is a dev-dependency
+# there, to drive the async trait in tests; the version already in the lock comes from flux's
+# runtime, so this pin adds no resolution of its own.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+tokio = { version = "1", default-features = false }

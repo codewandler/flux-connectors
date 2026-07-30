@@ -1,0 +1,35 @@
+[package]
+name = "connector-secrets"
+description = "A host library: where a connector's CredentialRef resolves to a value. Deliberately outside this workspace's compile path."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+
+[features]
+# `VaultStore` and its HTTP transport are opt-in. Off by default so that a consumer wanting only
+# the trait, the addressing and `MemoryStore` links no HTTP client at all — and so that this
+# workspace's own gate does not compile a TLS stack it never runs. See the module docs in
+# `src/vault.rs` for why the *transport* is a seam even with the feature on.
+default = []
+vault = ["dep:reqwest", "dep:serde_json"]
+
+[dependencies]
+# The addressing, and the only source of it. `CredentialRef` / `Layout` / `TenantLayout` come from
+# C-90; this crate does not define a second scheme.
+connector-spec.workspace = true
+
+async-trait.workspace = true
+thiserror.workspace = true
+
+reqwest = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+[dev-dependencies]
+# A runtime to drive the async trait in tests. `rt` + `macros` only: nothing here needs threads.
+tokio = { workspace = true, features = ["rt", "macros"] }
+# Used by one `compile_fail` doctest, which is how "`Secret` has no `Serialize`" is asserted rather
+# than merely stated.
+serde.workspace = true
