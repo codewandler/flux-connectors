@@ -2,7 +2,7 @@
 id: C-52
 title: Ship the GitHub connector
 pillar: Spec
-status: in-progress
+status: done
 priority: 3
 design: docs/designs/provider-operation-inventory.md
 epic: connectors-v1

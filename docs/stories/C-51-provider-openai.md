@@ -2,7 +2,7 @@
 id: C-51
 title: Ship the OpenAI connector
 pillar: Spec
-status: in-progress
+status: done
 priority: 3
 design: docs/designs/provider-operation-inventory.md
 epic: connectors-v1

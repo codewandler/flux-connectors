@@ -7,6 +7,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **C-51** — the **OpenAI** connector: the models pair, chat completions and embeddings, JSON in and
+  JSON out with no query parameter of any type. `max_completion_tokens` is required rather than
+  optional, so no LLM-invocable billed call is unbounded in cost.
+- **C-52** — the **GitHub** connector: repository, issue and pull-request reads plus issue creation
+  and commenting, addressed entirely by path parameters. Both writes are `risk = "high"`: a created
+  issue or comment is world-visible and attributed to the token owner.
+- Both connectors are curated to a **path-and-body surface only**. Every listing and search
+  operation is deliberately excluded until C-30 lands, because the emitter still emits a string
+  query value unencoded — the defect that makes `zendesk-ticket-search` non-functional. A test per
+  connector asserts it declares no query parameter of any type.
+
+### Known gaps found while shipping them
+- A **constant, non-credential request header cannot be declared** at all: there is no `headers`
+  table, and `connector-flux`'s `constant()` filter applies to the body chain only, so a
+  `const`-pinned header emits as a caller-overridable argument. GitHub's
+  `Accept: application/vnd.github+json` is therefore undeclared rather than smuggled in.
+- An **optional body field cannot be omitted**: query parameters get a `when` guard, but every body
+  field is placed unconditionally, so an omitted `required = false` field travels as an explicit
+  `null`. OpenAI's inference knobs are left out rather than shipped as a probable-null.
+
 ### Changed
 - **C-48** — rewrote the root README for human evaluators, front-loaded the agent workflow and
   generated-file boundaries in `AGENTS.md`, and recast the public site as a branded,
