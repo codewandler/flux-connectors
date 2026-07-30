@@ -2,8 +2,8 @@
 id: C-6
 title: Build the patch/overlay layer
 pillar: Spec
-status: ready
-priority: 7
+status: backlog
+priority:
 design: docs/designs/connector-pipeline.md
 epic: connectors-v1
 areas: [connector-spec]

@@ -2,7 +2,8 @@
 id: C-13
 title: Build and diff from the vendored spec cache
 pillar: Build
-status: backlog
+status: ready
+priority: 9
 design: docs/designs/connector-pipeline.md
 epic: connectors-v1
 areas: [connector-cli]

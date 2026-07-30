@@ -2,7 +2,8 @@
 id: C-11
 title: Prove every generated module parses and analyzes
 pillar: Codegen
-status: backlog
+status: ready
+priority: 8
 design: docs/designs/connector-pipeline.md
 epic: connectors-v1
 areas: [connector-flux]

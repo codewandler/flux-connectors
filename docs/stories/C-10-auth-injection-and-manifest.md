@@ -2,7 +2,8 @@
 id: C-10
 title: Emit the $auth marker and the connector manifest
 pillar: Codegen
-status: backlog
+status: ready
+priority: 7
 design: docs/designs/auth-seam.md
 epic: connectors-v1
 areas: [connector-flux, flux-bridge]
@@ -20,6 +21,13 @@ plugin's are.
 - [ ] Auth headers emit `{"$auth": {purpose: "<name>"}}` — a reference, never a value.
 - [ ] `<provider>.connector.toml` is generated with `http_hosts`, the endpoint env spec, and one
       `[[auth]]` entry per method (purpose, scheme, env, user_env).
+- [ ] **An operation requiring several purposes together emits one marker per purpose.** Babelforce
+      sends `X-Auth-Access-Id` *and* `X-Auth-Access-Token` on the same request, so the emitter must
+      handle an AND-set, not just a single credential.
+- [ ] When an operation offers **alternative** requirement sets, codegen picks one deterministically
+      (documented rule — e.g. the first satisfiable set in declared order) and records the choice, so
+      regeneration is stable and a reader can see why that scheme was chosen.
+- [ ] An operation requiring **no** auth emits no marker at all and no credential header.
 - [ ] A test asserts **no credential value** appears in any generated artifact or in the lockfile.
 - [ ] `http_hosts` is derived from the connector's base URL and is never widened to `*`.
 - [ ] Generated ops declare the `network` effect.

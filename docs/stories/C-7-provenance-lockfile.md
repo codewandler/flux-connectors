@@ -3,7 +3,7 @@ id: C-7
 title: Record provenance and write connectors.lock
 pillar: Spec
 status: ready
-priority: 8
+priority: 11
 design: docs/designs/connector-pipeline.md
 epic: connectors-v1
 areas: [connector-spec]

@@ -2,8 +2,8 @@
 id: C-4
 title: Ingest OpenAPI 3.x into the IR
 pillar: Spec
-status: ready
-priority: 5
+status: backlog
+priority:
 design: docs/designs/connector-pipeline.md
 epic: connectors-v1
 areas: [connector-spec]

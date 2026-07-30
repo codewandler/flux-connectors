@@ -2,8 +2,8 @@
 id: C-5
 title: Extract auth methods from securitySchemes
 pillar: Spec
-status: ready
-priority: 6
+status: backlog
+priority:
 design: docs/designs/auth-seam.md
 epic: connectors-v1
 areas: [connector-spec]

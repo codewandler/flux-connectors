@@ -2,7 +2,8 @@
 id: C-8
 title: Emit a Flux op for a GET with path and query params
 pillar: Codegen
-status: backlog
+status: ready
+priority: 5
 design: docs/designs/connector-pipeline.md
 epic: connectors-v1
 areas: [connector-flux]
