@@ -2,7 +2,7 @@
 id: C-27
 title: Wire the CLI seams to the loader and the emitter
 pillar: Build
-status: blocked
+status: done
 design: docs/designs/connector-pipeline.md
 epic: connectors-v1
 areas: [connector-cli]

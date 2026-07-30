@@ -54,6 +54,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   composite `op` built from real `flux_lang` AST nodes, with a test asserting the output is a fixed
   point of flux's own formatter, and four golden files.
 
+- **C-27** — the CLI seams are wired to the real loader and emitter, so `flux-connectors build`
+  produces genuine `.flux` and `.connector.toml` artifacts instead of placeholders. A `[spec]`-backed
+  provider is refused rather than emitted as an empty module.
+- **C-17** — `providers/{zendesk,freshdesk,babelforce}.toml`, hand-authored and curated to 7 / 9 / 9
+  operations (from 163 available for babelforce), each loading through `connector_spec::provider::load`
+  and pinned by `shipped_providers.rs`.
+
 ### Changed
 - **C-1** — flux-lang is depended on from **crates.io** (`codewandler-flux-lang = "0.37"`) rather
   than as a git or path dependency. The flux git remote uses a developer-only SSH host alias that

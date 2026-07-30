@@ -26,6 +26,11 @@ parse **and** analyze against flux-lang in CI.
 
 ## Progress
 - (not started)
+- **Placement decided by C-27's finding: this gate belongs in `connector-flux`, not `connector-cli`.**
+  `connector-cli` has no `flux-lang` dependency and `connector-flux` re-exports none of it, so
+  `flux_lang::program::Module::parse_str` is unreachable from the CLI without a manifest edit. C-27
+  therefore pinned the module envelope by *shape* only (`#` comments, never `//`) and left the real
+  gate to this story. Put it where flux-lang is already a dependency.
 
 ## Notes
 - This is the single most important test in the repository. Everything else can be fixed forward; a

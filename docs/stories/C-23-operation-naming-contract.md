@@ -38,6 +38,11 @@ prompts, and users already call.
 
 ## Progress
 - (not started)
+- **Now on C-17's critical path**, discovered by C-27's wiring: `connector-spec` **accepts** a dotted
+  op id and `connector-flux` **refuses** it. The spec crate's own test fixtures spell ids as
+  `zendesk.ticket.show`, so a provider TOML written the way those fixtures read will load and then
+  fail at emit. The two crates currently disagree about what a valid connector is, and this story is
+  where that is settled.
 
 ## Notes
 - Flagged as a risk in [connector-pipeline.md](../designs/connector-pipeline.md): "Op naming is a
