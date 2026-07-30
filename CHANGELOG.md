@@ -7,6 +7,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The artifact tests leaked their fixtures into a shared tmpfs, and went flaky under load (C-143).**
+  They wrote to `std::env::temp_dir()`, keyed on a label and a process id; `/tmp` here is a 32 GB
+  tmpfs, and 55 leaked fixture directories were sitting in it. Under a wave of concurrent builds,
+  tmpfs pressure was enough to fail a write.
+
+  Fixtures now live under the per-worktree build tree, follow `CARGO_TARGET_DIR`, carry a name no run
+  repeats, and are removed by a `Drop` guard even when a test panics. The three original tests each
+  lost exactly one cleanup line and still assert the same properties. Verified over 10 full workspace
+  runs under concurrent build load: 10/10 green, zero fixtures surviving.
+
+  **This cost real time twice before it was measured** — both times the first hypothesis was "the
+  merge broke it", and in one case a good merge was reverted before the cause was found. A flaky
+  integration gate is worse than a missing one, because it teaches a reader to distrust a red gate.
+
+  The wider half is filed as C-150: `tests/common/mod.rs` has the identical bug in the harness *every
+  integration binary* uses, and two agents reproduced it independently in the same wave.
+
+
 ## [0.5.0] — 2026-07-30
 
 ### Added

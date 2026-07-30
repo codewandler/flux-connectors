@@ -2,8 +2,7 @@
 id: C-143
 title: "The artifact tests leak their fixtures and go flaky under load"
 pillar: Core
-status: in-progress
-priority: 3
+status: done
 areas: [connector-cli]
 note: "found twice during a 7-agent wave, both times attributed to the wrong diff before being measured. 55 stale fixture directories in /tmp, which is a 32G tmpfs — the tests write to env::temp_dir() and do not always clean up"
 ---
