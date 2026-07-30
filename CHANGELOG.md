@@ -23,6 +23,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   transitions list and transition. v2 rather than v3 because v3's comment body is Atlassian Document
   Format — an array of block nodes — and `wire` paths address nested records only, so ADF is
   inexpressible rather than merely awkward. Pinned by a test, so a bulk upgrade to v3 fails loudly.
+- **C-76** — the **OpenRouter** connector: chat completion, models list, model endpoints, credits.
+  A transfer of the OpenAI connector's shape, with `max_completion_tokens` required so no
+  LLM-callable spend is unbounded — the vendor deprecates `max_tokens`, and a test asserts it is
+  absent so the deprecated spelling cannot come back.
+- **C-78** — the **Zoom** connector: meeting get, create and delete, plus user get, with the nested
+  `settings` object declared through a wire path. Meeting **UUID** addressing is excluded because
+  `meeting_id` is typed as an integer, which makes a base64 id carrying `/` untypeable at the op
+  boundary — the first case in the fleet where path injection is closed structurally rather than by
+  the vendor's charset happening to be safe.
 - **C-75** — the **Airtable** connector: record get, create, update and delete, with the `fields`
   envelope declared through a wire path as one opaque cell-value object — Airtable's field keys are a
   customer's own column names, unknown at compile time. It also settles the unencoded-path-parameter
