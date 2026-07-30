@@ -23,6 +23,21 @@
 //! `Authorization` header without registering the secret, every scrub below is the identity
 //! function and the sentinel survives all four.
 //!
+//! Four is the complete set: `ToolResult` has exactly three fields, and the progress line is the only
+//! other thing a tool can put in front of a reader. There is no fifth to add.
+//!
+//! # Two ways this file used to prove less than it claimed (C-152)
+//!
+//! **A `view` of `None` redacts to `""`.** `flux_runtime::tool_fn` builds every result with
+//! `ToolResult::ok` (`fn_tool.rs:107`), so the second assertion was scrubbing an empty string. The
+//! stand-in below is a `Tool` of its own that answers with `ToolResult::ok_view`, and the surface is
+//! now asserted with a control the way the first one always was.
+//!
+//! **`add_secret` is a no-op under six trimmed characters** (`codewandler-flux-secret-1.0.1`,
+//! `lib.rs:198`), so for a short credential registration succeeded and redaction never happened. The
+//! pack now refuses such a credential rather than sending it, and
+//! [`a_credential_too_short_to_redact_is_refused_rather_than_sent`] is that case.
+//!
 //! # The transport is deliberately adversarial
 //!
 //! The stand-in egress **reflects the request it was handed** into its result. A real
@@ -35,7 +50,9 @@ use std::sync::{Arc, Mutex};
 
 use connector_pack::{Credentials, Egress, Error, Operation, DEFAULT_SERVICE};
 use connector_secrets::{CredentialRef, MemoryStore, Secret, SecretStore};
-use flux_runtime::{RuntimeTurnContext, Tool, ToolContext, ToolProgress, ToolProgressSink};
+use flux_runtime::{
+    RuntimeTurnContext, Tool, ToolContext, ToolProgress, ToolProgressSink, ToolResult,
+};
 use flux_system::{System, Workspace};
 use serde_json::{json, Value};
 
@@ -43,6 +60,15 @@ use serde_json::{json, Value};
 /// deliberately carries none of `flux_secret`'s known prefixes (`xoxb-`, `sk-`, `ghp_`, …), so a
 /// pass cannot come from flux's prefix-shaped redaction instead of from registration.
 const SENTINEL: &str = "SENTINEL-NOT-A-REAL-SECRET-C116";
+
+/// **Five characters, and that is the whole point.** `Redactor::add_secret` stores a value only when
+/// it is at least six characters once trimmed (`codewandler-flux-secret-1.0.1/src/lib.rs:198`), so
+/// registering this one *succeeds and redacts nothing* — the case C-152 found, where the code was
+/// correct about what it did and the prose was wrong about what that meant.
+///
+/// A word rather than a token shape, for the same reason [`SENTINEL`] is: nothing here may commit a
+/// value that reads as a credential, and at this length no `SENTINEL-NOT-A-REAL-…` spelling fits.
+const SHORT_SENTINEL: &str = "SHORT";
 
 /// The tenant every reference below is addressed under.
 const TENANT: &str = "t-c116";
@@ -70,9 +96,14 @@ fn context(progress: Arc<Progress>) -> ToolContext {
 
 /// A store holding the sentinel at Slack's bot-token address for [`TENANT`].
 async fn store_with_the_sentinel() -> Arc<dyn SecretStore> {
+    store_holding(SENTINEL).await
+}
+
+/// A store holding `value` at Slack's bot-token address for [`TENANT`].
+async fn store_holding(value: &str) -> Arc<dyn SecretStore> {
     let store = MemoryStore::new();
     store
-        .put(&slack_bot_token(), &Secret::new(SENTINEL))
+        .put(&slack_bot_token(), &Secret::new(value))
         .await
         .expect("an in-memory put cannot fail");
     Arc::new(store)
@@ -84,12 +115,32 @@ fn slack_bot_token() -> CredentialRef {
         .expect("a valid address")
 }
 
+/// An egress that reflects the request it was handed into **both** result surfaces.
+///
+/// `flux_runtime::tool_fn` cannot be used for this: it builds every result with `ToolResult::ok`,
+/// which leaves `view: None` (`flux-runtime-0.39.0/src/fn_tool.rs:107`), so a `view` assertion
+/// against it redacts an empty string and holds nothing (C-152, finding 3). `ToolResult::ok_view`
+/// carries a real one, and a tool that reports its own view is not exotic — it is what any tool with
+/// a model-facing rendering does.
+struct Reflecting;
+
+#[async_trait::async_trait]
+impl Tool for Reflecting {
+    fn spec(&self) -> flux_spec::ToolSpec {
+        stand_in_spec()
+    }
+
+    async fn execute(&self, _ctx: &ToolContext, params: Value) -> flux_core::Result<ToolResult> {
+        Ok(ToolResult::ok_view(
+            json!({ "reflected": params }).to_string(),
+            format!("the request as it went out: {params}"),
+        ))
+    }
+}
+
 /// An egress that reflects the request it was handed. See this module's documentation.
 fn reflecting_egress() -> Egress {
-    Egress::new(flux_runtime::tool_fn(
-        stand_in_spec(),
-        |params: Value| async move { Ok(json!({ "reflected": params })) },
-    ))
+    Egress::new(Arc::new(Reflecting))
 }
 
 /// An egress that fails, quoting the request — the failure path flux folds to `ToolResult::error`.
@@ -146,6 +197,16 @@ async fn a_credential_never_reaches_a_surface() {
          nothing: {}",
         result.content
     );
+    // The same control for the second surface, and it is the one C-152 found missing: a `view` that
+    // is `None` redacts to `""`, which passes the assertion below while asserting nothing at all.
+    let view = result
+        .view
+        .as_deref()
+        .expect("the stand-in carries a view, or the assertion below is vacuous");
+    assert!(
+        view.contains("Bearer") && view.contains(SENTINEL),
+        "the reflected view carries no assembled credential: {view}"
+    );
 
     // Surface 1 and 2 — `ToolResult::content` and `::view`, scrubbed as `Executor::dispatch` does.
     assert!(
@@ -153,9 +214,7 @@ async fn a_credential_never_reaches_a_surface() {
         "the sentinel survived into the tool result"
     );
     assert!(
-        !ctx.redactor
-            .redact(result.view.as_deref().unwrap_or_default())
-            .contains(SENTINEL),
+        !ctx.redactor.redact(view).contains(SENTINEL),
         "the sentinel survived into the model-facing view"
     );
 
@@ -223,6 +282,49 @@ async fn the_redactor_knows_the_value_before_the_request_is_constructed() {
     // And the refusal itself carries nothing. Belt and braces: the redactor is the guarantee, but an
     // error that quoted a resolved value would be a second surface nobody scrubs on this path.
     assert!(!error.to_string().contains(SENTINEL), "{error}");
+}
+
+/// **A credential the host's redactor would silently decline to hold is refused, not sent.**
+///
+/// `Redactor::add_secret` is a no-op under six trimmed characters, so for a value this short every
+/// one of the four scrubs above is the identity function and the guarantee the surrounding
+/// documentation states does not hold. The decision C-152 records in
+/// [the design](../../../docs/designs/connector-tool-pack.md) is to refuse at resolve time: a
+/// credential the host cannot protect is one it should not send, and a five-character API token is a
+/// misconfiguration long before it is a credential.
+///
+/// The `Ok` arm is the assertion that matters. Before the refusal existed this call *succeeded*, and
+/// the value reached `ToolResult::content` through a redactor that had been told about it and had
+/// dropped it on the floor — which is why the failure message quotes the **scrubbed** content: the
+/// sentinel being visible there is the whole defect in one line.
+#[tokio::test]
+async fn a_credential_too_short_to_redact_is_refused_rather_than_sent() {
+    let credentials =
+        Credentials::new(store_holding(SHORT_SENTINEL).await, TENANT).expect("a tenant");
+    let ctx = context(Arc::new(Progress::default()));
+
+    let tool = projected("slack-chat-post-message", reflecting_egress(), credentials);
+    let outcome = tool.execute(&ctx, post_message_params()).await;
+
+    if let Ok(result) = &outcome {
+        let scrubbed = ctx.redactor.redact(&result.content);
+        assert!(
+            !scrubbed.contains(SHORT_SENTINEL),
+            "a credential too short for the redactor to hold was sent anyway, and survived every \
+             scrub into the tool result: {scrubbed}"
+        );
+    }
+
+    let error = outcome.expect_err("a credential the host cannot redact is not sent");
+    let rendered = error.to_string();
+    assert!(
+        rendered.contains("slack.bot_token") && rendered.contains(TENANT),
+        "the refusal must name the credential it could not protect: {rendered}"
+    );
+    assert!(
+        !rendered.contains(SHORT_SENTINEL),
+        "the refusal quoted the value it refused: {rendered}"
+    );
 }
 
 /// A missing credential names the address that was not found, and **no request is sent**.

@@ -2,7 +2,7 @@
 id: C-152
 title: "The redaction guarantee has two holes and one vacuous assertion"
 pillar: Bridge
-status: ready
+status: in-progress
 priority: 2
 design: docs/designs/connector-tool-pack.md
 epic: authentication-surface
@@ -75,12 +75,38 @@ window is closable by registering before the fallible step, and C-116's own acce
 
 ## Acceptance
 
-- [ ] Item 1 decided, implemented, and the decision recorded in the design.
-- [ ] `Assembled`'s `Debug` redacts, asserted by a test.
-- [ ] The `view` assertion either exercises a real `view` or is honestly removed.
-- [ ] The registration window is closed.
-- [ ] `a_credential_never_reaches_a_surface` still passes and still fails when registration is removed.
-- [ ] The gate is green; the build stays a fixed point.
+- [x] Item 1 decided, implemented, and the decision recorded in the design.
+- [x] `Assembled`'s `Debug` redacts, asserted by a test.
+- [x] The `view` assertion either exercises a real `view` or is honestly removed.
+- [x] The registration window is closed.
+- [x] `a_credential_never_reaches_a_surface` still passes and still fails when registration is removed.
+- [x] The gate is green; the build stays a fixed point.
+
+## Progress
+
+**Item 1 was decided by refusing**, and the decision record is
+[the design](../designs/connector-tool-pack.md)'s new section *"The redaction guarantee, and the
+condition it turned out to have"* — the options, the three grounds, and the named behaviour change.
+`connector_pack::Error::UnredactableCredential` is the refusal; it names the operation, the credential
+and the address's tenant and authority, and neither the value nor its length.
+
+The check **asks the redactor rather than mirroring the six**: `credentials::register` registers the
+value and then asserts that scrubbing it changes it. A mirrored threshold would go stale on a flux
+upgrade with no test noticing, which is the failure `DEFAULT_SERVICE`'s mirror guard exists for. Asking
+also covers the empty and all-whitespace cases without naming them.
+
+`register` is the single door every value goes through, which is what closes item 4 as well: it runs
+directly after the store answers and *before* the fallible `user_half`, and the assembled Basic blob
+goes through the same door on its own terms.
+
+Items 2 and 3 are `auth::Assembled`'s hand-written redacting `Debug`
+(`an_assembled_credential_redacts_its_value_the_way_a_secret_does`) and a stand-in egress that answers
+with `ToolResult::ok_view`, so the `view` surface is asserted against a real `view` with the same
+control the `content` surface always had.
+
+Verified by hand, not by inference: commenting out the `register` call for the stored secret makes
+`a_credential_never_reaches_a_surface` fail with *"the sentinel survived into the tool result"*. The
+tripwire the reviewer used still trips.
 
 ## Notes
 

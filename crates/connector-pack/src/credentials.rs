@@ -36,6 +36,16 @@
 //! reported, because presenting a Vault outage as "this tenant has not connected it" is the
 //! distinction C-91 built its error type around.
 //!
+//! # A credential the redactor cannot hold is refused, not sent
+//!
+//! Every value this module resolves is registered with the host's redactor through [`register`],
+//! **before** anything fallible happens to it and long before a request exists. That call is also
+//! where the guarantee is *verified*: `Redactor::add_secret` is a documented no-op for a value under
+//! six trimmed characters, so registering a five-character credential succeeded and protected
+//! nothing, and every surface would have rendered it in the clear. C-152's decision is to refuse such
+//! a credential at resolve time with [`Error::UnredactableCredential`], naming the address so an
+//! operator can replace the value. `docs/designs/connector-tool-pack.md` records why.
+//!
 //! # Nothing here holds a value beyond the call
 //!
 //! No cache, no expiry, no refresh. Out of scope since C-90 and still is: the store hands back a
@@ -149,12 +159,15 @@ impl Credentials {
     ///
     /// Both the stored secret **and** the assembled value are registered. For `Bearer` they are the
     /// same string; for Basic the assembled value is `base64(user:secret)`, which is as good as the
-    /// secret to anyone holding it and is the one that actually travels.
+    /// secret to anyone holding it and is the one that actually travels. Both go through
+    /// [`register`], so both are values the redactor demonstrably holds.
     ///
     /// # Errors
     ///
-    /// Every variant refuses and none sends. See the module documentation for the alternative-
-    /// selection rule and for why a transport failure is never reported as "not configured".
+    /// Every variant refuses and none sends — including [`Error::UnredactableCredential`], for a
+    /// value the host's redactor would silently decline to hold. See the module documentation for the
+    /// alternative-selection rule and for why a transport failure is never reported as "not
+    /// configured".
     pub(crate) async fn resolve(
         &self,
         ctx: &ToolContext,
@@ -246,14 +259,26 @@ impl Credentials {
                 }
             })?;
 
+            // **Before any request exists, and before the fallible step below.** C-116 stated the
+            // ordering as "registered before the request is constructed"; registering here rather
+            // than after `user_half` — which reads the environment and can fail — closes the window
+            // in which the value was in memory and the redactor had not been told (C-152, finding 4).
+            // Nothing in that window could surface it, and the point is that the code now says so.
+            register(
+                ctx,
+                operation.id,
+                credential,
+                &reference,
+                secret.expose_secret(),
+            )?;
+
             let user = self.user_half(operation.id, credential)?;
             let value = auth::acquire(credential, secret.expose_secret(), user.as_deref());
 
-            // **Before any request exists.** Both strings: the stored secret, and the value that
-            // actually travels when the acquisition transformed it.
-            ctx.redactor.add_secret(secret.expose_secret());
+            // The second string: `base64(user:secret)` is as good as the secret to anyone holding it
+            // and is the one that actually travels, so it is registered on its own terms.
             if value != secret.expose_secret() {
-                ctx.redactor.add_secret(value.clone());
+                register(ctx, operation.id, credential, &reference, &value)?;
             }
 
             assembled.push(Assembled {
@@ -302,6 +327,43 @@ impl Credentials {
             })?;
         Ok(Some(format!("{user}{user_suffix}")))
     }
+}
+
+/// **Register `value` with the host's redactor, or refuse the call.**
+///
+/// Every value this pack puts on a request goes through here, and that is what makes the guarantee
+/// in the module documentation above a structural one rather than a promise: a value the redactor
+/// does not hold is never assembled into a request, because this returns an error instead.
+///
+/// # Why it asks the redactor instead of checking a length
+///
+/// `Redactor::add_secret` **silently drops a value under six characters once trimmed**
+/// (`codewandler-flux-secret-1.0.1/src/lib.rs:195-201`) — over-redacting a common English word is
+/// the worse failure for it to risk, so the no-op is right for flux and wrong for a caller that
+/// reads the call as a guarantee. Registering such a value *succeeds* and redacts nothing.
+///
+/// Mirroring the six here would be a constant that can rot silently on a flux upgrade, in exactly
+/// the way [`DEFAULT_SERVICE`]'s mirror is guarded against. So the value is registered and the
+/// redactor is then **asked** whether it holds it: if scrubbing the value returns the value, nothing
+/// is protecting it, whatever the threshold happens to be. That also covers the empty and
+/// all-whitespace cases without naming them.
+fn register(
+    ctx: &ToolContext,
+    operation: &str,
+    credential: &'static catalog::Credential,
+    reference: &CredentialRef,
+    value: &str,
+) -> Result<(), Error> {
+    ctx.redactor.add_secret(value.to_owned());
+    if ctx.redactor.redact(value) == value {
+        return Err(Error::UnredactableCredential {
+            operation: operation.to_owned(),
+            credential: credential.name.to_owned(),
+            tenant: reference.tenant().to_owned(),
+            authority: reference.authority().to_owned(),
+        });
+    }
+    Ok(())
 }
 
 /// The path a [`StoreError::NotFound`] names.
