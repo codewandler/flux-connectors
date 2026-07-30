@@ -2,12 +2,12 @@
 id: C-16
 title: Design the $auth seam and file its stories on flux's board
 pillar: Bridge
-status: ready
-priority: 2
+status: done
+priority:
 design: docs/designs/auth-seam.md
 epic: connectors-v1
 areas: [flux-bridge]
-note: **critical path** · ships in ../flux, longest lead time
+note: design settled + verified against flux v0.38.0 · filing split to C-26
 ---
 
 # Design the $auth seam and file its stories on flux's board

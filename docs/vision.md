@@ -43,9 +43,12 @@ reads directly is wrong, however convenient it looks.
    generated `.flux` file, or in a lockfile. The generated call carries an auth *reference*; flux
    resolves it, applies the scheme, and registers the value with the redactor.
 
-5. **Capabilities are manifest-scoped and deny-by-default.** A plugin is a manifest plus a binary; a
-   connector is a manifest plus a Flux module. The same rule holds for both — a connector reaches
-   only the hosts and the secret credentials its manifest declares.
+5. **A connector declares what it needs, and nothing grants itself access.** A connector is a
+   manifest plus a Flux module, and the manifest names the hosts it reaches and the credentials it
+   requires. Note the asymmetry with plugins, established by C-16: flux obtains a plugin's
+   capabilities by *spawning its binary*, and has no file-based capability manifest at all, so a
+   connector manifest is a build artifact and a declaration — not a self-installing capability grant.
+   Access is granted by operator configuration, deliberately.
 
 6. **Types survive the whole pipeline.** Parameter and response schemas travel from the vendor spec
    through the IR into the op contract. An operation that takes an integer says so.

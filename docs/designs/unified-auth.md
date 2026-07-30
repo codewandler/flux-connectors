@@ -95,8 +95,18 @@ never being registered with the redactor. The token would then be free to appear
 model-visible output.
 
 So `basic_join` carries `secret_position`, and the credential's `source` is bound to whichever half
-actually holds it. This is precisely the kind of failure a flat `Basic` variant cannot express, and
-it is the strongest evidence so far that the axes are the right cut.
+actually holds it.
+
+**And each half must be a composable template, not a bare env value.** C-16 found the matching gap
+on flux's side: `AuthMethod.user_env` (`../flux/crates/flux-plugin-protocol/src/lib.rs:436`) resolves
+an env var **verbatim**. Zendesk's user half is `<email>/token` — an env value *plus a literal
+suffix* — and freshdesk's password half is the literal `X`. Neither is expressible by naming an env
+var, so `Basic` would ship implemented-but-unusable for two of our three providers, and the operator
+would be told to paste `me@corp.com/token` into an env var to work around it. Each half therefore
+resolves from a source **and** a literal template the connector declares.
+
+Both problems are precisely the kind a flat `Basic` variant cannot express, and together they are the
+strongest evidence so far that the axes are the right cut.
 
 ### It is a strict superset of flux's vocabulary, not a rival to it
 
@@ -114,6 +124,16 @@ the model, so the two agree by construction:
 So a connector that only uses the four presets serializes to exactly what flux understands today, and
 the richer forms are additive. **We ship the presets first and grow along the axes**, rather than
 proposing a rewrite of flux's auth model to get one provider working.
+
+> **Amended by C-16 — the round-trip is not yet exact.** Verification against flux `v0.38.0` found
+> that **three of the four presets do not round-trip** as drafted above, and one failure is a silent
+> credential-leak shape (flux assumes the Basic user half is non-secret; for freshdesk it *is* the
+> API key). See [auth-seam.md](auth-seam.md) §9 for the per-preset detail.
+>
+> This does not overturn the model — it sharpens what "superset" has to mean. The mapping table above
+> is the *target*, and C-19's superset test is what will hold it honest; where a preset cannot
+> round-trip, the gap is a change flux needs (the `user_env` verbatim-resolution gap is already
+> drafted as a flux story) rather than a licence for us to invent a second vocabulary.
 
 ### The line that decides who executes what
 

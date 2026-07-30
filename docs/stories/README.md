@@ -28,7 +28,6 @@ _None._
 
 ### Connectors v1 — spec to Flux
 _Prove the whole thesis on two real providers, end to end against a live flux._
-- [C-16 — Design the $auth seam and file its stories on flux's board](C-16-design-auth-seam.md) · Bridge · **critical path** · ships in ../flux, longest lead time
 - [C-3 — Load and validate provider TOML](C-3-provider-toml-loader.md) · Spec
 - [C-8 — Emit a Flux op for a GET with path and query params](C-8-flux-op-emitter.md) · Codegen · first end-to-end slice of codegen
 - [C-9 — Emit request bodies, headers, and response handling](C-9-bodies-and-responses.md) · Codegen
@@ -44,6 +43,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 
 ## Blocked
 - [C-25 — Vendor the babelforce spec without publishing credentials](C-25-vendor-babelforce-spec.md) · Spec · **blocked on a human decision** · upstream spec embeds live-shaped credentials
+- [C-26 — File the outbound $auth seam stories on flux's board](C-26-file-seam-stories-on-flux.md) · Bridge · **critical path** · 11 paste-ready drafts wait on a decision to write into ../flux
 
 ## Backlog
 
@@ -67,6 +67,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 ## Done
 - [C-1 — Scaffold the Cargo workspace and the gate](C-1-scaffold-workspace.md) · Foundation · everything else builds on this
 - [C-2 — Define the Connector IR](C-2-connector-ir.md) · Spec · the contract every other crate speaks
+- [C-16 — Design the $auth seam and file its stories on flux's board](C-16-design-auth-seam.md) · Bridge · design settled + verified against flux v0.38.0 · filing split to C-26
 - [C-18 — Vendor the babelforce spec and curate the provider operation inventory](C-18-vendor-specs-and-inventory.md) · Spec · inventory delivered · spec vendoring split to C-25 (credential literals)
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._

@@ -21,6 +21,8 @@ plugin's are.
 - [ ] Auth headers emit `{"$auth": {credential: "<name>"}}` — a reference, never a value.
 - [ ] `<provider>.connector.toml` is generated with `http_hosts`, the endpoint env spec, and one
       `[[auth]]` entry per method (credential name, scheme, env, user_env).
+      **It is a build artifact and a declaration, not an installable capability grant** — C-16 proved
+      flux has no file-based capability manifest, so credentials reach flux through operator config.
 - [ ] **An operation requiring several credentials together emits one marker each** — the emitter
       must handle an AND-set, not just a single credential.
       **Use a synthetic fixture, not babelforce.** Babelforce's `X-Auth-Access-Id` +

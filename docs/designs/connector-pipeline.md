@@ -53,10 +53,25 @@ plus a Flux module.** Each provider generates two artifacts:
 | `<provider>.flux` | `~/.flux/flows/` | The `op` declarations. |
 | `<provider>.connector.toml` | `~/.flux/connectors/` | Capability manifest: endpoint env, auth credentials + schemes, `http_hosts` allowlist. |
 
-It mirrors the plugin manifest's `EndpointSpec` / `AuthMethod` / `Caps`
-(`../flux/crates/flux-plugin-protocol/src/lib.rs:422`), which preserves flux's non-negotiable
-invariant that host capabilities are deny-by-default and manifest-scoped. See
-[auth-seam.md](auth-seam.md).
+> **Corrected by C-16 — the manifest premise was wrong.** This design originally claimed the
+> `<provider>.connector.toml` would be *installed into flux* at `~/.flux/connectors/` and read as a
+> capability grant, mirroring the plugin manifest. Verification against flux source disproved the
+> premise: **flux has no file-based capability manifest of any kind.** A `PluginManifest` is obtained
+> by *spawning the binary* and sending a `manifest` frame
+> (`../flux/crates/flux-plugin/src/host/loading.rs:187-189`); what sits on disk in `~/.flux/plugins`
+> is a `PluginDescriptor` carrying transport + sha256 only, never capabilities. A TOML file in
+> `~/.flux/connectors/` would be flux's **first** capability grant with no binary-hash anchor, so
+> `spawn_verified`'s drift refusal (D-48) would have no analogue. flux also has no "connector"
+> concept to fold into.
+>
+> So the manifest **stays in this repo** as a build artifact and a record of what a connector needs;
+> it is not an installable capability grant. Credentials reach flux through its **operator config**
+> instead. See [auth-seam.md](auth-seam.md) for the resolved design and
+> [unified-auth.md](unified-auth.md) for the credential model.
+
+The manifest's shape still mirrors the plugin protocol's `EndpointSpec` / `AuthMethod` / `Caps`
+(`../flux/crates/flux-plugin-protocol/src/lib.rs:422`), because agreeing with flux's vocabulary is
+what makes the operator config mechanical to produce.
 
 ### Why generated Flux loads with no flux change
 

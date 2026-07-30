@@ -30,6 +30,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   for zendesk (7 of 7), freshdesk (9 of 16) and babelforce (9 of 163), every claim carrying a
   `path:line` citation.
 
+- **C-16** — the `$auth` seam design, verified line-by-line against flux `v0.38.0`, plus eleven
+  paste-ready story drafts for flux's board (`docs/designs/auth-seam-flux-stories.md`).
+- **unified-auth epic** — credentials modelled on three orthogonal axes (source × acquisition ×
+  placement) so a new provider archetype costs one value on one axis, not a new variant crossing all
+  of them. Stories C-19 … C-22.
+
 ### Changed
 - **C-1** — flux-lang is depended on from **crates.io** (`codewandler-flux-lang = "0.37"`) rather
   than as a git or path dependency. The flux git remote uses a developer-only SSH host alias that
