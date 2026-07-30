@@ -128,6 +128,12 @@ fn operation_selection_stays_curated() {
         // text or pages with an opaque `page_info` cursor — plus C-56 for the body of the one write.
         // See `providers/shopify.toml`.
         ("shopify", 5),
+        // C-78 curates 4 of the several hundred operations in Zoom's Meeting API: meeting get,
+        // create and delete, plus user get. Two cuts shaped it — the meetings *list* is excluded
+        // pending C-30, which is what leaves the connector unable to enumerate a schedule, and every
+        // meeting option but `settings.waiting_room` is excluded pending C-56. See the header comment
+        // in `providers/zoom.toml`.
+        ("zoom", 4),
     ];
     for (name, count) in expected {
         let loaded = load(name);

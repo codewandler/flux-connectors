@@ -21,6 +21,7 @@ pub(crate) mod openai;
 pub(crate) mod shopify;
 pub(crate) mod slack;
 pub(crate) mod zendesk;
+pub(crate) mod zoom;
 
 use crate::Provider;
 
@@ -38,4 +39,5 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &shopify::PROVIDER,
     &slack::PROVIDER,
     &zendesk::PROVIDER,
+    &zoom::PROVIDER,
 ];
