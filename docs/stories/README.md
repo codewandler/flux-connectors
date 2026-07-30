@@ -30,7 +30,6 @@ Gate: `cargo build --workspace && cargo test --workspace && cargo clippy --works
 
 ## Next (ready — take the top one unless the user named a story)
 - [C-143 — The artifact tests leak their fixtures and go flaky under load](C-143-artifact-tests-leak-fixtures.md) · Core · found twice during a 7-agent wave, both times attributed to the wrong diff before being measured. 55 stale fixture directories in /tmp, which is a 32G tmpfs — the tests write to env::temp_dir() and do not always clean up
-- [C-142 — Make the explorer components attachable, without extracting a package yet](C-142-reusable-explorer-components.md) · Codegen · measured: the ENTIRE VitePress coupling is two functions — withBase in 5 components and inBrowser in 1 — and data/catalog.mts has zero imports. So this is a link port and a tier boundary, not a rewrite. The package boundary waits for a second consumer
 
 ### authentication as a connector surface — a login that cannot leak
 _Authentication is currently something the **host** does *around* a connector: `OAuth2Spec` declares_
@@ -237,6 +236,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-112 — Publish Flux core specifications in the connector explorer](C-112-publish-flux-core-specifications-in-the-explorer.md) · UX · Built-ins and language nodes become searchable beside connectors, with canonical JSON identities rather than fake providers
 - [C-114 — The connector-pack crate and the ToolSpec projection](C-114-tool-spec-projection.md) · Bridge · the foundation the rest of the epic builds on — a catalogue entry becomes a flux ToolSpec, dotted name and all
 - [C-120 — Declare roles on a service, with the closed set and its refusals](C-120-service-roles-declaration.md) · Spec · the mechanism — roles attach to a SERVICE and a provider's are derived; an unknown role name is a load error, because a typo'd capability that silently means 'no capability' is the whole failure mode
+- [C-142 — Detach the explorer components from VitePress: a link port and a tier boundary](C-142-reusable-explorer-components.md) · Codegen · measured, not guessed: 6 of 14 components import `vitepress`, and between them they use exactly two symbols. No `useData`, no `useRouter`, no theme internals — so this is a link port and a tier boundary, not a rewrite
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->
