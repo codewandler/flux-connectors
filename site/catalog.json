@@ -1,0 +1,2417 @@
+{
+  "schema_version": 1,
+  "generator": "flux-connectors 0.0.1",
+  "documentation": "docs/designs/catalog-json.md",
+  "providers": [
+    {
+      "id": "babelforce",
+      "vendor": "Babelforce",
+      "description": "Babelforce voice platform: agent availability, live and reported calls, and the session variables a flow reads and writes",
+      "base_url": "https://services.babelforce.com",
+      "hosts": [
+        "services.babelforce.com"
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "babelforce.access_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "SSO-issued babelforce access token, minted outside flux and supplied through the environment",
+            "env": [
+              "BABELFORCE_ACCESS_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "babelforce.access_token"
+          ]
+        ]
+      },
+      "operation_count": 9,
+      "operations": [
+        {
+          "id": "babelforce-agent-list",
+          "provider": "babelforce",
+          "description": "List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v2/agents",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "wire": null,
+              "description": "Page number",
+              "required": false,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "max",
+              "in": "query",
+              "wire": null,
+              "description": "Page size",
+              "required": false,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "q",
+              "in": "query",
+              "wire": null,
+              "description": "Free-text search over agent name and group name",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "enabled",
+              "in": "query",
+              "wire": null,
+              "description": "Filter enabled or disabled agents",
+              "required": false,
+              "schema": {
+                "type": "boolean"
+              }
+            },
+            {
+              "name": "name",
+              "in": "query",
+              "wire": null,
+              "description": "Search by agent name",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "number",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by the agent's number",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "sourceId",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by integration source id",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "source",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by source integration",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "state",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by agent line status",
+              "required": false,
+              "schema": {
+                "enum": [
+                  "available",
+                  "busy",
+                  "declined",
+                  "unreachable",
+                  "selected",
+                  "ringing",
+                  "in-call",
+                  "wrap-up"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "groupIds",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by group id; a single id or a list",
+              "required": false,
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "groups",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by group name; a single name or a list",
+              "required": false,
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "babelforce.access_token"
+            ]
+          ],
+          "hosts": [
+            "services.babelforce.com"
+          ],
+          "flux": "op babelforce-agent-list(page: Number, max: Number, q: String, enabled: Bool, name: String, number: String, sourceId: String, source: String, state: String, groupIds: Any, groups: Any) -> Any\n  description \"List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/agents\")\n  $sep = \"?\"\n  when $page\n    $url = fmt(\"{url}{sep}page={page}\")\n    $sep = \"&\"\n  when $max\n    $url = fmt(\"{url}{sep}max={max}\")\n    $sep = \"&\"\n  when $q\n    $url = fmt(\"{url}{sep}q={q}\")\n    $sep = \"&\"\n  when $enabled\n    $url = fmt(\"{url}{sep}enabled={enabled}\")\n    $sep = \"&\"\n  when $name\n    $url = fmt(\"{url}{sep}name={name}\")\n    $sep = \"&\"\n  when $number\n    $url = fmt(\"{url}{sep}number={number}\")\n    $sep = \"&\"\n  when $sourceId\n    $url = fmt(\"{url}{sep}sourceId={sourceId}\")\n    $sep = \"&\"\n  when $source\n    $url = fmt(\"{url}{sep}source={source}\")\n    $sep = \"&\"\n  when $state\n    $url = fmt(\"{url}{sep}state={state}\")\n    $sep = \"&\"\n  when $groupIds\n    $url = fmt(\"{url}{sep}groupIds={groupIds}\")\n    $sep = \"&\"\n  when $groups\n    $url = fmt(\"{url}{sep}groups={groups}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "story": "C-10",
+                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "story": "C-30",
+                "summary": "Query parameters `q`, `name`, `number`, `sourceId`, `source`, `state`, `groupIds`, `groups` carry free-form text, and the generated Flux interpolates query values verbatim — flux registers no percent-encoding op and `http.request` has no structured `query` parameter. `&`, `#` and `+` corrupt the request, and a value such as `x&per_page=1` injects query parameters.",
+                "params": [
+                  "q",
+                  "name",
+                  "number",
+                  "sourceId",
+                  "source",
+                  "state",
+                  "groupIds",
+                  "groups"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "babelforce-agent-get",
+          "provider": "babelforce",
+          "description": "Get one agent",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v2/agents/{id}",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "The agent id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "babelforce.access_token"
+            ]
+          ],
+          "hosts": [
+            "services.babelforce.com"
+          ],
+          "flux": "op babelforce-agent-get(id: String) -> Any\n  description \"Get one agent\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/agents/{id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "story": "C-10",
+                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "babelforce-agent-status-update",
+          "provider": "babelforce",
+          "description": "Update an agent's status. Supply at least one of enabled or presence.name — the request body's properties are all optional, so an empty PUT is schema-valid and does nothing",
+          "risk": "medium",
+          "idempotency": "idempotent",
+          "method": "PUT",
+          "path": "/api/v2/agents/{id}/status",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "The agent id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "enabled",
+              "in": "body",
+              "wire": null,
+              "description": "Enable or disable the agent",
+              "required": false,
+              "schema": {
+                "type": "boolean"
+              }
+            },
+            {
+              "name": "presence_name",
+              "in": "body",
+              "wire": "presence.name",
+              "description": "Presence label to set",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "babelforce.access_token"
+            ]
+          ],
+          "hosts": [
+            "services.babelforce.com"
+          ],
+          "flux": "op babelforce-agent-status-update(id: String, enabled: Bool, presence_name: String) -> Any\n  description \"Update an agent's status. Supply at least one of enabled or presence.name — the request body's properties are all optional, so an empty PUT is schema-valid and does nothing\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/agents/{id}/status\")\n  $content_type = \"application/json\"\n  $payload = { enabled: $enabled, presence: { name: $presence_name } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "story": "C-10",
+                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "babelforce-call-list",
+          "provider": "babelforce",
+          "description": "List and filter calls from the reporting view",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v2/calls/reporting",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "wire": null,
+              "description": "Page number",
+              "required": false,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "max",
+              "in": "query",
+              "wire": null,
+              "description": "Page size",
+              "required": false,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "id",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by call id; a single id or a list",
+              "required": false,
+              "schema": {
+                "oneOf": [
+                  {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "sessionId",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by session id",
+              "required": false,
+              "schema": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            {
+              "name": "conversationId",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by conversation id",
+              "required": false,
+              "schema": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            {
+              "name": "agentId",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by agent; a single id or a list",
+              "required": false,
+              "schema": {
+                "oneOf": [
+                  {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "fromNumber",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by originating number",
+              "required": false,
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "toNumber",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by destination number",
+              "required": false,
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "type",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by call direction",
+              "required": false,
+              "schema": {
+                "enum": [
+                  "inbound",
+                  "outbound"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "state",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by call state",
+              "required": false,
+              "schema": {
+                "enum": [
+                  "init",
+                  "scheduled",
+                  "ringing",
+                  "in-progress",
+                  "queued",
+                  "bridged",
+                  "canceled",
+                  "busy",
+                  "no-answer",
+                  "purged",
+                  "completed",
+                  "failed"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "finishReason",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by why the call ended",
+              "required": false,
+              "schema": {
+                "enum": [
+                  "unknown",
+                  "passive-hangup",
+                  "system-hangup",
+                  "failed",
+                  "timeout",
+                  "unreachable",
+                  "busy",
+                  "declined",
+                  "canceled",
+                  "transferred"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "time.start",
+              "in": "query",
+              "wire": null,
+              "description": "Window start, as a unix timestamp",
+              "required": false,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "time.end",
+              "in": "query",
+              "wire": null,
+              "description": "Window end, as a unix timestamp",
+              "required": false,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "q",
+              "in": "query",
+              "wire": null,
+              "description": "Free-text search",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "babelforce.access_token"
+            ]
+          ],
+          "hosts": [
+            "services.babelforce.com"
+          ],
+          "flux": "op babelforce-call-list(page: Number, max: Number, id: Any, sessionId: String, conversationId: String, agentId: Any, fromNumber: Any, toNumber: Any, type: String, state: String, finishReason: String, time_start: Number, time_end: Number, q: String) -> Any\n  description \"List and filter calls from the reporting view\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/calls/reporting\")\n  $sep = \"?\"\n  when $page\n    $url = fmt(\"{url}{sep}page={page}\")\n    $sep = \"&\"\n  when $max\n    $url = fmt(\"{url}{sep}max={max}\")\n    $sep = \"&\"\n  when $id\n    $url = fmt(\"{url}{sep}id={id}\")\n    $sep = \"&\"\n  when $sessionId\n    $url = fmt(\"{url}{sep}sessionId={sessionId}\")\n    $sep = \"&\"\n  when $conversationId\n    $url = fmt(\"{url}{sep}conversationId={conversationId}\")\n    $sep = \"&\"\n  when $agentId\n    $url = fmt(\"{url}{sep}agentId={agentId}\")\n    $sep = \"&\"\n  when $fromNumber\n    $url = fmt(\"{url}{sep}fromNumber={fromNumber}\")\n    $sep = \"&\"\n  when $toNumber\n    $url = fmt(\"{url}{sep}toNumber={toNumber}\")\n    $sep = \"&\"\n  when $type\n    $url = fmt(\"{url}{sep}type={type}\")\n    $sep = \"&\"\n  when $state\n    $url = fmt(\"{url}{sep}state={state}\")\n    $sep = \"&\"\n  when $finishReason\n    $url = fmt(\"{url}{sep}finishReason={finishReason}\")\n    $sep = \"&\"\n  when $time_start\n    $url = fmt(\"{url}{sep}time.start={time_start}\")\n    $sep = \"&\"\n  when $time_end\n    $url = fmt(\"{url}{sep}time.end={time_end}\")\n    $sep = \"&\"\n  when $q\n    $url = fmt(\"{url}{sep}q={q}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "story": "C-10",
+                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "story": "C-30",
+                "summary": "Query parameters `id`, `sessionId`, `conversationId`, `agentId`, `fromNumber`, `toNumber`, `type`, `state`, `finishReason`, `q` carry free-form text, and the generated Flux interpolates query values verbatim — flux registers no percent-encoding op and `http.request` has no structured `query` parameter. `&`, `#` and `+` corrupt the request, and a value such as `x&per_page=1` injects query parameters.",
+                "params": [
+                  "id",
+                  "sessionId",
+                  "conversationId",
+                  "agentId",
+                  "fromNumber",
+                  "toNumber",
+                  "type",
+                  "state",
+                  "finishReason",
+                  "q"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "babelforce-call-get",
+          "provider": "babelforce",
+          "description": "Get one call",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v2/calls/{id}",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "The call id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "babelforce.access_token"
+            ]
+          ],
+          "hosts": [
+            "services.babelforce.com"
+          ],
+          "flux": "op babelforce-call-get(id: String) -> Any\n  description \"Get one call\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/calls/{id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "story": "C-10",
+                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "babelforce-call-hangup",
+          "provider": "babelforce",
+          "description": "Hang up a live call",
+          "risk": "destructive",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/api/v2/calls/{id}/hangup",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "The call id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "babelforce.access_token"
+            ]
+          ],
+          "hosts": [
+            "services.babelforce.com"
+          ],
+          "flux": "op babelforce-call-hangup(id: String) -> Any\n  description \"Hang up a live call\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/calls/{id}/hangup\")\n  $response = http.request({ method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "story": "C-10",
+                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "babelforce-call-session-set",
+          "provider": "babelforce",
+          "description": "Set session variables on a live call. Variable keys must start with `app` — babelforce rejects other keys, and states the rule only in prose",
+          "risk": "medium",
+          "idempotency": "idempotent",
+          "method": "PUT",
+          "path": "/api/v2/calls/{id}/session/set",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "The call id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": {
+            "description": "The session variables to set, as a JSON object. Every key must start with `app`",
+            "type": "object"
+          },
+          "response_schema": null,
+          "credentials": [
+            [
+              "babelforce.access_token"
+            ]
+          ],
+          "hosts": [
+            "services.babelforce.com"
+          ],
+          "flux": "op babelforce-call-session-set(id: String, body: Any) -> Any\n  description \"Set session variables on a live call. Variable keys must start with `app` — babelforce rejects other keys, and states the rule only in prose\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/calls/{id}/session/set\")\n  $content_type = \"application/json\"\n  $payload = parse($body, as: \"json\")\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "story": "C-10",
+                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "babelforce-session-get",
+          "provider": "babelforce",
+          "description": "Get the IVR variables for a session",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v2/sessions/{id}",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "The session id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "babelforce.access_token"
+            ]
+          ],
+          "hosts": [
+            "services.babelforce.com"
+          ],
+          "flux": "op babelforce-session-get(id: String) -> Any\n  description \"Get the IVR variables for a session\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/sessions/{id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "story": "C-10",
+                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "babelforce-session-update",
+          "provider": "babelforce",
+          "description": "Update the user-scoped variables of a session",
+          "risk": "medium",
+          "idempotency": "idempotent",
+          "method": "PUT",
+          "path": "/api/v2/sessions/{id}",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "The session id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": {
+            "description": "The user-scoped session variables to update, as a JSON object",
+            "type": "object"
+          },
+          "response_schema": null,
+          "credentials": [
+            [
+              "babelforce.access_token"
+            ]
+          ],
+          "hosts": [
+            "services.babelforce.com"
+          ],
+          "flux": "op babelforce-session-update(id: String, body: Any) -> Any\n  description \"Update the user-scoped variables of a session\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://services.babelforce.com\"\n  $url = fmt(\"{base}/api/v2/sessions/{id}\")\n  $content_type = \"application/json\"\n  $payload = parse($body, as: \"json\")\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "story": "C-10",
+                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "freshdesk",
+      "vendor": "Freshdesk",
+      "description": "Freshdesk ticketing: list, read, create and update tickets and the contacts they belong to",
+      "base_url": "https://{domain}/api/v2",
+      "hosts": [
+        "{domain}"
+      ],
+      "auth": {
+        "schemes": [],
+        "credentials": [],
+        "default": []
+      },
+      "operation_count": 9,
+      "operations": [
+        {
+          "id": "freshdesk-test",
+          "provider": "freshdesk",
+          "description": "Verify credentials with a bounded contact read",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/contacts",
+          "parameters": [
+            {
+              "name": "per_page",
+              "in": "query",
+              "wire": null,
+              "description": "Records to fetch; one is enough to prove the credential works",
+              "required": false,
+              "schema": {
+                "default": 1,
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [],
+          "hosts": [
+            "{domain}"
+          ],
+          "flux": "op freshdesk-test(per_page: Number) -> Any\n  description \"Verify credentials with a bounded contact read\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/contacts\")\n  $sep = \"?\"\n  when $per_page\n    $url = fmt(\"{url}{sep}per_page={per_page}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "no-credential",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "freshdesk-ticket-list",
+          "provider": "freshdesk",
+          "description": "List and filter tickets",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/tickets",
+          "parameters": [
+            {
+              "name": "req_id",
+              "in": "query",
+              "wire": "requester_id",
+              "description": "Filter by requester",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "req_email",
+              "in": "query",
+              "wire": "email",
+              "description": "Filter by requester email",
+              "required": false,
+              "schema": {
+                "format": "email",
+                "type": "string"
+              }
+            },
+            {
+              "name": "company_id",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by company id",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "updated",
+              "in": "query",
+              "wire": "updated_since",
+              "description": "Only tickets updated at or after this date",
+              "required": false,
+              "schema": {
+                "format": "date-time",
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [],
+          "hosts": [
+            "{domain}"
+          ],
+          "flux": "op freshdesk-ticket-list(req_id: String, req_email: String, company_id: String, updated: String) -> Any\n  description \"List and filter tickets\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/tickets\")\n  $sep = \"?\"\n  when $req_id\n    $url = fmt(\"{url}{sep}requester_id={req_id}\")\n    $sep = \"&\"\n  when $req_email\n    $url = fmt(\"{url}{sep}email={req_email}\")\n    $sep = \"&\"\n  when $company_id\n    $url = fmt(\"{url}{sep}company_id={company_id}\")\n    $sep = \"&\"\n  when $updated\n    $url = fmt(\"{url}{sep}updated_since={updated}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "no-credential",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "story": "C-30",
+                "summary": "Query parameters `requester_id`, `email`, `company_id`, `updated_since` carry free-form text, and the generated Flux interpolates query values verbatim — flux registers no percent-encoding op and `http.request` has no structured `query` parameter. `&`, `#` and `+` corrupt the request, and a value such as `x&per_page=1` injects query parameters.",
+                "params": [
+                  "requester_id",
+                  "email",
+                  "company_id",
+                  "updated_since"
+                ]
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "freshdesk-ticket-get",
+          "provider": "freshdesk",
+          "description": "View one ticket",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/tickets/{id}",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "The ticket id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [],
+          "hosts": [
+            "{domain}"
+          ],
+          "flux": "op freshdesk-ticket-get(id: String) -> Any\n  description \"View one ticket\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/tickets/{id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "no-credential",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "freshdesk-ticket-create",
+          "provider": "freshdesk",
+          "description": "Create a ticket. The requester must be identified either by requester_id, or by phone together with name — Freshdesk states this only in prose and its required flags do not capture it",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/tickets",
+          "parameters": [
+            {
+              "name": "phone",
+              "in": "body",
+              "wire": null,
+              "description": "Requester phone number. Supply with name, or supply requester_id instead",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "name",
+              "in": "body",
+              "wire": null,
+              "description": "Requester name. Supply with phone, or supply requester_id instead",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "requester_id",
+              "in": "body",
+              "wire": null,
+              "description": "Requester id. Supply this, or supply phone together with name",
+              "required": false,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "subject",
+              "in": "body",
+              "wire": null,
+              "description": "Ticket subject",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "description",
+              "in": "body",
+              "wire": null,
+              "description": "Ticket description; HTML or long text",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "status",
+              "in": "body",
+              "wire": null,
+              "description": "Ticket status: 2 open, 3 pending, 4 resolved, 5 closed",
+              "required": true,
+              "schema": {
+                "default": 2,
+                "enum": [
+                  2,
+                  3,
+                  4,
+                  5
+                ],
+                "type": "integer"
+              }
+            },
+            {
+              "name": "priority",
+              "in": "body",
+              "wire": null,
+              "description": "Ticket priority: 1 low, 2 medium, 3 high, 4 urgent",
+              "required": true,
+              "schema": {
+                "default": 2,
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  4
+                ],
+                "type": "integer"
+              }
+            },
+            {
+              "name": "source",
+              "in": "body",
+              "wire": null,
+              "description": "Channel the ticket came in on",
+              "required": false,
+              "schema": {
+                "default": 3,
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  7,
+                  8,
+                  9,
+                  10
+                ],
+                "type": "integer"
+              }
+            },
+            {
+              "name": "responder_id",
+              "in": "body",
+              "wire": null,
+              "description": "Responding agent id",
+              "required": false,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "type",
+              "in": "body",
+              "wire": null,
+              "description": "Query type",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "email_config_id",
+              "in": "body",
+              "wire": null,
+              "description": "Email config used for this ticket",
+              "required": false,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "group_id",
+              "in": "body",
+              "wire": null,
+              "description": "Group the ticket is assigned to",
+              "required": false,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "product_id",
+              "in": "body",
+              "wire": null,
+              "description": "Associated product",
+              "required": false,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "tags",
+              "in": "body",
+              "wire": null,
+              "description": "Ticket tags",
+              "required": false,
+              "schema": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            {
+              "name": "cc_emails",
+              "in": "body",
+              "wire": null,
+              "description": "Addresses to copy on the ticket",
+              "required": false,
+              "schema": {
+                "items": {
+                  "format": "email",
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            {
+              "name": "custom_fields",
+              "in": "body",
+              "wire": null,
+              "description": "Custom ticket field data",
+              "required": false,
+              "schema": {
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "integer"
+                  ]
+                },
+                "type": "object"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [],
+          "hosts": [
+            "{domain}"
+          ],
+          "flux": "op freshdesk-ticket-create(phone: String, name: String, requester_id: Number, subject: String, description: String, status: Number, priority: Number, source: Number, responder_id: Number, type: String, email_config_id: Number, group_id: Number, product_id: Number, tags: List<String>, cc_emails: List<String>, custom_fields: Any) -> Any\n  description \"Create a ticket. The requester must be identified either by requester_id, or by phone together with name — Freshdesk states this only in prose and its required flags do not capture it\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/tickets\")\n  $content_type = \"application/json\"\n  $payload = { cc_emails: $cc_emails, custom_fields: $custom_fields, description: $description, email_config_id: $email_config_id, group_id: $group_id, name: $name, phone: $phone, priority: $priority, product_id: $product_id, requester_id: $requester_id, responder_id: $responder_id, source: $source, status: $status, subject: $subject, tags: $tags, type: $type }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "no-credential",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "freshdesk-ticket-update",
+          "provider": "freshdesk",
+          "description": "Update a ticket's fields",
+          "risk": "medium",
+          "idempotency": "idempotent",
+          "method": "PUT",
+          "path": "/tickets/{id}",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "Id of the ticket to update",
+              "required": true,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "subject",
+              "in": "body",
+              "wire": null,
+              "description": "Ticket subject",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "description",
+              "in": "body",
+              "wire": null,
+              "description": "Ticket description",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "status",
+              "in": "body",
+              "wire": null,
+              "description": "Ticket status: 2 open, 3 pending, 4 resolved, 5 closed",
+              "required": false,
+              "schema": {
+                "enum": [
+                  2,
+                  3,
+                  4,
+                  5
+                ],
+                "type": "integer"
+              }
+            },
+            {
+              "name": "priority",
+              "in": "body",
+              "wire": null,
+              "description": "Ticket priority: 1 low, 2 medium, 3 high, 4 urgent",
+              "required": false,
+              "schema": {
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  4
+                ],
+                "type": "integer"
+              }
+            },
+            {
+              "name": "requester_id",
+              "in": "body",
+              "wire": null,
+              "description": "Requester id",
+              "required": false,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "responder_id",
+              "in": "body",
+              "wire": null,
+              "description": "Responding agent id",
+              "required": false,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "name",
+              "in": "body",
+              "wire": null,
+              "description": "Requester name",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "phone",
+              "in": "body",
+              "wire": null,
+              "description": "Requester phone",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "email",
+              "in": "body",
+              "wire": null,
+              "description": "Requester email",
+              "required": false,
+              "schema": {
+                "format": "email",
+                "type": "string"
+              }
+            },
+            {
+              "name": "type",
+              "in": "body",
+              "wire": null,
+              "description": "Query type",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "email_config_id",
+              "in": "body",
+              "wire": null,
+              "description": "Email config used for this ticket",
+              "required": false,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "group_id",
+              "in": "body",
+              "wire": null,
+              "description": "Group the ticket is assigned to",
+              "required": false,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "product_id",
+              "in": "body",
+              "wire": null,
+              "description": "Associated product",
+              "required": false,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "tags",
+              "in": "body",
+              "wire": null,
+              "description": "Ticket tags",
+              "required": false,
+              "schema": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            {
+              "name": "custom_fields",
+              "in": "body",
+              "wire": null,
+              "description": "Custom ticket field data",
+              "required": false,
+              "schema": {
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "integer"
+                  ]
+                },
+                "type": "object"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [],
+          "hosts": [
+            "{domain}"
+          ],
+          "flux": "op freshdesk-ticket-update(id: Number, subject: String, description: String, status: Number, priority: Number, requester_id: Number, responder_id: Number, name: String, phone: String, email: String, type: String, email_config_id: Number, group_id: Number, product_id: Number, tags: List<String>, custom_fields: Any) -> Any\n  description \"Update a ticket's fields\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/tickets/{id}\")\n  $content_type = \"application/json\"\n  $payload = { custom_fields: $custom_fields, description: $description, email: $email, email_config_id: $email_config_id, group_id: $group_id, name: $name, phone: $phone, priority: $priority, product_id: $product_id, requester_id: $requester_id, responder_id: $responder_id, status: $status, subject: $subject, tags: $tags, type: $type }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "no-credential",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "freshdesk-ticket-note-add",
+          "provider": "freshdesk",
+          "description": "Add a note to a ticket; the note is private unless explicitly made public",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/tickets/{id}/notes",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "Id of the ticket",
+              "required": true,
+              "schema": {
+                "type": "integer"
+              }
+            },
+            {
+              "name": "body",
+              "in": "body",
+              "wire": null,
+              "description": "Note body",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "private",
+              "in": "body",
+              "wire": null,
+              "description": "Whether the note is hidden from end users",
+              "required": false,
+              "schema": {
+                "default": true,
+                "type": "boolean"
+              }
+            },
+            {
+              "name": "incoming",
+              "in": "body",
+              "wire": null,
+              "description": "Set true when the note originates from an external system",
+              "required": false,
+              "schema": {
+                "default": true,
+                "type": "boolean"
+              }
+            },
+            {
+              "name": "notify_emails",
+              "in": "body",
+              "wire": null,
+              "description": "Addresses to notify about the note",
+              "required": false,
+              "schema": {
+                "items": {
+                  "format": "email",
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [],
+          "hosts": [
+            "{domain}"
+          ],
+          "flux": "op freshdesk-ticket-note-add(id: Number, body: String, private: Bool, incoming: Bool, notify_emails: List<String>) -> Any\n  description \"Add a note to a ticket; the note is private unless explicitly made public\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/tickets/{id}/notes\")\n  $content_type = \"application/json\"\n  $payload = { body: $body, incoming: $incoming, notify_emails: $notify_emails, private: $private }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "no-credential",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "freshdesk-contact-list",
+          "provider": "freshdesk",
+          "description": "List and filter contacts, e.g. to resolve a caller before filing a ticket",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/contacts",
+          "parameters": [
+            {
+              "name": "phone",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by phone",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "email",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by email",
+              "required": false,
+              "schema": {
+                "format": "email",
+                "type": "string"
+              }
+            },
+            {
+              "name": "mobile",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by mobile number",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "company_id",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by company id",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "state",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by contact state",
+              "required": false,
+              "schema": {
+                "enum": [
+                  "blocked",
+                  "deleted",
+                  "unverified",
+                  "verified"
+                ],
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [],
+          "hosts": [
+            "{domain}"
+          ],
+          "flux": "op freshdesk-contact-list(phone: String, email: String, mobile: String, company_id: String, state: String) -> Any\n  description \"List and filter contacts, e.g. to resolve a caller before filing a ticket\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/contacts\")\n  $sep = \"?\"\n  when $phone\n    $url = fmt(\"{url}{sep}phone={phone}\")\n    $sep = \"&\"\n  when $email\n    $url = fmt(\"{url}{sep}email={email}\")\n    $sep = \"&\"\n  when $mobile\n    $url = fmt(\"{url}{sep}mobile={mobile}\")\n    $sep = \"&\"\n  when $company_id\n    $url = fmt(\"{url}{sep}company_id={company_id}\")\n    $sep = \"&\"\n  when $state\n    $url = fmt(\"{url}{sep}state={state}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "no-credential",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "story": "C-30",
+                "summary": "Query parameters `phone`, `email`, `mobile`, `company_id`, `state` carry free-form text, and the generated Flux interpolates query values verbatim — flux registers no percent-encoding op and `http.request` has no structured `query` parameter. `&`, `#` and `+` corrupt the request, and a value such as `x&per_page=1` injects query parameters.",
+                "params": [
+                  "phone",
+                  "email",
+                  "mobile",
+                  "company_id",
+                  "state"
+                ]
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "freshdesk-contact-get",
+          "provider": "freshdesk",
+          "description": "Get one contact",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/contacts/{id}",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "The contact id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [],
+          "hosts": [
+            "{domain}"
+          ],
+          "flux": "op freshdesk-contact-get(id: String) -> Any\n  description \"Get one contact\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/contacts/{id}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "no-credential",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "freshdesk-contact-create",
+          "provider": "freshdesk",
+          "description": "Create a contact",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/contacts",
+          "parameters": [
+            {
+              "name": "name",
+              "in": "body",
+              "wire": null,
+              "description": "Contact name",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "email",
+              "in": "body",
+              "wire": null,
+              "description": "Contact email",
+              "required": false,
+              "schema": {
+                "format": "email",
+                "type": "string"
+              }
+            },
+            {
+              "name": "phone",
+              "in": "body",
+              "wire": null,
+              "description": "Contact phone number",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [],
+          "hosts": [
+            "{domain}"
+          ],
+          "flux": "op freshdesk-contact-create(name: String, email: String, phone: String) -> Any\n  description \"Create a contact\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{domain}/api/v2\"\n  $url = fmt(\"{base}/contacts\")\n  $content_type = \"application/json\"\n  $payload = { email: $email, name: $name, phone: $phone }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"POST\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "no-credential",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "`freshdesk` declares no credential for this operation, so the request goes out unauthenticated and the vendor answers 401. Fail-closed by choice: the connector's auth shape cannot yet be expressed without routing a live secret outside flux's secret gating.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "The base URL `https://{domain}/api/v2` carries the placeholder `{domain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "zendesk",
+      "vendor": "Zendesk",
+      "description": "Zendesk Support ticketing: search, read, update tickets and their comments",
+      "base_url": "https://{subdomain}.zendesk.com",
+      "hosts": [
+        "{subdomain}.zendesk.com"
+      ],
+      "auth": {
+        "schemes": [
+          "basic"
+        ],
+        "credentials": [
+          {
+            "name": "zendesk.api_token",
+            "scheme": {
+              "kind": "basic",
+              "name": null
+            },
+            "description": "Zendesk API token; the user half is the agent email with Zendesk's /token marker",
+            "env": [
+              "ZENDESK_API_TOKEN"
+            ],
+            "user_env": [
+              "ZENDESK_USER"
+            ],
+            "user_suffix": "/token",
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "zendesk.api_token"
+          ]
+        ]
+      },
+      "operation_count": 7,
+      "operations": [
+        {
+          "id": "zendesk-test",
+          "provider": "zendesk",
+          "description": "Verify credentials by fetching the authenticated Zendesk user",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v2/users/me.json",
+          "parameters": [],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "zendesk.api_token"
+            ]
+          ],
+          "hosts": [
+            "{subdomain}.zendesk.com"
+          ],
+          "flux": "op zendesk-test -> Any\n  description \"Verify credentials by fetching the authenticated Zendesk user\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{subdomain}.zendesk.com\"\n  $url = fmt(\"{base}/api/v2/users/me.json\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "story": "C-10",
+                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "The base URL `https://{subdomain}.zendesk.com` carries the placeholder `{subdomain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "zendesk-ticket-search",
+          "provider": "zendesk",
+          "description": "Search tickets with Zendesk search syntax, e.g. `type:ticket status:new`",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v2/search.json",
+          "parameters": [
+            {
+              "name": "query",
+              "in": "query",
+              "wire": null,
+              "description": "Zendesk search expression",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "wire": null,
+              "description": "Page number, 1-based",
+              "required": false,
+              "schema": {
+                "default": 1,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "per_page",
+              "in": "query",
+              "wire": null,
+              "description": "Results per page; Zendesk caps this at 100",
+              "required": false,
+              "schema": {
+                "default": 100,
+                "maximum": 100,
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "zendesk.api_token"
+            ]
+          ],
+          "hosts": [
+            "{subdomain}.zendesk.com"
+          ],
+          "flux": "op zendesk-ticket-search(query: String, page: Number, per_page: Number) -> Any\n  description \"Search tickets with Zendesk search syntax, e.g. `type:ticket status:new`\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{subdomain}.zendesk.com\"\n  $url = fmt(\"{base}/api/v2/search.json?query={query}\")\n  $sep = \"&\"\n  when $page\n    $url = fmt(\"{url}{sep}page={page}\")\n    $sep = \"&\"\n  when $per_page\n    $url = fmt(\"{url}{sep}per_page={per_page}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "story": "C-10",
+                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "story": "C-30",
+                "summary": "Query parameter `query` carries free-form text, and the generated Flux interpolates query values verbatim — flux registers no percent-encoding op and `http.request` has no structured `query` parameter. `&`, `#` and `+` corrupt the request, and a value such as `x&per_page=1` injects query parameters.",
+                "params": [
+                  "query"
+                ]
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "The base URL `https://{subdomain}.zendesk.com` carries the placeholder `{subdomain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "zendesk-ticket-show",
+          "provider": "zendesk",
+          "description": "Show one ticket",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v2/tickets/{ticket_id}.json",
+          "parameters": [
+            {
+              "name": "ticket_id",
+              "in": "path",
+              "wire": null,
+              "description": "The ticket id",
+              "required": true,
+              "schema": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "zendesk.api_token"
+            ]
+          ],
+          "hosts": [
+            "{subdomain}.zendesk.com"
+          ],
+          "flux": "op zendesk-ticket-show(ticket_id: Number) -> Any\n  description \"Show one ticket\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{subdomain}.zendesk.com\"\n  $url = fmt(\"{base}/api/v2/tickets/{ticket_id}.json\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "story": "C-10",
+                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "The base URL `https://{subdomain}.zendesk.com` carries the placeholder `{subdomain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "zendesk-ticket-comment-list",
+          "provider": "zendesk",
+          "description": "List a ticket's comments",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v2/tickets/{ticket_id}/comments.json",
+          "parameters": [
+            {
+              "name": "ticket_id",
+              "in": "path",
+              "wire": null,
+              "description": "The ticket id",
+              "required": true,
+              "schema": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "wire": null,
+              "description": "Page number, 1-based",
+              "required": false,
+              "schema": {
+                "default": 1,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "per_page",
+              "in": "query",
+              "wire": null,
+              "description": "Comments per page; Zendesk caps this at 100",
+              "required": false,
+              "schema": {
+                "default": 100,
+                "maximum": 100,
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "zendesk.api_token"
+            ]
+          ],
+          "hosts": [
+            "{subdomain}.zendesk.com"
+          ],
+          "flux": "op zendesk-ticket-comment-list(ticket_id: Number, page: Number, per_page: Number) -> Any\n  description \"List a ticket's comments\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{subdomain}.zendesk.com\"\n  $url = fmt(\"{base}/api/v2/tickets/{ticket_id}/comments.json\")\n  $sep = \"?\"\n  when $page\n    $url = fmt(\"{url}{sep}page={page}\")\n    $sep = \"&\"\n  when $per_page\n    $url = fmt(\"{url}{sep}per_page={per_page}\")\n  $response = http.request({ method: \"GET\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "story": "C-10",
+                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "The base URL `https://{subdomain}.zendesk.com` carries the placeholder `{subdomain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "zendesk-ticket-update",
+          "provider": "zendesk",
+          "description": "Safe-update selected ticket fields against the caller's updated_stamp; at least one of status, priority, assignee_id, group_id or type must be supplied",
+          "risk": "medium",
+          "idempotency": "conditional",
+          "method": "PUT",
+          "path": "/api/v2/tickets/{ticket_id}.json",
+          "parameters": [
+            {
+              "name": "ticket_id",
+              "in": "path",
+              "wire": null,
+              "description": "The ticket id",
+              "required": true,
+              "schema": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "updated_stamp",
+              "in": "body",
+              "wire": "ticket.updated_stamp",
+              "description": "Optimistic-concurrency stamp: Zendesk rejects the update if the ticket moved since this stamp",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "safe_update",
+              "in": "body",
+              "wire": "ticket.safe_update",
+              "description": "Constant `true` — not caller-supplied; it is what makes updated_stamp binding. Dropping it turns every write into a last-write-wins race",
+              "required": true,
+              "schema": {
+                "const": true,
+                "type": "boolean"
+              }
+            },
+            {
+              "name": "status",
+              "in": "body",
+              "wire": "ticket.status",
+              "description": "The ticket's status",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "priority",
+              "in": "body",
+              "wire": "ticket.priority",
+              "description": "The ticket's priority",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "assignee_id",
+              "in": "body",
+              "wire": "ticket.assignee_id",
+              "description": "The agent the ticket is assigned to",
+              "required": false,
+              "schema": {
+                "format": "uint64",
+                "type": "integer"
+              }
+            },
+            {
+              "name": "group_id",
+              "in": "body",
+              "wire": "ticket.group_id",
+              "description": "The group the ticket belongs to",
+              "required": false,
+              "schema": {
+                "format": "uint64",
+                "type": "integer"
+              }
+            },
+            {
+              "name": "type",
+              "in": "body",
+              "wire": "ticket.type",
+              "description": "The ticket's type",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "zendesk.api_token"
+            ]
+          ],
+          "hosts": [
+            "{subdomain}.zendesk.com"
+          ],
+          "flux": "op zendesk-ticket-update(ticket_id: Number, updated_stamp: String, status: String, priority: String, assignee_id: Number, group_id: Number, type: String) -> Any\n  description \"Safe-update selected ticket fields against the caller's updated_stamp; at least one of status, priority, assignee_id, group_id or type must be supplied\"\n  risk \"medium\"\n  idempotency \"conditional\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{subdomain}.zendesk.com\"\n  $url = fmt(\"{base}/api/v2/tickets/{ticket_id}.json\")\n  $content_type = \"application/json\"\n  $safe_update = true\n  $payload = { ticket: { assignee_id: $assignee_id, group_id: $group_id, priority: $priority, safe_update: $safe_update, status: $status, type: $type, updated_stamp: $updated_stamp } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "story": "C-10",
+                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "The base URL `https://{subdomain}.zendesk.com` carries the placeholder `{subdomain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "zendesk-ticket-comment-add",
+          "provider": "zendesk",
+          "description": "Add a comment to a ticket; the comment is an internal note unless public is explicitly true",
+          "risk": "medium",
+          "idempotency": "conditional",
+          "method": "PUT",
+          "path": "/api/v2/tickets/{ticket_id}.json",
+          "parameters": [
+            {
+              "name": "ticket_id",
+              "in": "path",
+              "wire": null,
+              "description": "The ticket id",
+              "required": true,
+              "schema": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "updated_stamp",
+              "in": "body",
+              "wire": "ticket.updated_stamp",
+              "description": "Optimistic-concurrency stamp",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "safe_update",
+              "in": "body",
+              "wire": "ticket.safe_update",
+              "description": "Constant `true` — not caller-supplied",
+              "required": true,
+              "schema": {
+                "const": true,
+                "type": "boolean"
+              }
+            },
+            {
+              "name": "body",
+              "in": "body",
+              "wire": "ticket.comment.body",
+              "description": "The comment text; must not be blank",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "public",
+              "in": "body",
+              "wire": "ticket.comment.public",
+              "description": "False (an internal note) unless explicitly set true",
+              "required": false,
+              "schema": {
+                "default": false,
+                "type": "boolean"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "zendesk.api_token"
+            ]
+          ],
+          "hosts": [
+            "{subdomain}.zendesk.com"
+          ],
+          "flux": "op zendesk-ticket-comment-add(ticket_id: Number, updated_stamp: String, body: String, public: Bool) -> Any\n  description \"Add a comment to a ticket; the comment is an internal note unless public is explicitly true\"\n  risk \"medium\"\n  idempotency \"conditional\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{subdomain}.zendesk.com\"\n  $url = fmt(\"{base}/api/v2/tickets/{ticket_id}.json\")\n  $content_type = \"application/json\"\n  $safe_update = true\n  $payload = { ticket: { comment: { body: $body, public: $public }, safe_update: $safe_update, updated_stamp: $updated_stamp } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "story": "C-10",
+                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "The base URL `https://{subdomain}.zendesk.com` carries the placeholder `{subdomain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "zendesk-ticket-tag-add",
+          "provider": "zendesk",
+          "description": "Add tags to a ticket without replacing the tags it already has",
+          "risk": "medium",
+          "idempotency": "conditional",
+          "method": "PUT",
+          "path": "/api/v2/tickets/{ticket_id}.json",
+          "parameters": [
+            {
+              "name": "ticket_id",
+              "in": "path",
+              "wire": null,
+              "description": "The ticket id",
+              "required": true,
+              "schema": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "updated_stamp",
+              "in": "body",
+              "wire": "ticket.updated_stamp",
+              "description": "Optimistic-concurrency stamp",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "safe_update",
+              "in": "body",
+              "wire": "ticket.safe_update",
+              "description": "Constant `true` — not caller-supplied",
+              "required": true,
+              "schema": {
+                "const": true,
+                "type": "boolean"
+              }
+            },
+            {
+              "name": "tags",
+              "in": "body",
+              "wire": "ticket.additional_tags",
+              "description": "Tags to add; additive, so existing tags survive. Must be non-empty with no blank entries",
+              "required": true,
+              "schema": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            }
+          ],
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "zendesk.api_token"
+            ]
+          ],
+          "hosts": [
+            "{subdomain}.zendesk.com"
+          ],
+          "flux": "op zendesk-ticket-tag-add(ticket_id: Number, updated_stamp: String, tags: List<String>) -> Any\n  description \"Add tags to a ticket without replacing the tags it already has\"\n  risk \"medium\"\n  idempotency \"conditional\"\n  effects [\"network\"]\n  expose true\n\n  $base = \"https://{subdomain}.zendesk.com\"\n  $url = fmt(\"{base}/api/v2/tickets/{ticket_id}.json\")\n  $content_type = \"application/json\"\n  $safe_update = true\n  $payload = { ticket: { additional_tags: $tags, safe_update: $safe_update, updated_stamp: $updated_stamp } }\n  $response = http.request({ body: $payload, headers: { \"content-type\": $content_type }, method: \"PUT\", url: $url })\n  return $response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "story": "C-10",
+                "summary": "The operation names the credential it needs, but the generated Flux does not yet attach it to the request: flux's `{\"$secret\": \"ENV\"}` marker is a whole-value replacement and can compose neither a `Bearer ` prefix nor a base64-joined Basic pair. No provider can make a live call until the auth seam lands in flux.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "story": "C-17",
+                "summary": "The base URL `https://{subdomain}.zendesk.com` carries the placeholder `{subdomain}`, and nothing yet declares which operator setting resolves it, so the emitted URL is not a URL. The tenant is the operator's to choose; substituting one here would invent it.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

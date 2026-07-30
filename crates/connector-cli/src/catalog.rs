@@ -137,15 +137,8 @@ fn entry(connector: &Connector, operation: &Operation, host: &str) -> String {
 /// Flattening is the thing to avoid: babelforce's `accessId` + `accessToken` travel **together** on
 /// one request and are an alternative to OAuth2, so a flat list of three names would tell a caller
 /// that any one of them authenticates, which is false in both directions.
-///
-/// Resolved through [`Connector::effective_auth`], never by reading `Operation::auth` directly:
-/// an operation that declares nothing inherits the connector default, and one that declares an
-/// explicit empty list inherits nothing.
 fn credentials(connector: &Connector, operation: &Operation) -> String {
-    let mechanisms = connector.effective_auth(operation);
-    if mechanisms.is_empty() {
-        return "&[]".to_string();
-    }
+    let mechanisms = credential_mechanisms(connector, operation);
     let rendered: Vec<String> = mechanisms
         .iter()
         .map(|mechanism| {
@@ -156,6 +149,26 @@ fn credentials(connector: &Connector, operation: &Operation) -> String {
     format!("&[{}]", rendered.join(", "))
 }
 
+/// The operation's credentials as alternatives (OR) of mechanisms (AND), as plain data.
+///
+/// The one walk both catalogue backends share: this module quotes it into Rust literals and
+/// [`crate::site`] serializes it into JSON, so the crate cannot ship a `catalog.json` that
+/// disagrees with `crates/catalog` about what authenticates an operation.
+///
+/// Resolved through [`Connector::effective_auth`], never by reading `Operation::auth` directly: an
+/// operation that declares nothing inherits the connector default, and one that declares an
+/// explicit empty list inherits nothing.
+pub(crate) fn credential_mechanisms<'a>(
+    connector: &'a Connector,
+    operation: &'a Operation,
+) -> Vec<Vec<&'a str>> {
+    connector
+        .effective_auth(operation)
+        .iter()
+        .map(|mechanism| mechanism.iter().map(String::as_str).collect())
+        .collect()
+}
+
 /// The host a call reaches, taken from the connector's base URL with its templating intact.
 ///
 /// `https://{subdomain}.zendesk.com` yields `{subdomain}.zendesk.com`: the tenant is the operator's
@@ -164,7 +177,10 @@ fn credentials(connector: &Connector, operation: &Operation) -> String {
 ///
 /// C-10 replaces this with the manifest's real `http_hosts` allowlist, which is why the catalog
 /// field is a slice: today every operation reaches exactly the connector's own host.
-fn host_of(base_url: &str) -> Result<&str> {
+///
+/// Shared with [`crate::site`] so that `catalog.json` and `crates/catalog` name the same host — two
+/// answers to "which host does this reach?" would be one answer too many.
+pub(crate) fn host_of(base_url: &str) -> Result<&str> {
     let after_scheme = base_url
         .split_once("://")
         .map_or(base_url, |(_scheme, rest)| rest);

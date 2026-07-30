@@ -15,6 +15,7 @@ use anyhow::{Context, Result};
 use crate::artifact;
 use crate::discovery::{self, Provider};
 use crate::seam::{self, ProviderInputs};
+use crate::site::{self, ProviderEntry};
 use crate::workspace::Workspace;
 
 /// What writing a planned artifact would do to the tree.
@@ -78,15 +79,40 @@ pub fn plan(workspace: &Workspace, only: Option<&str>) -> Result<Plan> {
     let providers = discovery::discover(workspace, only)?;
 
     let mut artifacts = Vec::new();
+    let mut entries = Vec::new();
     for provider in &providers {
-        artifacts.extend(compile(workspace, provider)?);
+        let compiled = compile(workspace, provider)?;
+        artifacts.extend(compiled.artifacts);
+        entries.push(compiled.site);
     }
+
+    // The site's catalogue covers every provider at once, so it is a function of a **full** run
+    // only. A `--provider zendesk` build would have to drop the other two to write it honestly, so
+    // it leaves the committed document alone instead — neither rewritten nor reported stale. This
+    // is the same reasoning `crates/catalog/src/generated.rs` records for keeping its provider
+    // index by hand, reached from the other direction.
+    if only.is_none() {
+        artifacts.push(planned(
+            workspace.site_catalog_path(),
+            site::document(entries)?,
+        )?);
+    }
+
     artifacts.sort_by(|a, b| a.path.cmp(&b.path));
 
     Ok(Plan {
         providers: providers.into_iter().map(|p| p.name).collect(),
         artifacts,
     })
+}
+
+/// What compiling one provider yields: its own artifacts, and its contribution to the catalogue
+/// the whole run shares.
+struct Compiled {
+    /// The files this provider alone owns.
+    artifacts: Vec<PlannedArtifact>,
+    /// This provider's entry in `site/catalog.json`, which only a full run assembles (C-42).
+    site: ProviderEntry,
 }
 
 /// One provider's artifacts, compiled and compared.
@@ -96,12 +122,17 @@ pub fn plan(workspace: &Workspace, only: Option<&str>) -> Result<Plan> {
 /// the same plan on purpose. Every property the pipeline already holds then covers them for free:
 /// nothing is written until everything compiles, an unchanged catalog is not rewritten, and
 /// `flux-connectors diff` reports a stale rendering exactly as it reports a stale module.
-fn compile(workspace: &Workspace, provider: &Provider) -> Result<Vec<PlannedArtifact>> {
+///
+/// The site entry rides along rather than being recomputed: it needs the same `Connector` and the
+/// same renderings, and compiling twice is how a document comes to describe an operation the module
+/// no longer carries.
+fn compile(workspace: &Workspace, provider: &Provider) -> Result<Compiled> {
     let context = || format!("provider `{}`", provider.name);
 
     let inputs = ProviderInputs::read(provider).with_context(context)?;
     let connector = seam::load(&inputs).with_context(context)?;
     let emitted = seam::emit(&connector).with_context(context)?;
+    let site = site::provider_entry(&connector, &emitted.operations).with_context(context)?;
 
     let mut artifacts = vec![
         planned(workspace.module_path(&provider.name), emitted.module)?,
@@ -117,7 +148,7 @@ fn compile(workspace: &Workspace, provider: &Provider) -> Result<Vec<PlannedArti
             rendering.source,
         )?);
     }
-    Ok(artifacts)
+    Ok(Compiled { artifacts, site })
 }
 
 fn planned(path: PathBuf, contents: String) -> Result<PlannedArtifact> {
