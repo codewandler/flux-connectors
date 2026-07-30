@@ -1,0 +1,15 @@
+# Rust build output.
+/target/
+**/*.rs.bk
+
+# Local editor / OS noise.
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Local-only artifacts. Generated `.flux` modules and connector manifests are *committed and
+# reviewed* (see AGENTS.md) — only scratch output and local overrides are ignored here.
+/.env
+/scratch/
+*.local.toml
