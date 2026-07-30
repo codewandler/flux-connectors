@@ -19,6 +19,7 @@ pub(crate) mod hubspot;
 pub(crate) mod intercom;
 pub(crate) mod jira;
 pub(crate) mod openai;
+pub(crate) mod openrouter;
 pub(crate) mod sentry;
 pub(crate) mod shopify;
 pub(crate) mod slack;
@@ -39,6 +40,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &intercom::PROVIDER,
     &jira::PROVIDER,
     &openai::PROVIDER,
+    &openrouter::PROVIDER,
     &sentry::PROVIDER,
     &shopify::PROVIDER,
     &slack::PROVIDER,

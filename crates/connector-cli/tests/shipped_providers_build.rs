@@ -549,3 +549,110 @@ fn airtable_publishes_one_host_and_no_credential_in_its_module() {
          vacuously"
     );
 }
+/// **OpenRouter's egress host is exactly `openrouter.ai`, and its credential never leaves the manifest
+/// as anything but a name** (C-76).
+///
+/// The same pair of claims `intercom_publishes_one_host_and_no_credential_in_its_module` makes, and
+/// made here for the same reason: both are properties of what the *pipeline* derives rather than of
+/// what the provider file declares, so the IR-level test in
+/// `crates/connector-flux/tests/openrouter_connector.rs` cannot reach either of them.
+///
+/// This one carries the check one artifact further than intercom's, to the **public catalogue**.
+/// `web/public/catalog.json` is the one generated document that leaves the repository, and it is a
+/// function of a *full* run rather than a provider-scoped one (`pipeline::plan`'s note), so it is
+/// planned that way here. A credential resolved while assembling it would be published to the open
+/// web, which is the worst destination available for the failure this invariant exists to prevent —
+/// and `openrouter.ai` is a plausible place for someone to widen a host, since OpenRouter deliberately
+/// fans requests out to a few hundred upstream vendors and none of those hosts belongs in this
+/// connector's allow-list.
+#[test]
+fn openrouter_publishes_one_host_and_no_credential_anywhere() {
+    const SECRET_ENV: &str = "OPENROUTER_API_KEY";
+    const BASE_URL: &str = "https://openrouter.ai";
+
+    let connector = load("openrouter");
+    let module = planned("openrouter", "openrouter.flux");
+    let manifest = planned("openrouter", "openrouter.connector.toml");
+
+    assert_eq!(
+        connector.base_url, BASE_URL,
+        "the base URL is what the host is derived from, so widening it widens the allow-list"
+    );
+    assert!(
+        module.contains(&format!(r#"$base = "{BASE_URL}""#)),
+        "every OpenRouter request must address `openrouter.ai`:\n{module}"
+    );
+    assert!(
+        !module.contains('*') && !manifest.contains('*'),
+        "no OpenRouter artifact may carry a wildcard host:\n{module}\n{manifest}"
+    );
+    assert_eq!(
+        module.matches("https://").count(),
+        connector.operations.len(),
+        "each operation binds the one base URL and no other absolute URL:\n{module}"
+    );
+
+    // Not the value, which does not exist in this repository, and not even the variable's name: the
+    // bearer is applied by the host at the `$auth` seam (`docs/designs/auth-seam.md`), so
+    // `OPENROUTER_API_KEY` belongs in a credential *reference* and must never appear in Flux a model
+    // can read.
+    assert!(
+        !module.contains(SECRET_ENV) && !module.contains("api_key"),
+        "connectors/openrouter.flux names a credential; generated Flux must name nothing:\n{module}"
+    );
+    // OpenRouter's keys are `sk-or-`-prefixed, so the shape is checked as well as the name.
+    assert!(
+        !module.contains(SECRET_ENV_VALUE_SHAPE) && !manifest.contains(SECRET_ENV_VALUE_SHAPE),
+        "an OpenRouter artifact embeds something shaped like a key:\n{module}\n{manifest}"
+    );
+    assert!(
+        connector
+            .auth_method("openrouter.api_key")
+            .is_some_and(|method| method.env == [SECRET_ENV]),
+        "the connector must reference `{SECRET_ENV}` by name, or the absence checks above pass \
+         vacuously"
+    );
+
+    // The public catalogue, which only a full run assembles — and the artifact that leaves the
+    // repository, so its entry is read structurally rather than scanned. A text scan for `*` would
+    // fail on another provider's prose: Jira's comment description quotes wiki markup (`*bold*`).
+    let full = pipeline::plan(&workspace(), None).expect("the whole repository compiles");
+    let catalogue = full
+        .artifacts
+        .iter()
+        .find(|artifact| artifact.path.ends_with(PathBuf::from("catalog.json")))
+        .expect("a full build plans the public catalogue");
+    let document: serde_json::Value =
+        serde_json::from_str(&catalogue.contents).expect("the public catalogue is JSON");
+    let entry = document["providers"]
+        .as_array()
+        .expect("the catalogue lists providers")
+        .iter()
+        .find(|provider| provider["id"] == "openrouter")
+        .expect("the public catalogue describes openrouter, or the checks below pass vacuously");
+
+    let expected_hosts = serde_json::json!(["openrouter.ai"]);
+    assert_eq!(
+        entry["hosts"], expected_hosts,
+        "the published host list is not exactly what `base_url` derives"
+    );
+    for operation in entry["operations"]
+        .as_array()
+        .expect("the entry lists operations")
+    {
+        assert_eq!(
+            operation["hosts"], expected_hosts,
+            "operation `{}` publishes a wider egress surface than the connector's",
+            operation["id"]
+        );
+    }
+    assert!(
+        !catalogue.contents.contains(SECRET_ENV_VALUE_SHAPE),
+        "the public catalogue carries something shaped like an OpenRouter key, and this document is \
+         the one generated artifact that leaves the repository"
+    );
+}
+
+/// The prefix every OpenRouter API key carries (`sk-or-v1-…`). Checked for by shape as well as by
+/// name, because a leaked key would not be spelled `OPENROUTER_API_KEY`.
+const SECRET_ENV_VALUE_SHAPE: &str = "sk-or-";

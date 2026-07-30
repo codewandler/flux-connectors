@@ -1,0 +1,415 @@
+# OpenRouter — the cheapest connector in the fleet, because it is largely `providers/openai.toml`.
+#
+# OpenRouter is a routing layer in front of several hundred models from many upstream vendors, and it
+# normalizes their request and response shapes to the OpenAI Chat Completions API. So this file is
+# deliberately a *transfer* of C-51's rather than a fresh authoring, and the transfer record is the
+# point — the next OpenAI-compatible vendor should be a copy of one of these two files, not a
+# rediscovery. What carried over and what did not is set out in §1 below.
+#
+# ---------------------------------------------------------------------------------------------
+# WHY THIS IS NOT A `[spec]` POINTER, even though a usable document exists.
+# ---------------------------------------------------------------------------------------------
+#
+# OpenRouter publishes a complete OpenAPI 3 description at `https://openrouter.ai/openapi.json`
+# (~1.6 MB, `info.version` 1.0.0), and **every claim in this file was checked against it**: the paths
+# and methods below, the `in: query` location of the one parameter that excluded an operation, the two
+# `in: path` parameters of the model-endpoints read, the root-level `apiKey` bearer security scheme,
+# and the `required` list of each request body. That is a stronger starting point than zendesk or
+# freshdesk had, and the same position OpenAI is in.
+#
+# The file is still inline for exactly the reason `providers/openai.toml` gives: **C-4's ingest and
+# C-14's fetch do not exist**, so there is nothing to vendor under `specs/` and nothing to overlay.
+# When they land, this file becomes a `[spec]` pointer at that URL plus a `[[patch.operations]]`
+# selection, and the four operations below are the selection to reproduce, by method and path:
+#
+#   GET  /api/v1/models                                 GET  /api/v1/models/{author}/{slug}/endpoints
+#   POST /api/v1/chat/completions                        GET  /api/v1/credits
+#
+# Waiting is worth more here than for most vendors: the document describes **68 paths**, including
+# workspace administration, budgets, organization members, API-key minting, guardrails, files, video
+# and image generation. An opt-in selection is what keeps that from becoming 68-plus LLM tools, most of
+# them destructive account admin. Until ingest exists, drift is undetectable by machine
+# (`docs/designs/provider-operation-inventory.md` §6.7), exactly as for the other hand-authored
+# providers.
+#
+# ---------------------------------------------------------------------------------------------
+# §1. THE TRANSFER RECORD — what came from `providers/openai.toml` unchanged, and what did not.
+# ---------------------------------------------------------------------------------------------
+#
+# Carried over unchanged:
+#
+# - The whole auth model. One bearer credential over one environment variable, no user half, no
+#   `[auth.oauth2]`, declared once in `default_auth` and inherited by every operation. OpenRouter's
+#   document declares `apiKey` (`type: http`, `scheme: bearer`) once at the root and no operation
+#   overrides it — the same shape OpenAI's does.
+# - The selection *principle*: JSON in, JSON out, no query string. See §2.
+# - The body-field discipline: required fields only. See §3.
+# - The risk and idempotency reasoning for a per-token-billed `POST`: `medium`, `non_idempotent`,
+#   for the reasons C-51 wrote out and this file does not restate.
+# - `messages` as `array` of `object`, which `types.rs` maps to `List<Any>` — honestly so, since Flux
+#   has no record type and `Any` still accepts every message shape the vendor accepts.
+# - The path-parameter safety argument, and its shape: a path value is interpolated as verbatim as a
+#   query value is, and is safe here only because the charset is safe. See the note on
+#   `openrouter-model-endpoints-list`.
+#
+# Differed, and each difference is a place a copy-paste would have been wrong:
+#
+# 1. **`base_url` is the site, and every path carries `/api/v1`** — not OpenAI's bare `/v1`. The
+#    vendor's `servers[0].url` is `https://openrouter.ai/api/v1`; the acceptance criterion for this
+#    story fixes `base_url = "https://openrouter.ai"`, so the prefix lives in each `path` instead.
+# 2. **The token-budget field name is `max_completion_tokens`, and NOT the `max_tokens` C-76's
+#    acceptance text names.** This is the one deliberate departure from the story and it is a
+#    correction rather than a preference — see §4, which quotes the vendor.
+# 3. **`model` is optional at OpenRouter and required here.** OpenRouter's `ChatRequest.required` is
+#    `["messages"]` and nothing else: a request naming no model is routed to whatever default the
+#    account has configured in the dashboard. See §4.
+# 4. **There is no `openrouter-model-get`.** OpenRouter has no per-model read at the OpenAI path shape
+#    (`/api/v1/models/{model}`); the closest read is `/api/v1/models/{author}/{slug}/endpoints`, which
+#    splits the model id at its `/` into two path parameters. That split is why the operation is
+#    emittable at all — see its own note.
+# 5. **The verification operation is `openrouter-credits-get`, not the models list.** OpenAI's
+#    `GET /v1/models` doubles as its key check; OpenRouter's models list is a public catalogue whose
+#    documented failures are 400/403/500 with no 401, while `/api/v1/credits` is account-scoped and
+#    documents 401 and 403. A credential check has to be an operation that can actually fail on a bad
+#    credential.
+# 6. **The excluded-header set is different**: OpenRouter's are the two optional attribution headers
+#    and a metadata header, not OpenAI's organization/project scoping. See §5.
+#
+# Available and verified, but deliberately not selected here: `POST /api/v1/embeddings`, whose
+# required body is `["input", "model"]` — a direct transfer of `openai-embeddings-create`, down to the
+# scalar-or-array `input` union. C-76 curates "roughly three" operations and already carries four; the
+# embeddings transfer is a follow-up that needs no new capability from this repository, which is
+# exactly the claim this section exists to make.
+
+id = "openrouter"
+vendor = "OpenRouter"
+
+# One tenant-independent host, so like OpenAI's and unlike zendesk's `{subdomain}` there is **no
+# template variable here and nothing to bind**. C-10's `http_hosts` allowlist derives from this one
+# value and is therefore exactly `openrouter.ai`, never widened to a pattern;
+# `crates/connector-flux/tests/openrouter_connector.rs` asserts that each emitted module names exactly
+# one absolute URL and that it is this one.
+#
+# The vendor's own `servers[0].url` is `https://openrouter.ai/api/v1`. The version prefix is carried on
+# each operation's `path` instead, so that the host a reviewer checks and the host the allowlist
+# derives are the same short string.
+base_url = "https://openrouter.ai"
+
+description = "OpenRouter model router: list models and their endpoints, create chat completions, and read credit balance"
+
+# Every operation authenticates the same way: one bearer credential, requirement-set shape `single`.
+# OpenRouter's document declares its security scheme once at the root and no operation overrides it.
+default_auth = [{ credentials = ["openrouter.api_key"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "openrouter.api_key"
+scheme = "bearer"
+# The sole secret, and the whole credential — `Authorization: Bearer <OPENROUTER_API_KEY>`. Gated and
+# registered with flux's redactor by the host; never read here. No `user_env`, no `user_suffix`, no
+# `[auth.oauth2]`: the key is minted in OpenRouter's dashboard and supplied through the environment,
+# so flux runs no grant for it.
+#
+# OpenRouter does publish an OAuth2 PKCE flow (`/api/v1/auth/keys`) for applications that mint a key on
+# a user's behalf. That is effectful acquisition — C-21's, and the host's — and modelling it here would
+# put a grant into a description file. It is deliberately absent, not overlooked.
+#
+# An OpenRouter key is `sk-or-v1-` followed by a hex string. That prefix is named here, in a comment
+# that is not part of the IR, and **not** in the `description` below — a description is published to
+# the open web in `web/public/catalog.json`, and
+# `crates/connector-cli/tests/shipped_providers_build.rs` asserts that no OpenRouter artifact carries
+# anything shaped like a key. Naming the prefix in a published string would cost that check its
+# uniformity for no gain: the environment variable's name and the scheme already say everything an
+# operator needs.
+env = ["OPENROUTER_API_KEY"]
+description = "OpenRouter API key, sent as a bearer token"
+
+# ---------------------------------------------------------------------------------------------
+# NOT EXECUTABLE YET, for the same reason as every other provider in this repository.
+#
+# flux's `http.request` takes `{"$secret": "ENV"}` as a *whole-value* replacement, so it cannot produce
+# the string `Bearer ` followed by a secret (`docs/designs/auth-seam.md`). Bearer is the simplest scheme
+# there is and it is still out of reach: this connector is the catalogue's proof and the pipeline's, not
+# a working client. The `$auth` seam has to land in flux first.
+#
+# The generated Flux therefore carries no credential at all — not even the env var's name. That is
+# C-10's to add, and is deliberately absent rather than stubbed.
+# ---------------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------------
+# §2. WHY THERE IS NOT A SINGLE QUERY PARAMETER, and which operations that costs.
+# ---------------------------------------------------------------------------------------------
+#
+# Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim into a
+# `fmt` template and flux registers no URL-encoding op (C-30 is unimplemented,
+# `crates/connector-flux/src/op.rs`). `zendesk-ticket-search` is the standing demonstration AGENTS.md
+# lists under *Intentional gaps* — a value carrying `&` does not filter, it injects a parameter.
+#
+# For most providers in this fleet that criterion trims a selection. Here it **reshaped** it, and the
+# story's own third operation is the casualty:
+#
+# - `GET /api/v1/generation` is EXCLUDED, and cannot be included by any amount of care. Its generation
+#   id is `{"name": "id", "in": "query", "required": true}` in the vendor's document — the id is the
+#   *only* input the endpoint takes, and it takes it in the query string. There is no path-shaped
+#   spelling of this call to fall back on, so the operation is unemittable until C-30 lands rather than
+#   merely awkward. C-76's Acceptance names it as one of roughly three operations to ship; §1 note 5 and
+#   the story's Notes record the substitution.
+# - The 29 optional filters on `GET /api/v1/models` are EXCLUDED: `offset`, `limit`, `category`,
+#   `supported_parameters`, `output_modalities`, `input_modalities`, `sort`, `q`, `context`,
+#   `min_price`/`max_price` and the rest of the price, age and index bounds. Every one is `in: query`
+#   and every one is optional, so the operation is well-formed with none of them; a caller receives the
+#   whole catalogue and filters it itself. `q` is the worst of them and the most tempting — a free-text
+#   search value is precisely `zendesk-ticket-search`'s shape.
+# - Cursor and offset pagination as a quirk, for the same reason: `Pagination` is defined in terms of
+#   the query parameter that carries the page, so declaring it would be declaring a query parameter.
+#
+# The path surface, by contrast, is safe rather than merely untested — see the note on
+# `openrouter-model-endpoints-list`. That asymmetry is the whole selection principle here, and
+# `crates/connector-flux/tests/openrouter_connector.rs` asserts the absence in the strong form (zero
+# query parameters of any type) on the IR *and* on the emitted URL, checking every `$url` binding and
+# the `$sep` separator rather than only the first line. So it stays a property of the connector rather
+# than of this comment.
+#
+# ---------------------------------------------------------------------------------------------
+# §3. WHY EVERY BODY FIELD IS REQUIRED, and which fields that costs.
+# ---------------------------------------------------------------------------------------------
+#
+# THE EMITTER CANNOT OMIT AN OPTIONAL BODY FIELD. flux has no optional composite-op parameter — every
+# declared parameter is required at call time and "optional" means the caller may pass null
+# (`crates/connector-flux/src/op.rs`). For a **query** parameter the emitter compiles that into a
+# `when $x` guard, so null genuinely means "not sent". For a **body** field there is no guard:
+# `body_tree` places every declared field into the payload record unconditionally, so a
+# `required = false` body field the caller omits travels as an explicit `{"field": null}`. That is C-56.
+#
+# OpenRouter makes this worse than it is for a first-party vendor, and that is the reason to be strict
+# rather than optimistic: OpenRouter does not execute the request, it **forwards** it to whichever
+# upstream provider serves the chosen model. So `{"temperature": null}` is not evaluated against one
+# schema this repository could check, it is evaluated against a few hundred, none of which OpenRouter
+# controls and several of which reject a null where they accept an absent key. Sending it would be
+# plausible-but-unverified behaviour on a surface too large to verify, which AGENTS.md says to refuse:
+# *"a loud compile-time refusal is better than plausible but incorrect Flux"*.
+#
+# So the one body below declares **only fields that are always sent**. Deliberately left out for this
+# reason, and for this reason only — every one is `in` the vendor's `ChatRequest` and every one is
+# optional there: `temperature`, `top_p`, `top_k`, `top_a`, `min_p`, `seed`, `stop`,
+# `frequency_penalty`, `presence_penalty`, `repetition_penalty`, `logit_bias`, `logprobs`,
+# `top_logprobs`, `response_format`, `tools`, `tool_choice`, `parallel_tool_calls`, `reasoning`,
+# `reasoning_effort`, `prediction`, `modalities`, `user`, `metadata` and `prompt_cache_key`.
+#
+# Two OpenRouter-specific knobs are in that list and are worth naming separately, because they are the
+# features a caller would reach for this vendor *for*: `models` (a fallback list — try these in order)
+# and `provider` (routing preferences — which upstreams to allow, in what order, and whether to permit
+# a fallback). Both are objects or arrays and both are optional, so both wait for C-56. Closing that
+# gap — a `when`-guarded body field, mirroring what query parameters already get — unblocks all of them
+# at once; it is a `connector-flux` change, not a provider one.
+#
+# `stream` is excluded for an unrelated and permanent-looking reason: `http.request` returns one flat
+# string, so a streamed SSE response could not be consumed by generated Flux even if it arrived.
+#
+# ---------------------------------------------------------------------------------------------
+# §4. THE TWO NARROWINGS on the chat completion, and why each is a narrowing rather than a copy.
+# ---------------------------------------------------------------------------------------------
+#
+# OpenRouter's `ChatRequest.required` is `["messages"]`. Nothing else. Two fields are declared required
+# here anyway.
+#
+# **`max_completion_tokens`.** C-76's Acceptance says *"`max_tokens` is required, as C-51 made
+# `max_completion_tokens` required"*, and the reasoning it gives is right: an operation an LLM can call
+# that spends money must not be unbounded, and required also sidesteps C-56's null by construction.
+# The *field name* in that sentence is wrong for this vendor, and the vendor says so itself. Its
+# document describes the two fields as:
+#
+#     "max_tokens":            "Maximum tokens (deprecated, use max_completion_tokens).
+#                               Note: some providers enforce a minimum of 16."
+#     "max_completion_tokens": "Maximum tokens in completion"
+#
+# So `max_tokens` is deprecated at OpenRouter exactly as it is at OpenAI, and the story's premise —
+# that OpenRouter's OpenAI-compatible surface is the *legacy* shape and so wants the legacy name — does
+# not hold. Authoring against a field the vendor's own description marks deprecated would ship a
+# connector born on its way out, which is the specific mistake `providers/openai.toml` records
+# avoiding. The name therefore transfers from that file unchanged, which also makes the transfer in §1
+# cleaner than the story expected. `docs/stories/C-76-provider-openrouter.md` records the deviation.
+#
+# **`model`.** Optional at OpenRouter: a request naming none is routed to whatever default model the
+# account has configured in its dashboard. That is a reasonable convenience for a human at a terminal
+# and the wrong contract for a tool an LLM calls — the operation's cost, latency and capabilities would
+# be decided by out-of-band configuration this repository cannot see, and two callers of the same op id
+# would get different models. `required = true` makes the routing decision part of the call. It also
+# keeps the field out of C-56's null: OpenRouter reads a null `model` as "no model given", so an
+# optional declaration here would send that null on every unset call.
+#
+# ---------------------------------------------------------------------------------------------
+# §5. THE EXCLUDED HEADERS — the attribution pair, and why a `const` would not pin them.
+# ---------------------------------------------------------------------------------------------
+#
+# OpenRouter documents two optional app-attribution headers: `HTTP-Referer` (the site URL) and the
+# title header, which older documentation spells `X-Title` and current documentation spells
+# `X-OpenRouter-Title`. They place an application on OpenRouter's public leaderboards. Both are
+# optional, so every operation below is well-formed without them. The chat completion also accepts an
+# optional `X-OpenRouter-Metadata` header, which is likewise absent.
+#
+# None of them is declared, and in particular **none is declared as a caller-supplied parameter**.
+# `params.header` is documented as *"Request headers the caller supplies"* and is emitted as exactly
+# that; pinning such a param with a JSON Schema `const` — the trick that works for a constant *body*
+# field, `ticket.safe_update` in `providers/zendesk.toml` — does nothing here, because
+# `crates/connector-flux/src/op.rs` filters `constant(...)` out of the declared parameter list for
+# `body` params only. A `const`-pinned header therefore emits as
+#
+#   op openrouter-chat-completion(model: String, messages: List<Any>, http_referer: String, …) -> Any
+#     …
+#     $response = http.request({ headers: { http-referer: $http_referer }, … })
+#
+# — a required argument every caller must pass and any caller may set to anything, with the `const`
+# dropped. That is a caller-overridable parameter wearing a constant's clothes (C-52's finding), and a
+# *constant* is what an attribution header is. So C-76 declares nothing rather than smuggling one in.
+# [C-55](../docs/stories/C-55-constant-request-headers.md) is the story that closes it; when it lands,
+# this section becomes an `HTTP-Referer` and title-header declaration and
+# `crates/connector-flux/tests/openrouter_connector.rs` is the test to change deliberately.
+#
+# What is lost is only leaderboard attribution — no request below needs a header to succeed. The one
+# constant header the pipeline does send, `content-type: application/json`, is hard-coded in the
+# emitter (`JSON_MEDIA_TYPE`). The Authorization header is the host's business at the `$auth` seam and
+# must never travel through the parameter surface.
+#
+# ---------------------------------------------------------------------------------------------
+# Operations — 4, and ZERO query parameters between them. Op ids are hyphen-separated, not dotted:
+# flux-lang's `is_valid_decl_name` admits ASCII alphanumerics, `_` and `-` only, so
+# `op openrouter.models.list` is undeclarable (C-8, `crates/connector-flux/src/names.rs`). C-23 settles
+# the canonical rule.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "openrouter-models-list"
+method = "GET"
+path = "/api/v1/models"
+description = "List every model OpenRouter routes to, with its context length, modalities and per-token pricing"
+risk = "low"
+idempotency = "idempotent"
+# No parameters at all. The vendor declares 29, every one of them an optional query filter, and §2
+# excludes all 29 pending C-30. The unfiltered call returns the whole catalogue, which is the useful
+# form for a model choosing where to send work: pricing and context length are exactly what it needs
+# to choose, and OpenRouter's catalogue changes often enough that a hard-coded model id ages badly.
+#
+# This is NOT the credential-verification operation, unlike OpenAI's `GET /v1/models`. OpenRouter
+# documents 400, 403 and 500 for it and no 401 — it is a public catalogue — so a bad key would not
+# reliably fail here. `openrouter-credits-get` is the verification operation.
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "openrouter-model-endpoints-list"
+method = "GET"
+path = "/api/v1/models/{author}/{slug}/endpoints"
+description = "List the upstream provider endpoints serving one model, with each one's pricing, context length and quantization"
+risk = "low"
+idempotency = "idempotent"
+
+# SCHEMA GAP: a path parameter is interpolated as verbatim as a query parameter is, and `status.rs`
+# deliberately does **not** flag it — C-30 scopes its refusal to query values, and widening it here
+# would put the catalogue and the emitter out of step
+# (`crates/connector-cli/src/status.rs`, `only_query_parameters_are_examined_for_encoding`).
+#
+# It is safe for this operation, and not by luck. An OpenRouter model id is `<author>/<slug>`
+# (`openai/gpt-4`, `anthropic/claude-3.5-sonnet`, `meta-llama/llama-3.1-70b-instruct`), and the vendor
+# splits it into **two** path parameters at exactly that `/`. So the one character in a model id that
+# could change the shape of the URL is the one character that is never inside either value: each half
+# is drawn from `[a-z0-9.:_~-]` — verified against all 367 ids the vendor lists today, which
+# include a `:` (`deepseek/deepseek-r1:free`) and a `~`, and every one of which contains exactly
+# one `/`. All of those are already valid URL path characters. The charset is the entire load of
+# this argument, so it is stated from a survey rather than from the narrower guess it replaced.
+#
+# That split is also why this operation exists in place of an `openrouter-model-get`. Handed a single
+# `model` parameter the way `openai-model-get` is, an id containing `/` would silently traverse a path
+# segment — the case `providers/openai.toml` names as needing the encoding gap closed first. Here the
+# vendor's own path shape removes it.
+[[operations.params.path]]
+name = "author"
+description = "The model's author or organization, the part of a model id before the `/` — e.g. `openai`, `anthropic`, `meta-llama`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "slug"
+description = "The model slug, the part of a model id after the `/` — e.g. `gpt-4`, `claude-3.5-sonnet`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# ---------------------------------------------------------------------------------------------
+# The one cost-bearing operation.
+#
+# `POST`, billed per input and output token, and therefore `risk = "medium"` and
+# `idempotency = "non_idempotent"`. Neither value is decoration: flux's approval gate reads `risk`, so
+# a cost-bearing call declaring `low` would be waved through unattended, and a `POST` declaring itself
+# `idempotent` would make a `retry` around it turn one charge into three. `connector-flux`'s
+# `check_write_metadata` refuses both mistakes outright.
+#
+# `medium` rather than `high`, following C-51: nothing is created, updated or deleted at the vendor,
+# nothing the account's own users can see changes, and a call whose token budget is a required
+# parameter has a bounded cost. `high` is reserved for a write a reviewer would want to see before it
+# happens.
+#
+# The two narrowings — `model` and `max_completion_tokens` required, where the vendor requires only
+# `messages` — are argued in §4.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "openrouter-chat-completion"
+method = "POST"
+path = "/api/v1/chat/completions"
+description = "Create a chat completion through OpenRouter, routed to the named model. Billed per input and output token, so the caller must state a token budget via max_completion_tokens"
+risk = "medium"
+idempotency = "non_idempotent"
+
+# Required here though OpenRouter marks it optional — see §4. A request naming no model is routed to
+# the account's dashboard default, which would make this op's cost and capabilities depend on
+# configuration no caller can see.
+[[operations.params.body]]
+name = "model"
+description = "The model to route to, as `<author>/<slug>` — e.g. `openai/gpt-4o` or `anthropic/claude-3.5-sonnet`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# `List<Any>` in the emitted signature, and honestly so: a message is an object, Flux's type surface has
+# no record type, and `types.rs` maps an object to `Any` rather than guessing
+# (`crates/connector-flux/src/types.rs`). `Any` is the top type, so the op still accepts every message
+# shape OpenRouter accepts — including the content-part arrays used for images, audio and files — and
+# the full JSON Schema stays on the IR for C-10 and any later response work to read.
+#
+# The only field the vendor itself requires.
+[[operations.params.body]]
+name = "messages"
+description = "The conversation so far: a list of `{role, content}` objects, where role is one of system, developer, user, assistant or tool"
+required = true
+schema = { type = "array", minItems = 1, items = { type = "object" } }
+
+# REQUIRED HERE, THOUGH OPENROUTER MARKS IT OPTIONAL — the cost bound, and the same narrowing C-51
+# applied to OpenAI. See §4 for both reasons and for why this is `max_completion_tokens` rather than
+# the `max_tokens` C-76's Acceptance names: the vendor's own document describes `max_tokens` as
+# "deprecated, use max_completion_tokens".
+[[operations.params.body]]
+name = "max_completion_tokens"
+description = "Upper bound on generated tokens, including reasoning tokens. Required by this connector so that every call states its cost bound"
+required = true
+schema = { type = "integer", minimum = 1 }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "openrouter-credits-get"
+method = "GET"
+path = "/api/v1/credits"
+description = "Read the account's total purchased credits and total usage, in credit units"
+risk = "low"
+idempotency = "idempotent"
+# No parameters, and **this is the connector's verification operation**: cheap, read-only,
+# account-scoped, and it fails loudly on a bad key — the vendor documents 401 and 403 for it, which the
+# public models list does not.
+#
+# It is also the operation that makes the chat completion's cost legible rather than notional: a caller
+# can read the balance, spend against a stated `max_completion_tokens`, and read it again. Per-request
+# cost accounting is what `GET /api/v1/generation` would give, and that is the operation §2 excludes
+# for its required query parameter — so until C-30 lands, this is the account-level substitute for it,
+# not an equivalent.
