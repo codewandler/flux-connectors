@@ -370,10 +370,19 @@ These failures are recorded decisions. Do not “fix” one without reading its 
   the deliberate result is a fail-closed 401.
 - **`zendesk-ticket-search` is non-functional.** Query values are not percent-encoded. Spaces are a
   misleading test because URL parsing can rescue them; `&`, `#`, and `+` corrupt the request, and
-  `x&per_page=1` injects a parameter.
+  `x&per_page=1` injects a parameter. **A `form` request body has the same gap** (C-144): flux exposes
+  no form encoder and no percent-encoder a Flux *program* can call, so the emitter assembles the pairs
+  with `fmt` and each value is interpolated verbatim. Half-encoding in emitted Flux would look correct
+  and be wrong, and hand-rolling it out of `replace` chains is the connector-specific DSL this
+  repository refuses — so the fix is a flux-side encoder. **The body half now exists in flux as L-101**
+  (`parse($record, as: "form")`), and it reaches this repository only when flux-lang publishes it,
+  because the pin is a crates.io version and must stay one. The *query* half is still open and is the
+  structured-`query` handoff in
+  [docs/designs/query-encoding-flux-stories.md](docs/designs/query-encoding-flux-stories.md).
 - **Some operations are refused during emission.** Examples include a nested body path without a
-  `wire` field, a dotted operation id, and an ambiguous free-form body. Each refusal names its
-  owning story.
+  `wire` field, a dotted operation id, and an ambiguous free-form body — and, under
+  `body_encoding = "form"`, a nested field, a free-form `body_schema`, or an encoding declared on an
+  operation that sends no body. Each refusal names its owning story.
 - **`check`, `fetch`, and `install` are unimplemented.** They exit explicitly and point to C-14 or
   C-15. Do not turn them into partial, best-effort behavior.
 

@@ -86,6 +86,15 @@
 //!    (flux-lang `runtime.rs:4005-4010`), storing text either way — so both spellings of "here is
 //!    my body" reach the vendor.
 //!
+//! # How the body is *encoded* — orthogonal to all three
+//!
+//! [`connector_spec::ParamSet::body_encoding`] says whether the assembled body is a JSON document or
+//! `application/x-www-form-urlencoded` pairs, and the `content-type` header is **derived from it**
+//! rather than authored (C-144). `json` is the default and the emitter's output for an operation that
+//! declares nothing is byte-for-byte what it was before the axis existed. A `form` body is assembled
+//! as text by [`form_payload`], whose documentation states what that costs; the shapes form encoding
+//! cannot express are refused by [`check_body_encoding`] rather than flattened.
+//!
 //! # How a request header is decided
 //!
 //! Two kinds, and keeping them apart is the whole of C-55. A **caller-supplied** header is a
@@ -154,13 +163,14 @@ const CONTENT_TYPE: &str = "content_type";
 /// The header that media type travels in — the one constant header the emitter owns, because it
 /// describes a body only the emitter assembles.
 const CONTENT_TYPE_HEADER: &str = "content-type";
-/// The symbol holding the assembled JSON request body.
+/// The symbol holding the assembled request body.
 const PAYLOAD: &str = "payload";
+/// The symbol holding the next separator between form pairs, for a form body whose every field is
+/// optional. The body-side twin of [`SEP`], and needed for the same reason: the first *surviving*
+/// pair must not be preceded by an `&`.
+const FORM_SEP: &str = "form_sep";
 /// The symbol holding the HTTP response.
 const RESPONSE: &str = "response";
-/// The one media type this emitter sends. Every launch provider is JSON over HTTP — Freshdesk sends
-/// `content-type: application/json` on every request (inventory §4.3) and the other two agree.
-const JSON_MEDIA_TYPE: &str = "application/json";
 
 /// Emit `operation` as a formatted Flux `op` declaration, ready to concatenate into a module.
 ///
@@ -388,6 +398,7 @@ fn lower(connector: &Connector, operation: &Operation) -> Result<CompositeOpDecl
             });
         }
     }
+    check_body_encoding(operation, body, free_form.as_ref())?;
     check_header_names(
         operation,
         header,
@@ -424,6 +435,71 @@ fn lower(connector: &Connector, operation: &Operation) -> Result<CompositeOpDecl
             ..DraftAst::default()
         },
     })
+}
+
+/// Everything a declared [`BodyEncoding`] must be true of before the body is assembled — C-144.
+///
+/// Only the non-default encoding is checked, and that is the whole compatibility story: an operation
+/// that declares nothing reaches none of these branches, so every module this repository already
+/// ships is emitted by exactly the code that emitted it before.
+///
+/// Each refusal exists because its alternative is a request the vendor answers `200` to. See
+/// [`Error::UnencodableFormField`], [`Error::UnencodableFormBody`] and
+/// [`Error::BodyEncodingWithoutBody`].
+fn check_body_encoding(
+    operation: &Operation,
+    body: &[Bound<'_>],
+    free_form: Option<&FreeFormBody<'_>>,
+) -> Result<()> {
+    let encoding = operation.params.body_encoding;
+    if encoding.is_json() {
+        return Ok(());
+    }
+
+    if free_form.is_some() {
+        return Err(Error::UnencodableFormBody {
+            operation: operation.id.clone(),
+            encoding: encoding.tag(),
+        });
+    }
+    if body.is_empty() {
+        return Err(Error::BodyEncodingWithoutBody {
+            operation: operation.id.clone(),
+            encoding: encoding.tag(),
+        });
+    }
+
+    for bound in body {
+        let wire = wire_name(bound.param);
+        // A `fmt` template is what assembles the pairs, so a brace in a key would be read as an
+        // interpolation delimiter — `Symbols::allocate` makes the same check, but on the
+        // caller-facing name, and it is the *wire* name that reaches this template.
+        let reason = if wire.contains('.') {
+            Some("its `wire` path is nested")
+        } else if wire.is_empty() {
+            Some("its wire name is empty, which is not a form key")
+        } else if wire.contains('{') || wire.contains('}') {
+            Some("its wire name contains a brace, which would corrupt the form template")
+        } else if matches!(
+            bound.param.schema.get("type").and_then(|ty| ty.as_str()),
+            Some("object" | "array")
+        ) {
+            // The value nests even though the key does not. Interpolated, it would reach the vendor
+            // as JSON text inside a form pair — a shape no form parser reassembles.
+            Some("its declared value is an object or an array")
+        } else {
+            None
+        };
+        if let Some(reason) = reason {
+            return Err(Error::UnencodableFormField {
+                operation: operation.id.clone(),
+                name: bound.param.name.clone(),
+                wire: wire.to_string(),
+                reason,
+            });
+        }
+    }
+    Ok(())
 }
 
 /// Every header the request will carry, checked once: spellable, and claimed by one declaration.
@@ -676,7 +752,14 @@ fn request_body(
     let has_body = !body_params.is_empty() || free_form.is_some();
     let mut headers: BTreeMap<String, Box<Node>> = BTreeMap::new();
     if has_body {
-        body.push(bind_string(CONTENT_TYPE, JSON_MEDIA_TYPE));
+        // Derived from the operation's declaration, never authored as a header: a provider that could
+        // write `content-type` itself could claim an encoding this emitter does not produce, which is
+        // worse than the honest single-encoding limitation C-144 replaced. `check_header_names`
+        // refuses a constant header claiming the name for exactly that reason.
+        body.push(bind_string(
+            CONTENT_TYPE,
+            operation.params.body_encoding.media_type(),
+        ));
         headers.insert(
             CONTENT_TYPE_HEADER.to_string(),
             Box::new(symbol(CONTENT_TYPE)),
@@ -706,23 +789,27 @@ fn request_body(
         );
     }
 
-    // The JSON body, assembled as a record and passed **by symbol**. That is load-bearing rather
-    // than stylistic: `http.request` reads its `body` argument with `Value::as_str`
+    // The body, assembled and passed **by symbol**. That is load-bearing rather than stylistic:
+    // `http.request` reads its `body` argument with `Value::as_str`
     // (`../flux/crates/flux-web/src/http.rs:183-186`), so an inline record arrives as a JSON object
     // and is silently dropped, whereas a bound record is stored as canonical JSON *text* and
-    // arrives intact.
+    // arrives intact. A `form` body is text from the start — see `form_payload`.
     if !body_params.is_empty() {
         for bound in body_params {
             if let Some(value) = constant(bound.param) {
                 body.push(bind_lit(&bound.symbol, value.clone()));
             }
         }
-        body.push(Node::Bind {
-            name: SymbolName(PAYLOAD.to_string()),
-            value: Box::new(body_tree(operation, body_params)?.into_node()),
-            ty: None,
-            effect: None,
-        });
+        if operation.params.body_encoding.is_json() {
+            body.push(Node::Bind {
+                name: SymbolName(PAYLOAD.to_string()),
+                value: Box::new(body_tree(operation, body_params)?.into_node()),
+                ty: None,
+                effect: None,
+            });
+        } else {
+            body.extend(form_payload(body_params));
+        }
         request.insert("body".to_string(), Box::new(symbol(PAYLOAD)));
     } else if let Some(free) = free_form {
         // Re-bound rather than passed straight through, and that is the whole point: a parameter
@@ -867,6 +954,83 @@ fn body_tree(operation: &Operation, body_params: &[Bound<'_>]) -> Result<BodyNod
     }
 
     Ok(root)
+}
+
+/// A `form` body: `key=value` pairs assembled as **text**, not as a record — C-144.
+///
+/// # Why `fmt` and not an encoder
+///
+/// `http.request` reads `body` with `Value::as_str` and forwards the bytes verbatim, so a form body
+/// has to arrive as text. Under JSON that text comes from flux — a bound record is stored as
+/// canonical JSON, and a caller-supplied one is canonicalized by `parse($body, as: "json")`. **flux
+/// has no equivalent for a form body**: `parse`'s `as_type` is restricted to
+/// `f64`/`i64`/`bool`/`json`/`string` by flux-lang's own analyzer, no node or `expr` function
+/// serializes to a form, and nothing in flux's core catalogue percent-encodes. So `fmt` — the same
+/// construction the query string already uses — is the only one available, and hand-rolling
+/// percent-encoding out of `replace` chains in emitted Flux is not an improvement on it but a
+/// connector-specific DSL this repository refuses.
+///
+/// **The cost, stated plainly: form values are interpolated verbatim, exactly as query values are.**
+/// A value carrying `&` or `=` corrupts the body and can inject a field. That is the same gap
+/// AGENTS.md records for `zendesk-ticket-search`, now reaching a second request position, and the fix
+/// is a flux-side encoder rather than anything this emitter can do.
+///
+/// # Which pairs are guarded
+///
+/// A **required** field, and a field pinned by a `const`, always travels: it goes into the opening
+/// template. An **optional** one is guarded by `when`, for the reason the query string is: flux has
+/// no absent argument, so an unsupplied optional arrives as null, and interpolating it would send the
+/// vendor the literal text `note=null` — a value, not an omission. Only a body whose *every* field is
+/// optional needs [`FORM_SEP`]; with one always-present pair the separator is a literal `&`.
+fn form_payload(body_params: &[Bound<'_>]) -> Vec<Node> {
+    let pair = |bound: &Bound<'_>| format!("{}={{{}}}", wire_name(bound.param), bound.symbol);
+    let (always, guarded): (Vec<&Bound<'_>>, Vec<&Bound<'_>>) = body_params
+        .iter()
+        .partition(|bound| bound.param.required || constant(bound.param).is_some());
+
+    // The separator only has to be carried in a symbol when nothing else guarantees the payload is
+    // non-empty *and* more than one guarded pair could open it.
+    let carried_sep = always.is_empty() && guarded.len() > 1;
+
+    let mut out = Vec::new();
+    if always.is_empty() {
+        out.push(bind_string(PAYLOAD, ""));
+        if carried_sep {
+            out.push(bind_string(FORM_SEP, ""));
+        }
+    } else {
+        out.push(bind_fmt(
+            PAYLOAD,
+            always
+                .iter()
+                .map(|bound| pair(bound))
+                .collect::<Vec<_>>()
+                .join("&"),
+        ));
+    }
+
+    for (i, bound) in guarded.iter().enumerate() {
+        let separator = match (always.is_empty(), carried_sep) {
+            (false, _) => "&".to_string(),
+            (true, true) => format!("{{{FORM_SEP}}}"),
+            (true, false) => String::new(),
+        };
+        let mut then = vec![bind_fmt(
+            PAYLOAD,
+            format!("{{{PAYLOAD}}}{separator}{}", pair(bound)),
+        )];
+        // The last pair never needs to hand a separator on — the same economy the query string makes.
+        if carried_sep && i + 1 < guarded.len() {
+            then.push(bind_string(FORM_SEP, "&"));
+        }
+        out.push(Node::When {
+            cond: Box::new(symbol(&bound.symbol)),
+            then,
+            otherwise: Vec::new(),
+        });
+    }
+
+    out
 }
 
 /// The vendor path template with each `{wire_name}` rewritten to `{symbol_name}`, so the `fmt`

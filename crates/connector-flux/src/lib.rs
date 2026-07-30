@@ -195,6 +195,70 @@ pub enum Error {
         operation: String,
     },
 
+    /// A body field that a `form` encoding cannot carry — C-144.
+    ///
+    /// `application/x-www-form-urlencoded` is a flat list of `key=value` pairs and **has no agreed
+    /// nesting convention**: Stripe writes `metadata[key]`, PHP and Rails write `a[b]` and `a[b][]`,
+    /// and an OAuth2 token grant nests nothing at all. Picking one would send a vendor a key it does
+    /// not recognise, and a vendor that does not recognise a form key answers `200` and ignores it.
+    /// So a declared nesting — a dotted `wire` path, or a field whose declared value is itself an
+    /// object or an array — is refused rather than flattened.
+    #[error(
+        "operation `{operation}`: body field `{name}` (`{wire}` on the wire) cannot be form-encoded \
+         — {reason}. `application/x-www-form-urlencoded` is a flat list of `key=value` pairs, and a \
+         key a vendor does not recognise is accepted and ignored. Send this body as `json`, or \
+         declare the flat spelling the vendor documents"
+    )]
+    UnencodableFormField {
+        /// The operation id.
+        operation: String,
+        /// The caller-facing field name.
+        name: String,
+        /// The spelling the vendor would have seen.
+        wire: String,
+        /// Which property of the field makes it unencodable.
+        reason: &'static str,
+    },
+
+    /// A free-form `body_schema` under a non-JSON encoding — C-144.
+    ///
+    /// A free-form body names no fields, so there is no set of pairs for the emitter to assemble. The
+    /// JSON path works because flux canonicalizes a whole record with `parse($body, as: "json")`;
+    /// flux has **no equivalent for a form body** — `as_type` is restricted to
+    /// `f64`/`i64`/`bool`/`json`/`string` by flux-lang's own analyzer — so emitting one would be this
+    /// emitter claiming an encoding it cannot produce.
+    #[error(
+        "operation `{operation}`: a free-form `params.body_schema` cannot be encoded as \
+         `{encoding}`. The caller's keys are not known until runtime and flux has no form encoder, \
+         so there is nothing to assemble. Declare the body as named `params.body` fields, or send it \
+         as `json`"
+    )]
+    UnencodableFormBody {
+        /// The operation id.
+        operation: String,
+        /// The encoding the operation declared, as the provider file spells it.
+        encoding: &'static str,
+    },
+
+    /// A `body_encoding` on an operation that sends no body at all — C-144.
+    ///
+    /// The declaration would change nothing: with no body there is no payload and no `content-type`,
+    /// so the encoding is a statement about a request position the operation does not use. That is
+    /// the same silent no-op a `const` on a header parameter used to be (see
+    /// [`ConstantHeaderParam`](Self::ConstantHeaderParam)), and it is refused for the same reason —
+    /// an author who declared it believes something is happening.
+    #[error(
+        "operation `{operation}`: declares `body_encoding = \"{encoding}\"` but sends no body, so \
+         the declaration encodes nothing. Remove it, or declare the `params.body` fields it was \
+         meant to encode"
+    )]
+    BodyEncodingWithoutBody {
+        /// The operation id.
+        operation: String,
+        /// The encoding the operation declared, as the provider file spells it.
+        encoding: &'static str,
+    },
+
     /// A request-changing method declared the risk of a read.
     ///
     /// flux's approval gate reads `risk`, and `low` is the tier that passes without a human. A

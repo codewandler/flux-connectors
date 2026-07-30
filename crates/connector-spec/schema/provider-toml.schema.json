@@ -996,6 +996,10 @@
           "type": "object",
           "description": "Request headers the VENDOR fixes, for this operation only — the provider-level `const_headers` table states the ones every operation sends, and an entry here replaces it. Emitted as a literal, never as a parameter. It may never carry a credential: a value resolving from an environment variable or naming a declared credential is refused, and so is any header the `$auth` seam owns.",
           "additionalProperties": { "type": "string" }
+        },
+        "body_encoding": {
+          "$ref": "#/$defs/bodyEncoding",
+          "description": "How the body above is encoded on the wire. Omit it for `json`, which is what every provider in this repository sends. State `form` for a vendor that parses only `application/x-www-form-urlencoded` — Stripe, Twilio, Mailgun, PayPal classic, and every OAuth2 token endpoint. The emitter derives the `content-type` header from this and refuses a nested body under `form`, because form encoding has no agreed nesting convention."
         }
       }
     },
@@ -1193,6 +1197,12 @@
     "idempotency": {
       "enum": ["idempotent", "non_idempotent", "conditional"],
       "description": "Whether repeating an operation is safe, in flux's own vocabulary."
+    },
+
+    "bodyEncoding": {
+      "enum": ["json", "form"],
+      "default": "json",
+      "description": "How an operation's request body is encoded. A closed set rather than a media-type string, because a media type nobody validates is a typo away from a body the vendor accepts and silently ignores."
     },
 
     "paramPosition": {

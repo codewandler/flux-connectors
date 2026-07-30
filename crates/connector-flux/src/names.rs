@@ -24,7 +24,19 @@ use crate::Error;
 /// `content_type`, but reserving them everywhere keeps a parameter's symbol independent of which
 /// other parameters its operation happens to declare, so adding a body field later cannot rename a
 /// symbol that already travelled.
-const RESERVED: &[&str] = &["base", "url", "sep", "content_type", "payload", "response"];
+///
+/// `form_sep` is the same story one story later (C-144): only an all-optional form body binds it, but
+/// it is reserved everywhere so that declaring a form encoding on an operation can never rename that
+/// operation's other symbols.
+const RESERVED: &[&str] = &[
+    "base",
+    "url",
+    "sep",
+    "content_type",
+    "payload",
+    "form_sep",
+    "response",
+];
 
 /// Hands out a unique Flux symbol name for each vendor parameter name, in declaration order.
 pub(crate) struct Symbols {

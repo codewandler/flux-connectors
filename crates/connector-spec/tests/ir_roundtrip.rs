@@ -11,8 +11,8 @@
 use std::collections::BTreeMap;
 
 use connector_spec::{
-    AuthMethod, AuthRequirement, AuthScheme, Connector, HttpMethod, Idempotency, OAuth2Spec,
-    OAuthGrant, Operation, Param, ParamSet, Provenance, Quirks, Risk, DEFAULT_SERVICE,
+    AuthMethod, AuthRequirement, AuthScheme, BodyEncoding, Connector, HttpMethod, Idempotency,
+    OAuth2Spec, OAuthGrant, Operation, Param, ParamSet, Provenance, Quirks, Risk, DEFAULT_SERVICE,
 };
 use serde_json::json;
 
@@ -282,6 +282,7 @@ fn parameter_and_response_schemas_survive_the_round_trip() {
         }],
         body_schema: None,
         const_headers: BTreeMap::from([("Accept".into(), "application/json".into())]),
+        body_encoding: BodyEncoding::default(),
     };
     operation.response_schema = Some(json!({
         "type": "object",
@@ -334,6 +335,62 @@ fn operation_metadata_uses_the_flux_vocabulary() {
     assert_eq!(decoded.description, "List calls");
     assert_eq!(decoded.risk, Risk::Low);
     assert_eq!(decoded.idempotency, Idempotency::Idempotent);
+}
+
+/// `body_encoding` is a **closed** set whose default is invisible, and every one of its three
+/// self-descriptions agrees — C-144.
+///
+/// The three are the serde tag (what an author writes), [`BodyEncoding::tag`] (what an error message
+/// names) and [`BodyEncoding::media_type`] (what the vendor sees). A variant added with a mismatched
+/// `tag` would produce a refusal naming a key nobody can find in their file, and one with the wrong
+/// media type would send a body under a header that contradicts it.
+///
+/// The invisible default is the compatibility guarantee: `json` must not appear in any serialization,
+/// or every committed manifest, lockfile hash and catalogue entry would move.
+#[test]
+fn body_encoding_is_closed_and_its_default_is_invisible() {
+    for encoding in [BodyEncoding::Json, BodyEncoding::Form] {
+        assert_eq!(
+            serde_json::to_value(encoding).unwrap(),
+            json!(encoding.tag()),
+            "`tag()` must be the spelling a provider file carries"
+        );
+        assert_eq!(
+            serde_json::from_value::<BodyEncoding>(json!(encoding.tag())).unwrap(),
+            encoding
+        );
+    }
+    assert_eq!(BodyEncoding::default(), BodyEncoding::Json);
+    assert_eq!(BodyEncoding::Json.media_type(), "application/json");
+    assert_eq!(
+        BodyEncoding::Form.media_type(),
+        "application/x-www-form-urlencoded"
+    );
+    assert!(serde_json::from_value::<BodyEncoding>(json!("multipart")).is_err());
+
+    // The default encodes as nothing at all, which is what keeps every shipped artifact byte-identical.
+    let mut operation = op("acme.thing.create", None);
+    operation.params = ParamSet {
+        body: vec![Param {
+            name: "subject".into(),
+            wire: None,
+            description: String::new(),
+            required: true,
+            schema: json!({"type": "string"}),
+        }],
+        ..ParamSet::default()
+    };
+    let json = serde_json::to_string(&operation).unwrap();
+    assert!(
+        !json.contains("body_encoding"),
+        "a defaulted encoding must not appear on the wire: {json}"
+    );
+
+    operation.params.body_encoding = BodyEncoding::Form;
+    let json = serde_json::to_string(&operation).unwrap();
+    assert!(json.contains(r#""body_encoding":"form""#), "{json}");
+    let decoded: Operation = serde_json::from_str(&json).unwrap();
+    assert_eq!(decoded.params.body_encoding, BodyEncoding::Form);
 }
 
 /// The IR must be expressive enough that a **hand-authored** provider TOML defines a complete
