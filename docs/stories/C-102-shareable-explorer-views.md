@@ -2,7 +2,7 @@
 id: C-102
 title: Make a filtered view shareable, and let the list be sorted
 pillar: Surfaces
-status: in-progress
+status: done
 priority: 4
 design: docs/designs/explorer-ux.md
 epic: explorer-ux
