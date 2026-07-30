@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-07-30
+
 ### Added
 
 - **Every operation publishes one composed `input_schema` (C-125).** Path, query, header and body
@@ -29,9 +31,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   test over all 105 shipped operations asserts they describe the same parameter set modulo the symbol
   mapping, with a proper-subset guard so the divergence stays tested rather than assumed away.
 
-
-### Added
-
 - **The Notion connector (C-107)** — the nineteenth provider, 256 artifacts. Five operations, with
   `Notion-Version: 2022-06-28` emitted as a **literal** on every request.
 
@@ -45,9 +44,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `JsonSchema` has no `$ref`, so page **content** is out of scope and `notion-page-get` says it
   returns properties rather than text. The filter/sort DSL and the property `PATCH` are excluded for
   the same reason — their keys are tenant-defined.
-
-
-### Added
 
 - **A connector operation can now reach a vendor, with the network gate mirrored (C-115).** Each Tool
   builds `{method, url, headers, body}` and delegates to flux's own `http.request`, so flux keeps
@@ -85,9 +81,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it carried since C-52 is gone. This also unblocks Notion, whose required `Notion-Version` header is
   why C-107 was parked.
 
-
-### Added
-
 - **`connector-secrets` — a secret store trait and a Vault KV v2 implementation (C-91).** A **host
   library, outside the compile path**: `connector-cli` must not depend on it, and that is now asserted
   rather than assumed.
@@ -106,9 +99,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   plainly what that does and does not prove: the store's URL construction, envelope parsing and status
   mapping — nothing about Vault itself.
 
-
-### Added
-
 - **The Stripe connector (C-106)** — the eighteenth provider. Eight operations selected from roughly
   450, graded by what they do to money: the refund is `destructive`, capture and cancel are `high`,
   and all three are `conditional` **earned rather than asserted** — each declares a *required*
@@ -124,6 +114,65 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   It also shipped **without** the canonical `POST /v1/refunds`, using the legacy charge-nested form
   instead, and with capture and refund restricted to full amounts — all three because of C-144.
 
+- **A flow graph lowers to one composite Flux op (C-95).** Operation, Select, Template, Object,
+  Literal, Gate, Approval, Retry and Throttle lower through `flux_lang::ast`; Trigger, Schedule and
+  Endpoint are boundary declarations that reach no statement. Cycles, region-crossing edges, unbound
+  region outputs and a `Select` wired to an operation's response are all refusals rather than
+  degraded output.
+
+  It found an upstream defect and refused rather than working around it: **flux-lang 0.39's two
+  formatters disagree about durations.** `format::fmt_duration` never emits a bare number, so every
+  `throttle` and every `retry` with a delay produces text `format_cst` declines to re-print — though
+  both spellings parse to the same AST. Emitting a module flux's own formatter cannot format would
+  have been the alternative, so `throttle` is pinned as a refusal with the three steps to undo it
+  recorded.
+
+- **A service can declare the roles it implements (C-120).** `[[services]] roles = [...]` as a
+  **closed, checkable** set: an unknown role name is refused rather than ignored, because a typo'd
+  capability that silently means "no capability" is the failure the mechanism exists to prevent. A
+  provider's roles are derived as the union of its services' and are never authored — roles attach to
+  a *service* because a vendor's model-listing surface and its chat surface are different
+  capabilities.
+
+  Two holes an independent review demonstrated with probes were closed before merge. A `default`
+  service entry was accepted *alongside* named services, which repealed the rule that a provider
+  declaring named services has no implicit `default` — an operation omitting `service` became legal
+  again. And a role slot could be filled by **any member kind, including an event**, which would
+  publish a live-listing capability nothing can call, since an event is emitted into no module.
+
+- **The Tool pack's declaration half (C-114).** `crates/connector-pack` projects a catalogue
+  operation onto a flux `ToolSpec`, so a host can register a provider's operations into a
+  `ToolRegistry` and resolve them by dotted name (`zendesk.ticket.comment.add`) — the spelling flux's
+  reference flow uses and one a composite declaration cannot have. 97 operations across 17 providers
+  register and resolve.
+
+  Two findings the work turned up. `ToolSpec::access` cannot be left empty: flux **refuses the
+  registration** of a declared network effect with no carrying access kind, so the pack derives access
+  from effects and re-runs flux's own checker at projection time. An independent review reproduced
+  that refusal verbatim and confirmed the derivation picks the narrowest carrier rather than
+  over-granting. And the projection reads the *embedded Flux declaration* rather than the catalogue's
+  flat columns, which makes the pack's answer the module's answer by construction — removing the
+  drift C-117 exists to guard, for the declaration half, instead of testing for it.
+
+- **Verification conformance against real vendor vectors (C-60).** A parameterized matrix over
+  GitHub, Slack, Zendesk and Stripe, with the HMAC primitive pinned separately to RFC 4231 so the two
+  vendor-published triples count as independent evidence rather than the implementation agreeing with
+  itself.
+
+- **A tool contract is now readable.** The core explorer rendered `Risk`, `Idempotency`, `Effects`,
+  `Access` and `Group` as bare text and dumped the input schema through an unhighlighted
+  `JSON.stringify`. The safety fields are now chips whose tone is **derived from the value** — so a
+  risk level cannot read calm on one page and alarming on another — and the schema is syntax
+  highlighted with a JSON/YAML toggle and a copy button.
+
+  An unrecognised value stays neutral rather than being guessed at: a wrong colour on a safety field
+  would read as an assurance nobody made.
+
+  The highlighter is hand-rolled and about forty lines, deliberately. Shiki is a *build-time*
+  dependency in VitePress and this content is read from the catalogue at **runtime**, so the built
+  pipeline does not apply; a client-side highlighter would cost more bytes than the catalogue. Tokens
+  render as elements rather than through `v-html`. Every colour is a VitePress token, so light and
+  dark both work and a theme change carries automatically.
 
 ### Changed
 
@@ -145,78 +194,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   library is a distributed artifact with its own versioning and consumers, and that decision waits
   for a second consumer to shape it.
 
-### Fixed
-
-- **`web/README.md` still carried the reasoning that shipped an unstyled site.** It claimed the
-  committed CNAME serves the site from a custom domain "so `config.mts` sets `base: '/'`" — the exact
-  inference that broke production, and one the config and its test have contradicted since. Rewritten
-  to say where the site is actually served from and what evidence would justify changing it.
-
-
-### Added
-
-- **A flow graph lowers to one composite Flux op (C-95).** Operation, Select, Template, Object,
-  Literal, Gate, Approval, Retry and Throttle lower through `flux_lang::ast`; Trigger, Schedule and
-  Endpoint are boundary declarations that reach no statement. Cycles, region-crossing edges, unbound
-  region outputs and a `Select` wired to an operation's response are all refusals rather than
-  degraded output.
-
-  It found an upstream defect and refused rather than working around it: **flux-lang 0.39's two
-  formatters disagree about durations.** `format::fmt_duration` never emits a bare number, so every
-  `throttle` and every `retry` with a delay produces text `format_cst` declines to re-print — though
-  both spellings parse to the same AST. Emitting a module flux's own formatter cannot format would
-  have been the alternative, so `throttle` is pinned as a refusal with the three steps to undo it
-  recorded.
-
-
-### Added
-
-- **A service can declare the roles it implements (C-120).** `[[services]] roles = [...]` as a
-  **closed, checkable** set: an unknown role name is refused rather than ignored, because a typo'd
-  capability that silently means "no capability" is the failure the mechanism exists to prevent. A
-  provider's roles are derived as the union of its services' and are never authored — roles attach to
-  a *service* because a vendor's model-listing surface and its chat surface are different
-  capabilities.
-
-  Two holes an independent review demonstrated with probes were closed before merge. A `default`
-  service entry was accepted *alongside* named services, which repealed the rule that a provider
-  declaring named services has no implicit `default` — an operation omitting `service` became legal
-  again. And a role slot could be filled by **any member kind, including an event**, which would
-  publish a live-listing capability nothing can call, since an event is emitted into no module.
-
-
-### Added
-
-- **The Tool pack's declaration half (C-114).** `crates/connector-pack` projects a catalogue
-  operation onto a flux `ToolSpec`, so a host can register a provider's operations into a
-  `ToolRegistry` and resolve them by dotted name (`zendesk.ticket.comment.add`) — the spelling flux's
-  reference flow uses and one a composite declaration cannot have. 97 operations across 17 providers
-  register and resolve.
-
-  Two findings the work turned up. `ToolSpec::access` cannot be left empty: flux **refuses the
-  registration** of a declared network effect with no carrying access kind, so the pack derives access
-  from effects and re-runs flux's own checker at projection time. An independent review reproduced
-  that refusal verbatim and confirmed the derivation picks the narrowest carrier rather than
-  over-granting. And the projection reads the *embedded Flux declaration* rather than the catalogue's
-  flat columns, which makes the pack's answer the module's answer by construction — removing the
-  drift C-117 exists to guard, for the declaration half, instead of testing for it.
-
-- **Verification conformance against real vendor vectors (C-60).** A parameterized matrix over
-  GitHub, Slack, Zendesk and Stripe, with the HMAC primitive pinned separately to RFC 4231 so the two
-  vendor-published triples count as independent evidence rather than the implementation agreeing with
-  itself.
-
-### Fixed
-
-- **A signature scheme that verified forgeries (C-60).** `signed_placeholders` silently swallowed an
-  unterminated brace, so `signed = "v0:{timestamp}:{body"` — one missing character, a plausible typo —
-  passed every loader check and produced a signed string **containing no body at all**. A signature
-  captured from one delivery would then verify any forged payload for the whole tolerance window. The
-  fragment now comes back as a placeholder no host can fill, so the loader's existing refusal catches
-  it.
-
-### Changed
-
 - **Whole-catalogue artifacts are coordinator-owned (C-104).** The provider index is generated on a
   full build only, so provider stories no longer collide on a hand-maintained list. The real class is
   **four** artifacts, not the two the story assumed — enumerated by differencing a full plan against a
@@ -231,42 +208,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`AGENTS.md`'s "does not depend on the flux runtime" is now scoped to the compiler crates**, since
   `connector-pack` links `flux-runtime`/`flux-spec` by necessity. This repository still constructs no
   runtime.
-
-
-### Added
-
-- **A tool contract is now readable.** The core explorer rendered `Risk`, `Idempotency`, `Effects`,
-  `Access` and `Group` as bare text and dumped the input schema through an unhighlighted
-  `JSON.stringify`. The safety fields are now chips whose tone is **derived from the value** — so a
-  risk level cannot read calm on one page and alarming on another — and the schema is syntax
-  highlighted with a JSON/YAML toggle and a copy button.
-
-  An unrecognised value stays neutral rather than being guessed at: a wrong colour on a safety field
-  would read as an assurance nobody made.
-
-  The highlighter is hand-rolled and about forty lines, deliberately. Shiki is a *build-time*
-  dependency in VitePress and this content is read from the catalogue at **runtime**, so the built
-  pipeline does not apply; a client-side highlighter would cost more bytes than the catalogue. Tokens
-  render as elements rather than through `v-html`. Every colour is a VitePress token, so light and
-  dark both work and a theme change carries automatically.
-
-
-### Fixed
-
-- **The explorer set a floor under its own width (C-100, follow-up).** Three symptoms — 193px of
-  horizontal overflow on a phone, a filter bar that always wrapped to two rows, and a provider grid
-  stuck at three columns — turned out to be one cause: a flex or grid item's automatic minimum size
-  is its `min-content`, so a `<select>` (as wide as its widest option), a row (as wide as its longest
-  request path) and a card header (274px) each refused to shrink and pushed their container instead.
-  Measured after: overflow 193px → 0, filter bar 2 rows → 1 from 1280px up, provider grid 3 → 4
-  columns from 1440px up.
-
-  The earlier reasoning that 320px was "the smallest round number above the 314px floor" is kept in
-  the story as the thing that was wrong rather than deleted: it identified the cause correctly and
-  drew the wrong conclusion, because the floor was never a fact about the card — it was one missing
-  declaration.
-
-### Changed
 
 - **flux-lang 0.37 → 0.39, and every generated module is rewritten in the new canonical syntax.**
   Flux's L-93 changed what canonical source looks like: local bindings lose the `$` sigil, object
@@ -284,6 +225,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `$include` — which is why some fields pun and their neighbours do not.
 
 ### Fixed
+
+- **`web/README.md` still carried the reasoning that shipped an unstyled site.** It claimed the
+  committed CNAME serves the site from a custom domain "so `config.mts` sets `base: '/'`" — the exact
+  inference that broke production, and one the config and its test have contradicted since. Rewritten
+  to say where the site is actually served from and what evidence would justify changing it.
+
+- **A signature scheme that verified forgeries (C-60).** `signed_placeholders` silently swallowed an
+  unterminated brace, so `signed = "v0:{timestamp}:{body"` — one missing character, a plausible typo —
+  passed every loader check and produced a signed string **containing no body at all**. A signature
+  captured from one delivery would then verify any forged payload for the whole tolerance window. The
+  fragment now comes back as a placeholder no host can fill, so the loader's existing refusal catches
+  it.
+
+- **The explorer set a floor under its own width (C-100, follow-up).** Three symptoms — 193px of
+  horizontal overflow on a phone, a filter bar that always wrapped to two rows, and a provider grid
+  stuck at three columns — turned out to be one cause: a flex or grid item's automatic minimum size
+  is its `min-content`, so a `<select>` (as wide as its widest option), a row (as wide as its longest
+  request path) and a card header (274px) each refused to shrink and pushed their container instead.
+  Measured after: overflow 193px → 0, filter bar 2 rows → 1 from 1280px up, provider grid 3 → 4
+  columns from 1440px up.
+
+  The earlier reasoning that 320px was "the smallest round number above the 314px floor" is kept in
+  the story as the thing that was wrong rather than deleted: it identified the cause correctly and
+  drew the wrong conclusion, because the floor was never a fact about the card — it was one missing
+  declaration.
 
 - **A sigil-matching test would have gone vacuous under the upgrade.** Nine assertions checked the
   *absence* of an emitted symbol by its old spelling — `!module.contains("$sep")`, which pins that no
