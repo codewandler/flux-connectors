@@ -7,6 +7,87 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The Tool pack's declaration half (C-114).** `crates/connector-pack` projects a catalogue
+  operation onto a flux `ToolSpec`, so a host can register a provider's operations into a
+  `ToolRegistry` and resolve them by dotted name (`zendesk.ticket.comment.add`) — the spelling flux's
+  reference flow uses and one a composite declaration cannot have. 97 operations across 17 providers
+  register and resolve.
+
+  Two findings the work turned up. `ToolSpec::access` cannot be left empty: flux **refuses the
+  registration** of a declared network effect with no carrying access kind, so the pack derives access
+  from effects and re-runs flux's own checker at projection time. An independent review reproduced
+  that refusal verbatim and confirmed the derivation picks the narrowest carrier rather than
+  over-granting. And the projection reads the *embedded Flux declaration* rather than the catalogue's
+  flat columns, which makes the pack's answer the module's answer by construction — removing the
+  drift C-117 exists to guard, for the declaration half, instead of testing for it.
+
+- **Verification conformance against real vendor vectors (C-60).** A parameterized matrix over
+  GitHub, Slack, Zendesk and Stripe, with the HMAC primitive pinned separately to RFC 4231 so the two
+  vendor-published triples count as independent evidence rather than the implementation agreeing with
+  itself.
+
+### Fixed
+
+- **A signature scheme that verified forgeries (C-60).** `signed_placeholders` silently swallowed an
+  unterminated brace, so `signed = "v0:{timestamp}:{body"` — one missing character, a plausible typo —
+  passed every loader check and produced a signed string **containing no body at all**. A signature
+  captured from one delivery would then verify any forged payload for the whole tolerance window. The
+  fragment now comes back as a placeholder no host can fill, so the loader's existing refusal catches
+  it.
+
+### Changed
+
+- **Whole-catalogue artifacts are coordinator-owned (C-104).** The provider index is generated on a
+  full build only, so provider stories no longer collide on a hand-maintained list. The real class is
+  **four** artifacts, not the two the story assumed — enumerated by differencing a full plan against a
+  scoped one.
+
+  The rework corrected two documented claims that were measurably wrong, and both mattered because
+  they are the instruction implementors follow: a new provider leaves **eight** tests red, not three,
+  and a changed provider three, not one. Both undercounts came from plain `cargo test --workspace`
+  stopping at the first failing binary — the trap `AGENTS.md` documents elsewhere. Both gates now say
+  `--no-fail-fast`.
+
+- **`AGENTS.md`'s "does not depend on the flux runtime" is now scoped to the compiler crates**, since
+  `connector-pack` links `flux-runtime`/`flux-spec` by necessity. This repository still constructs no
+  runtime.
+
+
+### Added
+
+- **A tool contract is now readable.** The core explorer rendered `Risk`, `Idempotency`, `Effects`,
+  `Access` and `Group` as bare text and dumped the input schema through an unhighlighted
+  `JSON.stringify`. The safety fields are now chips whose tone is **derived from the value** — so a
+  risk level cannot read calm on one page and alarming on another — and the schema is syntax
+  highlighted with a JSON/YAML toggle and a copy button.
+
+  An unrecognised value stays neutral rather than being guessed at: a wrong colour on a safety field
+  would read as an assurance nobody made.
+
+  The highlighter is hand-rolled and about forty lines, deliberately. Shiki is a *build-time*
+  dependency in VitePress and this content is read from the catalogue at **runtime**, so the built
+  pipeline does not apply; a client-side highlighter would cost more bytes than the catalogue. Tokens
+  render as elements rather than through `v-html`. Every colour is a VitePress token, so light and
+  dark both work and a theme change carries automatically.
+
+
+### Fixed
+
+- **The explorer set a floor under its own width (C-100, follow-up).** Three symptoms — 193px of
+  horizontal overflow on a phone, a filter bar that always wrapped to two rows, and a provider grid
+  stuck at three columns — turned out to be one cause: a flex or grid item's automatic minimum size
+  is its `min-content`, so a `<select>` (as wide as its widest option), a row (as wide as its longest
+  request path) and a card header (274px) each refused to shrink and pushed their container instead.
+  Measured after: overflow 193px → 0, filter bar 2 rows → 1 from 1280px up, provider grid 3 → 4
+  columns from 1440px up.
+
+  The earlier reasoning that 320px was "the smallest round number above the 314px floor" is kept in
+  the story as the thing that was wrong rather than deleted: it identified the cause correctly and
+  drew the wrong conclusion, because the floor was never a fact about the card — it was one missing
+  declaration.
+
 ### Changed
 
 - **flux-lang 0.37 → 0.39, and every generated module is rewritten in the new canonical syntax.**

@@ -101,12 +101,23 @@ pub fn plan_selected(
         entries.push(compiled.site);
     }
 
-    // The site's catalogue covers every provider at once, so it is a function of a **full** run
-    // only. A `--provider zendesk` build would have to drop the other two to write it honestly, so
-    // it leaves the committed document alone instead — neither rewritten nor reported stale. This
-    // is the same reasoning `crates/catalog/src/generated.rs` records for keeping its provider
-    // index by hand, reached from the other direction.
+    // **The whole-catalogue artifacts.** Each covers every provider at once, so each is a function
+    // of a **full** run only. A `--provider zendesk` build would have to drop the other sixteen to
+    // write one honestly, so it leaves the committed documents alone instead — neither rewritten nor
+    // reported stale. `docs/designs/catalog-json.md` records the rule for `catalog.json`; C-104
+    // brings `crates/catalog/src/generated.rs` under it, which is what makes a provider-scoped run's
+    // write set disjoint from another provider's and so lets provider stories run in parallel.
     if only.is_none() && service.is_none() {
+        artifacts.push(planned(
+            workspace.catalog_index_path(),
+            crate::catalog::render_index(
+                &providers
+                    .iter()
+                    .map(|provider| provider.name.clone())
+                    .collect::<Vec<_>>(),
+            )?,
+        )?);
+
         let core = core_catalog::read_optional(workspace)?;
         artifacts.push(planned(
             workspace.site_catalog_path(),

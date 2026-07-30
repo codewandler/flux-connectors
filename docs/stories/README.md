@@ -30,10 +30,21 @@ Gate: `cargo build --workspace && cargo test --workspace && cargo clippy --works
 
 ## Next (ready — take the top one unless the user named a story)
 
+### authentication as a connector surface — a login that cannot leak
+_Authentication is currently something the **host** does *around* a connector: `OAuth2Spec` declares_
+- [C-134 — Authentication as a connector surface — a login that cannot leak (epic)](C-134-authentication-surface-epic.md) · Spec · EPIC — an operation's result becomes a session value the model can read, so a login that RETURNS its token hands a bearer credential to an LLM. The answer is structural: divert to the store, return a CredentialRef. Redaction cannot work here — C-79 already proves why
+- [C-136 — A credential-producing operation returns a handle, never the secret](C-136-credential-diversion.md) · Spec · THE safety story of its epic. An operation's result becomes a session value a model can read and a log can print, so a login that returns its token has already lost. Redaction cannot save it — a token minted BY THIS CALL is unknown to the redactor until after it arrives
+- [C-135 — The authentication role and its grant members](C-135-authentication-role.md) · Spec · reuses C-119's role mechanism rather than inventing a category beside it. OAuthGrant already exists with Password (babelforce's flow) and ClientCredentials — this gives OAuth2Spec its first real consumer
+
+### Babelforce Ivr
+- [C-129 — babelforce IVR v2 — atomics, not call modules (epic)](C-129-babelforce-ivr-epic.md) · Spec · EPIC — simpleMenu is audioplayer + read + switchnode welded together, so publishing call modules would freeze combinations instead of exposing parts. But an IVR flow's flowEndApplication is a GOTO, and C-94's graph refuses cycles because Flux has none
+- [C-130 — The ivr service and its atomic operation inventory](C-130-ivr-atomics-inventory.md) · Spec · six composable parts beat seventeen frozen combinations — audioplayer, read, switchnode, dial, recording, acd. Scope agentic and realtime out until the plain six land
+- [C-131 — The IVR inbound event set, including the two different invites](C-131-ivr-events.md) · Spec · 'on invite' is NOT the SIP INVITE of an inbound call — in this codebase it is the ACD inviting an AGENT to take a queued call (acd/handler.go:290-297). Both are real; they must not share a name
+- [C-132 — Decide: do composed IVR templates belong here, and in what execution model?](C-132-decide-ivr-templates.md) · Spec · DECISION — an IVR flow's edges are gotos and C-94's graph refuses cycles because Flux has none. And an IVR flow runs in the VENDOR's engine, a third case 'this repo compiles, flux executes' does not cover
+
 ### channel bindings — generalize a flux `channel` over a connector
 _[inbound-events.md](inbound-events.md) models an **event** — the vendor calls us — and stops there._
 - [C-83 — Publish events and channel bindings into the manifest and the catalogue](C-83-channel-binding-codegen.md) · Codegen · the strict split: bindings reach the manifest and catalog.json and NOTHING reaches the module. The emitter must refuse to dress a binding up as a pollable op
-- [C-84 — Design the flux-side generic connector channel kind and file its flux stories](C-84-flux-connector-channel-seam.md) · Bridge · this is what retires adapters/slack.rs — one generic `connector` arm in build_channels instead of one arm per vendor. Cross-repo handoff, per the C-16/C-64 precedent
 - [C-85 — The delivery envelope — flux's Event carries no id, source or verified flag](C-85-delivery-envelope.md) · Bridge · flux_app::Event is {label, payload} and nothing else, so 'delivery id in the payload' stuffs envelope into payload — and seed_payload binds every top-level payload field as a flow symbol, so a vendor key can silently shadow it
 
 ### the connector bundle
@@ -44,6 +55,13 @@ _A connector is more than a set of callable operations. It also has **schemas** 
 - [C-87 — Publish the configuration surface into the manifest and the catalogue](C-87-configuration-codegen.md) · Codegen · includes a BREAKING change to settle — site.rs flattens the whole OAuth2Spec to `oauth2: bool`, so a hosted product cannot build an authorize URL at all
 - [C-88 — Prove OAuth2 on one provider — the operator level is currently unexercised](C-88-prove-oauth2.md) · Spec · OAuth2Spec is a landed type NO shipped provider uses, so half the configuration model is proven only by a fixture. tests/auth_archetypes.rs asserts that gap and fails the day this lands
 - [C-89 — The hosted OAuth redirect has no home — OAuthRedirect is loopback-only](C-89-hosted-oauth-redirect.md) · Bridge · OAuthRedirect is {port, path} — a CLI shape. A hosted callback is https://app.example.com/oauth/callback, supplied by the host, and often must be pre-registered in the vendor's dashboard before the flow works at all
+
+### the connectors datasource — the catalogue, queryable from a session
+_A flux session has no way to ask **"which connector can do this?"**. The catalogue exists, it is_
+- [C-137 — The connectors datasource — the catalogue, queryable from a session (epic)](C-137-connectors-datasource-epic.md) · Bridge · EPIC — the Tool pack registers one tool per operation (97 and growing); a datasource is FIVE ops regardless of catalogue size. Discover through the datasource, invoke through the pack. flux's LiveDatasource seam already exists and binds at the same ClientBuilder call
+- [C-138 — The datasource entity model, its links, and the oip as record id](C-138-datasource-entity-model.md) · Bridge · the addressing work already bought this — the oip (authority[/service]:version#member) is a stable record id, and a binding's link to its reply operation is C-82's composition made traversable
+- [C-139 — The LiveDatasource backend and its binding](C-139-datasource-backend.md) · Bridge · implements flux's existing LiveDatasource trait over the compiled-in catalogue. Binds through the SAME ClientBuilder call as the Tool pack, so a host configures discovery and invocation in one place
+- [C-140 — Search that is good enough to act on](C-140-datasource-search.md) · Bridge · a search that returns the wrong connector confidently is worse than no search, because the caller acts on it. Role-aware search is what makes the roles epic pay off — 'find me a ticketing provider' is a role query
 
 ### the connectors proxy — server-side credential injection
 _Every credential problem in this repo has the same shape: **the caller must not hold the secret, but_
@@ -87,8 +105,7 @@ _Four waves built this vocabulary without naming it:_
 _A connector today compiles a vendor spec into **outbound** ops: flux calls Zendesk, GitHub, Slack._
 - [C-58 — Inbound events — connectors define the reverse call direction (epic)](C-58-inbound-events-epic.md) · Spec · EPIC — a connector today compiles only outbound ops; this adds the half where the vendor calls US. Verification is a declarable matrix (4 vendors, 1 parameterized HMAC), so it compiles rather than interprets — and flux's webhook channel has NO signature verification today, which is the blocking cross-repo seam
 - [C-59 — An `[inbound]` section in the provider TOML and the IR](C-59-inbound-ir-and-toml.md) · Spec · pure functions from bytes to IR, no network: transport, verification, discriminator, delivery id, per-event `when` narrowing and payload schema refs
-- [C-60 — Verification conformance — one parameterized HMAC against real vendor vectors](C-60-verification-conformance-matrix.md) · Spec · the load-bearing test of the inbound half: 4 vendors' 'unique' schemes collapse to one algorithm over {digest, encoding, signed-template, tolerance} — proven with signature vectors from vendor docs, not self-generated fixtures
-- [C-64 — Design the flux-side verified-webhook seam and file its flux stories](C-64-design-verified-webhook-seam.md) · Bridge · the C-16 pattern repeated: flux's webhook channel has NO signature verification (bearer token only), so generated verification has nowhere to run — design the seam here, file the stories on flux's board, and let every other inbound story proceed without it
+- [C-141 — Four gaps C-60 found in HmacSpec, one of which is a forgery hole by construction](C-141-hmac-spec-gaps.md) · Spec · found by C-60's conformance work, measured not guessed. A `signed` template that never interpolates {body} loads cleanly and signs a body-independent string — the same class as the brace typo C-60 fixed, but reachable without any typo
 - [C-66 — Put inbound events under a service, and admit AsyncAPI as their front-end](C-66-members-under-services.md) · Spec · provider → service → (operation | event | channel) · the two gaps C-58's epic leaves open. AMENDED by C-82: a third member kind, one shared namespace, `#name` reused — that half has landed
 
 ### Member Io
@@ -104,7 +121,6 @@ _A connector's operations are currently legible only by reading `providers/<name
 - [C-32 — Emit a curl form for each operation](C-32-curl-tab.md) · Codegen
 
 ### Provider Fleet 2
-- [C-104 — Make whole-catalogue artifacts coordinator-owned, so provider stories can run in parallel](C-104-parallel-provider-fanout.md) · Build · the fan-out cap is ONE file — crates/catalog/src/generated.rs carries two hand-maintained lists every provider story appends to, so any two collide and the wave size is 1
 - [C-105 — Provider fleet 2 — the next connectors, shipped in parallel (epic)](C-105-provider-fleet-2-epic.md) · Spec · EPIC — the first fleet (C-69..C-78) is fully drained. Each connector here is chosen to exercise something the model has not yet met, not just to add a row
 - [C-106 — Ship the Stripe connector](C-106-provider-stripe.md) · Spec · the second vendor in C-60's HMAC matrix — inbound-events.md already tabulates Stripe-Signature with its t=/v1= pairs and tolerance, and nothing has ever exercised that row
 - [C-107 — Ship the Notion connector](C-107-provider-notion.md) · Spec · forces C-55 — Notion REJECTS a request without a Notion-Version header, so this connector cannot ship until a provider can declare a constant request header
@@ -122,7 +138,6 @@ _Seventeen connectors share structure that nothing currently names. `zendesk`, `
 
 ### Tool Pack
 - [C-113 — The connector Tool pack — the flux interop layer (epic)](C-113-tool-pack-epic.md) · Bridge · EPIC — flux REMOVED flux-plugin-zendesk pending 'a flux-connectors interop layer'; D-200/D-201/D-202 are blocked on this and examples/zendesk.triage.flux is the written acceptance target. A Tool pack delegates to flux's own http.request, so flux keeps every byte of egress
-- [C-114 — The connector-pack crate and the ToolSpec projection](C-114-tool-spec-projection.md) · Bridge · the foundation the rest of the epic builds on — a catalogue entry becomes a flux ToolSpec, dotted name and all
 - [C-115 — Request construction, delegation to http.request, and the mirrored network gate](C-115-request-delegation.md) · Bridge · SAFETY — delegating to HttpRequestTool::execute bypasses Executor::dispatch, so a Tool that fails to declare its own permission_subjects is an un-gated hole through the host's network policy
 - [C-116 — The CredentialStore port, in-Rust auth assembly, and redaction](C-116-credential-store-port.md) · Bridge · finally wires C-90's Layout/CredentialRef to a consumer — and removes the $auth seam from milestone 1's critical path, because a Tool builds `Bearer <token>` itself
 - [C-117 — Generate the pack from the IR and hold it to the drift gate](C-117-pack-codegen.md) · Codegen · two surfaces from one IR can disagree about the same operation — the differential test is the honest guard, and it belongs here rather than in a later postmortem
@@ -140,6 +155,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-36 — Prove the proxy and the Flux emitter build the same request](C-36-proxy-emitter-conformance.md) · Bridge · blocked on C-34 · two backends over one IR will drift without this
 
 ## Backlog
+- [C-133 — The brave connector — Brave Talk's room-token HTTP surface](C-133-provider-brave-talk-tokens.md) · Spec · ONLY the three HTTP calls. The XMPP MUC stream stays OUT — vision.md names protocol-rich technology adapters as a non-goal, and flux already has D-205/D-206 with feasibility proven live. Blocked on two real things; read Notes before starting
 
 ### the connector bundle
 _A connector is more than a set of callable operations. It also has **schemas** (what goes in, what_
@@ -199,6 +215,8 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-52 — Ship the GitHub connector](C-52-provider-github.md) · Spec · bearer · path-and-body surface only · listing ops wait on C-30
 - [C-53 — Ship the Slack connector](C-53-provider-slack.md) · Spec · bearer · POST+JSON throughout, which is what avoids the query gap
 - [C-54 — Derive the shipped-provider lists instead of hand-maintaining seven of them](C-54-derive-shipped-lists.md) · Build · caused a REWORK in the C-51/52/53 wave; five lists and two counts in four crates
+- [C-60 — Verification conformance — one parameterized HMAC against real vendor vectors](C-60-verification-conformance-matrix.md) · Spec · the load-bearing test of the inbound half: 4 vendors' 'unique' schemes collapse to one algorithm over {digest, encoding, signed-template, tolerance} — proven with signature vectors from vendor docs, not self-generated fixtures
+- [C-64 — Design the flux-side verified-webhook seam and file its flux stories](C-64-design-verified-webhook-seam.md) · Bridge · the C-16 pattern repeated: flux's webhook channel has NO signature verification (bearer token only), so generated verification has nowhere to run — designed in verified-webhook-seam.md and filed on flux's board as C-291…C-295, so every other inbound story proceeds without it
 - [C-69 — Ship the Google Workspace connector](C-69-provider-google.md) · Spec · the multi-service showcase: gmail · calendar · drive under one provider
 - [C-70 — Ship the Jira connector](C-70-provider-jira.md) · Spec · basic email+token · tenant URL, like zendesk
 - [C-71 — Ship the Asana connector](C-71-provider-asana.md) · Spec · bearer · every body and response wrapped in `data`
@@ -209,11 +227,14 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-76 — Ship the OpenRouter connector](C-76-provider-openrouter.md) · Spec · bearer · OpenAI-compatible · charter-named
 - [C-77 — Ship the Sentry connector](C-77-provider-sentry.md) · Spec · bearer · trailing slashes are load-bearing
 - [C-78 — Ship the Zoom connector](C-78-provider-zoom.md) · Spec · bearer · nested meeting settings
+- [C-84 — Design the flux-side generic connector channel kind and file its flux stories](C-84-flux-connector-channel-seam.md) · Bridge · this is what retires adapters/slack.rs — one generic `connector` arm in build_channels instead of one arm per vendor. Cross-repo handoff, per the C-16/C-64 precedent
 - [C-100 — Render the explorer full-width](C-100-explorer-full-width.md) · Surfaces · the largest visible gain for the smallest diff — VPDoc.vue:191 caps content at 688px, so 16 provider cards render in two columns on a page allowed to be 1440px
 - [C-101 — Make services a visible, filterable dimension](C-101-services-in-the-explorer.md) · Surfaces · 18 services are published with base_url, api_version, gid and operation counts — the explorer mentions none of them, so Google's three read as one
 - [C-102 — Make a filtered view shareable, and let the list be sorted](C-102-shareable-explorer-views.md) · Surfaces · the page promises 'every operation has a stable page you can share' — true of an operation, false of a view. 'Every destructive Shopify operation' cannot be sent to anyone
+- [C-104 — Make whole-catalogue artifacts coordinator-owned, so provider stories can run in parallel](C-104-parallel-provider-fanout.md) · Build · the fan-out cap is ONE file — crates/catalog/src/generated.rs carries two hand-maintained lists every provider story appends to, so any two collide and the wave size is 1
 - [C-111 — Ship the Fly.io Machines connector](C-111-ship-the-fly-machines-connector.md) · Spec · A deliberately narrow machine-lifecycle surface: nine typed operations, one named service, and no invented channel contract
 - [C-112 — Publish Flux core specifications in the connector explorer](C-112-publish-flux-core-specifications-in-the-explorer.md) · UX · Built-ins and language nodes become searchable beside connectors, with canonical JSON identities rather than fake providers
+- [C-114 — The connector-pack crate and the ToolSpec projection](C-114-tool-spec-projection.md) · Bridge · the foundation the rest of the epic builds on — a catalogue entry becomes a flux ToolSpec, dotted name and all
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

@@ -157,6 +157,18 @@ impl Workspace {
             .join(format!("{provider}.rs"))
     }
 
+    /// `<root>/crates/catalog/src/generated.rs` — the index naming every provider's module (C-104).
+    ///
+    /// The whole-catalogue counterpart to [`Self::catalog_module_path`], and it carries the same
+    /// consequence [`Self::site_catalog_path`] does: it is a function of a **full** run, so
+    /// [`crate::pipeline::plan_selected`] emits it only when nothing narrowed the run. It was
+    /// hand-maintained until C-104 for exactly that reason, which made it the single file every
+    /// provider story had to append to — and therefore the reason two of them could never run at
+    /// once.
+    pub fn catalog_index_path(&self) -> PathBuf {
+        self.catalog_dir().join("src").join("generated.rs")
+    }
+
     /// `<root>/web/public/catalog.json` — the whole catalogue as one JSON document (C-42).
     ///
     /// One file for every provider, not one per provider: a website wants one fetch, and the

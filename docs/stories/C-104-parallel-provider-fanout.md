@@ -2,8 +2,7 @@
 id: C-104
 title: Make whole-catalogue artifacts coordinator-owned, so provider stories can run in parallel
 pillar: Build
-status: ready
-priority: 2
+status: done
 design:
 epic: provider-fleet-2
 areas: [connector-cli, catalog]
@@ -37,26 +36,104 @@ have to drop the other two"* — which is sound, and is exactly what caps the fa
 and a scoped build leaves the committed document untouched rather than truncating it.
 
 ## Acceptance
-- [ ] `crates/catalog/src/generated.rs` is **generated on a full build** and leaves untouched by a
+- [x] `crates/catalog/src/generated.rs` is **generated on a full build** and leaves untouched by a
       `--provider` or `--service` run — the rule `catalog.json` already follows. Its two lists stop
       being hand-maintained.
-- [ ] `crates/catalog/tests/embedded_operations.rs` keeps working: it exists to catch a forgotten
+      → `connector_cli::catalog::render_index` (`crates/connector-cli/src/catalog.rs:112`), planned
+      in the full-run-only block at `crates/connector-cli/src/pipeline.rs:113`, path at
+      `crates/connector-cli/src/workspace.rs:170`.
+- [x] `crates/catalog/tests/embedded_operations.rs` keeps working: it exists to catch a forgotten
       line, and once the line cannot be forgotten it should assert the *generated* index matches
       `providers/` instead. It must not become vacuous.
-- [ ] **A scoped build is what an implementor runs.** `build --provider <id>` produces every
+      → `the_provider_list_matches_the_repository` still reads `providers/` from disk and compares it
+      against the compiled-in index, which is now a **staleness** check on a committed artifact; a
+      non-emptiness guard was added so it cannot pass against an empty tree. Measured red on a
+      simulated new provider (see Progress), so it is not vacuous.
+- [x] **A scoped build is what an implementor runs.** `build --provider <id>` produces every
       per-provider artifact and touches no whole-catalogue one, so two implementors' write sets are
       disjoint. The story states the gate a provider implementor runs, and it does not include a full
       build.
-- [ ] **`AGENTS.md` names the whole-catalogue artifacts as coordinator-owned**, alongside the
+      → stated below and in `AGENTS.md`; verified by building a simulated 18th provider.
+- [x] **`AGENTS.md` names the whole-catalogue artifacts as coordinator-owned**, alongside the
       existing generated-path table — the same status the board and `CHANGELOG.md` already have.
       A conflict in a generated file is resolved by regenerating, never by merging hunks.
-- [ ] The whole-tree fixed-point property still holds: a full build after integrating N providers is
+      → `AGENTS.md`, "Whole-catalogue artifacts are coordinator-owned", with the four artifacts
+      marked in the generated-path table.
+- [x] The whole-tree fixed-point property still holds: a full build after integrating N providers is
       a no-op, asserted by the existing test.
-- [ ] Failing-first test: a scoped `build --provider <id>` leaves `generated.rs` and `catalog.json`
+      → `the_committed_tree_is_a_fixed_point_of_a_build` unchanged and green; it now also covers the
+      index, and it was observed *failing* on the simulated new provider, so it stays meaningful.
+- [x] Failing-first test: a scoped `build --provider <id>` leaves `generated.rs` and `catalog.json`
       byte-identical. That is the property the whole story rests on and nothing asserts it today.
+      → `a_scoped_build_leaves_the_whole_catalogue_artifacts_byte_identical`,
+      `crates/connector-cli/tests/catalog_index.rs`.
+
+## The gate a provider implementor runs
+
+Scoped, and deliberately **without a full build** — a full build would write the whole-catalogue
+artifacts, which is the collision this story removes:
+
+```bash
+cargo run -p connector-cli -- build --provider <id>
+cargo run -p connector-cli -- diff  --provider <id>
+cargo build --workspace
+cargo test --workspace --no-fail-fast
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all --check
+```
+
+`--no-fail-fast` is load-bearing: the expected failures span five test binaries, and plain
+`cargo test --workspace` stops at the first one.
+
+A story adding a **new** provider leaves **eight** tests red across five binaries, all whole-catalogue
+staleness checks, all red *because* the implementor correctly did not write a whole-catalogue file,
+and all resolved by the coordinator's full build at integration. `AGENTS.md` tabulates them with the
+binary each lives in. A story that only *changes* an existing provider leaves **three**:
+`the_committed_tree_is_a_fixed_point_of_a_build`, `a_build_plans_both_readme_images_and_they_are_current`
+and `the_build_writes_and_checks_site_catalog_json`.
+
+Both counts are measured, and the first draft of this section got both wrong — it said three and one.
+The cause is worth recording because it is the trap `AGENTS.md`'s own Validation section documents:
+the counts were taken with plain `cargo test --workspace`, which stops at the first failing binary
+and therefore cannot see failures in the four behind it. A count taken that way is not a measurement.
 
 ## Progress
-- Not started. Filed 2026-07-30 from a request to ship more connectors at once.
+- **Done** (impl/C-104). `crates/catalog/src/generated.rs` is generated by a full build and left
+  untouched by `--provider`/`--service`. Its bytes are unchanged from the hand-written file apart
+  from the header, so the change is purely in *who writes it*.
+- The whole-catalogue set was determined empirically, not from the story's table: a full plan and a
+  `--provider zendesk` plan were enumerated and differenced. The set is four, not two —
+  `crates/catalog/src/generated.rs`, `web/public/catalog.json`, `web/public/v1/**/*.json` and
+  `assets/readme-snippet-{light,dark}.svg`. The latter three were already full-run-only; only the
+  index needed moving.
+- The scoping test compares **whole-tree snapshots** rather than a list of paths. The first draft
+  enumerated four paths and silently omitted `web/public/v1/**` — the same drift the test exists to
+  prevent, reproduced inside the test. The fixture now copies the committed `specs/flux/core-v1.json`
+  and `assets/readme-snippet.flux` so every member is actually produced, with a guard asserting so;
+  otherwise the comparison would hold over an empty set and pass forever.
+- Verified the fan-out property end to end by adding a simulated 18th provider, running
+  `build --provider acmetest`, and confirming it wrote 12 per-provider artifacts and touched no
+  whole-catalogue file. The three resulting red tests are recorded above and in `AGENTS.md`.
+- A provider name that cannot be a Rust module is handled at emission. `providers/` admits `-` in a
+  file stem, and `pub(crate) mod google-ads;` does not parse — while the index was hand-written a
+  human hit that immediately, but generated it would ship a `crates/catalog` that does not compile.
+  A **keyword** name is escaped rather than refused: `box.com` is inside the charter, `mod box;` is a
+  compile error, and `mod r#box;` resolves to the same `generated/box.rs` while leaving the provider
+  id `box` in every address, file name and catalogue row. Refusing would have forced a rename that
+  changes the op-id prefix and the installable artifact name — a published address rewritten to work
+  around a detail of one generated file. Only the three keywords no raw identifier accepts
+  (`crate`, `self`, `super`) are refused. The keyword list was checked against rustc rather than
+  written from memory, which is how `union` came to be excluded: it is a weak keyword and
+  `mod union {}` compiles.
+- Merged `main` (flux-lang 0.39, which rewrote every generated `.flux` into the new canonical syntax)
+  into the branch rather than rebasing, and re-took the failing-first proof against the new merge
+  base `38d8c53`. The merge was conflict-free: this story changes *who writes* the index, not any
+  `.flux` byte, so it does not overlap the 0.39 regeneration. The merged tree is a build fixed point
+  with no regeneration needed — the index is a list of provider names and carries no Flux syntax, so
+  the 0.39 upgrade could not have staled it.
+- Not done here: `CHANGELOG.md`, the board and `docs/roadmap.md` are coordinator-owned and untouched.
+  `Cargo.toml`/`Cargo.lock` changed only by inheriting main's 0.39 pin through the merge; this branch
+  contributes no manifest edit of its own (`git diff 38d8c53 HEAD` touches neither).
 
 ## Notes
 - **This is the enabler; file it before the fleet.** With it, wave size for provider stories becomes
