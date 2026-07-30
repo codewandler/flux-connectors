@@ -1,0 +1,293 @@
+# Slack Web API — hand-authored, no vendor spec.
+#
+# Slack publishes an OpenAPI 2.0 description of the Web API (`slack_web_openapi_v2.json`, linked
+# from docs.slack.dev). It is not pointed at here for the same reason zendesk's is not: when C-14's
+# fetch and drift-check land, this file should become a `[spec]` pointer plus a
+# `[[patch.operations]]` selection over the vendored document, and until then a hand-authored
+# selection is the shortest honest route to a module. Drift is undetectable by machine in the
+# meantime (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# EVERY OPERATION IS POST WITH A JSON BODY — INCLUDING THE READS. DO NOT "FIX" A READ INTO A GET.
+# ---------------------------------------------------------------------------------------------
+#
+# Slack's Web API is method-style: the endpoint is `POST /api/<method>` and every argument travels
+# in the body. Keeping the reads on POST is a *correctness* decision, not a stylistic one, and the
+# reason is the emitter:
+#
+#   `connector-flux` interpolates a query value into the URL with `fmt` and percent-encodes
+#   nothing, because flux registers no URL-encoding op (`crates/connector-flux/src/op.rs`, C-28,
+#   C-30). Slack's `channel`, `user` and `timestamp` are opaque strings — `C0123ABCDEF`,
+#   `U0123ABCDEF`, `1728394857.123456`. A read written as
+#   `GET /api/conversations.history?channel={channel}` would therefore ship the same
+#   unencodable-value defect `zendesk-ticket-search` carries, and `crates/connector-cli/src/status.rs`
+#   would rightly publish it as broken. Written as a POST body it cannot: a JSON body is assembled
+#   as a record and serialized by flux, so no value is spliced into a URL.
+#
+# So this connector declares **no query parameter anywhere**, which is what makes it the only
+# shipped provider with no encoding gap at all. That is asserted, not merely intended:
+# `crates/connector-flux/tests/slack_connector.rs` fails if any operation gains a query parameter,
+# and fails again if an emitted module contains the emitter's `$sep` query-separator machinery.
+#
+# Vendor documentation, recorded precisely because the two halves do not say the same thing:
+#
+# - The Web API overview (docs.slack.dev/apis/web-api) states that a JSON body requires the token to
+#   travel as a bearer in the `Authorization` header — *"You must transmit your token as a bearer
+#   token in the Authorization HTTP header"*, and *"you cannot send your token as part of the query
+#   string or as an attribute in your posted JSON"*. That is why `scheme = "bearer"` below is what
+#   makes this request shape legal at all, rather than an incidental choice.
+# - The same page scopes its JSON guarantee to writes: *"Most write methods allow arguments with
+#   `application/json` attributes."*
+# - The reference pages for the two **reads** here (`conversations.history`, `users.info`) list
+#   `application/json` among their accepted content types, but give their HTTP method as `GET`.
+#
+# CONFIRMED-BY-DOCS GAP: for `chat.postMessage` and `reactions.add` the POST+JSON shape is
+# unambiguously documented. For `slack-conversations-history` and `slack-users-info` it rests on
+# `application/json` being listed as accepted for those methods plus Slack's long-standing
+# acceptance of POST for every Web API method (its own guidance for `conversations.history` offers
+# the token *"as a POST parameter"*, which presumes POST). This is the one vendor-behaviour
+# assumption in the file and it is the thing C-15's live end-to-end run must verify first. If a read
+# turns out to reject POST, the fix is C-30's percent-encoding, **not** a GET with a raw
+# `channel=` in the query string.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: nothing expresses "the failure is in the body of a 200".
+# ---------------------------------------------------------------------------------------------
+#
+# Slack signals failure with **HTTP 200** and `{"ok": false, "error": "channel_not_found"}`. A
+# consumer that switches on the status code sees success on every failure, which is the single most
+# consequential quirk of this API.
+#
+# `Quirks.error_envelope` cannot say that. `ErrorEnvelope` carries `message_pointer` and an optional
+# `code_pointer` and nothing else, and its own documentation defines it as *"Where a vendor hides
+# the real error inside a **non-2xx** response body"* (`crates/connector-spec/src/ir.rs`). There is
+# no success predicate — no `ok_pointer`, no `success_when` — so the fact that the *status code is
+# not the signal* has nowhere to live. `connector-flux`'s `description()` then appends a sentence
+# beginning *"A non-2xx response is returned as data, not a failure…"*, which for Slack is true but
+# beside the point and would leave a model checking the wrong thing.
+#
+# Two consequences, both deliberate:
+#
+#  1. The envelope *is* declared below, with `message_pointer = "/error"`, so the location is
+#     machine-readable for C-12 rather than lost. A second, narrower facet of the same gap:
+#     `message_pointer` is documented as the *human-readable message* and is mandatory, while Slack
+#     publishes only a machine code at `/error` and no message field at all — so the required field
+#     has to carry a code.
+#  2. Because the schema cannot carry it, **each operation's own `description` states the `ok: false`
+#     contract in prose**, which is the text that actually reaches the model as its tool contract.
+#     That is a workaround, and it is written down as one. The fix is a success-predicate field on
+#     `ErrorEnvelope` plus `http.request` returning a record instead of one flat string (the same
+#     flux-side seam `op.rs` already records for envelope handling).
+#
+# SCHEMA GAP: cursor pagination is unexpressible for a POST+JSON API. `conversations.history` pages
+# with an opaque `cursor`, but `Pagination::Cursor.cursor_param` is defined as *"The query parameter
+# carrying the cursor"* — there is no body-field spelling. Declaring it would be declaring a query
+# parameter, which is exactly what this connector must not do. Pagination is therefore left off
+# `slack-conversations-history` entirely and bounded with `limit` instead; C-53 excludes cursor
+# paging pending C-30, and closing it needs the quirk to admit a body-carried cursor.
+#
+# SCHEMA GAP: a method-style read cannot declare read metadata. `connector-flux`'s
+# `check_write_metadata` derives "is this a write" from the HTTP method, so a `POST` is refused if it
+# declares `risk = "low"` or `idempotency = "idempotent"`. Both reads below are genuinely
+# low-risk and genuinely repeatable, and neither can say so: they are recorded `medium` /
+# `non_idempotent` because those are the weakest values the emitter accepts. The direction is
+# fail-closed — flux's approval gate over-prompts and forgoes a safe retry rather than waving a
+# write through — but the cost is real: on this provider `risk` no longer separates a read from a
+# write, which is why `slack-reactions-add` (a genuine write) and the two reads all sit at `medium`.
+# Closing it means deciding write-ness from something other than the verb.
+
+id = "slack"
+vendor = "Slack"
+
+# One host for every workspace. Unlike zendesk there is no per-tenant subdomain, so `base_url`
+# carries no `{placeholder}` for an operator to bind and `status.rs` reports no
+# `unbound-base-url-template` issue: the connector already has a valid destination URL.
+#
+# `http_hosts` is `slack.com` and must never be widened. `files.slack.com` and
+# `*.slack-edge.com` serve user content, `hooks.slack.com` is the unauthenticated webhook surface;
+# none of them is reachable from the operations below and adding one would widen the egress
+# allow-list for nothing. The manifest's real `http_hosts` field lands in C-10; today the host is
+# derived from this URL (`crates/connector-cli/src/catalog.rs`, `host_of`).
+base_url = "https://slack.com"
+
+description = "Slack messaging: post messages, read conversation history, look up users, react"
+
+# Every operation authenticates the same way, and a bearer is not merely one option among several
+# here: it is what permits a JSON request body at all (see the header comment).
+default_auth = [{ credentials = ["slack.bot_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "slack.bot_token"
+scheme = "bearer"
+# The bot user OAuth token, `xoxb-…`. Gated and registered with flux's redactor by the host; its
+# value is never read here and never reaches a generated artifact.
+#
+# A bot token rather than a user token deliberately: a bot posts as the app, so a write is
+# attributable to the integration rather than impersonating the operator, and the scopes below are
+# grantable per workspace. Slack mints it through OAuth v2 at install time, which is why no
+# `[auth.oauth2]` block appears — flux is handed an already-minted token through the environment and
+# runs no grant, the same provenance babelforce's bearer has.
+env = ["SLACK_BOT_TOKEN"]
+description = "Slack bot user OAuth token (xoxb-…) with chat:write, channels:history, users:read and reactions:write"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 4 of ~200 Web API methods
+#
+# Curated to what a support or notification flow executes at runtime: say something, read what was
+# said, resolve who said it, acknowledge it. Everything administrative (`admin.*`, ~90 methods),
+# every workspace-mutating create/invite/archive, and every file upload is excluded — the same
+# selection principle babelforce's 9-of-163 follows
+# (`docs/designs/provider-operation-inventory.md` §5.2).
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only, so `op slack.chat.postMessage` is undeclarable (C-8, C-23). The
+# *path* keeps Slack's own camelCase method name, because that is what the vendor routes on.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "slack-chat-post-message"
+method = "POST"
+path = "/api/chat.postMessage"
+description = "Post a message to a Slack channel, visible to everyone in it. Slack answers HTTP 200 even on failure: check `ok` in the response body before treating the message as sent"
+# A message in a shared channel is read by people, notifies them, and cannot be un-seen once posted.
+# That is the "a reviewer would want to see this first" tier, and it is the one operation here that
+# is unambiguously high.
+risk = "high"
+# Posting twice posts two messages. Slack offers no idempotency key on this method.
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "channel"
+description = "Channel id (`C0123ABCDEF`) or name to post to. An id is preferred; a name resolves only for public channels"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# Slack requires one of `text`, `blocks` or `attachments`. This connector models only `text`, so
+# `text` is required here — a `blocks` payload is a structured-body shape worth its own story rather
+# than a free-form `Any` parameter a model would have to guess the schema of.
+[[operations.params.body]]
+name = "text"
+description = "Message text, in Slack's mrkdwn syntax"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "thread_ts"
+description = "The `ts` of a parent message to reply to, threading the reply under it. Omit to post at channel level"
+required = false
+schema = { type = "string" }
+
+[operations.quirks.error_envelope]
+# See the header comment: this says *where* the error is, and cannot say that it arrives with a 200.
+message_pointer = "/error"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "slack-conversations-history"
+method = "POST"
+path = "/api/conversations.history"
+description = "Read recent messages from a Slack channel, newest first. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `channel_not_found` appears at `error`"
+# A read, and recorded `medium` only because the emitter refuses `risk = "low"` on a POST. See the
+# method-style-read gap in the header comment; nothing about this operation changes state.
+risk = "medium"
+# Likewise: a read is repeatable, but `idempotency = "idempotent"` is refused on a POST.
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "channel"
+description = "Channel id to read (`C0123ABCDEF`)"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# The bound that replaces pagination. Slack's own guidance is to keep this well under the maximum;
+# `cursor` paging is deliberately absent because the quirk model can only express a cursor as a
+# query parameter — see the header comment.
+[[operations.params.body]]
+name = "limit"
+description = "Maximum messages to return in one call, newest first. Slack caps this at 1000 and advises far less"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 1000, default = 100 }
+
+[[operations.params.body]]
+name = "oldest"
+description = "Only messages after this `ts`, e.g. `1728394857.123456`. Omit for no lower bound"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "latest"
+description = "Only messages up to this `ts`. Omit for no upper bound"
+required = false
+schema = { type = "string" }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "slack-users-info"
+method = "POST"
+path = "/api/users.info"
+description = "Look up one Slack user by id — display name, real name, time zone and whether they are a bot. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `user_not_found` appears at `error`"
+# A read. `medium` for the same reason as above, not because looking up a user is risky.
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "user"
+description = "User id to look up (`U0123ABCDEF`)"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "include_locale"
+description = "Also return the user's locale"
+required = false
+schema = { type = "boolean", default = false }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "slack-reactions-add"
+method = "POST"
+path = "/api/reactions.add"
+description = "Add an emoji reaction to a message, visible to everyone in the channel. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `already_reacted` appears at `error`"
+# A visible write to a shared workspace, but a small and trivially reversible one — an emoji next to
+# a message, attributable to the bot. `medium` rather than `high`; that it collides with the two
+# reads is the method-style-read gap in the header comment, not a claim that they are equivalent.
+risk = "medium"
+# Repeating it does not add a second reaction — Slack answers `already_reacted` — but that is the
+# vendor refusing the duplicate, not the call being idempotent, and the emitter refuses
+# `idempotent` on a POST regardless.
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "channel"
+description = "Channel id containing the message (`C0123ABCDEF`)"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "timestamp"
+description = "The `ts` of the message to react to, e.g. `1728394857.123456`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# The bare emoji name, with no surrounding colons: Slack rejects `:thumbsup:` here.
+[[operations.params.body]]
+name = "name"
+description = "Emoji name without colons, e.g. `thumbsup` or `white_check_mark`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error"

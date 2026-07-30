@@ -13,8 +13,8 @@ use std::path::{Path, PathBuf};
 
 use connector_spec::{provider, AuthScheme};
 
-/// The three providers C-17 ships, in the order the story names them.
-const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce"];
+/// Every provider this repository ships: C-17's original three, then the connectors added since.
+const SHIPPED: &[&str] = &["zendesk", "freshdesk", "babelforce", "slack"];
 
 /// `<repo root>/providers`, derived from this crate's manifest directory so the test is independent
 /// of the working directory a runner happens to use.
@@ -56,7 +56,12 @@ fn every_shipped_provider_loads() {
 /// inventory selected are asserted next to it.
 #[test]
 fn operation_selection_stays_curated() {
-    let expected = [("zendesk", 7), ("freshdesk", 9), ("babelforce", 9)];
+    let expected = [
+        ("zendesk", 7),
+        ("freshdesk", 9),
+        ("babelforce", 9),
+        ("slack", 4),
+    ];
     for (name, count) in expected {
         let loaded = load(name);
         assert_eq!(
