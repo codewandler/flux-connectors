@@ -7,6 +7,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The site's hand-maintained-data guard read prose as data, and the web gate was red on `main`
+  (C-205).** `npm run build && npm test` reported 27 of 28 at v0.6.0. The guard collected every
+  catalogue service name into a forbidden-substring set and grepped the explorer sources with
+  `String.includes`, so Postmark's `server` service matched the English word in a comment about the
+  VitePress dev server. Nothing was hand-maintained.
+
+  **It was ten false positives, not one** — `server`, `delivery`, `front`, `account`, `box` and
+  `admin` across seven files; `server` was merely the first to fire. Thirteen of the catalogue's
+  service names are ordinary English words, so this was a latent gate failure waiting for the next
+  comment, with nothing to tell the next author why the build broke.
+
+  Two narrowings, both principles rather than exception lists, because an allowlist naming `server`
+  is this bug filed once per connector:
+
+  - *A comment renders nothing, so a comment is not data.* Sources are reduced to what they
+    contribute to the built site before matching. The scanner is string-aware rather than a
+    `//.*$` sweep — a hard-coded `https://api.postmark.com` is exactly what the guard exists to
+    catch, and a line sweep would cut it at its own `//`.
+  - *A value is a word, not a fragment.* Matching requires word boundaries, which is what lets the
+    first narrowing land at all: `catalog.mts` declares the field `delivery_id`, and that is
+    structure rather than data. It also settles the `gmail`/`mail` and `drives`/`drive` misreads. A
+    capital ends a word, so a hand-coded `zendeskTicket` is still caught.
+
+  **The guard was proved still to bite, not assumed to.** A new test plants a real catalogue value in
+  each language the sources are written in and requires each back; and on the integration branch,
+  appending `export const FIRST_CONNECTOR = 'zendesk'` to `web/data/catalog.data.mts` turned it red.
+  The gate is 30/30 — the 28 that existed plus this story's two.
+
 ### Added
 
 - **A graph's node ids now map to Flux AST paths, so a diagnostic lands on the node that produced it

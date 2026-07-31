@@ -2,8 +2,8 @@
 id: C-205
 title: "The hand-maintained-data guard matches English prose, so the web gate is red on main"
 pillar: Surfaces
-status: in-progress
-priority: 1
+status: done
+priority:
 design:
 epic:
 areas: [web]
@@ -124,3 +124,12 @@ prose — and requires each back. Verified end to end as well: appending
 
 Gate: `npm ci && npm run build && npm test` is 30/30 (28 before, plus the story's two new cases). No
 Rust touched, so no Cargo gate was run.
+
+**Coordinator verification, 2026-07-31.** The one risk worth checking on this diff is that a guard
+made more tolerant has been made useless, so it was falsified rather than reviewed: appending
+`export const FIRST_CONNECTOR = 'zendesk'` to `web/data/catalog.data.mts` on the integration branch
+turned tests 24 and 25 red; reverting returned the gate to 30/30 with a clean tree. The guard still
+catches what it exists to catch.
+
+Ten false positives were found, not the one this story was filed on — `server`, `delivery`, `front`,
+`account`, `box` and `admin` across seven files. The gate had been red on `main` at v0.6.0.
