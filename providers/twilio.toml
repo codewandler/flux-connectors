@@ -1,0 +1,400 @@
+# Twilio — hand-authored, no vendored OpenAPI spec.
+#
+# Twilio publishes a machine-readable OpenAPI description (github.com/twilio/twilio-oai), but this
+# file is transcribed by hand from its published REST API reference
+# (twilio.com/docs/messaging/api/message-resource, twilio.com/docs/voice/api/call-resource,
+# twilio.com/docs/iam/api/account) rather than vendored, consistent with how zendesk.toml and
+# freshdesk.toml are authored today (§1.2 in `docs/designs/provider-operation-inventory.md`). Drift
+# is therefore undetectable by machine until a `[spec]` pointer replaces this list.
+#
+# ---------------------------------------------------------------------------------------------
+# THE SHIP CUT: reads only. No operation here sends a body.
+# ---------------------------------------------------------------------------------------------
+#
+# Every Twilio write — sending a message, placing a call, updating a call in progress — is
+# `application/x-www-form-urlencoded`, and `params.body_encoding = "form"` (C-144) **interpolates
+# form values verbatim**: flux has no form encoder a Flux *program* can call, so a value carrying `&`
+# or `=` would corrupt the body and could inject a field into it. C-144's own note names the vendors
+# this recurs on: "Twilio, Mailgun, PayPal classic". The encoder exists upstream, in flux itself, as
+# `parse($record, as: "form")` — flux's own story `L-101` — but it reaches this repository only when
+# `codewandler-flux-lang` **publishes** a release carrying it, because the pin in
+# `[workspace.dependencies]` is a crates.io version and must stay one (`AGENTS.md` §Relationship to
+# flux). Today's pinned release does not carry it, so the encoder does not exist for this repository
+# yet, whatever exists in flux's own tree.
+#
+# `GET` requests carry no body, so every read below is unaffected: the request line and the query
+# string (curated to what is safe — see the per-operation comments) are all that go out, and Basic
+# auth's Authorization header is composed host-side, never templated here. So the connector ships
+# five reads: fetch the account (also `verify`), list and fetch messages, list and fetch calls.
+# Sending, and every other write, waits for the form encoder to publish.
+
+id = "twilio"
+vendor = "Twilio"
+
+# A single, fixed API host for every account — unlike zendesk's or freshdesk's per-tenant subdomain,
+# Twilio does not multi-tenant by host. There is therefore no `{placeholder}` here and no
+# `[[config]] binds = "endpoint.*"` field: see the credential/config section below for where the
+# Account SID actually goes, and why it is *not* templated into this string.
+base_url = "https://api.twilio.com/2010-04-01"
+
+description = "Twilio programmable messaging and voice: read messages, calls and the authenticated account"
+
+# The "Test connection" operation: a bounded read of the account itself, over the same Basic
+# credential every other operation uses.
+verify = "twilio-account-get"
+
+default_auth = [{ credentials = ["twilio.basic_auth"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "twilio.basic_auth"
+scheme = "basic"
+# The secret half: the Auth Token. Gated and registered with flux's redactor by the host; its value
+# is never read here and never reaches a generated artifact.
+env = ["TWILIO_AUTH_TOKEN"]
+# The non-secret identity half: the Account SID, `AC…`. Unlike zendesk's and jira's user half — an
+# email a user already knows — this is an identifier a user copies from the Twilio Console, which is
+# the whole reason C-109 exists: it tests whether the Basic-username config shape generalises past
+# "the email you sign in with". No `user_suffix`: Twilio's Basic pair is the bare SID and the bare
+# token, with no vendor marker appended to either half.
+user_env = ["TWILIO_ACCOUNT_SID"]
+description = "Twilio Account SID and Auth Token, sent as HTTP Basic credentials"
+
+# `signing` — the one scheme that never reaches an outgoing request. Declared even though nothing
+# references it yet, exactly as `stripe.webhook_signing_secret` and `slack.signing_secret` are: the
+# credential list is the one place a manifest names everything a connector requires, and an operator
+# wiring Twilio status callbacks needs to provision this before anything else about verification is
+# built.
+#
+# **It resolves from the same environment variable as the Basic credential's secret half.** That is
+# not a copy-paste mistake: Twilio has exactly one secret, the Auth Token, and uses it for two roles
+# — the Basic password Twilio expects on every outbound request, and the HMAC key Twilio itself uses
+# to sign every inbound status callback. Stripe and Slack each provision a *second*, distinct secret
+# for signing; Twilio does not issue one, so there is no second value to name a second environment
+# variable after. `AuthScheme::Basic` and `AuthScheme::Signing` are still two credentials in this
+# model, because a verification secret must be `scheme = "signing"` and no operation may authenticate
+# with one (`AGENTS.md` §Authentication contract) — but both entries resolve the one Auth Token an
+# operator sets once.
+[[auth]]
+name = "twilio.webhook_signing_secret"
+scheme = "signing"
+env = ["TWILIO_AUTH_TOKEN"]
+description = "The same Auth Token as twilio.basic_auth, used here to verify X-Twilio-Signature on inbound status callbacks. Never sent to Twilio"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 5, all reads (see the header comment on why nothing else ships)
+#
+# **The Account SID is a required path parameter on every operation, not a `base_url` template.**
+# This is the second genuinely new thing C-109 measures: the same identifier is both this
+# connector's Basic-auth *username* (bound via `[[config]] binds = "username.twilio.basic_auth"`,
+# below) and a segment every operation's path needs (`/Accounts/{account_sid}/...`).
+#
+# The precedented way to keep an account-scoped identifier out of every operation's caller-facing
+# parameters is `zendesk`'s and `freshdesk`'s: template it into `base_url` and bind it with
+# `[[config]] binds = "endpoint.<var>"`, so it never becomes a path parameter at all. That mechanism
+# does not extend to a value that must **also** be the credential's username half:
+#
+#   - `ConfigField::binds` (`crates/connector-spec/src/config.rs:239-267`) admits exactly one
+#     destination per field — `endpoint.<var>`, `credential.<name>`, `username.<name>`,
+#     `oauth.client_id` or `oauth.client_secret` — and there is no compound or repeated form.
+#   - The two destinations are not even the same *kind* of resolution on the host side: an
+#     `endpoint.*` binding fills a `base_url` template from a config store keyed by field name, while
+#     a `username.*` binding fills a Basic credential's `user_env` from the process environment.
+#     One collected answer cannot feed both without the host resolving one from the other, which
+#     nothing here declares.
+#
+# So this file has exactly one visible `[[config]]` field for the SID — satisfying "ask once" — and
+# it binds to the credential's username, because that is the acceptance this story is built to prove
+# out. The consequence is the one this comment exists to record: `account_sid` is a real, required,
+# caller-facing path parameter on every operation below, each of whose description says it is the
+# same value already entered for this connection's Basic-auth username. A caller (or the flow that
+# assembles a call) supplies it again rather than the connection form asking for it twice. That
+# duplication — call-time, not config-time — is the finding this story's Notes invite rather than
+# hand-wave: today's configuration model has no path from a `username.*` (or `endpoint.*`) binding
+# into an operation's path template, only into `base_url`, and `base_url` cannot absorb it here
+# because the fixed-host account resource itself (`/Accounts/{Sid}.json`, no separating slash before
+# `.json`) would need a path that does not start with `/` once split from a templated `base_url` —
+# which the loader refuses outright (`crates/connector-spec/src/provider.rs:2160`).
+#
+# RESPONSE SHAPES are read from Twilio's own reference pages (URLs on each operation below). Two
+# vendor quirks are worth stating once rather than on every field: **numeric-looking fields travel as
+# JSON strings**, not numbers — `duration`, `num_segments`, `num_media` and `price` are all quoted in
+# every example Twilio publishes — and **`date_created`/`date_updated`/`date_sent`/`start_time`/
+# `end_time` are RFC 2822 strings** (`Thu, 12 Aug 2010 22:29:53 +0000`), not ISO 8601, so no JSON
+# Schema `format = "date-time"` is claimed for them here.
+#
+# Message bodies and phone numbers are customer data. No field below carries an `example`, and none
+# of the prose names a real number or message text — only the documented shape.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "twilio-account-get"
+method = "GET"
+path = "/Accounts/{account_sid}.json"
+description = "Verify credentials by fetching the authenticated Twilio account"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "account_sid"
+description = "The Account SID — the same identifier entered as this connection's Basic-auth username"
+required = true
+schema = { type = "string" }
+
+# developer reference: twilio.com/docs/iam/api/account
+#
+# `auth_token` is deliberately **not** declared here, even though Twilio's own reference documents
+# the account resource as carrying it: it is the live secret this connector's Basic credential
+# already sends on every request, and a declared response field is an invitation to read, log or
+# forward it. Zendesk's `authenticity_token` is the same shape of decision made the other direction
+# (documented but flagged); Twilio's is a credential rather than a session token, so it is omitted
+# outright instead.
+[operations.response_schema]
+type = "object"
+required = ["sid"]
+properties = { sid = { type = "string", description = "The account's own SID — the same value configured as this connection's username" }, friendly_name = { type = "string", description = "The account's display name, set by whoever created it" }, status = { type = "string", enum = ["active", "suspended", "closed"], description = "closed is terminal" }, type = { type = "string", enum = ["Trial", "Full"], description = "A Trial account has sending and calling restrictions a Full account does not" }, owner_account_sid = { type = "string", description = "The parent account's SID when this is a subaccount; equal to sid for a primary account" }, date_created = { type = "string", description = "RFC 2822, not ISO 8601" }, date_updated = { type = "string", description = "RFC 2822, not ISO 8601" }, uri = { type = "string" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "twilio-message-list"
+method = "GET"
+path = "/Accounts/{account_sid}/Messages.json"
+description = "List messages sent from or received by this account"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "account_sid"
+description = "The Account SID — the same identifier entered as this connection's Basic-auth username"
+required = true
+schema = { type = "string" }
+
+# `To`, `From` and the `DateSent`/`DateSent<`/`DateSent>` range filters are documented Twilio list
+# filters and are all excluded here, checked and found unshippable rather than overlooked:
+#
+#   - `To` and `From` carry E.164 phone numbers, whose leading `+` is exactly the character
+#     `zendesk-ticket-search`'s gap corrupts (C-29): the query string this emitter assembles is not
+#     percent-encoded, and an unencoded `+` in a query value is form-decoded as a space by most
+#     servers — the number would arrive silently wrong.
+#   - `DateSent<` and `DateSent>` carry the operator in the **parameter name itself**, not the value.
+#     `<` and `>` are reserved characters in a URL query component; unencoded, they are likely to be
+#     rejected or reinterpreted by an intermediary before Twilio ever sees them.
+#
+# `page`/`page_size` are plain integers — no character either gap touches — so they are the only
+# filters declared.
+[[operations.params.query]]
+name = "page"
+wire = "Page"
+description = "Page number, 0-based"
+required = false
+schema = { type = "integer", minimum = 0, default = 0 }
+
+[[operations.params.query]]
+name = "page_size"
+wire = "PageSize"
+description = "Messages per page; Twilio caps this at 1000"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 1000, default = 50 }
+
+[operations.quirks.pagination]
+page = { page_param = "Page", size_param = "PageSize", page_size = 50, max_pages = 10 }
+
+# developer reference: twilio.com/docs/messaging/api/message-resource
+[operations.response_schema]
+type = "object"
+required = ["messages"]
+properties = { messages = { type = "array", description = "This page's messages, oldest or newest first depending on no filter being applied — Twilio does not document a stable default order", items = { type = "object", required = ["sid"], properties = { sid = { type = "string" }, account_sid = { type = "string" }, messaging_service_sid = { type = "string", description = "Set when the message was sent through a Messaging Service rather than a bare phone number; null otherwise" }, to = { type = "string", description = "The recipient, as an E.164 phone number or a channel address" }, from = { type = "string", description = "The sender, as an E.164 phone number, short code or alphanumeric sender id" }, body = { type = "string", description = "The message text, truncated by Twilio at 1600 characters" }, num_segments = { type = "string", description = "Sent as a numeric string, not a JSON number — Twilio quirk, not a typo here" }, num_media = { type = "string", description = "Sent as a numeric string" }, status = { type = "string", enum = ["accepted", "scheduled", "queued", "sending", "sent", "failed", "delivered", "undelivered", "receiving", "received", "read", "canceled"] }, direction = { type = "string", enum = ["inbound", "outbound-api", "outbound-call", "outbound-reply"] }, api_version = { type = "string" }, price = { type = "string", description = "Sent as a numeric string, negative for an outbound charge; null until the message settles" }, price_unit = { type = "string", description = "ISO 4217 currency code, e.g. the account's billing currency" }, error_code = { type = "integer", description = "Null unless status is failed or undelivered" }, error_message = { type = "string", description = "Null unless status is failed or undelivered" }, date_created = { type = "string", description = "RFC 2822, not ISO 8601" }, date_updated = { type = "string", description = "RFC 2822, not ISO 8601" }, date_sent = { type = "string", description = "RFC 2822, not ISO 8601; null until Twilio actually sends it" }, uri = { type = "string" } } } }, page = { type = "integer" }, page_size = { type = "integer" }, first_page_uri = { type = "string" }, previous_page_uri = { type = "string", description = "Null on the first page" }, next_page_uri = { type = "string", description = "Null on the last page" }, uri = { type = "string" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "twilio-message-get"
+method = "GET"
+path = "/Accounts/{account_sid}/Messages/{message_sid}.json"
+description = "Fetch one message"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "account_sid"
+description = "The Account SID — the same identifier entered as this connection's Basic-auth username"
+required = true
+schema = { type = "string" }
+
+[[operations.params.path]]
+name = "message_sid"
+description = "The message's SID, `SM…` or `MM…`"
+required = true
+schema = { type = "string" }
+
+# developer reference: twilio.com/docs/messaging/api/message-resource. Flat — the same object the
+# list operation's `messages` array carries, at the top level with no envelope.
+[operations.response_schema]
+type = "object"
+required = ["sid"]
+properties = { sid = { type = "string" }, account_sid = { type = "string" }, messaging_service_sid = { type = "string", description = "Set when the message was sent through a Messaging Service; null otherwise" }, to = { type = "string", description = "The recipient, as an E.164 phone number or a channel address" }, from = { type = "string", description = "The sender, as an E.164 phone number, short code or alphanumeric sender id" }, body = { type = "string", description = "The message text, truncated by Twilio at 1600 characters" }, num_segments = { type = "string", description = "Sent as a numeric string" }, num_media = { type = "string", description = "Sent as a numeric string" }, status = { type = "string", enum = ["accepted", "scheduled", "queued", "sending", "sent", "failed", "delivered", "undelivered", "receiving", "received", "read", "canceled"] }, direction = { type = "string", enum = ["inbound", "outbound-api", "outbound-call", "outbound-reply"] }, api_version = { type = "string" }, price = { type = "string", description = "Sent as a numeric string; null until the message settles" }, price_unit = { type = "string" }, error_code = { type = "integer", description = "Null unless status is failed or undelivered" }, error_message = { type = "string", description = "Null unless status is failed or undelivered" }, date_created = { type = "string", description = "RFC 2822, not ISO 8601" }, date_updated = { type = "string", description = "RFC 2822, not ISO 8601" }, date_sent = { type = "string", description = "RFC 2822, not ISO 8601; null until Twilio actually sends it" }, uri = { type = "string" }, subresource_uris = { type = "object", description = "Links to this message's media and feedback sub-resources" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "twilio-call-list"
+method = "GET"
+path = "/Accounts/{account_sid}/Calls.json"
+description = "List calls made from or received by this account"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "account_sid"
+description = "The Account SID — the same identifier entered as this connection's Basic-auth username"
+required = true
+schema = { type = "string" }
+
+# `To`, `From`, `StartTime`/`StartTime<`/`StartTime>` and `EndTime`/`EndTime<`/`EndTime>` are excluded
+# for exactly the reason `twilio-message-list`'s query comment records: phone numbers carry an
+# unencoded `+`, and the range operators live in the parameter *name*. `Status` is a plain enum word
+# with no character either gap touches, so it is declared alongside paging.
+[[operations.params.query]]
+name = "status"
+wire = "Status"
+description = "Filter by call status"
+required = false
+schema = { type = "string", enum = ["queued", "ringing", "in-progress", "completed", "busy", "failed", "no-answer", "canceled"] }
+
+[[operations.params.query]]
+name = "page"
+wire = "Page"
+description = "Page number, 0-based"
+required = false
+schema = { type = "integer", minimum = 0, default = 0 }
+
+[[operations.params.query]]
+name = "page_size"
+wire = "PageSize"
+description = "Calls per page; Twilio caps this at 1000"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 1000, default = 50 }
+
+[operations.quirks.pagination]
+page = { page_param = "Page", size_param = "PageSize", page_size = 50, max_pages = 10 }
+
+# developer reference: twilio.com/docs/voice/api/call-resource
+[operations.response_schema]
+type = "object"
+required = ["calls"]
+properties = { calls = { type = "array", items = { type = "object", required = ["sid"], properties = { sid = { type = "string" }, parent_call_sid = { type = "string", description = "Set when this call is a child leg (e.g. a conference or forwarded leg); null otherwise" }, account_sid = { type = "string" }, to = { type = "string", description = "The called party, as an E.164 phone number or SIP address" }, to_formatted = { type = "string", description = "A human-readable rendering of `to`" }, from = { type = "string", description = "The calling party" }, from_formatted = { type = "string", description = "A human-readable rendering of `from`" }, phone_number_sid = { type = "string", description = "The Twilio number involved, when one was" }, status = { type = "string", enum = ["queued", "ringing", "in-progress", "completed", "busy", "failed", "no-answer", "canceled"] }, direction = { type = "string", enum = ["inbound", "outbound-api", "outbound-dial"] }, answered_by = { type = "string", description = "Set only when answering-machine detection ran: human, machine_start, machine_end_beep, machine_end_silence, machine_end_other, or fax. Null otherwise" }, forwarded_from = { type = "string", description = "The number a carrier reports this call as forwarded from, when the carrier provides it" }, caller_name = { type = "string", description = "CNAM lookup result, when requested; null otherwise" }, duration = { type = "string", description = "Seconds, sent as a numeric string; empty until the call completes" }, start_time = { type = "string", description = "RFC 2822, not ISO 8601" }, end_time = { type = "string", description = "RFC 2822, not ISO 8601; null until the call ends" }, price = { type = "string", description = "Sent as a numeric string, negative for an outbound charge; null until the call settles" }, price_unit = { type = "string" }, api_version = { type = "string" }, uri = { type = "string" } } } }, page = { type = "integer" }, page_size = { type = "integer" }, first_page_uri = { type = "string" }, previous_page_uri = { type = "string", description = "Null on the first page" }, next_page_uri = { type = "string", description = "Null on the last page" }, uri = { type = "string" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "twilio-call-get"
+method = "GET"
+path = "/Accounts/{account_sid}/Calls/{call_sid}.json"
+description = "Fetch one call"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "account_sid"
+description = "The Account SID — the same identifier entered as this connection's Basic-auth username"
+required = true
+schema = { type = "string" }
+
+[[operations.params.path]]
+name = "call_sid"
+description = "The call's SID, `CA…`"
+required = true
+schema = { type = "string" }
+
+# developer reference: twilio.com/docs/voice/api/call-resource. Flat — the same object the list
+# operation's `calls` array carries, at the top level with no envelope.
+[operations.response_schema]
+type = "object"
+required = ["sid"]
+properties = { sid = { type = "string" }, parent_call_sid = { type = "string", description = "Set when this call is a child leg; null otherwise" }, account_sid = { type = "string" }, to = { type = "string", description = "The called party" }, to_formatted = { type = "string" }, from = { type = "string", description = "The calling party" }, from_formatted = { type = "string" }, phone_number_sid = { type = "string" }, status = { type = "string", enum = ["queued", "ringing", "in-progress", "completed", "busy", "failed", "no-answer", "canceled"] }, direction = { type = "string", enum = ["inbound", "outbound-api", "outbound-dial"] }, answered_by = { type = "string", description = "Set only when answering-machine detection ran; null otherwise" }, forwarded_from = { type = "string" }, caller_name = { type = "string", description = "CNAM lookup result, when requested; null otherwise" }, duration = { type = "string", description = "Seconds, sent as a numeric string; empty until the call completes" }, start_time = { type = "string", description = "RFC 2822, not ISO 8601" }, end_time = { type = "string", description = "RFC 2822, not ISO 8601; null until the call ends" }, price = { type = "string", description = "Sent as a numeric string; null until the call settles" }, price_unit = { type = "string" }, api_version = { type = "string" }, uri = { type = "string" }, subresource_uris = { type = "object", description = "Links to this call's recordings, notifications and other sub-resources" } }
+
+# ---------------------------------------------------------------------------------------------
+# Events — status callbacks. A fourth vendor for C-60's HMAC matrix, tabulated in prose below
+# because it cannot be tabulated in `[channels.verification.hmac]` — see the block comment after.
+#
+# Twilio has no webhook-subscription API to select event types from, the way GitHub, Stripe or
+# Slack's Events API do: a status callback is configured per-resource — a `StatusCallback` URL
+# supplied when a message or call is created, or set on a phone number's messaging/voice
+# configuration — all of which are writes this connector does not ship (see the header comment).
+# So there is no `[[channels]] transport = "webhook"` `[channels.subscription]` here either; an
+# operator wires the callback URL by hand, the same posture `providers/slack.toml`'s Events API
+# binding records under `[channels.setup]` when this repository does add a channel for it.
+# ---------------------------------------------------------------------------------------------
+
+[[events]]
+name = "message.status_callback"
+description = "A message's delivery status changed. Twilio POSTs this, form-encoded, to the StatusCallback URL supplied when the message was created"
+group = "Messaging"
+schema = { type = "object", required = ["MessageSid", "MessageStatus"], properties = { MessageSid = { type = "string" }, MessageStatus = { type = "string", enum = ["accepted", "queued", "sending", "sent", "failed", "delivered", "undelivered", "receiving", "received", "read"] }, To = { type = "string", description = "The recipient" }, From = { type = "string", description = "The sender" }, ApiVersion = { type = "string" }, ErrorCode = { type = "string", description = "Present only when MessageStatus is failed or undelivered" } } }
+
+[[events]]
+name = "call.status_callback"
+description = "A call's status changed. Twilio POSTs this, form-encoded, to the StatusCallback URL configured for the call or the answering number"
+group = "Voice"
+schema = { type = "object", required = ["CallSid", "CallStatus"], properties = { CallSid = { type = "string" }, CallStatus = { type = "string", enum = ["queued", "ringing", "in-progress", "completed", "busy", "failed", "no-answer", "canceled"] }, To = { type = "string", description = "The called party" }, From = { type = "string", description = "The calling party" }, Direction = { type = "string", enum = ["inbound", "outbound-api", "outbound-dial"] }, CallDuration = { type = "string", description = "Seconds, sent as a numeric string; present only once the call has ended" }, Timestamp = { type = "string", description = "RFC 2822, not ISO 8601" }, ApiVersion = { type = "string" } } }
+
+# ---------------------------------------------------------------------------------------------
+# THERE IS NO `[[channels]]` BINDING, AND THAT IS THE FINDING RATHER THAN AN OMISSION — the same
+# shape of finding `providers/stripe.toml` records for `Stripe-Signature`.
+# ---------------------------------------------------------------------------------------------
+#
+# Twilio signs a status callback with `X-Twilio-Signature`: base64(HMAC-SHA1(AuthToken, signed)),
+# where `signed` is the **full request URL** with every POST parameter's name and value — sorted by
+# name, no delimiter between a pair or between pairs — appended directly after it
+# (twilio.com/docs/usage/security#validating-requests). Every one of `HmacSpec`'s axes
+# (`crates/connector-spec/src/inbound.rs`) is checked against that and fails:
+#
+#  1. **The signed string is not a template over `{body}` and `{timestamp}`** — the only two
+#     placeholders `HmacSpec::signed` accepts. It is the request URL concatenated with the **parsed,
+#     re-sorted, re-joined** form fields, not the raw bytes that arrived. `{body}` names the raw
+#     request bytes verified *before* parsing (`inbound.rs`'s own load-bearing rule); Twilio's scheme
+#     needs the opposite — parse first, discard the original byte order, reassemble sorted — which is
+#     not expressible as a template over raw bytes at all, let alone with `{url}` absent from the
+#     placeholder set entirely.
+#  2. **Even granting a hypothetical `{url}` placeholder does not save it.** A `signed` template
+#     concatenates fixed strings around two named values; it cannot re-sort N form fields whose count
+#     and names vary per delivery. That is exactly the class of defect this repository's north star
+#     refuses a solution for: a per-vendor expression capable of resorting a field list is the
+#     connector-specific DSL principle 2 exists to keep out, not a gap in this one struct.
+#
+# So the credential is declared above, named, and ready — an operator terminating Twilio status
+# callbacks needs precisely `twilio.webhook_signing_secret` — and the events ship, because they are
+# correct today and are what a trigger would match on. The binding waits for a verification model
+# that can express "sign the sorted, reassembled parameters", which is a gap in `HmacSpec` itself
+# (a C-60-adjacent finding, parallel to Stripe's composite-header gap C-141 owns) rather than
+# something this file can work around.
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any operation above can run
+#
+# Two fields, matching the two halves of the Basic pair. Note what is *not* here: there is no third
+# field for the Account SID's use as a path parameter — see the long comment above the operations for
+# why that is a caller-facing duplication rather than a configuration-time one.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "account_sid"
+label = "Account SID"
+help = "Copy this from the Twilio Console dashboard — it starts with AC and is the same value used to sign in to the API, not your login email"
+example = "ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+format = "token"
+docs_url = "https://www.twilio.com/docs/iam/api/account"
+binds = "username.twilio.basic_auth"
+
+[[config]]
+name = "auth_token"
+label = "Auth Token"
+help = "Your primary Auth Token from the Twilio Console dashboard. Twilio shows it masked by default — click to reveal it"
+format = "token"
+secret = true
+docs_url = "https://www.twilio.com/docs/iam/api/account"
+binds = "credential.twilio.basic_auth"
