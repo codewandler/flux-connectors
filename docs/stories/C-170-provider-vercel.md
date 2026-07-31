@@ -2,7 +2,7 @@
 id: C-170
 title: Ship the Vercel connector
 pillar: Spec
-status: ready
+status: in-progress
 priority: 3
 design:
 epic: provider-fleet-2
@@ -36,21 +36,33 @@ An optional parameter whose absence silently redirects a write is worth a `descr
 
 ## Acceptance
 
-- [ ] `providers/vercel.toml`, hand-authored and **curated** — a small set of operations this pipeline
-      can express honestly, not every endpoint the vendor documents.
-- [ ] Declared `risk`, `idempotency` and effects per operation, and a `description` on each written for
-      a *model* to read rather than as UI copy.
-- [ ] A `[[config]]` surface with `label` and `help` on every field, and `secret` agreeing with `binds`.
-- [ ] A `verify` operation that is a read and runs unattended.
-- [ ] `crates/connector-flux/tests/vercel_connector.rs` — a per-provider contract test asserting the
-      thing *this* connector is about (see the archetype above), not that the file parses.
-- [ ] **Failing-first test:** the contract test must fail before `providers/vercel.toml` exists.
-- [ ] The scoped gate is green: `build --provider vercel`, `diff --provider vercel` reporting no drift,
+- [x] `providers/vercel.toml`, hand-authored and **curated** — a small set of operations this pipeline
+      can express honestly, not every endpoint the vendor documents. Five operations: list projects,
+      get a project, list deployments, get a deployment, cancel a deployment.
+- [x] Declared `risk`, `idempotency` and effects per operation, and a `description` on each written for
+      a *model* to read rather than as UI copy. See `providers/vercel.toml`.
+- [x] A `[[config]]` surface with `label` and `help` on every field, and `secret` agreeing with `binds`.
+      One field (`token`, `binds = "credential.vercel.token"`); `teamId` cannot be a `[[config]]`
+      field at all — see `## Progress`.
+- [x] A `verify` operation that is a read and runs unattended. `verify = "vercel-projects-list"`, a GET.
+- [x] `crates/connector-flux/tests/vercel_connector.rs` — a per-provider contract test asserting the
+      thing *this* connector is about (see the archetype above), not that the file parses. See
+      `every_operation_declares_team_id_and_names_the_personal_account_fallback` and
+      `list_operations_name_the_hazard_in_their_own_description`.
+- [x] **Failing-first test:** the contract test must fail before `providers/vercel.toml` exists. See
+      `BASE_PROOF` in the handoff report — all 8 tests failed with "cannot read providers/vercel.toml"
+      before the file existed.
+- [x] The scoped gate is green: `build --provider vercel`, `diff --provider vercel` reporting no drift,
       `cargo build --workspace`, `cargo test --workspace --no-fail-fast`,
       `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all --check`.
-- [ ] **Exactly eight tests are red and reported, not silenced** — the whole-catalogue staleness checks
+- [x] **Exactly eight tests are red and reported, not silenced** — the whole-catalogue staleness checks
       `AGENTS.md` tabulates. They are red because you correctly did not write a coordinator-owned
-      artifact. Report the eight; if the number differs, that is the finding.
+      artifact. Report the eight; if the number differs, that is the finding. Measured: exactly the
+      eight `AGENTS.md` names, across the same five binaries (`catalog::embedded_operations`,
+      `connector-cli::catalog_artifacts`, `connector-cli::readme_snippet`,
+      `connector-cli::service_units`, `connector-cli::site_catalog`). The ninth,
+      `the_recorded_floor_is_the_measured_figure`, stayed **green** — this story's 4 response-schema'd
+      operations fit inside the recorded floor's slack alone.
 
 ## Notes
 
@@ -68,3 +80,39 @@ An optional parameter whose absence silently redirects a write is worth a `descr
 - Whole-catalogue artifacts are coordinator-owned: `crates/catalog/src/generated.rs`,
   `web/public/catalog.json`, `web/public/v1/**`, `assets/readme-snippet-*.svg`. The per-provider
   `crates/catalog/src/generated/vercel.rs` is **not** in that set and is yours to commit.
+
+## Progress
+
+- **Every path, method and query parameter was checked against Vercel's own reference pages**
+  (`vercel.com/docs/rest-api/{projects,deployments}` and the two operation pages for each of the five
+  ids below), fetched 2026-07-31, rather than recalled — `GET /v10/projects`, `GET
+  /v9/projects/{idOrName}`, `GET /v7/deployments`, `GET /v13/deployments/{idOrUrl}`, `PATCH
+  /v12/deployments/{id}/cancel`. Nothing in this file is a guessed path.
+- **`teamId` cannot be a `[[config]]` field.** `ConfigField::binds` closes over `endpoint.<var>`,
+  `credential.<name>`, `username.<name>`, `oauth.client_id` and `oauth.client_secret`
+  (`crates/connector-spec/src/config.rs::parse_binding`) — none of those forms names a per-request
+  query parameter, so there is no honest `binds` value to give it. It stays a caller-supplied argument
+  on every operation instead of a pre-configured value. This is a real schema gap, not an oversight:
+  a future `binds = "query.<name>"` form (or similar) would let an operator pin a default team
+  per-connection the way `endpoint.subdomain` pins a tenant host today, and would remove the model's
+  chance to omit it. Recorded here rather than worked around.
+- **`vercel-projects-list`'s response carries no `response_schema`, deliberately.** Vercel's own
+  reference page documents three mutually incompatible top-level shapes for the same `200` (a bare
+  array, and two `{pagination, projects}` variants differing on which per-project field is present)
+  with nothing to say which an account actually gets — asserting one would be a guess wearing a
+  schema's clothes. The other four operations do carry a `response_schema`, each restricted to the
+  fields common across every documented variant.
+- **Response-shape confidence, named per field.** `vercel-deployments-list`'s schema is the one I have
+  full confidence in — Vercel's list-deployments reference page shows a single, unambiguous shape with
+  no `oneOf`. `vercel-project-get`, `vercel-deployment-get` and `vercel-deployment-cancel` all union
+  multiple documented variants; only fields present in **every** variant are marked `required`, and
+  the properties beyond those (`url`, `name`, `target`) are declared but not required, because at
+  least one variant omits each of them.
+- **`risk = "high"` on `vercel-deployment-cancel`, not `"destructive"`.** Cancelling stops an in-flight
+  build; it does not delete a resource the way `fly-machine-delete` does. Classified alongside Fly's
+  `stop`/`restart` (interrupts an in-progress or running process) rather than its `delete`.
+- **Not verified, and therefore not shipped:** Vercel's error envelope shape (no `quirks.error_envelope`
+  declared — I could not confirm one confidently from the fetched pages in the time available), and
+  every operation beyond the curated five (domains, env vars, transfers, rollback, OIDC tokens,
+  pause/unpause, and the rest of Vercel's REST reference). None of these are guessed at; they are
+  simply absent.
