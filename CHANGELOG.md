@@ -9,6 +9,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Bitbucket connector (C-217).** Seven curated operations — repository and pull-request
+  reads, plus create, comment and approve — behind an operator-pinned `workspace`, and the first
+  connector whose [C-187] pin is the **final** path segment rather than an inner one. That edge is
+  the whole reason its `verify` can be argument-free: `GET /repositories/{workspace}` needs nothing
+  from the caller once the workspace is pinned.
+
+  The curation runs in an uncomfortable direction and the provider header says so rather than
+  leaving it to be discovered: the connector can **add** an approval and cannot withdraw one.
+  Withdraw-approval and decline are held back together, because a set that can approve, un-approve
+  and decline is a governance surface deserving its own story. The PR merge endpoint is excluded
+  too — its `pullrequest_merge_parameters` discriminator is unverified against a live response, and
+  a merge is too consequential to ship on an inference.
+
+  Independently reviewed by falsification: nine single-fact mutations of the provider file each
+  turned exactly one contract test red.
+
 - **An operator can pin a tenant scope at install time, not only a base URL (C-187).** `[[config]]`
   bound `base_url` and nothing else, so Cloudflare's `zone_id` (a path segment) and Vercel's `teamId`
   (a query parameter) stayed per-call arguments a model chose on every request. For Vercel that was
