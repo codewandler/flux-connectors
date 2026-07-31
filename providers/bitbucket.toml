@@ -1,0 +1,586 @@
+# Bitbucket Cloud REST API 2.0 — hand-authored, curated to the surface this pipeline can express
+# honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Atlassian publishes the Bitbucket Cloud reference as a
+# developer-portal site (developer.atlassian.com/cloud/bitbucket/rest/) rather than as a document
+# vendored under `specs/`, and no C-4 ingest run has selected it — the same route trello, babelforce,
+# postmark, zendesk, github, notion and datadog already take. **Drift against the vendor's own docs is
+# therefore undetectable by machine** (`docs/designs/provider-operation-inventory.md` §6.7). Every
+# path, parameter and response field below was read from developer.atlassian.com/cloud/bitbucket/rest/
+# and support.atlassian.com/bitbucket-cloud/docs/using-access-tokens/ on **2026-07-31**, and is cited
+# where it is not obvious.
+#
+# ---------------------------------------------------------------------------------------------
+# WHAT THIS CONNECTOR IS FOR: IT IS THE FIRST SHIPPED CONSUMER OF C-187'S PINNED PATH SEGMENT, AND
+# EVERY OPERATION IT SHIPS IS SCOPED BY ONE.
+# ---------------------------------------------------------------------------------------------
+#
+# [C-187](../docs/stories/C-187-config-cannot-pin-a-request-component.md) grew `ConfigField::binds`
+# from "a `{placeholder}` in a service's `base_url`" to "one position of every request" — `path.<name>`,
+# `query.<name>`, `header.<name>`. `providers/cloudflare.toml` moved its `zone_id` onto it in the same
+# wave. But Cloudflare is a **retrofit**: it shipped as an argument first, four of its five operations
+# are scoped and the fifth exists to discover the value. Nothing had yet been *designed* around the pin,
+# and a capability with no consumer is a capability nobody has checked.
+#
+# Bitbucket is that consumer, and it is a stricter one in three ways:
+#
+#  1. **Every operation here is scoped.** Every meaningful Bitbucket Cloud endpoint lives under
+#     `/2.0/repositories/{workspace}/…`; a workspace is Bitbucket's unit of tenancy (an organisation,
+#     or a person's own account). The pin is not a narrowing applied to most of this connector — it is
+#     this connector's entire address space. Without it, all seven operations below would carry a
+#     `workspace` argument that a model chooses on every single call, which is precisely the problem
+#     C-187 exists to end.
+#  2. **There is no discovery operation, and none is needed.** Cloudflare needs `cloudflare-zone-list`
+#     because a zone id is 32 opaque hex characters nobody can know without asking. A Bitbucket
+#     workspace slug is the first path segment of every `bitbucket.org` URL an operator already has
+#     open — `bitbucket.org/acme-engineering/widget-service` — so it is typed, not fetched. This file
+#     therefore ships **no** unscoped read, and `bitbucket_connector.rs::
+#     the_connector_ships_no_unscoped_discovery_operation` is what stops a later edit from adding one
+#     and quietly widening the connector past its own pin.
+#  3. **The pin is what makes `verify` argument-free.** `bitbucket-repository-list` is
+#     `GET /2.0/repositories/{workspace}`: a path with a variable in it and an empty parameter list.
+#     That combination is not expressible without C-187 — before it, this operation would have required
+#     a `workspace` argument, and a "Test connection" button that needs an argument is not a button.
+#
+# **The consequence is stated rather than absorbed: one installed connection addresses one workspace.**
+# An operator with three workspaces makes three connections, each with its own pinned workspace and its
+# own token. That is the intended cost, the same one `providers/cloudflare.toml` records for its zone:
+# the alternative is a connector whose blast radius is whatever the token happens to allow, chosen
+# per-call by a model. Here the two agree by construction — see the credential section, where the
+# vendor's own token is minted against one workspace too.
+#
+# Four properties of the pin are derived by the schema rather than asserted here, and the loader
+# refuses a file that disagrees with any of them: it is **connection** level (one per tenant, not one
+# per vendor), it is **required** (a host refuses the whole request rather than omitting a pin), it is
+# **never a secret** (`Binding::is_secret` is unconditionally false for a pinned value), and it is
+# **not also an argument** (a pin a caller can override is advisory, which is the opposite of a pin).
+#
+# ---------------------------------------------------------------------------------------------
+# THE FINDING THIS CONNECTOR SURFACES: THE RULE THAT WOULD CATCH THE MISTAKE THIS FIELD INVITES IS
+# NOT RUN AGAINST THE VALUE THAT TRAVELS. THAT IS C-214, AND IT IS NOT PAPERED OVER HERE.
+# ---------------------------------------------------------------------------------------------
+#
+# `Position::validate_value` (`crates/connector-spec/src/config.rs`) is correct and refuses exactly
+# what it should for a path pin: `/`, `%`, `?`, `#`, `\`, whitespace, control characters, `.` and `..`.
+# The loader runs it against this file's `example`, so the placeholder shown below cannot itself be a
+# value the rule would reject.
+#
+# **It is not run against the value an operator types.**
+# [C-214](../docs/stories/C-214-a-pinned-value-reaches-the-wire-unvalidated.md) measured that: the real
+# value is substituted in `connector-pack`'s `request.rs` with no predicate at all, so a workspace
+# carrying a `/` composes a **wrong endpoint at the right vendor, carrying the operator's own token** —
+# a 404 or somebody else's repository, not a refusal.
+#
+# That matters more here than it did for Cloudflare, because of what the value looks like. A zone id is
+# 32 hex characters: nothing else on the Cloudflare dashboard resembles one, so an operator either has
+# it or does not. A Bitbucket workspace slug is a **fragment of a URL**, and the two mistakes an
+# operator will actually make are pasting the URL it came from
+# (`https://bitbucket.org/acme-engineering/`) or the `workspace/repo` pair Bitbucket itself calls a
+# repository's "full name". Both are values `Position::validate_value` refuses and neither is refused
+# today.
+#
+# So the `help` text below carries the shape explicitly — where to read the slug off, and that it is
+# one segment and not two — because until C-214 lands that sentence is the only thing between an
+# operator and a silently wrong URL. `bitbucket_connector.rs::
+# a_pasted_workspace_url_is_refused_at_the_example_and_nowhere_else` pins both halves: that the rule
+# refuses those pastes, and that the help text says so. It is written to get *stronger* when C-214
+# closes, not to go stale.
+#
+# **This file changes nothing in `connector-spec` or `connector-pack` to work around it.** The gap is a
+# missing call site in the pack, not a defect in the pin, and a connector that routed around it would
+# leave the same line in the same state minus the evidence that anyone reached it — the judgement
+# `providers/trello.toml` records for C-159 §2, in the same words.
+#
+# ---------------------------------------------------------------------------------------------
+# BITBUCKET CLOUD ONLY. BITBUCKET SERVER / DATA CENTER IS A DIFFERENT API AND IS OUT OF SCOPE.
+# ---------------------------------------------------------------------------------------------
+#
+# Atlassian ships two products under the name Bitbucket, and they share a brand and almost nothing
+# else:
+#
+#   Bitbucket Cloud             api.bitbucket.org/2.0, paths under /repositories/{workspace}/…,
+#                               paginated `{values, page, pagelen, next}`. **This file.**
+#   Bitbucket Data Center       a customer's own host, paths under /rest/api/1.0/projects/{key}/
+#   (formerly Server)           repos/{slug}/…, a different pagination envelope, different auth, and
+#                               no concept of a "workspace" at all.
+#
+# Nothing below reaches Data Center, and it cannot be made to: `base_url` is a fixed host with no
+# `{placeholder}`, so `http_hosts` derives to exactly `api.bitbucket.org` and is never widened.
+# Supporting Data Center would mean a templated host, a second path grammar and a second auth model —
+# a separate provider file, not a variant of this one. It is named here rather than left for a reader
+# to discover after installing this connector against the wrong product.
+#
+# ---------------------------------------------------------------------------------------------
+# AUTHENTICATION: A WORKSPACE ACCESS TOKEN, AND IT AGREES WITH THE PIN BY CONSTRUCTION
+# ---------------------------------------------------------------------------------------------
+#
+# Bitbucket Cloud publishes several routes to a REST credential. This file declares exactly one: an
+# **Access Token** (Workspace, Project or Repository), sent as `Authorization: Bearer <token>` — the
+# repository's plain `bearer` scheme, one value, nothing for the emitter to compose.
+#
+# It is chosen over the alternatives on scope rather than convenience, and the reason is the same fact
+# the pin is about. A **Workspace Access Token is minted from one workspace's own settings and is valid
+# for that workspace only.** So the credential's scope and the pinned path segment describe the same
+# boundary from two directions, and an operator who follows the `help` text below cannot end up with a
+# token that reaches further than the connection does. That is the guarantee
+# `providers/cloudflare.toml` explicitly could **not** give — there, an operator wanting a single-zone
+# connector had to remember to scope the token themselves, because nothing in the file could enforce
+# it. Here the vendor's own token boundary and this connector's own pin coincide.
+#
+# Deliberately not declared:
+#  - **App passwords** (Basic auth, `username:app_password`). Atlassian has deprecated them for
+#    Bitbucket Cloud and published a removal date; declaring a credential type on its way out would
+#    ship an installation instruction that stops working. Independently of the timeline it is the wrong
+#    choice here: an app password is scoped to a *person's whole account*, so it reaches every workspace
+#    that person belongs to, and pinning one workspace in front of it would be a narrowing this
+#    repository states and the credential does not.
+#  - **Atlassian API tokens** (Basic auth, email + token, across Atlassian products). Also
+#    account-scoped rather than workspace-scoped, with the same mismatch, and it would additionally put
+#    a person's email address in the Basic username position — the `providers/freshdesk.toml` shape
+#    that AGENTS.md records as an intentional gap.
+#  - **OAuth 2.0.** A real option and a better one for a multi-tenant product, but it needs an
+#    operator-level app registration (`oauth.client_id` / `oauth.client_secret`) plus a grant flow, and
+#    that is a second connector-level decision this story does not carry. It is the obvious follow-on.
+#
+# ---------------------------------------------------------------------------------------------
+# WHAT SHIPS: 7 operations — 4 reads, 3 writes. Repositories: list the workspace's, read one. Pull
+# requests: list a repository's open ones, read one, open one, comment on one, approve one.
+# ---------------------------------------------------------------------------------------------
+#
+# **Not one operation declares a query parameter**, the same curation choice `providers/trello.toml`
+# and `providers/cloudflare.toml` record. This emitter interpolates query values verbatim and
+# percent-encodes nothing, deliberately (`crates/connector-flux/src/op.rs`; `zendesk-ticket-search` is
+# the standing demonstration under AGENTS.md's Intentional gaps). The parameters a reader will look for
+# and not find are all real and all excluded for that one reason:
+#
+#  - `q` — Bitbucket's own query language, on repository and pull-request lists. Free text with `~`,
+#    quotes and `AND`/`OR` in it; the single worst candidate for verbatim interpolation in this file.
+#  - `state` on `pullrequests` (`OPEN`, `MERGED`, `DECLINED`, `SUPERSEDED`). Its absence is why
+#    `bitbucket-pull-request-list` returns Bitbucket's default — open pull requests only — and the
+#    description says so rather than leaving a caller to infer it.
+#  - `sort`, `fields` (a projection with `+`/`-` prefixes), and `page`/`pagelen`.
+#
+# **No `quirks.pagination`, and the reason is structural rather than a preference.** Bitbucket
+# paginates by handing back a whole `next` URL alongside `page`/`pagelen`. `Pagination::Cursor` wants a
+# cursor *value* and a query parameter to put it in, and `Pagination::Page` wants a page-number
+# parameter — this connector declares neither parameter, and a `next` URL is not a cursor. Declaring
+# one anyway would name a parameter no operation here carries. A caller therefore gets Bitbucket's
+# first page (10 values by default) and the `next` link in the response body, which is a known
+# incompleteness rather than a silent truncation — the distinction `providers/notion.toml` draws for
+# its own uncursored lists.
+#
+# **Endpoints deliberately not shipped, named rather than silently absent:**
+#
+#  - **`POST /2.0/repositories/{workspace}/{repo_slug}/pullrequests/{id}/merge`** — the operation a
+#    reader will most expect after `approve`, and the one this file is least willing to guess at. Its
+#    documented body (`pullrequest_merge_parameters`) carries a `type` discriminator alongside
+#    `merge_strategy`, `message` and `close_source_branch`, and this file is not confident which of
+#    them the endpoint requires. A merge is the single highest-consequence write in Bitbucket's API;
+#    it is exactly the operation that must not ship on an inference. It is a small, confident
+#    follow-on once the body is verified against a live response.
+#  - **`DELETE …/pullrequests/{id}/approve`** (withdraw an approval) and
+#    **`POST …/pullrequests/{id}/decline`** — the two ways to take a review back. Note what this
+#    excludes and what it does not: **`approve` itself ships**, below, at `risk = "high"`. What is
+#    left out is the pair that undoes or refuses a review, not the act of recording one.
+#
+#    That asymmetry is deliberate and it runs in the uncomfortable direction, so it is stated rather
+#    than left to be discovered: this connector can add an approval and cannot withdraw one. A
+#    mistaken approval is corrected in Bitbucket's own UI, not through this connector. It is on the
+#    shipped side of the line because it is what the curated set is *for* — reading a workspace's
+#    open pull requests and acting on one — and its consequences are carried by its `high` risk and
+#    by its own description, which are the declarations a host and a model actually read.
+#
+#    The withdrawal is the obvious follow-on and the more honest pair. It is not shipped here because
+#    `decline` belongs with it: a set that can approve, un-approve and decline is a governance surface
+#    that deserves its own story, not three line items appended to this one.
+#  - **Repository create/update/delete** (`POST`/`PUT`/`DELETE /2.0/repositories/{workspace}/{slug}`).
+#    Creating and destroying repositories is not what this connector is for, and a repository delete
+#    is unrecoverable.
+#  - **Commits, diffs, branches, tags, pipelines, deployments, issues, downloads, webhooks.**
+#    Bitbucket's surface is large; a connector earns operations by need, and none of these is needed to
+#    express "see what is in this workspace, read its open pull requests, open one, comment on one,
+#    approve one". `[[events]]`/`[[channels]]` are likewise absent: Bitbucket does publish a webhook
+#    API, and declaring an inbound half means also declaring how it is registered and verified, which
+#    is its own story.
+#  - **`GET /2.0/workspaces/{workspace}`, `GET /2.0/user`.** Both would work and both are unscoped —
+#    see point 2 of the header above. They would buy nothing this connector needs and would cost it the
+#    property that makes it C-187's probe.
+
+id = "bitbucket"
+vendor = "Bitbucket"
+
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address and
+# every credential path — `tenants/<tenant>/org.bitbucket.api/<credential>`.
+#
+# **The authority rule keys on the product, not the parent.** Bitbucket is an Atlassian product, and
+# the question is whether the product still publishes its own API domain: Bitbucket Cloud does —
+# `api.bitbucket.org` is the host every request below goes to — so it keeps its own authority, exactly
+# as `providers/trello.toml` is `com.trello.api` and `providers/slack.toml` is `com.slack.api` under
+# Salesforce. (`providers/jira.toml` is `com.atlassian.jira` because Jira publishes no domain of its
+# own; that is the other branch of the same rule, not a precedent for putting Bitbucket under
+# Atlassian.)
+#
+# **Never repointed once published** (AGENTS.md: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "org.bitbucket.api"
+
+# One host for the whole Cloud API, identical for every workspace on the platform — which is exactly
+# what puts the workspace scope in the operation *path* rather than in the address, and therefore out
+# of reach of `endpoint.<variable>` and into C-187's `path.<name>`. No `{placeholder}`, so `status.rs`
+# reports no `unbound-base-url-template` issue and this connector has a valid destination URL as soon
+# as it is installed.
+#
+# `http_hosts` derives from this single value (`crates/connector-cli/src/catalog.rs`, `host_of`) and is
+# therefore exactly `api.bitbucket.org`. Nothing here reaches bitbucket.org itself, Atlassian's
+# id.atlassian.com auth host, or a Data Center installation.
+base_url = "https://api.bitbucket.org/2.0"
+
+# The vendor's own spelling, and it is already the leading path segment of `base_url`. Rendered
+# addresses read `org.bitbucket.api:2.0#bitbucket-pull-request-list`. A credential path deliberately
+# carries no version, so a token survives Bitbucket's next one.
+api_version = "2.0"
+
+description = "Bitbucket Cloud repositories and pull requests for one pinned workspace: list the workspace's repositories, read one, list and read its open pull requests, open a pull request, comment on one, and approve one"
+
+# The "Test connection" button: list the repositories in the pinned workspace. It takes no parameters
+# at all — the workspace it reads is the one the operator just pinned — so pressing it proves the token
+# resolves, proves the workspace exists and is reachable with that token, and reports what it can see.
+# A `verify` operation must be a read; the loader refuses a `high` or `destructive` one, and this is a
+# plain `GET`.
+verify = "bitbucket-repository-list"
+
+# One alternative, one credential. See the header for why the other three routes Bitbucket publishes
+# are deliberately not declared.
+default_auth = [{ credentials = ["bitbucket.access_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "bitbucket.access_token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; its value is never read here
+# and never reaches a generated artifact.
+env = ["BITBUCKET_ACCESS_TOKEN"]
+description = "Bitbucket Cloud Access Token, sent as a bearer token. A Workspace Access Token is valid for exactly one workspace, which is the same boundary this connector's pinned `workspace` describes; scope it to repository:read plus pullrequest:write for the writes below"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a human supplies before any of this runs.
+#
+# Two fields, and the pair is the point: the token says *what this connector may do*, the pinned
+# workspace says *what it may do it to*. Before C-187 only the first was expressible.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "access_token"
+label = "Bitbucket access token"
+help = "Create one in the workspace's settings under Security -> Access tokens -> Create Workspace Access Token, with the Repositories: Read and Pull requests: Write scopes. Bitbucket shows the token once. Create it in the same workspace you name below, so the token reaches no further than this connection does"
+# No `example`, deliberately. A Bitbucket access token is a long opaque string, and a plausible-looking
+# placeholder is matched by secret scanners on shape alone — `providers/trello.toml`,
+# `providers/notion.toml` and `providers/shopify.toml` each record the release this repository actually
+# lost that way. Atlassian's own docs illustrate the header with `<access_token>` for the same reason.
+format = "token"
+secret = true
+docs_url = "https://support.atlassian.com/bitbucket-cloud/docs/using-access-tokens/"
+binds = "credential.bitbucket.access_token"
+
+# **The pin this connector exists to exercise.** Substituted into the `{workspace}` segment of every
+# operation's path (C-187), so it is asked for once here instead of being chosen by a model on every
+# call.
+#
+# `format` is left at `text` rather than declared, the same call `providers/cloudflare.toml` makes for
+# its zone id and for the same reason: the closed `Format` enum has no variant that fits. `subdomain`
+# is the near miss and it is wrong — it forbids `_`, which Bitbucket workspace slugs permit — so
+# declaring it would put a rule in front of a user that rejects values the vendor accepts. The shape
+# stays in `help`, where a human reads it.
+#
+# `help` carries the "one segment, not the URL" sentence on purpose. See the C-214 section of the
+# header: `Position::validate_value` would refuse a pasted URL, and it is not yet run against the value
+# an operator actually types.
+[[config]]
+name = "workspace"
+label = "Bitbucket workspace"
+help = "The workspace this connection manages, as its slug — the single path segment right after bitbucket.org/ in any of its URLs. In https://bitbucket.org/acme-engineering/widget-service the workspace is acme-engineering, not acme-engineering/widget-service and not the full URL. Find it under Workspace settings -> Overview. One connection manages one workspace"
+example = "acme-engineering"
+docs_url = "https://support.atlassian.com/bitbucket-cloud/docs/what-is-a-workspace/"
+binds = "path.workspace"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 7. Every path below is under `/repositories/{workspace}`, and `{workspace}` is the pin;
+# no operation declares it, and `bitbucket_connector.rs` asserts both halves.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only, so `op bitbucket.pull-request.list` is undeclarable (C-8, C-23).
+#
+# Every non-2xx response carries Bitbucket's one error envelope — `{"type": "error", "error":
+# {"message": …, "detail": …}}` — declared per operation because `response_schema` and `quirks` are
+# per-operation and this repository has no connector-level place to say "every error looks like this"
+# (the same gap `providers/airtable.toml` and `providers/cloudflare.toml` note for their own
+# envelopes). No `code_pointer`: Bitbucket publishes no numeric error code in the body, and pointing at
+# a field that is not there would be worse than pointing at nothing.
+# ---------------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------------
+# Repositories. Both reads, both `low`: a repository read exposes what the token's own scope already
+# permits in Bitbucket's UI.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "bitbucket-repository-list"
+method = "GET"
+path = "/repositories/{workspace}"
+description = "List the repositories in this connection's workspace, with each one's slug, name, description, main branch and privacy. Takes no argument at all: the workspace is pinned when the connection is made, so this reads exactly the workspace the operator chose and no other. Returns Bitbucket's first page only; this connector declares no page or filter parameters, and the response's `next` field carries the URL of the following page. The `slug` returned here is what every other operation in this connector takes as `repo_slug`. Also this connector's `verify`: a bounded read that runs unattended and needs nothing beyond the token and the pinned workspace"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["values"]
+properties = { values = { type = "array", items = { type = "object", properties = { uuid = { type = "string", description = "The repository's stable identifier, in braces. Survives a rename, which `slug` does not" }, name = { type = "string", description = "The repository's display name" }, slug = { type = "string", description = "The repository's URL segment — pass this as `repo_slug` to every other operation here" }, full_name = { type = "string", description = "`workspace/slug`. Note that this is two segments: `repo_slug` is the second one alone" }, description = { type = "string" }, is_private = { type = "boolean", description = "Whether the repository is visible only to the workspace" }, scm = { type = "string", description = "Always `git` on Bitbucket Cloud today" }, language = { type = "string", description = "The primary language Bitbucket detected, empty when it detected none" }, size = { type = "integer", description = "The repository's size in bytes" }, has_issues = { type = "boolean", description = "Whether the repository's own issue tracker is enabled" }, has_wiki = { type = "boolean" }, fork_policy = { type = "string", description = "allow_forks, no_public_forks, or no_forks" }, mainbranch = { type = "object", description = "The default branch — the `destination_branch` most pull requests target", properties = { name = { type = "string" } } }, project = { type = "object", description = "The Bitbucket project grouping this repository. Left untyped rather than enumerated" }, created_on = { type = "string", format = "date-time" }, updated_on = { type = "string", format = "date-time", description = "When the repository last changed" }, links = { type = "object", description = "Bitbucket's hypermedia links for this repository, including `html.href` — the page to give a human" } } } }, page = { type = "integer", description = "The 1-based page this response is" }, pagelen = { type = "integer", description = "How many values a page holds; 10 by default" }, size = { type = "integer", description = "The total number of repositories, when Bitbucket computes it" }, next = { type = "string", format = "uri", description = "The URL of the next page, absent on the last one. This connector cannot follow it — see its header note on pagination" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "bitbucket-repository-get"
+method = "GET"
+path = "/repositories/{workspace}/{repo_slug}"
+description = "Read one repository in this connection's workspace by its slug, with its main branch, privacy, project and size. Use it to confirm a repository exists and to learn its default branch before opening a pull request against it"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "repo_slug"
+description = "The repository's URL segment, from bitbucket-repository-list's `slug` — the part after the workspace in a Bitbucket URL. Not the `workspace/slug` pair Bitbucket calls a full name"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["uuid", "name", "slug", "full_name"]
+properties = { uuid = { type = "string", description = "The repository's stable identifier, in braces" }, name = { type = "string" }, slug = { type = "string", description = "The repository's URL segment" }, full_name = { type = "string", description = "`workspace/slug`" }, description = { type = "string" }, is_private = { type = "boolean" }, scm = { type = "string" }, language = { type = "string" }, size = { type = "integer", description = "The repository's size in bytes" }, has_issues = { type = "boolean" }, has_wiki = { type = "boolean" }, fork_policy = { type = "string", description = "allow_forks, no_public_forks, or no_forks" }, mainbranch = { type = "object", description = "The default branch — the branch a pull request usually targets", properties = { name = { type = "string" } } }, project = { type = "object", description = "The Bitbucket project grouping this repository. Left untyped rather than enumerated" }, owner = { type = "object", description = "The account owning the repository. Identifies a named person for a personal workspace — read it for what the calling flow needs and do not persist it beyond that" }, created_on = { type = "string", format = "date-time" }, updated_on = { type = "string", format = "date-time" }, links = { type = "object", description = "Bitbucket's hypermedia links, including `html.href` — the page to give a human" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+
+# ---------------------------------------------------------------------------------------------
+# Pull requests. Two reads and three writes.
+#
+# The pull-request shape below is Bitbucket's documented Pullrequest object. `participants`,
+# `reviewers`, `links` and `summary` are left as untyped objects or arrays rather than enumerated:
+# this file states what it can name with confidence, and an untyped object inside an otherwise
+# informative schema is honest rather than permissive
+# (`crates/connector-spec/tests/response_schema_coverage.rs` refuses a *top-level* schema with no
+# informative key, which is the placeholder it exists to catch).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "bitbucket-pull-request-list"
+method = "GET"
+path = "/repositories/{workspace}/{repo_slug}/pullrequests"
+description = "List the open pull requests on one repository in this connection's workspace, newest activity first. Returns OPEN pull requests only — that is Bitbucket's default and this connector declares no `state` parameter to change it (see its header note), so merged and declined pull requests are not returned. Returns Bitbucket's first page only; the response's `next` field carries the URL of the following page. Each value's `id` is what bitbucket-pull-request-get, -comment and -approve take"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "repo_slug"
+description = "The repository's URL segment, from bitbucket-repository-list's `slug`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["values"]
+properties = { values = { type = "array", items = { type = "object", properties = { id = { type = "integer", description = "The pull request's number within its repository — what the other pull-request operations address it by" }, title = { type = "string" }, description = { type = "string", description = "The pull request's body, as Markdown" }, state = { type = "string", description = "OPEN, MERGED, DECLINED or SUPERSEDED. Always OPEN here, because this call declares no state filter" }, author = { type = "object", description = "The account that opened it. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that" }, source = { type = "object", description = "Where the change comes from", properties = { branch = { type = "object", properties = { name = { type = "string" } } } } }, destination = { type = "object", description = "Where the change would land", properties = { branch = { type = "object", properties = { name = { type = "string" } } } } }, close_source_branch = { type = "boolean", description = "Whether merging will delete the source branch" }, comment_count = { type = "integer" }, task_count = { type = "integer" }, created_on = { type = "string", format = "date-time" }, updated_on = { type = "string", format = "date-time" }, links = { type = "object", description = "Bitbucket's hypermedia links, including `html.href` — the pull request's page, the link to give a human" } } } }, page = { type = "integer" }, pagelen = { type = "integer", description = "How many values a page holds; 10 by default" }, size = { type = "integer" }, next = { type = "string", format = "uri", description = "The URL of the next page, absent on the last one" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "bitbucket-pull-request-get"
+method = "GET"
+path = "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}"
+description = "Read one pull request by its number, including its description, its source and destination branches, its current state and who is participating. Reads a merged or declined pull request too, unlike bitbucket-pull-request-list"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "repo_slug"
+description = "The repository's URL segment, from bitbucket-repository-list's `slug`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "pull_request_id"
+description = "The pull request's number within its repository, from bitbucket-pull-request-list's `id` — the number in its Bitbucket URL"
+required = true
+schema = { type = "integer", minimum = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "title", "state"]
+properties = { id = { type = "integer", description = "The pull request's number within its repository" }, title = { type = "string" }, description = { type = "string", description = "The pull request's body, as Markdown" }, state = { type = "string", description = "OPEN, MERGED, DECLINED or SUPERSEDED" }, author = { type = "object", description = "The account that opened it. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that" }, source = { type = "object", description = "Where the change comes from", properties = { branch = { type = "object", properties = { name = { type = "string" } } }, commit = { type = "object", properties = { hash = { type = "string" } } } } }, destination = { type = "object", description = "Where the change would land", properties = { branch = { type = "object", properties = { name = { type = "string" } } }, commit = { type = "object", properties = { hash = { type = "string" } } } } }, merge_commit = { type = "object", description = "The commit the merge produced, null while the pull request is open", properties = { hash = { type = "string" } } }, close_source_branch = { type = "boolean" }, reason = { type = "string", description = "Why it was declined, empty otherwise" }, comment_count = { type = "integer" }, task_count = { type = "integer" }, participants = { type = "array", items = { type = "object" }, description = "Everyone who has touched the pull request, each with their `approved` flag and `role`. Left untyped rather than enumerated; this is the field bitbucket-pull-request-approve writes into" }, reviewers = { type = "array", items = { type = "object" }, description = "The accounts asked to review. Left untyped rather than enumerated" }, created_on = { type = "string", format = "date-time" }, updated_on = { type = "string", format = "date-time" }, links = { type = "object", description = "Bitbucket's hypermedia links, including `html.href` — the link to give a human" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+
+# ---------------------------------------------------------------------------------------------
+
+# **The three writes.**
+#
+# `bitbucket-pull-request-create` and `bitbucket-pull-request-comment` are `medium`: both are visible
+# to everyone watching the repository and both notify people, but neither destroys anything and both
+# are reversible in Bitbucket's own UI. `bitbucket-pull-request-approve` is `high`, and the reason is
+# below it.
+#
+# All three are `non_idempotent`. For the two `POST`s that create something it is simply true —
+# Bitbucket documents no idempotency key and calling either twice produces two of the thing. For the
+# approval it is true as well: Bitbucket answers a repeat with `409`, not a repeat of the first `200`.
+# `crates/connector-flux/src/op.rs`'s `check_write_metadata` would refuse `idempotency = "idempotent"`
+# on a `POST` regardless, so no claim here is load-bearing on a compiler rule.
+#
+# **Required body fields only**, the call `providers/cloudflare.toml` makes and for the same reason: an
+# optional body field is bound unconditionally by the emitter (C-56), so a caller who did not set it
+# sends the vendor an explicit `null`, and this file has no evidence Bitbucket accepts `null` for
+# `description`, `close_source_branch` or `reviewers` on a create. Those three are the obvious
+# additions once C-56 lands.
+
+[[operations]]
+id = "bitbucket-pull-request-create"
+method = "POST"
+path = "/repositories/{workspace}/{repo_slug}/pullrequests"
+description = "Open a pull request from one branch to another in a repository of this connection's workspace. Both branches must already exist and be pushed. Bitbucket does not deduplicate: opening the same source-to-destination pull request twice creates two of them, and notifies the repository's watchers twice. The created pull request, with its assigned `id`, is in the response"
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "repo_slug"
+description = "The repository's URL segment, from bitbucket-repository-list's `slug`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "title"
+description = "The pull request's title, as it will read in the list. Bitbucket requires one"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# `source.branch.name` and `destination.branch.name` are nested wire paths — Bitbucket's body is
+# `{"source": {"branch": {"name": …}}}`, and the flat spelling `{"source.branch.name": …}` is a request
+# Bitbucket accepts and ignores. `wire` is what keeps the emitted record nested.
+[[operations.params.body]]
+name = "source_branch"
+wire = "source.branch.name"
+description = "The branch holding the change, exactly as it is named in the repository — the branch this pull request would merge from"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# Required rather than optional, and that is a deliberate departure from Bitbucket's own default.
+# Omitting `destination` makes Bitbucket target the repository's main branch, which is usually right and
+# is exactly the kind of "usually right" a model should not be left to assume: the destination is what
+# decides where the change lands. bitbucket-repository-get returns `mainbranch.name` for a caller that
+# wants the default, so naming it costs one read and removes a guess. It is also what avoids the C-56
+# null hazard above, since an optional nested field would send `{"destination": {"branch": {"name":
+# null}}}`.
+[[operations.params.body]]
+name = "destination_branch"
+wire = "destination.branch.name"
+description = "The branch the change would merge into. Bitbucket's own default is the repository's main branch, which bitbucket-repository-get returns as `mainbranch.name` — name it explicitly rather than assuming it"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "title", "state"]
+properties = { id = { type = "integer", description = "The new pull request's number — what bitbucket-pull-request-comment and -approve address it by" }, title = { type = "string" }, description = { type = "string" }, state = { type = "string", description = "OPEN on a pull request just created" }, author = { type = "object", description = "The account the token belongs to. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that" }, source = { type = "object", properties = { branch = { type = "object", properties = { name = { type = "string" } } } } }, destination = { type = "object", properties = { branch = { type = "object", properties = { name = { type = "string" } } } } }, close_source_branch = { type = "boolean", description = "False unless the repository defaults it otherwise; this connector does not set it" }, created_on = { type = "string", format = "date-time" }, updated_on = { type = "string", format = "date-time" }, links = { type = "object", description = "Bitbucket's hypermedia links, including `html.href` — the new pull request's page, the link to give a human" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "bitbucket-pull-request-comment"
+method = "POST"
+path = "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments"
+description = "Add a top-level comment to a pull request. The comment is attributed to the account the token belongs to and notifies everyone participating; Bitbucket sends no un-notification, so a comment posted in error can be deleted but not un-seen. This posts a general comment on the pull request, never an inline comment on a line of the diff"
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "repo_slug"
+description = "The repository's URL segment, from bitbucket-repository-list's `slug`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "pull_request_id"
+description = "The pull request's number, from bitbucket-pull-request-list's `id`"
+required = true
+schema = { type = "integer", minimum = 1 }
+
+# Nested, as above: Bitbucket's comment body is `{"content": {"raw": …}}`.
+[[operations.params.body]]
+name = "body"
+wire = "content.raw"
+description = "The comment text, as Markdown. Bitbucket renders it and returns the rendered HTML alongside the raw text"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "content"]
+properties = { id = { type = "integer", description = "The comment's id within the pull request" }, content = { type = "object", description = "The comment as stored and as rendered", properties = { raw = { type = "string", description = "The Markdown that was sent" }, markup = { type = "string" }, html = { type = "string", description = "Bitbucket's rendering of it" } } }, user = { type = "object", description = "The account the comment is attributed to — the token's own. Identifies a named person; read it for what the calling flow needs and do not persist it beyond that" }, deleted = { type = "boolean" }, created_on = { type = "string", format = "date-time" }, updated_on = { type = "string", format = "date-time" }, links = { type = "object", description = "Bitbucket's hypermedia links, including `html.href` — the comment's anchor on the pull request page" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+
+# ---------------------------------------------------------------------------------------------
+
+# **`risk = "high"`, and it is the one declaration in this file worth arguing about.**
+#
+# Not `medium` ("limited blast radius") and not `destructive` (nothing is deleted; Bitbucket publishes
+# a `DELETE` on the same path to withdraw an approval, deliberately not shipped here — see the header).
+# `high` is "a write a reviewer would want to see first", and an approval is exactly that for a reason
+# no other write in this file has: **it is a claim about a human process.** It records, under the
+# token's own account, that this change was reviewed. In a repository with an approval merge check it
+# is also the thing standing between a branch and the default branch, so an automated approval does not
+# merely add a row — it can release a merge somebody configured a gate to hold. That is the same tier
+# `providers/google.toml` gives an unrecallable Gmail send and `providers/asana.toml` a comment nobody
+# can un-notify, and it is the tier that makes flux's approval gate stop for it.
+#
+# This operation sends no body: the approval is the `POST` itself, and the approver is whoever the
+# token belongs to. A model calling it has nothing to choose beyond which pull request.
+[[operations]]
+id = "bitbucket-pull-request-approve"
+method = "POST"
+path = "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/approve"
+description = "Approve a pull request as the account this connection's token belongs to. This records a review that a human may not have performed, and in a repository with an approval merge check it can release a merge that gate was configured to hold — treat it as an assertion about a review, not as a bookmark. Bitbucket answers a repeat approval with 409 rather than approving twice. Sends no body: the approver is the token's own account"
+risk = "high"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "repo_slug"
+description = "The repository's URL segment, from bitbucket-repository-list's `slug`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "pull_request_id"
+description = "The pull request's number, from bitbucket-pull-request-list's `id`"
+required = true
+schema = { type = "integer", minimum = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["approved"]
+properties = { approved = { type = "boolean", description = "True once the approval landed" }, state = { type = "string", description = "approved, changes_requested, or null" }, role = { type = "string", description = "PARTICIPANT or REVIEWER — how the token's account relates to this pull request" }, user = { type = "object", description = "The account the approval is attributed to — the token's own. Identifies a named person; read it for what the calling flow needs and do not persist it beyond that" }, participated_on = { type = "string", format = "date-time", description = "When the approval was recorded" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"

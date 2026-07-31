@@ -1,0 +1,308 @@
+# Supabase — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Supabase's reference is published as a documentation site
+# (supabase.com/docs) rather than as a document vendored here — no C-4 ingest run has selected it —
+# so this file is written directly in the IR's shape, the same route babelforce, postmark, zendesk,
+# freshdesk, github, notion, datadog and trello already take. **Drift against the vendor's own docs
+# is therefore undetectable by machine** (`docs/designs/provider-operation-inventory.md` §6.7,
+# `AGENTS.md` C-14). Everything below was read from supabase.com/docs — the API Keys guide, the
+# "Securing your API" guide, the PostgREST reference under supabase.com/docs/guides/api, and the
+# Auth server's own settings endpoint — on **2026-07-31**, and is cited where it is not obvious.
+#
+# ---------------------------------------------------------------------------------------------
+# C-221'S QUESTION: SUPABASE GIVES EVERY PROJECT TWO KEYS, BOTH CALLED "THE API KEY", AND ONE OF
+# THEM BYPASSES ROW-LEVEL SECURITY ENTIRELY. WHICH ONE DOES A CONNECTOR ASK FOR? MEASURED, AND THE
+# ANSWER IS: ONE CREDENTIAL, NAMED FOR THE KEY IT WANTS, WITH THE OTHER KEY EXPLAINED IN THE WORDS
+# A PERSON READS AND DECLARED NOWHERE AT ALL.
+# ---------------------------------------------------------------------------------------------
+#
+# The two keys, in the vendor's own terms:
+#
+# - **`anon`** (its successor spelling is `sb_publishable_…`) — Supabase's API Keys guide calls it
+#   safe to expose in a browser, because every request it makes runs as the Postgres `anon` (or,
+#   with a user's JWT, `authenticated`) role and is therefore constrained by whatever row-level
+#   security policies the project's tables carry.
+# - **`service_role`** (successor `sb_secret_…`) — the same guide states it "bypass[es] Row Level
+#   Security", by way of the Postgres `BYPASSRLS` attribute. It is database-owner authority in a
+#   string, and Supabase's security guide says in as many words never to put it in a client.
+#
+# **Why declaring one credential called `supabase.api_key` would have been the wrong answer, and a
+# quiet one.** Both keys are "the API key" — the same length class, the same paste target, the same
+# project settings page, and until recently the same JWT shape. A connector with one generically
+# named slot does not present a choice; it presents a box, and an operator with two strings in front
+# of them fills it with whichever one they found first. The more capable one always works. And it
+# works *silently*: every `risk = "low"` in this file would still be true of the operation while
+# saying nothing whatsoever about the authority the credential behind it carries. That gap between
+# "what the call does" and "what the key can do" is the thing C-221 exists to close, and the only
+# lever this repository actually has over it is the **name** and the **words** — so both are pinned
+# as assertions in `crates/connector-flux/tests/supabase_connector.rs`, not left as prose.
+#
+# **So: `supabase.anon_key`, and no second credential.** Every operation below is a `GET`, and every
+# one of them is satisfied by the `anon` role. The story's own instruction is the rule followed here
+# — *"If the shipped operations only need `anon`, ship only `anon` and say why — the narrower
+# connector is the better one, and it can be widened later with evidence."* There is no
+# `service_role` slot because there is nothing here that needs one, and a declared slot is a slot
+# somebody fills.
+#
+# **The limit of all this, stated rather than papered over.** Nothing in this repository can
+# *refuse* the wrong key. `Format` is a closed enum with no `pattern`, deliberately
+# (`crates/connector-spec/src/config.rs`), and the only evidence distinguishing the two keys is an
+# `sb_secret_` prefix or a `"role":"service_role"` claim inside a legacy JWT — neither of which a
+# `format` can express and neither of which this repository is in a position to check, because it
+# never holds a credential value. An operator who pastes the secret key into the one field below
+# gets a connector that works and that silently bypasses every row-level-security policy their
+# project has. The connector's whole answer is to say so in the `help` text, where they are looking
+# at the moment they choose. A host that wanted to do better could inspect the key's own prefix at
+# provisioning time; that is a host story, not this one.
+#
+# ---------------------------------------------------------------------------------------------
+# ONE CREDENTIAL IN ONE PLACEMENT — `apikey` — AND WHY THE VENDOR'S SECOND HEADER IS NOT DECLARED.
+# ---------------------------------------------------------------------------------------------
+#
+# Supabase fronts every project with a gateway that requires the key in a bare `apikey` header; its
+# security guide describes the header as mandatory and not configurable. That is the placement
+# declared below, with an empty prefix — the whole header value is the secret.
+#
+# The vendor's `curl` examples additionally repeat the *same value* in `Authorization: Bearer …`.
+# This connector deliberately does not declare that second placement, and the reason is structural
+# rather than stylistic: an `AuthMethod` is one credential in one placement, so declaring both would
+# mean **two credential names for one value** — two `[[config]]` fields, two provisioning slots, two
+# secret-store addresses, and nothing keeping the two in step. That is the pre-composed-credential
+# mistake `docs/designs/auth-seam.md` §7.5 rejects, and it would be a worse form of exactly the
+# ambiguity this connector exists to remove.
+#
+# The redundant half also carries no additional authority. Under the legacy JWT keys, PostgREST
+# reads `Authorization` to choose a role and falls back to the project's configured anonymous role
+# when it is absent — which, for the `anon` key, is the same `anon` role either way. Under the new
+# key format the vendor documents that `Authorization` may carry the API key only when it *equals*
+# the `apikey` header. **This is the one inference in this file that a reader should treat as the
+# most likely to drift**, because it is a statement about gateway behaviour rather than about a
+# documented request contract: if a future Supabase deployment requires the pair, this connector
+# fails closed with a `401` rather than succeeding with reduced authority, which is the safe
+# direction, and widening it is a story with evidence attached rather than a guess made here.
+#
+# ---------------------------------------------------------------------------------------------
+# ONE SERVICE, DELIBERATELY — THE SURFACES SHARE A HOST, A VERSION AND A KEY.
+# ---------------------------------------------------------------------------------------------
+#
+# Supabase's REST (PostgREST, `/rest/v1`) and Auth (`/auth/v1`) surfaces are reachable under one
+# per-project host, both at `v1`, both authenticated by the same `apikey` header. A service is the
+# unit that "owns its base URL and its API version" (`AGENTS.md`, Service contract) and neither of
+# those differs here, so splitting them would mint two addresses and two credential directories to
+# describe one thing an operator provisions once. They stay one implicit `default` service, and the
+# path prefix carries the surface. Storage (`/storage/v1`), Realtime and the Edge Functions host
+# (`*.functions.supabase.co`, a *different* host) are the shapes that would justify revisiting this;
+# none of them ships here.
+#
+# ---------------------------------------------------------------------------------------------
+# WHAT SHIPS: 3 operations, all reads. Describe the exposed schema, read a table's rows, read the
+# project's auth configuration.
+# ---------------------------------------------------------------------------------------------
+#
+# **Not one operation declares a free-text query parameter, and that is the curation decision this
+# connector turns on.** This emitter interpolates query values verbatim and percent-encodes nothing,
+# deliberately (`crates/connector-flux/src/op.rs`; `zendesk-ticket-search` is the standing
+# demonstration under `AGENTS.md`'s Intentional gaps, and sentry, fly, clickup, datadog and trello
+# each excluded filters for it). PostgREST's entire expressive power is in its query string, so this
+# gap bites harder here than on any connector shipped so far — and the honest consequence is that
+# the *filtering* half of PostgREST does not ship.
+#
+# **The PostgREST query surface left out, named rather than silently absent:**
+#
+# - **`select`** — the column projection (`?select=id,name,author(name)`). Comma- and
+#   parenthesis-bearing free text; it would be interpolated raw. Its absence is why every row comes
+#   back with every column the caller's role may read.
+# - **Column filters** — `?id=eq.42`, `?created_at=gte.2026-01-01`, `?name=like.*acme*`. These are
+#   the reason anyone uses PostgREST, and every one of them is a caller-supplied *parameter name* as
+#   well as a value, which this IR has no way to declare at all: `[[operations.params.query]]` names
+#   a fixed key, and a filter's key is the column. Even with an encoder, filters need a story of
+#   their own.
+# - **`order`** — `?order=created_at.desc`. Free text naming a column, and the reason `offset` is
+#   also absent below: PostgREST returns rows in no guaranteed order without it, so offset paging
+#   over an unordered read is incoherent rather than merely limited. Shipping `offset` without
+#   `order` would have produced a paginator that silently skips and repeats rows.
+#
+# All three belong to whichever story closes the query-encoding gap
+# (`docs/designs/query-encoding-flux-stories.md`), not to this one. `limit` ships because it is a
+# bare integer with a bounded schema and because an unbounded table read is the one shape a curated
+# connector must not hand a model.
+#
+# **Endpoints deliberately not shipped:**
+#
+# - **Writes to `/rest/v1/{table}`** — `POST` (insert), `PATCH` (update), `DELETE`. All documented,
+#   all deliberately absent, and this is the *load-bearing* exclusion rather than a scope call: a
+#   write against a table whose `anon` role has no permissive policy fails, and the tempting fix is
+#   a quietly added `service_role` credential. `supabase_connector.rs`'s
+#   `every_shipped_operation_is_a_read_which_is_why_the_anon_key_is_enough` fails the moment a write
+#   lands here, which reopens the credential question in review instead of in production.
+# - **`POST /rest/v1/rpc/{fn}`** — calling a Postgres function. It is a `POST` by contract even for a
+#   read-only function, its body is the function's own arbitrary argument record, and its risk is
+#   whatever the function does — unknowable from here. A connector cannot state `risk` for an
+#   operation whose effect is defined in the operator's database.
+# - **`/auth/v1` sign-in, sign-up, token, recover, logout, and the admin user endpoints.** These are
+#   an end-user identity flow, not an integration surface; the admin half additionally requires the
+#   `service_role` key, which is precisely the key this connector declines to ask for.
+# - **`/storage/v1`, Realtime, and Edge Functions.** A different surface each, two of them on
+#   different hosts or protocols. A connector earns operations by need.
+# - **`[[events]]` / `[[channels]]`.** Supabase publishes Database Webhooks and Realtime
+#   subscriptions, and declaring an inbound half means also declaring how it is registered and how
+#   it is verified. That is its own story.
+
+id = "supabase"
+vendor = "Supabase"
+
+# The reverse-DNS authority this connector publishes under (C-92, `docs/designs/global-addressing.md`
+# §"How an authority is chosen"): reverse-DNS of the vendor's own primary domain with `.api` as the
+# trailing label. Supabase publishes its own API surface, so it keeps its own authority rather than
+# taking a parent's.
+#
+# **`com`, not `co`, and the distinction is worth a line because `base_url` below says `.co`.** The
+# rule keys on the vendor's *primary domain* — supabase.com, where the product, the docs and the
+# dashboard live. `supabase.co` is not a second brand; it is the per-project API host, the same way
+# `api.machines.dev` is Fly's request host while `providers/fly.toml` is `io.fly.api` after fly.io.
+# An authority is a stable identifier for the vendor, not a spelling of the hostname a request goes
+# to.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused").
+# Tenants provision secrets under this path; a different spelling mints a new address and deprecates
+# this one.
+authority = "com.supabase.api"
+
+# Every Supabase project is its own host, so there is no tenant-independent base URL — the same
+# shape as `providers/zendesk.toml`'s `{subdomain}`. `{project_ref}` is bound by the `[[config]]`
+# field at the end of this file; the loader refuses a template variable nothing binds.
+base_url = "https://{project_ref}.supabase.co"
+
+# The vendor's own spelling, and it is already in every path below: `/rest/v1`, `/auth/v1`. Recorded
+# here so a `gid` renders — `com.supabase.api:v1#supabase-rows-list`.
+api_version = "v1"
+
+description = "Supabase project data and configuration: describe the tables the API exposes, read a table's rows, and read which sign-in methods the project has enabled. Reads only, through the project's public anon key, so every row returned is bounded by the project's own row-level-security policies"
+
+# The "Test connection" operation: an argument-free read that proves three things at once — the
+# project ref resolves to a real host, the gateway accepts the key, and the data API is reachable.
+verify = "supabase-schema-describe"
+
+# One alternative naming one credential. Supabase offers no other mechanism for a REST call that
+# this connector uses, and the second key is deliberately not an alternative of this one — see the
+# header comment.
+default_auth = [{ credentials = ["supabase.anon_key"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials — exactly one, and its name says which of Supabase's two keys it is.
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "supabase.anon_key"
+# A bare `apikey` header: no scheme word, no prefix, the whole value is the secret. Supabase's
+# gateway requires it on every request to every surface.
+scheme = { header = { name = "apikey" } }
+env = ["SUPABASE_ANON_KEY"]
+description = "Supabase project anon (publishable) key. Travels as the `apikey` header on every request. Requests made with it run as the project's `anon` Postgres role, so everything they return is bounded by the project's row-level-security policies — it is not the `service_role` key and confers none of that key's authority"
+
+# ---------------------------------------------------------------------------------------------
+# Operations. Three reads, all `low`, all `idempotent`.
+#
+# **Why `low` is the honest rating for all three, and not a shrug.** The anon key is a credential the
+# vendor publishes as safe to embed in a browser. Anything these operations can read is, by
+# construction, already readable by anyone holding a key the operator has published — a row reaches
+# the `anon` role only through a row-level-security policy the project's own author wrote, or through
+# an explicit grant on a table with RLS disabled. So the ceiling on all three is "what this project
+# already serves to the public", which is the lowest-authority thing this vendor offers. The rating
+# would not survive a `service_role` credential, which is one more reason there is not one.
+# ---------------------------------------------------------------------------------------------
+
+# PostgREST's root endpoint returns an OpenAPI 2.0 (Swagger) document describing the schema the API
+# exposes. It is what Supabase's own dashboard renders its auto-generated API docs from.
+[[operations]]
+id = "supabase-schema-describe"
+method = "GET"
+path = "/rest/v1/"
+description = "Describe the tables, views and columns this project's data API exposes, as an OpenAPI 2.0 document. Takes no argument. Call this first to discover the table names supabase-rows-list takes and what columns each one has — the document reflects only what the anon role may see, so a table absent from it is a table this key cannot read. Also this connector's `verify`: a bounded read that runs unattended and needs nothing configured beyond the project ref and the key"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["swagger", "paths", "definitions"]
+properties = { swagger = { type = "string", description = "The OpenAPI version of this document — `2.0`" }, host = { type = "string", description = "The project's API host, as PostgREST sees it" }, basePath = { type = "string", description = "The path prefix every documented path hangs off — `/`" }, schemes = { type = "array", items = { type = "string" } }, consumes = { type = "array", items = { type = "string" } }, produces = { type = "array", items = { type = "string" } }, info = { type = "object", description = "Title, description and version of the exposed schema, as PostgREST reports them" }, paths = { type = "object", description = "One key per exposed table, view and function, each `/<name>`. The key without its leading slash is what supabase-rows-list's `table` argument takes" }, definitions = { type = "object", description = "One key per exposed table or view, each carrying that relation's `properties` — the column names, their types, and PostgREST's own notes. This is where a caller reads what a row looks like" }, parameters = { type = "object", description = "PostgREST's shared query parameters — `select`, `order`, `limit`, `offset` and the filter operators. Note that this connector declares only `limit`; see the file header for the rest" } }
+
+# ---------------------------------------------------------------------------------------------
+
+# **No `response_schema`, deliberately, and this is the one operation where absence is the *only*
+# honest answer.** A row's shape is defined in the operator's own database, so there is no vendor
+# document to declare from — `providers/trello.toml` gives the same answer for its list endpoint and
+# `providers/babelforce.toml` for all nine of its operations. A placeholder `array of object` would
+# count towards `response_schema_coverage.rs` while telling a consumer nothing absence does not.
+# The shape a caller actually needs is discoverable at runtime and from a *real* schema, which is
+# what supabase-schema-describe is for, and the description below says so.
+[[operations]]
+id = "supabase-rows-list"
+method = "GET"
+path = "/rest/v1/{table}"
+description = "Read rows from one table or view in this project. Returns a JSON array of row objects with every column the anon role may read; the columns are the project's own, so call supabase-schema-describe first to learn them. Row-level security decides which rows come back — an empty array means the policies matched nothing, not that the table is empty. This connector cannot filter, project or sort: pass `limit` to bound the read and do the rest in the flow"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "table"
+description = "The table or view to read, exactly as it appears under `paths` in supabase-schema-describe's response, without the leading slash. Must be a relation the project exposes to its API — a name the schema document does not list is not readable with this key"
+required = true
+# A bare relation name. The pattern is this file's own narrowing, not a vendor-documented rule: it
+# admits what Postgres identifiers actually look like and refuses `/`, `?` and `.`, which is what
+# keeps a caller-supplied value from steering the path this operation builds. Path values, like
+# host-position ones, are substituted without a predicate at request time (C-214), so the
+# declaration is the only place the constraint can be stated.
+schema = { type = "string", minLength = 1, maxLength = 63, pattern = "^[A-Za-z_][A-Za-z0-9_]*$" }
+
+[[operations.params.query]]
+name = "limit"
+description = "Maximum number of rows to return. Omitting it returns every row the policies match, up to the ceiling the project's own API settings impose (1000 by default) — pass a value rather than relying on that, because the ceiling is per-project and can be raised"
+required = false
+# No `maximum`: unlike PagerDuty's fixed 100, Supabase's row ceiling is a per-project setting, so a
+# constant here would be this file inventing a limit the vendor does not publish.
+schema = { type = "integer", minimum = 1 }
+
+# ---------------------------------------------------------------------------------------------
+
+# The Auth server's public settings endpoint — the one the vendor's own client libraries read to
+# know which sign-in buttons to render. It requires the `apikey` header and nothing else, and it
+# returns configuration only: no user, no identity, no token.
+[[operations]]
+id = "supabase-auth-settings"
+method = "GET"
+path = "/auth/v1/settings"
+description = "Read which sign-in methods this project has enabled, and whether self-service sign-up is open. Takes no argument and returns configuration only — no user data and no identities. Use it to decide whether a flow can offer a given provider before it tries"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["external", "disable_signup"]
+properties = { external = { type = "object", description = "One boolean per external identity provider the project may enable — `google`, `github`, `apple`, `azure` and the rest — true where it is configured and turned on. Left untyped rather than enumerated: the key set follows whichever providers Supabase currently supports, and a fixed list here would be wrong on their next release" }, disable_signup = { type = "boolean", description = "True when self-service sign-up is off, so only an existing user can sign in" }, mailer_autoconfirm = { type = "boolean", description = "True when a new email address is trusted without a confirmation link" }, phone_autoconfirm = { type = "boolean", description = "True when a new phone number is trusted without an SMS code" }, sms_provider = { type = "string", description = "The configured SMS provider's name, or empty when there is none" }, saml_enabled = { type = "boolean", description = "True when SAML single sign-on is available on this project" } }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — the whole of what a product asks a human for before any of the above can run.
+# Two fields: where the project is, and the key to reach it with.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "project_ref"
+label = "Supabase project ref"
+help = "The reference id of your project, from Project Settings → General, or the first label of your project's URL. Paste only that label — not the full `https://…` URL and not anything with an `@` in it: the ref becomes the hostname every request goes to, so a value carrying an `@` would send this project's key to a host you did not name"
+example = "abcdefghijklmnopqrst"
+format = "subdomain"
+docs_url = "https://supabase.com/docs/guides/api"
+binds = "endpoint.project_ref"
+
+[[config]]
+name = "anon_key"
+label = "Supabase anon (publishable) key"
+# The `help` is a contract, not decoration — `supabase_connector.rs` asserts that it names
+# `service_role`, says what that key *bypasses*, and uses the word "bypass". This is the one moment
+# a person is looking at both keys and choosing between them.
+help = "From Project Settings → API, copy the key labelled `anon` / `public` (newer projects spell it `sb_publishable_…`). Do NOT paste the `service_role` key, even though it also works: `service_role` bypasses row-level security completely, so a connector holding it can read and change every row in your database regardless of the policies you wrote. The anon key is the one Supabase publishes as safe to expose, and it is all this connector needs"
+format = "token"
+secret = true
+docs_url = "https://supabase.com/docs/guides/api/api-keys"
+binds = "credential.supabase.anon_key"

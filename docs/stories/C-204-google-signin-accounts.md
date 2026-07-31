@@ -2,7 +2,7 @@
 id: C-204
 title: "Google sign-in, accounts and sessions"
 pillar: Bridge
-status: in-progress
+status: done
 priority: 3
 design: docs/designs/connectors-api.md
 epic: connectors-api

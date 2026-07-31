@@ -21,8 +21,26 @@
 //!    two in step, which is precisely the outcome C-164 weighed against a refusal.
 //!
 //! So the probe's answer is now *narrower* rather than overturned, and this file pins the new
-//! boundary with the loader and the emitter rather than leaving it as prose. Shipping
-//! `providers/algolia.toml` remains C-164's call, and needs the third finding addressed.
+//! boundary with the loader and the emitter rather than leaving it as prose.
+//!
+//! # C-164 made the call: still no `providers/algolia.toml`, and the space is now closed
+//!
+//! Finding 3 is not an ergonomic wart to be waived — it is a rule, and the three ways to make the
+//! two positions share one value are each measured here rather than argued:
+//!
+//! | shape | outcome |
+//! |---|---|
+//! | two fields, different names (`endpoint.app_id` + `header.X-Algolia-Application-Id`) | **loads** — and is the problem: two host-side slots, one answer, nothing keeping them in step |
+//! | two fields, one name (both spelled `X-Algolia-Application-Id`) | **refused** — `validate_pin`'s C-197 shared-slot pass |
+//! | one field, header pin alone, hostname resolving from it | **refused** — only `Binding::Endpoint` binds a `base_url` variable |
+//!
+//! The middle row is the sharp one. The declaration that would give Algolia what it needs — one
+//! collected value substituted into both positions — is refused *by name*, and the rule refusing it
+//! is right: two **fields** keyed to one slot means one field's answer is silently discarded. The
+//! rule and the vendor want opposite things, and this model has no way to write the one question
+//! that would satisfy both. Algolia is the only one of C-187's three motivating vendors whose scope
+//! sits in *two* positions — Cloudflare's `zone_id` and Vercel's `teamId` each sit in one, which is
+//! why they ship and this does not.
 
 use std::path::{Path, PathBuf};
 
@@ -38,11 +56,25 @@ use connector_spec::{provider, Binding, Level, Position};
 /// a real secret, `Header` scheme, gated as `secret = true`. Only the *application id*'s config
 /// block varies across cases below.
 fn fixture(application_id_auth: &str, application_id_config: &str) -> String {
+    fixture_hosted_on(
+        "https://{app_id}-dsn.algolia.net",
+        application_id_auth,
+        application_id_config,
+    )
+}
+
+/// [`fixture`] with the hostname template varied too, for the cases that turn on *which* name the
+/// `base_url` placeholder and the header pin are spelled with.
+fn fixture_hosted_on(
+    base_url: &str,
+    application_id_auth: &str,
+    application_id_config: &str,
+) -> String {
     format!(
         r#"
 id = "algolia"
 vendor = "Algolia"
-base_url = "https://{{app_id}}-dsn.algolia.net"
+base_url = "{base_url}"
 
 default_auth = [{{ credentials = ["algolia.api_key"] }}]
 
@@ -260,13 +292,97 @@ binds = "header.X-Algolia-Application-Id"
     );
 }
 
+/// **Spelling both destinations with one name — the declaration that would make them share — is
+/// refused, by name, at the loader.**
+///
+/// This is the "why not just…" the previous two findings leave open. If the `base_url` placeholder
+/// and the header are given the *same* spelling, the two fields resolve one `{placeholder}` and a
+/// host would substitute one collected value into both positions, which is exactly the behaviour
+/// Algolia needs. The loader refuses it: `validate_pin`'s shared-slot pass
+/// (`crates/connector-spec/src/provider.rs:795-820`) compares a pin's name against every other
+/// field's endpoint variable and request name, and rejects a match as the C-197 one-slot collapse.
+///
+/// The refusal is right on its own terms — two *fields* keyed to one slot means one field's answer
+/// is silently discarded — and it is precisely what makes Algolia unshippable. The rule and the
+/// vendor want opposite things: the rule says two questions sharing an answer must be one question,
+/// and this model has no way to *write* that one question.
+#[test]
+fn one_name_for_both_destinations_is_refused_as_a_shared_slot() {
+    let config = r#"
+[[config]]
+name = "app_id"
+label = "Algolia application id"
+help = "For the probe fixture only"
+binds = "endpoint.X-Algolia-Application-Id"
+
+[[config]]
+name = "application_id_header"
+label = "Algolia application id (header)"
+help = "For the probe fixture only"
+binds = "header.X-Algolia-Application-Id"
+"#;
+    let source = fixture_hosted_on(
+        "https://{X-Algolia-Application-Id}-dsn.algolia.net",
+        "",
+        config,
+    );
+    let error = provider::load("providers/algolia.toml", &source)
+        .expect_err("two fields resolving one placeholder must be refused");
+    let message = error.to_string();
+    assert!(
+        message.contains("app_id")
+            && message.contains("application_id_header")
+            && message.contains("one slot"),
+        "expected the C-197 shared-slot refusal naming both fields, got: {message}"
+    );
+}
+
+/// **A header pin does not satisfy a `base_url` template variable**, so the header alone cannot
+/// stand in for the hostname either.
+///
+/// The remaining escape would be to declare the application id *once*, as a header pin, and let the
+/// hostname template resolve from it. It does not:
+/// `validate_every_template_variable_is_asked_for` (`provider.rs:831-855`) matches only
+/// `Binding::Endpoint`, so a `{placeholder}` in a `base_url` is bound by an endpoint binding or by
+/// nothing. With the header pin as the sole declaration the connector has no valid destination URL,
+/// and the loader says so rather than emitting one.
+#[test]
+fn a_header_pin_does_not_bind_the_hostname_template() {
+    let config = r#"
+[[config]]
+name = "application_id"
+label = "Algolia application id"
+help = "For the probe fixture only"
+binds = "header.X-Algolia-Application-Id"
+"#;
+    let source = fixture_hosted_on(
+        "https://{X-Algolia-Application-Id}-dsn.algolia.net",
+        "",
+        config,
+    );
+    let error = provider::load("providers/algolia.toml", &source)
+        .expect_err("a header pin must not count as binding the hostname");
+    let message = error.to_string();
+    assert!(
+        message.contains("X-Algolia-Application-Id") && message.contains("endpoint."),
+        "expected the unbound-template refusal pointing at `endpoint.`, got: {message}"
+    );
+}
+
 /// **The recorded outcome: no dishonest connector was shipped for this probe.**
 ///
 /// `providers/algolia.toml` still does not exist, and C-187 narrowed rather than removed the reason.
 /// Mislabelling a public identifier as a secret is no longer necessary — a header pin is non-secret
 /// by construction — but asking an operator for the application id **twice**, with no guard against
-/// the two answers disagreeing, still is. Shipping this connector is C-164's call and needs that
-/// third finding addressed; see the module documentation and the story's `## Progress`.
+/// the two answers disagreeing, still is.
+///
+/// C-164 has now made that call with the space closed rather than surveyed: the unifying declaration
+/// is refused (`one_name_for_both_destinations_is_refused_as_a_shared_slot`) and the header pin does
+/// not reach the hostname (`a_header_pin_does_not_bind_the_hostname_template`). The remaining shape
+/// would ship a second `[[config]]` field for which no honest `label`/`help` can be written — its
+/// only truthful help text is "type the same value again" — against a configuration contract that
+/// requires a connector to ask for "everything it needs and nothing it cannot use". See the module
+/// documentation and the story's `## Progress`.
 #[test]
 fn no_provider_toml_was_shipped_for_this_probe() {
     let path = providers_dir().join("algolia.toml");

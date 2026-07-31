@@ -17,6 +17,7 @@ pub(crate) mod airtable;
 pub(crate) mod anthropic;
 pub(crate) mod asana;
 pub(crate) mod babelforce;
+pub(crate) mod bitbucket;
 pub(crate) mod r#box;
 pub(crate) mod calendly;
 pub(crate) mod clickup;
@@ -35,7 +36,9 @@ pub(crate) mod google;
 pub(crate) mod hubspot;
 pub(crate) mod intercom;
 pub(crate) mod jira;
+pub(crate) mod klaviyo;
 pub(crate) mod launchdarkly;
+pub(crate) mod mailchimp;
 pub(crate) mod microsoft_graph;
 pub(crate) mod miro;
 pub(crate) mod notion;
@@ -44,6 +47,7 @@ pub(crate) mod openai;
 pub(crate) mod openrouter;
 pub(crate) mod pagerduty;
 pub(crate) mod postmark;
+pub(crate) mod resend;
 pub(crate) mod salesforce;
 pub(crate) mod sendgrid;
 pub(crate) mod sentry;
@@ -51,6 +55,7 @@ pub(crate) mod shopify;
 pub(crate) mod slack;
 pub(crate) mod statuspage;
 pub(crate) mod stripe;
+pub(crate) mod supabase;
 pub(crate) mod trello;
 pub(crate) mod twilio;
 pub(crate) mod typeform;
@@ -69,6 +74,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &anthropic::PROVIDER,
     &asana::PROVIDER,
     &babelforce::PROVIDER,
+    &bitbucket::PROVIDER,
     &r#box::PROVIDER,
     &calendly::PROVIDER,
     &clickup::PROVIDER,
@@ -87,7 +93,9 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &hubspot::PROVIDER,
     &intercom::PROVIDER,
     &jira::PROVIDER,
+    &klaviyo::PROVIDER,
     &launchdarkly::PROVIDER,
+    &mailchimp::PROVIDER,
     &microsoft_graph::PROVIDER,
     &miro::PROVIDER,
     &notion::PROVIDER,
@@ -96,6 +104,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &openrouter::PROVIDER,
     &pagerduty::PROVIDER,
     &postmark::PROVIDER,
+    &resend::PROVIDER,
     &salesforce::PROVIDER,
     &sendgrid::PROVIDER,
     &sentry::PROVIDER,
@@ -103,6 +112,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &slack::PROVIDER,
     &statuspage::PROVIDER,
     &stripe::PROVIDER,
+    &supabase::PROVIDER,
     &trello::PROVIDER,
     &twilio::PROVIDER,
     &typeform::PROVIDER,

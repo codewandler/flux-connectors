@@ -59,7 +59,17 @@ use connector_spec::JsonSchema;
 /// where the slack is 24. That is exactly the per-wave-not-per-story case `AGENTS.md` records, and
 /// it is why this constant is coordinator-owned — three concurrent provider stories that each
 /// raised it would collide on one line.
-const COVERED_FLOOR: usize = 220;
+///
+/// **Raised 220 → 250 by the 2026-07-31 provider wave, the same mechanism a second time and at
+/// larger scale.** Bitbucket (7 of 7), Mailchimp (7 of 7), Klaviyo (5 of 5), Supabase (2 of 3) and
+/// Resend (4 of 4) each fitted inside the slack **alone** — every one of them checked this test and
+/// correctly reported it green, left this file untouched, and reported the eight staleness failures
+/// instead. Their accumulation crossed it: 250 of 281 against a floor of 220, where the slack is 28.
+///
+/// Two of them predicted it in their handoffs before it happened, which is the part worth keeping:
+/// the per-story signal is green by construction, so an implementor cannot see a per-wave failure
+/// coming. Giving them one is filed as its own story rather than fixed by lowering anything here.
+const COVERED_FLOOR: usize = 250;
 
 /// The same floor as a share of every shipped operation, in whole percent. This is the half that
 /// notices a connector arriving with no response shapes at all.
@@ -80,7 +90,15 @@ const COVERED_FLOOR: usize = 220;
 /// figure` turns [`COVERED_FLOOR`] both ways; nothing turns this one, so it can only drift. Wiring
 /// the same two-way check here — or deriving this from `COVERED_FLOOR` rather than storing it twice
 /// — is worth a story. Until then it is raised by hand, which is the mechanism that just failed.
-const RATIO_FLOOR_PERCENT: usize = 87;
+///
+/// **Raised 87 → 88 on 2026-07-31 by the provider wave, deliberately and while nothing forced it.**
+/// The measurement is now 250 of 281 — **89.0%** — so 87 had become two points under and was
+/// drifting in the same direction as before. Nothing failed: this constant still has no ratchet, so
+/// it went on being satisfied while the gap widened, which is precisely the archaeology described
+/// above. Moving it back to one point under is the whole of the fix available by hand, and having to
+/// *notice* it rather than be *told* is the standing argument for
+/// [C-196](../../../docs/stories/C-196-the-ratio-floor-has-no-ratchet.md).
+const RATIO_FLOOR_PERCENT: usize = 88;
 
 fn providers_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
