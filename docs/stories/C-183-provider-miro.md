@@ -2,8 +2,7 @@
 id: C-183
 title: Ship the Miro connector
 pillar: Spec
-status: in-progress
-priority: 3
+status: done
 design:
 epic: provider-fleet-2
 areas: [providers]

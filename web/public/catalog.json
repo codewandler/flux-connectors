@@ -15093,6 +15093,1066 @@
       "channels": []
     },
     {
+      "id": "miro",
+      "authority": null,
+      "vendor": "Miro",
+      "description": "Miro boards and board items: discover boards, read items of any type, and create, update and delete sticky notes",
+      "base_url": "https://api.miro.com/v2",
+      "api_version": null,
+      "hosts": [
+        "api.miro.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.miro.com/v2",
+          "hosts": [
+            "api.miro.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 6
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "miro.access_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "Miro access token (a personal access token or an OAuth2 access token), sent as a bearer token, scoped to read and write boards, board items and sticky notes",
+            "env": [
+              "MIRO_ACCESS_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "miro.access_token"
+          ]
+        ]
+      },
+      "operation_count": 6,
+      "operations": [
+        {
+          "id": "miro-board-list",
+          "provider": "miro",
+          "service": "default",
+          "description": "List the boards this access token can see, with each board's id, name and description. Returns Miro's first page only; this connector declares no cursor or limit parameter (see the connector's header note). The board `id` returned here is what every other operation in this connector needs as `board_id`",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/boards",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "cursor": {
+                "description": "Opaque pagination token for the next page; not usable by this connector (see the header note)",
+                "type": "string"
+              },
+              "data": {
+                "items": {
+                  "properties": {
+                    "createdAt": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "description": {
+                      "description": "The board's description, empty string when none",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "The board's id — pass this as `board_id` to every other operation",
+                      "type": "string"
+                    },
+                    "modifiedAt": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "The board's display name",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "miro.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.miro.com"
+          ],
+          "flux": "op miro-board-list -> Any\n  description \"List the boards this access token can see, with each board's id, name and description. Returns Miro's first page only; this connector declares no cursor or limit parameter (see the connector's header note). The board `id` returned here is what every other operation in this connector needs as `board_id`\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.miro.com/v2\"\n  url = fmt(\"{base}/boards\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "miro-board-item-list",
+          "provider": "miro",
+          "service": "default",
+          "description": "List the items on a board, of any type (sticky note, shape, text or frame). Each item's shape depends on its `type`: sticky notes and text carry `data.content`, shapes carry `data.content` and `data.shape`, frames carry `data.title`. Returns Miro's first page only; this connector declares no cursor or limit parameter (see the connector's header note)",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/boards/{board_id}/items",
+          "parameters": [
+            {
+              "name": "board_id",
+              "in": "path",
+              "wire": null,
+              "description": "The board's id, as returned by miro-board-list",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "board_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "board_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "cursor": {
+                "description": "Opaque pagination token for the next page; not usable by this connector (see the header note)",
+                "type": "string"
+              },
+              "data": {
+                "items": {
+                  "oneOf": [
+                    {
+                      "description": "A sticky note",
+                      "properties": {
+                        "data": {
+                          "properties": {
+                            "content": {
+                              "description": "HTML content of the note",
+                              "type": "string"
+                            },
+                            "shape": {
+                              "description": "square or rectangle",
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "geometry": {
+                          "properties": {
+                            "height": {
+                              "type": "number"
+                            },
+                            "width": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "parent": {
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "description": "The containing frame's id, when this item sits inside one",
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "position": {
+                          "properties": {
+                            "x": {
+                              "type": "number"
+                            },
+                            "y": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "type": {
+                          "const": "sticky_note",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "description": "A shape",
+                      "properties": {
+                        "data": {
+                          "properties": {
+                            "content": {
+                              "type": "string"
+                            },
+                            "shape": {
+                              "description": "e.g. rectangle, circle, triangle",
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "geometry": {
+                          "properties": {
+                            "height": {
+                              "type": "number"
+                            },
+                            "width": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "parent": {
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "position": {
+                          "properties": {
+                            "x": {
+                              "type": "number"
+                            },
+                            "y": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "type": {
+                          "const": "shape",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "description": "A text item",
+                      "properties": {
+                        "data": {
+                          "properties": {
+                            "content": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "geometry": {
+                          "properties": {
+                            "height": {
+                              "type": "number"
+                            },
+                            "width": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "parent": {
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "position": {
+                          "properties": {
+                            "x": {
+                              "type": "number"
+                            },
+                            "y": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "type": {
+                          "const": "text",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "description": "A frame — a container other items reference by `parent.id`; a frame never embeds its members' bodies",
+                      "properties": {
+                        "data": {
+                          "properties": {
+                            "title": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "geometry": {
+                          "properties": {
+                            "height": {
+                              "type": "number"
+                            },
+                            "width": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "position": {
+                          "properties": {
+                            "x": {
+                              "type": "number"
+                            },
+                            "y": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "type": {
+                          "const": "frame",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "miro.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.miro.com"
+          ],
+          "flux": "op miro-board-item-list(board_id: String) -> Any\n  description \"List the items on a board, of any type (sticky note, shape, text or frame). Each item's shape depends on its `type`: sticky notes and text carry `data.content`, shapes carry `data.content` and `data.shape`, frames carry `data.title`. Returns Miro's first page only; this connector declares no cursor or limit parameter (see the connector's header note)\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.miro.com/v2\"\n  url = fmt(\"{base}/boards/{board_id}/items\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "miro-board-item-get",
+          "provider": "miro",
+          "service": "default",
+          "description": "Get one item from a board, of any type (sticky note, shape, text or frame). Its shape depends on its `type` — see miro-board-item-list's description for what each carries",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/boards/{board_id}/items/{item_id}",
+          "parameters": [
+            {
+              "name": "board_id",
+              "in": "path",
+              "wire": null,
+              "description": "The board's id, as returned by miro-board-list",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "item_id",
+              "in": "path",
+              "wire": null,
+              "description": "The item's id, as returned by miro-board-item-list",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "board_id": {
+                "type": "string"
+              },
+              "item_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "board_id",
+              "item_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "oneOf": [
+              {
+                "description": "A sticky note",
+                "properties": {
+                  "data": {
+                    "properties": {
+                      "content": {
+                        "type": "string"
+                      },
+                      "shape": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "geometry": {
+                    "properties": {
+                      "height": {
+                        "type": "number"
+                      },
+                      "width": {
+                        "type": "number"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "parent": {
+                    "nullable": true,
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "position": {
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": {
+                    "const": "sticky_note",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "type"
+                ],
+                "type": "object"
+              },
+              {
+                "description": "A shape",
+                "properties": {
+                  "data": {
+                    "properties": {
+                      "content": {
+                        "type": "string"
+                      },
+                      "shape": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "geometry": {
+                    "properties": {
+                      "height": {
+                        "type": "number"
+                      },
+                      "width": {
+                        "type": "number"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "parent": {
+                    "nullable": true,
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "position": {
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": {
+                    "const": "shape",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "type"
+                ],
+                "type": "object"
+              },
+              {
+                "description": "A text item",
+                "properties": {
+                  "data": {
+                    "properties": {
+                      "content": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "geometry": {
+                    "properties": {
+                      "height": {
+                        "type": "number"
+                      },
+                      "width": {
+                        "type": "number"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "parent": {
+                    "nullable": true,
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "position": {
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": {
+                    "const": "text",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "type"
+                ],
+                "type": "object"
+              },
+              {
+                "description": "A frame",
+                "properties": {
+                  "data": {
+                    "properties": {
+                      "title": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "geometry": {
+                    "properties": {
+                      "height": {
+                        "type": "number"
+                      },
+                      "width": {
+                        "type": "number"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "position": {
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": {
+                    "const": "frame",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "type"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "credentials": [
+            [
+              "miro.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.miro.com"
+          ],
+          "flux": "op miro-board-item-get(board_id: String, item_id: String) -> Any\n  description \"Get one item from a board, of any type (sticky note, shape, text or frame). Its shape depends on its `type` — see miro-board-item-list's description for what each carries\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.miro.com/v2\"\n  url = fmt(\"{base}/boards/{board_id}/items/{item_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "miro-sticky-note-create",
+          "provider": "miro",
+          "service": "default",
+          "description": "Create a sticky note on a board. Miro does not deduplicate: creating the same content twice makes two sticky notes, so this is not idempotent. The created note, with its assigned id, is in the response",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/boards/{board_id}/sticky_notes",
+          "parameters": [
+            {
+              "name": "board_id",
+              "in": "path",
+              "wire": null,
+              "description": "The board's id, as returned by miro-board-list",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "content",
+              "in": "body",
+              "wire": "data.content",
+              "description": "The sticky note's text content, as HTML",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "board_id": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "board_id",
+              "content"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "createdAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "data": {
+                "properties": {
+                  "content": {
+                    "type": "string"
+                  },
+                  "shape": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "geometry": {
+                "properties": {
+                  "height": {
+                    "type": "number"
+                  },
+                  "width": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "id": {
+                "type": "string"
+              },
+              "modifiedAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "position": {
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "type": {
+                "const": "sticky_note",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "type"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "miro.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.miro.com"
+          ],
+          "flux": "op miro-sticky-note-create(board_id: String, content: String) -> Any\n  description \"Create a sticky note on a board. Miro does not deduplicate: creating the same content twice makes two sticky notes, so this is not idempotent. The created note, with its assigned id, is in the response\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.miro.com/v2\"\n  url = fmt(\"{base}/boards/{board_id}/sticky_notes\")\n  content_type = \"application/json\"\n  payload = { data: { content } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "miro-sticky-note-update",
+          "provider": "miro",
+          "service": "default",
+          "description": "Update a sticky note's text content. Setting the same content twice ends in the same state, but this is declared non_idempotent because check_write_metadata refuses idempotency = idempotent on any PATCH by method alone, regardless of vendor behaviour (see the header note, C-186). The updated note is in the response",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "PATCH",
+          "path": "/boards/{board_id}/sticky_notes/{item_id}",
+          "parameters": [
+            {
+              "name": "board_id",
+              "in": "path",
+              "wire": null,
+              "description": "The board's id, as returned by miro-board-list",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "item_id",
+              "in": "path",
+              "wire": null,
+              "description": "The sticky note's id, as returned by miro-board-item-list or miro-sticky-note-create",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "content",
+              "in": "body",
+              "wire": "data.content",
+              "description": "The sticky note's new text content, as HTML, replacing the existing content entirely",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "board_id": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "item_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "board_id",
+              "item_id",
+              "content"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "createdAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "data": {
+                "properties": {
+                  "content": {
+                    "type": "string"
+                  },
+                  "shape": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "geometry": {
+                "properties": {
+                  "height": {
+                    "type": "number"
+                  },
+                  "width": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "id": {
+                "type": "string"
+              },
+              "modifiedAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "position": {
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "type": {
+                "const": "sticky_note",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "type"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "miro.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.miro.com"
+          ],
+          "flux": "op miro-sticky-note-update(board_id: String, item_id: String, content: String) -> Any\n  description \"Update a sticky note's text content. Setting the same content twice ends in the same state, but this is declared non_idempotent because check_write_metadata refuses idempotency = idempotent on any PATCH by method alone, regardless of vendor behaviour (see the header note, C-186). The updated note is in the response\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.miro.com/v2\"\n  url = fmt(\"{base}/boards/{board_id}/sticky_notes/{item_id}\")\n  content_type = \"application/json\"\n  payload = { data: { content } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PATCH\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "miro-sticky-note-delete",
+          "provider": "miro",
+          "service": "default",
+          "description": "Delete one sticky note. There is no undo route in the API. Responds with no content",
+          "risk": "destructive",
+          "idempotency": "non_idempotent",
+          "method": "DELETE",
+          "path": "/boards/{board_id}/sticky_notes/{item_id}",
+          "parameters": [
+            {
+              "name": "board_id",
+              "in": "path",
+              "wire": null,
+              "description": "The board's id, as returned by miro-board-list",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "item_id",
+              "in": "path",
+              "wire": null,
+              "description": "The sticky note's id, as returned by miro-board-item-list or miro-sticky-note-create",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "board_id": {
+                "type": "string"
+              },
+              "item_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "board_id",
+              "item_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "miro.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.miro.com"
+          ],
+          "flux": "op miro-sticky-note-delete(board_id: String, item_id: String) -> Any\n  description \"Delete one sticky note. There is no undo route in the API. Responds with no content\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.miro.com/v2\"\n  url = fmt(\"{base}/boards/{board_id}/sticky_notes/{item_id}\")\n  response = http.request(method: \"DELETE\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "notion",
       "authority": null,
       "vendor": "Notion",

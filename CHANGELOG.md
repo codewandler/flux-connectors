@@ -9,6 +9,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Miro connector (C-183), and it narrows a gap Notion recorded.** Six operations: board discovery
+  as `verify`, generic item list and get, and sticky-note create/update/delete.
+
+  The story was filed as an experiment — C-107 refused Notion's block model, and the question was
+  *which* of its two reasons was load-bearing. **Neither applies here, and both were tested rather than
+  assumed.** Recursion does not, because Miro's item union is flat. Untyped-blob-on-write does not,
+  because **Miro resolves its type discriminator through the URL** (`/sticky_notes`), not through a body
+  field — so the write side never needs to carry a discriminator at all, and a test asserts it doesn't.
+
+  The union therefore survives on the **read** side as a JSON Schema `oneOf` in `response_schema`, and
+  the mechanism is worth naming: `response_schema` is raw JSON, unconstrained by `params.body`'s flat
+  `BodyNode` model. That is the same asymmetry C-185 describes from the other direction — this pipeline
+  can *describe* a shape it cannot *construct*.
+
+  Update and delete are scoped to sticky notes on their type-specific paths rather than the generic
+  `/items` endpoints, because the generic ones could not be confirmed and a wrong guess there is exactly
+  what the story said to avoid.
+
 - **The Vercel connector (C-170).** Five operations over a bearer token, all five endpoint shapes
   verified against Vercel's published reference rather than recalled.
 

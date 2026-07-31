@@ -133,7 +133,6 @@ _A connector's operations are currently legible only by reading `providers/<name
 - [C-180 — Ship the Postmark connector](C-180-provider-postmark.md) · Spec · `X-Postmark-Server-Token`, and the server token is per-SERVER while the account token is a different header for a different endpoint set — two credentials scoped to different operation subsets
 - [C-181 — Ship the Statuspage connector](C-181-provider-statuspage.md) · Spec · `Authorization: OAuth <token>` — a fourth Authorization scheme word, and a page id prefixes every path
 - [C-182 — Ship the Webflow connector](C-182-provider-webflow.md) · Spec · a CMS item's fields are a free-form object whose shape is defined by a user's collection schema — genuinely unknowable at compile time, which is the honest limit of a typed connector
-- [C-183 — Ship the Miro connector](C-183-provider-miro.md) · Spec · board items are a discriminated union by `type` (sticky_note, shape, text, frame) — the same shape problem as Notion's blocks, one level shallower and possibly expressible
 - [C-154 — Add YouTube as a fourth Google service](C-154-google-youtube-service.md) · Spec · google already publishes gmail, calendar and drive on three different hosts — the multi-service case C-49 was built for. YouTube is a fourth, and it is what makes C-153's `social` tag have a second value to filter on
 - [C-108 — Ship the Microsoft Graph connector](C-108-provider-microsoft-graph.md) · Spec · the second multi-service provider after Google — and the first where the services share a host, so it tests whether a service is a real level or just Google's URL problem
 - [C-109 — Ship the Twilio connector](C-109-provider-twilio.md) · Spec · third basic-join vendor, and the one whose username half is an account identifier rather than an email — so it tests whether the config model generalises past the zendesk/jira shape
@@ -281,6 +280,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-175 — Ship the LaunchDarkly connector](C-175-provider-launchdarkly.md) · Spec · `Authorization: <token>` with NO scheme word at all — tests whether 'no prefix' is expressible distinctly from bearer, or whether it collapses into it
 - [C-176 — Ship the Figma connector](C-176-provider-figma.md) · Spec · `X-Figma-Token` — a custom header credential, and a file is addressed by a key taken from a URL a human copied
 - [C-178 — Ship the ClickUp connector](C-178-provider-clickup.md) · Spec · `Authorization: <pk_...>` raw, and the resource tree is four levels deep (team → space → folder → list) before a task
+- [C-183 — Ship the Miro connector](C-183-provider-miro.md) · Spec · board items are a discriminated union by `type` (sticky_note, shape, text, frame) — the same shape problem as Notion's blocks, one level shallower and possibly expressible
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->
