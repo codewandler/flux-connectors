@@ -14,13 +14,13 @@
 //! 1. **The prefix is `"Bot "`, trailing space included, on `Authorization`.** Asserted as an exact
 //!    string rather than "some prefix is set", because the whole hazard is a plausible neighbouring
 //!    value.
-//! 2. **The catalogue's prefix census, measured rather than asserted from memory.** The story that
-//!    filed this work states that every shipped connector using a prefix spells `Bearer `. That is
-//!    **not what the catalogue says**, and this test is where the correction lives: `SSWS `,
-//!    `OAuth ` and `Token token=` were already shipped, and no connector spells `Bearer ` as a
-//!    `Header` prefix at all — the `Bearer` *preset* is a separate variant and stays one
-//!    (`AuthScheme::Bearer`). What Discord actually adds is the first prefix whose neighbouring
-//!    value is **also valid vendor syntax for a different credential**, which is the sharper case.
+//! 2. **The premise this story was filed on, corrected against the three connectors it is about.**
+//!    The story states that every shipped connector using a prefix spells `Bearer `. It is wrong:
+//!    Okta's `SSWS `, Statuspage's `OAuth ` and PagerDuty's `Token token=` were all shipping before
+//!    Discord, and no connector spells `Bearer ` as a `Header` prefix at all — the `Bearer` *preset*
+//!    is a separate variant and stays one (`AuthScheme::Bearer`). What Discord actually adds is the
+//!    first prefix whose neighbouring value is **also valid vendor syntax for a different
+//!    credential**, which is the sharper case.
 //! 3. **One credential kind, chosen deliberately.** Discord publishes two authentication mechanisms
 //!    for this API — a bot token and an OAuth2 bearer token — and they are different credentials
 //!    with different capabilities, not interchangeable alternatives of one mechanism. This connector
@@ -36,6 +36,19 @@
 //! takes a fixed `requests`/`per_seconds` pair and cannot express that, so this connector declares
 //! none and states the rule in prose a model reads instead — which *is* asserted, below, because
 //! prose that nothing checks is how a caller ends up discovering a limit by being rate-limited.
+//!
+//! # A scoping rule for this file, learned the hard way
+//!
+//! **Nothing here walks `providers/`.** A per-provider contract test may load a provider it *names* —
+//! finding 2 loads three predecessors deliberately — but it must never enumerate the directory and
+//! assert on what it finds. An earlier version of finding 2 did, and Klaviyo landing a fifth prefix
+//! in the same wave turned this file red from a worktree it could not see: a failure that is not one
+//! of the eight whole-catalogue staleness checks `AGENTS.md` tabulates, that no regeneration at
+//! integration resolves, and that breaks the disjoint-write-set property letting provider stories run
+//! in parallel. Catalogue-wide claims belong in a catalogue-wide test that the coordinator owns;
+//! model-wide claims about the prefix axis belong in
+//! `crates/connector-spec/tests/auth_prefix.rs`, which is fixture-based and therefore cannot be
+//! falsified by a new connector at all. That is the pattern to copy.
 
 use std::path::{Path, PathBuf};
 
@@ -106,24 +119,6 @@ fn load_provider(id: &str) -> Connector {
         .connector
 }
 
-/// Every provider id in the repository, sorted.
-fn shipped_providers() -> Vec<String> {
-    let mut providers: Vec<String> = std::fs::read_dir(providers_dir())
-        .expect("providers/ is readable")
-        .filter_map(|entry| {
-            let path = entry.expect("a readable directory entry").path();
-            (path.extension()? == "toml").then(|| {
-                path.file_stem()
-                    .expect("a .toml file has a stem")
-                    .to_string_lossy()
-                    .into_owned()
-            })
-        })
-        .collect();
-    providers.sort();
-    providers
-}
-
 /// **Finding 1: the credential travels as `Authorization: Bot <token>`, and the prefix is asserted
 /// exactly.**
 ///
@@ -186,95 +181,153 @@ fn the_bot_token_travels_with_the_bot_prefix_and_never_bearer() {
     );
 
     assert_eq!(credential.env, [CREDENTIAL_ENV]);
+}
 
-    // The prefix is connector data and must stay out of the module: generated Flux names a
-    // credential and nothing more (`AGENTS.md`, the authentication contract).
-    //
-    // The scan is over the emitted *code*, with the `description` line removed. A description is
-    // prose a model reads and `discord-current-user`'s deliberately names the scheme word — telling
-    // a caller which header arrangement a 401 would be blaming. The hazard this assertion guards is
-    // the module *assembling* the header, which would appear as a `headers:` argument or an
-    // interpolated string, never as documentation.
+/// **The prefix never reaches the module, asserted so that it can actually fail.**
+///
+/// `AGENTS.md`'s authentication contract says generated Flux names a credential and nothing more:
+/// the host applies the placement, so `Bot ` must not appear in an emitted module. The obvious way to
+/// check that is to emit each operation and search the text for the scheme word — and this file did
+/// exactly that, twice, wrongly.
+///
+/// The first version searched the whole module and **failed**, because `discord-current-user`'s
+/// `description` deliberately names the `Bot ` scheme word for the model reading it. The second
+/// version dropped `description` lines to fix that, and passed — but review found it **inert**:
+/// `crates/connector-flux/src` never references `AuthScheme` at all, so no emitted module can contain
+/// an auth prefix under *any* declaration. A text search over the output could not have failed for a
+/// prefix regression before the change or after it. It was reassurance wearing an assertion's clothes.
+///
+/// So the property is asserted at its cause instead: emitting an operation against a connector whose
+/// credentials have been **removed entirely** produces byte-identical Flux. That is the strongest
+/// form of "the prefix does not reach the module" available here — not that the scheme word happens
+/// to be absent from the text, but that the emitter's output does not depend on the auth declaration
+/// at all. Teaching the emitter to read `AuthScheme` — the change that would put a prefix in a module
+/// — turns this red on the first operation, which a text search never would.
+///
+/// The declaration-side pin, which is the one that catches a wrong scheme word actually shipping, is
+/// [`the_bot_token_travels_with_the_bot_prefix_and_never_bearer`].
+#[test]
+fn the_emitter_never_reads_the_credential_declaration() {
+    let connector = load();
+
+    let mut blind = connector.clone();
+    blind.auth.clear();
+    blind.default_auth.clear();
+
     for id in OPERATIONS {
         let operation = connector
             .operation(id)
             .unwrap_or_else(|| panic!("discord declares `{id}`"));
-        let flux = emit_operation(&connector, operation)
+        let with_auth = emit_operation(&connector, operation)
             .unwrap_or_else(|error| panic!("{id} does not emit: {error}"));
-        let code = flux_without_descriptions(&flux);
-        assert!(
-            !code.contains(PREFIX.trim()) && !code.contains("Bearer"),
-            "{id} emits a scheme word into the module; the prefix belongs to the placement, and \
-             the host applies it:\n{flux}"
+
+        let blind_operation = blind
+            .operation(id)
+            .expect("the stripped connector keeps its operations");
+        let without_auth = emit_operation(&blind, blind_operation)
+            .unwrap_or_else(|error| panic!("{id} does not emit without credentials: {error}"));
+
+        assert_eq!(
+            with_auth, without_auth,
+            "{id}'s emitted Flux changed when the credential declaration was removed, so the \
+             emitter now reads auth and a scheme word can reach a module"
         );
+
+        // With the above established, these are statements about the emitted text that mean
+        // something: the module carries no credential material of any kind.
         assert!(
-            !flux.contains(CREDENTIAL_ENV),
-            "{id} emits the credential's environment variable into the module:\n{flux}"
+            !with_auth.contains(CREDENTIAL_ENV) && !with_auth.contains(CREDENTIAL),
+            "{id} emits credential material into the module:\n{with_auth}"
         );
     }
 }
 
-/// The emitted module with its `description` lines dropped, leaving the declaration and the
-/// statements — the part that becomes a request.
-fn flux_without_descriptions(flux: &str) -> String {
-    flux.lines()
-        .filter(|line| !line.trim_start().starts_with("description \""))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-/// **Finding 2: the catalogue's prefix census — and the correction to the claim that filed this
-/// story.**
+/// **Finding 2: the correction to the claim that filed this story — measured, and scoped to the
+/// connectors the claim is actually about.**
 ///
 /// `docs/stories/C-216-provider-discord.md` says "Every shipped connector that uses it spells
-/// `Bearer `". Measured over `providers/*.toml`, that is false in both directions: three connectors
-/// already ship non-`Bearer ` prefixes (Okta's `SSWS `, Statuspage's `OAuth `, PagerDuty's
-/// `Token token=`), and **no** connector spells `Bearer ` as a `Header` prefix, because `Bearer` is a
-/// preset variant of its own and stays one — `AuthScheme::Header`'s own documentation records why
-/// collapsing it would move fifteen providers' committed artifacts to say what they already say.
+/// `Bearer `". That is false in both directions, and this is where the evidence lives: Okta, PagerDuty
+/// and Statuspage were all shipping non-`Bearer ` prefixes before Discord existed, and **no**
+/// connector spells `Bearer ` as a `Header` prefix at all — `AuthScheme::Bearer` is a preset variant
+/// of its own, which `connector-spec`'s `auth_prefix.rs::the_preset_schemes_carry_no_prefix_of_their
+/// _own` pins at the model, where it belongs.
 ///
-/// So Discord is not the first non-`Bearer ` prefix, and this file does not claim it is. What it *is*
+/// So Discord is not the first non-`Bearer ` prefix and this file does not claim it is. What it *is*
 /// — and what makes it worth a probe — is the first prefix whose **neighbouring value is also valid
 /// vendor syntax, for a different credential**. `SSWS <token>` sent as `Bearer <token>` is rejected
 /// by a vendor that has no bearer scheme at all; `Bot <token>` sent as `Bearer <token>` is a
 /// well-formed request for a principal the caller does not hold.
 ///
-/// The census is asserted as a whole list rather than as a lookup, so a fourth prefix landing in the
-/// catalogue makes this test say so instead of passing quietly.
+/// **On the shape of this assertion, because the first version of it was wrong in a way worth
+/// recording.** It walked `providers/*.toml` and asserted the resulting census equalled a four-element
+/// literal. That is a *whole-catalogue* assertion living inside a *per-provider* test, and it made
+/// this file falsifiable by work it has nothing to do with: Klaviyo landed `Klaviyo-API-Key ` in the
+/// same wave and turned this test red, from another worktree, with a red that is not among the eight
+/// staleness checks `AGENTS.md` tabulates and that no regeneration at integration could resolve. It
+/// broke the property that lets provider stories run in parallel at all — disjoint write sets, and
+/// no per-provider test that a stranger's provider can falsify.
+///
+/// The fix is not to append Klaviyo; that reproduces the defect one wave later. It is to assert what
+/// the claim is actually about. The premise named specific connectors, so the correction names them
+/// too: each predecessor is loaded **by name** and its own prefix checked. A fifth, tenth or fiftieth
+/// prefix landing in the catalogue cannot falsify this, because the catalogue's *membership* was never
+/// the evidence — what Okta, PagerDuty and Statuspage declare is. If one of those three ever changes
+/// its scheme word this test fires, which is exactly when the evidence would have stopped being true.
+///
+/// **Why the three are a `let` in the body and not a `const`.** `connector-cli`'s C-54 guard
+/// `shipped_providers_build.rs::no_test_hand_maintains_a_shipped_provider_list` refuses a test
+/// `const` naming two or more shipped providers, because five such constants once drifted out of step
+/// and silently switched off a connector's whole gate. That guard's own documentation carves out the
+/// case this is — "a per-provider claim inside a test body … is an assertion about each provider
+/// rather than a copy of the provider set, and stays" — and the distinction is exactly right here:
+/// this is not the shipped set, and it must *not* grow when a provider is added. Keeping it in the
+/// body says so to both the guard and the next reader. Do not lift it back out to a `const`.
 #[test]
-fn the_catalogue_prefix_census_is_exactly_these_four() {
-    let mut census: Vec<String> = Vec::new();
+fn the_non_bearer_prefixes_this_connector_joins_were_already_shipped() {
+    // (provider, credential, the exact scheme word it shipped before Discord existed)
+    let predecessors = [
+        ("okta", "okta.api_token", "SSWS "),
+        ("pagerduty", "pagerduty.api_token", "Token token="),
+        ("statuspage", "statuspage.api_key", "OAuth "),
+    ];
 
-    for id in shipped_providers() {
-        for method in &load_provider(&id).auth {
-            match &method.scheme {
-                AuthScheme::Header { name, prefix } if !prefix.is_empty() => {
-                    census.push(format!("{id}:{}:{name}:{prefix}", method.name));
-                }
-                // A `Bearer`/`Basic` preset carries its prefix in the variant, not in a string, and
-                // the loader has no way to spell a second one on top. Nothing to census.
-                _ => {}
-            }
-        }
+    for (id, credential, expected) in predecessors {
+        let connector = load_provider(id);
+        let method = connector
+            .auth_method(credential)
+            .unwrap_or_else(|| panic!("{id} declares `{credential}`"));
+
+        let AuthScheme::Header { name, prefix } = &method.scheme else {
+            panic!("{id}'s `{credential}` is a header placement carrying a scheme word");
+        };
+        assert_eq!(name, AUTH_HEADER);
+        assert_eq!(
+            prefix, expected,
+            "{id} ships `{expected}`, which is the evidence that this story's premise — that every \
+             prefix spells `Bearer ` — was never true"
+        );
+        assert_ne!(
+            prefix, WRONG_PREFIX,
+            "{id} is one of the connectors that disproves the premise; it cannot spell `Bearer `"
+        );
     }
 
-    assert_eq!(
-        census,
-        [
-            "discord:discord.bot_token:Authorization:Bot ",
-            "okta:okta.api_token:Authorization:SSWS ",
-            "pagerduty:pagerduty.api_token:Authorization:Token token=",
-            "statuspage:statuspage.api_key:Authorization:OAuth ",
-        ],
-        "the shipped `Header` prefixes, provider-sorted. If this list changed, re-read finding 2: \
-         the story's premise was that `Bearer ` was the only value, and it never was"
-    );
-
-    // The other half of the correction, stated as an assertion: `Bearer ` is not spellable as a
-    // header prefix in the shipped catalogue, because the preset is a distinct variant.
+    // And Discord joins them rather than starting them. Asserted here too, so this test states the
+    // whole of the correction and not merely its first half.
+    let discord = load();
+    let AuthScheme::Header { prefix, .. } = &discord
+        .auth_method(CREDENTIAL)
+        .expect("discord declares its bot token")
+        .scheme
+    else {
+        panic!("discord's bot token is a header placement");
+    };
+    assert_eq!(prefix, PREFIX);
     assert!(
-        !census.iter().any(|entry| entry.ends_with(WRONG_PREFIX)),
-        "no connector spells `Bearer ` as a header prefix — it is `AuthScheme::Bearer`, a variant"
+        predecessors
+            .iter()
+            .all(|(_, _, shipped)| *shipped != PREFIX),
+        "`Bot ` is a scheme word none of the predecessors already used"
     );
 }
 

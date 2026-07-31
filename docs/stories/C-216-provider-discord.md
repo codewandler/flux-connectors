@@ -101,3 +101,48 @@ appear.
 **Follow-up worth a story:** `permission_overwrites`, `attachments`, `embeds` and guild `roles` are
 declared as untyped objects. Enumerating them is real work with real value for a model, and it is not
 this story's.
+
+### Rework round 1 — the census was a whole-catalogue assertion in a per-provider test
+
+Review found `the_catalogue_prefix_census_is_exactly_these_four` blocking: it walked `providers/*.toml`
+and asserted the result equalled a four-element literal. C-218's Klaviyo declares a fifth prefix
+(`Klaviyo-API-Key `), so this file went red from a worktree it could not see — a red that is **not**
+among the eight tabulated staleness checks and that no regeneration at integration can resolve,
+because it is a hand-written literal in a shipped test. It broke the disjoint-write-set property that
+lets provider stories run in parallel.
+
+Reproduced here after merging `main` (old assertion, current tree): `left` 5 entries, `right` 4.
+
+**The fix is not to append Klaviyo** — that reproduces the defect one wave later. The premise being
+corrected named *specific connectors*, so the correction names them too:
+`the_non_bearer_prefixes_this_connector_joins_were_already_shipped` loads Okta, PagerDuty and
+Statuspage **by name** and checks each one's own prefix. The catalogue's *membership* was never the
+evidence — what those three declare is. A fifth or fiftieth prefix cannot falsify it; one of those
+three changing its scheme word can, which is exactly when the evidence would stop being true. The
+model-wide half (`Bearer ` is not spellable as a `Header` prefix) was dropped as duplication: it is
+already pinned, fixture-based and growth-proof, at
+`crates/connector-spec/tests/auth_prefix.rs::the_preset_schemes_carry_no_prefix_of_their_own`.
+
+A scoping rule is now stated in the test file's module docs: **nothing in a per-provider contract test
+walks `providers/`.** Naming a provider is fine; enumerating the directory is not.
+
+**Second finding, non-blocking: the emitted-Flux prefix scan was inert.** `crates/connector-flux/src`
+never references `AuthScheme`, so no emitted module can contain a prefix under any declaration — the
+scan could not have failed before or after the description-stripping fix. Replaced with
+`the_emitter_never_reads_the_credential_declaration`, which emits each operation against a connector
+whose credentials have been *removed* and asserts byte-identical output. That pins the actual
+invariant ("the emitter is auth-blind") at its cause and fails the moment the emitter reads auth.
+Both rewritten tests were mutation-checked to confirm they fail when the property is broken.
+
+**The C-54 guard caught a third thing**, and it was right to.
+`shipped_providers_build.rs::no_test_hand_maintains_a_shipped_provider_list` refuses a test `const`
+naming two or more shipped providers. The first draft of the fix put the three predecessors in a
+`const`; the list now lives in the test body, which is the carve-out that guard's own documentation
+names ("a per-provider claim inside a test body … is an assertion about each provider rather than a
+copy of the provider set"). It is the correct shape, not an evasion: this list must *not* grow when a
+provider is added.
+
+**The ninth is now red, and it is not this story's.** `the_recorded_floor_is_the_measured_figure`
+reports coverage 256 of 287 against a floor of 220. Measured with `providers/discord.toml` removed
+entirely it is still red — 250 of 281 — so it is the wave accumulating, exactly as `AGENTS.md`
+describes. `COVERED_FLOOR` untouched; the coordinator raises it at integration.
