@@ -369,8 +369,8 @@ description = "Purge every cached asset for a zone, immediately, for every visit
 # on one by default — `idempotent_because` is what buys it, and what a reviewer reads beside it in
 # `web/public/catalog.json`. This operation shipped `non_idempotent` before C-186, contradicting the
 # header comment above it; that contradiction is what the story was filed for.
-idempotency = "idempotent"
-idempotent_because = "purging an already-empty edge cache is a no-op: `purge_everything` states the target state rather than applying a delta, so a repeat leaves the zone exactly where the first call left it. Cloudflare returns the same 200 to each"
+idempotency = "conditional"
+repeatable_because = "`purge_everything` names a target state rather than applying a delta, so a repeat leaves the zone exactly where the first call left it — purging an already-empty edge cache is a no-op. Conditional rather than idempotent because the cache refills from origin between calls, so a stored result must never be served in place of running it"
 # Not `destructive` (nothing is deleted or unrecoverable; the cache refills from origin) and not
 # `medium` (a whole-zone purge is not "limited blast radius"). `high` is "a write a reviewer would
 # want to see first" - exactly what an instantaneous, global, origin-load-spiking purge is.

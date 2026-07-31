@@ -22,15 +22,21 @@
 //! are least alike: a DNS record delete (destructive, and the vendor documents no repeat guarantee)
 //! and a cache purge (genuinely idempotent by vendor behaviour, but `POST`).
 //!
-//! **The purge is where C-186 was measured and where it was fixed.** `check_write_metadata` refused
+//! **The purge is where C-186 was measured and where it was fixed.** `check_write_metadata` refuses
 //! `idempotency = "idempotent"` on any `POST` by method, so this connector shipped `non_idempotent`
 //! beside a header comment explaining at length that the value was false — and the comment is not
-//! what a host reads. `idempotent_because` now buys the true declaration in exchange for stating the
-//! vendor behaviour behind it, and the method rule is untouched for an author who states nothing.
+//! what a host reads.
+//!
+//! The fix is **not** a relaxation of that refusal, which still stands unconditionally. It is
+//! `idempotency = "conditional"` — the value `flux_spec::coherence` reserves for a write that is
+//! genuinely safe to repeat — plus a stated `repeatable_because`. `conditional` was accepted here
+//! all along with nothing asked of it; what C-186 added is the obligation to say *what* makes the
+//! repeat safe, so the claim reaches a host with its evidence attached.
+//!
 //! `the_dns_record_delete_is_destructive_and_not_claimed_idempotent` and
-//! `the_cache_purge_is_high_risk_and_idempotent_with_its_reason_declared` are the tests for that,
-//! and the second one still asserts the refusal — with the reason stripped — because a guard that
-//! merely gained an exception must be shown to still be a guard.
+//! `the_cache_purge_is_high_risk_and_conditional_with_its_condition_stated` are the tests for that.
+//! The second asserts **both** refusals still bite — `idempotent` outright, and `conditional` with
+//! the condition stripped — because a rule that gained a neighbour must be shown to still be a rule.
 
 use std::path::{Path, PathBuf};
 
@@ -237,7 +243,7 @@ fn the_dns_record_delete_is_destructive_and_not_claimed_idempotent() {
 /// value **and** the justification that licenses it, because the claim without its reason is the
 /// thing `check_write_metadata` is right to refuse.
 #[test]
-fn the_cache_purge_is_high_risk_and_idempotent_with_its_reason_declared() {
+fn the_cache_purge_is_high_risk_and_conditional_with_its_condition_stated() {
     let connector = cloudflare();
     let purge = op(&connector, "cloudflare-cache-purge");
 
@@ -251,40 +257,54 @@ fn the_cache_purge_is_high_risk_and_idempotent_with_its_reason_declared() {
     );
     assert_eq!(
         purge.idempotency,
-        Idempotency::Idempotent,
-        "purging an already-purged cache is a no-op, and since C-186 that is declarable rather than \
-         only documentable. `non_idempotent` here would be the connector under-claiming its own \
-         behaviour to a host, forever and in silence"
+        Idempotency::Conditional,
+        "purging an already-purged cache is a no-op, and `conditional` is flux's own value for a \
+         write that is safely repeatable (`flux_spec::coherence`, I3). `non_idempotent` was this \
+         connector under-claiming its own behaviour to a host; `idempotent` would over-claim it, \
+         because that value also licenses flux's op cache to serve a stored result *instead of* \
+         running the purge"
     );
-    let reason = purge
-        .idempotency_justification()
-        .expect("the purge states why a POST may claim idempotency");
+    let condition = purge
+        .repeatability_condition()
+        .expect("the purge states the condition under which repeating it is safe");
     assert!(
-        reason.contains("no-op") && reason.contains("purge_everything"),
-        "the justification must state the vendor behaviour the claim rests on — that \
+        condition.contains("no-op") && condition.contains("purge_everything"),
+        "the condition must state the vendor behaviour the claim rests on — that \
          `purge_everything` names a target state rather than applying a delta — not merely assert \
-         the conclusion: {reason:?}"
+         the conclusion: {condition:?}"
     );
 
-    // The escape is an escape, not a hole: strip the reason and the emitter refuses exactly as it
-    // did before C-186. This is the half of the rule that must never weaken, because it is the half
-    // that catches an author who copied a read's metadata onto a write.
-    let mut unjustified_purge = connector.clone();
-    let purge_index = unjustified_purge
+    // Two guards, both asserted, because C-186 weakened neither.
+    //
+    // First: `idempotent` stays refused on this POST outright. The story did not buy that and must
+    // not be read as having bought it — letting it through would license flux's op cache to skip a
+    // whole-zone cache purge in favour of a stored response.
+    let purge_index = connector
         .operations
         .iter()
         .position(|operation| operation.id == "cloudflare-cache-purge")
         .expect("the purge operation exists");
-    unjustified_purge.operations[purge_index].idempotent_because = None;
-    let attempt = emit_operation(
-        &unjustified_purge,
-        &unjustified_purge.operations[purge_index],
-    );
+    let mut over_claiming = connector.clone();
+    over_claiming.operations[purge_index].idempotency = Idempotency::Idempotent;
+    // The condition is cleared too, so `WriteDeclaredIdempotent` is the *only* arm that can refuse
+    // this. Left in place it would trip `RepeatabilityConditionWithoutTheClaim` instead, and the
+    // assertion would stay green with the guard it names deleted — measured, not hypothetical.
+    over_claiming.operations[purge_index].repeatable_because = None;
     assert!(
-        attempt.is_err(),
-        "an idempotent POST with no stated reason must still be refused — if this now emits, the \
-         guard has been removed rather than qualified, and every POST in the catalogue may claim \
-         to be safe to retry on nothing but its author's say-so"
+        emit_operation(&over_claiming, &over_claiming.operations[purge_index]).is_err(),
+        "`idempotent` on this POST must still be refused; C-186 moved the escape to `conditional` \
+         precisely so this refusal did not have to weaken"
+    );
+
+    // Second: strip the stated condition and even `conditional` is refused. That rule is new — the
+    // value was previously accepted on any write with nothing asked of it — so this is the only
+    // thing standing between `conditional` and meaning nothing again.
+    let mut unstated = connector.clone();
+    unstated.operations[purge_index].repeatable_because = None;
+    assert!(
+        emit_operation(&unstated, &unstated.operations[purge_index]).is_err(),
+        "a `conditional` POST that states no condition must be refused — six shipped operations \
+         were in exactly that state before C-186, publishing a claim with no evidence behind it"
     );
 }
 

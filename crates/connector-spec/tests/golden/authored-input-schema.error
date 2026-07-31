@@ -2,4 +2,4 @@ providers/authored-input-schema.toml: TOML parse error at line 14, column 1
    |
 14 | input_schema = { type = "object" }
    | ^^^^^^^^^^^^
-unknown field `input_schema`, expected one of `id`, `service`, `method`, `path`, `description`, `risk`, `idempotency`, `idempotent_because`, `auth`, `params`, `response_schema`, `quirks`
+unknown field `input_schema`, expected one of `id`, `service`, `method`, `path`, `description`, `risk`, `idempotency`, `repeatable_because`, `auth`, `params`, `response_schema`, `quirks`

@@ -1,2 +1,0 @@
-providers/idempotency-justification-says-nothing.toml is not a valid connector definition:
-  - operation "acme-cache-purge" declares `idempotent_because` = "it is", which is shorter than 24 characters and states no vendor behaviour. This field is what a reviewer reads beside a retry-safety claim on a method RFC 9110 §9.2.2 does not make idempotent; say what repeating the call actually does, as `cloudflare-cache-purge` and `launchdarkly-flag-toggle` do

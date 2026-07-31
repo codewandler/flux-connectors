@@ -63,7 +63,7 @@ fn connector(reversed: bool) -> Connector {
             description: "List calls".into(),
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
-            idempotent_because: None,
+            repeatable_because: None,
             auth: None,
             params: ParamSet {
                 query: vec![Param {

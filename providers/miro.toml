@@ -309,8 +309,8 @@ risk = "medium"
 # *model* as its tool contract (`AGENTS.md`, "`description` is not UI copy"). A model weighing
 # whether to call this has no use for the emitter's rules, and once the rule changed the sentence was
 # simply false in a shipped artifact.
-idempotency = "idempotent"
-idempotent_because = "the request carries the note's whole content as an absolute value rather than a delta, so re-sending the same body leaves the note in the state the caller asked for, however many times it runs"
+idempotency = "conditional"
+repeatable_because = "the request carries the note's whole content as an absolute value rather than a delta, so re-sending the same body leaves the note in the state the caller asked for, however many times it runs"
 
 [[operations.params.path]]
 name = "board_id"

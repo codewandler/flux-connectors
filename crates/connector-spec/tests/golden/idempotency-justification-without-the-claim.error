@@ -1,2 +1,0 @@
-providers/idempotency-justification-without-the-claim.toml is not a valid connector definition:
-  - operation "acme-cache-purge" declares `idempotent_because` but `idempotency = "non_idempotent"`. The justification asserts what the field denies — one of the two is wrong, and shipping both is the contradiction `idempotent_because` exists to end

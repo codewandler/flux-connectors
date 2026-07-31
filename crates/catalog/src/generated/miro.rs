@@ -77,7 +77,7 @@ static OPERATIONS: &[crate::Operation] = &[
         service: "default",
         description: "Update a sticky note's text content. The content sent replaces what was there, so setting the same content twice ends in the same state. The updated note is in the response",
         risk: crate::Risk::Medium,
-        idempotency: crate::Idempotency::Idempotent,
+        idempotency: crate::Idempotency::Conditional,
         credentials: &[&["miro.access_token"]],
         hosts: &["api.miro.com"],
         flux: include_str!("../../ops/miro/miro-sticky-note-update.flux"),

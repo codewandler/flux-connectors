@@ -1,2 +1,0 @@
-providers/idempotency-justification-on-a-get.toml is not a valid connector definition:
-  - operation "acme-thing-get" is a GET and declares `idempotent_because`, but nothing refuses `idempotency = "idempotent"` on that method — RFC 9110 §9.2.2 already makes it idempotent. The field exists only to unlock the claim on `POST` and `PATCH`; remove it rather than leaving a justification no refusal ever reads

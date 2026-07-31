@@ -4,7 +4,7 @@ title: "An idempotent POST or PATCH cannot be declared, so two connectors ship a
 pillar: Spec
 status: in-progress
 priority: 2
-design: docs/designs/idempotency-justification.md
+design: docs/designs/repeatable-writes.md
 areas: [connector-spec, connector-flux]
 note: "found twice in one wave: C-169's cache purge (POST, genuinely idempotent) and C-175's flag toggle (PATCH). check_write_metadata refuses `idempotent` on both methods, so each declares non_idempotent and documents the opposite in a comment. The declaration is what a host reads"
 ---
@@ -55,27 +55,30 @@ Option 2 is the likely answer, but the decision belongs in a story with a reason
 ## Acceptance
 
 - [x] The decision is made and **recorded with its reasoning** in a design doc, not just in code.
-      → [docs/designs/idempotency-justification.md](../designs/idempotency-justification.md),
-      "The decision" — option 2, with option 1 and option 3 each rejected in writing.
+      → [docs/designs/repeatable-writes.md](../designs/repeatable-writes.md). The answer is none of
+      the three options as written: `conditional` — flux's own escape hatch — was always available
+      and this repository had glossed it out of reach.
 - [x] Whatever lands, `cloudflare-cache-purge` and `launchdarkly-flag-toggle` end up with a declared
       idempotency that does not contradict their own documentation — either the field changes or the
       documentation does.
-      → the field changed. `providers/cloudflare.toml`, `providers/launchdarkly.toml`; a third
-      instance, `miro-sticky-note-update`, was found and fixed with them (see Progress).
+      → the field changed, to `conditional`, with the condition stated. Two more instances were found
+      and fixed (`miro-sticky-note-update`, and six pre-existing `conditional` operations that stated
+      no condition at all).
 - [x] **Failing-first test:** an operation declaring `idempotent` on POST is refused today; whatever
       replaces that behaviour is asserted.
-      → `crates/connector-flux/tests/idempotency_justification.rs`.
+      → `crates/connector-flux/tests/repeatability_condition.rs`.
 - [x] If an escape hatch lands, a test asserts that the **careless** case is still refused. A guard that
       anyone can opt out of without saying why is not a guard.
-      → `a_post_declaring_idempotent_without_a_reason_is_still_refused`,
-      `a_patch_declaring_idempotent_without_a_reason_is_still_refused` and
-      `a_reason_that_says_nothing_does_not_unlock_the_claim`; plus each of the three changed
-      connectors re-asserts it on its own operation with the reason stripped.
+      → `a_post_declaring_idempotent_is_still_refused_with_or_without_a_condition` (the refusal was
+      restored to unconditional), `a_conditional_write_that_states_no_condition_is_refused`,
+      `a_condition_that_says_nothing_does_not_unlock_the_claim`,
+      `a_condition_of_pure_whitespace_does_not_clear_the_floor`, and
+      `the_emitter_refuses_an_in_memory_ir` — which is the one that pins the emitter independently of
+      the loader.
 - [x] Every existing operation's emitted module is byte-identical unless it is one of the two named
       above, and those two are shown before and after.
-      → three operations moved, not two; every other emitted module is byte-identical
-      (`diff --provider` reports no drift, and `git status` touched only those three providers'
-      artifacts). Before and after are in the Progress note.
+      → three modules moved, not two; the six extra corrections moved none. Before and after in the
+      Progress note.
 
 ## Notes
 
@@ -90,38 +93,63 @@ Option 2 is the likely answer, but the decision belongs in a story with a reason
 
 ## Progress
 
-**Landed: option 2 — `idempotent_because`.** The method-based refusal is unchanged where an author
-says nothing; stating a reason is what buys the claim, and the reason is published rather than left
-in a comment. Reasoning, the rejected options, the full method matrix and the semver obligation are
-in [docs/designs/idempotency-justification.md](../designs/idempotency-justification.md).
+**Round 2 (rework). The first landing was wrong, and the way it was wrong is the finding.**
 
-**The contradiction was found three times, not two.** The catalogue grew from 45 to 53 providers
-after this story was filed, and `miro-sticky-note-update` (C-183) had hit the same wall. Its own
-comment said *"the honest fix is C-186's escape hatch, not yet landed"*, so fixing it was this
-story's instruction, left in place by its author. Worse, Miro had put the explanation in the
-operation's `description` — the one string that reaches a **model** as its tool contract — so a fact
-about this repository's compiler was shipping into `web/public/catalog.json` and
-`crates/catalog/`, and became false the moment the rule changed. The description was rewritten to
-describe Miro.
+It added `idempotent_because` to let a `POST` declare `Idempotency::Idempotent`. Its own design doc
+rejected the story's option 3 on the ground that *flux owns this vocabulary* — and then never asked
+flux what the vocabulary means. `flux_spec::coherence` (pinned 1.3.0, linked by `connector-pack`)
+declares **I3**: a consequence-bearing spec must not declare `Idempotent`, because that value licenses
+flux's op cache to serve a stored result **instead of executing**, and it names `Conditional` as the
+escape hatch for "safely repeatable".
+
+Two measurements settled it:
+
+1. **`conditional` on a `POST` always emitted, at the merge base, with nothing asked of it.** The
+   story's premise — that a repeatable `POST` could not be declared — was false.
+2. **This repository had narrowed the word.** `Idempotency::Conditional`'s doc said "idempotent only
+   under a condition *the caller supplies* (e.g. an idempotency key)", and the refusal message
+   repeated it. None of the three connectors has a caller-supplied key; their repeatability comes from
+   what the endpoint does. So all three read `conditional` as unavailable and under-declared.
+
+**The root cause was a gloss on a flux-owned value, not a missing feature.** So the rework is a
+*tightening*, not a loosening:
+
+- `idempotent` on `POST`/`PATCH` is refused **unconditionally** again — restored, not relaxed;
+- a **mutating `conditional` must now state its condition** in `repeatable_because`, which is a rule
+  that did not previously exist;
+- the condition is refused where it means nothing, and is published to `web/public/catalog.json`.
 
 Before and after, from `crates/catalog/ops/`:
 
 | operation | before | after |
 |---|---|---|
-| `cloudflare-cache-purge` | `idempotency "non_idempotent"` | `idempotency "idempotent"` |
-| `launchdarkly-flag-toggle` | `idempotency "non_idempotent"` | `idempotency "idempotent"` |
-| `miro-sticky-note-update` | `idempotency "non_idempotent"` + a `description` explaining `check_write_metadata` | `idempotency "idempotent"` + a description about sticky notes |
+| `cloudflare-cache-purge` | `idempotency "non_idempotent"` | `idempotency "conditional"` |
+| `launchdarkly-flag-toggle` | `idempotency "non_idempotent"` | `idempotency "conditional"` |
+| `miro-sticky-note-update` | `idempotency "non_idempotent"` + a `description` explaining `check_write_metadata` | `idempotency "conditional"` + a description about sticky notes |
 
 No other emitted module moved.
 
-**`PUT`/`DELETE` confirmed rather than assumed** — they were already permitted to claim
-`idempotent`, and the matrix in the design doc states all seven methods. Note that three shipped
-deletes decline the claim anyway (`cloudflare-dns-record-delete`, `miro-sticky-note-delete`,
-airtable's), because each vendor answers a repeat with `404` and documents no guarantee. That is a
-connector declining to claim what it cannot back, and it is correct.
+**Six more instances of the same defect, fixed at zero artifact cost.** `zendesk-ticket-update`,
+`zendesk-ticket-comment-add`, `zendesk-ticket-tag-add`, `stripe-payment-intent-capture`,
+`stripe-payment-intent-cancel` and `stripe-charge-refund-create` all declared `conditional` with the
+condition in a TOML comment and in no field, artifact or manifest — three of them Stripe money
+movements. Their comments moved into `repeatable_because`. Because that field reaches only
+`catalog.json`, `build --provider zendesk` and `build --provider stripe` wrote **nothing**.
 
-**Left open, deliberately.** `risk` carries the identical method-shaped heuristic with no escape at
-all: `notion-database-query` and `notion-search` are `POST` **reads** forced to `medium`, and C-110
-measured the whole-connector version for a GraphQL vendor where every operation is a `POST`. `risk`
-gates flux's *approval* path rather than its retry path, so relaxing it is a safety change that
-deserves its own story and its own evidence. It needs filing.
+**flux conformance, measured over all 299 shipped operations** (`crates/connector-pack/tests/metadata_coherence.rs`):
+I3 violations among `POST`/`PATCH` went 0 → 3 (first landing) → **0**. Two populations remain and are
+filed rather than fixed: 192 *reads* trip I3 spuriously because every emitted operation declares
+`effects ["network"]` with no `Effect::Read`; and **nine shipped `PUT`s claim `Idempotent`**, which
+this repository permits under RFC 9110 §9.2.2 and flux refuses outright. That second one is a genuine
+conflict — replaying a `PUT` is safe, *skipping* one is not — and is pinned by a two-way count so it
+cannot grow unnoticed.
+
+**Not a live hazard, and said plainly:** in flux 0.41 the only consumer of `Idempotent` is the op
+cache, which also demands `Risk::Low` and read-only effects; all three operations fail those anyway.
+This was honesty of declaration, not exploitability.
+
+**Left open, deliberately.** `risk` has the identical method-shaped heuristic with no escape at all —
+`notion-database-query` and `notion-search` are `POST` reads forced to `medium`, and C-110 measured
+the whole-connector version for a GraphQL vendor. `risk` gates the *approval* path, so it needs its
+own story. Also needs filing: emitting `Effect::Read` for non-mutating methods, the `PUT`/I3 conflict,
+and `#[non_exhaustive]` on `Operation`.

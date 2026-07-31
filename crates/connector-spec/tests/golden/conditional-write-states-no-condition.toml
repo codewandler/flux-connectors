@@ -1,0 +1,19 @@
+# C-186, and the tightening rather than the loosening. `conditional` is flux's own escape hatch for a
+# write that is genuinely safe to repeat — `flux_spec::coherence`'s I3 calls it exactly that — but
+# flux's wording is "safe to repeat under STATED conditions", and until C-186 nothing here made
+# anyone state them.
+#
+# Six shipped operations declared `conditional` with the condition recorded in no field and no
+# artifact, three of them Stripe money movements. A host reading `conditional` learned that some
+# condition existed and nothing whatever about what it was, which is barely more than
+# `non_idempotent`.
+id = "acme"
+base_url = "https://api.acme.example"
+
+[[operations]]
+id = "acme-payment-capture"
+method = "POST"
+path = "/v1/payments/capture"
+description = "Capture an authorized payment."
+risk = "high"
+idempotency = "conditional"

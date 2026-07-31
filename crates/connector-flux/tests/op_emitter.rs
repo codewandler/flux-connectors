@@ -105,7 +105,7 @@ fn zendesk_comment_list() -> Connector {
             description: "List one Zendesk ticket's comments.".to_string(),
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
-            idempotent_because: None,
+            repeatable_because: None,
             auth: None,
             params: ParamSet {
                 path: vec![param(
@@ -153,7 +153,7 @@ fn zendesk_ticket_search() -> Connector {
             description: "Search Zendesk tickets with Zendesk search syntax.".to_string(),
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
-            idempotent_because: None,
+            repeatable_because: None,
             auth: None,
             params: ParamSet {
                 path: Vec::new(),
@@ -203,7 +203,7 @@ fn babelforce_call_list() -> Connector {
             description: "List and filter calls, in the reporting view.".to_string(),
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
-            idempotent_because: None,
+            repeatable_because: None,
             auth: None,
             params: ParamSet {
                 path: Vec::new(),
@@ -259,7 +259,7 @@ fn zendesk_test() -> Connector {
                 .to_string(),
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
-            idempotent_because: None,
+            repeatable_because: None,
             auth: None,
             params: ParamSet::default(),
             response_schema: None,
@@ -287,7 +287,7 @@ fn freshdesk_note_add() -> Connector {
                     .to_string(),
             risk: Risk::Medium,
             idempotency: Idempotency::NonIdempotent,
-            idempotent_because: None,
+            repeatable_because: None,
             auth: None,
             params: ParamSet {
                 path: vec![param(
@@ -349,7 +349,7 @@ fn zendesk_ticket_show() -> Connector {
             description: "Show one ticket".to_string(),
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
-            idempotent_because: None,
+            repeatable_because: None,
             auth: None,
             params: ParamSet {
                 path: vec![param(
@@ -641,7 +641,7 @@ fn headered_operation() -> Connector {
             description: "Create a thing.".to_string(),
             risk: Risk::High,
             idempotency: Idempotency::NonIdempotent,
-            idempotent_because: None,
+            repeatable_because: None,
             auth: None,
             params: ParamSet {
                 path: Vec::new(),
@@ -942,8 +942,16 @@ fn zendesk_comment_add() -> Connector {
             risk: Risk::Medium,
             // Optimistic concurrency: replaying the call after the ticket moved is rejected by
             // Zendesk rather than applied, so repeating is safe only under the caller's stamp.
+            //
+            // That sentence used to live only here. C-186 requires a mutating `conditional` to state
+            // its condition in the IR, so it moves into the field below — where a host can read it —
+            // and this fixture tracks `providers/zendesk.toml`, which made the same move.
             idempotency: Idempotency::Conditional,
-            idempotent_because: None,
+            repeatable_because: Some(
+                "the caller supplies `updated_stamp` and Zendesk applies the write only if the \
+                 ticket has not moved since, so a stale replay is rejected rather than duplicated"
+                    .to_string(),
+            ),
             auth: None,
             params: ParamSet {
                 path: vec![param(
@@ -1005,7 +1013,7 @@ fn babelforce_session_set() -> Connector {
             description: "Set session variables on a live call.".to_string(),
             risk: Risk::Medium,
             idempotency: Idempotency::Idempotent,
-            idempotent_because: None,
+            repeatable_because: None,
             auth: None,
             params: ParamSet {
                 path: vec![param("id", "The call id", true, json!({"type": "string"}))],

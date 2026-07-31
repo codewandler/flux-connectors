@@ -194,3 +194,29 @@ fn the_schema_is_published_and_self_describing() {
         "the schema is the documentation of the file format; a bare title is not enough"
     );
 }
+
+/// **The schema's `minLength` for `repeatable_because` is the loader's constant, not a copy of it.**
+///
+/// The published schema is what an author's editor validates against, and the loader is what the
+/// build enforces. A hand-typed `24` in the JSON is a second statement of one fact — the exact shape
+/// C-186 was filed for, re-enacted inside C-186's own change — and the two would drift the first
+/// time anyone tuned the floor: an editor would accept a condition the build then refuses, or the
+/// reverse, with nothing to say which was right.
+///
+/// So the number is read from `connector_spec::MIN_REPEATABILITY_CONDITION` here rather than
+/// written twice. Changing the constant fails this test until the schema follows.
+#[test]
+fn the_schema_publishes_the_loaders_own_repeatability_floor() {
+    let schema = schema();
+    let published = schema["$defs"]["operation"]["properties"]["repeatable_because"]["minLength"]
+        .as_u64()
+        .expect("`repeatable_because` publishes a `minLength`");
+
+    assert_eq!(
+        published as usize,
+        connector_spec::MIN_REPEATABILITY_CONDITION,
+        "`schema/provider-toml.schema.json` states a different minimum for `repeatable_because` \
+         than the loader enforces, so an author's editor and the build disagree about what counts \
+         as a stated condition"
+    );
+}

@@ -360,7 +360,7 @@ mod tests {
             description: "Do a thing".to_string(),
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
-            idempotent_because: None,
+            repeatable_because: None,
             auth: None,
             params: ParamSet::default(),
             response_schema: None,

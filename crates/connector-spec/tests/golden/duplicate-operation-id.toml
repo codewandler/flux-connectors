@@ -1,4 +1,8 @@
 # The op id is the public name callers and models use, so two operations cannot share one.
+#
+# `non_idempotent` rather than the `conditional` this mirrored from `providers/zendesk.toml`: C-186
+# requires a mutating `conditional` to state its condition, and a fixture that trips two unrelated
+# refusals produces a snapshot in which the one it is named for is harder to find.
 id = "zendesk"
 base_url = "https://acme.zendesk.com"
 
@@ -7,7 +11,7 @@ id = "zendesk.ticket.update"
 method = "PUT"
 path = "/api/v2/tickets/{ticket_id}.json"
 risk = "medium"
-idempotency = "conditional"
+idempotency = "non_idempotent"
 auth = []
 
 [[operations.params.path]]
@@ -20,7 +24,7 @@ id = "zendesk.ticket.update"
 method = "PUT"
 path = "/api/v2/tickets/{ticket_id}.json"
 risk = "medium"
-idempotency = "conditional"
+idempotency = "non_idempotent"
 auth = []
 
 [[operations.params.path]]

@@ -280,8 +280,10 @@ path = "/api/v2/tickets/{ticket_id}.json"
 description = "Safe-update selected ticket fields against the caller's updated_stamp; at least one of status, priority, assignee_id, group_id or type must be supplied"
 risk = "medium"
 # Optimistic concurrency: the same call replayed after the ticket moved is rejected by Zendesk
-# rather than applied, so repeating is safe only under the caller-supplied stamp.
+# rather than applied, so repeating is safe only under the caller-supplied stamp. C-186 moved that
+# sentence out of this comment and into `repeatable_because`, where a host can read it.
 idempotency = "conditional"
+repeatable_because = "the caller supplies `updated_stamp` and Zendesk applies the write only if the ticket has not moved since; a replay after any other change is rejected rather than applied, so a retry either lands the caller's intended edit or fails loudly"
 
 [[operations.params.path]]
 name = "ticket_id"
@@ -369,6 +371,7 @@ path = "/api/v2/tickets/{ticket_id}.json"
 description = "Add a comment to a ticket; the comment is an internal note unless public is explicitly true"
 risk = "medium"
 idempotency = "conditional"
+repeatable_because = "Zendesk does not deduplicate comments, so this is safe to repeat only when the caller supplies a fresh `updated_stamp` and lets the safe-update check reject a stale replay; without that condition a retry adds the comment a second time"
 
 [[operations.params.path]]
 name = "ticket_id"
@@ -424,6 +427,7 @@ path = "/api/v2/tickets/{ticket_id}.json"
 description = "Add tags to a ticket without replacing the tags it already has"
 risk = "medium"
 idempotency = "conditional"
+repeatable_because = "tags are a set on Zendesk's side and this endpoint adds without replacing, so re-sending the same tags leaves the same set — conditional rather than idempotent because the response reflects the merged set, which a stored result must not stand in for"
 
 [[operations.params.path]]
 name = "ticket_id"

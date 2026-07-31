@@ -275,8 +275,8 @@ risk = "high"
 # unless the operation says why — only `PUT` and `DELETE` are left alone by method. This body is a
 # narrow, verified slice of JSON Patch (`replace` onto one environment's `on` bit and nothing else),
 # which is exactly what makes the claim checkable rather than a guess about PATCH in general.
-idempotency = "idempotent"
-idempotent_because = "the body is a single JSON Patch `replace` setting one environment's `on` bit to an absolute value, never a toggle or a delta, so re-sending it lands the flag in the state the caller asked for however many times it runs"
+idempotency = "conditional"
+repeatable_because = "the body schema admits exactly one JSON Patch `replace` onto one environment's `on` bit (maxItems 1, op pinned to `replace`, path pinned to `/environments/{key}/on`), so it sets an absolute value and never a toggle or a delta — re-sending it lands the flag where the caller asked, however many times it runs"
 
 [[operations.params.path]]
 name = "project_key"

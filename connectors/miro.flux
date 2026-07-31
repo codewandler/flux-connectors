@@ -55,7 +55,7 @@ op miro-sticky-note-create(board_id: String, content: String) -> Any
 op miro-sticky-note-update(board_id: String, item_id: String, content: String) -> Any
   description "Update a sticky note's text content. The content sent replaces what was there, so setting the same content twice ends in the same state. The updated note is in the response"
   risk "medium"
-  idempotency "idempotent"
+  idempotency "conditional"
   effects ["network"]
   expose true
 

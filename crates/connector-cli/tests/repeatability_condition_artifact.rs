@@ -28,7 +28,7 @@ const CATALOG_JSON: &str = "web/public/catalog.json";
 /// `cloudflare-cache-purge` reduced to the two fields this test is about.
 fn purge_connector(justification: Option<&str>) -> String {
     let because = justification
-        .map(|reason| format!("idempotent_because = {reason:?}\n"))
+        .map(|reason| format!("repeatable_because = {reason:?}\n"))
         .unwrap_or_default();
     format!(
         r#"id = "acme"
@@ -45,7 +45,7 @@ risk = "high"
 idempotency = "{idempotency}"
 {because}"#,
         idempotency = if justification.is_some() {
-            "idempotent"
+            "conditional"
         } else {
             "non_idempotent"
         }
@@ -80,18 +80,18 @@ fn only_operation(document: &Value) -> &Value {
 /// **The claim and its evidence travel together.** A consumer reading `idempotency: "idempotent"` on
 /// a `POST` — the one combination the compiler otherwise refuses — can read why in the same object.
 #[test]
-fn a_justified_idempotent_post_publishes_its_reason_beside_the_claim() {
+fn a_conditional_post_publishes_its_condition_beside_the_claim() {
     let reason = "purging an already-purged cache is a no-op";
-    let document = planned_catalog("justified-idempotent-post", &purge_connector(Some(reason)));
+    let document = planned_catalog("conditional-post", &purge_connector(Some(reason)));
     let operation = only_operation(&document);
 
     assert_eq!(
         operation["idempotency"],
-        Value::String("idempotent".to_owned()),
+        Value::String("conditional".to_owned()),
         "the published claim must be the one the author declared, not the one the method implies"
     );
     assert_eq!(
-        operation["idempotent_because"],
+        operation["repeatable_because"],
         Value::String(reason.to_owned()),
         "the justification must reach `{CATALOG_JSON}` verbatim — a reason that stops at the IR \
          leaves a consumer reading a method-defying retry-safety claim with no way to audit it, \
@@ -103,8 +103,8 @@ fn a_justified_idempotent_post_publishes_its_reason_beside_the_claim() {
 /// idempotency follows from its verb would turn a deliberate exception into ambient noise, and a
 /// consumer could no longer tell the two apart by reading.
 #[test]
-fn an_operation_whose_method_decides_its_idempotency_publishes_no_reason() {
-    let document = planned_catalog("unjustified-post", &purge_connector(None));
+fn an_operation_whose_method_decides_its_idempotency_publishes_no_condition() {
+    let document = planned_catalog("unconditional-post", &purge_connector(None));
     let operation = only_operation(&document);
 
     assert_eq!(
@@ -112,7 +112,7 @@ fn an_operation_whose_method_decides_its_idempotency_publishes_no_reason() {
         Value::String("non_idempotent".to_owned())
     );
     assert_eq!(
-        operation["idempotent_because"],
+        operation["repeatable_because"],
         Value::Null,
         "an operation stating no justification must publish none; the key is present and null \
          rather than missing, so a consumer reads one shape for every operation"
