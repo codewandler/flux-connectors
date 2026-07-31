@@ -232,7 +232,13 @@ fn base64(bytes: &[u8]) -> String {
 /// `zendesk-ticket-search`'s missing parameter encoding, which is a recorded intentional gap over
 /// caller-supplied values in the *emitter* (C-144); widening it from here would put two different
 /// encoders on one URL.
-fn query_encode(value: &str) -> String {
+///
+/// C-214 gave it a second caller, and on the same principle rather than in spite of it:
+/// [`crate::request`] encodes an operator-pinned **configuration** value bound to a query position
+/// with *this* function, because the alternative was a second encoder on the same URL — exactly what
+/// the paragraph above refuses. The caller-parameter gap is still the emitter's and is still open;
+/// what closed is the class of value the pack itself substitutes.
+pub(crate) fn query_encode(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     for byte in value.as_bytes() {
         match byte {
