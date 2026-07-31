@@ -2,7 +2,7 @@
 id: C-230
 title: "Two per-provider tests assert catalogue-wide literals, so the next connector with the wrong shape turns an unrelated provider's test red from a worktree that cannot see it"
 pillar: Build
-status: in-progress
+status: done
 priority: 2
 design:
 epic:

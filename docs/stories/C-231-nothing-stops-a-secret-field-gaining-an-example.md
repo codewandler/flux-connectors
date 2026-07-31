@@ -2,7 +2,7 @@
 id: C-231
 title: "Nothing catalogue-wide stops a secret configuration field gaining an `example`, and that is the exact shape that has blocked a release here before"
 pillar: Build
-status: in-progress
+status: done
 priority: 1
 design:
 epic:
