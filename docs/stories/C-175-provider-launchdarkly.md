@@ -2,8 +2,7 @@
 id: C-175
 title: Ship the LaunchDarkly connector
 pillar: Spec
-status: in-progress
-priority: 3
+status: done
 design:
 epic: provider-fleet-2
 areas: [providers]

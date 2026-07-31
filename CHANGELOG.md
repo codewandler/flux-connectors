@@ -9,6 +9,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The LaunchDarkly connector (C-175).** Five operations over a raw, unprefixed `Authorization`
+  header, and a test asserts **no emitted operation carries a `Bearer` or `Basic` word** — the failure
+  mode here is silent, since either prefix would produce a request LaunchDarkly rejects.
+
+  The flag toggle is declared `high` risk and **`non_idempotent`, which was not a choice**: the emitter
+  refuses `idempotency = "idempotent"` on any `PATCH` under RFC 9110 §9.2.2, as a repository-wide rule
+  rather than a judgement about this endpoint. Recorded at `path:line` in the connector rather than
+  worked around. Its `description` names the live production effect, because toggling a flag changes
+  behaviour for real users the moment it returns.
+
+  The toggle's body schema admits **only** a single JSON-Patch replace onto one environment's `on` bit —
+  a general patch body would let a model rewrite a flag's targeting rules through an operation whose
+  description promises a toggle.
+
 - **The ClickUp connector (C-178).** Six operations over a bare `Authorization` header — no scheme
   word, which needs no new capability: it is `AuthScheme::Header { name: "Authorization" }`, the
   variant C-161 proved loads and round-trips cleanly. ClickUp's raw token and Okta's prefixed one look
