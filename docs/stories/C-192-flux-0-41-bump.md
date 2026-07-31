@@ -2,7 +2,7 @@
 id: C-192
 title: Move the flux pin from 0.39 to 0.41
 pillar: Build
-status: in-progress
+status: done
 priority: 1
 design:
 epic:
