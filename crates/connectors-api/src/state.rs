@@ -23,6 +23,11 @@ pub struct Oidc {
     pub settings: oidc::Settings,
     /// Google's signing keys, fetched lazily and refreshed across a rotation.
     pub jwks: JwksCache,
+    /// The client for the two back-channel calls — the token exchange and the JWKS fetch — that
+    /// deliberately do not go through flux's `Egress`. Built once, with the timeouts and the
+    /// no-redirect policy that `Egress` would otherwise have supplied. See
+    /// [`oidc::back_channel_client`].
+    pub http: reqwest::Client,
 }
 
 /// The host.
@@ -109,8 +114,16 @@ impl App {
         // button that leads nowhere.
         let (oidc, setup_message) = match oidc::Settings::from_env() {
             Setup::Configured(settings) => {
-                let jwks = JwksCache::new(settings.jwks_url.clone());
-                (Some(Arc::new(Oidc { settings, jwks })), None)
+                let http = oidc::back_channel_client();
+                let jwks = JwksCache::new(settings.jwks_url.clone(), http.clone());
+                (
+                    Some(Arc::new(Oidc {
+                        settings,
+                        jwks,
+                        http,
+                    })),
+                    None,
+                )
             }
             Setup::Missing(missing) => (None, Some(Arc::new(Setup::explain(&missing)))),
         };
