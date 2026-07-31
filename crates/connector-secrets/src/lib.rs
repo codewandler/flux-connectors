@@ -38,6 +38,19 @@
 //! # tokio::runtime::Builder::new_current_thread().build().unwrap().block_on(example()).unwrap();
 //! ```
 //!
+//! # Three stores, and how to choose between them
+//!
+//! | | survives the process | what protects a value at rest | prerequisite |
+//! |---|---|---|---|
+//! | [`MemoryStore`] | no | the process boundary | none |
+//! | [`FileStore`] | yes | a `0600` file mode, and **nothing else** | a writable directory |
+//! | `VaultStore` | yes | Vault's own storage and policy | a Vault an operator runs |
+//!
+//! [`FileStore`] is the middle rung C-207 added, and its row is written the way it is on purpose:
+//! its values are **not encrypted**, and its module documentation says so at length rather than
+//! leaving an operator to infer it from the absence of a key parameter. It is the right store for a
+//! local single-operator deployment and the wrong one for a shared machine.
+//!
 //! # Three gaps in flux's trait, closed deliberately
 //!
 //! `flux_credentials::CredentialStore` is the nearest existing thing, and [`SecretStore`] differs
@@ -63,11 +76,18 @@
 
 #![forbid(unsafe_code)]
 
+// Unix only, and deliberately: the whole of what protects a credential in it is `0600` on the file
+// and `0700` on its directory, and a platform that cannot spell those would get a store that
+// implied a safety it did not have. See the module documentation.
+#[cfg(unix)]
+pub mod file;
 mod memory;
 mod secret;
 #[cfg(feature = "vault")]
 pub mod vault;
 
+#[cfg(unix)]
+pub use file::FileStore;
 pub use memory::MemoryStore;
 pub use secret::Secret;
 #[cfg(feature = "vault")]

@@ -76,8 +76,80 @@ consent screen the operator sees when they connect a provider rather than when t
   a real deployment. The attributes themselves are not restated here — `session_cookie` and
   `login_cookie` in `src/auth/mod.rs` are the only place they are written, and
   `tests/tenancy.rs::the_login_cookie_is_scoped_short_lived_and_locked_down` asserts them.
-- **Sessions live in memory**, like credentials. Restarting the process signs everyone out, which
-  is the same cleanup story the rest of this host has.
+- **Sessions live in memory**, and — since C-207 — credentials no longer do. Restarting the process
+  signs everyone out and leaves every connector still wired. That asymmetry is deliberate: a session
+  is a bearer token somebody's browser is holding, so a restart *should* invalidate it, while a
+  credential is a thing the operator deposited and expects to find again. Conflating the two stores
+  would make a stolen cookie outlive the process. See [Where the credentials
+  live](#where-the-credentials-live).
+
+## Where the credentials live
+
+**In one file, not encrypted, readable by you and by anyone who can become you.** That sentence is
+the whole security argument and it is written first on purpose — the rest of this section is where
+the file is, how to move it, and how to destroy it.
+
+```
+$XDG_DATA_HOME/connectors-api/credentials      # or ~/.local/share/... when XDG_DATA_HOME is unset
+```
+
+The host prints the exact path, and everything below, in its startup banner. It is assembled from
+the store that was actually bound, so it cannot describe a different one.
+
+| | |
+|---|---|
+| **What protects it** | `0600` on the file, `0700` on the directory — set in the `open(2)`/`mkdir(2)` call, not `chmod`-ed afterwards, and re-checked every time the host starts. A store whose mode has been widened is **refused, not repaired**: it was already exposed, and quietly tightening it would hide that. |
+| | The write is **atomic** — a full rewrite into a sibling temporary, `fsync`, then `rename(2)` — so a crash mid-write leaves the previous file whole rather than a truncated one. |
+| | The path is refused if it lies inside the directory the host runs from. One `git add -A` from a committed credential is not a risk this host leaves to attention. |
+| **What does not** | **No encryption.** No key, no passphrase, no OS keychain. The values are hex-encoded, and hex is *framing* — it stops a value containing a newline from forging a second entry, and stops a careless `grep` from matching a token. `xxd -r` undoes it. |
+| | Nothing stands between the file and `root`, a backup that copies it, or a process running as you. |
+
+If that trade is wrong for the machine you are on, say so — the host does not decide for you:
+
+```bash
+# Somewhere else, on a volume you chose. Must be absolute.
+export CONNECTORS_CREDENTIAL_STORE=file:/var/lib/connectors-api/credentials
+
+# Nothing at rest at all. The pre-C-207 behaviour, now something you ask for rather than
+# something that happens: every connector must be wired again after each restart.
+export CONNECTORS_CREDENTIAL_STORE=memory
+```
+
+**To destroy them**, which is how an operator revokes:
+
+```bash
+rm -r ~/.local/share/connectors-api               # all of them
+# or, for one connector, through the surface that stored it:
+curl -X DELETE http://127.0.0.1:8787/v1/credentials/anthropic/anthropic.api_key -b "$COOKIE"
+```
+
+A `DELETE` rewrites the file immediately, so a revoked credential does not come back on the next
+start.
+
+**`rm -r` on the directory, not `rm` on the file, and the difference is not tidiness.** A write is a
+temporary file plus a `rename(2)`; a process killed between the two leaves a `0600` temporary beside
+the store holding a complete copy of every credential. The next start reaps it — but an operator who
+deletes only `credentials` and never starts the host again has revoked nothing. Removing the
+directory is the instruction that is true in every case, and it is the one the startup banner
+prints.
+
+**One process at a time.** The whole store is held in memory and every change rewrites the file, so
+two hosts pointed at one path will each overwrite the other's last write. That is the right trade
+for a single-operator deployment and it is why the reaping above is safe; a deployment that wants
+several writers wants `VaultStore`.
+
+**A bad value stops the host.** `CONNECTORS_CREDENTIAL_STORE=vault` — or a store that cannot be
+opened, or a path inside the checkout — is a startup error that names what would have worked. There
+is deliberately **no fallback to memory**: a host that fell back would start successfully, serve
+every route correctly, look exactly like a working one, and lose everything on the next restart.
+That is the failure this whole arrangement exists to end, and reaching it by accident would be no
+better than reaching it by design.
+
+**The address survives the round trip whole.** A credential is stored at
+`tenants/<tenant>/<authority>/<service>/<credential>`, and the file holds that address verbatim —
+parsed back and re-rendered on load, so a line that is not the canonical spelling of the address it
+names is a loud error rather than a second entry for one credential. Two accounts do not share a
+credential, and neither do two services of one vendor.
 
 ## The tenant comes from the session
 
@@ -212,6 +284,65 @@ $ curl -sX POST localhost:8787/v1/operations/anthropic-models-list/execute -d '{
 The `request-id`, the `cf-ray` and the Cloudflare `server` header are Anthropic's real API answering.
 Both halves matter: without a credential the pack **refuses by address** and sends nothing, and with
 one the request goes out through flux's own `http.request`.
+
+## The restart, performed and labelled
+
+Same standard as the live leg above: the thing the story is about was done to the real binary, not
+only to an `App` in a test. `tests/persistence.rs` rebuilds the host in-process, which is the whole
+of what a restart does to its credentials; this is the process actually stopping and starting.
+
+**2026-07-31 — a credential wired, the process stopped, the credential still wired.**
+
+```console
+$ cargo run -p connectors-api -- --dev
+connectors-api listening on http://127.0.0.1:8787
+  Credentials are kept in /home/…/.local/share/connectors-api/credentials and SURVIVE A RESTART.
+  They are NOT ENCRYPTED. A 0600 file mode inside a 0700 directory is the whole
+  of what protects them …
+  To destroy them:          rm -r /home/…/.local/share/connectors-api
+
+$ COOKIE=$(curl -si -XPOST localhost:8787/auth/dev | sed -n 's/^[Ss]et-[Cc]ookie: //p' | cut -d';' -f1)
+$ curl -sX PUT localhost:8787/v1/credentials/anthropic/anthropic.api_key -b "$COOKIE" \
+       -d '{"value":"SENTINEL-NOT-A-REAL-SECRET-handverify-C207"}'          # 204
+$ curl -s localhost:8787/v1/connectors/anthropic -b "$COOKIE" | jq '.credentials[0]|{stored,address}'
+{"stored": true, "address": "tenants/dev-local/com.anthropic.api/api_key"}
+
+$ ls -ld ~/.local/share/connectors-api ~/.local/share/connectors-api/credentials
+drwx------ 2 timo timo 4096 …  /home/…/.local/share/connectors-api
+-rw------- 1 timo timo  176 …  /home/…/.local/share/connectors-api/credentials
+
+$ kill -INT <pid>
+stopping; sessions are discarded and every operator must sign in again
+
+$ cargo run -p connectors-api -- --dev            # a new process
+$ curl -s localhost:8787/auth/me -b "$COOKIE"                                # 401 — the session died
+$ COOKIE=$(curl -si -XPOST localhost:8787/auth/dev | sed -n 's/^[Ss]et-[Cc]ookie: //p' | cut -d';' -f1)
+$ curl -s localhost:8787/v1/connectors/anthropic -b "$COOKIE" | jq '.credentials[0]|{stored,address}'
+{"stored": true, "address": "tenants/dev-local/com.anthropic.api/api_key"}
+```
+
+**The session did not survive and the credential did**, which is the split this host wants. Every
+served surface of the second process was then swept for the value — `/`, `/v1/connectors`,
+`/v1/connectors/anthropic`, `/v1/operations/anthropic-models-list`, `/auth/me`, `/auth/status`, and
+the `401`/`400` refusals — and none carried it.
+
+And the honest half, in the same transcript: the value **is** recoverable from that file by anyone
+who can read it.
+
+```console
+$ cat ~/.local/share/connectors-api/credentials
+# codewandler-connector-secrets file store, v1
+tenants/dev-local/com.anthropic.api/api_key 53454e54494e454c2d4e4f542d412d5245…
+
+$ chmod 644 ~/.local/share/connectors-api/credentials && cargo run -p connectors-api -- --dev
+Error: … refused access to …/credentials: its mode is 0644, and a credential store must be no
+wider than 0600 — run `chmod 600 …` once you are satisfied nobody else has read it
+This host does not fall back to holding credentials in memory — that would start successfully
+and forget everything on the next restart. …
+```
+
+The file's mode was **still 0644** afterwards. The host refuses a widened store; it does not tighten
+it, because tightening would repair the symptom and hide the exposure.
 
 ## The automated leg: one request, to a vendor under test control
 

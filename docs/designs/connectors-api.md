@@ -45,7 +45,7 @@ direction, so it is stated first.
 | bind | a reachable address, once the gate below is met | `Ipv4Addr::LOCALHOST`, port `8787`, **no flag, no env var** (`src/main.rs`) |
 | principal | an authenticated account | **none** — `tenant_of()` returns the constant `SOLE_TENANT = "local"` (`src/api.rs:24-36`) |
 | tenancy | many | the tenant is a **parameter of every port**, with one value bound |
-| credential store | per tenant, persistent | per tenant, **in memory** — the process exiting is the cleanup |
+| credential store | per tenant, persistent | per tenant, **a `0600` file by default** (C-207) — selected by `CONNECTORS_CREDENTIAL_STORE`, refusing a bad value rather than falling back to memory |
 | transport | flux's | `flux_web::http::HttpRequestTool`, `PrivateNetAllow::None` |
 | request construction | none of its own | none of its own — every route ends in `connector_pack::pack` |
 
@@ -152,7 +152,15 @@ all.**
 2. Per-tenant credential isolation is asserted by a test that fails if A's session reaches B's
    secret — not argued from construction.
 3. The credential store at rest is a deliberate choice with its own design, not `MemoryStore`
-   promoted by default.
+   promoted by default. **Met for a single-operator deployment, and not for a reachable one**
+   ([C-207](../stories/C-207-the-host-forgets-every-credential.md)): the store is now selected by
+   `CONNECTORS_CREDENTIAL_STORE`, defaults to a `0600` file, and refuses a bad value rather than
+   falling back to memory. What that file has is a mode; what it does not have is encryption, and
+   the store says so in its own module docs, in the README and in the startup banner. A host bound
+   to a reachable address holds several tenants' tokens recoverable by anyone who can read one
+   file, so **widening the bind wants `VaultStore` or an equivalent, not this**. The gate item is
+   satisfied in the sense that the choice is now expressible and defaulted deliberately; it is not
+   a finding that a plaintext file is adequate for a deployment.
 4. The widening is a reviewed change that cites this section.
 
 Until then the constant stays a constant. **A PR that adds a `--bind` flag while `tenant_of()` still
@@ -261,8 +269,14 @@ allowed, which is what keeps `curl` usable and is therefore also the check's lim
 - **The charter now runs ahead of the code**, which is the failure mode the amendment was written to
   end and could reintroduce in the other direction. §"What the host actually is today" is the
   correction and needs re-measuring, not re-reading, when cited.
-- **`MemoryStore` becomes the deployed store by default.** Credentials surviving a restart is a
-  feature request that arrives before the design for holding them at rest does. Gate item 3 exists
-  for this.
+- **~~`MemoryStore` becomes the deployed store by default.~~ Closed by C-207, and replaced by its
+  successor.** The risk was that credentials surviving a restart would arrive as a feature request
+  before the design for holding them at rest did. It did not: the store is a choice, its default is
+  a `0600` file, and there is no fallback to memory. **The successor risk is that the file reads as
+  more than it is.** It is plaintext under a file mode — no encryption, no protection from `root` or
+  from a backup — and the mitigation is that every surface an operator meets says so in those words:
+  the module documentation, the README, and the startup banner assembled from the store itself so it
+  cannot describe a different one. The thing to watch for is a later change that softens any of those
+  three, or a deployment that reads "persistent" as "safe to put on a shared host".
 - **"Multi-tenant" reads as permission for the general shape.** It is permission for *this* shape:
   the caller names an operation and nothing else.

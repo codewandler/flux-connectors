@@ -2,9 +2,7 @@
 
 use std::sync::Arc;
 
-use connector_pack::{
-    CredentialRef, Credentials, Egress, MemoryStore, Secret, SecretStore, StoreError,
-};
+use connector_pack::{CredentialRef, Credentials, Egress, Secret, SecretStore, StoreError};
 use flux_runtime::ToolContext;
 use flux_system::{System, Workspace};
 use flux_web::http::HttpRequestTool;
@@ -13,6 +11,7 @@ use flux_web::WebOptions;
 use crate::auth::oidc::{self, JwksCache, Setup};
 use crate::auth::session::{Accounts, Sessions};
 use crate::config::Settings;
+use crate::secrets::StoreChoice;
 
 /// Everything sign-in needs, once it is configured.
 ///
@@ -57,11 +56,19 @@ pub struct App {
     egress: Egress,
     /// Where this host's tenants' credentials live.
     ///
-    /// In memory, deliberately, for now: the process exiting is the cleanup, and this is the first
-    /// component in the repository that holds a plaintext credential at runtime. A file-backed
-    /// `0600` store and the existing `VaultStore` are both drop-in — the port is
-    /// `Arc<dyn SecretStore>` precisely so that swapping it is a one-line change at this call site.
-    secrets: Arc<MemoryStore>,
+    /// **Chosen at startup and never afterwards** (C-207). The port was always `Arc<dyn
+    /// SecretStore>`, so swapping the implementation was never the hard part; what this field now
+    /// carries that it did not is that the choice was *made* — by an operator through
+    /// [`crate::secrets::STORE_ENV`], or by a caller — rather than defaulted into.
+    ///
+    /// A value behind this handle may now outlive the process, which is a new exposure and not a
+    /// free one. [`StoreChoice::banner`] is where what protects it, and what does not, is said out
+    /// loud; nothing here should describe it a second time and drift.
+    secrets: Arc<dyn SecretStore>,
+    /// Which store that is, kept so the host can say so without asking the store to describe
+    /// itself. Holding the *choice* rather than a rendered string is what lets the startup banner
+    /// and the operator-facing diagnostics be assembled from one source.
+    storage: Arc<StoreChoice>,
     /// Non-secret connection settings — the `{subdomain}` in a templated base URL.
     settings: Arc<Settings>,
     /// The workspace every dispatch happens under. Nothing here reaches the filesystem through it;
@@ -71,7 +78,29 @@ pub struct App {
 }
 
 impl App {
-    /// Build the host.
+    /// Build the host. **Credentials in memory, and no environment is consulted.**
+    ///
+    /// # Exactly one constructor reads the environment, and it is not this one
+    ///
+    /// [`App::deployed`] reads [`STORE_ENV`](crate::secrets::STORE_ENV); every other constructor
+    /// takes its store as an argument or does not persist at all. That is the whole rule, and it is
+    /// worth stating as a rule because the first version of C-207 broke it in a way that looked
+    /// harmless: `new` *also* honoured the variable, on the reasoning that a caller who exported it
+    /// meant it.
+    ///
+    /// What that reasoning missed is that **`new` is what the test suite builds hosts with**, and an
+    /// environment variable is ambient. An operator with `CONNECTORS_CREDENTIAL_STORE=file`
+    /// exported — which this crate's own README tells them to export — could not run `cargo test`
+    /// without every test host reaching into their real credential file. Measured, not predicted:
+    /// `tests/host.rs`'s two hosts share one credential address, one storing it and the other
+    /// requiring it absent, so a shared store made
+    /// `an_operation_without_its_credential_refuses_by_address` answer `200` instead of `400` —
+    /// meaning the suite **dispatched** `anthropic-models-list` and sent a live request to
+    /// `api.anthropic.com`, with a value left in the file by an earlier run.
+    ///
+    /// So the isolation is structural rather than a convention the test harness has to remember:
+    /// there is no ambient input to this function. `tests/credential_store.rs`'s
+    /// `an_ambient_store_variable_does_not_reach_a_host_built_with_new` pins it.
     ///
     /// # Errors
     ///
@@ -83,7 +112,37 @@ impl App {
         // private, loopback, link-local and internal hosts are all refused. That is the right
         // default for a host whose connectors call public SaaS APIs, and widening it is a deliberate
         // act through [`App::with_web_options`] rather than a state a reader finds by accident.
-        Self::with_web_options(root, WebOptions::default())
+        Self::build(root, WebOptions::default(), StoreChoice::Memory)
+    }
+
+    /// **The host as the binary runs it**, and the only constructor that reads the environment.
+    ///
+    /// This is C-207 in one function. [`STORE_ENV`](crate::secrets::STORE_ENV) selects the store;
+    /// **unset resolves to a `0600` file under the operator's data home**, so wiring a connector and
+    /// restarting keeps the connector wired without anybody having read a variable name first.
+    /// `CONNECTORS_CREDENTIAL_STORE=memory` restores the pre-C-207 behaviour as something asked for
+    /// rather than something that happened.
+    ///
+    /// Nothing here is a *fallback*. A value that does not parse, a data home that does not exist
+    /// and a store that will not open are all errors that stop the process. A host that answered any
+    /// of them by holding credentials in memory instead would start successfully, serve every route
+    /// correctly, look exactly like a working one, and lose everything on the next restart.
+    ///
+    /// # Errors
+    ///
+    /// If `root` does not exist; if the variable does not parse; if there is no data home to default
+    /// into; if the resolved path lies inside `root` ([`crate::secrets::refuse_inside`]); or if the
+    /// store will not open.
+    pub fn deployed(root: impl AsRef<std::path::Path>) -> anyhow::Result<Self> {
+        let choice = match StoreChoice::from_env()? {
+            Some(choice) => choice,
+            // **The line C-207 is about.** `tests/credential_store.rs`'s
+            // `the_deployed_default_is_a_file_under_the_data_home` builds a host through here with
+            // a scratch `XDG_DATA_HOME` and requires the file to exist afterwards, so changing this
+            // arm to `Memory` is a red test rather than a silent return to forgetting.
+            None => StoreChoice::File(crate::secrets::default_path()?),
+        };
+        Self::build(root, WebOptions::default(), choice)
     }
 
     /// The host, with an egress policy chosen by the caller.
@@ -104,10 +163,51 @@ impl App {
     /// # Errors
     ///
     /// If `root` is not a directory that exists.
+    ///
+    /// # The store
+    ///
+    /// In memory, and no environment is consulted — as [`App::new`], for the reason given there.
+    /// A caller wanting both seams uses [`App::with_credential_store`].
     pub fn with_web_options(
         root: impl AsRef<std::path::Path>,
         options: WebOptions,
     ) -> anyhow::Result<Self> {
+        Self::build(root, options, StoreChoice::Memory)
+    }
+
+    /// The host, with both seams named by the caller.
+    ///
+    /// The explicit form the two constructors above resolve into. A caller that already knows which
+    /// store it wants — a test asserting a restart, an embedder with its own data directory — says
+    /// so here rather than through the environment, so that the choice is visible at the call site
+    /// and not a property of the process it happens to be running in.
+    ///
+    /// # Errors
+    ///
+    /// If `root` does not exist, if `store` is inside `root`, or if `store` cannot be opened.
+    pub fn with_credential_store(
+        root: impl AsRef<std::path::Path>,
+        options: WebOptions,
+        store: StoreChoice,
+    ) -> anyhow::Result<Self> {
+        Self::build(root, options, store)
+    }
+
+    /// Every constructor above, once.
+    fn build(
+        root: impl AsRef<std::path::Path>,
+        options: WebOptions,
+        choice: StoreChoice,
+    ) -> anyhow::Result<Self> {
+        // **Asserted, not assumed.** A credential file inside the tree the host runs under is one
+        // `git add -A` from a commit and sits inside the workspace a dispatch is rooted at, so it
+        // is refused here — before the file is created, and for a configured path as much as for
+        // the default one.
+        if let Some(path) = choice.path() {
+            crate::secrets::refuse_inside(root.as_ref(), path)?;
+        }
+        let secrets = choice.open()?;
+
         let workspace = Workspace::new(root.as_ref())
             .map_err(|error| anyhow::anyhow!("workspace root {:?}: {error}", root.as_ref()))?;
 
@@ -143,7 +243,8 @@ impl App {
             sessions: Arc::new(Sessions::new()),
             accounts: Arc::new(Accounts::new()),
             egress: Egress::new(Arc::new(http)),
-            secrets: Arc::new(MemoryStore::new()),
+            secrets,
+            storage: Arc::new(choice),
             settings: Arc::new(Settings::new()),
             system: Arc::new(System::new(workspace)),
         })
@@ -220,6 +321,23 @@ impl App {
     /// This host's connection settings.
     pub fn settings(&self) -> &Arc<Settings> {
         &self.settings
+    }
+
+    /// Which credential store this host bound.
+    pub fn storage(&self) -> &StoreChoice {
+        &self.storage
+    }
+
+    /// **What to print at startup about where credentials go**, and what protects them there.
+    ///
+    /// Assembled from the store the host actually bound, so it cannot claim the wrong one. Before
+    /// C-207 the equivalent sentence was typed into `main.rs`, which was correct for as long as
+    /// there was only one store and became a lie the moment there were two.
+    ///
+    /// It carries no value: it is derived from a [`StoreChoice`], which holds a path and no
+    /// credential.
+    pub fn storage_banner(&self) -> String {
+        self.storage.banner()
     }
 
     /// The credential port, bound for one tenant.
