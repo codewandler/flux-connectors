@@ -2,7 +2,7 @@
 id: C-218
 title: Ship the Klaviyo connector
 pillar: Spec
-status: ready
+status: in-progress
 priority: 4
 design:
 epic: provider-fleet-2

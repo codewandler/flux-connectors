@@ -1,0 +1,536 @@
+# Klaviyo API — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Klaviyo *does* publish OpenAPI, unlike trello, notion or
+# babelforce: github.com/klaviyo/openapi carries `openapi/stable.json` plus per-category and
+# per-`operationId` slices, and each API revision lives on its own branch. Nothing is vendored under
+# `specs/` here for the reason `providers/github.toml` records — ingest (C-4) and the overlay (C-6)
+# do not exist, and without a selection mechanism pointing at that document would be pointing at
+# several hundred operations. **When C-14's fetch and C-4's ingest land, this file becomes `[spec]`
+# plus a `[[patch.operations]]` selection, and the six operations below are the selection to
+# reproduce** — by `operationId`: `get_accounts`, `get_profiles`, `get_profile`, `create_profile`,
+# `get_lists`, `create_event`.
+#
+# Until then drift against the vendor is undetectable by machine
+# (`docs/designs/provider-operation-inventory.md` §6.7). Every path, parameter and response field
+# below was read from developers.klaviyo.com on **2026-07-31**, from the portal rendered at the
+# revision named in the next section.
+#
+# ---------------------------------------------------------------------------------------------
+# C-218'S QUESTION: KLAVIYO REQUIRES A DATED `revision` HEADER ON EVERY REQUEST. IS THAT A CONSTANT
+# HEADER OR A `[[config]]` FIELD WITH A DEFAULT? THE ANSWER IS **CONSTANT**, AND THE REASON IS NOT
+# "AN OPERATOR HAS NOTHING TO CHOOSE" BUT SOMETHING SHARPER: THE REVISION IS THIS FILE'S CLAIM ABOUT
+# WHICH CONTRACT ITS RESPONSE SCHEMAS DESCRIBE, AND A CLAIM AN OPERATOR CAN EDIT IS NOT A CLAIM.
+# ---------------------------------------------------------------------------------------------
+#
+# **The mechanism is not new, and this file does not pretend otherwise.** C-218's frontmatter says
+# "nothing shipped has one". That is wrong: `const_headers` landed with C-55, and
+# `providers/notion.toml` has pinned `Notion-Version: 2022-06-28` — a *dated* vendor version header
+# the vendor refuses a request without — ever since. `providers/anthropic.toml` pins
+# `anthropic-version: 2023-06-01` and `providers/github.toml` and `providers/pagerduty.toml` pin
+# version-bearing `Accept` values. Klaviyo needed **no change to `connector-spec`** and no new field.
+#
+# **What is new is the question the story actually asks**, which the four connectors above never had
+# to answer: those headers pin a *behaviour* version, and the response shapes recorded beside them
+# are a convenience. Klaviyo's revision governs the JSON:API envelope, the attribute set of every
+# resource, and which fields exist at all — so the value below and the `response_schema` blocks
+# further down are **one claim, stated twice**. A revision bumped without re-reading the schemas is
+# worse than no revision at all: it asserts a compatibility nobody checked, in a header the vendor
+# accepts without complaint, and every consumer downstream reads the schemas as though the assertion
+# had been verified.
+#
+# So the coupling is held by a test rather than by this paragraph.
+# `crates/connector-flux/tests/klaviyo_connector.rs::the_pin_and_the_schemas_name_one_date` requires
+# the `const_headers` value and the provenance sentence in the next paragraph to be the same string.
+# Bumping one alone fails; bumping both means someone edited a sentence that says they re-read the
+# schemas, which is the smallest speed bump that puts the work in front of the person doing it.
+#
+# **Response schemas below were read from the developer portal rendered at revision `2026-07-15`**,
+# on 2026-07-31. That is the sentence the test pins. It is a claim about *provenance*, not about
+# correctness: nothing in this repository can verify a hand-authored shape against a live vendor
+# (C-14), and this file makes the weaker claim it can actually stand behind.
+#
+# **Why not a `[[config]]` field with a default**, stated as a decision rather than a preference,
+# since C-218 records it as the first time the question has arisen:
+#
+# 1. **It would make the schemas below conditional on a value this file does not control.** A
+#    connector's `response_schema` is read by a model as a contract. Under an operator-chosen
+#    revision it would describe whichever revision the *author* used, while the request carried
+#    whichever the *operator* typed — and both would look correct. That is the exact failure the
+#    story names, promoted from an authoring mistake to a supported feature.
+# 2. **There is no wrong-value feedback.** Klaviyo rejects an *undocumented* revision string, so a
+#    typo fails loudly; a valid but different revision succeeds, and the mismatch surfaces as a
+#    missing attribute somewhere downstream weeks later.
+# 3. **The level axis has no answer for it.** `Level` is derived from what a field `binds`
+#    (`docs/designs/connector-configuration.md`), and there is no `header.*` binding at all — the
+#    same wall `providers/pagerduty.toml` documents for its `From` header. A configured revision is
+#    not merely unwise here, it is unspellable, and reaching for `[[config]]` would mean widening the
+#    binding grammar to make a bad idea expressible.
+# 4. **The migration story is better without it.** Bumping a revision is a change to this file's
+#    request *and* response contract, so it belongs in a diff a reviewer reads, next to the schemas
+#    it invalidates — not in a tenant's settings row where nobody sees it.
+#
+# The one real cost is recorded rather than argued away: an operator who needs a newer revision
+# — because Klaviyo added a field, or is sunsetting this one — cannot get it without a release of
+# this repository. That is the correct trade for a value that governs what every schema here means,
+# and Klaviyo's deprecation policy gives roughly a year of notice per revision, so the window is
+# generous. `providers/notion.toml` accepts the same cost for the same reason.
+#
+# ---------------------------------------------------------------------------------------------
+# WHAT SHIPS: 6 operations — 5 reads and 1 write, plus one write that is a read's opposite in every
+# sense worth flagging. Accounts: list (the `verify`). Profiles: list, get, create. Lists: list.
+# Events: create.
+# ---------------------------------------------------------------------------------------------
+#
+# **Not one operation declares a query parameter**, and on Klaviyo that excludes more than usual.
+# This emitter interpolates query values verbatim and percent-encodes nothing, deliberately
+# (`crates/connector-flux/src/op.rs:138-143`; `zendesk-ticket-search` is the standing demonstration
+# under `AGENTS.md`'s Intentional gaps). Klaviyo puts four whole mechanisms in the query string:
+#
+# - **`filter`** — a small expression language of its own (`equals(email,"a@b.com")`,
+#   `greater-than(created,2026-01-01T00:00:00Z)`). Its operands are caller free text, and it is the
+#   single most useful thing this connector cannot offer. It is also, notably, exactly the kind of
+#   expression language `AGENTS.md`'s flow-graph contract refuses to *author*; here it would merely
+#   be passed through, but unencoded, which is worse.
+# - **`page[cursor]`** — Klaviyo's opaque cursor. Pagination is therefore first-page-only on every
+#   list below, and each says so in its description rather than leaving a model to discover it.
+# - **`fields[<resource>]`** — sparse fieldsets. Omitting it returns every attribute, which is what
+#   the schemas below describe, so nothing is lost by excluding it.
+# - **`include`** — JSON:API compound documents. Excluded for the same reason, and its absence is
+#   why no schema below describes a populated `included` array.
+#
+# All four belong to whichever story closes the query-encoding gap
+# (`docs/designs/query-encoding-flux-stories.md`), not to this one.
+#
+# **Endpoints deliberately not shipped, and named rather than silently absent:**
+#
+# - **`GET /api/lists/{id}`, `GET /api/lists/{id}/profiles`** — both documented and both useful. The
+#   second is the natural follow-on to `klaviyo-list-list`, and it is left out because without
+#   `page[cursor]` it returns an unbounded first page of *named people* with no way to walk it; a
+#   membership read that silently truncates is a worse answer than no membership read.
+# - **`GET /api/metrics`** — documented. `klaviyo-event-create` names its metric by string and
+#   Klaviyo creates the metric on first use, so nothing in the shipped set needs to look one up.
+#   Adding it later costs one operation and one more scope on the key.
+# - **`POST /api/profile-import`, `POST /api/profile-subscription-bulk-create-jobs`** — upsert and
+#   bulk subscribe. The second is the one to be most careful about: it is how a profile is opted *in*
+#   to marketing, and consent is a legal claim about a human being that a generated connector should
+#   not make casually. It belongs to a story that states how consent was obtained.
+# - **`PATCH /api/profiles/{id}`, and every `DELETE`** — updates and deletion are out of a first
+#   curated set for the reason `providers/trello.toml` gives: a connector earns operations by need.
+# - **Campaigns, flows, segments, templates, coupons, catalogs, reporting, webhooks.** Klaviyo's
+#   surface is very large. `[[events]]`/`[[channels]]` are likewise absent: Klaviyo does publish
+#   webhooks, and declaring an inbound half would mean also declaring how it is registered and
+#   verified, which is its own story.
+#
+# ---------------------------------------------------------------------------------------------
+# A NOTE ON WHAT THIS CONNECTOR READS AND WRITES. Klaviyo is a marketing platform, so a "profile" is
+# a named human being: email address, phone number, postal address, and an open-ended `properties`
+# object a customer may have filled with anything. Three of the six operations below return or
+# accept that data, and each says so in its description. Two consequences are worth stating once
+# here rather than six times below:
+#
+#   - **`klaviyo-event-create` can cause a message to be sent to a real person.** An event is what
+#     triggers a Klaviyo flow, so posting one is not merely writing a row — it can put an email or an
+#     SMS in front of a customer. That is why it is declared `high` rather than `medium`, which is
+#     the only operation in this file where the risk is about the world rather than about the data.
+#   - **Nothing here reads back an unsubscribe or consent state and acts on it.** `subscriptions` is
+#     returned on a profile and is described, not interpreted. A flow that decides who to contact
+#     needs more than this connector offers.
+# ---------------------------------------------------------------------------------------------
+
+id = "klaviyo"
+vendor = "Klaviyo"
+
+# The reverse-DNS authority this connector publishes under (C-92), keyed on the product: Klaviyo
+# publishes its own API domain (`a.klaviyo.com`), so it takes its own authority in the same shape as
+# every other independent vendor here — `com.datadoghq.api`, `com.trello.api`, `com.notion.api`.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"), and
+# note that a credential path deliberately carries no version, so the revision question below never
+# reaches `tenants/<tenant>/com.klaviyo.api/default/api_key`.
+authority = "com.klaviyo.api"
+
+# One tenant-independent host. Klaviyo serves every account from `a.klaviyo.com` — the account is
+# identified by the key, not by a subdomain — so there is no `{variable}` here and no endpoint
+# binding. `http_hosts` derives from this single value and is therefore exactly `a.klaviyo.com`,
+# never widened. (Klaviyo also serves `https://a.klaviyo.com/client/…` for public-key browser calls;
+# nothing below reaches it, and a server-side connector has no business there.)
+base_url = "https://a.klaviyo.com/api"
+
+# **No `api_version`, deliberately** — the same answer `providers/github.toml` gives, reached from a
+# different direction and worth stating because a reader will look for one.
+#
+# Klaviyo's URLs carry no version segment: `/api/profiles`, never `/api/v3/profiles`. Its only
+# version is the dated `revision` header below. Copying that date into `api_version` would render
+# `com.klaviyo.api:2026-07-15#klaviyo-profile-list`, which is not obviously wrong — the IR's own
+# docs cite AWS's dated service versions (`s3:2006-03-01`) as the motivating case — but it would put
+# **a second authored copy of the revision date in this file**, with nothing checking that the two
+# agree. Given that the whole point of this connector is that a half-bumped revision is a silent
+# lie, adding a second place to half-bump it is the wrong trade. If the address should ever carry
+# Klaviyo's version, it should be *derived* from `const_headers`, and nothing derives it today.
+
+# ---------------------------------------------------------------------------------------------
+# THE VERSION PIN. Read the second section of the header comment before changing this value: the
+# `response_schema` blocks below were written against this exact revision, and the two move together
+# or not at all.
+#
+# An inline table deliberately — a `[const_headers]` section header would scope every provider
+# scalar written after it into that table and the loader would reject the file.
+# `providers/github.toml`, `providers/notion.toml` and `providers/anthropic.toml` all record the same
+# trap against the same fix.
+#
+# Lowercase `revision` is Klaviyo's own spelling. HTTP field names are case-insensitive and the
+# loader treats them so, but this file uses the vendor's.
+# ---------------------------------------------------------------------------------------------
+const_headers = { "revision" = "2026-07-15" }
+
+description = "Klaviyo marketing platform: read the account a key belongs to, read and create customer profiles, read lists, and post an event that can trigger a flow. Every request carries a dated API revision the vendor requires"
+
+# `GET /api/accounts` — argument-free, needs only the narrowest scope, and answers the question a
+# Test-connection button asks: which account is this key for?
+verify = "klaviyo-account-list"
+
+# One mechanism. Klaviyo's server-side API takes a private key and nothing else; its public key is a
+# browser-side identifier for the `/client/` endpoints this connector does not reach.
+default_auth = [{ credentials = ["klaviyo.api_key"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credential
+#
+# `Authorization: Klaviyo-API-Key <key>` — a header placement with a vendor scheme word in front of
+# the secret, which is what the prefix axis (C-184) exists for. Klaviyo refuses a `Bearer `-prefixed
+# value, so `scheme = "bearer"` would be a connector that authenticates nothing. `Klaviyo-API-Key `
+# is public API syntax printed in the vendor's own documentation; the credential is appended by the
+# host and never appears in this repository.
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "klaviyo.api_key"
+scheme = { header = { name = "Authorization", prefix = "Klaviyo-API-Key " } }
+env = ["KLAVIYO_API_KEY"]
+description = "Klaviyo private API key for one account. Travels as the whole Authorization header behind Klaviyo's own scheme word. Keys are scoped per key: one minted without the scopes the shipped operations need will authenticate, pass verification, and fail on exactly the call that needs the missing scope"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — Accounts. One read, and the connector's `verify`.
+#
+# `accounts:read` is the narrowest scope Klaviyo offers, which is what makes this the right
+# verification call: a key that can do nothing else still proves it belongs to an account.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "klaviyo-account-list"
+method = "GET"
+path = "/accounts"
+description = "Read the Klaviyo account this API key belongs to, with its timezone, currency, industry and contact details. Returns exactly one account — a private key is scoped to one — so this is the call that answers 'which account am I connected to'. Also this connector's verify: it takes no argument and needs only the accounts:read scope"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "array", description = "Always exactly one account: a private API key belongs to one account and cannot see another", items = { type = "object", required = [
+  "type",
+  "id",
+  "attributes",
+], properties = { type = { const = "account" }, id = { type = "string", description = "The account id, which is also Klaviyo's public (site) API key for this account — a browser-side identifier, not a secret" }, attributes = { type = "object", required = [
+  "test_account",
+], properties = { test_account = { type = "boolean", description = "Whether this is a test account. A test account still accepts events and still runs flows" }, contact_information = { type = "object", description = "The sender identity and postal address Klaviyo puts in email footers: `default_sender_name`, `default_sender_email`, `organization_name`, `website_url`, and a `street_address` object (`address1`, `address2`, `city`, `region`, `country`, `zip`). Left untyped below the first level rather than enumerated in full" }, industry = { type = "string", description = "The industry the account selected at signup" }, timezone = { type = "string", description = "The account's IANA timezone. Klaviyo renders every date in the UI in this zone, while the API returns UTC" }, preferred_currency = { type = "string", description = "ISO 4217 code the account reports revenue in. This is what an event's `value_currency` should normally match" }, public_api_key = { type = "string", description = "The six-character public site id, repeated from `id`. Public by design — it is embedded in the account's own web pages" }, locale = { type = "string", description = "The account's locale, e.g. `en-US`" } } }, links = { type = "object", description = "`{self}` — the JSON:API link to this resource" } } } }, links = { type = "object", description = "JSON:API document links. `next` is absent here; an account list is never paginated" } }
+
+# ---------------------------------------------------------------------------------------------
+# Operations — Profiles. Two reads and one write.
+#
+# A profile is a named human being. Every response below carries email addresses, phone numbers and
+# postal locations; read them for what the calling flow needs and do not persist them beyond that.
+#
+# The attribute set is Klaviyo's documented Profile object at the pinned revision, field for field.
+# `properties`, `subscriptions` and `predictive_analytics` are left as untyped objects rather than
+# enumerated: `properties` is customer-defined and unknowable at build time, `subscriptions` is a
+# deep consent structure this connector does not interpret, and `predictive_analytics` is present
+# only on accounts with enough history. An untyped object inside an otherwise-informative schema is
+# honest rather than permissive — the same answer `providers/trello.toml` gives for a board's
+# `prefs`.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "klaviyo-profile-list"
+method = "GET"
+path = "/profiles"
+description = "List customer profiles in the account, newest first. Returns the FIRST PAGE ONLY — Klaviyo pages with an opaque `page[cursor]` query parameter this connector cannot send, so there is no way to reach later pages and no way to filter. Every profile carries personal data: an email address, often a phone number and a postal location"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "array", description = "One entry per profile, first page only", items = { type = "object", required = [
+  "type",
+  "id",
+  "attributes",
+], properties = { type = { const = "profile" }, id = { type = "string", description = "The profile's Klaviyo id — what klaviyo-profile-get addresses it by" }, attributes = { type = "object", properties = { email = { type = "string", format = "email", description = "The profile's email address, or null. Personal data" }, phone_number = { type = "string", description = "E.164 phone number, or null. Personal data" }, external_id = { type = "string", description = "The id this profile carries in the customer's own system, when one was supplied" }, first_name = { type = "string" }, last_name = { type = "string" }, organization = { type = "string" }, title = { type = "string" }, locale = { type = "string" }, image = { type = "string", format = "uri" }, created = { type = "string", format = "date-time", description = "When the profile was first seen, in UTC" }, updated = { type = "string", format = "date-time" }, last_event_date = { type = "string", format = "date-time", description = "When this profile last did anything Klaviyo recorded — the closest thing to an activity signal here" }, location = { type = "object", description = "`address1`, `address2`, `city`, `region`, `zip`, `country`, `timezone`, `ip`, and `latitude`/`longitude` which Klaviyo returns as either numbers or strings. Personal data, including a home address where one was collected" }, properties = { type = "object", description = "Custom properties the account itself defined. Keys are chosen by whoever built the integration and are not knowable at build time; treat every value as potentially personal" }, subscriptions = { type = "object", description = "Consent state per channel — `email.marketing`, `sms.marketing`, `sms.transactional` — each with a `consent` value and timestamps. This connector reports it and never interprets it: deciding who may be contacted needs more than this shape" }, predictive_analytics = { type = "object", description = "Klaviyo's modelled figures (historic and predicted CLV, churn probability, expected date of next order). Present only on accounts with enough order history" } } }, relationships = { type = "object", description = "JSON:API relationship links for `lists`, `segments`, `push-tokens` and `conversations`. Only links: this connector sends no `include`, so nothing is expanded" }, links = { type = "object" } } } }, links = { type = "object", description = "`self`, and `next`/`prev` when more pages exist. **`next` is unusable here** — following it needs the `page[cursor]` query parameter (C-30)" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "klaviyo-profile-get"
+method = "GET"
+path = "/profiles/{id}"
+description = "Read one customer profile by its Klaviyo id, with its identifiers, custom properties, consent state and location. Returns personal data about a named individual"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The profile's Klaviyo id, from klaviyo-profile-list's `id` or from klaviyo-profile-create's response. Not an email address — Klaviyo addresses a profile by id here, and looking one up by email needs the `filter` query parameter this connector cannot send"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "object", required = [
+  "type",
+  "id",
+  "attributes",
+], properties = { type = { const = "profile" }, id = { type = "string", description = "The profile's Klaviyo id, echoed back" }, attributes = { type = "object", properties = { email = { type = "string", format = "email", description = "The profile's email address, or null. Personal data" }, phone_number = { type = "string", description = "E.164 phone number, or null. Personal data" }, external_id = { type = "string", description = "The id this profile carries in the customer's own system" }, first_name = { type = "string" }, last_name = { type = "string" }, organization = { type = "string" }, title = { type = "string" }, locale = { type = "string" }, image = { type = "string", format = "uri" }, created = { type = "string", format = "date-time" }, updated = { type = "string", format = "date-time" }, last_event_date = { type = "string", format = "date-time" }, location = { type = "object", description = "Postal and network location — see klaviyo-profile-list for the field list. Personal data" }, properties = { type = "object", description = "Account-defined custom properties; keys are not knowable at build time" }, subscriptions = { type = "object", description = "Per-channel consent state. Reported, never interpreted" }, predictive_analytics = { type = "object", description = "Modelled CLV and churn figures, when the account has enough history" } } }, relationships = { type = "object", description = "Relationship links only; nothing is expanded" }, links = { type = "object" } } }, links = { type = "object" } }
+
+# ---------------------------------------------------------------------------------------------
+
+# **The profile write.** `medium`, not `high`: it adds a row to a customer database and sends nothing
+# to anybody. Compare `klaviyo-event-create` below, which can put a message in front of a person.
+#
+# `non_idempotent`: Klaviyo answers `409 Conflict` when a profile with the same email, phone number
+# or external id already exists, so calling this twice does not make two profiles — but it does not
+# succeed twice either, and this repository's convention (first written for `providers/asana.toml`)
+# is that a write earns `idempotent` only from a vendor-documented idempotency guarantee, never from
+# a conflict response. `POST /api/profile-import` is Klaviyo's upsert and is deliberately not shipped
+# here (see the header comment).
+#
+# Klaviyo's request body is JSON:API, so every field below declares the JSON path it occupies with
+# `wire` (C-29). Without those paths the fields would be emitted at the body root, where Klaviyo
+# answers `400` naming them as unexpected.
+[[operations]]
+id = "klaviyo-profile-create"
+method = "POST"
+path = "/profiles"
+description = "Create a customer profile. At least one identifier is required — email, phone number or external id — and Klaviyo answers 409 Conflict if a profile with that identifier already exists, so this creates and never updates. The created profile can be marketed to only once it is subscribed, which this connector does not do"
+risk = "medium"
+idempotency = "non_idempotent"
+
+# The JSON:API resource type. A constant this operation always sends, not a caller-supplied
+# parameter — the same pattern `providers/docusign.toml` and `providers/cloudflare.toml` use for a
+# body value with exactly one correct answer. Named `resource_type` rather than `type` because the
+# caller-facing name becomes a Flux symbol and `type` reads as a language word.
+[[operations.params.body]]
+name = "resource_type"
+wire = "data.type"
+description = "Constant profile — Klaviyo's JSON:API resource type for this endpoint, which has no other correct value"
+required = true
+schema = { type = "string", const = "profile" }
+
+[[operations.params.body]]
+name = "email"
+wire = "data.attributes.email"
+description = "The profile's email address. Not required by Klaviyo on its own, but at least one of email, phone_number or external_id must be supplied or the call is rejected. Personal data about a named individual"
+required = false
+schema = { type = "string", format = "email" }
+
+[[operations.params.body]]
+name = "phone_number"
+wire = "data.attributes.phone_number"
+description = "Phone number in E.164 form, e.g. +15005550006. Klaviyo rejects other formats. Counts as an identifier"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "external_id"
+wire = "data.attributes.external_id"
+description = "The id this person carries in the calling system — an order-system customer id, say. Counts as an identifier, and is the one that lets a later call find this profile without holding an email address"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "first_name"
+wire = "data.attributes.first_name"
+description = "Given name, as it should appear in a message greeting"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "last_name"
+wire = "data.attributes.last_name"
+description = "Family name"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "organization"
+wire = "data.attributes.organization"
+description = "The company this person belongs to"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "title"
+wire = "data.attributes.title"
+description = "Job title"
+required = false
+schema = { type = "string" }
+
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "object", required = [
+  "type",
+  "id",
+  "attributes",
+], properties = { type = { const = "profile" }, id = { type = "string", description = "The created profile's id — what klaviyo-profile-get reads back, and the only handle on it" }, attributes = { type = "object", properties = { email = { type = "string", format = "email", description = "Echoes the address that was sent" }, phone_number = { type = "string" }, external_id = { type = "string" }, first_name = { type = "string" }, last_name = { type = "string" }, organization = { type = "string" }, title = { type = "string" }, locale = { type = "string" }, created = { type = "string", format = "date-time", description = "When Klaviyo created the profile, in UTC" }, updated = { type = "string", format = "date-time" }, last_event_date = { type = "string", format = "date-time", description = "Null on a profile just created: it has done nothing yet" }, location = { type = "object", description = "Empty on a profile created by this operation, which sends no location" }, properties = { type = "object", description = "Empty unless the account has default properties" }, subscriptions = { type = "object", description = "**Not subscribed.** Creating a profile grants no marketing consent; the subscription endpoints this connector does not ship are what change this" } } }, relationships = { type = "object" }, links = { type = "object" } } }, links = { type = "object" } }
+
+# ---------------------------------------------------------------------------------------------
+# Operations — Lists. One read.
+#
+# A Klaviyo list is a static, opt-in collection of profiles, as distinct from a segment, which is a
+# live query. Only lists are shipped: a segment's membership changes under the reader, and reading
+# one without a cursor would be an even weaker claim than reading a list without one.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "klaviyo-list-list"
+method = "GET"
+path = "/lists"
+description = "List the account's lists — static, opt-in collections of profiles, as opposed to segments, which are live queries and are not shipped here. Returns the FIRST PAGE ONLY; Klaviyo's `page[cursor]` query parameter cannot be sent by this connector. Returns the lists themselves, not their members"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "array", description = "One entry per list, first page only", items = { type = "object", required = [
+  "type",
+  "id",
+  "attributes",
+], properties = { type = { const = "list" }, id = { type = "string", description = "The list's id, a six-character code. This is what Klaviyo's own UI shows in a list URL" }, attributes = { type = "object", required = [
+  "name",
+], properties = { name = { type = "string", description = "The list's name, as the account's marketers see it" }, created = { type = "string", format = "date-time" }, updated = { type = "string", format = "date-time" }, opt_in_process = { type = "string", description = "How a profile joins: `single_opt_in`, or `double_opt_in` where Klaviyo sends a confirmation message first. A flow that adds members has to respect this, and this connector does not add members" } } }, relationships = { type = "object", description = "Relationship links for `profiles`, `tags` and `flow-triggers`. Links only — nothing is expanded, and the profiles endpoint behind the first is deliberately not shipped" }, links = { type = "object" } } } }, links = { type = "object", description = "`self`, plus `next`/`prev` when more pages exist. `next` is unusable here (C-30)" } }
+
+# ---------------------------------------------------------------------------------------------
+# Operations — Events. One write, and the one operation in this file whose blast radius reaches a
+# human being.
+#
+# **`high`, and the reason is not the data.** An event is what triggers a Klaviyo flow. Posting a
+# `Placed Order` event to an account whose marketers have built a flow on that metric can send an
+# email or an SMS to the profile named in the body, immediately, with no further call from here.
+# `medium` would describe the database write and say nothing about the message.
+#
+# **`non_idempotent`, and the nuance is worth recording** because Klaviyo does document a dedup
+# mechanism: repeating an event with the same `unique_id` for the same profile and metric records
+# only the first. That is a real guarantee, and it is still not this operation's guarantee, because
+# it holds only when the *caller* supplies `unique_id` — an optional field. A connector cannot claim
+# a property that depends on an argument a caller may omit; `Idempotency::Conditional` exists but
+# describes a vendor-side condition, not a caller-side one. Callers who need the guarantee should
+# pass `unique_id` and the description says so.
+#
+# **No `response_schema`, and that is the honest answer, not an omission.** Klaviyo answers `202
+# Accepted` with an empty body — the call reports that the event was *accepted for processing*, not
+# that it was recorded. Declaring a shape would invent one.
+#
+# The body is JSON:API with two nested resource objects inside it, so this is the deepest `wire`
+# nesting in the shipped catalogue (`data.attributes.profile.data.attributes.email`, five segments).
+# Every path is Klaviyo's own.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "klaviyo-event-create"
+method = "POST"
+path = "/events"
+description = "Post an event about a customer — a purchase, a page view, anything the account measures. THIS CAN CAUSE A MESSAGE TO BE SENT: an event triggers any Klaviyo flow built on its metric, so an email or SMS may reach the named profile immediately. Klaviyo creates the metric and the profile on first use if they do not exist. Answers 202 Accepted with no body: the event is queued, not confirmed. Pass unique_id to make a retry safe — Klaviyo records only the first event with a given unique_id for the same profile and metric"
+risk = "high"
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "resource_type"
+wire = "data.type"
+description = "Constant event — Klaviyo's JSON:API resource type for this endpoint, which has no other correct value"
+required = true
+schema = { type = "string", const = "event" }
+
+[[operations.params.body]]
+name = "metric_type"
+wire = "data.attributes.metric.data.type"
+description = "Constant metric — the resource type of the nested metric object, which has no other correct value"
+required = true
+schema = { type = "string", const = "metric" }
+
+[[operations.params.body]]
+name = "metric_name"
+wire = "data.attributes.metric.data.attributes.name"
+description = "What happened, as the account's marketers name it — `Placed Order`, `Viewed Product`. Klaviyo creates the metric on first use, so a typo silently creates a second metric nobody has built a flow on rather than failing"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "profile_type"
+wire = "data.attributes.profile.data.type"
+description = "Constant profile — the resource type of the nested profile object, which has no other correct value"
+required = true
+schema = { type = "string", const = "profile" }
+
+[[operations.params.body]]
+name = "profile_email"
+wire = "data.attributes.profile.data.attributes.email"
+description = "The email address of the person this event is about. Klaviyo matches an existing profile on it and creates one if there is none, so an address typed wrongly creates a new profile rather than failing. Personal data"
+required = true
+schema = { type = "string", format = "email" }
+
+[[operations.params.body]]
+name = "properties"
+wire = "data.attributes.properties"
+description = "The event's own detail, as a JSON object — order id, product names, values. Keys are whatever the account's flows and reports expect; Klaviyo imposes no shape. Pass an empty object when there is nothing to say"
+required = true
+schema = { type = "object" }
+
+[[operations.params.body]]
+name = "value"
+wire = "data.attributes.value"
+description = "The monetary value of the event, as a number, for revenue reporting. Omit it on an event that is not worth money"
+required = false
+schema = { type = "number" }
+
+[[operations.params.body]]
+name = "value_currency"
+wire = "data.attributes.value_currency"
+description = "ISO 4217 code for `value`, e.g. EUR. Klaviyo converts to the account's preferred currency; omitting it means the account's own currency is assumed"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "unique_id"
+wire = "data.attributes.unique_id"
+description = "A caller-chosen id that makes this event's delivery safe to retry: Klaviyo records only the first event with a given unique_id for the same profile and metric. Omitting it means a retry posts a second event and may trigger a second message"
+required = false
+schema = { type = "string" }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any of the above can run.
+#
+# One field, because Klaviyo's host is tenant-independent: the key identifies the account, so there
+# is no subdomain, no region and no instance to collect.
+#
+# **The scopes are in `help` and are checked by a test**, not by this comment.
+# `crates/connector-flux/tests/klaviyo_connector.rs::the_help_text_names_every_scope_the_shipped_set_needs`
+# reads the list back and requires each named scope to belong to an operation this file declares.
+# The failure it exists to pre-empt is nasty: Klaviyo private keys are scoped per key, so a key
+# minted read-only authenticates, passes `verify` (which needs only `accounts:read`), and then fails
+# on the one write a flow was built around.
+#
+# No `example`: a placeholder shaped like a real `pk_`-prefixed key is worse than none — one has
+# already tripped GitHub's push protection in this repository's history
+# (`providers/shopify.toml` records the release that cost).
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "api_key"
+label = "Klaviyo private API key"
+help = "Create one in Klaviyo under Settings > Account > API keys > Create Private API Key. Grant it these scopes and no more: accounts:read (for the connection test), profiles:read, profiles:write, lists:read and events:write. A key missing one of these still connects successfully and then fails on the single call that needs it. The key begins pk_ followed by a long hex string; it is shown once, so store it when it is created"
+format = "token"
+secret = true
+docs_url = "https://developers.klaviyo.com/en/docs/retrieve_api_credentials"
+binds = "credential.klaviyo.api_key"
