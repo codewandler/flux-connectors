@@ -90,6 +90,16 @@ buckets, so a new crate that is none of them fails rather than passing unexamine
 compiler and host libraries, `connector-pack` is the one that links flux's runtime types, and it
 constructs none of it — see [Relationship to flux](#relationship-to-flux).
 
+`connector-pack`'s own "must never hold an HTTP client" is asserted separately, in
+`crates/connector-cli/tests/pack_links_no_http_client.rs` (C-199), and **it deliberately reads a
+different graph**. The lock cannot state that claim: `connector-pack` legitimately depends on
+`connector-secrets`, whose Vault client is an *optional* `reqwest`, so the lock reports
+`codewandler-connector-pack -> codewandler-connector-secrets -> reqwest` for a build that never
+happens. That fence therefore reads cargo's **feature-resolved** graph, and covers what it thereby
+stops seeing with manifest-level assertions: the carrier is optional, `default = []`, and no
+workspace member asks for `vault` — which matters because cargo unifies features, so one member
+switching it on would put `reqwest` in the single `connector_secrets` rlib the pack links.
+
 `connector-spec` ingest accepts bytes so it remains fully unit-testable. Vendor network access, when
 implemented, belongs only in `connector-cli`'s `fetch` path.
 

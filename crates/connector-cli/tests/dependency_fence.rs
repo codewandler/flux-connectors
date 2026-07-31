@@ -72,6 +72,12 @@ fn connector_cli_does_not_depend_on_connector_secrets() {
 /// of their own. They are neither compiler nor network crates, and they are listed so that
 /// [`every_workspace_member_is_classified`] has three buckets to sort into rather than an
 /// unexplained remainder.
+///
+/// **Being in this list is a classification, not a fence.** `codewandler-connector-pack`'s own
+/// claim — that it links no HTTP client — cannot be stated over `Cargo.lock` at all, because the
+/// lock reports the optional `connector-secrets -> reqwest` edge that no build takes. It is
+/// asserted over cargo's feature-resolved graph instead, in
+/// [`pack_links_no_http_client.rs`](../pack_links_no_http_client.rs) (C-199).
 const HOST_LIBRARIES: &[&str] = &["codewandler-connector-pack", HOST_LIBRARY];
 
 /// **The edge that actually earns the allow-list its keep.**
