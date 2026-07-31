@@ -41,6 +41,41 @@ person looking at a list of 45 connectors deciding which ones they can use — s
 not lower: a connector that is ready to call reads as one that is not, and the operator goes looking
 for a token that does not exist.
 
+## The second way the same boolean is wrong, measured against a running host
+
+Found by driving the real service on 2026-07-31, not by reading:
+
+```
+$ curl -X PUT .../v1/credentials/anthropic/anthropic.api_key -d '{"value":"…"}'   → 204
+$ curl .../v1/connectors/anthropic
+  connected: false
+  anthropic.api_key    stored: true
+  anthropic.admin_key  stored: false
+```
+
+The operator supplied the credential the connector's operations actually use, and the app still
+reports the connector as unwired — because `all_stored` (`api.rs:128-145`) requires **every**
+declared credential. Anthropic declares two: `api_key`, which nearly every operation carries, and
+`admin_key`, which belongs to the management surface. Supplying the first is the normal case and it
+does not turn `connected` true.
+
+**The code already contains the argument against itself.** The loop excludes one credential class
+for precisely this reason, in its own words:
+
+> An inbound signing secret never leaves, so it is not part of "can this connector call out".
+> Counting it would show a connector as unconnectable for want of a value no outgoing request would
+> ever carry.
+
+That reasoning is right, and it is not specific to `Placement::Inbound`. `admin_key` is a value no
+*ordinary* outgoing request carries either. The principle is stated and then applied to exactly one
+case.
+
+The honest unit is the **operation**, not the connector: an operation is callable when the
+credentials *it* declares are stored. A connector is then "fully wired", "partly wired — these N
+operations are callable", or "nothing to supply". `credentials` already carries `stored` per entry,
+so the view has the data; what is missing is the per-operation mapping from operation to the
+credentials it requires.
+
 ## Why it is cheap
 
 The view already carries the fields needed to express the third state. Each entry in `credentials`
