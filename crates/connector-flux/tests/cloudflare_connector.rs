@@ -20,12 +20,17 @@
 //!
 //! The other half of the story is getting `risk`/`idempotency` right on the two operations where they
 //! are least alike: a DNS record delete (destructive, and the vendor documents no repeat guarantee)
-//! and a cache purge (genuinely idempotent by vendor behaviour, but `POST`, and
-//! `crates/connector-flux/src/op.rs`'s `check_write_metadata` refuses `idempotency = "idempotent"` on
-//! any `POST` outright — so it is declared `non_idempotent` not because that is true but because the
-//! compiler will not accept the true answer, the same trade `providers/notion.toml` records for its
-//! own `POST` reads). `the_dns_record_delete_is_destructive_and_not_claimed_idempotent` and
-//! `the_cache_purge_is_high_risk_and_forced_non_idempotent_by_the_post_rule` are the tests for that.
+//! and a cache purge (genuinely idempotent by vendor behaviour, but `POST`).
+//!
+//! **The purge is where C-186 was measured and where it was fixed.** `check_write_metadata` refused
+//! `idempotency = "idempotent"` on any `POST` by method, so this connector shipped `non_idempotent`
+//! beside a header comment explaining at length that the value was false — and the comment is not
+//! what a host reads. `idempotent_because` now buys the true declaration in exchange for stating the
+//! vendor behaviour behind it, and the method rule is untouched for an author who states nothing.
+//! `the_dns_record_delete_is_destructive_and_not_claimed_idempotent` and
+//! `the_cache_purge_is_high_risk_and_idempotent_with_its_reason_declared` are the tests for that,
+//! and the second one still asserts the refusal — with the reason stripped — because a guard that
+//! merely gained an exception must be shown to still be a guard.
 
 use std::path::{Path, PathBuf};
 
@@ -223,11 +228,16 @@ fn the_dns_record_delete_is_destructive_and_not_claimed_idempotent() {
     );
 }
 
-/// The cache purge: high risk (instantaneous, global, externally visible), and — the forced half of
-/// the story — declared `non_idempotent` even though it is genuinely idempotent by vendor behaviour,
-/// because `check_write_metadata` refuses `idempotency = "idempotent"` on any `POST`.
+/// The cache purge: high risk (instantaneous, global, externally visible), and — once C-186 landed —
+/// declared with the idempotency it actually has.
+///
+/// This test is the story's before-and-after. It used to assert `non_idempotent` and quote the
+/// provider file's comment explaining that the value was false; the connector was shipping a field
+/// that contradicted its own prose, and the field is the half a host reads. It now asserts the true
+/// value **and** the justification that licenses it, because the claim without its reason is the
+/// thing `check_write_metadata` is right to refuse.
 #[test]
-fn the_cache_purge_is_high_risk_and_forced_non_idempotent_by_the_post_rule() {
+fn the_cache_purge_is_high_risk_and_idempotent_with_its_reason_declared() {
     let connector = cloudflare();
     let purge = op(&connector, "cloudflare-cache-purge");
 
@@ -241,27 +251,40 @@ fn the_cache_purge_is_high_risk_and_forced_non_idempotent_by_the_post_rule() {
     );
     assert_eq!(
         purge.idempotency,
-        Idempotency::NonIdempotent,
-        "genuinely idempotent by Cloudflare's own behaviour, but declared non_idempotent because \
-         `check_write_metadata` refuses `idempotency = idempotent` on a POST outright regardless of \
-         vendor truth — see the provider file's header comment for the trade"
+        Idempotency::Idempotent,
+        "purging an already-purged cache is a no-op, and since C-186 that is declarable rather than \
+         only documentable. `non_idempotent` here would be the connector under-claiming its own \
+         behaviour to a host, forever and in silence"
+    );
+    let reason = purge
+        .idempotency_justification()
+        .expect("the purge states why a POST may claim idempotency");
+    assert!(
+        reason.contains("no-op") && reason.contains("purge_everything"),
+        "the justification must state the vendor behaviour the claim rests on — that \
+         `purge_everything` names a target state rather than applying a delta — not merely assert \
+         the conclusion: {reason:?}"
     );
 
-    // The emitter's own refusal is the mechanism backing the claim above: declaring this operation
-    // idempotent would fail to emit at all, which is exactly why it is not declared that way.
-    let mut idempotent_purge = connector.clone();
-    let purge_index = idempotent_purge
+    // The escape is an escape, not a hole: strip the reason and the emitter refuses exactly as it
+    // did before C-186. This is the half of the rule that must never weaken, because it is the half
+    // that catches an author who copied a read's metadata onto a write.
+    let mut unjustified_purge = connector.clone();
+    let purge_index = unjustified_purge
         .operations
         .iter()
         .position(|operation| operation.id == "cloudflare-cache-purge")
         .expect("the purge operation exists");
-    idempotent_purge.operations[purge_index].idempotency = Idempotency::Idempotent;
-    let attempt = emit_operation(&idempotent_purge, &idempotent_purge.operations[purge_index]);
+    unjustified_purge.operations[purge_index].idempotent_because = None;
+    let attempt = emit_operation(
+        &unjustified_purge,
+        &unjustified_purge.operations[purge_index],
+    );
     assert!(
         attempt.is_err(),
-        "declaring the purge idempotent should be refused by check_write_metadata — if this now \
-         emits, the compiler rule changed and the provider file's comment should be revisited rather \
-         than this test silently passing"
+        "an idempotent POST with no stated reason must still be refused — if this now emits, the \
+         guard has been removed rather than qualified, and every POST in the catalogue may claim \
+         to be safe to retry on nothing but its author's say-so"
     );
 }
 

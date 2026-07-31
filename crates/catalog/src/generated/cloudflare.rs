@@ -77,7 +77,7 @@ static OPERATIONS: &[crate::Operation] = &[
         service: "default",
         description: "Purge every cached asset for a zone, immediately, for every visitor worldwide. There is no partial or selective purge in this connector (see its header note) — every call empties the whole zone's edge cache. Repeating it changes nothing further, but each call can spike load on the origin as the cache refills, so it should not be called more often than a real cache-affecting change warrants",
         risk: crate::Risk::High,
-        idempotency: crate::Idempotency::NonIdempotent,
+        idempotency: crate::Idempotency::Idempotent,
         credentials: &[&["cloudflare.api_token"]],
         hosts: &["api.cloudflare.com"],
         flux: include_str!("../../ops/cloudflare/cloudflare-cache-purge.flux"),

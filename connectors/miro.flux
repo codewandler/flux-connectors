@@ -53,9 +53,9 @@ op miro-sticky-note-create(board_id: String, content: String) -> Any
   return response
 
 op miro-sticky-note-update(board_id: String, item_id: String, content: String) -> Any
-  description "Update a sticky note's text content. Setting the same content twice ends in the same state, but this is declared non_idempotent because check_write_metadata refuses idempotency = idempotent on any PATCH by method alone, regardless of vendor behaviour (see the header note, C-186). The updated note is in the response"
+  description "Update a sticky note's text content. The content sent replaces what was there, so setting the same content twice ends in the same state. The updated note is in the response"
   risk "medium"
-  idempotency "non_idempotent"
+  idempotency "idempotent"
   effects ["network"]
   expose true
 

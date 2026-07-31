@@ -705,7 +705,33 @@ fn mutates(method: HttpMethod) -> bool {
 /// `idempotency`, so a `POST` that inherited a `GET`'s `low`/`idempotent` would be auto-approved and
 /// treated as safe to retry. Both are refused rather than corrected: a silent correction hides the
 /// authoring mistake, and the IR omits `Default` on both enums for exactly that reason.
+///
+/// # The one thing that moves the idempotency half (C-186)
+///
+/// The `risk` half is unconditional and stays so. The idempotency half now asks *why* instead of
+/// asking nothing: `POST` and `PATCH` are still refused `idempotent`, unless the operation states a
+/// justification the loader has already checked is more than a shrug
+/// ([`connector_spec::Operation::idempotency_justification`]).
+///
+/// It is worth being precise about what this does and does not concede. It does **not** trust the
+/// author's `idempotency` field — that is option 1 of the story, and it would have removed a guard
+/// that has caught real mistakes. It concedes only that the *verb* is not always the last word on
+/// vendor behaviour, and it makes the disagreement expensive to state and impossible to state
+/// silently. Two connectors were shipping `non_idempotent` alongside a comment saying they were
+/// idempotent; a host reading `ToolSpec` saw the field, never the comment, and declined a retry that
+/// was always safe.
 fn check_write_metadata(operation: &Operation) -> Result<()> {
+    // Checked ahead of the `mutates` gate, because the methods this refuses include `GET` — which is
+    // where a justification is most tempting and least meaningful, since nothing was refusing the
+    // claim there in the first place.
+    if operation.idempotent_because.is_some()
+        && !matches!(operation.method, HttpMethod::Post | HttpMethod::Patch)
+    {
+        return Err(Error::IdempotencyJustificationUnneeded {
+            operation: operation.id.clone(),
+            method: method_word(operation.method),
+        });
+    }
     if !mutates(operation.method) {
         return Ok(());
     }
@@ -717,9 +743,18 @@ fn check_write_metadata(operation: &Operation) -> Result<()> {
     }
     // `PUT` and `DELETE` *are* idempotent methods under RFC 9110 §9.2.2, so declaring them so is
     // honest; `POST` and `PATCH` are not, and claiming otherwise makes a `retry` around the call
-    // unsound.
+    // unsound. That stays true for every operation whose author says nothing — which is the
+    // authoring mistake the rule was always for.
+    //
+    // What C-186 adds is an addressee. A `POST` or `PATCH` that is idempotent by the *vendor's*
+    // behaviour rather than by its verb may say so, and the cost of saying so is stating why: the
+    // reason travels to `web/public/catalog.json` and a reviewer, where the previous best available
+    // answer was a TOML comment nothing reads. Note the direction the check is written in — the
+    // claim is refused unless justified, never corrected — so a missing justification cannot degrade
+    // into a silently downgraded declaration.
     if operation.idempotency == Idempotency::Idempotent
         && matches!(operation.method, HttpMethod::Post | HttpMethod::Patch)
+        && operation.idempotency_justification().is_none()
     {
         return Err(Error::WriteDeclaredIdempotent {
             operation: operation.id.clone(),
@@ -1342,6 +1377,7 @@ mod tests {
             description: "Get a thing.".to_string(),
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
+            idempotent_because: None,
             auth: None,
             params: ParamSet {
                 path: path_params,

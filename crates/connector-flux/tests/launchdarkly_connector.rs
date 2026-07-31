@@ -219,9 +219,35 @@ fn the_flag_toggle_is_declared_as_a_high_risk_write_with_immediate_live_effect()
     );
     assert_eq!(
         toggle.idempotency,
-        Idempotency::NonIdempotent,
-        "PATCH is not an idempotent method under RFC 9110 §9.2.2, and this repository's emitter \
-         refuses `idempotency = \"idempotent\"` on one; only PUT and DELETE are left alone"
+        Idempotency::Idempotent,
+        "the body is a single `replace` onto one environment's `on` bit — an absolute value, not a \
+         toggle — so re-sending it lands the flag where the caller asked. `PATCH` is not an \
+         idempotent method under RFC 9110 §9.2.2 and the emitter still refuses the claim on one by \
+         default; C-186's `idempotent_because` is what buys it here"
+    );
+    let reason = toggle
+        .idempotency_justification()
+        .expect("the toggle states why a PATCH may claim idempotency");
+    assert!(
+        reason.contains("replace") && reason.contains("absolute value"),
+        "the justification must rest on this connector's *narrow* body — a single `replace` onto an \
+         absolute value — and not on a claim about JSON Patch or about PATCH in general, neither of \
+         which is idempotent: {reason:?}"
+    );
+
+    // Qualified, not removed. With the reason stripped this is refused exactly as it was before
+    // C-186 — which matters most on this operation, because the thing being declared safe to retry
+    // flips live production behaviour for every user the moment it returns.
+    let mut unjustified = connector.clone();
+    let index = unjustified
+        .operations
+        .iter()
+        .position(|operation| operation.id == TOGGLE_OPERATION)
+        .expect("the toggle operation exists");
+    unjustified.operations[index].idempotent_because = None;
+    assert!(
+        emit_operation(&unjustified, &unjustified.operations[index]).is_err(),
+        "an idempotent PATCH with no stated reason must still be refused"
     );
 
     let description = toggle.description.to_lowercase();

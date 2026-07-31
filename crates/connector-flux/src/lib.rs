@@ -309,18 +309,46 @@ pub enum Error {
         method: &'static str,
     },
 
-    /// A `POST` or `PATCH` declared itself idempotent.
+    /// A `POST` or `PATCH` declared itself idempotent **without saying why**.
     ///
     /// Neither method is idempotent under RFC 9110 §9.2.2, and `idempotency` is what tells flux
     /// whether wrapping the call in a `retry` is sound — the field's own IR documentation puts it
     /// as "guessing is how a retry turns one charge into three". `PUT` and `DELETE` *are* idempotent
     /// by RFC and are left alone.
+    ///
+    /// **C-186 narrowed this from "always" to "unless justified", and the narrowing is deliberately
+    /// the smaller half.** Some endpoints genuinely are idempotent against the vendor's own
+    /// behaviour while their verb is not — Cloudflare's whole-zone cache purge, LaunchDarkly's
+    /// `replace` onto one boolean — and before `idempotent_because` existed, the only way to record
+    /// that was a TOML comment, while the field a host reads said the opposite. An author who states
+    /// nothing still lands exactly here.
     #[error(
         "operation `{operation}`: a {method} is not an idempotent method (RFC 9110 §9.2.2) and may \
          not declare `idempotency = \"idempotent\"` — flux would treat a retry around it as safe. \
-         Use `non_idempotent`, or `conditional` when the caller supplies a key or stamp"
+         Use `non_idempotent`, or `conditional` when the caller supplies a key or stamp. If this \
+         endpoint really is idempotent by the vendor's own behaviour, say so in \
+         `idempotent_because` and the claim is allowed"
     )]
     WriteDeclaredIdempotent {
+        /// The operation id.
+        operation: String,
+        /// The HTTP method, as `http.request` spells it.
+        method: &'static str,
+    },
+
+    /// `idempotent_because` was stated on a method that was never refused the claim.
+    ///
+    /// The field's whole meaning is "override the `POST`/`PATCH` refusal". On `GET`, `PUT` or
+    /// `DELETE` there is no refusal to override — RFC 9110 §9.2.2 already makes those idempotent —
+    /// so a justification there answers nothing and reads as though the repository requires one
+    /// everywhere. Left permitted, it would be copied onto operations that never needed it until no
+    /// reviewer read any of them, which is how the escape hatch would quietly become the norm.
+    #[error(
+        "operation `{operation}`: `idempotent_because` is stated on a {method}, but nothing refuses \
+         `idempotency = \"idempotent\"` on that method — RFC 9110 §9.2.2 already makes it \
+         idempotent. The field exists only to unlock the claim on `POST` and `PATCH`; remove it"
+    )]
+    IdempotencyJustificationUnneeded {
         /// The operation id.
         operation: String,
         /// The HTTP method, as `http.request` spells it.

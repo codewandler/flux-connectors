@@ -1,0 +1,18 @@
+# C-186. `idempotent_because` exists to unlock `idempotency = "idempotent"` on a `POST` or `PATCH`,
+# which the emitter refuses by method. On a `GET` nothing was refusing the claim — RFC 9110 §9.2.2
+# already makes the method idempotent — so a justification here answers no refusal.
+#
+# Refused rather than ignored, because a field that may be written anywhere and means nothing in
+# most places is a field nobody reads anywhere, and the whole value of this one is that a reviewer
+# reads it when they see a method-defying retry-safety claim.
+id = "acme"
+base_url = "https://api.acme.example"
+
+[[operations]]
+id = "acme-thing-get"
+method = "GET"
+path = "/v1/things"
+description = "List things."
+risk = "low"
+idempotency = "idempotent"
+idempotent_because = "reading a list twice reads the same list"

@@ -77,7 +77,7 @@ static OPERATIONS: &[crate::Operation] = &[
         service: "default",
         description: "Turn a feature flag on or off in one environment. This is a live production change: every SDK instance currently evaluating this flag in this environment — web, mobile and backend alike — switches to the other branch as soon as this call returns, for every real user it serves. It is reversible by toggling back, but it is not a private or staged edit",
         risk: crate::Risk::High,
-        idempotency: crate::Idempotency::NonIdempotent,
+        idempotency: crate::Idempotency::Idempotent,
         credentials: &[&["launchdarkly.api_token"]],
         hosts: &["app.launchdarkly.com"],
         flux: include_str!("../../ops/launchdarkly/launchdarkly-flag-toggle.flux"),

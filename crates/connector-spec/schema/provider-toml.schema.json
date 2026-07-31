@@ -943,6 +943,11 @@
           "$ref": "#/$defs/idempotency",
           "description": "Whether repeating the call is safe. Mandatory: it decides whether a retry is sound."
         },
+        "idempotent_because": {
+          "type": "string",
+          "minLength": 24,
+          "description": "Why this POST or PATCH is idempotent when its method is not — the only thing that permits `idempotency = \"idempotent\"` on one.\n\nNeither method is idempotent under RFC 9110 §9.2.2 and the compiler refuses the claim by method, which is right for nearly every write. Some endpoints are idempotent by the VENDOR's behaviour anyway: purging an already-purged cache, or replacing one boolean with the same boolean. State what repeating the call actually does, in the vendor's terms.\n\nRefused in three cases, each a different mistake: on GET, PUT or DELETE, where nothing was refusing the claim; on an operation whose `idempotency` is not `idempotent`, where the prose contradicts its own field; and when it is shorter than 24 characters, because an escape hatch that costs nothing is a deleted guard rather than a qualified one.\n\nIt is published in `web/public/catalog.json` beside the claim it licenses, so a reader auditing a method-defying retry-safety claim can see the reason for it."
+        },
         "auth": {
           "type": "array",
           "description": "The auth alternatives for this operation (OR of mechanisms).\n\nThree distinct states, all meaningful: OMIT the key to inherit `default_auth`; write `auth = []` for an operation that genuinely needs no credential, such as a health check, which then does NOT inherit; write a non-empty list to name the mechanisms that authorize it.",

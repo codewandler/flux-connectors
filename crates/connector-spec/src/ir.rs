@@ -610,6 +610,15 @@ pub struct Service {
     pub roles: Vec<Role>,
 }
 
+/// **The shortest justification that counts as one**, in characters after trimming.
+///
+/// Not a measure of truth — nothing here can check whether a vendor really deduplicates — but a
+/// floor on effort, and the number is calibrated rather than invented: it is the length of
+/// `"purging twice is a no-op"`, the shortest honest reason anyone working on C-186 actually wrote.
+/// Below it live `"yes"`, `"idempotent"` and `"see above"`, which unlock the claim while telling a
+/// reviewer nothing, and an escape hatch that costs nothing is a deleted guard.
+pub const MIN_IDEMPOTENCY_JUSTIFICATION: usize = 24;
+
 /// One operation: a single HTTP call, and everything a Flux `op` declaration needs to wrap it.
 ///
 /// `description`, `risk` and `idempotency` map straight onto the metadata a Flux composite op
@@ -649,6 +658,39 @@ pub struct Operation {
     pub risk: Risk,
     /// Whether repeating it is safe. See [`Idempotency`].
     pub idempotency: Idempotency,
+    /// **Why this `POST` or `PATCH` is idempotent when its method is not** — the one thing that
+    /// unlocks [`Idempotency::Idempotent`] on a method RFC 9110 §9.2.2 does not make idempotent.
+    ///
+    /// `connector-flux` refuses `idempotent` on `POST` and `PATCH` by method, and that refusal is
+    /// correct almost every time: most `POST`s create something, and a `retry` wrapped around one
+    /// that does is unsound. It was also correct for `cloudflare-cache-purge` (purging an
+    /// already-purged cache is a no-op) and `launchdarkly-flag-toggle` (a `replace` onto the same
+    /// boolean), which are idempotent by their vendors' own behaviour. Both shipped
+    /// `non_idempotent` with a comment stating the opposite, and **a comment is not what a host
+    /// reads** — the field travels to flux's `ToolSpec`, and a host deciding whether a retry is safe
+    /// reads the field (C-186).
+    ///
+    /// So the guard stays and gains an addressee. Stating a reason is the whole cost of the claim,
+    /// and it is deliberately not free:
+    ///
+    /// - **Silence still refuses.** An author who copies a read's metadata onto a write says
+    ///   nothing here, so the build fails exactly as it did before. The careless case is the case
+    ///   the method rule was always for.
+    /// - **The reason must be one.** Blank, or shorter than [`MIN_IDEMPOTENCY_JUSTIFICATION`], is
+    ///   refused: an escape hatch anyone can take without saying anything is a removal of the guard
+    ///   wearing its clothes. What no compiler can check is whether the sentence is *true* — that is
+    ///   what publishing it into `web/public/catalog.json`, where a reviewer reads it beside the
+    ///   claim it licenses, is for.
+    /// - **It is refused where nothing was refusing the claim.** `GET`, `PUT` and `DELETE` may
+    ///   declare `idempotent` freely, so a justification on one addresses no refusal; and a
+    ///   justification on an operation not claiming `idempotent` is prose contradicting its own
+    ///   field, which is the defect this story exists to remove, arriving backwards.
+    ///
+    /// `Option`, not a defaulted `String`: "stated nothing" and "stated the empty string" must not
+    /// be two spellings of one thing, and `skip_serializing_if` keeps every `ir_sha256` in the
+    /// repository exactly where it was for the operations that do not use it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idempotent_because: Option<String>,
     /// Which auth this operation requires, as a set of **alternatives** (OR); each alternative is
     /// an [`AuthRequirement`] — one mechanism — whose credentials must all be satisfied together
     /// (AND).
@@ -679,6 +721,30 @@ pub struct Operation {
 }
 
 impl Operation {
+    /// **The justification that licenses `idempotent` on this operation**, or `None`.
+    ///
+    /// One reading of [`Operation::idempotent_because`], shared by the loader (which refuses a file
+    /// stating a reason that says nothing) and by `connector-flux`'s `check_write_metadata` (which
+    /// must not trust an IR assembled in memory rather than loaded). Two implementations of "is this
+    /// a real reason" would be two places for the floor to drift apart, and the emitter is the one
+    /// that has to be right.
+    ///
+    /// Returns the trimmed reason, so a caller never publishes an author's stray whitespace.
+    pub fn idempotency_justification(&self) -> Option<&str> {
+        let reason = self.idempotent_because.as_deref()?.trim();
+        (reason.chars().count() >= MIN_IDEMPOTENCY_JUSTIFICATION).then_some(reason)
+    }
+
+    /// Whether this operation *states* a justification at all, however poor.
+    ///
+    /// The difference from [`Operation::idempotency_justification`] is what the loader needs to tell
+    /// an author apart from silence: "you wrote nothing" and "you wrote `yes`" are different
+    /// mistakes and deserve different refusals, and a field present-but-rejected must never read as
+    /// a field absent.
+    pub fn states_idempotency_justification(&self) -> bool {
+        self.idempotent_because.is_some()
+    }
+
     /// **One JSON Schema describing everything the operation receives.**
     ///
     /// Derived, never authored: there is no `input_schema` key in a provider file, and one is a

@@ -296,13 +296,21 @@ properties = { id = { type = "string" }, type = { type = "string", const = "stic
 id = "miro-sticky-note-update"
 method = "PATCH"
 path = "/boards/{board_id}/sticky_notes/{item_id}"
-description = "Update a sticky note's text content. Setting the same content twice ends in the same state, but this is declared non_idempotent because check_write_metadata refuses idempotency = idempotent on any PATCH by method alone, regardless of vendor behaviour (see the header note, C-186). The updated note is in the response"
+description = "Update a sticky note's text content. The content sent replaces what was there, so setting the same content twice ends in the same state. The updated note is in the response"
 risk = "medium"
-# Genuinely idempotent by Miro's behaviour (an absolute value, not a delta) but the compiler refuses
-# the honest answer on a PATCH — the same trade `providers/cloudflare.toml` records for its own
-# genuinely-idempotent POST. Do not "fix" this by editing the compiler rule to fit one connector; the
-# honest fix is C-186's escape hatch, not yet landed.
-idempotency = "non_idempotent"
+# Genuinely idempotent by Miro's behaviour (an absolute value, not a delta), and now declarable as
+# such: C-186's escape hatch landed, and this comment's own instruction — "the honest fix is C-186's
+# escape hatch, not yet landed" — is what it is being spent on. The `PATCH` refusal is unchanged for
+# an author who states nothing; `idempotent_because` is what buys the claim, and it is published
+# beside the claim in `web/public/catalog.json`.
+#
+# The description above was rewritten in the same change. It had grown an explanation of
+# `check_write_metadata` — a fact about this repository's compiler, in the one string that reaches a
+# *model* as its tool contract (`AGENTS.md`, "`description` is not UI copy"). A model weighing
+# whether to call this has no use for the emitter's rules, and once the rule changed the sentence was
+# simply false in a shipped artifact.
+idempotency = "idempotent"
+idempotent_because = "the request carries the note's whole content as an absolute value rather than a delta, so re-sending the same body leaves the note in the state the caller asked for, however many times it runs"
 
 [[operations.params.path]]
 name = "board_id"

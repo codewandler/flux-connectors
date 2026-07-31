@@ -410,6 +410,19 @@ struct OperationEntry {
     risk: Risk,
     /// Whether repeating it is safe (`idempotent`, `non_idempotent`, `conditional`).
     idempotency: Idempotency,
+    /// **Why a `POST` or `PATCH` claims to be idempotent when its verb is not** — `null` for every
+    /// operation whose `idempotency` follows from its method, which is almost all of them.
+    ///
+    /// This is the artifact half of C-186, and it is the reason the escape hatch is an escape rather
+    /// than a hole. `idempotency` is machine-read: flux's `ToolSpec` carries it and a host decides
+    /// from it whether a retry is safe. A method-defying claim is exactly the one a reader wants to
+    /// audit, and before this field the audit trail was a comment in `providers/<id>.toml` that
+    /// reached no artifact at all — so `cloudflare-cache-purge` shipped `non_idempotent` next to a
+    /// paragraph explaining that it was idempotent, and every consumer saw only the field.
+    ///
+    /// Published rather than merely stored, for the same reason the rest of this document is: the
+    /// claim travels to consumers, so the evidence for it has to travel with it.
+    idempotent_because: Option<String>,
     /// The HTTP method, uppercase.
     method: HttpMethod,
     /// The path template, relative to [`ProviderEntry::base_url`].
@@ -681,6 +694,10 @@ fn operation_entry(
         description: operation.description.clone(),
         risk: operation.risk,
         idempotency: operation.idempotency,
+        // The trimmed reading, not the raw field: an author's stray whitespace is not part of the
+        // claim, and a reason too short to be one never reaches here because the loader refused the
+        // provider file that stated it.
+        idempotent_because: operation.idempotency_justification().map(str::to_owned),
         method: operation.method,
         path: operation.path.clone(),
         parameters: parameters(operation),
@@ -833,6 +850,7 @@ mod tests {
             description: "List things".to_string(),
             risk: Risk::Destructive,
             idempotency: Idempotency::NonIdempotent,
+            idempotent_because: None,
             auth: None,
             params: ParamSet {
                 query: vec![Param {

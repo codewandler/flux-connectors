@@ -45,8 +45,9 @@ use crate::inbound::{
 };
 use crate::lock::sha256_hex;
 use crate::{
-    AuthMethod, AuthRequirement, AuthScheme, Connector, Idempotency, JsonSchema, Operation, Param,
-    ParamSet, Provenance, Quirks, Risk, Role, Service, DEFAULT_SERVICE,
+    AuthMethod, AuthRequirement, AuthScheme, Connector, HttpMethod, Idempotency, JsonSchema,
+    Operation, Param, ParamSet, Provenance, Quirks, Risk, Role, Service, DEFAULT_SERVICE,
+    MIN_IDEMPOTENCY_JUSTIFICATION,
 };
 
 /// The documented JSON Schema for `providers/<name>.toml`.
@@ -2599,6 +2600,8 @@ fn validate_operations(connector: &Connector, problems: &mut Vec<String>) {
             }
         }
 
+        validate_idempotency_justification(operation, problems);
+
         if let Some(alternatives) = &operation.auth {
             validate_requirements(
                 connector,
@@ -2607,6 +2610,85 @@ fn validate_operations(connector: &Connector, problems: &mut Vec<String>) {
                 problems,
             );
         }
+    }
+}
+
+/// **`idempotent_because` must address the refusal it exists for, and must say something.**
+///
+/// The field unlocks `idempotency = "idempotent"` on `POST` and `PATCH`, which `connector-flux`
+/// refuses by method (C-186). Three ways to write it are refused here, and each is a different
+/// author mistake:
+///
+/// - **on a method that was never refused** — `GET`, `PUT` and `DELETE` may claim `idempotent`
+///   freely, so a justification there answers nothing and would spread as cargo-culted decoration
+///   until nobody read any of them;
+/// - **on an operation not claiming `idempotent`** — prose asserting what its own field denies,
+///   which is precisely the drift this story removes, arriving from the other side;
+/// - **saying nothing** — `"yes"` unlocks the claim while telling a reviewer no more than silence
+///   did, and an escape hatch with no cost is the guard deleted rather than qualified.
+///
+/// The emitter refuses the first case again, and the "no reason at all" case, on the IR rather than
+/// on the file. That overlap is deliberate: this is the loud, early refusal an author sees, and
+/// `check_write_metadata` is the one an in-memory IR cannot walk past.
+fn validate_idempotency_justification(operation: &Operation, problems: &mut Vec<String>) {
+    if !operation.states_idempotency_justification() {
+        return;
+    }
+    let id = operation.id.as_str();
+
+    if !matches!(operation.method, HttpMethod::Post | HttpMethod::Patch) {
+        problems.push(format!(
+            "operation {id:?} is a {} and declares `idempotent_because`, but nothing refuses \
+             `idempotency = \"idempotent\"` on that method — RFC 9110 §9.2.2 already makes it \
+             idempotent. The field exists only to unlock the claim on `POST` and `PATCH`; remove it \
+             rather than leaving a justification no refusal ever reads",
+            method_word(operation.method)
+        ));
+        return;
+    }
+
+    if operation.idempotency != Idempotency::Idempotent {
+        problems.push(format!(
+            "operation {id:?} declares `idempotent_because` but `idempotency = {:?}`. The \
+             justification asserts what the field denies — one of the two is wrong, and shipping \
+             both is the contradiction `idempotent_because` exists to end",
+            idempotency_word(operation.idempotency)
+        ));
+        return;
+    }
+
+    if operation.idempotency_justification().is_none() {
+        problems.push(format!(
+            "operation {id:?} declares `idempotent_because` = {:?}, which is shorter than \
+             {MIN_IDEMPOTENCY_JUSTIFICATION} characters and states no vendor behaviour. This field \
+             is what a reviewer reads beside a retry-safety claim on a method RFC 9110 §9.2.2 does \
+             not make idempotent; say what repeating the call actually does, as \
+             `cloudflare-cache-purge` and `launchdarkly-flag-toggle` do",
+            operation.idempotent_because.as_deref().unwrap_or_default()
+        ));
+    }
+}
+
+/// The `idempotency` value as an author spells it in a provider file. Exhaustive so a fourth variant
+/// is a compile error here rather than a refusal quoting the wrong word.
+fn idempotency_word(idempotency: Idempotency) -> &'static str {
+    match idempotency {
+        Idempotency::Idempotent => "idempotent",
+        Idempotency::NonIdempotent => "non_idempotent",
+        Idempotency::Conditional => "conditional",
+    }
+}
+
+/// The method as an author spells it in a provider file.
+fn method_word(method: HttpMethod) -> &'static str {
+    match method {
+        HttpMethod::Get => "GET",
+        HttpMethod::Post => "POST",
+        HttpMethod::Put => "PUT",
+        HttpMethod::Patch => "PATCH",
+        HttpMethod::Delete => "DELETE",
+        HttpMethod::Head => "HEAD",
+        HttpMethod::Options => "OPTIONS",
     }
 }
 

@@ -2,8 +2,9 @@
 id: C-186
 title: "An idempotent POST or PATCH cannot be declared, so two connectors ship a field that contradicts their own prose"
 pillar: Spec
-status: ready
+status: in-progress
 priority: 2
+design: docs/designs/idempotency-justification.md
 areas: [connector-spec, connector-flux]
 note: "found twice in one wave: C-169's cache purge (POST, genuinely idempotent) and C-175's flag toggle (PATCH). check_write_metadata refuses `idempotent` on both methods, so each declares non_idempotent and documents the opposite in a comment. The declaration is what a host reads"
 ---
@@ -53,16 +54,28 @@ Option 2 is the likely answer, but the decision belongs in a story with a reason
 
 ## Acceptance
 
-- [ ] The decision is made and **recorded with its reasoning** in a design doc, not just in code.
-- [ ] Whatever lands, `cloudflare-cache-purge` and `launchdarkly-flag-toggle` end up with a declared
+- [x] The decision is made and **recorded with its reasoning** in a design doc, not just in code.
+      → [docs/designs/idempotency-justification.md](../designs/idempotency-justification.md),
+      "The decision" — option 2, with option 1 and option 3 each rejected in writing.
+- [x] Whatever lands, `cloudflare-cache-purge` and `launchdarkly-flag-toggle` end up with a declared
       idempotency that does not contradict their own documentation — either the field changes or the
       documentation does.
-- [ ] **Failing-first test:** an operation declaring `idempotent` on POST is refused today; whatever
+      → the field changed. `providers/cloudflare.toml`, `providers/launchdarkly.toml`; a third
+      instance, `miro-sticky-note-update`, was found and fixed with them (see Progress).
+- [x] **Failing-first test:** an operation declaring `idempotent` on POST is refused today; whatever
       replaces that behaviour is asserted.
-- [ ] If an escape hatch lands, a test asserts that the **careless** case is still refused. A guard that
+      → `crates/connector-flux/tests/idempotency_justification.rs`.
+- [x] If an escape hatch lands, a test asserts that the **careless** case is still refused. A guard that
       anyone can opt out of without saying why is not a guard.
-- [ ] Every existing operation's emitted module is byte-identical unless it is one of the two named
+      → `a_post_declaring_idempotent_without_a_reason_is_still_refused`,
+      `a_patch_declaring_idempotent_without_a_reason_is_still_refused` and
+      `a_reason_that_says_nothing_does_not_unlock_the_claim`; plus each of the three changed
+      connectors re-asserts it on its own operation with the reason stripped.
+- [x] Every existing operation's emitted module is byte-identical unless it is one of the two named
       above, and those two are shown before and after.
+      → three operations moved, not two; every other emitted module is byte-identical
+      (`diff --provider` reports no drift, and `git status` touched only those three providers'
+      artifacts). Before and after are in the Progress note.
 
 ## Notes
 
@@ -74,3 +87,41 @@ Option 2 is the likely answer, but the decision belongs in a story with a reason
   drift, and only one of them is machine-checked.
 - `PUT` and `DELETE` are presumably already allowed to be idempotent; confirm rather than assume, and
   say what the full method matrix is once you have read it.
+
+## Progress
+
+**Landed: option 2 — `idempotent_because`.** The method-based refusal is unchanged where an author
+says nothing; stating a reason is what buys the claim, and the reason is published rather than left
+in a comment. Reasoning, the rejected options, the full method matrix and the semver obligation are
+in [docs/designs/idempotency-justification.md](../designs/idempotency-justification.md).
+
+**The contradiction was found three times, not two.** The catalogue grew from 45 to 53 providers
+after this story was filed, and `miro-sticky-note-update` (C-183) had hit the same wall. Its own
+comment said *"the honest fix is C-186's escape hatch, not yet landed"*, so fixing it was this
+story's instruction, left in place by its author. Worse, Miro had put the explanation in the
+operation's `description` — the one string that reaches a **model** as its tool contract — so a fact
+about this repository's compiler was shipping into `web/public/catalog.json` and
+`crates/catalog/`, and became false the moment the rule changed. The description was rewritten to
+describe Miro.
+
+Before and after, from `crates/catalog/ops/`:
+
+| operation | before | after |
+|---|---|---|
+| `cloudflare-cache-purge` | `idempotency "non_idempotent"` | `idempotency "idempotent"` |
+| `launchdarkly-flag-toggle` | `idempotency "non_idempotent"` | `idempotency "idempotent"` |
+| `miro-sticky-note-update` | `idempotency "non_idempotent"` + a `description` explaining `check_write_metadata` | `idempotency "idempotent"` + a description about sticky notes |
+
+No other emitted module moved.
+
+**`PUT`/`DELETE` confirmed rather than assumed** — they were already permitted to claim
+`idempotent`, and the matrix in the design doc states all seven methods. Note that three shipped
+deletes decline the claim anyway (`cloudflare-dns-record-delete`, `miro-sticky-note-delete`,
+airtable's), because each vendor answers a repeat with `404` and documents no guarantee. That is a
+connector declining to claim what it cannot back, and it is correct.
+
+**Left open, deliberately.** `risk` carries the identical method-shaped heuristic with no escape at
+all: `notion-database-query` and `notion-search` are `POST` **reads** forced to `medium`, and C-110
+measured the whole-connector version for a GraphQL vendor where every operation is a `POST`. `risk`
+gates flux's *approval* path rather than its retry path, so relaxing it is a safety change that
+deserves its own story and its own evidence. It needs filing.

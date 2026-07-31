@@ -211,36 +211,57 @@ fn no_body_field_declares_an_array_this_connector_does_not_need_c_185() {
     }
 }
 
-/// The sticky-note update is a `PATCH` that is genuinely idempotent by vendor behaviour (it always
-/// sets absolute values, never a delta) but `check_write_metadata` refuses `idempotency =
-/// "idempotent"` on any `PATCH` by method alone (C-186) — so it is declared `non_idempotent`, and the
-/// emitter's own refusal is what backs that claim.
+/// The sticky-note update is a `PATCH` that is genuinely idempotent by vendor behaviour — it always
+/// sets absolute values, never a delta — and since C-186 it says so.
+///
+/// It used to declare `non_idempotent` with a comment instructing whoever landed C-186 to come back
+/// and fix it. This is that fix. The `PATCH` rule itself is unchanged: strip the justification and
+/// the emitter refuses exactly as it did, which is asserted below rather than assumed.
 #[test]
-fn the_sticky_note_update_is_forced_non_idempotent_by_the_patch_rule() {
+fn the_sticky_note_update_is_idempotent_and_says_why() {
     let connector = miro();
     let update = op(&connector, "miro-sticky-note-update");
 
     assert_eq!(update.method, HttpMethod::Patch);
     assert_eq!(
         update.idempotency,
-        Idempotency::NonIdempotent,
-        "declared non_idempotent because check_write_metadata refuses `idempotent` on any PATCH \
-         outright, regardless of vendor truth — see the provider file's header comment (C-186)"
+        Idempotency::Idempotent,
+        "the request carries the note's whole content as an absolute value, so re-sending it lands \
+         in one state — `non_idempotent` was the compiler's answer, never Miro's (C-186)"
+    );
+    let reason = update
+        .idempotency_justification()
+        .expect("the update states why a PATCH may claim idempotency");
+    assert!(
+        reason.contains("absolute value") && reason.contains("delta"),
+        "the justification must name the vendor behaviour it rests on — an absolute value rather \
+         than a delta — since that is the whole difference between this PATCH and one that \
+         increments a counter: {reason:?}"
     );
 
-    let mut idempotent_update = connector.clone();
-    let index = idempotent_update
+    // The description must no longer explain this repository's compiler to a model. It carried a
+    // sentence about `check_write_metadata` — a fact about the build, in the one string that
+    // reaches a model as its tool contract (`AGENTS.md`: "`description` is not UI copy") — and once
+    // the rule changed, that sentence was false in a shipped artifact.
+    assert!(
+        !update.description.contains("check_write_metadata")
+            && !update.description.contains("non_idempotent"),
+        "the model-facing description must describe Miro, not the emitter: {:?}",
+        update.description
+    );
+
+    let mut unjustified_update = connector.clone();
+    let index = unjustified_update
         .operations
         .iter()
         .position(|operation| operation.id == "miro-sticky-note-update")
         .expect("the update operation exists");
-    idempotent_update.operations[index].idempotency = Idempotency::Idempotent;
-    let attempt = emit_operation(&idempotent_update, &idempotent_update.operations[index]);
+    unjustified_update.operations[index].idempotent_because = None;
+    let attempt = emit_operation(&unjustified_update, &unjustified_update.operations[index]);
     assert!(
         attempt.is_err(),
-        "declaring the update idempotent should be refused by check_write_metadata — if this now \
-         emits, the compiler rule changed (see C-186) and the provider file's comment should be \
-         revisited rather than this test silently passing"
+        "an idempotent PATCH with no stated reason must still be refused — C-186 qualified the \
+         guard, and a change that removed it would leave this assertion as the only thing saying so"
     );
 }
 
