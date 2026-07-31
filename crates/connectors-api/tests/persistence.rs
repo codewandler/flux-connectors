@@ -45,6 +45,9 @@ use support::{client, sign_in, Idp};
 /// constant, so the two cannot drift apart unnoticed.
 const STORE_ENV: &str = "CONNECTORS_CREDENTIAL_STORE";
 
+/// The data home `App::deployed` resolves its default store under.
+const DATA_HOME_ENV: &str = "XDG_DATA_HOME";
+
 /// An obviously-fake credential, long enough for flux's redactor to hold it — the same care
 /// `tests/host.rs` takes with its own.
 const SENTINEL: &str = "SENTINEL-NOT-A-REAL-SECRET-connectors-api-persisted";
@@ -367,9 +370,16 @@ impl Scratch {
         Self(path)
     }
 
-    /// The store file: one directory down, so directory creation and its `0700` are exercised.
+    /// The scratch directory itself, used as `XDG_DATA_HOME`.
+    fn data_home(&self) -> &std::path::Path {
+        &self.0
+    }
+
+    /// Where `App::deployed` will put the store given that data home — the real default path, so
+    /// these tests assert against the location an operator actually gets rather than one a test
+    /// chose.
     fn store(&self) -> PathBuf {
-        self.0.join("state").join("credentials")
+        self.0.join("connectors-api").join("credentials")
     }
 }
 
@@ -378,18 +388,25 @@ impl Drop for Scratch {
         // The write-failure test leaves a read-only directory behind if it panicked before
         // restoring it; make a best effort rather than failing a whole run on cleanup.
         use std::os::unix::fs::PermissionsExt as _;
-        let _ =
-            std::fs::set_permissions(self.0.join("state"), std::fs::Permissions::from_mode(0o700));
+        let _ = std::fs::set_permissions(
+            self.0.join("connectors-api"),
+            std::fs::Permissions::from_mode(0o700),
+        );
         let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 
 /// Start a host over `scratch`'s store and return its base URL.
 ///
-/// `support::serve` cannot be reused: it builds the `App` itself, and the store location is exactly
+/// **Built with `App::deployed` and a scratch `XDG_DATA_HOME`**, which is the operator's own path
+/// exactly: the variable is left unset, so the store lands at the default location the binary would
+/// have chosen. That makes every test in this file an assertion about the shipped default rather
+/// than about a location a test picked — the gap that let `App::deployed`'s unset-variable arm be
+/// changed to `Memory` with the whole suite staying green.
+///
+/// `support::serve` cannot be reused: it builds the `App` itself with `App::new`, and the store is
 /// what varies here. Everything else — the identity provider, the ephemeral loopback port, the real
-/// router, `App::new` — is the same, and the store is chosen through the one environment variable an
-/// operator has rather than through a constructor only a test can reach.
+/// router — is the same.
 async fn serve(idp: &Idp, scratch: &Scratch) -> String {
     use std::net::{Ipv4Addr, SocketAddr};
 
@@ -413,10 +430,19 @@ async fn serve(idp: &Idp, scratch: &Scratch) -> String {
         std::env::set_var("CONNECTORS_OIDC_AUTHORIZE_URL", idp.authorize_url());
         std::env::set_var("CONNECTORS_OIDC_TOKEN_URL", idp.token_url());
         std::env::set_var("CONNECTORS_OIDC_JWKS_URL", idp.jwks_url());
-        std::env::set_var(STORE_ENV, format!("file:{}", scratch.store().display()));
 
-        let app = App::new(env!("CARGO_MANIFEST_DIR")).expect("a host over the scratch store");
+        // Unset, deliberately: this exercises the default, and it also means an operator who has
+        // exported it for their own host cannot change what these tests do.
         std::env::remove_var(STORE_ENV);
+        let restore = std::env::var_os(DATA_HOME_ENV);
+        std::env::set_var(DATA_HOME_ENV, scratch.data_home());
+
+        let app = App::deployed(env!("CARGO_MANIFEST_DIR")).expect("a host over the scratch store");
+
+        match restore {
+            Some(previous) => std::env::set_var(DATA_HOME_ENV, previous),
+            None => std::env::remove_var(DATA_HOME_ENV),
+        }
         app
     };
 

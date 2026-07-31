@@ -65,6 +65,15 @@ use crate::{CredentialRef, Layout, Secret, SecretStore, StoreError, TenantLayout
 /// The first line of every file this store writes.
 const HEADER: &str = "# codewandler-connector-secrets file store, v1";
 
+/// The prefix a version line begins with, and the version this store speaks.
+///
+/// Split out from [`HEADER`] so the version is **checked** rather than merely written. A header a
+/// reader skips as a comment is decoration: a future `v2` — one that encrypted the values, say, or
+/// changed the separator — would be loaded as `v1`, and the failure would be a wrong answer rather
+/// than a refusal. `v2` bytes read as `v1` is exactly the case a credential store must not guess at.
+const VERSION_PREFIX: &str = "# codewandler-connector-secrets file store, v";
+const VERSION: &str = "1";
+
 /// The mode a store file is created with, and the widest mode one may be opened at.
 pub const FILE_MODE: u32 = 0o600;
 
@@ -150,7 +159,54 @@ impl<L: Layout> FileStore<L> {
             store.write_through(&store.locked())?;
         }
 
+        store.reap_temporaries();
+
         Ok(store)
+    }
+
+    /// Remove any temporary left behind by a write that did not finish.
+    ///
+    /// **A crash between the write and the `rename(2)` leaves a `0600` file holding a complete copy
+    /// of every credential**, under a name nothing else looks at. Without this, `rm <store>` — the
+    /// revocation this store documents — would leave the tokens on disk beside the file the operator
+    /// just deleted, which makes the documented revocation wrong rather than merely incomplete.
+    ///
+    /// Reaped at `open` rather than at write, because the only writer that can leave one behind is a
+    /// process that is no longer running: [`write_through`](Self::write_through) removes its own on
+    /// failure, and there is exactly one in flight at a time. That reasoning depends on the
+    /// single-process rule this module states; a second concurrent host would have its in-flight
+    /// temporary removed under it, and would report the write as failed rather than lose data.
+    ///
+    /// Best effort throughout. A temporary that cannot be read or removed is not a reason to refuse
+    /// to open a store that is otherwise sound — the credentials are the point, and the leftover is
+    /// reported by [`stale_temporaries`](Self::stale_temporaries) for a caller that wants to look.
+    fn reap_temporaries(&self) {
+        for leftover in self.stale_temporaries() {
+            let _ = std::fs::remove_file(leftover);
+        }
+    }
+
+    /// Every unfinished temporary sitting beside this store, in no particular order.
+    ///
+    /// Public so the reaping above is observable rather than merely asserted — a test can plant one,
+    /// see it listed, open the store and see the list empty.
+    pub fn stale_temporaries(&self) -> Vec<PathBuf> {
+        let (Some(directory), Some(name)) = (self.path.parent(), self.path.file_name()) else {
+            return Vec::new();
+        };
+        let (prefix, suffix) = (format!(".{}.", name.to_string_lossy()), ".tmp");
+        let Ok(entries) = std::fs::read_dir(directory) else {
+            return Vec::new();
+        };
+        entries
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with(&prefix) && name.ends_with(suffix))
+            })
+            .collect()
     }
 
     /// The file this store is kept in.
@@ -268,13 +324,17 @@ impl<L: Layout> FileStore<L> {
             // `0600` is protecting against. `umask` can only clear further bits, never add one.
             .mode(FILE_MODE)
             .open(temporary)
-            .map_err(|error| unreachable(temporary, &error))?;
+            // **Every error on this path names the store, not the temporary.** The temporary's name
+            // carries a pid and a counter that mean nothing to an operator, and the message reaches
+            // a served surface through the host's `502` — so it discloses an internal path for no
+            // gain. The store's own path is the actionable half and the one already documented.
+            .map_err(|error| unreachable(&self.path, &error))?;
         file.write_all(rendered.as_bytes())
-            .map_err(|error| unreachable(temporary, &error))?;
+            .map_err(|error| unreachable(&self.path, &error))?;
         // Without this the rename can land before the bytes do, and a power cut leaves a file that
         // is present, correctly named, and empty.
         file.sync_all()
-            .map_err(|error| unreachable(temporary, &error))?;
+            .map_err(|error| unreachable(&self.path, &error))?;
         drop(file);
 
         std::fs::rename(temporary, &self.path).map_err(|error| unreachable(&self.path, &error))?;
@@ -418,6 +478,24 @@ fn parse<L: Layout>(
     for (index, line) in contents.lines().enumerate() {
         let number = index + 1;
         let line = line.trim();
+
+        // **The version is read, not skipped.** It sits behind a `#` so an operator sees a comment,
+        // but a comment nothing checks would let a future format load as this one.
+        if let Some(version) = line.strip_prefix(VERSION_PREFIX) {
+            if version != VERSION {
+                return Err(StoreError::Backend {
+                    path: file.display().to_string(),
+                    reason: format!(
+                        "line {number}: this file says it is version {version:?} and this build \
+                         speaks version {VERSION:?}. Refusing rather than reading it as {VERSION:?} \
+                         — a credential store that guesses at a format it does not know hands back \
+                         a wrong value instead of an error."
+                    ),
+                });
+            }
+            continue;
+        }
+
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
@@ -652,6 +730,255 @@ mod tests {
             mode_of(&path),
             0o644,
             "the store tightened the mode instead of reporting it"
+        );
+    }
+
+    /// **A directory somebody else can enter is refused too**, on the same reasoning as the file.
+    ///
+    /// Separate from the file case because they are separate calls: deleting the directory leg of
+    /// [`ensure_directory`] left every file-mode assertion green, so `0700` was a behaviour nothing
+    /// observed.
+    #[test]
+    fn a_world_readable_directory_is_refused() {
+        let scratch = Scratch::new("dir-mode-refusal");
+        let path = scratch.store();
+        drop(FileStore::open(&path).expect("open"));
+        let directory = path.parent().expect("a parent").to_owned();
+        std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o755))
+            .expect("loosen it");
+
+        let error = FileStore::open(&path).expect_err("a 0755 directory must be refused");
+
+        // Restored before asserting, so a failure still leaves a removable directory.
+        std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(DIR_MODE))
+            .expect("restore");
+
+        assert!(
+            matches!(error, StoreError::Denied { .. }),
+            "expected a refusal, got {error:?}"
+        );
+        assert!(
+            error.to_string().contains("0755"),
+            "the refusal must say what the mode is: {error}"
+        );
+    }
+
+    /// **A temporary left by a crash is reaped**, because `rm <store>` must actually revoke.
+    ///
+    /// A write that dies between the `write_all` and the `rename(2)` leaves a `0600` file holding a
+    /// complete copy of every credential under a name nothing looks at. An operator who then deletes
+    /// the store believes they have revoked; the tokens are still on disk beside it.
+    #[test]
+    fn a_temporary_left_by_a_crash_is_reaped_on_the_next_open() {
+        let scratch = Scratch::new("reap");
+        let path = scratch.store();
+        drop(FileStore::open(&path).expect("open"));
+
+        // What a crash between `write_all` and `rename` leaves: the temporary's real name shape,
+        // holding a real entry.
+        let orphan = path.parent().expect("a parent").join(format!(
+            ".{}.999999.0.tmp",
+            path.file_name().expect("a name").to_string_lossy()
+        ));
+        std::fs::write(
+            &orphan,
+            format!(
+                "{HEADER}\ntenants/a/com.acme.api/token {}\n",
+                hex_encode(SENTINEL.as_bytes())
+            ),
+        )
+        .expect("plant the orphan");
+        assert!(orphan.exists());
+
+        let store = FileStore::open(&path).expect("reopen");
+
+        assert!(
+            !orphan.exists(),
+            "a crashed write's temporary survived the next open, so `rm {}` would leave a full \
+             copy of every credential beside the file the operator deleted",
+            path.display()
+        );
+        assert!(
+            store.stale_temporaries().is_empty(),
+            "the store still reports leftovers after reaping them"
+        );
+    }
+
+    /// A file from a format this build does not speak is refused, not read as this one.
+    #[test]
+    fn a_file_from_another_version_is_refused() {
+        let scratch = Scratch::new("version");
+        let path = scratch.store();
+        drop(FileStore::open(&path).expect("open"));
+        std::fs::write(
+            &path,
+            format!(
+                "{VERSION_PREFIX}2\ntenants/a/com.acme.api/token {}\n",
+                hex_encode(SENTINEL.as_bytes())
+            ),
+        )
+        .expect("write a v2 file");
+
+        let error = FileStore::open(&path).expect_err("a v2 file must not load as v1");
+        let message = error.to_string();
+        assert!(matches!(error, StoreError::Backend { .. }), "{error:?}");
+        assert!(
+            message.contains("\"2\""),
+            "the refusal must name it: {message}"
+        );
+        assert!(!message.contains(SENTINEL));
+
+        // And the version this build does write is the one it accepts, so the check above cannot be
+        // satisfied by refusing everything.
+        std::fs::write(&path, format!("{HEADER}\n")).expect("write a v1 file");
+        assert!(FileStore::open(&path).is_ok(), "a v1 file must still load");
+    }
+
+    /// **The three legs of the atomic write, audited over this file's own source.**
+    ///
+    /// Each of `create_new`, the temporary's `sync_all` and the directory `fsync` can be deleted
+    /// with the whole suite staying green — they are durability and anti-clobber properties, and a
+    /// single-threaded test on a working filesystem cannot observe any of them. That is exactly the
+    /// case this repository already handles by reading its own source
+    /// (`Secret::every_exit_from_the_wrapper_is_named_expose_secret`), so the same instrument is
+    /// used here rather than leaving three deletions undefended.
+    ///
+    /// It asserts over the write path only, and it fails loudly if it stops matching anything, so it
+    /// cannot quietly become an assertion about nothing.
+    #[test]
+    fn the_write_path_keeps_all_three_legs_of_its_atomicity() {
+        let source = include_str!("file.rs");
+        let start = source
+            .find("fn write_temporary")
+            .expect("the write path is still called `write_temporary`");
+        let end = source[start..]
+            .find("\n    }\n")
+            .map(|offset| start + offset)
+            .expect("the function ends");
+        let body = &source[start..end];
+
+        for (fragment, why) in [
+            (
+                ".create_new(true)",
+                "without it the write follows a name somebody else placed there, through a symlink \
+                 or a planted file",
+            ),
+            (
+                ".mode(FILE_MODE)",
+                "without it the temporary exists at the default mode for the width of the write, \
+                 holding every credential",
+            ),
+            (
+                "file.sync_all()",
+                "without it the rename can land before the bytes, and a power cut leaves a file \
+                 that is present, correctly named and empty",
+            ),
+            (
+                "std::fs::rename",
+                "without it there is no atomic step at all and the truncation window is back",
+            ),
+            (
+                "handle.sync_all()",
+                "without it the rename itself is not durable across a power cut",
+            ),
+        ] {
+            assert!(
+                body.contains(fragment),
+                "the atomic write no longer contains `{fragment}` — {why}. If this was deliberate, \
+                 the module documentation and this test both have to say so."
+            );
+        }
+    }
+
+    /// **A reader never observes a partial store while a writer is rewriting it.**
+    ///
+    /// The behavioural half of the audit above, and the assertion
+    /// `a_write_leaves_no_temporary_and_no_truncated_file` only appeared to make: that test opened
+    /// the store *after* the writes finished, so a truncate-then-write implementation left it green
+    /// and the truncation window in its name went unobserved. This one reads while the writes are
+    /// happening.
+    ///
+    /// It can only fail in one direction. Under `rename(2)` every observation is a whole file, so
+    /// the assertion holds for every interleaving; under truncate-then-write a reader eventually
+    /// lands in the window and sees a store that is empty, short, or unparseable.
+    #[test]
+    fn a_concurrent_reader_never_sees_a_half_written_store() {
+        let scratch = Scratch::new("torn-read");
+        let path = scratch.store();
+        let store = FileStore::open(&path).expect("open");
+
+        // Ten entries, so a torn read is a visibly short file rather than an ambiguous one.
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("a runtime");
+        for index in 0..10 {
+            let reference = CredentialRef::new(
+                format!("tenant-{index}").as_str(),
+                "com.acme.api",
+                "default",
+                "token",
+            )
+            .expect("valid");
+            runtime
+                .block_on(store.put(&reference, &Secret::new(format!("{SENTINEL}-{index}"))))
+                .expect("put");
+        }
+
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let reader = {
+            let (path, stop) = (path.clone(), std::sync::Arc::clone(&stop));
+            std::thread::spawn(move || {
+                let mut observations = 0usize;
+                while !stop.load(Ordering::Relaxed) {
+                    // **The bytes, not `FileStore::open`.** Opening a store reaps stale
+                    // temporaries, and a reader that did that would delete the writer's in-flight
+                    // one — which is the single-process rule this module states, demonstrated the
+                    // hard way when this test was first written that way. Reading the file directly
+                    // is also the truer question: atomicity is a property of what is on disk, not of
+                    // what a second `FileStore` makes of it.
+                    let seen = match std::fs::read_to_string(&path) {
+                        Ok(contents) => contents,
+                        // `rename(2)` never unlinks the destination, so the path is never absent.
+                        Err(error) => panic!("a reader could not read the store: {error}"),
+                    };
+                    let lines: Vec<&str> = seen
+                        .lines()
+                        .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
+                        .collect();
+
+                    // The writer only ever *replaces* one of the ten values below, so a whole file
+                    // always has a header and exactly ten entries. Anything else was caught in a
+                    // truncation window.
+                    assert!(
+                        seen.starts_with(HEADER),
+                        "a reader saw a file that does not begin with the header, so it caught the \
+                         store mid-write"
+                    );
+                    assert_eq!(
+                        lines.len(),
+                        10,
+                        "a reader saw {} entries rather than 10, so it caught the store mid-write",
+                        lines.len()
+                    );
+                    observations += 1;
+                }
+                observations
+            })
+        };
+
+        let target =
+            CredentialRef::new("tenant-0", "com.acme.api", "default", "token").expect("valid");
+        for index in 0..300 {
+            runtime
+                .block_on(store.put(&target, &Secret::new(format!("{SENTINEL}-rewrite-{index}"))))
+                .expect("put");
+        }
+        stop.store(true, Ordering::Relaxed);
+
+        let observations = reader.join().expect("the reader thread did not panic");
+        assert!(
+            observations > 0,
+            "the reader never managed to open the store, so it asserted nothing"
         );
     }
 

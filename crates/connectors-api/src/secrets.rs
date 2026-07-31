@@ -164,9 +164,14 @@ impl StoreChoice {
                  copies it, has your vendor tokens.\n\
                  To point them elsewhere: {STORE_ENV}=file:/an/absolute/path\n\
                  To hold nothing at rest:  {STORE_ENV}=memory\n\
-                 To destroy them:          rm {}",
+                 To destroy them:          rm -r {}",
                 path.display(),
-                path.display()
+                // The **directory**, not the file, and the difference is not tidiness. A write
+                // interrupted by a crash can leave a `0600` temporary beside the store holding a
+                // complete copy of every credential; the next `open` reaps it, but an operator who
+                // deletes only the file and never starts the host again has revoked nothing. `rm -r`
+                // on the directory is the instruction that is true in every case.
+                path.parent().unwrap_or(path).display()
             ),
         }
     }
@@ -363,7 +368,9 @@ mod tests {
             "the banner must not imply a protection the store does not have: {file}"
         );
         assert!(
-            file.contains("rm /var/lib/connectors/credentials"),
+            // The **directory**. A crashed write can leave a temporary holding a full copy beside
+            // the store, so `rm` on the file alone is a revoke that does not revoke.
+            file.contains("rm -r /var/lib/connectors"),
             "a credential store with no documented delete is one an operator cannot revoke: {file}"
         );
         assert!(

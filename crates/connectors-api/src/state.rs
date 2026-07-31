@@ -78,53 +78,68 @@ pub struct App {
 }
 
 impl App {
-    /// Build the host.
+    /// Build the host. **Credentials in memory, and no environment is consulted.**
     ///
-    /// # The credential store, and why this constructor's default is not the binary's
+    /// # Exactly one constructor reads the environment, and it is not this one
     ///
-    /// [`App::new`] persists **only when told where to**: it honours
-    /// [`STORE_ENV`](crate::secrets::STORE_ENV) when it is set and holds credentials in memory when
-    /// it is not. [`App::deployed`] is the other resolution — the same variable, but an unset one
-    /// means the default file location rather than memory — and it is the one the binary uses.
+    /// [`App::deployed`] reads [`STORE_ENV`](crate::secrets::STORE_ENV); every other constructor
+    /// takes its store as an argument or does not persist at all. That is the whole rule, and it is
+    /// worth stating as a rule because the first version of C-207 broke it in a way that looked
+    /// harmless: `new` *also* honoured the variable, on the reasoning that a caller who exported it
+    /// meant it.
     ///
-    /// Two constructors rather than one, because they answer to different failures. A *deployment*
-    /// that forgets on restart is C-207's whole subject, so `deployed` persists unless told
-    /// otherwise. An *embedder or a test* that persisted unless told otherwise would write to a
-    /// real operator's data home the first time anybody ran `cargo test`, and two tests of this
-    /// crate that store one tenant's credential and then assert another finds none would reach
-    /// through the same file into each other. Neither default is a fallback: nothing here reaches
-    /// memory after failing to open something else.
+    /// What that reasoning missed is that **`new` is what the test suite builds hosts with**, and an
+    /// environment variable is ambient. An operator with `CONNECTORS_CREDENTIAL_STORE=file`
+    /// exported — which this crate's own README tells them to export — could not run `cargo test`
+    /// without every test host reaching into their real credential file. Measured, not predicted:
+    /// `tests/host.rs`'s two hosts share one credential address, one storing it and the other
+    /// requiring it absent, so a shared store made
+    /// `an_operation_without_its_credential_refuses_by_address` answer `200` instead of `400` —
+    /// meaning the suite **dispatched** `anthropic-models-list` and sent a live request to
+    /// `api.anthropic.com`, with a value left in the file by an earlier run.
+    ///
+    /// So the isolation is structural rather than a convention the test harness has to remember:
+    /// there is no ambient input to this function. `tests/credential_store.rs`'s
+    /// `an_ambient_store_variable_does_not_reach_a_host_built_with_new` pins it.
     ///
     /// # Errors
     ///
     /// If `root` is not a directory that exists — `System` requires one, and failing here makes a
-    /// misconfiguration a startup error rather than a surprise at the first dispatch — or if the
-    /// configured store cannot be parsed or opened.
+    /// misconfiguration a startup error rather than a surprise at the first dispatch.
     #[allow(clippy::missing_panics_doc)]
     pub fn new(root: impl AsRef<std::path::Path>) -> anyhow::Result<Self> {
-        let choice = StoreChoice::from_env()?.unwrap_or(StoreChoice::Memory);
         // `WebOptions::default()` carries `PrivateNetAllow::None` — the full SSRF guard, where
         // private, loopback, link-local and internal hosts are all refused. That is the right
         // default for a host whose connectors call public SaaS APIs, and widening it is a deliberate
         // act through [`App::with_web_options`] rather than a state a reader finds by accident.
-        Self::build(root, WebOptions::default(), choice)
+        Self::build(root, WebOptions::default(), StoreChoice::Memory)
     }
 
-    /// The host as the binary runs it: **persistent unless an operator says otherwise.**
+    /// **The host as the binary runs it**, and the only constructor that reads the environment.
     ///
-    /// The difference from [`App::new`] is one line and it is the line C-207 is about. An unset
-    /// [`STORE_ENV`](crate::secrets::STORE_ENV) resolves to a `0600` file under the operator's data
-    /// home, so wiring a connector and restarting keeps the connector wired without anybody having
-    /// read a variable name first. `CONNECTORS_CREDENTIAL_STORE=memory` restores the old behaviour
-    /// as something asked for rather than something that happened.
+    /// This is C-207 in one function. [`STORE_ENV`](crate::secrets::STORE_ENV) selects the store;
+    /// **unset resolves to a `0600` file under the operator's data home**, so wiring a connector and
+    /// restarting keeps the connector wired without anybody having read a variable name first.
+    /// `CONNECTORS_CREDENTIAL_STORE=memory` restores the pre-C-207 behaviour as something asked for
+    /// rather than something that happened.
+    ///
+    /// Nothing here is a *fallback*. A value that does not parse, a data home that does not exist
+    /// and a store that will not open are all errors that stop the process. A host that answered any
+    /// of them by holding credentials in memory instead would start successfully, serve every route
+    /// correctly, look exactly like a working one, and lose everything on the next restart.
     ///
     /// # Errors
     ///
-    /// As [`App::new`], plus: when the resolved store path lies inside `root` (see
-    /// [`crate::secrets::refuse_inside`]), and when there is no data home to default into.
+    /// If `root` does not exist; if the variable does not parse; if there is no data home to default
+    /// into; if the resolved path lies inside `root` ([`crate::secrets::refuse_inside`]); or if the
+    /// store will not open.
     pub fn deployed(root: impl AsRef<std::path::Path>) -> anyhow::Result<Self> {
         let choice = match StoreChoice::from_env()? {
             Some(choice) => choice,
+            // **The line C-207 is about.** `tests/credential_store.rs`'s
+            // `the_deployed_default_is_a_file_under_the_data_home` builds a host through here with
+            // a scratch `XDG_DATA_HOME` and requires the file to exist afterwards, so changing this
+            // arm to `Memory` is a red test rather than a silent return to forgetting.
             None => StoreChoice::File(crate::secrets::default_path()?),
         };
         Self::build(root, WebOptions::default(), choice)
@@ -148,12 +163,16 @@ impl App {
     /// # Errors
     ///
     /// If `root` is not a directory that exists.
+    ///
+    /// # The store
+    ///
+    /// In memory, and no environment is consulted — as [`App::new`], for the reason given there.
+    /// A caller wanting both seams uses [`App::with_credential_store`].
     pub fn with_web_options(
         root: impl AsRef<std::path::Path>,
         options: WebOptions,
     ) -> anyhow::Result<Self> {
-        let choice = StoreChoice::from_env()?.unwrap_or(StoreChoice::Memory);
-        Self::build(root, options, choice)
+        Self::build(root, options, StoreChoice::Memory)
     }
 
     /// The host, with both seams named by the caller.

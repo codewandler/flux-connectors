@@ -118,13 +118,25 @@ export CONNECTORS_CREDENTIAL_STORE=memory
 **To destroy them**, which is how an operator revokes:
 
 ```bash
-rm ~/.local/share/connectors-api/credentials      # all of them
+rm -r ~/.local/share/connectors-api               # all of them
 # or, for one connector, through the surface that stored it:
 curl -X DELETE http://127.0.0.1:8787/v1/credentials/anthropic/anthropic.api_key -b "$COOKIE"
 ```
 
 A `DELETE` rewrites the file immediately, so a revoked credential does not come back on the next
 start.
+
+**`rm -r` on the directory, not `rm` on the file, and the difference is not tidiness.** A write is a
+temporary file plus a `rename(2)`; a process killed between the two leaves a `0600` temporary beside
+the store holding a complete copy of every credential. The next start reaps it — but an operator who
+deletes only `credentials` and never starts the host again has revoked nothing. Removing the
+directory is the instruction that is true in every case, and it is the one the startup banner
+prints.
+
+**One process at a time.** The whole store is held in memory and every change rewrites the file, so
+two hosts pointed at one path will each overwrite the other's last write. That is the right trade
+for a single-operator deployment and it is why the reaping above is safe; a deployment that wants
+several writers wants `VaultStore`.
 
 **A bad value stops the host.** `CONNECTORS_CREDENTIAL_STORE=vault` — or a store that cannot be
 opened, or a path inside the checkout — is a startup error that names what would have worked. There
@@ -287,7 +299,7 @@ connectors-api listening on http://127.0.0.1:8787
   Credentials are kept in /home/…/.local/share/connectors-api/credentials and SURVIVE A RESTART.
   They are NOT ENCRYPTED. A 0600 file mode inside a 0700 directory is the whole
   of what protects them …
-  To destroy them:          rm /home/…/.local/share/connectors-api/credentials
+  To destroy them:          rm -r /home/…/.local/share/connectors-api
 
 $ COOKIE=$(curl -si -XPOST localhost:8787/auth/dev | sed -n 's/^[Ss]et-[Cc]ookie: //p' | cut -d';' -f1)
 $ curl -sX PUT localhost:8787/v1/credentials/anthropic/anthropic.api_key -b "$COOKIE" \
