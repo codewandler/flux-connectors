@@ -61,6 +61,31 @@ pub async fn signin(State(app): State<App>) -> Response {
         .into_response()
 }
 
+// **The three ways the callback refuses before it ever looks at a token, named.**
+//
+// All three answer `400` and all three clear the binding, so the *message* is the only thing that
+// distinguishes them from outside — which makes it the only thing a route-level test can assert to
+// prove which branch it reached. They are constants rather than inline literals for exactly that
+// reason: C-228 was filed because `a_callback_with_an_unknown_state_is_refused` had silently
+// stopped reaching `NO_SUCH_SIGN_IN` and was passing on `NO_BINDING` instead, and a test holding
+// its own copy of the string would have been just as blind. A test that names the constant cannot
+// drift from the branch, because there is only one string.
+
+/// No cookie at all: the request never came from a browser that started a sign-in here. **This is
+/// the login-CSRF refusal** — the victim of a link-or-`<img>` attack has no binding cookie.
+pub const NO_BINDING: &str =
+    "this callback did not come from a browser that started a sign-in here";
+
+/// A cookie is present but carries a different flow's `state`.
+pub const BINDING_DISAGREES: &str =
+    "this callback's state does not belong to this browser's sign-in";
+
+/// The binding held, and the `state` still was not one this host has outstanding — never issued, or
+/// already spent. This is the issued-here/single-use guard, and it sits **behind** the two above,
+/// which is precisely why a test aimed at it must present a cookie that agrees.
+pub const NO_SUCH_SIGN_IN: &str =
+    "this callback does not correspond to a sign-in this host started";
+
 /// What Google sends back.
 #[derive(Deserialize)]
 pub struct CallbackParams {
@@ -119,23 +144,17 @@ pub async fn callback(State(app): State<App>, request: axum::extract::Request) -
     // is the entire vulnerability: an attacker's victim has no cookie, and a check that skips when
     // absent is a check that is never performed on the one request that matters.
     let Some(bound_state) = crate::auth::login_state_of(&parts) else {
-        return refuse_and_clear(
-            "this callback did not come from a browser that started a sign-in here".to_owned(),
-        );
+        return refuse_and_clear(NO_BINDING.to_owned());
     };
     if !crate::auth::oidc::constant_time_eq(bound_state.as_bytes(), state.as_bytes()) {
-        return refuse_and_clear(
-            "this callback's state does not belong to this browser's sign-in".to_owned(),
-        );
+        return refuse_and_clear(BINDING_DISAGREES.to_owned());
     }
 
     // ---------------------------------------------------------------------------------------
     // 2. Was it issued here, and not already spent?
     // ---------------------------------------------------------------------------------------
     let Some((verifier, nonce)) = app.sessions().take_login(&state) else {
-        return refuse_and_clear(
-            "this callback does not correspond to a sign-in this host started".to_owned(),
-        );
+        return refuse_and_clear(NO_SUCH_SIGN_IN.to_owned());
     };
 
     // ---------------------------------------------------------------------------------------
