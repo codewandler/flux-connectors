@@ -45,6 +45,7 @@ use std::sync::Arc;
 use catalog::OperationKey;
 use connector_pack::{
     Configuration, Credentials, Egress, MemoryConfig, MemoryStore, Operation, Rehearsal, Request,
+    DEFAULT_USER_AGENT,
 };
 use serde_json::{json, Value};
 
@@ -476,10 +477,15 @@ fn a_nested_body_operation_nests_rather_than_flattening() {
     );
 
     // Credentials are C-116. Asserting the whole header set rather than an absence keeps that
-    // story's addition visible here.
+    // story's addition visible here — and C-223's, which is why `User-Agent` is spelled out rather
+    // than filtered out: this connector declares none of its own, so the identity here is the
+    // default, and a change to it must be seen in the one test that reads the whole set.
     assert_eq!(
         request.headers.iter().collect::<Vec<_>>(),
-        vec![(&"content-type".to_string(), &"application/json".to_string())]
+        vec![
+            (&"User-Agent".to_string(), &DEFAULT_USER_AGENT.to_string()),
+            (&"content-type".to_string(), &"application/json".to_string()),
+        ]
     );
 }
 
@@ -507,7 +513,14 @@ fn a_query_string_operation_separates_its_parameters() {
     );
     assert_eq!(all.method, "GET");
     assert!(all.body.is_none(), "a listing sends no body");
-    assert!(all.headers.is_empty(), "a listing sets no content type");
+    // No content type, because a `GET` sends no body — but not empty: since C-223 every request the
+    // pack builds carries this software's identity, and a listing is the case that would otherwise
+    // go out anonymous.
+    assert_eq!(
+        all.headers.iter().collect::<Vec<_>>(),
+        vec![(&"User-Agent".to_string(), &DEFAULT_USER_AGENT.to_string())],
+        "a listing sets no content type, and still identifies the software sending it"
+    );
 
     // A middle filter only: it must be the one that opens the query with `?`, not the one that
     // inherits an `&` from a filter that was never sent.
@@ -585,7 +598,13 @@ fn a_free_form_body_travels_whole_in_either_spelling() {
 }
 
 /// The params handed to `http.request` are the shape its own input schema declares — `url` and
-/// `method` always, `headers` and `body` only when there are any.
+/// `method` always, `body` only when there is one.
+///
+/// **`headers` used to be conditional too, and since C-223 it is not.** The pack authors a
+/// `User-Agent` on every request it builds, so the header record is never empty and `to_params`
+/// always carries one. That is a deliberate consequence rather than an incidental one: the branch in
+/// `to_params` that omits an empty record still exists and is still correct, and nothing in the
+/// shipped catalogue can now reach it.
 #[test]
 fn the_request_becomes_the_params_http_request_declares() {
     let show = request("zendesk-ticket-show", json!({"ticket_id": 7}));
@@ -594,6 +613,7 @@ fn the_request_becomes_the_params_http_request_declares() {
         json!({
             "url": "https://acme.zendesk.com/api/v2/tickets/7.json",
             "method": "GET",
+            "headers": {"User-Agent": DEFAULT_USER_AGENT},
         })
     );
 
@@ -604,7 +624,10 @@ fn the_request_becomes_the_params_http_request_declares() {
     let params = add.to_params();
     assert_eq!(
         params["headers"],
-        json!({"content-type": "application/json"})
+        json!({
+            "content-type": "application/json",
+            "User-Agent": DEFAULT_USER_AGENT,
+        })
     );
     assert!(
         params["body"].is_string(),
@@ -927,6 +950,130 @@ fn a_document_literal_is_refused_at_projection_and_not_only_at_build() {
         error.to_string().contains("displayName"),
         "the refusal must quote the literal it could not classify: {error}"
     );
+}
+
+/// **Every operation this repository declares carries exactly one `User-Agent`** (C-223).
+///
+/// A property over whatever ships rather than a census of what ships today, which is the shape
+/// `AGENTS.md` requires of a catalogue-wide claim: a forty-sixth connector satisfying it leaves this
+/// green, and one violating it is exactly when this should fail.
+///
+/// **Exactly one** is the load-bearing half, and it is why the count is taken case-insensitively
+/// over the header *names*. `Request::headers` is a `BTreeMap`, so a connector declaring
+/// `user-agent` while the default inserts `User-Agent` would produce two entries, two JSON keys in
+/// `to_params`, and either two headers on the wire or a silent overwrite depending on how the
+/// transport folds them. A duplicated `User-Agent` is its own defect, and asserting presence alone
+/// would report it as success.
+///
+/// Driven from the same per-provider artifacts as
+/// [`every_declared_operation_composes_a_request_from_its_declared_configuration`], so a provider
+/// story's own connector is covered before it reaches the index.
+#[test]
+fn every_declared_operation_carries_exactly_one_user_agent() {
+    let configuration = configuration();
+    let ops = root().join("crates/catalog/ops");
+    let mut checked = 0usize;
+
+    for module in modules() {
+        for id in &module.operations {
+            let flux = read(&ops.join(&module.connector).join(format!("{id}.flux")));
+            let rehearsal = Rehearsal::of(id, &module.connector, &module.service, &flux)
+                .unwrap_or_else(|error| panic!("`{id}` does not rehearse: {error}"));
+            let Ok(request) = rehearsal.request(&configuration, &params_from_schema(&rehearsal))
+            else {
+                // Composability is `every_declared_operation_composes_a_request_from_its_declared_
+                // configuration`'s assertion, and duplicating it here would report one defect twice.
+                continue;
+            };
+
+            let agents: Vec<&String> = request
+                .headers
+                .keys()
+                .filter(|name| name.eq_ignore_ascii_case("User-Agent"))
+                .collect();
+            assert_eq!(
+                agents.len(),
+                1,
+                "`{id}` carries {} `User-Agent` headers, not one: {:?}",
+                agents.len(),
+                request.headers.keys().collect::<Vec<_>>()
+            );
+            let value = &request.headers[agents[0]];
+            assert!(
+                !value.trim().is_empty(),
+                "`{id}` carries an empty `User-Agent`, which a vendor reads as absent"
+            );
+            checked += 1;
+        }
+    }
+
+    assert!(
+        checked > 100,
+        "only {checked} operations were checked, so this property was quantified over almost \
+         nothing"
+    );
+}
+
+/// **A connector that declares its own `User-Agent` keeps it, and gains no second one** (C-223).
+///
+/// This case exists in the shipped catalogue today — `providers/resend.toml` declares
+/// `const_headers = {{ "User-Agent" = "flux-connectors" }}`, because Resend answers a request
+/// without one with a `403` — so the first half is asserted against a real connector rather than a
+/// fixture. Named connectors, loaded by name: this is a premise about specific connectors, not about
+/// the catalogue, and only those connectors changing can falsify it.
+///
+/// The second half needs a fixture, because no shipped connector spells the header in another case
+/// and the defect is invisible until one does. `user-agent` lowercase against a `User-Agent`
+/// default is two `BTreeMap` entries and two headers on the wire; the check is case-insensitive for
+/// exactly this, and this is where that is proved rather than asserted in a comment.
+#[test]
+fn a_connector_declaring_its_own_user_agent_wins_and_gains_no_second_one() {
+    // The shipped case. Resend's own value, not the default.
+    let entry = catalog::operation(OperationKey::id("resend-email-send"))
+        .expect("the shipped catalogue carries resend-email-send");
+    let sent = request(
+        "resend-email-send",
+        json!({"from": "a@b.c", "to": ["d@e.f"], "subject": "s", "html": "<p>h</p>"}),
+    );
+    assert_eq!(
+        sent.headers.get("User-Agent").map(String::as_str),
+        Some("flux-connectors"),
+        "a connector's declared `User-Agent` was overwritten by the host default"
+    );
+    assert_ne!(
+        sent.headers.get("User-Agent").map(String::as_str),
+        Some(DEFAULT_USER_AGENT),
+        "the fixture no longer distinguishes the two, so this test proves nothing"
+    );
+
+    // The case no connector spells yet: a lowercase declaration must still win, and must not sit
+    // beside a `User-Agent` the default inserted.
+    let lowercased = entry.flux.replace("\"User-Agent\"", "\"user-agent\"");
+    assert!(
+        lowercased.contains("\"user-agent\""),
+        "the doctoring did not apply, so this half proves nothing"
+    );
+    let rehearsal = Rehearsal::of(entry.id, entry.provider, entry.service, &lowercased)
+        .expect("the doctored declaration rehearses");
+    let request = rehearsal
+        .request(
+            &configuration(),
+            &json!({"from": "a@b.c", "to": ["d@e.f"], "subject": "s", "html": "<p>h</p>"}),
+        )
+        .expect("the doctored declaration builds its request");
+
+    let agents: Vec<&String> = request
+        .headers
+        .keys()
+        .filter(|name| name.eq_ignore_ascii_case("User-Agent"))
+        .collect();
+    assert_eq!(
+        agents,
+        vec!["user-agent"],
+        "a differently-cased declaration was joined by a second `User-Agent` rather than kept: {:?}",
+        request.headers.keys().collect::<Vec<_>>()
+    );
+    assert_eq!(request.headers["user-agent"], "flux-connectors");
 }
 
 /// Projection reads variables and not values, so an unconfigured port still answers what an

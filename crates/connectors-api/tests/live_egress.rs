@@ -89,12 +89,19 @@ const SENTINEL: &str = "SENTINEL-NOT-A-REAL-SECRET-openai-api-key";
 /// `accept*` pair are hyper's and reqwest's to decide, and pinning them here would turn a flux-web
 /// or reqwest upgrade into a failure of this repository's test with nothing wrong in this
 /// repository. Everything outside this list must be a header the pack authored, exactly.
+///
+/// **`user-agent` was on this list and came off it with C-223**, which is the entry worth explaining
+/// because the list is otherwise about layers below this repository. It was here on a true premise —
+/// no code in this repository set one — and the premise was the defect: neither `Client::builder()`
+/// site in `codewandler-flux-web` 0.41.0 calls `ClientBuilder::user_agent` and reqwest sends no
+/// default, so nothing was being excused and nothing arrived. Now `connector_pack` authors it during
+/// request assembly, so it belongs in the equality like any other pack header — and the equality is
+/// what proves the identity survives the wire byte-identically rather than merely being built.
 const TRANSPORT_HEADERS: &[&str] = &[
     "host",
     "content-length",
     "accept",
     "accept-encoding",
-    "user-agent",
     "connection",
 ];
 
@@ -344,6 +351,81 @@ async fn the_vendor_receives_exactly_the_request_the_pack_built() {
         result.content
     );
     assert!(!result.is_error, "a 200 is not a tool error");
+}
+
+/// **The host identifies itself on the wire** (C-223).
+///
+/// Every other assertion in this file compares what arrived against what the pack built, which is
+/// silent about a header *neither* of them carries. This one asserts on the wire directly: the
+/// `User-Agent` the vendor received, read off the recorded request. Resend answers a request without
+/// one with a `403` carrying a valid key, so the absence is a live failure that names the wrong
+/// cause — an authorization status for a missing header.
+///
+/// Three claims, and they are separable on purpose:
+///
+/// 1. **A `User-Agent` arrived at all.** This is the one that was false before C-223: neither
+///    `Client::builder()` site in `codewandler-flux-web` 0.41.0 calls `ClientBuilder::user_agent`,
+///    `WebOptions` carries no field for one, and reqwest sends no default.
+/// 2. **It names this software and its version**, rather than a browser or a bare product word. A
+///    `User-Agent` that lies is worse than one that is absent, so the value is asserted against
+///    `CARGO_PKG_VERSION` — which this crate and `connector-pack` both inherit from the workspace —
+///    rather than against a literal that would drift at the next release.
+/// 3. **The rehearsal agrees with the wire.** The same operation's [`Operation::dry_run`] is asked
+///    for the same header and must report the byte-identical value. That is C-145's whole purpose,
+///    and it is the property that decided *where* the identity lives: a header set by the transport
+///    would be invisible here, because `DryRunTransport` holds no client at all.
+#[tokio::test]
+async fn the_vendor_receives_a_user_agent_that_names_this_software() {
+    let vendor = Vendor::start().await;
+    let app = App::with_web_options(
+        env!("CARGO_MANIFEST_DIR"),
+        WebOptions {
+            private_net: PrivateNetAllow::Hosts(vec!["127.0.0.1".to_owned()]),
+            ..WebOptions::default()
+        },
+    )
+    .expect("the crate root exists");
+
+    let operation = projected(&app, retargeted_at(OPERATION, &vendor.origin)).await;
+    let params = params();
+
+    operation
+        .execute(&app.context(), params.clone())
+        .await
+        .expect("the request reaches the loopback vendor");
+
+    let received = vendor.exactly_one();
+    let user_agent = received.headers.get("user-agent").unwrap_or_else(|| {
+        panic!(
+            "the request left the host with no `User-Agent`, which Resend answers with a 403 \
+             carrying a valid key; the vendor received {:?}",
+            received.headers.keys().collect::<Vec<_>>()
+        )
+    });
+
+    // **The product token, not the whole value.** An earlier revision of this asserted that the
+    // value *contained* `flux-connectors`, and a mutation proved that worthless: the repository URL
+    // in the trailing comment satisfies it, so `Mozilla/5.0 0.7.0 (+…/flux-connectors)` passed a
+    // test whose entire purpose is refusing a `User-Agent` that lies. RFC 9110 §10.1.5 puts the
+    // identity in the **first** product token and everything after it is commentary, so that is what
+    // is asserted, whole and equal.
+    let product = user_agent.split_whitespace().next().unwrap_or_default();
+    assert_eq!(
+        product,
+        format!("flux-connectors/{}", env!("CARGO_PKG_VERSION")),
+        "the `User-Agent`'s product token does not name this software and its version: \
+         {user_agent:?}"
+    );
+
+    // The rehearsal is the wire, or C-145's transport is describing a call the host does not make.
+    let rehearsed = operation
+        .dry_run(&params)
+        .expect("the shipped operation rehearses");
+    assert_eq!(
+        rehearsed.request().headers.get("User-Agent"),
+        Some(user_agent),
+        "the dry run reports a different `User-Agent` than the one the vendor received"
+    );
 }
 
 /// **The shipped default refuses the very request the grant admits.**
