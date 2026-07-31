@@ -2,7 +2,7 @@
 id: C-181
 title: Ship the Statuspage connector
 pillar: Spec
-status: in-progress
+status: done
 priority: 3
 design:
 epic: provider-fleet-2

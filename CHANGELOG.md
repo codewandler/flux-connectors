@@ -9,6 +9,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Statuspage connector (C-181) — the first shipped connector with a non-empty auth prefix.**
+  Five operations over `Authorization: OAuth <key>`, with `statuspage-component-list` as `verify`.
+  This is C-184's prefix axis proved end to end: `crates/catalog/src/generated/statuspage.rs` is the
+  first committed artifact carrying a `prefix` field with a value in it.
+
+  **`OAuth` here is a literal scheme word, not OAuth2**, and the connector declares no `oauth2` block
+  — with a test asserting `oauth2.is_none()` so the trap stays pinned. A connector spelled `bearer`
+  would compile clean and fail closed with 401 on every call, which is the trap C-107 recorded for
+  Notion and C-161 for Okta.
+
+  **The page id folds into `base_url`**, the way DocuSign's `account_id` already does — so this is
+  *not* the C-187 gap, and the story says so. The cost is recorded rather than worked around:
+  `GET /v1/pages` becomes unreachable under that base URL, and a multi-page account needs one
+  installation per page.
+
+  **What the model cannot say, and does not pretend to.** Creating a Statuspage incident emails and
+  texts every subscriber immediately. There is no effects field to declare that — `effects
+  ["network"]` is hardcoded at `connector-flux/src/op.rs:616`, which is exactly what C-155 measured
+  — and `Risk` has no value meaning externally-visible. Both writes are `risk = "high"`, matching
+  `github-issue-create` and `launchdarkly-flag-toggle`, and the asymmetry the scale cannot carry
+  lives in each operation's description: **the incident is reversible, the subscriber email is not.**
+  No `effects` key was invented, and a test greps the provider file to prove none appears.
+
+  `deliver_notifications` is a **required** body field on both writes, so a caller must make an
+  explicit choice about notifying every subscriber rather than inheriting a default.
+
 - **A credential can sit inside a header value it does not wholly occupy (C-184).**
   `AuthScheme::Header` now carries `{ name, prefix }`, so `Authorization: SSWS <token>` is expressible
   without any credential value being authored. Unblocks Okta (C-161, back to `ready`), PagerDuty
