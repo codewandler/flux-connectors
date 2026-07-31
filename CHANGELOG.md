@@ -154,31 +154,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `Placement::Query` credential**. `trello_is_the_only_query_placement_in_the_shipped_catalogue`
   bounds that to one connector and fails the moment a second lands.
 
-### Fixed
 
-- **A configuration value is checked where it is substituted, not only where it is declared
-  (C-214).** `Position::validate_value` existed and was correct, and had exactly two call sites —
-  both in the loader, both running against an `example` or a parameter *name*. The value that
-  actually travels was substituted with no predicate at all.
+- **A graph's node ids now map to Flux AST paths, so a diagnostic lands on the node that produced it
+  (C-96).** `emit_graph_with_paths` returns the emitted module alongside a `NodePaths` map, and the
+  round trip is asserted in both directions against real `flux_lang::analyze` diagnostics: every
+  diagnostic path resolves to a recorded node, and that node's own path is the one the diagnostic
+  sits at or inside. No second attribution mechanism was invented — the path grammar is flux's own,
+  consumed from `analyze_flow` rather than re-spelled locally.
 
-  The severe half was **pre-existing** and moved the origin: an `@` makes everything before it
-  userinfo, so `subdomain = "acme.zendesk.com@evil.example"` resolved to the authority
-  `evil.example.zendesk.com`. Nine shipped connectors carry a templated host. The check compares
-  against the **template's** authority rather than the built URL's, because the composed string is
-  itself a well-formed hostname and inspecting the finished URL sees nothing wrong.
+  **Boundary nodes are deliberately absent from the map, and the test asserts each absence.** A
+  `trigger`, `schedule` or `endpoint` becomes a *parameter* of the emitted op rather than a
+  statement, and flux renders no path for a parameter finding. Spelling one anyway (`params[0]`)
+  would be exactly the second mechanism this story exists not to build.
 
-  Each position gets its own answer, since "escape it" is wrong for two of them: refuse for host,
-  path and header; refuse-then-encode through the existing `auth::query_encode` for query. No shipped
-  connector's behaviour changed — 53 providers, `diff` clean. Independently reviewed with 36 probes
-  against the host guard, including percent-encoded `%40`/`%2540`, CRLF, IPv6 literals, and fullwidth
-  and ideographic dot homographs; none moved the origin.
-
-- **A per-provider test no longer asserts a catalogue-wide literal (C-216).** Discord's prefix census
-  walked every `providers/*.toml` and compared the result against a four-element list, which Klaviyo's
-  fifth prefix falsified in the same wave — each branch green alone, red together, invisible from
-  either worktree. It now loads Okta, PagerDuty and Statuspage **by name** and checks what each
-  declares, because catalogue membership was never the evidence. The identical defect in
-  `trello_connector.rs` is filed as C-230.
+  **What did not land, and why it could not:** the map is not yet a committed, drift-checked
+  repository artifact. Nothing in `providers/` declares `[[graphs]]` and `connector-cli` never calls
+  `emit_graph`, so `build` writes no graph module for a map to sit beside. Both fixture graphs' maps
+  are committed as goldens instead, drift-checked on every run; the `connectors/*.paths.json` writer
+  belongs with whichever story first gives the lowering a producer.
 
 ### Changed
 
@@ -216,6 +209,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   likely to be misread in the optimistic direction.
 
 ### Fixed
+
+- **A configuration value is checked where it is substituted, not only where it is declared
+  (C-214).** `Position::validate_value` existed and was correct, and had exactly two call sites —
+  both in the loader, both running against an `example` or a parameter *name*. The value that
+  actually travels was substituted with no predicate at all.
+
+  The severe half was **pre-existing** and moved the origin: an `@` makes everything before it
+  userinfo, so `subdomain = "acme.zendesk.com@evil.example"` resolved to the authority
+  `evil.example.zendesk.com`. Nine shipped connectors carry a templated host. The check compares
+  against the **template's** authority rather than the built URL's, because the composed string is
+  itself a well-formed hostname and inspecting the finished URL sees nothing wrong.
+
+  Each position gets its own answer, since "escape it" is wrong for two of them: refuse for host,
+  path and header; refuse-then-encode through the existing `auth::query_encode` for query. No shipped
+  connector's behaviour changed — 53 providers, `diff` clean. Independently reviewed with 36 probes
+  against the host guard, including percent-encoded `%40`/`%2540`, CRLF, IPv6 literals, and fullwidth
+  and ideographic dot homographs; none moved the origin.
+
+- **A per-provider test no longer asserts a catalogue-wide literal (C-216).** Discord's prefix census
+  walked every `providers/*.toml` and compared the result against a four-element list, which Klaviyo's
+  fifth prefix falsified in the same wave — each branch green alone, red together, invisible from
+  either worktree. It now loads Okta, PagerDuty and Statuspage **by name** and checks what each
+  declares, because catalogue membership was never the evidence. The identical defect in
+  `trello_connector.rs` is filed as C-230.
+
 
 - **`no-credential` told a consumer that a public endpoint was disabled for their protection
   (C-206).** `effective_auth` answered `no-credential` for two opposite situations — a vendor that
@@ -281,26 +299,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   each language the sources are written in and requires each back; and on the integration branch,
   appending `export const FIRST_CONNECTOR = 'zendesk'` to `web/data/catalog.data.mts` turned it red.
   The gate is 30/30 — the 28 that existed plus this story's two.
-
-### Added
-
-- **A graph's node ids now map to Flux AST paths, so a diagnostic lands on the node that produced it
-  (C-96).** `emit_graph_with_paths` returns the emitted module alongside a `NodePaths` map, and the
-  round trip is asserted in both directions against real `flux_lang::analyze` diagnostics: every
-  diagnostic path resolves to a recorded node, and that node's own path is the one the diagnostic
-  sits at or inside. No second attribution mechanism was invented — the path grammar is flux's own,
-  consumed from `analyze_flow` rather than re-spelled locally.
-
-  **Boundary nodes are deliberately absent from the map, and the test asserts each absence.** A
-  `trigger`, `schedule` or `endpoint` becomes a *parameter* of the emitted op rather than a
-  statement, and flux renders no path for a parameter finding. Spelling one anyway (`params[0]`)
-  would be exactly the second mechanism this story exists not to build.
-
-  **What did not land, and why it could not:** the map is not yet a committed, drift-checked
-  repository artifact. Nothing in `providers/` declares `[[graphs]]` and `connector-cli` never calls
-  `emit_graph`, so `build` writes no graph module for a map to sit beside. Both fixture graphs' maps
-  are committed as goldens instead, drift-checked on every run; the `connectors/*.paths.json` writer
-  belongs with whichever story first gives the lowering a producer.
 
 ## [0.6.0] — 2026-07-31
 
