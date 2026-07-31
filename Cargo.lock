@@ -163,6 +163,55 @@ dependencies = [
 ]
 
 [[package]]
+name = "codewandler-connector-catalog"
+version = "0.5.0"
+dependencies = [
+ "codewandler-flux-lang",
+]
+
+[[package]]
+name = "codewandler-connector-pack"
+version = "0.5.0"
+dependencies = [
+ "async-trait",
+ "codewandler-connector-catalog",
+ "codewandler-connector-secrets",
+ "codewandler-flux-core",
+ "codewandler-flux-lang",
+ "codewandler-flux-runtime",
+ "codewandler-flux-spec",
+ "codewandler-flux-system",
+ "serde_json",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "codewandler-connector-secrets"
+version = "0.5.0"
+dependencies = [
+ "async-trait",
+ "codewandler-connector-spec",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "codewandler-connector-spec"
+version = "0.5.0"
+dependencies = [
+ "indexmap",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror",
+ "toml 0.8.23",
+]
+
+[[package]]
 name = "codewandler-flux-config"
 version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -307,19 +356,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "connector-catalog"
-version = "0.5.0"
-dependencies = [
- "codewandler-flux-lang",
-]
-
-[[package]]
 name = "connector-cli"
 version = "0.5.0"
 dependencies = [
  "anyhow",
+ "codewandler-connector-spec",
  "connector-flux",
- "connector-spec",
  "jsonschema",
  "serde",
  "serde_json",
@@ -330,52 +372,10 @@ dependencies = [
 name = "connector-flux"
 version = "0.5.0"
 dependencies = [
+ "codewandler-connector-spec",
  "codewandler-flux-lang",
- "connector-spec",
  "serde",
  "serde_json",
- "thiserror",
- "toml 0.8.23",
-]
-
-[[package]]
-name = "connector-pack"
-version = "0.5.0"
-dependencies = [
- "async-trait",
- "codewandler-flux-core",
- "codewandler-flux-lang",
- "codewandler-flux-runtime",
- "codewandler-flux-spec",
- "codewandler-flux-system",
- "connector-catalog",
- "connector-secrets",
- "serde_json",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "connector-secrets"
-version = "0.5.0"
-dependencies = [
- "async-trait",
- "connector-spec",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "connector-spec"
-version = "0.5.0"
-dependencies = [
- "indexmap",
- "serde",
- "serde_json",
- "sha2 0.10.9",
  "thiserror",
  "toml 0.8.23",
 ]
