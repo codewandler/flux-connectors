@@ -110,6 +110,22 @@ pub fn cleared_cookie() -> String {
 ///   and it never travels in clear.
 /// - **`Max-Age`** matching [`session::LOGIN_TTL`], because a binding value for a flow that has to
 ///   complete in ten minutes has no business outliving it.
+///
+/// # What this does not cover, and why `__Host-` is not available
+///
+/// This is a **double-submit**, and the cookie's value *is* the `state` that travels in the URL —
+/// so the comparison in [`routes::callback`] is "these two agree", with no server-side secret in
+/// it. Anyone who can *set* this cookie satisfies it by construction. That needs a cookie-injection
+/// foothold (a sibling subdomain writing a `Domain` cookie, or an XSS on this origin), which is
+/// outside the link-or-`<img>` threat model C-204 closes and is true of most double-submit
+/// implementations; [`routes::NO_SUCH_SIGN_IN`] still holds independently, so a forged binding only
+/// reopens the attacker's own live flow.
+///
+/// **`__Host-` would close the sibling-subdomain half and is foreclosed here:** the prefix requires
+/// `Path=/`, and this cookie is deliberately scoped to `Path=/auth/callback` so it is not attached
+/// to every request. The two cannot both be had, narrow scoping was chosen, and widening the path
+/// is the price of revisiting it. Recorded in full, for an operator, in this crate's README under
+/// "What the binding does not cover".
 pub fn login_cookie(state: &str) -> String {
     format!(
         "{LOGIN_COOKIE}={state}; Path=/auth/callback; HttpOnly; Secure; SameSite=Lax; Max-Age={}",
