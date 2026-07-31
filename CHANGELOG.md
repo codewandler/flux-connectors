@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [0.6.0] — 2026-07-31
+
 ### Fixed
 
 - **Two services of one connector no longer collapse into one configuration value (C-197).** The
