@@ -9,6 +9,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **This software identifies itself on every outgoing request (C-223).** Every request left the host
+  with no `User-Agent` at all — `codewandler-flux-web` builds its client at two places and calls
+  `ClientBuilder::user_agent` at neither, and reqwest sends no default. Resend **rejects** such a
+  request with `403` while carrying a valid key: a status that says *authorization* when the cause is
+  a missing header, so the operator rotates a key that was never wrong and nothing points at the real
+  cause.
+
+  The identity is set in `request::build` — the single funnel the live path, `DryRunTransport` and
+  the rehearsal already share, so a rehearsal agreeing with the wire is structural rather than two
+  paths kept in step. Deliberately **not** on the host's client: a client-level header is invisible
+  to a dry run that holds no client, and the rehearsal would then describe a request the host does
+  not make. A connector declaring its own still wins, matched case-insensitively because
+  `Request::headers` is a `BTreeMap` and two casings would be two headers on the wire.
+
+  Reviewed by dumping all 299 shipped operations before and after: **295 gained exactly one header,
+  4 were unchanged, 0 anomalies** — method, URL, body and every other header byte-identical.
+
 - **Credentials survive a restart (C-207).** The host held them in memory and the process exiting was
   the cleanup, so wiring a connector and restarting lost everything. They now live in a `0600` file
   inside a `0700` directory, with the mode set in the `open(2)`/`mkdir(2)` call rather than
@@ -52,6 +69,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   same operation under `App::new` and requiring a refusal with nothing recorded by the vendor.
 
 ### Fixed
+
+- **`connector-pack` is fenced against linking an HTTP client (C-199).** The guard reads the
+  **feature-resolved** graph from `cargo metadata`, not `Cargo.lock`, because the two answer
+  different questions: the existing lock fence exists precisely to catch optional dependencies, and
+  this one exists precisely not to count them. The pack does reach `reqwest` through
+  `connector-secrets`' Vault client, which is `optional`, `default = []` and requested by no
+  workspace member — so a lock-idiom fence would have gone red on a correct build, which is what
+  forced the change of instrument.
+
+  Eight mutations, each reverted: a dev-dependency edge reddens only the dev-build test, and asking
+  for `vault` from `connectors-api` reddens the *pack's* fence, so feature unification is measured
+  rather than asserted.
 
 - **The test suite could reach an operator's real credential store, and send a real request (C-207).**
   Found in security review. `App::new` honoured `CONNECTORS_CREDENTIAL_STORE`, which this crate's own

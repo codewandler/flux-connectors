@@ -125,6 +125,29 @@ use crate::Error;
 /// scattered string.
 const HTTP_REQUEST: &str = "http.request";
 
+/// The header this software identifies itself in.
+const USER_AGENT: &str = "User-Agent";
+
+/// **What this software calls itself on the wire** (C-223).
+///
+/// A product token and its version, per RFC 9110 §10.1.5, with the repository as the comment a
+/// vendor can act on. It names *this* software rather than a browser or a bare product word, which
+/// is the acceptance the story states in the form it matters: a `User-Agent` that lies is worse than
+/// one that is absent, because a vendor's rate limit, allow-list and support desk all believe it.
+///
+/// Both halves are read from the manifest rather than typed, so neither can go stale at a release:
+/// `CARGO_PKG_VERSION` is the workspace version every crate here inherits, and
+/// `CARGO_PKG_REPOSITORY` is the `repository` field the publishing contract already requires. The
+/// concatenation is `const`, so this costs nothing at runtime and is one `&'static str` a test can
+/// compare against.
+pub const DEFAULT_USER_AGENT: &str = concat!(
+    "flux-connectors/",
+    env!("CARGO_PKG_VERSION"),
+    " (+",
+    env!("CARGO_PKG_REPOSITORY"),
+    ")"
+);
+
 /// **The request**: `{ method, url, headers, body }`, exactly `http.request`'s own input.
 ///
 /// A typed value rather than a bare `serde_json::Value` so a test can assert on the pieces that go
@@ -1050,7 +1073,7 @@ pub(crate) fn build(
         endpoints,
         slots,
     };
-    let request = match cx.run(&declaration.body.body, &mut env)? {
+    let mut request = match cx.run(&declaration.body.body, &mut env)? {
         Some(request) => request,
         None => {
             return Err(Error::Unbuildable {
@@ -1074,7 +1097,64 @@ pub(crate) fn build(
             url: request.url,
         });
     }
+
+    identify(&mut request);
     Ok(request)
+}
+
+/// **Give the request this software's identity, unless the connector already stated one** (C-223).
+///
+/// # Why here, and not in the host or in each connector
+///
+/// This function is one line long and its position is the whole of the story's second acceptance,
+/// so the reasoning is recorded where the code is. The full argument is
+/// [docs/designs/host-identity.md](../../../docs/designs/host-identity.md).
+///
+/// **Not the host.** `connectors-api` constructs no request of its own — `AGENTS.md`'s ownership
+/// table forbids it, and every route ends in `connector_pack::pack`. Its only lever is the client it
+/// builds, and `codewandler-flux-web` 0.41.0 exposes none: neither `Client::builder()` site in
+/// `egress.rs` calls `ClientBuilder::user_agent` and `WebOptions` carries no field for one. Even
+/// granting the upstream field, a header set on the *client* is invisible to [`crate::DryRunTransport`],
+/// which is zero-sized and holds no client by construction — so the rehearsal would report a request
+/// the host does not make, which is the one thing C-145 exists to prevent. That single fact decides
+/// it independently of what upstream does.
+///
+/// **Not a C-55 constant header per connector.** It is what `providers/resend.toml` does today and
+/// what C-52 contemplated for GitHub, and it is the option to argue against rather than inherit.
+/// Three reasons: the default becomes *absence*, so the forty-sixth connector's omission is silent
+/// and surfaces as a vendor `403` naming authorization; a TOML literal cannot carry the build's
+/// version, so the value ships a bare product word that is wrong at the next release — Resend's
+/// shipped `"flux-connectors"` is already exactly that; and it puts the *host's* identity into
+/// *compiler* data, which the compiler has no business having an opinion about.
+///
+/// **So: request assembly, in the pack.** It is the one funnel every path already shares —
+/// [`crate::Operation::build_request`], [`crate::Operation::build_authenticated_request`] through
+/// it, [`crate::DryRunTransport::dry_run`] through it, and [`crate::Rehearsal`] through this same
+/// `build`. Agreement between the rehearsal and the wire is therefore structural rather than a
+/// property two code paths maintain in parallel.
+///
+/// # The connector still wins, and there is never a second header
+///
+/// The check is **case-insensitive**, which is not fastidiousness: `Request::headers` is a
+/// `BTreeMap`, so a module setting `user-agent` and a default inserting `User-Agent` would be two
+/// entries, two JSON keys, and — depending on how the transport folds them — two headers on the wire
+/// or a silent overwrite. A duplicated `User-Agent` is its own defect and this is where it is
+/// prevented. `providers/resend.toml` and any connector after it keep the value they declare.
+///
+/// If `codewandler-flux-web` later sets a client-level default, this stays correct and stays
+/// necessary: reqwest treats a per-request header as an override of a client default, so there is no
+/// duplication, and the dry run still needs its own answer.
+fn identify(request: &mut Request) {
+    if request
+        .headers
+        .keys()
+        .any(|name| name.eq_ignore_ascii_case(USER_AGENT))
+    {
+        return;
+    }
+    request
+        .headers
+        .insert(USER_AGENT.to_owned(), DEFAULT_USER_AGENT.to_owned());
 }
 
 /// The symbols an op body has bound so far.

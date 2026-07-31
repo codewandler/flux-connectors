@@ -185,7 +185,7 @@ pub use credentials::{Credentials, DEFAULT_SERVICE};
 pub use dry_run::{CredentialReference, DryRun, DryRunTransport, Transport};
 pub use name::{dotted_name, NameError};
 pub use rehearsal::Rehearsal;
-pub use request::Request;
+pub use request::{Request, DEFAULT_USER_AGENT};
 pub use spec::project;
 pub use tool::{Egress, Operation};
 

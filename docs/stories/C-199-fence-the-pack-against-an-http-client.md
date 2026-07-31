@@ -2,7 +2,7 @@
 id: C-199
 title: Fence connector-pack against linking an HTTP client
 pillar: Build
-status: in-progress
+status: done
 priority: 2
 design:
 epic:
