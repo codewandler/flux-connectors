@@ -9,6 +9,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Credentials survive a restart (C-207).** The host held them in memory and the process exiting was
+  the cleanup, so wiring a connector and restarting lost everything. They now live in a `0600` file
+  inside a `0700` directory, with the mode set in the `open(2)`/`mkdir(2)` call rather than
+  `chmod`-ed afterwards, re-checked on every open, and a **widened store refused rather than quietly
+  repaired** — it was already exposed, and repairing it silently would hide that.
+
+  Writes are atomic (`create_new` → `write` → `fsync` → `rename` → directory `fsync`) with the
+  in-memory map rolled back on failure, so nothing resolves that is not on disk. **There is no
+  encryption**, and the module docs, the README and the startup banner all say so in those words:
+  values are hex-encoded, and hex is framing — it stops a newline forging a second entry and a
+  careless `grep` matching a token — not protection.
+
+  Verified against the running binary rather than only by test: mode bits confirmed by `strace` under
+  `umask 000`, a widened file *and* a widened directory each refused and left widened, and an
+  adversarial value containing a newline and a forged address line round-tripping as one entry with
+  the forgery unresolvable.
+
+### Added
+
 - **A dev sign-in, so the app is usable without a Google registration (C-234).** `cargo run -p
   connectors-api -- --dev` mints a session through the same machinery a Google sign-in uses — same
   cookie attributes, same opacity, same tenant resolution — for an account labelled
@@ -33,6 +52,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   same operation under `App::new` and requiring a refusal with nothing recorded by the vendor.
 
 ### Fixed
+
+- **The test suite could reach an operator's real credential store, and send a real request (C-207).**
+  Found in security review. `App::new` honoured `CONNECTORS_CREDENTIAL_STORE`, which this crate's own
+  README instructs an operator to export — so running the gate wrote their live store, and
+  `tests/host.rs` then answered `200` instead of `400`, **dispatching an operation to
+  `api.anthropic.com`** because a credential left by an earlier run resolved.
+
+  Fixed structurally rather than by convention: exactly one constructor reads the environment, and it
+  is the one `main.rs` calls. Clearing the variable in the test harness would have been a rule
+  somebody has to remember.
+
+  Two claims that could not fail were made falsifiable in the same pass — *"there is no silent
+  fallback to memory"*, and `App::deployed`'s default, which was the whole of this story for the
+  binary and which the story's own acceptance cited as its evidence. And a crash mid-write left a
+  `0600` temporary holding the full credential that the documented revoke did not remove; temporaries
+  are now reaped, and the revoke is `rm -r` on the directory everywhere it appears.
 
 - **A whole-catalogue test that could not fail, and the blind spot behind it (C-232, C-233).**
   `every_shipped_operation_builds_an_absolute_request` manufactured a value for every variable the

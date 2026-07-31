@@ -2,7 +2,7 @@
 id: C-207
 title: "The host forgets every credential on restart — `MemoryStore` is not a deployment"
 pillar: Bridge
-status: in-progress
+status: done
 priority: 2
 design:
 epic: connectors-api
