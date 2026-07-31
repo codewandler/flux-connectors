@@ -93,6 +93,40 @@ tenant names it in its signature; one that does not cannot reach it.
   cookie. No credential material and no tenant secret is in it.
 - **Sign-out revokes server-side**, so a copy of the cookie taken by somebody else stops working
   too — not only the browser that asked.
+- **A sign-in is bound to the browser that began it.** `/auth/signin` sets a short-lived
+  `connectors_login` cookie carrying the OAuth `state`, and `/auth/callback` refuses unless that
+  cookie is present and agrees with the `state` in the URL.
+
+### The login-CSRF hole this crate shipped once
+
+Worth stating plainly, because the shape of the mistake is more instructive than the fix.
+
+The first version had no `connectors_login` cookie. The `state` lived only in a server-side map, so
+**any** browser presenting **any** live `state` could redeem it. An attacker began a sign-in in
+their own browser, kept the `state`, and got a victim to fetch the callback URL — a top-level `GET`,
+so a link is enough. The victim was silently signed in *as the attacker*, saw a perfectly healthy
+page, and every credential they pasted went to the attacker's tenant.
+
+The code consumed the `state` on first use and a comment called that "the login-CSRF defence". It is
+not. Single-use is a **replay** defence — it stops one callback being redeemed twice. Binding is a
+**CSRF** defence — it stops a callback being redeemed by a browser that did not start the flow.
+RFC 6749 §10.12 asks for the second explicitly, requiring the value be kept *"in a location
+accessible only to the client and the user-agent"*. Both are needed and both are now enforced;
+`tests/tenancy.rs:a_state_issued_to_one_browser_cannot_be_redeemed_by_another` is the regression
+test, and it asserts on the resulting **identity** rather than a status code.
+
+`SameSite=Lax` on that cookie is not a weaker choice than `Strict` — it is the only workable one.
+The callback arrives as a cross-site top-level `GET` from Google, and `Strict` withholds cookies on
+exactly that navigation.
+
+### The two requests that bypass the egress guard
+
+The token exchange and the JWKS fetch do not go through flux's `Egress`, because their URLs are
+operator configuration rather than anything a caller chose. That is deliberate, and it means the
+bounds `Egress` would have supplied are applied directly: a 10-second total timeout, a 5-second
+connect timeout, **no redirect following** — a redirect on the token call would re-send the client
+secret wherever it pointed — and a hard cap on response size, checked against `Content-Length` and
+then enforced chunk by chunk so a lying length is caught too.
 
 `crates/connectors-api/tests/tenancy.rs` asserts it adversarially: a request that names tenant B in
 a body field, two headers and a query parameter, while carrying tenant A's session, resolves to
