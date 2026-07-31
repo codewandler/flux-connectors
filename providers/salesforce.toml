@@ -1,0 +1,315 @@
+# Salesforce REST API — hand-authored, no vendor spec.
+#
+# Salesforce publishes no single machine-readable description of its REST API; the surface below is
+# transcribed from Salesforce's own REST API developer guide, per resource (cited at each
+# operation). As with zendesk, freshdesk, github and notion, provenance is hand-authored and drift is
+# undetectable by machine (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# THE QUESTION THIS CONNECTOR WAS CHOSEN TO ANSWER: is a per-tenant HOST configurable at all?
+# ---------------------------------------------------------------------------------------------
+#
+# Every provider shipped before this one has a base URL that is either a constant, or a
+# `{placeholder}` left deliberately *unbound* — zendesk's `{subdomain}`, jira's `{site}` — because
+# nothing declared where the value came from. Salesforce's org lives on its own "My Domain" host,
+# discovered at login (`https://{instance}.my.salesforce.com`) and never at a shared address, so this
+# connector cannot skip the question the way a single-host provider can.
+#
+# **Answer: yes, and it is already the case the configuration contract was built for.**
+# `crates/connector-spec/src/config.rs` documents `ConfigField::binds` as naming a *destination*
+# rather than re-implementing flux's `{placeholder}` templating, and `Binding::Endpoint { variable }`
+# (parsed from `endpoint.<name>`, `config.rs:180-184,240-245`) is exactly "a `{variable}` in the
+# service's base URL". So `{instance}` below is bound by the `[[config]]` field at the end of this
+# file, `binds = "endpoint.instance"`, and `crates/connector-flux/tests/salesforce_connector.rs`
+# asserts the binding exists rather than trusting this comment.
+#
+# This is good news specifically because of what C-169 and C-170 measured and filed as C-187:
+# `ConfigField::binds` reaches `base_url` and *nothing else* — it cannot pin a path segment
+# (Cloudflare's `zone_id`) or a query parameter (Vercel's `teamId`). A configured **host** is the one
+# shape the config surface can already express, and this connector is the one whose whole
+# requirement is that shape. Nothing here needed C-187 to land.
+#
+# ---------------------------------------------------------------------------------------------
+# C-92 ("declare an authority for every shipped provider"): no conflict, and no authority declared.
+# ---------------------------------------------------------------------------------------------
+#
+# A per-tenant *host* and a published *authority* are different facts. `authority`
+# (`crates/connector-spec/src/ir.rs:764-771`) is the reverse-DNS namespace a provider publishes
+# under — `com.zendesk.api` — and it is independent of `base_url`, which "may carry tenant
+# templating" per the same struct's doc comment; `providers/babelforce.toml`'s header states the
+# distinction is what lets `s3` and `bedrock-runtime` share an authority and not a host. So a
+# per-tenant base URL is not a reason an authority cannot be declared — `com.salesforce.api` would be
+# a perfectly coherent choice and would render exactly as `com.zendesk.api` does today, unaffected by
+# `{instance}` being unresolved at compile time.
+#
+# It is not declared here anyway, for the same reason `providers/google.toml` gives: C-92 is its own
+# story, open at the time of writing, whose acceptance is that *every* awkward case — including
+# providers with no obvious reverse-DNS form — is decided together and each choice recorded with its
+# reasoning in one place. Minting one fifteenth of that decision inside this story would pre-empt a
+# call that is not this story's to make; 23 of 27 shipped providers are in the same undeclared state
+# today. `gid` stays `null` for salesforce until C-92 lands, which is the state every provider but
+# fly, slack and vercel already carries.
+#
+# ---------------------------------------------------------------------------------------------
+# THE SOQL QUERY OPERATION IS EXCLUDED, AND IT IS THE ONE THE STORY LED WITH.
+# ---------------------------------------------------------------------------------------------
+#
+# `GET /services/data/vXX.X/query/?q=<SOQL>` is Salesforce's most useful read and the one this
+# connector cannot ship honestly. A SOQL expression is exactly the shape `zendesk-ticket-search`
+# already demonstrates cannot survive as a query parameter here: full of spaces
+# (`SELECT Id, Name FROM Account WHERE Industry = 'Technology'`), quotes and `=`, and the emitter
+# interpolates a query value into the URL with `fmt` and percent-encodes nothing at all
+# (`crates/connector-flux/src/op.rs`; C-28, C-30). Spaces are the misleading case, because URL
+# parsing can rescue them; a caller's `&` or `#` does not filter the query, it injects a second
+# parameter into the request. So `salesforce-query` is not declared. It ships the day C-30's
+# structured-`query` handoff lands (`docs/designs/query-encoding-flux-stories.md`), and not before.
+#
+# ---------------------------------------------------------------------------------------------
+# STILL CANNOT MAKE A LIVE CALL, for the same reason as every shipped connector: `http.request` takes
+# `{"$secret": …}` as a whole-value replacement and cannot assemble a `Bearer` header itself
+# (`docs/designs/auth-seam.md`, AGENTS.md's *Intentional gaps*). This connector is the catalogue's
+# proof, not a working client.
+# ---------------------------------------------------------------------------------------------
+
+id = "salesforce"
+vendor = "Salesforce"
+
+# `{instance}` is bound by the `[[config]]` field at the end of this file — see the header comment
+# above. Every Salesforce org's My Domain host is its own, so there is no tenant-independent base URL,
+# and the loader refuses a template variable nothing binds: the gap this comment used to have to
+# record cannot reopen silently.
+base_url = "https://{instance}.my.salesforce.com"
+
+description = "Salesforce REST API: read the authenticated identity, read/create/update an SObject record, and describe an SObject's schema"
+
+# The "Test connection" operation. Salesforce's REST API has no `/me`-shaped resource under
+# `/services/data/`; the OAuth2 identity resource at `/services/oauth2/userinfo` is the one that
+# takes no parameters at all and answers with the authenticated user and org, which is the clearest
+# available confirmation that the token resolves and names who it belongs to.
+verify = "salesforce-whoami"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["salesforce.access_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "salesforce.access_token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; never read here.
+#
+# No `[auth.oauth2]` block, deliberately: an access token minted by Salesforce's OAuth2 flow (or by a
+# Connected App's client-credentials or JWT-bearer flow) reaches the wire identically —
+# `Authorization: Bearer <token>` — so which grant minted it is operator configuration rather than
+# connector shape, the same reasoning `providers/google.toml`, `providers/notion.toml` and
+# `providers/slack.toml` give for the same omission. flux is handed an already-minted token through
+# the environment and runs no grant.
+#
+# Like Google's, a Salesforce access token is short-lived (its exact lifetime is an org policy
+# setting, not a fixed constant this file could state honestly). Refresh is effectful acquisition —
+# it belongs to the host (C-21, `docs/designs/unified-auth.md` §7) — and its absence here means a
+# long-running flow re-reads the environment and a stale token fails closed with a 401, which is the
+# better of the two available failures.
+env = ["SALESFORCE_ACCESS_TOKEN"]
+description = "Salesforce OAuth2 access token sent as a bearer; already minted, supplied through the environment"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 5: the identity check, and the four the story named minus the one query it cannot
+# ship (see the header comment).
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only (C-8, C-23).
+#
+# No operation declares a query parameter. `sobject_type` and `id` are path segments only, and both
+# are safe in the sense github's path parameters are: a Salesforce SObject API name is
+# `[A-Za-z][A-Za-z0-9_]*`, optionally ending `__c`, and a record id is fixed-length base62 — neither
+# can carry a character that changes the shape of the request the way a free-text query value can.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "salesforce-whoami"
+method = "GET"
+path = "/services/oauth2/userinfo"
+description = "Get the authenticated user and org for the current access token — the identity check for a settings page's Test Connection button. Takes no parameters"
+risk = "low"
+idempotency = "idempotent"
+
+# Salesforce's OpenID Connect UserInfo response. `sub` is the OIDC-standard identity URL
+# (`https://login.salesforce.com/id/<orgId>/<userId>`); `user_id` and `organization_id` are the same
+# two ids restated as plain fields, which is what a flow actually branches on rather than parsing the
+# URL. `user_type` is Salesforce's own claim and is what tells a flow whether the token belongs to a
+# full "STANDARD" user or a more restricted type (e.g. a Community/Experience Cloud guest).
+[operations.response_schema]
+type = "object"
+required = ["sub", "user_id", "organization_id"]
+properties = { sub = { type = "string", format = "uri", description = "The OIDC identity URL, e.g. https://login.salesforce.com/id/00Dxx0000000001/005xx000001Sv6QAAS" }, user_id = { type = "string", description = "The 18-character id of the authenticated user" }, organization_id = { type = "string", description = "The 18-character id of the org the token authenticates against" }, preferred_username = { type = "string", description = "Usually the Salesforce username, which is email-shaped but is not necessarily a deliverable address" }, name = { type = "string" }, email = { type = "string" }, email_verified = { type = "boolean" }, active = { type = "boolean" }, user_type = { type = "string", description = "e.g. STANDARD for a full internal user; a Community/Experience Cloud or partner user carries a different value here" }, locale = { type = "string" }, zoneinfo = { type = "string" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "salesforce-record-get"
+method = "GET"
+path = "/services/data/v59.0/sobjects/{sobject_type}/{id}"
+description = "Read one SObject record by id. Returns every field of the record; narrowing to a subset needs the fields query parameter, which this connector cannot encode safely (see the provider file's header) so it is not offered"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "sobject_type"
+description = "The SObject's API name, e.g. Account, Contact, Opportunity, or a custom object ending in __c"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "id"
+description = "The record's Salesforce id, 15 characters (case-sensitive) or 18 (case-insensitive)"
+required = true
+schema = { type = "string", pattern = "^[a-zA-Z0-9]{15,18}$" }
+
+# The envelope is fixed; the fields beside it are not. `attributes` is the one part of this response
+# every SObject shares; every other member is one of the object's own fields, and which fields exist
+# — standard and custom — is per-object and per-org, discoverable with `salesforce-sobject-describe`.
+# Enumerating `Name` or `Industry` here would be exactly the guess this repository's schemas refuse:
+# right for `Account` on one org and wrong for a custom object on the next.
+[operations.response_schema]
+type = "object"
+required = ["attributes", "Id"]
+description = "Every member besides `attributes` is one of the SObject's own fields — standard and custom — and the set is per-object and per-org. Read it with `salesforce-sobject-describe` rather than assuming a fixed shape"
+properties = { attributes = { type = "object", required = ["type", "url"], properties = { type = { type = "string", description = "The SObject API name this record is" }, url = { type = "string", description = "This record's own resource path" } } }, Id = { type = "string", description = "The record's 18-character Salesforce id" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "salesforce-record-create"
+method = "POST"
+path = "/services/data/v59.0/sobjects/{sobject_type}"
+description = "Create one SObject record. Which fields are required depends on the SObject type and the org's own validation rules and page layouts — check with salesforce-sobject-describe first"
+risk = "medium"
+# Retrying a create makes a second record, not the same one; Salesforce assigns no idempotency key
+# on this resource.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "sobject_type"
+description = "The SObject's API name, e.g. Account, Contact, Opportunity, or a custom object ending in __c"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# Free-form, deliberately: an SObject's field set is per-object and per-org (custom fields, required
+# validation rules, page-layout-driven requiredness), so there is no fixed parameter list this file
+# could declare without either guessing at one org's schema or excluding every other. `body_schema`
+# is the same free-form-object route `providers/babelforce.toml` takes for a body with no fixed
+# properties; the caller supplies the whole record as one JSON object, re-bound through
+# `parse($body, as: "json")` by the emitter rather than passed straight to `http.request`
+# (`crates/connector-flux/src/op.rs`).
+[operations.params]
+body_schema = { type = "object", description = "The new record's field values as a JSON object, e.g. {\"Name\": \"Acme\", \"Industry\": \"Technology\"}. Which fields exist and which are required depends on the SObject type and the org's schema" }
+
+# `201 Created`. This envelope is fixed regardless of SObject type or org, unlike the record body
+# above — it is Salesforce's own write-result shape, not the object's fields.
+[operations.response_schema]
+type = "object"
+required = ["id", "success", "errors"]
+properties = { id = { type = "string", description = "The new record's 18-character Salesforce id" }, success = { type = "boolean" }, errors = { type = "array", description = "Empty on success. Populated on a partial failure such as a validation rule, each entry carrying statusCode, message and the fields it names", items = { type = "object" } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "salesforce-record-update"
+method = "PATCH"
+path = "/services/data/v59.0/sobjects/{sobject_type}/{id}"
+description = "Update one or more fields on an existing SObject record. Only the supplied fields change; fields left out are untouched. Answers 204 with no body on success"
+risk = "medium"
+# TRUE FACT, FALSE DECLARATION, BY DESIGN — read before "fixing" this.
+#
+# Sending the same field values twice changes nothing the second time, which is genuinely
+# idempotent under RFC 9110 §9.2.2. It cannot be declared here: `check_write_metadata`
+# (`crates/connector-flux/src/op.rs:594-604`) refuses `idempotency = "idempotent"` on `PATCH`
+# unconditionally, by method, regardless of what the endpoint actually does — the same refusal
+# `providers/cloudflare.toml`'s cache purge and `providers/launchdarkly.toml`'s flag toggle hit and
+# recorded as C-186. That story is still open; until it lands, the honest-but-refused claim is
+# declared here as `non_idempotent` and the true claim lives in this comment and in the
+# `description` above, exactly as C-186's two connectors do it. The direction is safe: it makes a
+# host more conservative about retrying than the endpoint requires, never less.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "sobject_type"
+description = "The SObject's API name, e.g. Account, Contact, Opportunity, or a custom object ending in __c"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "id"
+description = "The record's Salesforce id, 15 characters (case-sensitive) or 18 (case-insensitive)"
+required = true
+schema = { type = "string", pattern = "^[a-zA-Z0-9]{15,18}$" }
+
+# Free-form for the same reason `salesforce-record-create`'s body is: which fields exist is per-object
+# and per-org. Unlike create, every field here is genuinely optional in the vendor's own terms — this
+# is a partial update — so there is no C-56 gap to record: nothing here is a caller-omittable
+# *declared* field travelling as an explicit null, because no field is declared at all.
+[operations.params]
+body_schema = { type = "object", description = "The fields to change, as a JSON object, e.g. {\"Industry\": \"Technology\"}. Fields not present are left untouched; which fields exist depends on the SObject type and the org's schema" }
+
+# NO `response_schema`, DELIBERATELY (C-126). Salesforce answers this one `204 No Content`: there is
+# no body at all, so `{}` or `{"type": "object"}` would both satisfy a coverage count while being
+# false — they describe an empty JSON object, and what arrives is no document. The honest record is
+# the `description` above ("Answers 204 with no body on success"); confirming the update took means
+# reading the record back with `salesforce-record-get`.
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "salesforce-sobject-describe"
+method = "GET"
+path = "/services/data/v59.0/sobjects/{sobject_type}/describe"
+description = "Describe an SObject's schema: its label, whether it is custom, its create/update/delete/query permissions, and every field's name, type and constraints. The reference for what salesforce-record-create and salesforce-record-update may send"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "sobject_type"
+description = "The SObject's API name, e.g. Account, Contact, Opportunity, or a custom object ending in __c"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# The describe result is Salesforce's own metadata, not the object's data, so unlike the record
+# endpoints above its shape does not vary by SObject or by org — every describe response has the
+# same envelope, whichever object it describes. `type` on a field entry is Salesforce's field type
+# (`string`, `boolean`, `reference`, `picklist`, `currency`, …), not a JSON Schema type, which is
+# worth stating because the two vocabularies share words with different meanings.
+[operations.response_schema]
+type = "object"
+required = ["name", "fields"]
+properties = { name = { type = "string", description = "The SObject's API name" }, label = { type = "string" }, labelPlural = { type = "string" }, keyPrefix = { type = "string", description = "The 3-character prefix embedded in every record id of this type; null for objects with none" }, custom = { type = "boolean" }, createable = { type = "boolean" }, updateable = { type = "boolean" }, deletable = { type = "boolean" }, queryable = { type = "boolean" }, fields = { type = "array", description = "Every field's own metadata, standard and custom", items = { type = "object", required = ["name", "type"], properties = { name = { type = "string" }, label = { type = "string" }, type = { type = "string", description = "Salesforce's field type, e.g. string, boolean, reference, picklist, currency — not a JSON Schema type" }, length = { type = "integer" }, nillable = { type = "boolean" }, unique = { type = "boolean" }, createable = { type = "boolean" }, updateable = { type = "boolean" }, picklistValues = { type = "array", description = "Present only on a picklist field: each entry carries value, label, active and defaultValue", items = { type = "object" } } } } } }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any of the above can run
+#
+# Two fields: the org host, and the token. Both are connection level, derived from what they bind —
+# every Salesforce org is its own tenant, and there is no operator-level registration this connector
+# needs (contrast a connected app's own OAuth2 client id/secret, which this file does not model; see
+# the `[auth.oauth2]` note above).
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "instance"
+label = "Salesforce My Domain name"
+help = "The subdomain of your org's My Domain URL — if you log in at acme.my.salesforce.com, this is acme. Find it under Setup → Company Settings → My Domain, or read it off the instance_url your org's login flow returns"
+example = "acme"
+format = "subdomain"
+binds = "endpoint.instance"
+
+[[config]]
+name = "access_token"
+label = "Access token"
+help = "An OAuth2 access token for this org — minted by Salesforce's own login flow, or by a Connected App's client-credentials or JWT-bearer flow, and pasted here already-minted. It is short-lived; a call that starts failing with 401 usually means this needs refreshing"
+# No `example`, deliberately: a Salesforce access token is a long opaque string, and a
+# realistic-looking placeholder for a secret field has already tripped GitHub's push protection and
+# blocked a release (`providers/notion.toml` records the same caution).
+format = "token"
+secret = true
+binds = "credential.salesforce.access_token"
