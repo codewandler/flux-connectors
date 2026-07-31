@@ -1,0 +1,362 @@
+# Contentful — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Contentful documents its Content Delivery and Content
+# Management APIs as hand-written reference prose (`contentful.com/developers/docs/references/...`),
+# not a vendored OpenAPI document, so there is nothing to point `[spec]` at even once ingest (C-4) and
+# the overlay (C-6) land. Drift against the vendor's own docs is therefore undetectable by machine,
+# the same caveat zendesk, freshdesk, github, notion and postmark already carry
+# (`docs/designs/provider-operation-inventory.md` §6.7). Checked against
+# contentful.com/developers/docs/references/content-delivery-api and
+# contentful.com/developers/docs/references/content-management-api on 2026-07-31.
+#
+# ---------------------------------------------------------------------------------------------
+# C-177'S QUESTION: THE CREDENTIAL HALF IS ALREADY ANSWERED. WHAT THIS FILE ADDS IS THE PATH HALF.
+# ---------------------------------------------------------------------------------------------
+#
+# Two hosts, two bearer tokens, one vendor: `cdn.contentful.com` (Content Delivery API, read-only,
+# published content only) and `api.contentful.com` (Content Management API, create and publish
+# drafts) are different authorities that never accept the other's token. `providers/postmark.toml`
+# already measured that shape in full — two credentials partitioned by service, enforced by
+# `Operation::auth` overriding `default_auth` (`crates/connector-spec/src/ir.rs:652-669`), with
+# `Connector::credential_ref_for` (`ir.rs:1166-1178`) still rendering every credential's tenant path
+# under the elided default service regardless of which service its operations belong to. Nothing
+# below re-derives that question; `crates/connector-flux/tests/contentful_connector.rs` exercises the
+# same mechanism on this connector's own two services rather than re-proving it in the abstract.
+#
+# What this file adds is the part Postmark's two surfaces did not need: **every Contentful call is
+# scoped to a space and an environment**, `/spaces/{space_id}/environments/{environment_id}/...`, and
+# both are declared in the *service's own `base_url` template*
+# (`crates/connector-spec/src/config.rs`'s `template_variables`), not as per-operation path
+# parameters. The reasoning: a Contentful token is provisioned against one known space (found on the
+# space's own Settings > General settings page) the same way a Zendesk token is provisioned against
+# one known subdomain (`providers/zendesk.toml`'s `{subdomain}`) — it is a property of the
+# *installation*, not of an individual call. Contrast `providers/airtable.toml`'s `baseId`/`tableId`,
+# which travel as ordinary `[[operations.params.path]]` entries: a base and a table genuinely differ
+# from one Airtable call to the next, where a Contentful space and environment do not. This is the
+# first provider whose service `base_url` carries **two** template variables rather than one
+# (`providers/zendesk.toml`, `providers/jira.toml`, `providers/shopify.toml`, `providers/freshdesk.toml`
+# each carry exactly one), and the first where **two distinct services** each need their own copy of
+# both — `ConfigField::service` is "exactly one, always concrete"
+# (`crates/connector-spec/src/config.rs`), so `space_id`/`environment_id` are asked for twice below,
+# once per service, rather than once shared. Measured rather than assumed: a config field's `name` is
+# unique across the *whole connector*, not per service (`validate_config`,
+# `crates/connector-spec/src/provider.rs`) — unlike an operation, event, channel or graph, each of
+# which is namespaced per service. So the two copies below are `delivery_space_id`/
+# `delivery_environment_id` and `management_space_id`/`management_environment_id`, four distinctly
+# named fields each binding the same `endpoint.space_id` / `endpoint.environment_id` placeholder in
+# its own service's `base_url` — not two pairs sharing one name. A product is free to point a
+# read-only integration at one space and a write-side one at another even though most installations
+# will answer both prompts the same way.
+#
+# The payoff: `contentful-entries-list` (this connector's `verify`) declares **no path parameter at
+# all**. Space and environment are already resolved from configuration before the request is built,
+# so a settings page's "Test connection" button can press it without having to invent an entry or
+# asset id — exactly what "runs unattended" requires and what no per-call-argument reading of
+# space/environment could have delivered.
+#
+# ---------------------------------------------------------------------------------------------
+# WHAT SHIPS: 5 operations. Delivery Token — get an entry, list entries, get an asset. Management
+# Token — create an entry, publish an entry.
+# ---------------------------------------------------------------------------------------------
+#
+# `contentful-entry-create`'s body is a free-form `body_schema`, not named `params.body` fields:
+# Contentful wraps a create/update body in `{"fields": {<field id>: {<locale>: <value>}}}`, and both
+# the outer field-id keys and the locale keys are the space's own content model, chosen by whoever
+# built it — the same reason `providers/airtable.toml`'s `fields` and `providers/babelforce.toml`'s
+# session-variable bodies are declared with `body_schema` rather than composed field-by-field (C-29).
+# A schema keyed by this connector's own IDs would hard-code one space's content types into a
+# connector every space shares, and Contentful publishes no build-time-readable description of a
+# space's model the way it does per-space at runtime (the same SCHEMA GAP `providers/airtable.toml`
+# records for `GET /v0/meta/bases/{baseId}/tables`). One consequence worth stating: because the whole
+# body is one opaque schema rather than a tree of named `wire` paths, this operation never reaches
+# `BodyNode` at all, and so never exercises its missing array variant (C-168/C-185) — not because the
+# fields object avoids arrays (a Contentful array-typed field is a real, common case), but because
+# `body_schema` bypasses `BodyNode`'s composition entirely, the same escape `providers/babelforce.toml`
+# already uses for its own untyped bodies.
+#
+# `contentful-entry-publish` needs no body at all — it is a bare `PUT .../published` with one
+# caller-supplied header, `X-Contentful-Version`, Contentful's optimistic-concurrency stamp (the
+# `sys.version` from a prior create or read). `params.header` is documented as *caller-supplied*, so
+# it is the right field for a value that genuinely changes per call — contrast `providers/github.toml`
+# and `providers/notion.toml`, where a header value is a vendor *constant* `params.header` cannot pin
+# (C-55's finding) and `const_headers` is the correct field instead. Nothing here is a constant:
+# `providers/stripe.toml`'s `idempotency_key` on `stripe-payment-intent-capture` is the shipped
+# precedent for a genuinely caller-supplied header.
+#
+# WHY THE SELECTION EXCLUDES QUERY FILTERS ON `contentful-entries-list` BEYOND `limit`/`skip`.
+# Nothing in this pipeline percent-encodes a query value (C-30, `crates/connector-flux/src/op.rs`);
+# `zendesk-ticket-search` is the standing demonstration `AGENTS.md` lists under *Intentional gaps*.
+# Contentful's own `content_type`/`select`/full-text `query` filters are exactly the free-text shape
+# that gap cannot carry safely, so only `limit` and `skip` — both plain integers, never encoded — are
+# curated onto the list operation, the same reasoning `providers/postmark.toml`'s `count`/`offset` and
+# `providers/anthropic.toml`'s exclusion of every cursor filter both give.
+#
+# WHY THERE IS NO RESPONSE-SCHEMA HAZARD FIELD HERE, UNLIKE `providers/postmark.toml`'s `ApiTokens` OR
+# `providers/zoom.toml`'s `start_url`. Neither the Delivery nor the Management API response for an
+# entry, an asset, or a publish result carries credential material or an access token anywhere in its
+# `sys` envelope or its `fields` — this file was checked against that specifically, not merely left
+# unconsidered, and nothing here needed the "declare it with a hazard description" convention those
+# two files carry.
+#
+# NOT EXECUTABLE YET, for the same reason as every other provider in this repository: flux's
+# `http.request` takes `{"$secret": "ENV"}` as a whole-value replacement and cannot yet produce a
+# `Bearer` header from a named credential — the `$auth` seam (`docs/designs/auth-seam.md`) has to land
+# in flux first.
+
+id = "contentful"
+vendor = "Contentful"
+authority = "com.contentful.api"
+
+# Never actually reached: both services declared below fully override this with their own host *and*
+# their own `{space_id}`/`{environment_id}` template, so every operation resolves through
+# `base_url_of` to one of those, never to this connector-level fallback. Still required non-empty —
+# `Connector::base_url` is not an `Option` — so it is stated as the more general of the two hosts.
+base_url = "https://api.contentful.com"
+
+description = "Contentful headless CMS: read published content from the Content Delivery API, and create and publish entries through the Content Management API — two different hosts and two different tokens for one vendor"
+
+# The Delivery token is the connector default — the lower-privilege, read-only credential, so
+# pressing "Test connection" never asks an operator for write access they may not hold. Every
+# Management operation below overrides `auth` explicitly rather than inheriting this.
+default_auth = [{ credentials = ["contentful.delivery_token"] }]
+
+# `contentful-entries-list`: no path parameter at all, because space/environment are already
+# resolved from configuration below. See the header comment.
+verify = "contentful-entries-list"
+
+# ---------------------------------------------------------------------------------------------
+# Credentials — two, never sent on the same request. See the header comment.
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "contentful.delivery_token"
+scheme = "bearer"
+env = ["CONTENTFUL_DELIVERY_TOKEN"]
+description = "Contentful Content Delivery API (CDA) access token, sent as a bearer. Read-only: published content in one space only, and only the Delivery API accepts it"
+
+[[auth]]
+name = "contentful.management_token"
+scheme = "bearer"
+env = ["CONTENTFUL_MANAGEMENT_TOKEN"]
+description = "Contentful Content Management API (CMA) access token, sent as a bearer. Read and write in one space; the Delivery API rejects it. Required only for contentful-entry-create and contentful-entry-publish — every read above uses the Delivery token instead"
+
+# ---------------------------------------------------------------------------------------------
+# Services — each owns its own host and its own two-variable path template. See the header comment
+# for why `space_id`/`environment_id` are declared per service rather than once, shared.
+# ---------------------------------------------------------------------------------------------
+
+[[services]]
+name = "delivery"
+description = "Content Delivery API (CDA): read-only access to this space's published content. Authenticates with the delivery token; the management token cannot reach this surface"
+base_url = "https://cdn.contentful.com/spaces/{space_id}/environments/{environment_id}"
+
+[[services]]
+name = "management"
+description = "Content Management API (CMA): create and publish entries. Authenticates with the management token; the delivery token cannot reach this surface"
+base_url = "https://api.contentful.com/spaces/{space_id}/environments/{environment_id}"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a human supplies before any of the above can run. `space_id`/`environment_id`
+# close each service's own two-variable `base_url` template (`endpoint.<var>`, "deliberate headroom"
+# generalized here to two variables rather than one); the tokens close a declared credential.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+# Named `delivery_space_id`, not `space_id`: a configuration field's `name` is unique across the
+# *whole connector*, not per service (`validate_config`, `crates/connector-spec/src/provider.rs`) —
+# unlike an operation, event or channel, whose namespace is per-service. Since both services need
+# their own copy of this variable (see the header comment), the two fields need two distinct names
+# even though each binds the same `{space_id}` placeholder in its own service's `base_url`.
+name = "delivery_space_id"
+service = "delivery"
+label = "Contentful space ID"
+help = "Found on the space's Settings > General settings page in the Contentful web app. Identifies which space the delivery token reads from"
+example = "a1b2c3d4e5f6"
+secret = false
+docs_url = "https://www.contentful.com/developers/docs/references/authentication/"
+binds = "endpoint.space_id"
+
+[[config]]
+name = "delivery_environment_id"
+service = "delivery"
+label = "Contentful environment"
+help = "The environment within the space to read from — commonly `master` unless this space uses staged environments"
+example = "master"
+secret = false
+docs_url = "https://www.contentful.com/developers/docs/concepts/multiple-environments/"
+binds = "endpoint.environment_id"
+
+[[config]]
+name = "delivery_token"
+service = "delivery"
+label = "Contentful Delivery API token"
+help = "Create a Content Delivery API access token in the space under Settings > API keys. Read-only: published content in this space only"
+format = "token"
+secret = true
+docs_url = "https://www.contentful.com/developers/docs/references/authentication/"
+binds = "credential.contentful.delivery_token"
+
+[[config]]
+name = "management_space_id"
+service = "management"
+label = "Contentful space ID"
+help = "Found on the space's Settings > General settings page in the Contentful web app. Identifies which space the management token writes to"
+example = "a1b2c3d4e5f6"
+secret = false
+docs_url = "https://www.contentful.com/developers/docs/references/content-management-api/"
+binds = "endpoint.space_id"
+
+[[config]]
+name = "management_environment_id"
+service = "management"
+label = "Contentful environment"
+help = "The environment within the space to write to — commonly `master` unless this space uses staged environments"
+example = "master"
+secret = false
+docs_url = "https://www.contentful.com/developers/docs/concepts/multiple-environments/"
+binds = "endpoint.environment_id"
+
+[[config]]
+name = "management_token"
+service = "management"
+label = "Contentful Management API token"
+help = "Create a Content Management API token (a Personal Access Token) in the space under Settings > API keys > Content management tokens. Grants create and publish access in this space — never reuse the Delivery token here"
+format = "token"
+secret = true
+docs_url = "https://www.contentful.com/developers/docs/references/content-management-api/"
+binds = "credential.contentful.management_token"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — `delivery` service (Delivery token): get an entry, list entries, get an asset
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "contentful-entry-get"
+service = "delivery"
+method = "GET"
+path = "/entries/{entry_id}"
+description = "Get one published entry by id, with its fields resolved to one locale"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "entry_id"
+description = "The entry's id, from contentful-entries-list or the Contentful web app"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["sys", "fields"]
+properties = { sys = { type = "object", description = "Envelope metadata: at least `id`, `type` (\"Entry\"), `createdAt`, `updatedAt`, `revision`, and links to this entry's content type, space and environment", required = ["id", "type"], properties = { id = { type = "string" }, type = { const = "Entry" } } }, fields = { type = "object", description = "The entry's own field values, keyed by this space's content-model field ids — chosen by whoever built the content type, and not knowable at build time. See contentful-entry-create's header comment for why this is described rather than enumerated" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "contentful-entries-list"
+service = "delivery"
+method = "GET"
+path = "/entries"
+description = "List published entries in this space and environment, most recently updated first. This connector's `verify` — a bounded read that runs unattended: space and environment are already resolved from configuration, and `limit`/`skip` are optional, so no required argument is ever needed"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "limit"
+description = "Maximum entries to return. Contentful defaults to 100 and caps at 1000"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 1000 }
+
+[[operations.params.query]]
+name = "skip"
+description = "Number of entries to skip, for paging"
+required = false
+schema = { type = "integer", minimum = 0 }
+
+[operations.response_schema]
+type = "object"
+required = ["sys", "total", "items"]
+properties = { sys = { type = "object", description = "The envelope's own type marker, e.g. `{\"type\": \"Array\"}`" }, total = { type = "integer", description = "Total matching entries in the space, not just this page" }, skip = { type = "integer" }, limit = { type = "integer" }, items = { type = "array", description = "One entry per result, each shaped like contentful-entry-get's response", items = { type = "object" } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "contentful-asset-get"
+service = "delivery"
+method = "GET"
+path = "/assets/{asset_id}"
+description = "Get one published asset (an uploaded file, e.g. an image) by id, with its metadata resolved to one locale"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "asset_id"
+description = "The asset's id, from an entry's own field links or the Contentful web app"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["sys", "fields"]
+properties = { sys = { type = "object", description = "Envelope metadata: at least `id`, `type` (\"Asset\"), `createdAt`, `updatedAt`, `revision`", required = ["id", "type"], properties = { id = { type = "string" }, type = { const = "Asset" } } }, fields = { type = "object", description = "At least `title` and `file`; `file` carries `url` (schemeless, prefix with `https:`), `fileName`, `contentType`, and a vendor `details` object (`size`, plus `image: {width, height}` for image assets). `description` is present when the asset has one" } }
+
+# ---------------------------------------------------------------------------------------------
+# Operations — `management` service (Management token): create an entry, publish an entry
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "contentful-entry-create"
+service = "management"
+method = "POST"
+path = "/entries"
+description = "Create a new entry from a content type's field values. Contentful assigns the entry's id. The entry is created as a draft — it is not visible through the Delivery API until contentful-entry-publish publishes it"
+risk = "medium"
+idempotency = "non_idempotent"
+# The connector default is the Delivery token; this operation needs the Management token instead and
+# names it explicitly rather than inheriting `default_auth`.
+auth = [{ credentials = ["contentful.management_token"] }]
+
+[[operations.params.header]]
+name = "content_type_id"
+wire = "X-Contentful-Content-Type"
+description = "The id of the content type this entry is an instance of. Required by Contentful on every create; there is no default"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.params]
+body_schema = { type = "object", description = "The entry's field values: `{\"fields\": {<field id>: {<locale>: <value>}}}`. Both the field ids and the locale keys (e.g. `en-US`) are this space's own content model and are not knowable at build time — see the header comment for why this is one opaque schema rather than named fields" }
+
+[operations.response_schema]
+type = "object"
+required = ["sys", "fields"]
+properties = { sys = { type = "object", description = "At least `id` (the new entry's id, for contentful-entry-publish), `type` (\"Entry\"), `version` (the optimistic-concurrency stamp contentful-entry-publish's `X-Contentful-Version` header needs), `createdAt`, `updatedAt`", required = ["id", "type", "version"], properties = { id = { type = "string" }, type = { const = "Entry" }, version = { type = "integer" } } }, fields = { type = "object", description = "Echoes the field values just written" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "contentful-entry-publish"
+service = "management"
+method = "PUT"
+path = "/entries/{entry_id}/published"
+description = "Publish a draft entry, making it visible through the Delivery API. Sends no body"
+risk = "high"
+idempotency = "idempotent"
+auth = [{ credentials = ["contentful.management_token"] }]
+
+[[operations.params.path]]
+name = "entry_id"
+description = "The entry's id, from contentful-entry-create or a prior read"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.header]]
+name = "version"
+wire = "X-Contentful-Version"
+description = "The entry's current `sys.version` (from contentful-entry-create or a subsequent read). Contentful rejects the request with a version conflict if this is stale, which is the optimistic-concurrency check that keeps a publish from clobbering someone else's more recent edit"
+required = true
+schema = { type = "integer", minimum = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["sys", "fields"]
+properties = { sys = { type = "object", description = "At least `id`, `type` (\"Entry\"), `version` (incremented by this call), `publishedVersion`, `publishedAt`, `publishedCounter`", required = ["id", "type"], properties = { id = { type = "string" }, type = { const = "Entry" }, version = { type = "integer" }, publishedVersion = { type = "integer" } } }, fields = { type = "object", description = "The published field values" } }
