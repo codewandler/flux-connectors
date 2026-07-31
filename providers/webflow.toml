@@ -1,0 +1,330 @@
+# Webflow Data API v2 — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Webflow publishes an OpenAPI description at
+# developers.webflow.com/data/reference, but nothing is vendored under `specs/` for it: ingest (C-4)
+# and fetch (C-14) do not exist yet, and the document covers the whole product surface (sites, CMS,
+# assets, forms, ecommerce, users, webhooks) — pointing at it without a selection mechanism would be
+# pointing every one of those tools at one account. Until C-14's fetch and C-4's ingest land, drift is
+# undetectable by machine, exactly as for zendesk, freshdesk, github, notion and miro
+# (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# THE QUESTION THIS CONNECTOR EXISTS TO ANSWER: A THIRD VARIETY OF "A PAYLOAD THIS PIPELINE CANNOT
+# TYPE" — NOT RECURSIVE (NOTION), NOT A BOUNDED UNION (MIRO), BUT GENUINELY OPEN.
+# ---------------------------------------------------------------------------------------------
+#
+# A Webflow CMS collection item's `fieldData` is a flat object whose *keys and value shapes* are
+# whatever the site owner defined for that collection — a different item, on the same account, has an
+# entirely different `fieldData`. This is the same "tenant-defined properties" problem
+# `providers/notion.toml`'s header comment records for `PATCH /v1/pages/{page_id}`, and it gets the
+# same answer for the same reason, checked against both prior refusals on their own terms:
+#
+#  1. Notion's block model was excluded for being **recursive** — `JsonSchema` here has no `$ref`, so
+#     an unbounded tree is not expressible. That is not this shape's problem: `fieldData` is one flat
+#     object, one level deep, never nested arbitrarily.
+#  2. Miro's board-item union was expressible on the **read** side as a bounded `oneOf` over four
+#     known variants, because `response_schema` is raw JSON unconstrained by `params.body`'s flat
+#     `BodyNode`. That mechanism needs an enumerable set of shapes to enumerate. `fieldData` has none:
+#     it is not "one of a small closed set of shapes", it is "whatever this collection's fields
+#     happen to be", which is a **per-tenant, per-collection** set with no upper bound this file could
+#     write down even as a `oneOf`. So unlike Miro, the read side does not get to type it either — the
+#     honest declaration is an untyped `object` for `fieldData` specifically, inside an otherwise fully
+#     typed envelope (`id`, `isDraft`, `isArchived`, `lastUpdated`, …). This is the same shape of
+#     compromise `providers/notion.toml`'s `notion-page-get` makes for its own `properties` field, and
+#     it is coverage-safe for the same reason: `response_schema_coverage.rs`'s `is_permissive` inspects
+#     the operation's *top-level* schema, and every operation below has one with real `properties`,
+#     `required` and `items` around the one open field.
+#
+# **THE DECISION THIS CONNECTOR WAS CHOSEN TO MAKE: item *creation* does not ship.** `POST
+# /v2/collections/{collection_id}/items` demands a `fieldData` object satisfying that collection's own
+# field definitions — exactly the shape nothing static can describe, and exactly why
+# `providers/notion.toml` excludes `PATCH /v1/pages/{page_id}` rather than accepting a free-form
+# `body_schema` object as a typed field dressed up. A single caller-supplied `Any`-typed body field
+# would decompose nothing and would hand a model a guess at the one shape Webflow is strictest about —
+# the "plausible but incorrect" output AGENTS.md refuses. Independently of that, Webflow's create
+# endpoint is envelope-shaped — it wraps the item(s) being created in an array — which
+# `crates/connector-flux/src/op.rs`'s `BodyNode` cannot express at all: it composes a nested *object*
+# from a dotted `wire` path and has no spelling that produces a JSON array at any depth (C-185, which
+# names this exact connector as a predicted hit). Either reason alone would exclude this operation;
+# together they are why item creation is not attempted rather than half-attempted and abandoned.
+#
+# **`webflow-collection-get` ("get a collection schema") ships instead, as the honest substitute.** It
+# returns the collection's own `fields` array — each field's id, slug, display name, type and whether
+# it is required — which is precisely the information a caller needs to *discover* `fieldData`'s shape
+# at runtime, the thing this file cannot supply at compile time. Reading a tenant-defined shape and
+# writing one are different problems, and this connector answers only the first: it ships full read
+# access to items (list and get) with `fieldData` honestly declared open, plus the schema that would
+# let a caller (or a future connector, once C-185 lands) construct a well-formed write. It does not
+# ship that write itself.
+#
+# `crates/connector-flux/tests/webflow_connector.rs` asserts all of this as a property of the loaded
+# connector rather than leaving it as prose.
+#
+# ---------------------------------------------------------------------------------------------
+# `site_id` / `collection_id` / `item_id` ARE PER-CALL ARGUMENTS, NOT `[[config]]` — THE SAME
+# SCHEMA-DRIVEN REASONING `providers/cloudflare.toml` GIVES `zone_id` AND `providers/miro.toml` GIVES
+# `board_id`.
+# ---------------------------------------------------------------------------------------------
+#
+# Webflow is one host for every site on the platform (`api.webflow.com`), with no per-tenant
+# subdomain. `[[config]]`'s only path to a URL is `endpoint.<var>` reaching a `{placeholder}` in
+# `base_url`, and there is none to bind here. So every scoped operation below takes its id as
+# `params.path`, and `webflow-site-list` — the one call that exists to *discover* site ids — is the
+# one operation with nothing yet to scope. That call is also this connector's `verify`: a "Test
+# connection" button has to run with no argument a human has not supplied yet, and listing sites is
+# the only read here that takes none.
+#
+# ---------------------------------------------------------------------------------------------
+# `webflow-site-publish` HAS IMMEDIATE PUBLIC EFFECT. IT IS NOT AN ORDINARY WRITE.
+# ---------------------------------------------------------------------------------------------
+#
+# Publishing a site pushes whatever is currently staged live, to every connected custom domain and the
+# Webflow-hosted subdomain, the moment the call returns — the same "expensive and externally visible,
+# for everyone, instantly" shape `providers/cloudflare.toml` records for its own cache purge and
+# `providers/launchdarkly.toml` records for its flag toggle, not the "limited blast radius" `medium`
+# tier. `risk = "high"` — "a write a reviewer would want to see first" — and not `destructive`: nothing
+# is deleted, and publishing again supersedes it.
+#
+# It sends **no body**. Webflow's own optional `customDomains` selector is itself an array of domain
+# ids — the caller-supplied-list variety of the array problem C-185 names, not the fixed-shape
+# envelope variety — so it is excluded rather than guessed at, the same way this file excludes item
+# creation. Omitting it does not narrow what this operation does: without a `customDomains` selection
+# Webflow publishes to every connected domain, which is the more complete of the two behaviours, not a
+# smaller one.
+#
+# `POST` is refused `idempotency = "idempotent"` by `check_write_metadata`
+# (`crates/connector-flux/src/op.rs`) regardless of vendor behaviour — the same method-shaped
+# refusal `providers/cloudflare.toml`'s cache purge and `providers/miro.toml`'s sticky-note update
+# record (C-186). Publishing the same staged state twice is, in effect, idempotent; the declaration
+# below is `non_idempotent` because the emitter allows nothing else on a `POST`, and that is the safe
+# direction of the error, not a claim this file is walking back.
+#
+# ---------------------------------------------------------------------------------------------
+# WHAT IS DELIBERATELY EXCLUDED, AND WHY
+# ---------------------------------------------------------------------------------------------
+#
+#  - Item create, update and delete. See the archetype section above — the primary reason
+#    (tenant-defined `fieldData`) applies to all three; delete alone would not need `fieldData` and
+#    could in principle ship on path parameters only, but is left out of this first curated set as a
+#    write with no read-side counterpart yet exercised here (the curated set below is reads plus the
+#    one already-necessary publish write, not a mandate to add every safe write).
+#  - Pagination (`offset`/`limit` on the two list-shaped reads, `webflow-site-list` and
+#    `webflow-collection-item-list`). Not the query-encoding gap AGENTS.md tracks for zendesk — plain
+#    integers carry no character that changes the shape of a request — but this file is not confident
+#    of Webflow's exact default page size or upper bound and would rather return a first page than
+#    assert one that is wrong, the same choice `providers/cloudflare.toml` and `providers/miro.toml`
+#    make for their own list endpoints. No operation below declares any query parameter at all, so the
+#    unencoded-query hazard AGENTS.md names for `zendesk-ticket-search` does not arise here either.
+#  - Site create/update/delete, custom domains, assets, forms, ecommerce (products, orders,
+#    inventory), users, and webhooks. Out of scope for a first curated set built around one workflow:
+#    discover a site, discover its collections and a collection's schema, read items of any shape, and
+#    publish.
+#
+# `crates/connector-flux/tests/webflow_connector.rs` is the contract test for C-182.
+
+id = "webflow"
+vendor = "Webflow"
+
+# One host for every site on the platform — see the header comment for why this is exactly what
+# makes `site_id` an argument rather than `[[config]]`. No `{placeholder}`, so `status.rs` reports no
+# `unbound-base-url-template` issue.
+#
+# `http_hosts` derives from this single value (`crates/connector-cli/src/catalog.rs`, `host_of`) and
+# is therefore exactly `api.webflow.com`, never widened.
+base_url = "https://api.webflow.com/v2"
+
+description = "Webflow sites and CMS: discover sites, read a collection's own field schema, read collection items of any tenant-defined shape, and publish a site live"
+
+# The "Test connection" button: list the sites this token can see. It takes no required parameters —
+# `webflow-site-list` is also the one operation with no `site_id` to supply — so pressing it can only
+# prove the token resolves and report what it can reach. A `verify` operation must be a read; the
+# loader refuses a `high` or `destructive` one, and this is a plain `GET`.
+verify = "webflow-site-list"
+
+# Every operation authenticates the same way: a bearer token. Webflow issues one either as a
+# Site API token (scoped to a single site, generated in that site's settings) or as an OAuth2 access
+# token; both are sent identically on the wire (`Authorization: Bearer <token>`), and acquiring either
+# is the host's job, not this file's — see AGENTS.md's authentication contract.
+default_auth = [{ credentials = ["webflow.token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "webflow.token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; its value is never read
+# here and never reaches a generated artifact.
+env = ["WEBFLOW_TOKEN"]
+description = "Webflow API token (a Site API token or an OAuth2 access token), sent as a bearer token, scoped to read sites, collections and items, and to publish"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a human supplies before any of this runs
+#
+# One field. There is no site to bind here — see the header comment for why that is a property of
+# the schema rather than an omission.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "token"
+label = "Webflow API token"
+help = "Generate a Site API token from your site's Settings -> Apps & Integrations -> API access, or register an OAuth app at developers.webflow.com for a token scoped across sites. A Site API token only ever sees the one site it was generated for; supply a per-site token for a single-site connection or an OAuth token for one that must span several"
+# No `example`, deliberately. A placeholder shaped like a real token has already tripped GitHub's push
+# protection and blocked a release (`providers/notion.toml`, `providers/miro.toml`,
+# `providers/shopify.toml`, `providers/cloudflare.toml` all record the same call).
+format = "token"
+secret = true
+docs_url = "https://developers.webflow.com/data/reference/authentication"
+binds = "credential.webflow.token"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 6: discover sites (also `verify`), discover a site's collections, get a collection's
+# own field schema (the honest substitute for typing `fieldData`), read items of any tenant-defined
+# shape, and publish.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only (C-8, C-23).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "webflow-site-list"
+method = "GET"
+path = "/sites"
+description = "List the sites this token can see, with each site's id, display name, hosted subdomain and last-published time. The `id` returned here is what every other operation in this connector needs as `site_id`"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["sites"]
+properties = { sites = { type = "array", items = { type = "object", required = ["id", "displayName", "shortName"], properties = { id = { type = "string", description = "The site's id — pass this as `site_id` to every other operation" }, displayName = { type = "string" }, shortName = { type = "string", description = "The site's Webflow-hosted subdomain slug" }, workspaceId = { type = "string" }, createdOn = { type = "string", format = "date-time" }, lastUpdated = { type = "string", format = "date-time" }, lastPublished = { type = "string", format = "date-time", description = "Absent or null when the site has never been published" } } } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "webflow-collection-list"
+method = "GET"
+path = "/sites/{site_id}/collections"
+description = "List the CMS collections defined on a site, with each collection's id, display name and slug. Does not include a collection's fields — call webflow-collection-get for that. Returns Webflow's first page only; this connector declares no offset or limit parameter"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "site_id"
+description = "The site's id, as returned by webflow-site-list"
+required = true
+schema = { type = "string", pattern = "^[0-9a-f]{24}$" }
+
+[operations.response_schema]
+type = "object"
+required = ["collections"]
+properties = { collections = { type = "array", items = { type = "object", required = ["id", "displayName", "slug"], properties = { id = { type = "string", description = "The collection's id — pass this as `collection_id` to every other collection operation" }, displayName = { type = "string" }, singularName = { type = "string" }, slug = { type = "string" }, createdOn = { type = "string", format = "date-time" }, lastUpdated = { type = "string", format = "date-time" } } } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "webflow-collection-get"
+method = "GET"
+path = "/collections/{collection_id}"
+# THE OPERATION THAT ANSWERS THE ARCHETYPE'S HAZARD. See the header comment: this is the runtime
+# discovery mechanism this connector ships in place of typing `fieldData`.
+description = "Get a collection's own schema: its display name, slug, and the full list of fields the site owner defined for it — each field's id, slug, display name, type, and whether it is required. This is the honest way to learn what an item's fieldData will contain, since that shape is tenant-defined and unknowable at compile time; this connector cannot type fieldData any more precisely than this lets a caller discover it"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "collection_id"
+description = "The collection's id, as returned by webflow-collection-list"
+required = true
+schema = { type = "string", pattern = "^[0-9a-f]{24}$" }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "displayName", "slug", "fields"]
+properties = { id = { type = "string" }, displayName = { type = "string" }, singularName = { type = "string" }, slug = { type = "string" }, createdOn = { type = "string", format = "date-time" }, lastUpdated = { type = "string", format = "date-time" }, fields = { type = "array", description = "Every field this collection's items carry, tenant-defined — this is what makes an item's fieldData unknowable until this is fetched", items = { type = "object", required = ["id", "slug", "type"], properties = { id = { type = "string" }, isEditable = { type = "boolean" }, isRequired = { type = "boolean" }, type = { type = "string", description = "Webflow's field type, e.g. PlainText, RichText, Number, Bool, Date, Image, Link, Reference, MultiReference, Option, Color — not enumerated further as a closed set, since Webflow may add types this file does not yet know about" }, displayName = { type = "string" }, slug = { type = "string", description = "The key this field occupies inside an item's fieldData" } } } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "webflow-collection-item-list"
+method = "GET"
+path = "/collections/{collection_id}/items"
+# THE FIRST HALF OF THE ARCHETYPE'S ANSWER ON THE READ SIDE. `fieldData` is declared as an open
+# `object` deliberately — see the header comment for why neither Notion's nor Miro's mechanism
+# applies here, and why this is still coverage-safe under `response_schema_coverage.rs`.
+description = "List the items in a collection, in Webflow's default order. Each item's fieldData is a flat object keyed by that collection's own field slugs — call webflow-collection-get to discover them; this connector cannot type fieldData beyond that, because it is defined per-tenant, per-collection. Returns Webflow's first page only; this connector declares no offset or limit parameter"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "collection_id"
+description = "The collection's id, as returned by webflow-collection-list"
+required = true
+schema = { type = "string", pattern = "^[0-9a-f]{24}$" }
+
+[operations.response_schema]
+type = "object"
+required = ["items"]
+properties = { items = { type = "array", items = { type = "object", required = ["id", "fieldData"], properties = { id = { type = "string", description = "The item's id — pass this as `item_id` to webflow-collection-item-get" }, cmsLocaleId = { type = "string" }, lastPublished = { type = "string", format = "date-time", description = "Absent or null when this item has never been published" }, lastUpdated = { type = "string", format = "date-time" }, createdOn = { type = "string", format = "date-time" }, isArchived = { type = "boolean" }, isDraft = { type = "boolean" }, fieldData = { type = "object", description = "This item's custom fields, keyed by the collection's own field slugs. Genuinely unknowable at compile time — call webflow-collection-get to discover the keys and their types before reading this" } } } }, pagination = { type = "object", description = "Offset/limit paging metadata; unusable here — this connector returns Webflow's first page only and declares no offset or limit parameter" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "webflow-collection-item-get"
+method = "GET"
+path = "/collections/{collection_id}/items/{item_id}"
+description = "Get one item from a collection. Its fieldData is a flat object keyed by that collection's own field slugs — call webflow-collection-get to discover them; this connector cannot type fieldData beyond that, because it is defined per-tenant, per-collection"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "collection_id"
+description = "The collection's id, as returned by webflow-collection-list"
+required = true
+schema = { type = "string", pattern = "^[0-9a-f]{24}$" }
+
+[[operations.params.path]]
+name = "item_id"
+description = "The item's id, as returned by webflow-collection-item-list"
+required = true
+schema = { type = "string", pattern = "^[0-9a-f]{24}$" }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "fieldData"]
+properties = { id = { type = "string" }, cmsLocaleId = { type = "string" }, lastPublished = { type = "string", format = "date-time", description = "Absent or null when this item has never been published" }, lastUpdated = { type = "string", format = "date-time" }, createdOn = { type = "string", format = "date-time" }, isArchived = { type = "boolean" }, isDraft = { type = "boolean" }, fieldData = { type = "object", description = "This item's custom fields, keyed by the collection's own field slugs. Genuinely unknowable at compile time — call webflow-collection-get to discover the keys and their types before reading this" } }
+
+# ---------------------------------------------------------------------------------------------
+# THE ONE WRITE. See the header comment: this has immediate public effect and is declared `high`,
+# not an ordinary write's `medium`.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "webflow-site-publish"
+method = "POST"
+path = "/sites/{site_id}/publish"
+description = "Publish a site's currently staged changes to its live, public domains — every connected custom domain and the Webflow-hosted subdomain. This has immediate public effect: whatever is staged goes live for every visitor as soon as this call returns, with no separate confirmation step. Takes no body — Webflow's optional custom-domain selector is itself an array this connector cannot express (C-185), so this always publishes to every connected domain rather than a caller-chosen subset"
+# `high`, not `medium`: an externally-visible change, live for everyone, the instant the call
+# returns — the same tier `providers/cloudflare.toml` gives its cache purge and
+# `providers/launchdarkly.toml` gives its flag toggle, for the identical reason. Not `destructive`:
+# nothing is deleted, and publishing again supersedes it.
+risk = "high"
+# `POST` is refused `idempotency = "idempotent"` by `check_write_metadata` regardless of vendor
+# behaviour (C-186) — publishing the same staged state twice is, in effect, idempotent, but the
+# emitter allows nothing else on a `POST`. `non_idempotent` is the honest declaration this compiler
+# permits, not a claim this file is walking back; see `providers/cloudflare.toml`'s cache purge and
+# `providers/miro.toml`'s sticky-note update for the identical trade.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "site_id"
+description = "The site's id, as returned by webflow-site-list"
+required = true
+schema = { type = "string", pattern = "^[0-9a-f]{24}$" }
+
+# No response_schema: this file has no confident, vendored reference for the publish response's exact
+# shape, and declares nothing rather than a permissive placeholder for a response it cannot describe —
+# the same choice `providers/babelforce.toml`, `providers/fly.toml` and others make where the vendor's
+# body is genuinely unspecified (`crates/connector-spec/tests/response_schema_coverage.rs`'s own
+# header explains why absence, not a placeholder, is the honest answer here).
