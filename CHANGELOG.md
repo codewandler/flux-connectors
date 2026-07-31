@@ -7,6 +7,54 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A dev sign-in, so the app is usable without a Google registration (C-234).** `cargo run -p
+  connectors-api -- --dev` mints a session through the same machinery a Google sign-in uses — same
+  cookie attributes, same opacity, same tenant resolution — for an account labelled
+  `DEVELOPER — NOT A REAL ACCOUNT` in tenant `dev-local`.
+
+  Without the flag the route does **not exist**: `404` with an empty body, not `403`, because an
+  absent route cannot be reached by a misconfiguration. Probed with 156 raw HTTP requests written on
+  a bare socket so nothing normalised them — `/auth/%2564ev`, `/auth/x/../dev`, `/auth/dev%00`,
+  method overrides, `X-Original-URL`, `X-Forwarded-*` — all refused, none set a cookie. No
+  `id_token`, with any attacker-chosen `sub`, can reach the dev tenant: `from_claims` prepends a
+  literal `google-` and `developer()` takes no arguments. The binary now also refuses unknown
+  arguments, because the loopback-only bind is what makes the dev door safe enough to exist.
+
+- **The first byte (C-202).** A test now sends one request through a real `HttpRequestTool` wrapped
+  in `Egress` to a loopback server under test control, and asserts the vendor received exactly the
+  `{ method, url, headers, body }` the pack built. The request path was a proposition asserted
+  against stubs; it is now something that has sent.
+
+  The loopback-versus-SSRF-guard tension — the host sets `PrivateNetAllow::None`, which refuses the
+  very address such a test must reach — resolved as a one-host grant on one `App`, leaving
+  `WebOptions::default()` and `App::new` untouched. The grant is proved load-bearing by running the
+  same operation under `App::new` and requiring a refusal with nothing recorded by the vendor.
+
+### Fixed
+
+- **`RATIO_FLOOR_PERCENT` could only drift, and is replaced by a unit that cannot (C-196).** It
+  guarded against a connector arriving with no response shapes at all, as a share of the catalogue,
+  and nothing ratcheted it — it was moved by hand twice, each time *after* somebody noticed.
+
+  Both obvious fixes were rejected on evidence. Deriving it from `COVERED_FLOOR` puts the same
+  denominator on both sides and collapses to the assertion above it, deleting the guard along with
+  the constant. Keeping a percentage fails for a sharper reason: **one point of 110 operations is one
+  operation; one point of 299 is three.** At a floor of 88, five operations could arrive carrying
+  nothing before it fired — and 27 of the 53 shipped connectors are five operations or fewer, so over
+  half the catalogue could have landed with nothing and passed. The unit was the defect, not the
+  number.
+
+  `ABSENCE_CEILING` and `ABSENCE_SLACK` count absences directly, ratcheted both ways, with the slack
+  read off the catalogue rather than copied: datadog and google each landed with exactly two honest
+  absences, so a slack of one would have turned both red for doing nothing wrong.
+
+- **An SSRF guard that was asserting a third-party constant (C-202).**
+  `the_default_egress_guards_the_private_network` read `flux_web::WebOptions::default()` rather than
+  this host's policy, so a host shipping `PrivateNetAllow::Any` passed it. Found by mutation, and now
+  caught by a behavioural test instead.
+
 ## [0.7.0] — 2026-07-31
 
 ### Added

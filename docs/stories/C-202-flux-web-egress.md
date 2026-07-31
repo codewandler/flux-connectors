@@ -2,7 +2,7 @@
 id: C-202
 title: "Bring flux-web into the graph and prove Egress over a real http.request"
 pillar: Bridge
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/connectors-api.md
 epic: connectors-api

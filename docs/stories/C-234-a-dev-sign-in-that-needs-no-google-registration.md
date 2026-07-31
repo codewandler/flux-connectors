@@ -2,7 +2,7 @@
 id: C-234
 title: "The app cannot be used at all without a real Google registration, so trying it locally requires credentials the operator may not have"
 pillar: Bridge
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/connectors-api.md
 epic: connectors-api

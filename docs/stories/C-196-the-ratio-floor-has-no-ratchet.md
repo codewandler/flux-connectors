@@ -2,7 +2,7 @@
 id: C-196
 title: "`RATIO_FLOOR_PERCENT` has no ratchet, so it can only drift"
 pillar: Build
-status: in-progress
+status: done
 priority: 3
 design:
 epic: connectors-v1
