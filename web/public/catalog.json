@@ -4905,7 +4905,7 @@
           "id": "cloudflare-zone-list",
           "provider": "cloudflare",
           "service": "default",
-          "description": "List the zones (domains) this API token can see, with each zone's id, name, status and assigned Cloudflare name servers. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note). The zone `id` returned here is what every other operation in this connector needs as `zone_id`",
+          "description": "List the zones (domains) this API token can see, with each zone's id, name, status and assigned Cloudflare name servers. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note). The zone `id` returned here is the value an operator pins as this connection's `zone_id`; every other operation in this connector is already scoped to that one zone and does not take it as an argument",
           "risk": "low",
           "idempotency": "idempotent",
           "method": "GET",
@@ -5005,7 +5005,7 @@
           "hosts": [
             "api.cloudflare.com"
           ],
-          "flux": "op cloudflare-zone-list -> Any\n  description \"List the zones (domains) this API token can see, with each zone's id, name, status and assigned Cloudflare name servers. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note). The zone `id` returned here is what every other operation in this connector needs as `zone_id`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.cloudflare.com/client/v4\"\n  url = fmt(\"{base}/zones\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op cloudflare-zone-list -> Any\n  description \"List the zones (domains) this API token can see, with each zone's id, name, status and assigned Cloudflare name servers. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note). The zone `id` returned here is the value an operator pins as this connection's `zone_id`; every other operation in this connector is already scoped to that one zone and does not take it as an argument. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.cloudflare.com/client/v4\"\n  url = fmt(\"{base}/zones\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5027,29 +5027,10 @@
           "idempotency": "idempotent",
           "method": "GET",
           "path": "/zones/{zone_id}/dns_records",
-          "parameters": [
-            {
-              "name": "zone_id",
-              "in": "path",
-              "wire": null,
-              "description": "The zone's id, 32 lowercase hex characters, as returned by cloudflare-zone-list",
-              "required": true,
-              "schema": {
-                "pattern": "^[0-9a-f]{32}$",
-                "type": "string"
-              }
-            }
-          ],
+          "parameters": [],
           "input_schema": {
-            "properties": {
-              "zone_id": {
-                "pattern": "^[0-9a-f]{32}$",
-                "type": "string"
-              }
-            },
-            "required": [
-              "zone_id"
-            ],
+            "properties": {},
+            "required": [],
             "type": "object"
           },
           "body_schema": null,
@@ -5165,7 +5146,7 @@
           "hosts": [
             "api.cloudflare.com"
           ],
-          "flux": "op cloudflare-dns-record-list(zone_id: String) -> Any\n  description \"List the DNS records in a zone: each record's id, type, name, content, TTL and whether it is proxied through Cloudflare. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.cloudflare.com/client/v4\"\n  url = fmt(\"{base}/zones/{zone_id}/dns_records\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op cloudflare-dns-record-list -> Any\n  description \"List the DNS records in a zone: each record's id, type, name, content, TTL and whether it is proxied through Cloudflare. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.cloudflare.com/client/v4\"\n  zone_id = \"{zone_id}\"\n  url = fmt(\"{base}/zones/{zone_id}/dns_records\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5188,17 +5169,6 @@
           "method": "POST",
           "path": "/zones/{zone_id}/dns_records",
           "parameters": [
-            {
-              "name": "zone_id",
-              "in": "path",
-              "wire": null,
-              "description": "The zone's id, 32 lowercase hex characters, as returned by cloudflare-zone-list",
-              "required": true,
-              "schema": {
-                "pattern": "^[0-9a-f]{32}$",
-                "type": "string"
-              }
-            },
             {
               "name": "type",
               "in": "body",
@@ -5260,14 +5230,9 @@
                   "CAA"
                 ],
                 "type": "string"
-              },
-              "zone_id": {
-                "pattern": "^[0-9a-f]{32}$",
-                "type": "string"
               }
             },
             "required": [
-              "zone_id",
               "type",
               "name",
               "content"
@@ -5347,7 +5312,7 @@
           "hosts": [
             "api.cloudflare.com"
           ],
-          "flux": "op cloudflare-dns-record-create(zone_id: String, type: String, name: String, content: String) -> Any\n  description \"Create a DNS record in a zone. Cloudflare does not deduplicate: creating the same name/type/content pair twice makes two records, so this is not idempotent. The created record, with its assigned id, is in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.cloudflare.com/client/v4\"\n  url = fmt(\"{base}/zones/{zone_id}/dns_records\")\n  content_type = \"application/json\"\n  payload = { content, name, type }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "flux": "op cloudflare-dns-record-create(type: String, name: String, content: String) -> Any\n  description \"Create a DNS record in a zone. Cloudflare does not deduplicate: creating the same name/type/content pair twice makes two records, so this is not idempotent. The created record, with its assigned id, is in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.cloudflare.com/client/v4\"\n  zone_id = \"{zone_id}\"\n  url = fmt(\"{base}/zones/{zone_id}/dns_records\")\n  content_type = \"application/json\"\n  payload = { content, name, type }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5371,17 +5336,6 @@
           "path": "/zones/{zone_id}/dns_records/{dns_record_id}",
           "parameters": [
             {
-              "name": "zone_id",
-              "in": "path",
-              "wire": null,
-              "description": "The zone's id, 32 lowercase hex characters, as returned by cloudflare-zone-list",
-              "required": true,
-              "schema": {
-                "pattern": "^[0-9a-f]{32}$",
-                "type": "string"
-              }
-            },
-            {
               "name": "dns_record_id",
               "in": "path",
               "wire": null,
@@ -5398,14 +5352,9 @@
               "dns_record_id": {
                 "pattern": "^[0-9a-f]{32}$",
                 "type": "string"
-              },
-              "zone_id": {
-                "pattern": "^[0-9a-f]{32}$",
-                "type": "string"
               }
             },
             "required": [
-              "zone_id",
               "dns_record_id"
             ],
             "type": "object"
@@ -5458,7 +5407,7 @@
           "hosts": [
             "api.cloudflare.com"
           ],
-          "flux": "op cloudflare-dns-record-delete(zone_id: String, dns_record_id: String) -> Any\n  description \"Delete one DNS record. There is no API route back: Cloudflare's dashboard \\\"recently deleted\\\" surface is a retention-window UI feature, not an endpoint, so a flux run cannot undo this. Responds with just the deleted record's id. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.cloudflare.com/client/v4\"\n  url = fmt(\"{base}/zones/{zone_id}/dns_records/{dns_record_id}\")\n  response = http.request(method: \"DELETE\", url)\n  return response\n",
+          "flux": "op cloudflare-dns-record-delete(dns_record_id: String) -> Any\n  description \"Delete one DNS record. There is no API route back: Cloudflare's dashboard \\\"recently deleted\\\" surface is a retention-window UI feature, not an endpoint, so a flux run cannot undo this. Responds with just the deleted record's id. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.cloudflare.com/client/v4\"\n  zone_id = \"{zone_id}\"\n  url = fmt(\"{base}/zones/{zone_id}/dns_records/{dns_record_id}\")\n  response = http.request(method: \"DELETE\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -5482,17 +5431,6 @@
           "path": "/zones/{zone_id}/purge_cache",
           "parameters": [
             {
-              "name": "zone_id",
-              "in": "path",
-              "wire": null,
-              "description": "The zone's id, 32 lowercase hex characters, as returned by cloudflare-zone-list",
-              "required": true,
-              "schema": {
-                "pattern": "^[0-9a-f]{32}$",
-                "type": "string"
-              }
-            },
-            {
               "name": "purge_everything",
               "in": "body",
               "wire": null,
@@ -5509,14 +5447,9 @@
               "purge_everything": {
                 "const": true,
                 "type": "boolean"
-              },
-              "zone_id": {
-                "pattern": "^[0-9a-f]{32}$",
-                "type": "string"
               }
             },
             "required": [
-              "zone_id",
               "purge_everything"
             ],
             "type": "object"
@@ -5569,7 +5502,7 @@
           "hosts": [
             "api.cloudflare.com"
           ],
-          "flux": "op cloudflare-cache-purge(zone_id: String) -> Any\n  description \"Purge every cached asset for a zone, immediately, for every visitor worldwide. There is no partial or selective purge in this connector (see its header note) — every call empties the whole zone's edge cache. Repeating it changes nothing further, but each call can spike load on the origin as the cache refills, so it should not be called more often than a real cache-affecting change warrants. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.cloudflare.com/client/v4\"\n  url = fmt(\"{base}/zones/{zone_id}/purge_cache\")\n  content_type = \"application/json\"\n  purge_everything = true\n  payload = { purge_everything }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "flux": "op cloudflare-cache-purge -> Any\n  description \"Purge every cached asset for a zone, immediately, for every visitor worldwide. There is no partial or selective purge in this connector (see its header note) — every call empties the whole zone's edge cache. Repeating it changes nothing further, but each call can spike load on the origin as the cache refills, so it should not be called more often than a real cache-affecting change warrants. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.cloudflare.com/client/v4\"\n  zone_id = \"{zone_id}\"\n  url = fmt(\"{base}/zones/{zone_id}/purge_cache\")\n  content_type = \"application/json\"\n  purge_everything = true\n  payload = { purge_everything }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -32284,31 +32217,14 @@
           "id": "vercel-projects-list",
           "provider": "vercel",
           "service": "default",
-          "description": "List projects. Scoped to the personal account unless teamId names a team — on a team workspace, omitting teamId silently returns the wrong, but real-looking, project list rather than an error",
+          "description": "List the projects of the team this connector is installed for. The team is pinned at install time and is not a parameter, so every call returns that team's projects and no other account's",
           "risk": "low",
           "idempotency": "idempotent",
           "method": "GET",
           "path": "/v10/projects",
-          "parameters": [
-            {
-              "name": "teamId",
-              "in": "query",
-              "wire": null,
-              "description": "The team to act on behalf of. Omit it and this lists the personal account's projects instead — Vercel accepts the call and returns a complete, plausible list either way, so there is no error to notice if this is the wrong account",
-              "required": false,
-              "schema": {
-                "minLength": 1,
-                "type": "string"
-              }
-            }
-          ],
+          "parameters": [],
           "input_schema": {
-            "properties": {
-              "teamId": {
-                "minLength": 1,
-                "type": "string"
-              }
-            },
+            "properties": {},
             "required": [],
             "type": "object"
           },
@@ -32322,7 +32238,7 @@
           "hosts": [
             "api.vercel.com"
           ],
-          "flux": "op vercel-projects-list(teamId: String) -> Any\n  description \"List projects. Scoped to the personal account unless teamId names a team — on a team workspace, omitting teamId silently returns the wrong, but real-looking, project list rather than an error\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.vercel.com\"\n  url = fmt(\"{base}/v10/projects\")\n  sep = \"?\"\n  when teamId\n    url = fmt(\"{url}{sep}teamId={teamId}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op vercel-projects-list -> Any\n  description \"List the projects of the team this connector is installed for. The team is pinned at install time and is not a parameter, so every call returns that team's projects and no other account's\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.vercel.com\"\n  teamId = \"{teamId}\"\n  url = fmt(\"{base}/v10/projects?teamId={teamId}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -32331,14 +32247,6 @@
                 "scope": "catalog",
                 "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
-              },
-              {
-                "code": "unencodable-query-value",
-                "scope": "operation",
-                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
-                "params": [
-                  "teamId"
-                ]
               }
             ]
           }
@@ -32347,7 +32255,7 @@
           "id": "vercel-project-get",
           "provider": "vercel",
           "service": "default",
-          "description": "Get one project by its id or name. teamId scopes which account's project this addresses; a team project looked up with the wrong or absent teamId is documented to 404 rather than silently returning a different project",
+          "description": "Get one project of the team this connector is installed for, by its id or name. A project belonging to any other account is a 404 here: the team is pinned at install time and is not a parameter",
           "risk": "low",
           "idempotency": "idempotent",
           "method": "GET",
@@ -32363,26 +32271,11 @@
                 "minLength": 1,
                 "type": "string"
               }
-            },
-            {
-              "name": "teamId",
-              "in": "query",
-              "wire": null,
-              "description": "The team to act on behalf of. Omit it and Vercel looks for the project in the personal account instead of any team",
-              "required": false,
-              "schema": {
-                "minLength": 1,
-                "type": "string"
-              }
             }
           ],
           "input_schema": {
             "properties": {
               "idOrName": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "teamId": {
                 "minLength": 1,
                 "type": "string"
               }
@@ -32435,7 +32328,7 @@
           "hosts": [
             "api.vercel.com"
           ],
-          "flux": "op vercel-project-get(idOrName: String, teamId: String) -> Any\n  description \"Get one project by its id or name. teamId scopes which account's project this addresses; a team project looked up with the wrong or absent teamId is documented to 404 rather than silently returning a different project\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.vercel.com\"\n  url = fmt(\"{base}/v9/projects/{idOrName}\")\n  sep = \"?\"\n  when teamId\n    url = fmt(\"{url}{sep}teamId={teamId}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op vercel-project-get(idOrName: String) -> Any\n  description \"Get one project of the team this connector is installed for, by its id or name. A project belonging to any other account is a 404 here: the team is pinned at install time and is not a parameter\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.vercel.com\"\n  teamId = \"{teamId}\"\n  url = fmt(\"{base}/v9/projects/{idOrName}?teamId={teamId}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -32444,14 +32337,6 @@
                 "scope": "catalog",
                 "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
-              },
-              {
-                "code": "unencodable-query-value",
-                "scope": "operation",
-                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
-                "params": [
-                  "teamId"
-                ]
               }
             ]
           }
@@ -32460,7 +32345,7 @@
           "id": "vercel-deployments-list",
           "provider": "vercel",
           "service": "default",
-          "description": "List deployments. Scoped to the personal account unless teamId names a team — on a team workspace, omitting teamId silently returns the wrong, but real-looking, deployment list rather than an error",
+          "description": "List the deployments of the team this connector is installed for, newest first, optionally filtered to one project. The team is pinned at install time and is not a parameter, so every call returns that team's deployments and no other account's",
           "risk": "low",
           "idempotency": "idempotent",
           "method": "GET",
@@ -32476,26 +32361,11 @@
                 "minLength": 1,
                 "type": "string"
               }
-            },
-            {
-              "name": "teamId",
-              "in": "query",
-              "wire": null,
-              "description": "The team to act on behalf of. Omit it and this lists the personal account's deployments instead — Vercel accepts the call and returns a complete, plausible list either way, so there is no error to notice if this is the wrong account",
-              "required": false,
-              "schema": {
-                "minLength": 1,
-                "type": "string"
-              }
             }
           ],
           "input_schema": {
             "properties": {
               "projectId": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "teamId": {
                 "minLength": 1,
                 "type": "string"
               }
@@ -32615,7 +32485,7 @@
           "hosts": [
             "api.vercel.com"
           ],
-          "flux": "op vercel-deployments-list(projectId: String, teamId: String) -> Any\n  description \"List deployments. Scoped to the personal account unless teamId names a team — on a team workspace, omitting teamId silently returns the wrong, but real-looking, deployment list rather than an error\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.vercel.com\"\n  url = fmt(\"{base}/v7/deployments\")\n  sep = \"?\"\n  when projectId\n    url = fmt(\"{url}{sep}projectId={projectId}\")\n    sep = \"&\"\n  when teamId\n    url = fmt(\"{url}{sep}teamId={teamId}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op vercel-deployments-list(projectId: String) -> Any\n  description \"List the deployments of the team this connector is installed for, newest first, optionally filtered to one project. The team is pinned at install time and is not a parameter, so every call returns that team's deployments and no other account's\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.vercel.com\"\n  teamId = \"{teamId}\"\n  url = fmt(\"{base}/v7/deployments?teamId={teamId}\")\n  sep = \"&\"\n  when projectId\n    url = fmt(\"{url}{sep}projectId={projectId}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -32630,8 +32500,7 @@
                 "scope": "operation",
                 "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
                 "params": [
-                  "projectId",
-                  "teamId"
+                  "projectId"
                 ]
               }
             ]
@@ -32641,7 +32510,7 @@
           "id": "vercel-deployment-get",
           "provider": "vercel",
           "service": "default",
-          "description": "Get one deployment by its id or its hostname. teamId scopes which account's authorization applies; a team deployment looked up with the wrong or absent teamId is documented to fail rather than silently returning a different deployment",
+          "description": "Get one deployment of the team this connector is installed for, by its id or its unique hostname. A deployment belonging to any other account fails here: the team is pinned at install time and is not a parameter",
           "risk": "low",
           "idempotency": "idempotent",
           "method": "GET",
@@ -32657,26 +32526,11 @@
                 "minLength": 1,
                 "type": "string"
               }
-            },
-            {
-              "name": "teamId",
-              "in": "query",
-              "wire": null,
-              "description": "The team to act on behalf of. Omit it and Vercel looks for the deployment in the personal account instead of any team",
-              "required": false,
-              "schema": {
-                "minLength": 1,
-                "type": "string"
-              }
             }
           ],
           "input_schema": {
             "properties": {
               "idOrUrl": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "teamId": {
                 "minLength": 1,
                 "type": "string"
               }
@@ -32732,7 +32586,7 @@
           "hosts": [
             "api.vercel.com"
           ],
-          "flux": "op vercel-deployment-get(idOrUrl: String, teamId: String) -> Any\n  description \"Get one deployment by its id or its hostname. teamId scopes which account's authorization applies; a team deployment looked up with the wrong or absent teamId is documented to fail rather than silently returning a different deployment\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.vercel.com\"\n  url = fmt(\"{base}/v13/deployments/{idOrUrl}\")\n  sep = \"?\"\n  when teamId\n    url = fmt(\"{url}{sep}teamId={teamId}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op vercel-deployment-get(idOrUrl: String) -> Any\n  description \"Get one deployment of the team this connector is installed for, by its id or its unique hostname. A deployment belonging to any other account fails here: the team is pinned at install time and is not a parameter\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.vercel.com\"\n  teamId = \"{teamId}\"\n  url = fmt(\"{base}/v13/deployments/{idOrUrl}?teamId={teamId}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -32741,14 +32595,6 @@
                 "scope": "catalog",
                 "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
-              },
-              {
-                "code": "unencodable-query-value",
-                "scope": "operation",
-                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
-                "params": [
-                  "teamId"
-                ]
               }
             ]
           }
@@ -32757,7 +32603,7 @@
           "id": "vercel-deployment-cancel",
           "provider": "vercel",
           "service": "default",
-          "description": "Cancel a deployment that is still building, stopping it before it completes; refused with 400 if it already finished (READY, ERROR or CANCELED). teamId scopes which account's authorization applies — omit it and Vercel looks for the deployment in the personal account instead of any team, most often failing closed rather than cancelling a different one",
+          "description": "Cancel a deployment of the team this connector is installed for, stopping it before it completes; refused with 400 if it already finished (READY, ERROR or CANCELED). The team is pinned at install time and is not a parameter, so this cannot reach a deployment of another account",
           "risk": "high",
           "idempotency": "non_idempotent",
           "method": "PATCH",
@@ -32773,26 +32619,11 @@
                 "minLength": 1,
                 "type": "string"
               }
-            },
-            {
-              "name": "teamId",
-              "in": "query",
-              "wire": null,
-              "description": "The team to act on behalf of. Omit it and Vercel looks for the deployment in the personal account instead of any team",
-              "required": false,
-              "schema": {
-                "minLength": 1,
-                "type": "string"
-              }
             }
           ],
           "input_schema": {
             "properties": {
               "id": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "teamId": {
                 "minLength": 1,
                 "type": "string"
               }
@@ -32836,7 +32667,7 @@
           "hosts": [
             "api.vercel.com"
           ],
-          "flux": "op vercel-deployment-cancel(id: String, teamId: String) -> Any\n  description \"Cancel a deployment that is still building, stopping it before it completes; refused with 400 if it already finished (READY, ERROR or CANCELED). teamId scopes which account's authorization applies — omit it and Vercel looks for the deployment in the personal account instead of any team, most often failing closed rather than cancelling a different one\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.vercel.com\"\n  url = fmt(\"{base}/v12/deployments/{id}/cancel\")\n  sep = \"?\"\n  when teamId\n    url = fmt(\"{url}{sep}teamId={teamId}\")\n  response = http.request(method: \"PATCH\", url)\n  return response\n",
+          "flux": "op vercel-deployment-cancel(id: String) -> Any\n  description \"Cancel a deployment of the team this connector is installed for, stopping it before it completes; refused with 400 if it already finished (READY, ERROR or CANCELED). The team is pinned at install time and is not a parameter, so this cannot reach a deployment of another account\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.vercel.com\"\n  teamId = \"{teamId}\"\n  url = fmt(\"{base}/v12/deployments/{id}/cancel?teamId={teamId}\")\n  response = http.request(method: \"PATCH\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -32845,14 +32676,6 @@
                 "scope": "catalog",
                 "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
-              },
-              {
-                "code": "unencodable-query-value",
-                "scope": "operation",
-                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
-                "params": [
-                  "teamId"
-                ]
               }
             ]
           }
