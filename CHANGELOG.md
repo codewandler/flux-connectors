@@ -9,6 +9,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **An operator can pin a tenant scope at install time, not only a base URL (C-187).** `[[config]]`
+  bound `base_url` and nothing else, so Cloudflare's `zone_id` (a path segment) and Vercel's `teamId`
+  (a query parameter) stayed per-call arguments a model chose on every request. For Vercel that was
+  sharp: `teamId` is optional at the vendor and its absence is not neutral — omit it and the call
+  lands on the personal account instead of the team, so the connector shipped a parameter whose
+  omission silently redirects a write.
+
+  `ConfigField::binds` now reaches a **path segment, a query parameter and a header**, through one
+  closed `Position` enum. A pinned value is refused as a caller argument in two independent places —
+  the loader and the emitter — and pins are **mandatory**: `connector-pack` refuses a request with an
+  unresolved literal, so an optional pin is a connector that composes no URL. Verified at request
+  time, where both an absent value and an empty string refuse without sending.
+
+  Consequence, stated rather than discovered: Cloudflare and Vercel are now single-tenant per
+  connection. One installed connector reaching several zones needs one connection per zone.
+
 - **A dry-run transport that cannot send, and the first check that the pack and the shipped modules
   agree (C-145).** `connector-pack` gains a `Transport` seam whose live arm delegates to flux's
   `http.request` exactly as C-115 landed it, and a `DryRunTransport` that answers "what request would

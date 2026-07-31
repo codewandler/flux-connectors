@@ -2,8 +2,7 @@
 id: C-187
 title: "`[[config]]` can pin a base URL and nothing else, so an operator cannot scope a connector to one tenant"
 pillar: Spec
-status: in-progress
-priority: 3
+status: done
 areas: [connector-spec, connector-flux]
 note: "found twice in one wave: C-169 wanted an operator-pinned zone_id (a path segment) and C-170 wanted an operator-pinned teamId (a query parameter). ConfigField::binds reaches base_url and nothing else, so both became per-call arguments a model may set freely"
 ---
@@ -241,3 +240,54 @@ there is what turns "a pinned path segment cannot escape its segment" from a che
 into a checked *request*, and it was out of this story's write set. Related: `connector-pack`'s
 `Field::Endpoint` is now the kind every pinned value resolves through, so its doc-comment ("a `{var}`
 in a service's `base_url`") understates what it carries.
+
+## Coordinator note at integration (2026-07-31)
+
+Merged at `9b40720`; the whole-catalogue staleness resolved by the coordinator's full build
+(`9ed91af`). Independent review returned **PASS** after verifying the failing-first proof at the
+merge base, both refusal paths, the per-provider fixed points, and the flux formatter fixed point.
+
+**Three positions rather than two, and mandatory pins, are both endorsed.** Shipping path and query
+but not header would have left [C-164](C-164-provider-algolia.md) blocked for a reason that no longer
+existed. Mandatory was forced rather than chosen: `connector-pack` refuses a request with an
+unresolved literal, so an optional pin is a connector that composes no URL. The review verified this
+is enforced at **request** time, not merely at load time — both an absent value and an empty string
+refuse with `needs endpoint.teamId ... the request was not sent`, and the filter sits in
+`Configuration::snapshot`, so it binds every `ConfigStore` rather than only `MemoryConfig`.
+
+**The escape guard gap is real, is not this story's to fix, and the reasoning is worth recording.**
+`Position::validate_value` has two non-test call sites, both in the loader, both against `example` or
+a parameter *name* — never a real value. The review's probe against the shipped catalogue confirms
+every value substitutes verbatim:
+
+```
+zone_id="../../v4/other" -> https://api.cloudflare.com/client/v4/zones/../../v4/other/dns_records
+zone_id="abc?evil=1"     -> https://api.cloudflare.com/client/v4/zones/abc?evil=1/dns_records
+teamId="team_a&projectId=evil" -> https://api.vercel.com/v10/projects?teamId=team_a&projectId=evil
+```
+
+**The origin cannot change from a path or query pin**: substitution lands after the authority is
+fixed in the `base` literal, so the host stays the vendor's in every case. The result is a wrong
+endpoint at the right vendor, with the operator's own token.
+
+It is a follow-on rather than a rework for three independent reasons the review established: it is
+**not an Acceptance item** (the diff changed only `[ ]`→`[x]` and `status:`; the phrase appears only
+in the implementor's self-imposed Progress); `connector-pack` is **outside this story's declared
+areas**; and the gap is **pre-existing and strictly wider than what this story adds** — the same
+unvalidated substitution already applies to `endpoint.<var>` in a **host** position, which *can* move
+the origin. See [C-214](C-214-a-pinned-value-reaches-the-wire-unvalidated.md), which carries the
+serious half.
+
+**Two doc-comments this change falsified, confirmed false and fixed at integration:**
+`connector-pack/src/config.rs` described `Field::Endpoint` as "a `{var}` in a service's `base_url`"
+— path, query and header pins all resolve through it — and `request.rs` claimed the only
+brace-carrying literals were the nine templated base URLs, where there are now ten more
+(`{teamId}` ×5, `{zone_id}` ×4).
+
+**Recorded consequence, stated by the implementor rather than discovered later:** Cloudflare and
+Vercel are now single-tenant per connection. A deployment relying on one installed Cloudflare
+connector reaching several zones needs one connection per zone.
+
+Minor, recorded: the failing-first proof is not reproducible by re-running the shipped test file at
+the merge base — the file does not compile there, since it imports `Position` and `Binding::Request`.
+The named test is genuine once reconstructed with base-era API, which the reviewer did.
