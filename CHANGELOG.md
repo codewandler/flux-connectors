@@ -7,6 +7,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A `--service` scoped build carried another service's `config`, `graphs` and `verify` (C-194).**
+  `select_service` narrowed `services`, `operations`, `events` and `channels`, then let
+  `..connector.clone()` carry the rest through. Seventeen real crossings across four shipped
+  providers: 12 configuration fields and 5 `verify` pointers, in `anthropic`, `contentful`,
+  `microsoft_graph` and `postmark`. `graphs` leaked zero times, because **no provider declares one**.
+
+  **None of the seventeen reached a committed artifact, and the number needs its plain reading.**
+  Eight of the leaked config fields declare `secret = true`, which sounds far worse than it is: a
+  `ConfigField` is `name`/`label`/`help`/`format`/`example`/`binds` and **has no value field**.
+  `secret = true` is a claim *about a value a host will later collect*, not a credential. The worst a
+  crossing could have published is a form field — a label, its help text, and a credential name the
+  catalogue already publishes deliberately. Verified four ways that nothing reaches disk, including
+  that the leaked help string appears nowhere outside `providers/anthropic.toml`, which is input.
+  The real defect is that a `models`-scoped install would ask an operator for an admin key, eroding
+  the operator/connection level split.
+
+  It was invisible because **no test had ever looked at `select_service`'s output beyond
+  `operations`**, and an emitted-artifact test structurally cannot cover an IR-only surface. Both
+  halves are now pinned: a fixture test for what no shipped provider exercises, and a property test
+  over the real catalogue that produced the seventeen.
+
+  `auth`/`default_auth` are deliberately **not** narrowed — `AuthMethod` has no `service` field, so
+  it needs a reachability computation rather than a filter, and a test pins that so a later edit
+  cannot take it by accident. `..connector.clone()` remains the mechanism and will do this again for
+  the next service-partitioned field; `HashDomain::of` already solves the class with exhaustive
+  destructuring that fails to compile until someone states the answer.
+
 ### Changed
 
 - **The docs now say what a connector actually is, and the charter was amended twice.**

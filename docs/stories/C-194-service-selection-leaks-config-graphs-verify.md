@@ -2,7 +2,7 @@
 id: C-194
 title: "`select_service` narrows four surfaces and carries `config`, `graphs` and `verify` through unfiltered"
 pillar: Build
-status: in-progress
+status: done
 priority: 2
 epic: connectors-v1
 areas: [connector-cli]
