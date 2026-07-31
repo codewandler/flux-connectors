@@ -2,8 +2,7 @@
 id: C-160
 title: Ship the Datadog connector
 pillar: Spec
-status: in-progress
-priority: 2
+status: done
 design:
 epic: provider-fleet-2
 areas: [providers]
@@ -139,3 +138,33 @@ up to date`). `cargo test --workspace --no-fail-fast` reports exactly the eight 
 (`response_schema_coverage`'s three tests) stayed green, because two of the four shipped operations
 carry a real, non-permissive schema and the catalogue-wide slack easily absorbs two operations added
 without one.
+
+### Coordinator note at integration
+
+**The story's own premise was wrong and the implementor falsified it rather than accepting it.** This was
+filed predicting that `[[auth]]` is single-valued and that a refusal would be the outcome. It is not:
+`Operation::auth`/`default_auth` is a `Vec<AuthRequirement>` (**OR** — alternatives), and each
+`AuthRequirement` already holds an **AND**-set of credentials
+(`crates/connector-spec/src/auth.rs:272-288`, `ir.rs:652-668`).
+
+So the capability existed, was documented as a worked example in `providers/babelforce.toml`'s header, and
+**had never been exercised by a shipped connector** because that vendor deprecated the pair it described.
+Datadog is the first to use it, verified in the emitted artifact rather than in the TOML:
+`crates/catalog/src/generated/datadog.rs` carries
+`credentials: &[&["datadog.api_key", "datadog.application_key"]]` — one outer alternative, two inner
+credentials, never flattened.
+
+**This is the direct answer for [C-164](C-164-provider-algolia.md)**, which was filed on the same premise
+and no longer needs to probe it.
+
+### The hazard this surfaces, and it is not in this repository
+
+The two axes are **structurally identical in the type** and must not be resolved by one code path. A host
+reading `&[&[a, b]]` has to place **both** headers; reading `&[&[a], &[b]]` it should pick whichever
+single credential it can satisfy. A host that treats the AND-set as "the first satisfiable credential"
+would send `DD-API-KEY` alone and get a `403` — or, worse for a different vendor, send only the
+higher-privilege half.
+
+Nothing here can enforce that: `AGENTS.md` records that no provider can make a live call, and placement
+belongs to the `$auth` seam on flux's side. It is written down here, on the first connector that depends
+on it, so the seam's implementor meets it as a stated requirement rather than as a bug report.

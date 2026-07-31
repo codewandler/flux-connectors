@@ -5578,6 +5578,397 @@
       "channels": []
     },
     {
+      "id": "datadog",
+      "authority": "com.datadoghq.api",
+      "vendor": "Datadog",
+      "description": "Datadog monitoring: list and inspect monitors, list and inspect incidents. Authenticates every request with an API key and an Application key together",
+      "base_url": "https://api.datadoghq.com",
+      "api_version": null,
+      "hosts": [
+        "api.datadoghq.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.datadoghq.com",
+          "hosts": [
+            "api.datadoghq.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 4
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "header"
+        ],
+        "credentials": [
+          {
+            "name": "datadog.api_key",
+            "scheme": {
+              "kind": "header",
+              "name": "DD-API-KEY"
+            },
+            "description": "Datadog API key. Identifies the organization; required on every request together with the Application Key — neither key alone authenticates a call",
+            "env": [
+              "DATADOG_API_KEY"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          },
+          {
+            "name": "datadog.application_key",
+            "scheme": {
+              "kind": "header",
+              "name": "DD-APPLICATION-KEY"
+            },
+            "description": "Datadog Application Key, scoped to the user who created it. Required on every request together with the API Key — neither key alone authenticates a call",
+            "env": [
+              "DATADOG_APPLICATION_KEY"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "datadog.api_key",
+            "datadog.application_key"
+          ]
+        ]
+      },
+      "operation_count": 4,
+      "operations": [
+        {
+          "id": "datadog-monitor-list",
+          "provider": "datadog",
+          "service": "default",
+          "description": "List every monitor visible to this API key. Also this connector's `verify` — a bounded read that runs unattended, needing no argument",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v1/monitor",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "items": {
+              "properties": {
+                "created": {
+                  "description": "When this monitor was created",
+                  "type": "string"
+                },
+                "creator": {
+                  "description": "The user who created this monitor; may be absent for a system-authored monitor. Carries a name and an email address — personal data, never given an example value here",
+                  "type": "object"
+                },
+                "id": {
+                  "description": "Datadog's numeric id for this monitor",
+                  "type": "integer"
+                },
+                "message": {
+                  "description": "The notification message template; may embed @-mentions and template variables",
+                  "type": "string"
+                },
+                "modified": {
+                  "description": "When this monitor was last modified",
+                  "type": "string"
+                },
+                "multi": {
+                  "description": "Whether this is a multi-alert monitor grouped by tag",
+                  "type": "boolean"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "options": {
+                  "description": "Evaluation and notification settings (thresholds, notify_no_data, renotify_interval, evaluation_delay, and more) — left untyped rather than enumerated in full; see Datadog's own Monitor Options reference for the complete shape",
+                  "type": "object"
+                },
+                "overall_state": {
+                  "description": "The monitor's current alert state, e.g. \"OK\", \"Alert\", \"Warn\", \"No Data\"",
+                  "type": "string"
+                },
+                "query": {
+                  "description": "The monitor's evaluation query, in Datadog's own monitor query syntax",
+                  "type": "string"
+                },
+                "tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": {
+                  "description": "The monitor's evaluation type, e.g. \"metric alert\", \"query alert\", \"service check\", \"log alert\", \"composite\"",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "type",
+                "query",
+                "message",
+                "tags",
+                "overall_state",
+                "created",
+                "modified"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "credentials": [
+            [
+              "datadog.api_key",
+              "datadog.application_key"
+            ]
+          ],
+          "hosts": [
+            "api.datadoghq.com"
+          ],
+          "flux": "op datadog-monitor-list -> Any\n  description \"List every monitor visible to this API key. Also this connector's `verify` — a bounded read that runs unattended, needing no argument\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.datadoghq.com\"\n  url = fmt(\"{base}/api/v1/monitor\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "datadog-monitor-get",
+          "provider": "datadog",
+          "service": "default",
+          "description": "Get one monitor by id",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v1/monitor/{monitor_id}",
+          "parameters": [
+            {
+              "name": "monitor_id",
+              "in": "path",
+              "wire": null,
+              "description": "The monitor's id, from datadog-monitor-list",
+              "required": true,
+              "schema": {
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "monitor_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "monitor_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "created": {
+                "description": "When this monitor was created",
+                "type": "string"
+              },
+              "creator": {
+                "description": "The user who created this monitor; may be absent for a system-authored monitor. Carries a name and an email address — personal data, never given an example value here",
+                "type": "object"
+              },
+              "id": {
+                "description": "Datadog's numeric id for this monitor",
+                "type": "integer"
+              },
+              "message": {
+                "description": "The notification message template; may embed @-mentions and template variables",
+                "type": "string"
+              },
+              "modified": {
+                "description": "When this monitor was last modified",
+                "type": "string"
+              },
+              "multi": {
+                "description": "Whether this is a multi-alert monitor grouped by tag",
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "options": {
+                "description": "Evaluation and notification settings (thresholds, notify_no_data, renotify_interval, evaluation_delay, and more) — left untyped rather than enumerated in full; see Datadog's own Monitor Options reference for the complete shape",
+                "type": "object"
+              },
+              "overall_state": {
+                "description": "The monitor's current alert state, e.g. \"OK\", \"Alert\", \"Warn\", \"No Data\"",
+                "type": "string"
+              },
+              "query": {
+                "description": "The monitor's evaluation query, in Datadog's own monitor query syntax",
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": {
+                "description": "The monitor's evaluation type, e.g. \"metric alert\", \"query alert\", \"service check\", \"log alert\", \"composite\"",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "type",
+              "query",
+              "message",
+              "tags",
+              "overall_state",
+              "created",
+              "modified"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "datadog.api_key",
+              "datadog.application_key"
+            ]
+          ],
+          "hosts": [
+            "api.datadoghq.com"
+          ],
+          "flux": "op datadog-monitor-get(monitor_id: Number) -> Any\n  description \"Get one monitor by id\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.datadoghq.com\"\n  url = fmt(\"{base}/api/v1/monitor/{monitor_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "datadog-incident-list",
+          "provider": "datadog",
+          "service": "default",
+          "description": "List the organization's incidents",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v2/incidents",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "datadog.api_key",
+              "datadog.application_key"
+            ]
+          ],
+          "hosts": [
+            "api.datadoghq.com"
+          ],
+          "flux": "op datadog-incident-list -> Any\n  description \"List the organization's incidents\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.datadoghq.com\"\n  url = fmt(\"{base}/api/v2/incidents\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "datadog-incident-get",
+          "provider": "datadog",
+          "service": "default",
+          "description": "Get one incident by id",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v2/incidents/{incident_id}",
+          "parameters": [
+            {
+              "name": "incident_id",
+              "in": "path",
+              "wire": null,
+              "description": "The incident's id (a UUID), from datadog-incident-list",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "incident_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "incident_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "datadog.api_key",
+              "datadog.application_key"
+            ]
+          ],
+          "hosts": [
+            "api.datadoghq.com"
+          ],
+          "flux": "op datadog-incident-get(incident_id: String) -> Any\n  description \"Get one incident by id\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.datadoghq.com\"\n  url = fmt(\"{base}/api/v2/incidents/{incident_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "dropbox",
       "authority": null,
       "vendor": "Dropbox",

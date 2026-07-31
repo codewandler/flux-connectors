@@ -9,6 +9,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Datadog connector (C-160) — the first connector to send two credentials on one request.**
+  `DD-API-KEY` and `DD-APPLICATION-KEY` together, four read operations, `monitor-list` as `verify`.
+
+  **It was filed expecting a refusal and shipped instead, because the premise was falsifiable and got
+  falsified.** `default_auth` is a `Vec<AuthRequirement>` (an **OR** of alternatives) and each
+  `AuthRequirement` holds an **AND**-set of credentials (`auth.rs:272-288`). The capability was designed,
+  written up as a worked example in `providers/babelforce.toml`, and never exercised by a shipped
+  connector because that vendor deprecated the pair. Confirmed in the emitted artifact:
+  `credentials: &[&["datadog.api_key", "datadog.application_key"]]` — one alternative, two credentials,
+  never flattened. This also settles C-164 (Algolia), filed on the same wrong premise.
+
+  Two operations were dropped rather than guessed: *submit an event* (v1-vs-v2 body shape unverifiable —
+  the vendor's docs render client-side) and *query metrics* (needs the percent-encoding this pipeline
+  does not have). Incident Management operations carry no `response_schema` for the same reason
+  babelforce carries none: the field-level shape is genuinely unverified.
+
+  **A hazard for flux's `$auth` seam is recorded on the story**, since nothing here can enforce it: an
+  AND-set and a set of OR-alternatives are structurally identical in the type, and a host that resolves
+  the AND-set as "the first satisfiable credential" would send one header of a required pair.
+
 - **The Webflow connector (C-182), and it completes a taxonomy.** Six operations over a bearer token;
   `site-list` doubles as `verify` and as the site-id discovery step, since `base_url` has no per-tenant
   placeholder to bind.
