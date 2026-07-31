@@ -1,0 +1,342 @@
+# GitLab REST API (`/api/v4`) — hand-authored, no vendor spec vendored.
+#
+# GitLab does not publish one canonical machine-readable OpenAPI document for its whole REST API the
+# way Stripe or GitHub do, so this is authored the same way zendesk, freshdesk, github and notion
+# already are: by reading `docs.gitlab.com/ee/api/*` directly. When ingest (C-4) and the overlay
+# (C-6) exist and GitLab's own description becomes usable, this file becomes `[spec]` plus a
+# `[[patch.operations]]` selection reproducing the seven operations below. Until then, drift is
+# undetectable by machine (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# THE CONSTRAINT THAT SHAPED THE WHOLE SELECTION: A PROJECT HAS TWO ADDRESSES, AND ONLY ONE SURVIVES
+# THIS PIPELINE.
+# ---------------------------------------------------------------------------------------------
+#
+# Every project-scoped GitLab endpoint takes its subject as `:id` in the path, and GitLab's own
+# reference states plainly that `:id` "can be either the project ID or the URL-encoded path of the
+# project" — `278964` or `gitlab-org%2Fgitlab`. The encoded form is what a human actually has: nobody
+# carries a project's numeric id in their head, they have `group/subgroup/project` from the URL bar.
+#
+# It is also the form this pipeline cannot produce. `crates/connector-flux/src/op.rs` interpolates
+# every path and query value **verbatim** into a `fmt` template — "nothing percent-encodes them" is
+# stated there in exactly those words — and flux registers no URL-encoding op
+# (`../flux/crates/flux-flow/docs/ops-reference.md:15`, C-30 unimplemented). AGENTS.md's standing
+# demonstration of what that costs is `zendesk-ticket-search`, non-functional because an unescaped
+# `&` injects a parameter rather than filtering by one; a raw `/` in a path segment is the same
+# failure moved one position to the left, corrupting the segment boundary the moment it is
+# interpolated, and a *caller*-supplied `%2F` would still need the caller to have percent-encoded it
+# themselves — the outcome this story explicitly forbids ("do not hand a model a parameter it must
+# pre-encode itself").
+#
+# So this connector takes the branch `providers/stripe.toml` took for the same reason: **the numeric
+# id only.** Every project-scoped operation below types its project parameter as a JSON Schema
+# `integer` — not a `string` with a `pattern`, because unlike a Stripe object id (`ch_…`) a numeric
+# id needs no pattern to be safe, an `integer` cannot carry a `/` or a `%` at all. That is safe by
+# construction, not merely untested. The cost is stated on every such parameter's `description`,
+# because a model reading the tool contract has no other way to learn it: **a caller who has only
+# the namespaced path (`group/project`) cannot use this connector**, and must resolve it to a numeric
+# id first — through GitLab's own search UI, or through a future percent-encoder landing in flux.
+# `crates/connector-flux/tests/gitlab_connector.rs::every_project_reference_is_a_bare_numeric_id`
+# asserts this over the IR and the emitted path template together, so it stays a property of the
+# connector rather than of this comment.
+#
+# ---------------------------------------------------------------------------------------------
+# WHY THERE IS NO FREE-TEXT QUERY FILTER, for the same underlying reason.
+#
+# `gitlab-issue-list`, `gitlab-merge-request-list` and `gitlab-branch-list` all could take a
+# free-text `search` filter on the real API. None of them do here: a search string is exactly the
+# shape `zendesk-ticket-search` already demonstrates cannot survive unencoded interpolation — a
+# space is misleadingly rescued by URL parsing, but `&`, `#` and `+` are not. The only query
+# parameters declared are a closed `state` enum (whose values are plain lowercase words with no
+# unsafe character) and integer pagination (`page`, `per_page`), both safe by construction for the
+# same reason the project id is.
+#
+# ---------------------------------------------------------------------------------------------
+# `gitlab.com` ONLY. A self-managed GitLab instance lives at an operator-chosen host, and nothing
+# here can express "the same connector against a different endpoint" — the same limitation
+# `providers/sentry.toml` records for a self-hosted Sentry, and C-68's subject
+# (`docs/stories/C-68-endpoint-binding.md`). Recorded here rather than invented around: a `{host}`
+# template with no binding would trade a loud "this is SaaS only" for a silently unbound URL.
+# ---------------------------------------------------------------------------------------------
+
+id = "gitlab"
+vendor = "GitLab"
+
+# One host, gitlab.com's own SaaS. `http_hosts` derives from this single value
+# (`crates/connector-cli/src/catalog.rs`, `host_of`) and is therefore exactly `gitlab.com`, never
+# widened.
+base_url = "https://gitlab.com/api/v4"
+
+description = "GitLab: read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["gitlab.token"] }]
+
+# The "Test connection" button. `GET /user` takes no parameters and cannot do anything except prove
+# the token resolves — it returns the authenticated user, which is also the read a settings page
+# would show as "connected as ...". A `verify` operation must be a read; the loader refuses a `high`
+# or `destructive` one.
+verify = "gitlab-user-get"
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "gitlab.token"
+scheme = "bearer"
+# The sole credential. Gated and registered with flux's redactor by the host; its value is never
+# read here and never reaches a generated artifact.
+#
+# A GitLab personal access token travels as `Authorization: Bearer <token>` (GitLab also accepts the
+# older `PRIVATE-TOKEN: <token>` header, but the bearer form is documented, is what GitLab's own
+# OAuth2-flavoured docs lead with, and is what the story specifies).
+env = ["GITLAB_TOKEN"]
+description = "GitLab personal access token sent as a bearer. A token scoped to read_api is enough for every read below; the api scope is required for gitlab-issue-create"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 7: the parameterless verify read, plus the six the story names, all addressed by
+# numeric project id only.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only (C-8, C-23).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "gitlab-user-get"
+method = "GET"
+path = "/user"
+description = "Get the currently authenticated user. Takes no parameters; used as the verify read to prove a token resolves"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["id", "username", "state"]
+properties = { id = { type = "integer", description = "The user's global id" }, username = { type = "string" }, name = { type = "string" }, state = { type = "string", description = "`active`, `blocked`, or one of GitLab's other account states" }, web_url = { type = "string", format = "uri" }, avatar_url = { type = "string", format = "uri" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "gitlab-issue-list"
+method = "GET"
+path = "/projects/{project_id}/issues"
+description = "List issues in a project, optionally filtered by state, newest activity first"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "project_id"
+description = "The project's numeric id, e.g. 278964 — visible on the project's overview page. GitLab also accepts a URL-encoded namespaced path (`group%2Fproject`) on this same segment, but this pipeline has no percent-encoder, so only the numeric id is accepted here"
+required = true
+schema = { type = "integer", minimum = 1 }
+
+[[operations.params.query]]
+name = "state"
+description = "Filter by issue state"
+required = false
+schema = { type = "string", enum = ["opened", "closed"] }
+
+[[operations.params.query]]
+name = "page"
+description = "1-based page number"
+required = false
+schema = { type = "integer", minimum = 1 }
+
+[[operations.params.query]]
+name = "per_page"
+description = "Results per page"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100 }
+
+[operations.response_schema]
+type = "array"
+description = "The matching issues"
+items = { type = "object", required = ["id", "iid", "project_id", "title", "state"], properties = { id = { type = "integer", description = "The issue's global id, unique across the whole GitLab instance" }, iid = { type = "integer", description = "The project-scoped issue number shown in GitLab's UI and URL — what gitlab-issue-get takes" }, project_id = { type = "integer" }, title = { type = "string" }, description = { type = "string", description = "Markdown body, or null" }, state = { type = "string", enum = ["opened", "closed"] }, labels = { type = "array", items = { type = "string" } }, assignees = { type = "array", description = "Each `{id, username, name}`", items = { type = "object" } }, author = { type = "object", description = "`{id, username, name}`" }, milestone = { type = "object", description = "The milestone, or null" }, confidential = { type = "boolean" }, upvotes = { type = "integer" }, downvotes = { type = "integer" }, web_url = { type = "string", format = "uri" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, closed_at = { type = "string", format = "date-time", description = "Null while open" } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "gitlab-issue-get"
+method = "GET"
+path = "/projects/{project_id}/issues/{issue_iid}"
+description = "Get one issue by its project-scoped number (iid), not its global id"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "project_id"
+description = "The project's numeric id. GitLab also accepts a URL-encoded namespaced path (`group%2Fproject`) on this same segment, but this pipeline has no percent-encoder, so only the numeric id is accepted here"
+required = true
+schema = { type = "integer", minimum = 1 }
+
+[[operations.params.path]]
+name = "issue_iid"
+description = "The project-scoped issue number — the number shown in GitLab's UI and in the issue's URL, not the global id"
+required = true
+schema = { type = "integer", minimum = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "iid", "project_id", "title", "state"]
+properties = { id = { type = "integer", description = "The issue's global id" }, iid = { type = "integer", description = "The project-scoped number this operation takes" }, project_id = { type = "integer" }, title = { type = "string" }, description = { type = "string", description = "Markdown body, or null" }, state = { type = "string", enum = ["opened", "closed"] }, labels = { type = "array", items = { type = "string" } }, assignees = { type = "array", description = "Each `{id, username, name}`", items = { type = "object" } }, author = { type = "object", description = "`{id, username, name}`" }, milestone = { type = "object", description = "The milestone, or null" }, confidential = { type = "boolean" }, upvotes = { type = "integer" }, downvotes = { type = "integer" }, web_url = { type = "string", format = "uri" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, closed_at = { type = "string", format = "date-time", description = "Null while open" } }
+
+# ---------------------------------------------------------------------------------------------
+# The one write. **Publishes to a surface project members (and, on a public project, the world) can
+# read**, exactly the reasoning `providers/github.toml` states for its own issue-create: `risk =
+# "high"`, not `medium`, because a reviewer would want to see this before it happens, and
+# `idempotency = "non_idempotent"` because GitLab issues no idempotency key on this endpoint and a
+# retry creates a second issue, not the same one.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "gitlab-issue-create"
+method = "POST"
+path = "/projects/{project_id}/issues"
+description = "Open a new issue on a project. Visible immediately to everyone with access to the project (the whole world, if the project is public) and notifies its watchers"
+risk = "high"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "project_id"
+description = "The project's numeric id. GitLab also accepts a URL-encoded namespaced path (`group%2Fproject`) on this same segment, but this pipeline has no percent-encoder, so only the numeric id is accepted here"
+required = true
+schema = { type = "integer", minimum = 1 }
+
+[[operations.params.body]]
+name = "title"
+description = "The issue title; the only required field"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "description"
+description = "The issue body as Markdown"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "labels"
+description = "Comma-separated label names, e.g. \"bug,urgent\" — GitLab's issue-create endpoint takes labels as one comma-separated string, not an array. A name the project does not have yet is created"
+required = false
+schema = { type = "string" }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "iid", "project_id", "title", "state"]
+properties = { id = { type = "integer", description = "The new issue's global id" }, iid = { type = "integer", description = "The project-scoped number to address it by afterwards, with gitlab-issue-get" }, project_id = { type = "integer" }, title = { type = "string" }, description = { type = "string" }, state = { type = "string", description = "`opened` on a freshly created issue" }, labels = { type = "array", description = "The labels that were applied; a name the project did not have is created by this call", items = { type = "string" } }, author = { type = "object", description = "The account the token belongs to — a created issue is attributed to it" }, web_url = { type = "string", format = "uri", description = "The issue's page — the link to give a human" }, created_at = { type = "string", format = "date-time" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "gitlab-merge-request-list"
+method = "GET"
+path = "/projects/{project_id}/merge_requests"
+description = "List merge requests in a project, optionally filtered by state, newest activity first"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "project_id"
+description = "The project's numeric id. GitLab also accepts a URL-encoded namespaced path (`group%2Fproject`) on this same segment, but this pipeline has no percent-encoder, so only the numeric id is accepted here"
+required = true
+schema = { type = "integer", minimum = 1 }
+
+[[operations.params.query]]
+name = "state"
+description = "Filter by merge request state. Omit to list every state"
+required = false
+schema = { type = "string", enum = ["opened", "closed", "locked", "merged"] }
+
+[[operations.params.query]]
+name = "page"
+description = "1-based page number"
+required = false
+schema = { type = "integer", minimum = 1 }
+
+[[operations.params.query]]
+name = "per_page"
+description = "Results per page"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100 }
+
+[operations.response_schema]
+type = "array"
+description = "The matching merge requests"
+items = { type = "object", required = ["id", "iid", "project_id", "title", "state"], properties = { id = { type = "integer", description = "The merge request's global id" }, iid = { type = "integer", description = "The project-scoped number shown in GitLab's UI and URL" }, project_id = { type = "integer" }, title = { type = "string" }, description = { type = "string", description = "Markdown body, or null" }, state = { type = "string", enum = ["opened", "closed", "locked", "merged"] }, draft = { type = "boolean", description = "Whether it is marked as a draft; GitLab refuses to merge a draft until it is marked ready" }, source_branch = { type = "string" }, target_branch = { type = "string" }, sha = { type = "string", description = "The commit SHA currently at the tip of the source branch" }, author = { type = "object", description = "`{id, username, name}`" }, web_url = { type = "string", format = "uri" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, merged_at = { type = "string", format = "date-time", description = "Null unless merged" }, closed_at = { type = "string", format = "date-time", description = "Null unless closed without merging" } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "gitlab-pipeline-get"
+method = "GET"
+path = "/projects/{project_id}/pipelines/{pipeline_id}"
+description = "Get one CI/CD pipeline's status and timing by its id"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "project_id"
+description = "The project's numeric id. GitLab also accepts a URL-encoded namespaced path (`group%2Fproject`) on this same segment, but this pipeline has no percent-encoder, so only the numeric id is accepted here"
+required = true
+schema = { type = "integer", minimum = 1 }
+
+[[operations.params.path]]
+name = "pipeline_id"
+description = "The pipeline's numeric id, as shown in its GitLab CI/CD URL"
+required = true
+schema = { type = "integer", minimum = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "project_id", "status", "ref"]
+properties = { id = { type = "integer", description = "The pipeline's own id, what this operation takes" }, iid = { type = "integer", description = "The project-scoped pipeline number, distinct from `id`" }, project_id = { type = "integer" }, sha = { type = "string", description = "The commit SHA the pipeline ran against" }, ref = { type = "string", description = "The branch or tag name that triggered it" }, status = { type = "string", enum = ["created", "waiting_for_resource", "preparing", "pending", "running", "success", "failed", "canceled", "skipped", "manual", "scheduled"] }, source = { type = "string", description = "What triggered it, e.g. `push`, `web`, `schedule`, `api`, `merge_request_event`" }, web_url = { type = "string", format = "uri" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, started_at = { type = "string", format = "date-time", description = "Null before it starts running" }, finished_at = { type = "string", format = "date-time", description = "Null while still running" }, duration = { type = "integer", description = "Run time in seconds, null while not yet finished" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "gitlab-branch-list"
+method = "GET"
+path = "/projects/{project_id}/repository/branches"
+description = "List a project's repository branches"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "project_id"
+description = "The project's numeric id. GitLab also accepts a URL-encoded namespaced path (`group%2Fproject`) on this same segment, but this pipeline has no percent-encoder, so only the numeric id is accepted here"
+required = true
+schema = { type = "integer", minimum = 1 }
+
+[[operations.params.query]]
+name = "page"
+description = "1-based page number"
+required = false
+schema = { type = "integer", minimum = 1 }
+
+[[operations.params.query]]
+name = "per_page"
+description = "Results per page"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100 }
+
+[operations.response_schema]
+type = "array"
+description = "The project's branches"
+items = { type = "object", required = ["name", "commit"], properties = { name = { type = "string" }, merged = { type = "boolean", description = "Whether this branch has been merged into the project's default branch" }, protected = { type = "boolean" }, default = { type = "boolean", description = "Whether this is the project's default branch" }, developers_can_push = { type = "boolean" }, developers_can_merge = { type = "boolean" }, can_push = { type = "boolean", description = "Whether the authenticated token's user can push to this branch" }, web_url = { type = "string", format = "uri" }, commit = { type = "object", description = "The branch tip: `{id, short_id, title, author_name, authored_date, message}`" } } }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a human supplies before any of the above runs
+#
+# One field, because one value is all this connector needs: gitlab.com is a fixed host with no
+# tenant subdomain and no OAuth app to register.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "token"
+label = "GitLab personal access token"
+help = "Create one at User Settings -> Access Tokens (gitlab.com/-/user_settings/personal_access_tokens). Grant the read_api scope for every read below, or api if you also want gitlab-issue-create to work. This connector only reaches gitlab.com; a self-managed GitLab instance is not supported yet"
+format = "token"
+secret = true
+docs_url = "https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html"
+binds = "credential.gitlab.token"
