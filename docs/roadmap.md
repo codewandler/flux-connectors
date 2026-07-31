@@ -6,22 +6,73 @@ document is the hand-written narrative around it.
 
 ## Status
 
-_As of 2026-07-30:_ the repository has just been scaffolded. Nothing is implemented yet — the
-backlog, the two design records, and the Cargo workspace are the whole of it. The single epic,
-**connectors-v1**, carries every story. The one external dependency is a change to `../flux`
-described in [designs/auth-seam.md](designs/auth-seam.md); it is on the critical path and should be
-designed and filed against flux's board before the codegen work finishes.
+_As of 2026-07-31:_ the compiler is built, the catalogue is real, and **84 of 192 stories are
+closed** across seven releases up to **v0.5.0**. `cargo run -p connector-cli -- diff` reports
+`454 artifacts up to date (41 providers checked)` — 48 services, 232 curated operations, 8 events and
+2 channel bindings. Twenty epics carry the work, not the single **connectors-v1** this section once
+named; ten of them have a narrative below and the rest live on the board.
+
+Working end to end: provider TOML → IR → a Flux module, a capability manifest, one rendering per
+operation, an embedded Rust catalogue and the published `catalog.json` behind the explorer — hermetic,
+offline and byte-reproducible, with `connectors.lock` recording what produced what. Beside the
+compiler sit two **host libraries**: `connector-pack` projects every operation onto a flux `ToolSpec`,
+assembles its credential in Rust and hands a registry declarations; `connector-secrets` resolves a
+credential address to a value over an in-memory or Vault-backed store.
+
+**The external dependency this section used to name is gone.** flux's `$auth` seam was the critical
+path for a live call; C-114, C-115 and C-116 dissolved it by assembling auth inside the Tool pack, so
+the whole-value `{"$secret"}` marker never has to grow a prefix or an encoder and no flux release
+gates the milestone. [designs/auth-seam.md](designs/auth-seam.md) is kept as the composite-path
+design. What still waits on flux is narrower: the form and query **encoder** (upstream `L-101`), which
+is what keeps `zendesk-ticket-search` and every `form` body non-functional.
+
+What gates a live call now is local and named: this workspace links no `http.request` implementation
+(`Egress` takes one as a constructor argument and nothing here supplies it) and runs no host process.
+That is the loopback-only reference host the vision's narrowed non-goal now permits —
+`crates/connectors-app`, C-34 resolved as **yes-narrowed**; see
+[designs/connectors-app.md](designs/connectors-app.md).
+
+The largest gap is not a blocker but a hole: **six declarable surfaces reach no artifact** —
+`config`, `verify`, a service's `roles`, `quirks.pagination`, `graphs` and `quirks.rate_limit`. The IR
+models each and the loader validates it, and then neither the manifest nor the published catalogue
+carries it, so a host cannot render a connector's settings page or find its "Test connection"
+operation for connectors that declare both. `AGENTS.md`'s *Intentional gaps* has the table.
 
 ## Delivered
 
-- _Nothing yet._ Itemized history lands in [CHANGELOG.md](../CHANGELOG.md) as stories close.
+The itemized history is [CHANGELOG.md](../CHANGELOG.md); this is its shape.
+
+- **v0.0.1** — the Cargo workspace, the connector IR with deterministic serialization, the
+  provider-TOML front-end, the Flux op emitter through `flux_lang`'s AST, the `build`/`diff` CLI with
+  its offline guarantee proven three ways, `connectors.lock` with an explicit hash domain, and the
+  first three providers (zendesk, freshdesk, babelforce).
+- **v0.1.0** — the public VitePress site, the provider and operation explorer, `catalog.json` as a
+  fourth backend over the same IR, and a README image highlighted by flux's own `flux_lang::highlight`.
+- **v0.2.0** — OpenAI, GitHub and Slack; the rewritten root README.
+- **v0.3.0** — **services** as the middle addressing level (C-49), the first provider fleet
+  (Jira, Google Workspace, OpenRouter, Zoom, Airtable, Sentry, Asana, HubSpot, Intercom, Shopify), and
+  C-54's deletion of five hand-maintained provider lists.
+- **v0.4.0** — the configuration surface (C-86), channel bindings (C-82), the flow graph (C-94),
+  credential addressing (C-90), the auth archetype matrix (C-22), the core-catalogue projection, and
+  an explorer that renders outside the prose column.
+- **v0.5.0** — the **Tool pack** (C-114/C-115/C-116): a catalogue operation projected onto a
+  `ToolSpec`, gated individually by flux's permission envelope, authenticating from a bound
+  `CredentialStore` with the secret registered before the request is built. Plus `connector-secrets`
+  (C-91), composed `input_schema`s (C-125), events and channels reaching the manifest and catalogue
+  (C-83), service roles (C-120), verification conformance against real vendor vectors (C-60), and
+  C-104 making whole-catalogue artifacts coordinator-owned — the change that let provider stories run
+  in parallel at all.
+- **Unreleased** — the second provider fleet, run in waves rather than one at a time: past forty
+  vendors, with each connector chosen for the modelling question it forces rather than the row it
+  adds. Plus `body_encoding = "form"` (C-144), a measured floor under response-shape coverage (C-126),
+  and `AuthScheme::Header { prefix }` (C-184), so a credential can sit inside a header value it does
+  not wholly occupy.
 
 ## Next
 
-The ranked, actionable form is the **Next** list on the [board](stories/README.md). In short:
-scaffold the workspace, design the auth seam early (longest lead time), build the spec crate, then
-the codegen crate, then the CLI — and finish with two providers proven end-to-end against a live
-flux.
+The ranked, actionable form is the **Next** list on the [board](stories/README.md). In short: close
+the surface gap so a host can read what a connector already declares, stand up the reference host that
+proves the seams end to end, and keep the fleet growing in parallel waves.
 
 ## Epics
 
@@ -35,9 +86,9 @@ from inside a running flow, so an agent either has every connector operation reg
 none of them.
 
 The scaling argument is why this matters now. The Tool pack registers **one tool per operation** — 97
-today, and the fleet stories multiply it — and every one is model-facing surface: schema in the
-context window, a name to disambiguate, a chance to pick wrong. A datasource is a fixed handful of
-operations whether the catalogue holds 97 or 970. The two are complementary: discover through the
+when this epic was filed, **232** as of 2026-07-31, and the fleet stories keep multiplying it — and
+every one is model-facing surface: schema in the context window, a name to disambiguate, a chance to
+pick wrong. A datasource is a fixed handful of operations whether the catalogue holds 97 or 970. The two are complementary: discover through the
 datasource, invoke through the pack.
 
 The seam is flux's and already built — `LiveDatasource`, `try_register_live_datasource`, and
@@ -115,18 +166,21 @@ catalogue that grew by five without anyone editing a shared list by hand.
 
 ### The explorer at fleet scale
 
-The public explorer was designed against six providers and twenty-five operations. It now indexes
-sixteen providers, eighteen services and eighty-eight operations, and the decisions that were right at
-a third of the size are wrong at this one: VitePress's doc layout caps the content column at 688px, so
+The public explorer was designed against six providers and twenty-five operations. When this epic was
+filed it indexed sixteen providers, eighteen services and eighty-eight operations; as of 2026-07-31 it
+is **41 providers, 48 services and 232 operations**, and the decisions that were right at a fraction
+of the size are wrong at this one: VitePress's doc layout caps the content column at 688px, so
 a `minmax(320px, 1fr)` provider grid renders exactly two columns and the five-control filter bar wraps.
 Services — the middle addressing level C-49 established — are published in the catalogue and appear
 nowhere in the UI. Design: [designs/explorer-ux.md](designs/explorer-ux.md).
 
-The constraint that outlives the redesign: the explorer does **not** report "N of 88 operations
-working". `works` is false for every operation until the `$auth` seam lands in flux, and a
-working-count headline would misrepresent the eighty that are exactly as designed and waiting on one
-shared seam. Presentation follows each issue's `scope` instead — catalogue-wide once, per-provider on
-the card, per-operation as a badge.
+The constraint that outlives the redesign: the explorer does **not** report "N of 232 operations
+working". `works` is false for every operation for a reason that is *shared* — no host runs them here —
+and a working-count headline would misrepresent the overwhelming majority that are exactly as designed
+and waiting on that one thing rather than on anything of their own. (The shared reason has changed
+since this was written: it was the `$auth` seam landing in flux, and it is now a reference host in this
+repository. The argument against the headline is unaffected.) Presentation follows each issue's `scope`
+instead — catalogue-wide once, per-provider on the card, per-operation as a badge.
 
 **Done looks like:** a full-width explorer where sixteen connectors are visible without scrolling,
 "every destructive Shopify operation" is a URL you can send someone, and the honest account of what
