@@ -258,19 +258,23 @@ pub fn select_service(connector: &Connector, selector: &str) -> Result<Connector
         // emit an s3 manifest carrying another service's events, and it would do so successfully.
         // The kinds partition the same way for the same reason — each member names exactly one
         // service — so one filter per kind is the whole rule. `config` and `graphs` arrived after
-        // C-83 wrote that and were carried through by the tail below until C-190; each has had its
+        // C-83 wrote that and were carried through by the tail below until C-194; each has had its
         // accessor since it landed.
         events: connector.events_of(service).cloned().collect(),
         channels: connector.channels_of(service).cloned().collect(),
         config: connector.config_of(service).cloned().collect(),
         graphs: connector.graphs_of(service).cloned().collect(),
         // `verify` is connector-level but *denotes* an operation, and an operation has exactly one
-        // service — so it is service-derived, and the tail carried it through unnarrowed (C-190).
+        // service — so it is service-derived, and the tail carried it through unnarrowed (C-194).
         // Neither "keep" nor "drop" is right on its own: kept across a boundary it names an operation
         // this connector no longer declares, which `connector_spec`'s own `validate_verify` refuses
         // on load; dropped unconditionally it would strip a legitimate Test-connection button from
         // the service that owns it. So it survives exactly when its operation does.
-        verify: connector.verify.clone(),
+        verify: connector.verify.clone().filter(|id| {
+            connector
+                .operation(id)
+                .is_some_and(|op| op.service == service)
+        }),
         ..connector.clone()
     })
 }
@@ -971,7 +975,7 @@ path = \"specs/acme/v1.json\"
         }
     }
 
-    /// **C-190.** The narrowing carries the selected service's surfaces and *nothing else* — the
+    /// **C-194.** The narrowing carries the selected service's surfaces and *nothing else* — the
     /// three the C-83 comment above [`select_service`] did not cover.
     ///
     /// The assertions are stated as the loader's own invariants rather than as field values, because
@@ -1051,7 +1055,7 @@ path = \"specs/acme/v1.json\"
     ///
     /// `AuthMethod` carries no `service` and an `AuthRequirement` names a credential connector-wide,
     /// so narrowing auth would need a reachability computation rather than a filter. That is a
-    /// different story; this test is what says C-190 did not quietly take it.
+    /// different story; this test is what says C-194 did not quietly take it.
     #[test]
     fn selecting_a_service_keeps_the_connector_level_surfaces() {
         let connector = load(&inputs(TWO_SERVICE_CONFIGURED)).unwrap();

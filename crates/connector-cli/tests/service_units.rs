@@ -68,7 +68,7 @@ fn load(provider: &str) -> connector_spec::Connector {
         .connector
 }
 
-/// **C-190, measured against what ships.** Narrowing any shipped provider to one of its services
+/// **C-194, measured against what ships.** Narrowing any shipped provider to one of its services
 /// must leave a connector whose `config`, `graphs` and `verify` belong to that service.
 ///
 /// `select_service` filtered `operations`, `events` and `channels` and spread the rest, so these
@@ -101,11 +101,20 @@ fn narrowing_a_shipped_provider_carries_no_other_services_config_graphs_or_verif
                 .unwrap_or_else(|error| panic!("`{name}` declares service `{service}`: {error}"));
 
             for field in selected.config.iter().filter(|f| f.service != service) {
+                // `secret = true` is noted because it is the field most worth not misplacing, but
+                // the wording is deliberate: a `ConfigField` is a *question a settings page asks* —
+                // name, label, help, format, `binds` — and never a value. No credential value exists
+                // anywhere in this repository's inputs or outputs (AGENTS.md), so what crosses a
+                // service boundary here is a declaration, not a secret.
                 leaks.push(format!(
                     "{name} --service {service}: configuration field `{}` configures service `{}`{}",
                     field.name,
                     field.service,
-                    if field.secret { " (SECRET)" } else { "" }
+                    if field.secret {
+                        " (declares secret = true)"
+                    } else {
+                        ""
+                    }
                 ));
             }
             for graph in selected.graphs.iter().filter(|g| g.service != service) {
