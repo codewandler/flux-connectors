@@ -1,0 +1,339 @@
+# Anthropic — hand-authored, management surface and model catalogue only.
+#
+# ---------------------------------------------------------------------------------------------
+# THE CHARTER BOUNDARY, FIRST: NO INFERENCE OPERATION IN THIS FILE.
+# ---------------------------------------------------------------------------------------------
+#
+# `docs/vision.md`'s non-goals exclude "replacing flux's native model providers" — a generated
+# connector is a pipeline test fixture and a convenience surface, not the inference path. flux
+# already ships a native `anthropic` provider (`flux-providers`), and `POST /v1/messages` is that
+# provider's job, not this file's: duplicating it here would be a second, worse implementation of a
+# solved problem (the case laid out in full in
+# [C-123](../docs/stories/C-123-decide-connector-inference.md), still open as a charter decision and
+# deliberately not pre-empted by this connector). So what ships below is exactly what
+# `docs/stories/C-122-provider-anthropic.md` scopes: the model catalogue (which flux's pool
+# consumes live, see `llm_catalogue` below) and a curated slice of the Admin API. Nothing here ever
+# sends or receives a message.
+#
+# ---------------------------------------------------------------------------------------------
+# `anthropic-version` IS DECLARED BELOW IN `const_headers`, AND EVERY REQUEST NEEDS IT.
+# ---------------------------------------------------------------------------------------------
+#
+# Every Anthropic endpoint — the Models API and the Admin API alike — requires an
+# `anthropic-version` header stating the dated API version the request is written against; there is
+# no default and no unversioned alias. This is the same shape `providers/notion.toml` documents for
+# `Notion-Version`, and the same mechanism: `const_headers`, which C-55 added after measuring that
+# the only other header field this schema had, `params.header`, is documented as *caller-supplied*
+# and cannot pin a vendor constant (pinning one with a JSON Schema `const` silently drops the
+# constraint at emission — C-55's own finding). `crates/connector-flux/tests/anthropic_connector.rs`
+# asserts the literal reaches every emitted operation and appears in no signature, so this stays a
+# property of the connector rather than of this comment.
+#
+# An inline table deliberately — a `[const_headers]` section header would scope every provider
+# scalar after it into that table and the loader would reject the file. `providers/github.toml` and
+# `providers/notion.toml` both record the same trap against the same fix.
+#
+# `2023-06-01` is the version every operation below is written against; it has been Anthropic's
+# current version since (per Anthropic's own docs) no dated version has superseded it. Changing it
+# is a deliberate migration of this whole file, not a refresh.
+#
+# `content-type: application/json` remains hard-coded in the emitter and is still not declarable
+# (C-144); it does not arise here regardless, since every operation below is a parameterless or
+# path/query-only GET and carries no body.
+#
+# ---------------------------------------------------------------------------------------------
+# TWO CREDENTIALS, BOTH `x-api-key`, AND WHY THEY ARE NOT ONE.
+# ---------------------------------------------------------------------------------------------
+#
+# Anthropic authenticates with a custom header, `x-api-key: <secret>` — never `Authorization:
+# Bearer` — so every credential below uses `scheme = { header = { name = "x-api-key" } }`
+# (`crates/connector-spec/src/auth.rs`'s `Header` variant, mirroring
+# `flux_plugin_protocol::AuthScheme`).
+#
+# The *value* differs by surface, though, and this file keeps that honest rather than smuggling one
+# key into two jobs. A regular API key (`sk-ant-api03-…`) authenticates the Models API and is what
+# most operators already hold. The Admin API — organization info, workspaces, API keys — accepts
+# only an **Admin API key** (`sk-ant-admin…`, provisionable solely by an organization member with
+# the admin role) or an `org:admin` OAuth bearer token; Anthropic's own Admin API reference states
+# this explicitly ("The Admin API requires special access"). This connector models the API-key half
+# of that only — OAuth acquisition is the host's business at flux's `$auth` seam, never this file's
+# (see the authentication contract in AGENTS.md) — so `anthropic.admin_key` is declared as a second,
+# separate credential rather than folded into `anthropic.api_key`. Conflating them would mean an
+# operator who only ever uses the model catalogue is asked for an organization-admin secret they may
+# not be entitled to provision, and a provider that reused one field for two different security
+# boundaries is exactly the kind of silent widening this repository's auth model exists to prevent.
+#
+# `default_auth` names the regular key; each Admin operation below overrides `auth` to name the
+# admin key instead (`Operation::auth`, "OMIT the key to inherit `default_auth`… write a non-empty
+# list to name the mechanisms that authorize it" — the schema's own wording).
+#
+# ---------------------------------------------------------------------------------------------
+# NOT EXECUTABLE YET, for the same reason as every other provider in this repository.
+#
+# flux's `http.request` takes `{"$secret": "ENV"}` as a *whole-value* replacement, so it cannot
+# produce a custom-header credential either (`docs/designs/auth-seam.md`). The `$auth` seam has to
+# land in flux first; the generated Flux below carries no credential at all, deliberately, exactly
+# as OpenAI's and OpenRouter's do.
+# ---------------------------------------------------------------------------------------------
+#
+# WHY THERE IS NOT A SINGLE QUERY PARAMETER, and which fields that costs.
+#
+# Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim into
+# a `fmt` template and flux registers no encoding op (C-30, `crates/connector-flux/src/op.rs`).
+# `zendesk-ticket-search` is the standing demonstration AGENTS.md lists under *Intentional gaps*. So
+# every optional cursor-pagination parameter Anthropic documents — `after_id`, `before_id`, `limit`
+# on the models list, and `after_id`/`before_id`/`limit`/`include_archived` on the workspaces list,
+# and the same trio plus `status`/`workspace_id`/`created_by_user_id` on the API-keys list — is
+# excluded outright. Every operation below therefore returns Anthropic's first, unpaginated page
+# (20 items by default), which is a correct answer to "what does this account have" and not a
+# broken answer to "give me page 2". The path-shaped `model_id` on `anthropic-model-get` is left
+# alone for the same charset reason `providers/openai.toml` records for `GET /v1/models/{model}`:
+# Anthropic's model ids are drawn from `[A-Za-z0-9.-]` (`claude-opus-4-6`,
+# `claude-3-5-sonnet-20241022`), every character of which is already a valid URL path character.
+#
+# WHY THE SELECTION IS READ-ONLY.
+#
+# Nothing below is a POST, PATCH or DELETE. Two constraints measured earlier in this wave make that
+# the honest choice rather than a missed opportunity: `BodyNode` never builds an array (C-168/C-185),
+# and the emitter refuses `idempotency = "idempotent"` on POST and PATCH regardless of vendor
+# semantics (C-186) — neither gap is exercised here because there is no body to build and no write
+# to mis-declare. The Admin API's mutating surface (creating invites, updating member roles,
+# archiving workspaces, rotating API-key status) is real and useful, but each one needs a decision
+# about request/response shape this story does not need to make to satisfy its Goal, so it is left
+# out rather than guessed at — the standing rule this repository applies everywhere a shape is
+# unclear.
+
+id = "anthropic"
+vendor = "Anthropic"
+# The reverse-DNS authority this connector publishes under — the leading component of every
+# rendered service address (`com.anthropic/models:2023-06-01`), the same optional field
+# `providers/slack.toml` and `providers/vercel.toml` set.
+authority = "com.anthropic"
+
+# One tenant-independent host for every surface below — the Models API and the Admin API are both
+# served from it. `http_hosts` derives from this single value and is therefore exactly
+# `api.anthropic.com`, never widened.
+base_url = "https://api.anthropic.com"
+
+# C-55: the vendor-constant header, distributed by the loader onto every operation below.
+const_headers = { "anthropic-version" = "2023-06-01" }
+
+description = "Anthropic platform: the live model catalogue, and organization info, workspaces and API keys from the Admin API"
+
+# The Models API default. Admin operations override this individually — see the header comment.
+default_auth = [{ credentials = ["anthropic.api_key"] }]
+
+# The "Test connection" button: a parameterless, unpaginated GET that needs only the regular API
+# key, so pressing it never asks an operator for organization-admin access they may not hold.
+verify = "anthropic-models-list"
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "anthropic.api_key"
+scheme = { header = { name = "x-api-key" } }
+# The sole secret for the Models API — `x-api-key: <ANTHROPIC_API_KEY>`. Gated and registered with
+# flux's redactor by the host; never read here. No `user_env`, no `user_suffix`, no `[auth.oauth2]`:
+# the key is minted in the Anthropic Console and supplied through the environment, so flux runs no
+# grant for it.
+env = ["ANTHROPIC_API_KEY"]
+description = "Anthropic API key, sent as x-api-key"
+
+[[auth]]
+name = "anthropic.admin_key"
+scheme = { header = { name = "x-api-key" } }
+# A second, distinct secret for the Admin API only — see the header comment for why this is not the
+# same credential as `anthropic.api_key`. Provisionable only by an organization member with the
+# admin role, in the Anthropic Console.
+env = ["ANTHROPIC_ADMIN_KEY"]
+description = "Anthropic Admin API key (starts sk-ant-admin), sent as x-api-key. Required only for the organization, workspace and API-key operations below — the model catalogue uses the regular API key"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a human supplies before any of this runs
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "api_key"
+# This provider declares named services (`models`, `admin`), so a config field has no implicit
+# `default` to fall into — this field configures the credential the `models` service's operations
+# actually use.
+service = "models"
+label = "API key"
+help = "Create a key in the Anthropic Console (console.anthropic.com), under API Keys. This is the standard key used for the model catalogue"
+# No `example`, deliberately. An Anthropic API key is `sk-ant-api03-` followed by a long token, and a
+# placeholder of that shape is exactly what trips secret scanning and has blocked a release here
+# before (`providers/notion.toml`, `providers/shopify.toml` record the same call). The shape belongs
+# in prose, where it cannot be copied into a form.
+format = "token"
+secret = true
+docs_url = "https://docs.anthropic.com/en/api/getting-started"
+binds = "credential.anthropic.api_key"
+
+[[config]]
+name = "admin_key"
+service = "admin"
+label = "Admin API key"
+help = "Create an Admin API key in the Anthropic Console — only an organization member with the admin role can provision one. Required only for the organization, workspace and API-key operations; the model catalogue works with the API key above alone"
+format = "token"
+secret = true
+docs_url = "https://docs.anthropic.com/en/docs/manage-claude/admin-api-keys"
+binds = "credential.anthropic.admin_key"
+
+# ---------------------------------------------------------------------------------------------
+# Services
+# ---------------------------------------------------------------------------------------------
+
+[[services]]
+name = "models"
+description = "The live model catalogue: list available models, and retrieve one by id"
+# C-121: the capability shape `openai` and `openrouter` already claim. Filling it costs no reshaping
+# — `anthropic-models-list` already ends in the `list` segment the role's slot matches on
+# (`fills_slot`, `crates/connector-spec/src/ir.rs`), which is the falsification this story exists to
+# run: two vendors with genuinely different management surfaces both fit the same role unchanged.
+roles = ["llm_catalogue"]
+
+[[services]]
+name = "admin"
+description = "Admin API: organization info, workspaces, and API keys — read-only"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — the models service (2), then the admin service (3). All five are GET, all
+# authenticated, and none takes a body.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only (C-8, `crates/connector-flux/src/names.rs`); C-23 settles the
+# canonical rule.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "anthropic-models-list"
+service = "models"
+method = "GET"
+path = "/v1/models"
+description = "List the models available to this API key, most recently released first. Unpaginated — this connector cannot request a further page"
+risk = "low"
+idempotency = "idempotent"
+# No parameters at all. The vendor declares three, `after_id`/`before_id`/`limit`, all optional
+# cursor-pagination and all excluded — see the header comment's query-parameter section.
+
+# The envelope is stable and is what this schema commits to; the model entry is not, and is
+# described rather than enumerated field-by-field for the same reason `providers/openrouter.toml`
+# gives for its own models list: Anthropic's `capabilities` object already nests `batch`,
+# `citations`, `code_execution`, `context_management`, `effort`, `image_input`, `pdf_input`,
+# `structured_outputs` and `thinking`, each itself an object, and the vendor adds to that set as it
+# ships new model capabilities. A field list transcribed from today's reference would become a
+# confident description of an earlier response the moment the vendor adds one.
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "array", description = "One entry per model this key can reach. Each carries at least `id` (the string to pass as `model_id` to anthropic-model-get, e.g. `claude-opus-4-6`), `type: \"model\"`, `display_name`, `created_at`, `max_input_tokens`, `max_tokens`, and a `capabilities` object describing which features (batch, citations, code execution, image/PDF input, structured outputs, extended thinking) this model supports", items = { type = "object", required = ["id", "type"], properties = { id = { type = "string" }, type = { const = "model" }, display_name = { type = "string" }, created_at = { type = "string", format = "date-time" } } } }, first_id = { type = "string", description = "First id in `data`. This connector cannot use it as `before_id` — no query parameter is encodable (C-30)" }, last_id = { type = "string", description = "Last id in `data`, likewise unusable as `after_id` here" }, has_more = { type = "boolean", description = "True when the account has more models than this unpaginated call returned" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/type"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "anthropic-model-get"
+service = "models"
+method = "GET"
+path = "/v1/models/{model_id}"
+description = "Retrieve one model by id, or resolve an alias to the model id it currently points at"
+risk = "low"
+idempotency = "idempotent"
+
+# SCHEMA GAP: a path parameter is interpolated as verbatim as a query parameter is, and `status.rs`
+# deliberately does not flag it — C-30 scopes its refusal to query values. Safe here for the same
+# reason `providers/openai.toml` states for its own model-id path parameter: every character of an
+# Anthropic model id (`claude-opus-4-6`, `claude-3-5-sonnet-20241022`) is drawn from
+# `[A-Za-z0-9.-]`, already a valid URL path character, so nothing about the id can change the shape
+# of the request.
+[[operations.params.path]]
+name = "model_id"
+description = "The model id or alias, e.g. `claude-opus-4-6` or `claude-3-5-sonnet-20241022`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "type"]
+properties = { id = { type = "string", description = "The model id, echoed back — or the id the alias resolved to" }, type = { const = "model" }, display_name = { type = "string" }, created_at = { type = "string", format = "date-time", description = "When the model was released. May be an epoch value if the vendor does not know the release date" }, max_input_tokens = { type = "integer" }, max_tokens = { type = "integer", description = "The maximum value this model accepts for a completion's own max_tokens parameter" }, capabilities = { type = "object", description = "Which features this model supports — batch, citations, code execution, image/PDF input, structured outputs, extended thinking. See anthropic-models-list for why this is described rather than enumerated" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/type"
+
+# ---------------------------------------------------------------------------------------------
+# The three Admin operations. Each needs `anthropic.admin_key`, not the regular API key — see the
+# header comment.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "anthropic-organization-get"
+service = "admin"
+method = "GET"
+path = "/v1/organizations/me"
+description = "Get the organization this Admin API key belongs to. Takes no parameters; useful for confirming which organization a key resolves to"
+risk = "low"
+idempotency = "idempotent"
+auth = [{ credentials = ["anthropic.admin_key"] }]
+
+[operations.response_schema]
+type = "object"
+required = ["id", "type", "name"]
+properties = { id = { type = "string" }, name = { type = "string" }, type = { const = "organization" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/type"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "anthropic-workspaces-list"
+service = "admin"
+method = "GET"
+path = "/v1/organizations/workspaces"
+description = "List the organization's workspaces. Unpaginated and excludes archived workspaces by default — this connector cannot request a further page or ask for archived ones"
+risk = "low"
+idempotency = "idempotent"
+auth = [{ credentials = ["anthropic.admin_key"] }]
+# No parameters. The vendor declares four, `after_id`/`before_id`/`limit`/`include_archived`, all
+# optional query and all excluded — see the header comment.
+
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "array", description = "One entry per workspace: `id`, `name`, `type: \"workspace\"`, `created_at`, `archived_at` (absent unless the workspace is archived), plus `data_residency` and user-defined `tags` objects", items = { type = "object", required = ["id", "type"], properties = { id = { type = "string" }, name = { type = "string" }, type = { const = "workspace" }, created_at = { type = "string", format = "date-time" } } } }, first_id = { type = "string" }, last_id = { type = "string" }, has_more = { type = "boolean", description = "True when the organization has more workspaces than this unpaginated call returned" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/type"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "anthropic-api-keys-list"
+service = "admin"
+method = "GET"
+path = "/v1/organizations/api_keys"
+description = "List the organization's API keys, with each key's name, status and a redacted hint — never the key itself. Unpaginated and unfiltered"
+risk = "low"
+idempotency = "idempotent"
+auth = [{ credentials = ["anthropic.admin_key"] }]
+# No parameters. The vendor declares six optional query filters — `after_id`, `before_id`, `limit`,
+# `status`, `workspace_id`, `created_by_user_id` — all excluded; see the header comment.
+
+# `partial_key_hint` is Anthropic's own redacted display value, not a secret — it is exactly what
+# this connector must never treat as one. No key material of any shape appears in this schema.
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "array", description = "One entry per API key: `id`, `name`, `status` (`active`, `inactive`, `archived` or `expired`), `type: \"api_key\"`, `created_at`, `expires_at` (absent for a key that never expires), `partial_key_hint` (a partially redacted display string, safe to show in a UI — never the key), `workspace_id` (absent for a key on the default workspace), and `created_by`/`principal` objects each `{id, type}`", items = { type = "object", required = ["id", "type", "status"], properties = { id = { type = "string" }, name = { type = "string" }, type = { const = "api_key" }, status = { type = "string", description = "One of active, inactive, archived, expired" }, created_at = { type = "string", format = "date-time" } } } }, first_id = { type = "string" }, last_id = { type = "string" }, has_more = { type = "boolean" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/type"
