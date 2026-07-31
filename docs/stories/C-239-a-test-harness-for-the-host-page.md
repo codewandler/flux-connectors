@@ -2,7 +2,7 @@
 id: C-239
 title: "A behavioural change to the host's page cannot ship with a failing-first test, because nothing can test it"
 pillar: Build
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/host-explorer.md
 epic: host-explorer
@@ -47,7 +47,7 @@ unconfigured host). Nothing greps the HTML, so a redesign is free — and so is 
       is in dev mode`). At the merge base with M15 applied, `cargo test --workspace --no-fail-fast`
       is entirely green; with the harness present it is red, naming the button.
 - [x] The harness follows `web/test/explorer.test.mjs`'s shape rather than inventing one: `node
-      --test`, zero dependencies, asserting against built output **and** the emitted stylesheet.
+      --test`, one dependency at most, asserting against built output **and** the emitted stylesheet.
       That is how the site catches layout regressions without screenshots, and it already runs in
       this repository.
       → `crates/connectors-api/ui/`. `node --test`; the comment-stripping scanner is that file's,

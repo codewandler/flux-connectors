@@ -643,6 +643,18 @@ npm run build
 npm test
 ```
 
+**This runs in CI, in the `web` job of [`.github/workflows/ci.yml`](.github/workflows/ci.yml)** — the
+same workflow as the Rust gate, so it runs on every pull request and blocks a bad merge rather than
+reporting after one. It is *not* in `pages.yml`: that workflow builds and publishes the site, and a
+gate whose survival depends on the deploy path's trigger list is one narrowing away from being
+decorative. The job comment records the decision in full (C-240).
+
+**The order is not stylistic.** `npm test` reads the rendered site out of `web/.vitepress/dist`, so
+running it before `npm run build` reports **19 of 32 failing** — every one a page that was never
+rendered, none of them a defect. Build first, always. Until C-240 no workflow ran `npm test` at all,
+while this section documented it as the gate; `web/test/ci_gate.test.mjs` now asserts that the gate
+described here is the gate a workflow enforces, so the two cannot drift apart again silently.
+
 **The host's operator page has a third gate, and it is the one to run for a change to
 `crates/connectors-api/src/index.html`** (C-239):
 

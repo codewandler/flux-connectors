@@ -2,7 +2,7 @@
 id: C-240
 title: "The site's 32-test explorer suite runs in no CI workflow, so it guards nothing that a push can see"
 pillar: Build
-status: ready
+status: in-progress
 priority: 1
 design:
 epic:
@@ -53,17 +53,48 @@ these components. A new harness wired into nothing would inherit exactly this st
 
 ## Acceptance
 
-- [ ] **Failing-first:** a deliberately broken assertion in `web/test/explorer.test.mjs` fails the
+- [x] **Failing-first:** a deliberately broken assertion in `web/test/explorer.test.mjs` fails the
       workflow. It does not today. Show the run.
-- [ ] `npm test` runs in CI after `npm run build`, in that order — the suite asserts against
+- [x] `npm test` runs in CI after `npm run build`, in that order — the suite asserts against
       `.vitepress/dist`, so running it first reports **10 spurious failures**. That ordering is the
       whole trap and should be stated where the step is added, not just obeyed.
-- [ ] Decide whether it belongs in `pages.yml` (which already has the Node setup and the built site)
+- [x] Decide whether it belongs in `pages.yml` (which already has the Node setup and the built site)
       or in `ci.yml` (which is where a *gate* lives, and which runs on pull requests rather than only
       on a push to `main`). Record the reason. A test that only runs on the deploy path does not
       block a bad merge.
-- [ ] `AGENTS.md`'s web gate section says where it runs, so the documented gate and the enforced gate
+- [x] `AGENTS.md`'s web gate section says where it runs, so the documented gate and the enforced gate
       are the same thing.
+
+## Progress
+
+Landed as the `web` job of `.github/workflows/ci.yml`, plus `web/test/ci_gate.test.mjs` and the
+`AGENTS.md` §Validation rewrite. Three measurements taken here correct the text above; they are
+recorded rather than silently absorbed.
+
+**The count in the second item is wrong: it is 19, not 10.** Measured 2026-08-01 at `cecf320`, in a
+worktree with no `.vitepress/dist`: `npm test` reports 13 pass, **19 fail** of 32. The first is
+`.vitepress/dist/operations/airtable-record-get.html was not built`. The number presumably drifted
+upward with the catalogue as more pages became deep-linkable; 19 is what the workflow comment and
+`AGENTS.md` now state. The acceptance is ticked on the *ordering*, which is what it is about.
+
+**The third item's premise about `pages.yml` is also wrong, and it does not change the outcome.**
+`pages.yml` does *not* run only on push to `main` — it has had `pull_request:` since it was written
+(`:19`), with a comment saying the build job is a gate; only `deploy` is push-only, via
+`if: github.event_name != 'pull_request'`. So siting the step there would in fact have blocked a bad
+merge today. `ci.yml` was still chosen, for reasons that survive that correction: `pages.yml`'s PR
+trigger is a documented add-on to a workflow that exists to publish, so the gate would inherit the
+deploy path's trigger list and any future narrowing of it; a red step in its build job does not
+distinguish a test failure from Pages plumbing; and `AGENTS.md` §Validation describes exactly two
+gates, which now both live in `ci.yml`. The full argument is in the job comment. Cost accepted: the
+site builds twice per PR. `pages.yml` is untouched.
+
+**A guard test was added beyond the literal acceptance.** The defect this story fixes was
+documentation running ahead of enforcement — `AGENTS.md` described this gate while nothing ran it —
+so `web/test/ci_gate.test.mjs` (3 tests, no new dependency, hand-rolled reader for the workflow YAML
+subset) asserts that some workflow a pull request triggers runs the suite, that it builds before it
+tests, and that the gate `AGENTS.md` documents is one a workflow enforces. It rides in the suite it
+guards; that limitation is commented at the top of the file. A non-circular version belongs in the
+Rust gate and is a wider surface than this story owns.
 
 ## Notes
 

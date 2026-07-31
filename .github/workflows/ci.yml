@@ -87,6 +87,69 @@ jobs:
         run: npm test
         working-directory: crates/connectors-api/ui
 
+  web:
+    name: site · build · test
+    runs-on: ubuntu-latest
+    # The public site's gate. `AGENTS.md` §Validation has documented it as
+    # `npm ci && npm run build && npm test` for a long time; until C-240 no workflow ran the third
+    # command, so `web/test/explorer.test.mjs` — 32 assertions covering the honesty rules, the
+    # no-JavaScript guarantees, the architecture guards and the layout regressions — ran only when a
+    # person remembered. It was green throughout, which is exactly the problem: nothing would have
+    # said otherwise.
+    #
+    # WHY HERE AND NOT IN `pages.yml`, which already installs Node and builds the site:
+    #
+    #   1. This workflow is the one whose entire job is to say "do not merge this". `pages.yml`
+    #      exists to produce and publish an artifact, and its build job gates pull requests as a
+    #      documented add-on. A gate should not be a side effect of the deploy path's trigger list:
+    #      whoever narrows `pages.yml` later — to fix a deployment concern, with no thought of tests —
+    #      would silently take the web gate with it.
+    #   2. Failure attribution. A red step inside `pages.yml`'s build job could be a test failure or
+    #      Pages plumbing (`upload-pages-artifact`, the repository's Pages source setting). Its own
+    #      job here means the site's tests fail under their own name.
+    #   3. It makes the workflow mirror `AGENTS.md` §Validation, which describes exactly two gates:
+    #      the Rust one and the Node one. Both now live in `ci.yml`.
+    #
+    # The cost is honest and accepted: the site is built twice per pull request, here and in
+    # `pages.yml`. That is roughly ten seconds of `vitepress build` on a warm npm cache, and buying
+    # trigger-independence with it is worth it. `pages.yml` is deliberately left alone.
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Install Node toolchain
+        # Pinned for the same reason the Rust toolchain above is pinned, and matching the version
+        # `pages.yml` builds with — a gate that runs on a different Node than the deploy path can
+        # pass on a site that then fails to publish.
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # `npm ci`, not `npm install`: it installs exactly the committed lockfile and fails when
+      # package.json and the lockfile disagree, instead of quietly resolving something else.
+      - name: Install dependencies
+        run: npm ci
+        working-directory: web
+
+      - name: Build site
+        run: npm run build
+        working-directory: web
+
+      # ORDER IS LOAD-BEARING, and it is the whole trap of this story. The suite asserts against the
+      # *rendered* site in `web/.vitepress/dist` — deep-linkable operation pages, content that
+      # survives without JavaScript, layout read out of the emitted stylesheet. Run it before the
+      # build and it reports 19 of 32 failing, every one of them a page that was never rendered
+      # rather than a defect. Measured on 2026-08-01 at cecf320: 13 pass, 19 fail, the first being
+      # `.vitepress/dist/operations/airtable-record-get.html was not built`.
+      #
+      # So this step must stay after "Build site" and in the same job. Splitting it into a job of its
+      # own would need the dist tree carried across as an artifact, which buys nothing.
+      # `web/test/ci_gate.test.mjs` asserts this ordering so a future edit cannot quietly undo it.
+      - name: Test site
+        run: npm test
+        working-directory: web
+
   package:
     name: crates.io dry run
     runs-on: ubuntu-latest
