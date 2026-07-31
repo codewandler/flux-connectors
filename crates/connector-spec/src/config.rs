@@ -522,6 +522,12 @@ pub struct ConfigField {
     pub help: String,
     /// A realistic example, rendered as a placeholder. Never a default — nothing is pre-filled with
     /// it, and it is validated against [`format`](Self::format) so it cannot mislead.
+    ///
+    /// **A [`secret`](Self::secret) field declares none, and the loader refuses one** (C-231). A
+    /// token-shaped literal in a committed file has tripped GitHub push protection and blocked a
+    /// release here; one that is a real token is a disclosed credential. It also buys nothing —
+    /// nobody recognises their own secret from an example of someone else's — so the shape of the
+    /// value belongs in [`help`](Self::help), as prose.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub example: Option<String>,
     /// The value's shape, which decides the input type and the validation a form applies.

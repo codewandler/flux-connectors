@@ -374,7 +374,7 @@
         },
         "example": {
           "type": "string",
-          "description": "A realistic example, rendered as a placeholder. Never a default, and validated against `format` so it cannot mislead — a placeholder that would fail the field's own validation is worse than none, because a user copies it."
+          "description": "A realistic example, rendered as a placeholder. Never a default, and validated against `format` so it cannot mislead — a placeholder that would fail the field's own validation is worse than none, because a user copies it.\n\nA `secret` field declares NONE, and the loader refuses one. A token-shaped literal in a committed file has tripped GitHub push protection and blocked a release here, and one that is a real token is a disclosed credential. Put the shape of the value in `help` instead."
         },
         "format": { "$ref": "#/$defs/format" },
         "required": {

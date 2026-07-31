@@ -110,10 +110,22 @@ the enum cannot say.
 5. **A field is renderable.** `label` and `help` are mandatory and non-empty; defaulting `label` to
    `name` would ship `zendesk.api_token` as user-facing copy.
 6. **An example satisfies its own format.**
-7. **A verification operation is a read.** `verify` names the "Test connection" operation; a `high` or
+7. **A secret field declares no example at all** (C-231). Not a documentation preference: a
+   token-shaped literal in a committed file has tripped GitHub push protection and blocked a release
+   in this repository, and a placeholder that *is* a real token is a disclosed credential rather than
+   a blocked push. It also buys nothing, because nobody recognises their own secret from an example
+   of someone else's — the shape of the value goes in `help`, as prose. This is a **loader refusal**
+   and not a test over `providers/`: the loader already checks `example` against `format` and against
+   a pinned request position, so the "an example is documentation" objection was already answered by
+   the code; and these crates are published, so the only form of the rule that reaches a downstream
+   author writing their own provider TOML is one that fires at `provider::load`. The catalogue is
+   covered as a consequence — `every_shipped_provider_loads` enumerates `providers/` from disk — so
+   no per-connector restatement of it should exist. Scope: **secret fields only**; a non-secret
+   field's placeholder stays welcome, and invariant 6 is the only rule it answers to.
+8. **A verification operation is a read.** `verify` names the "Test connection" operation; a `high` or
    `destructive` one is refused, because a connection test runs unattended whenever someone opens a
    settings page.
-8. **Config names join the shared member namespace** of their service.
+9. **Config names join the shared member namespace** of their service.
 
 ## Webhooks as a full exposure
 
