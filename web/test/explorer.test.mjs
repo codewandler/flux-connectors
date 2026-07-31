@@ -1524,3 +1524,105 @@ test('a tool contract renders its safety fields as toned chips and its schema hi
 
   assert.ok(checked > 0, 'no page rendered a tool contract; the selector above is stale')
 })
+
+// ---------------------------------------------------------------------------------------------
+// C-206 — a withheld credential is not the same fact as a vendor that requires none.
+//
+// An operation listing no credentials is in one of two opposite situations. Either a real credential
+// exists and this repository cannot hold it safely yet, so the reader waits and the fail-closed 401
+// is the correct outcome; or the vendor requires nothing, the unauthenticated call is the working
+// call, and the reader has nothing to do at all. The catalogue published one sentence for both, so
+// the explorer told a visitor that a working public endpoint was disabled for their protection.
+//
+// The catalogue answers it now, as a `notes` entry. Asserted against the shipped document where it
+// can be — the invariants below hold of whatever is in it — and against fixtures for the rest,
+// because no connector declares a public operation yet and a test that waited for one would pass
+// vacuously until it did.
+// ---------------------------------------------------------------------------------------------
+
+test('a fact that is not a defect is published apart from the reasons an operation fails', () => {
+  const document = catalog()
+
+  // `works` is `issues.length === 0` and a note is not an issue — the property that lets a fifth
+  // code be added without moving the boolean every consumer already filters on.
+  for (const operation of operations(document)) {
+    assert.equal(
+      operation.status.works,
+      operation.status.issues.length === 0,
+      `\`${operation.id}\` disagrees with itself about whether it works`
+    )
+    for (const note of selectors.notes(operation)) {
+      assert.match(note.scope, /^(catalog|provider|operation)$/, `\`${note.code}\` has no scope`)
+      assert.ok(note.summary.length > 0, `\`${note.code}\` publishes no sentence to render`)
+      assert.ok(!('params' in note), `\`${note.code}\` grew a parameter list a note has no use for`)
+    }
+  }
+
+  // An absent key reads as none, resolved in one place, so no caller has to know it can be omitted.
+  const operation = (status) => ({ id: 'fixture', credentials: [], status })
+  assert.deepEqual(selectors.notes(operation({ works: false, issues: [] })), [])
+  assert.deepEqual(selectors.notes(operation({ works: false, issues: [], notes: [] })), [])
+
+  // The two situations, told apart. Both list no credential and only one of them is waiting on
+  // anything, which is precisely what a reader could not see before.
+  const withheld = operation({
+    works: false,
+    issues: [
+      {
+        code: 'withheld',
+        scope: 'provider',
+        summary: 'a credential cannot be held safely yet',
+        params: [],
+      },
+    ],
+  })
+  const needsNone = operation({
+    works: true,
+    issues: [],
+    notes: [{ code: 'needs-none', scope: 'operation', summary: 'this vendor requires none' }],
+  })
+
+  assert.equal(selectors.notes(withheld).length, 0)
+  assert.equal(selectors.notes(needsNone).length, 1)
+  assert.notDeepEqual(
+    [withheld.status.works, selectors.notes(withheld)],
+    [needsNone.status.works, selectors.notes(needsNone)],
+    'a withheld credential and a vendor that needs none are still indistinguishable here'
+  )
+
+  // The sentence a page shows comes from the catalogue and never from this site: a note carries its
+  // own summary exactly as an issue does.
+  assert.equal(selectors.notes(needsNone)[0].summary, 'this vendor requires none')
+})
+
+test('the operation page says what to supply from the catalogue, and claims nothing it is not told', () => {
+  const detail = readFileSync(
+    path.join(webRoot, '.vitepress', 'theme', 'components', 'OperationDetail.vue'),
+    'utf-8'
+  )
+
+  // The false sentence is the one this story is about: "no safe credential configuration … live
+  // calls are disabled" is true of a withheld credential and false of a public endpoint. It may
+  // still be rendered, but no longer for an operation the catalogue publishes a note for.
+  const fallback = detail.match(/<p v-if="([^"]+)" class="op__note">\s*No safe credential/)
+  assert.ok(fallback, 'the operation page no longer has a credential fallback this test can read')
+  assert.match(
+    fallback[1],
+    /notes|clear/,
+    'the credential fallback still fires for an operation the catalogue says needs no credential'
+  )
+
+  // And every built page renders exactly the notes the catalogue publishes for it — no more, which
+  // would be invention, and no fewer, which would be the conflation again.
+  const document = catalog()
+  for (const operation of operations(document)) {
+    const html = page('operations', `${operation.id}.html`)
+    const marker = html.match(/data-notes="(\d+)"/)
+    assert.ok(marker, `the page for \`${operation.id}\` does not report how many notes it rendered`)
+    assert.equal(
+      Number(marker[1]),
+      selectors.notes(operation).length,
+      `the page for \`${operation.id}\` renders a different number of notes than the catalogue has`
+    )
+  }
+})

@@ -210,8 +210,13 @@ The names are credential *references*. Resolve one against `provider.auth.creden
 
 | Field | Type | Notes |
 |---|---|---|
-| `works` | boolean | Exactly `issues.length === 0`, restated so a consumer can filter on one boolean without knowing any code. |
+| `works` | boolean | Exactly `issues.length === 0`, restated so a consumer can filter on one boolean without knowing any code. A `note` does not enter into it. |
 | `issues` | array\<Issue\> | Every reason it does not. |
+| `notes` | array\<Note\> | Facts that are **not** reasons it fails. **Omitted entirely when empty** — read an absent key as `[]`. |
+
+`notes` is the one key in this document that is not always present, and the exception is deliberate.
+Writing `"notes": []` onto every operation would rewrite a whole-catalogue artifact to say nothing
+about any of them, and no operation shipped today carries one.
 
 ### Issue
 
@@ -222,6 +227,18 @@ The names are credential *references*. Resolve one against `provider.auth.creden
 | `story` | string | The story that closes it. |
 | `summary` | string | One line, renderable as-is. |
 | `params` | array\<string\> | The parameters implicated, by their **wire** name; `[]` when the issue is not about parameters. |
+
+### Note
+
+| Field | Type | Notes |
+|---|---|---|
+| `code` | string | A stable machine token, from the same namespace as an Issue's. |
+| `scope` | string | `catalog` \| `provider` \| `operation`. |
+| `summary` | string | One line, renderable as-is. |
+
+No `story` and no `params`: a note is not something anyone is going to close, and none of them is
+about parameters. Both would be permanently empty fields inviting a consumer to look for meaning in
+them.
 
 **`scope` is what keeps the field useful.** An explorer that says "0 of 25 operations work" is
 accurate and useless. `scope` separates a defect the operation owns from one it merely inherits:
@@ -236,19 +253,57 @@ operation ids is exactly the hand-maintained truth this story exists to avoid: a
 with a free-text query parameter and it is flagged with no edit here, and closing the underlying gap
 clears the flag from every operation at once.
 
-| `code` | `scope` | Story | Derived from |
-|---|---|---|---|
-| `no-credential` | provider | C-17 | `Connector::effective_auth(op)` is **empty** — the operation names no credential, so the request goes out unauthenticated. |
-| `credential-not-injected` | catalog | C-10 | `Connector::effective_auth(op)` is **not** empty. The operation names its credential, but the generated Flux does not yet attach it. |
-| `unencodable-query-value` | operation | C-30 | Any query parameter whose JSON Schema `type` is not `integer`, `number` or `boolean`. |
-| `unbound-base-url-template` | provider | C-17 | `base_url` contains a `{name}` placeholder. |
+| `code` | kind | `scope` | Story | Derived from |
+|---|---|---|---|---|
+| `no-credential` | issue | provider | C-17 | `Connector::effective_auth(op)` is **empty** and the operation did not declare it so — a credential exists and cannot be held safely yet, so the request would go out unauthenticated. |
+| `credential-not-injected` | issue | catalog | C-10 | `Connector::effective_auth(op)` is **not** empty. The operation names its credential, but the generated Flux does not yet attach it. |
+| `unencodable-query-value` | issue | operation | C-30 | Any query parameter whose JSON Schema `type` is not `integer`, `number` or `boolean`. |
+| `unbound-base-url-template` | issue | provider | C-17 | `base_url` contains a `{name}` placeholder. |
+| `no-credential-required` | **note** | operation | C-206 | `Operation::auth` is `Some([])` — the author **declared** that the vendor needs no credential. |
 
-Together these reproduce, per operation and from the IR alone, the four entries README.md publishes
-under **Known limits**.
+Together the four issues reproduce, per operation and from the IR alone, the four entries README.md
+publishes under **Known limits**.
 
-The first two are **complementary and exhaustive**: every operation gets exactly one of them. That is
-the machine-readable form of *"no provider can make a live call yet, and freshdesk cannot even name
-the credential it would need."*
+The first two are **complementary** over every operation that has not declared itself public: one of
+them fires. That is the machine-readable form of *"no provider can make a live call yet, and
+freshdesk cannot even name the credential it would need."*
+
+### Withheld is not the same as unnecessary (C-206)
+
+An empty effective auth carries **two opposite meanings**, and `no-credential` used to be published
+for both:
+
+- **withheld** — a credential exists and this repository cannot hold it safely yet. Freshdesk is the
+  case: its API key occupies the Basic *username* position, so `providers/freshdesk.toml` declares
+  none deliberately and every request 401s. That is fail-closed behaviour working as designed, and
+  `no-credential` keeps exactly this sense.
+- **unnecessary** — the vendor requires nothing. Nothing is withheld and the unauthenticated call is
+  the correct one. This is `no-credential-required`, and it is a **note** rather than an issue,
+  because there is nothing wrong.
+
+**The difference is declared, never inferred.** `Operation::auth` already separates the two empties,
+as OpenAPI's operation-level `security` does: unset inherits the connector default, and an explicit
+`auth = []` is *"the operation needs no auth at all: a health or ping endpoint"*. Inferring
+"public" from the absence of a credential field would reproduce the conflation with more steps, and
+would infer it wrongly for the one connector already shipping in that shape.
+
+The declaration is per **operation**. A connector whose whole vendor is public repeats `auth = []` on
+each of its operations, because `Connector::default_auth` is a plain list — `default_auth = []` and an
+omitted key decode identically, so the connector cannot make the statement once. Making it able to is
+a `connector-spec` change and is not part of C-206.
+
+#### A public operation reports `works: true`, deliberately
+
+`works` is `issues.length === 0` and a note is not an issue, so a declared-public operation with a
+bound base URL and no free-text query parameter has **nothing left in the way** and says so. That is
+a visible change for every consumer: this catalogue has published `works: false` for every operation
+since it existed, and a site or a filter that treats `works: true` as unreachable will be wrong the
+first time such an operation ships. Nothing ships one today — the change is stated here before it is
+discovered.
+
+It is also the honest answer. The `credential-not-injected` condition is about attaching a credential
+to a request, and there is no credential to attach; the generated Flux for a public operation builds
+its URL and calls `http.request`, which is the whole of what the endpoint needs.
 
 `unencodable-query-value` follows [query-encoding.md](query-encoding.md) §4 exactly, including its
 deliberate narrowness: a `Number` or `Boolean` value cannot contain `&`, `#`, `+` or a space, so the

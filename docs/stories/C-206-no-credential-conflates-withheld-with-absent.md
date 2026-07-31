@@ -2,7 +2,7 @@
 id: C-206
 title: "`no-credential` tells consumers a public endpoint is disabled for their protection"
 pillar: Surfaces
-status: ready
+status: in-progress
 priority: 2
 design:
 epic:
@@ -65,18 +65,60 @@ wrong for the public case too, since the operation *does* work.
 
 ## Acceptance
 
-- [ ] **Failing-first test:** a connector declaring no credential because its vendor needs none is
+- [x] **Failing-first test:** a connector declaring no credential because its vendor needs none is
       published differently from freshdesk, which declares none because its key cannot yet be held
       safely. The test must fail before the change with both rendering identically.
-- [ ] A **new** issue code is added rather than `NO_CREDENTIAL` changing meaning, per the stability
+- [x] A **new** issue code is added rather than `NO_CREDENTIAL` changing meaning, per the stability
       rule at `status.rs:64-70`. `NO_CREDENTIAL` keeps its freshdesk sense exactly.
-- [ ] The IR can express the difference. Today "no `[[auth]]`" is one state carrying two meanings;
+- [x] The IR can express the difference. Today "no `[[auth]]`" is one state carrying two meanings;
       an author must be able to say *"this vendor requires no credential"* as a positive declaration,
       distinct from *"a credential exists and we cannot hold it safely"*.
-- [ ] Decide and record whether a genuinely-public operation reports `works: true`. If it does, the
+- [x] Decide and record whether a genuinely-public operation reports `works: true`. If it does, the
       explorer and `catalog.json` consumers see a working operation for the first time — which is a
       visible change worth stating deliberately rather than discovering.
-- [ ] `docs/designs/catalog-json.md` documents the new code, since it is a published contract.
+- [x] `docs/designs/catalog-json.md` documents the new code, since it is a published contract.
+
+## Progress
+
+**2026-07-31 — implemented on `impl/C-206`.** The distinction is `no-credential-required`, and it is
+a **note** rather than a fifth issue.
+
+- **The IR needed no change.** `Operation::auth` already separates the two empties and documents
+  them as OpenAPI does: `None` inherits `Connector::default_auth`, `Some(vec![])` is *explicitly
+  none* — "a health or ping endpoint", in the IR's own words. So the positive declaration an author
+  writes is `auth = []` on the operation, and `status.rs::declares_no_credential_is_needed` reads
+  it. Nothing is inferred from an absence, which is the trap the dispatch named:
+  `a_missing_credential_is_never_read_as_a_public_endpoint` pins it.
+- **A note, not an issue, because `works` had to move.** `works == issues.is_empty()` is the
+  contract every consumer already filters on, and a public operation *works*. Publishing the fact as
+  a fifth issue would have kept `works: false` on an operation with nothing wrong — the same lie one
+  code further along. So `Status` gained `notes: Vec<Note>` beside `issues`, and `works` is
+  unchanged.
+- **`works: true` is the recorded decision** (`docs/designs/catalog-json.md`, "A public operation
+  reports `works: true`, deliberately"). No shipped operation is public today, so nothing in the
+  committed catalogue moves — but a consumer treating `works: true` as unreachable will be wrong the
+  first time C-133 or C-157 lands, and that is now stated rather than discovered.
+- **Zero drift by construction.** `notes` is `skip_serializing_if = "Vec::is_empty"`, so
+  `web/public/catalog.json` is byte-identical and no whole-catalogue artifact needed regenerating.
+  `a_status_with_no_note_encodes_exactly_as_it_did_before` holds that. It is the one key in
+  `catalog-json.md` that is not always present, documented as such.
+
+### For C-133 and C-157
+
+Write `auth = []` on each unauthenticated operation. The declaration is **per operation**:
+`Connector::default_auth` is a plain `Vec`, so `default_auth = []` and an omitted key decode
+identically and a connector cannot make the statement once. Giving the connector field an `Option`
+is a `connector-spec` change (loader, lockfile encoding, every provider file) and was out of this
+story's write set.
+
+### For the host — `crates/connectors-api` (not touched, another agent owns it this wave)
+
+`api.rs:169` computes `connected: all_stored && !provider.auth.is_empty()`, which reports a
+connector whose vendor needs no credential as **not connected** — the same conflation this story
+closed in the catalogue, in the surface the owner actually looks at. A connector with no declared
+credentials is either "you must supply something we cannot hold yet" or "nothing to do here", and
+`!provider.auth.is_empty()` reads both as the first. Worth a story: the host can express it with the
+fields it already has (`stored`, `address`), it just needs the third state.
 
 ## Notes
 
