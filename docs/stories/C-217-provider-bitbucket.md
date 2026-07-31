@@ -2,7 +2,7 @@
 id: C-217
 title: Ship the Bitbucket connector
 pillar: Spec
-status: ready
+status: in-progress
 priority: 4
 design:
 epic: provider-fleet-2
