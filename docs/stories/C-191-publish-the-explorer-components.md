@@ -2,12 +2,12 @@
 id: C-191
 title: "Publish the explorer components as an npm package — C-142's deferral condition is met"
 pillar: Surfaces
-status: ready
+status: blocked
 priority: 2
 design: docs/designs/explorer-ux.md
 epic: explorer-ux
 areas: [web]
-note: "C-142 deferred extraction 'until a second consumer exists'. babelforce's ai-agent-platform console is that second consumer, filed 2026-07-31. The deferral was conditional and the condition is now true"
+note: "BLOCKED on C-205 (the web gate is red on main) and C-158 (this story's own Acceptance requires it first). C-142 deferred extraction 'until a second consumer exists'. babelforce's ai-agent-platform console is that second consumer, filed 2026-07-31. The deferral was conditional and the condition is now true"
 ---
 
 # Publish the explorer components as an npm package
@@ -60,3 +60,32 @@ repository where this repository's test cannot see it.
   vs `input_schema` do not, and the platform's datasource half has no counterpart here at all
   (C-137 is unbuilt). So the realistic consumer is the presentational and catalogue-aware tiers over
   connector-shaped data — worth knowing when deciding what the package's surface must be.
+
+## Progress
+
+- **2026-07-31 — dispatched, and parked without a diff.** Two independent blockers, both traced to
+  the merge base by the implementor and both re-verified by the coordinator against a clean `main`.
+  No branch was created and no file was changed, so a re-dispatch costs nothing.
+
+  1. **This story's own Acceptance requires C-158 first** — *"Land C-158 first"*, on the recorded
+     reasoning that publishing `catalog.mts` as a consumer-facing type contract before that gate
+     exists "ships the drift". [C-158](C-158-typescript-catalogue-types-drift.md) is `ready` and
+     unimplemented; the only commit naming it is the one that filed it.
+
+  2. **The web gate is red on `main`**, in the exact guard Acceptance item 3 depends on.
+     `cd web && npm ci && npm run build && npm test` reports **27 pass, 1 fail** —
+     `nothing about the catalogue is hand-maintained in the explorer sources`. Verified by the
+     coordinator independently of the implementor's report. It is a false positive: Postmark
+     declares a service named `server`, the guard forbids every service name as a raw substring,
+     and `web/data/catalog.data.mts:20` uses the word in a comment about the dev server. Filed as
+     [C-205](C-205-service-name-guard-matches-english-prose.md), which also records that **12 more
+     service names are ordinary English words**.
+
+  Confirmed already-done while investigating, so the remaining work really is packaging only:
+  `PathResolver`, `PATH_RESOLVER` and `identityPath` exist at `web/data/catalog.mts:385-391`,
+  `no_component_imports_the_site_framework` passes, and the three-tier public surface Acceptance
+  item 4 asks to document is already written up in
+  `web/.vitepress/theme/components/README.md`.
+
+  **Dispatch order to unblock: C-205 → C-158 → C-191.** All three write
+  `web/test/explorer.test.mjs`, so they take one wave slot between them, never three.

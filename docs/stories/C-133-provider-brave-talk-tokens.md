@@ -2,10 +2,10 @@
 id: C-133
 title: "The brave connector — Brave Talk's room-token HTTP surface"
 pillar: Spec
-status: ready
+status: blocked
 priority: 5
 areas: [providers]
-note: "ONLY the three HTTP calls. The XMPP MUC stream stays OUT — vision.md names protocol-rich technology adapters as a non-goal, and flux already has D-205/D-206 with feasibility proven live. Blocked on two real things; read Notes before starting"
+note: "BLOCKED — its own Notes say it must not start before C-127 (still ready), the acceptable-use question is unanswered, and C-206 (found here) must settle how a genuinely-public endpoint is published. Charter question too: vision.md scopes connectors to paid SaaS"
 ---
 
 # The brave connector — Brave Talk's room-token HTTP surface
@@ -103,3 +103,40 @@ to build.**
 
 - **The alternative is still the better connector**: an own 8x8 JaaS tenant is a paid SaaS product
   with a real credential, squarely in charter, and free of all three problems.
+
+## Progress
+
+- **2026-07-31 — dispatched, and parked before `providers/brave.toml` was written.** Three blockers,
+  all verified by the coordinator rather than taken on the implementor's word. No provider file
+  exists, so **no whole-catalogue artifact is stale and there is nothing to resolve at integration**
+  — not eight red tests, not nine, zero.
+
+  1. **This story's own Notes forbid starting.** Line 60: *"This story should not start before that
+     lands"*, referring to [C-127](C-127-truthful-output-typing.md), which is still `status: ready`.
+     The blocker is real: `http.request` returns one flat string and flux's `jq` parses a whole
+     string as JSON, so a pointer resolves to `null` on every response — the `PUT` cannot read the
+     `OPTIONS` response's `x-csrf-token` (`crates/connector-flux/src/op.rs:625-636`). A workaround
+     exists — declare `x-csrf-token` as a caller-supplied required header param, as
+     `providers/stripe.toml:430-435` does — but it produces exactly what the Notes pre-registered as
+     the reason not to start: three operations that compile, cannot be composed, and push the
+     handshake's one hard part onto the caller. **The failure mode is silent**: they pass every
+     artifact check and the gap only appears when someone tries to chain them.
+
+  2. **The acceptable-use question is unanswered.** A grep over `docs/` and `providers/` finds no ToS
+     determination anywhere. Acceptance item 2 requires the answer be recorded *in the connector*, so
+     it ships to consumers as fact, and the Notes say *"say so where a user will see it, or not
+     ship."* That is a position on publishing a third party's free, unauthenticated endpoint into a
+     public catalogue — not an implementor's call.
+
+  3. **A new blocker, found here: [C-206](C-206-no-credential-conflates-withheld-with-absent.md).**
+     Declaring no credential is legal, but the catalogue then publishes freshdesk's wording — *"has
+     no safe credential configuration… live calls are disabled rather than sending a credential
+     outside Flux's secret protection"* — for an endpoint where nothing is withheld and the
+     unauthenticated call is correct. `status.rs:128-131` already states this distinction in a
+     comment and then does not make it. C-206 blocks C-157 identically.
+
+- **Charter question, raised and not decided.** `docs/vision.md` scopes connectors to *"paid SaaS
+  services"*. Brave Talk's room-token handshake is free and unauthenticated, so it fails that test on
+  its face. The implementor's recommendation is to close this in favour of an 8x8 JaaS story — a paid
+  product with a real credential, a single-call auth flow, and none of blockers 1–3. Recorded rather
+  than acted on: dropping a connector in favour of a different vendor is a product decision.

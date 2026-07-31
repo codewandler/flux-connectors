@@ -42,3 +42,23 @@ none could safely fix them.
   touch the file, because four concurrent siblings each invalidated whatever number the others wrote.
   A coordinator fixing it by hand once per wave is not a fix; it is the same manual step that already
   failed five times.
+
+## Findings added 2026-07-31 (from the C-133 dispatch)
+
+Two more documented claims that are false today, both in `AGENTS.md`, both found while a provider
+implementor was following that file as instructions:
+
+- **`AGENTS.md:35` says 43 providers.** `ls providers/*.toml | wc -l` is **44**, and
+  `web/public/catalog.json` agrees: 44 providers, 51 services, 248 operations, 8 events, 2 channel
+  bindings. `README.md` carries the same stale figures (43 / 242 / 470). This is the drift this
+  story exists to end, now measured a third time.
+- **`AGENTS.md:153` instructs a provider implementor to add `specs/<id>/v1.json`** as part of the
+  scoped-build recipe. **No such directory exists for any vendor** — `specs/` contains only `flux/`,
+  and no shipped provider declares a `[spec]` block at all. An implementor following the recipe
+  literally would create a file nothing reads. This one is worse than a wrong count: it is a wrong
+  *instruction*, in the section agents are told to follow exactly, and it silently misdirects every
+  future provider story.
+
+The second is arguably not this story's job — a count checker will not catch a stale sentence. But it
+is the same failure with the same cause, so it is recorded here rather than lost: **the operating
+contract is not checked against the repository it describes.**
