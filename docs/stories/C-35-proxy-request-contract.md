@@ -6,7 +6,7 @@ status: blocked
 design: docs/designs/connectors-proxy.md
 epic: connectors-proxy
 areas: [flux-bridge]
-note: blocked on C-34
+note: "still blocked, and re-measured 2026-08-01: C-34 is DONE and decided AGAINST this story's subject. It permitted a loopback reference host and refused a credential-injecting proxy reachable by other callers. This is not waiting on a decision that will arrive -- the decision arrived and went the other way. Reopen only if the charter changes"
 ---
 
 # Specify the proxy request contract and its guardrails

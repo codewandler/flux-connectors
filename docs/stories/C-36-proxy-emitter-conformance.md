@@ -6,7 +6,7 @@ status: blocked
 design: docs/designs/connectors-proxy.md
 epic: connectors-proxy
 areas: [connector-flux, flux-bridge]
-note: blocked on C-34 · two backends over one IR will drift without this
+note: "still blocked, and re-measured 2026-08-01: C-34 is DONE and refused the proxy this story would prove. The concern it names -- two backends over one IR drifting silently -- was met by a different route: C-145's differential test compares the pack's request against the shipped Flux for every operation and found zero divergences. Reopen only if a second backend reappears"
 ---
 
 # Prove the proxy and the Flux emitter build the same request

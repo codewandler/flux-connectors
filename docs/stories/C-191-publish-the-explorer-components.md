@@ -7,7 +7,7 @@ priority: 2
 design: docs/designs/explorer-ux.md
 epic: explorer-ux
 areas: [web]
-note: "BLOCKED on C-205 (the web gate is red on main) and C-158 (this story's own Acceptance requires it first). C-142 deferred extraction 'until a second consumer exists'. babelforce's ai-agent-platform console is that second consumer, filed 2026-07-31. The deferral was conditional and the condition is now true"
+note: "BLOCKED on C-158 only. C-205 is DONE (the web gate is green -- verified 32/32 on 2026-07-31, and the earlier red reading was npm test run without the npm run build that precedes it). C-142 deferred extraction until a second consumer exists; babelforce's console is one, and C-238 makes this host a second"
 ---
 
 # Publish the explorer components as an npm package
