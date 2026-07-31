@@ -168,48 +168,45 @@ fn both_credentials_are_placed_in_the_query_string_and_travel_together() {
     }
 }
 
-/// **Finding 2: this is the catalogue's only query placement.**
+/// **Finding 2: Trello is what made C-159 §2's hazard reachable** — and the catalogue-wide half of
+/// that finding lives in `crates/connector-flux/tests/query_placed_credentials.rs`, not here.
 ///
 /// C-159 §2 recorded a real divergence in `connector-pack` — a query-placed credential is
 /// percent-encoded on its way onto the URL (`crates/connector-pack/src/auth.rs:157-164`, `:204-215`)
 /// while the *unencoded* value is what was registered with flux's redactor — and closed the finding
-/// as unreachable, because the committed catalogue declared no query placement at all.
+/// as unreachable, because the committed catalogue declared no query placement at all. This
+/// connector is what made it reachable, which is the Trello-scoped fact and is asserted here.
 ///
-/// It is reachable now, and this test states exactly how far: **every query-placed credential in
-/// the repository is one of Trello's two.** A reviewer weighing C-159 §2 does not have to survey the
-/// catalogue to find the exposure, and if a second connector ever declares a query placement this
-/// test fails and makes it say so.
+/// **What this test used to be, and why it is not that any more (C-230).** It walked every
+/// `providers/*.toml` and asserted the query-placed set equalled `[trello:key, trello:token]`. That
+/// was green only because no provider since Trello had placed a credential in the query string, and
+/// the next one that did would have turned *Trello's* test red — from a worktree holding a different
+/// connector, for a reason having nothing to do with Trello, discovered at integration and blamed on
+/// whichever merge happened to be second. `AGENTS.md`'s parallel-provider guarantee is that two
+/// implementors' write sets are disjoint; a catalogue-walking assertion breaks it without touching a
+/// shared file.
+///
+/// The measurement was not deleted. It became a **property** — every connector that places a
+/// credential in the query string puts nothing else there — which is the question the hazard
+/// actually poses, and which a fifty-fourth connector cannot falsify merely by existing.
 #[test]
-fn trello_is_the_only_query_placement_in_the_shipped_catalogue() {
-    let mut query_placed: Vec<String> = Vec::new();
+fn trello_made_the_query_placement_hazard_reachable() {
+    let connector = load();
 
-    let mut providers: Vec<String> = std::fs::read_dir(providers_dir())
-        .expect("providers/ is readable")
-        .filter_map(|entry| {
-            let path = entry.expect("a readable directory entry").path();
-            (path.extension()? == "toml").then(|| {
-                path.file_stem()
-                    .expect("a .toml file has a stem")
-                    .to_string_lossy()
-                    .into_owned()
-            })
-        })
+    let query_placed: Vec<String> = connector
+        .auth
+        .iter()
+        .filter(|method| matches!(method.scheme, AuthScheme::Query { .. }))
+        .map(|method| format!("{PROVIDER}:{}", method.name))
         .collect();
-    providers.sort();
-
-    for id in &providers {
-        for method in &load_provider(id).auth {
-            if matches!(method.scheme, AuthScheme::Query { .. }) {
-                query_placed.push(format!("{id}:{}", method.name));
-            }
-        }
-    }
 
     assert_eq!(
         query_placed,
         [format!("{PROVIDER}:{KEY}"), format!("{PROVIDER}:{TOKEN}")],
-        "the whole of C-159 §2's reachable surface is Trello's key and token. If this list grew, a \
-         second connector now shares the hazard and C-159's account of it needs re-measuring"
+        "both of Trello's credentials are query-placed, and they are the whole of its exposure to \
+         C-159 §2. This is a closed claim about one connector: the catalogue-wide half — that no \
+         connector combines a query-placed credential with caller text in the same query string — is \
+         `crates/connector-flux/tests/query_placed_credentials.rs`"
     );
 }
 
