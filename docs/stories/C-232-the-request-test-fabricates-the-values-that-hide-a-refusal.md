@@ -2,7 +2,7 @@
 id: C-232
 title: "The whole-catalogue request test fabricates a value for every variable it discovers, so an operation that refuses against a real configuration passes it"
 pillar: Build
-status: ready
+status: in-progress
 priority: 1
 design:
 epic:
@@ -54,23 +54,63 @@ reported it.
 
 ## Acceptance
 
-- [ ] **Failing-first test:** every shipped operation composes a request against the configuration an
+- [x] **Failing-first test:** every shipped operation composes a request against the configuration an
       operator would actually supply — that is, the fields the provider file **declares**, and
       nothing else. It must fail for any operation that refuses. Name it.
-- [ ] The configuration under test is built from `[[config]]` **declarations**, never from the
+      → `every_declared_operation_composes_a_request_from_its_declared_configuration`
+      (`crates/connector-pack/tests/request.rs`). The failing-first proof is the unit test that
+      drives the same refusal over C-110's document,
+      `a_braced_literal_that_is_neither_a_url_nor_a_pin_is_refused`
+      (`crates/connector-pack/src/request.rs`), which is red at the base.
+- [x] The configuration under test is built from `[[config]]` **declarations**, never from the
       variables the scan discovers. Deriving the input from the thing under test is the defect; a
       fix that keeps that dependency has not fixed it.
-- [ ] An operation that declares no configuration is exercised **against an empty configuration**,
+      → `declared_config` / `declared_for` / `configuration` read `providers/<id>.toml`'s
+      `[[config]]` blocks — `binds` for the variable, `example` for the value — and bind those and
+      nothing else. The old `configuration()`/`value_for` pair is gone.
+- [x] An operation that declares no configuration is exercised **against an empty configuration**,
       because that is its production shape. This is the case that was never run.
-- [ ] The assertion covers more than the URL. A request whose URL composes while its body has been
+      → falls out of the above, and is asserted explicitly: the test counts service modules whose
+      declared configuration is empty and fails if there are none.
+- [x] The assertion covers more than the URL. A request whose URL composes while its body has been
       rewritten by configuration substitution is the second half of what C-110's review found, and a
       URL-only check cannot see it.
-- [ ] The existing `every_shipped_operation_builds_an_absolute_request` is repaired or replaced, not
+      → every operation is built twice against two different declared configurations and the body
+      and headers must be identical. Measured against a restored fixture: the assertion fires with
+      `left: Some("{"query":"a-document"}") / right: Some("{"query":"xa-document"}")`.
+- [x] The existing `every_shipped_operation_builds_an_absolute_request` is repaired or replaced, not
       supplemented. Two whole-catalogue request tests where one lies is worse than one that is
       honest.
-- [ ] The invariant comment at `crates/connector-pack/src/request.rs:57-64` is either re-established
+      → replaced. The name, the `configuration()` helper, `value_for` and `resolved_host` are all
+      deleted.
+- [x] The invariant comment at `crates/connector-pack/src/request.rs:57-64` is either re-established
       as true or rewritten to describe what actually holds — and something checks it, rather than it
       being prose that a future connector can silently falsify.
+      → re-established as a rule. `unconfigurable()` classifies every brace-carrying literal into
+      the two declared kinds and `refuse_unconfigurable()` returns `Error::Unbuildable` for anything
+      else, at projection and again at build. `sole_placeholder` was tightened to a configuration
+      field name so a JSON object literal is not read as a pin.
+
+## Progress
+
+**2026-07-31 — implemented on `impl/C-232`, together with C-233 as the story asks.**
+
+The root fix is in `crates/connector-pack/src/request.rs`: a brace in a bound string literal is read
+as configuration only for the two kinds the module always claimed — a templated URL (`://`) and a
+C-187 pin bind (a sole placeholder whose inner text is a configuration field name). Anything else is
+`Error::Unbuildable`, raised in `Operation::project` and again in `request::build`. That is what
+removes the circularity at its source: the scan can no longer *invent* a variable out of a vendor's
+syntax, so a test that binds what the scan reports is binding declarations.
+
+The whole-catalogue test is driven from `connectors/*.connector.toml` and `crates/catalog/ops/`
+rather than from `catalog::operations()`, which is what lets it cover a provider that is not in the
+coordinator-owned index — the C-233 half. `the_declared_configuration_agrees_with_every_templated_base_url`
+is the oracle for the small line-oriented `[[config]]` reader: it cross-checks the provider file
+against the emitted manifest, from two different artifacts, so a mis-read is loud rather than
+vacuous.
+
+Left for a follow-up: the reader exists only because `[[config]]` reaches no artifact
+(`AGENTS.md`, "Six declarable surfaces reach no artifact at all"). C-87 deletes it.
 
 ## Notes
 

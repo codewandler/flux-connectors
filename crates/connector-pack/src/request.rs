@@ -53,25 +53,38 @@
 //! # A `{placeholder}` in a *literal* is the connector's configuration (C-193)
 //!
 //! flux interpolates `fmt` and never a `lit`, so a brace inside a bound string literal names
-//! something flux itself would never fill — which is exactly what a templated `base_url` is. In the
-//! shipped catalogue the string literals carrying braces are of exactly two kinds, and both are
+//! something flux itself would never fill — which is exactly what a templated `base_url` is. The
+//! string literals this module reads braces out of are of **exactly two kinds**, and both are
 //! configuration:
 //!
-//! - the **ten templated base URLs** across nine connectors (`{subdomain}.zendesk.com`,
-//!   `{shop}.myshopify.com`, `{site}.atlassian.net`, freshdesk's and okta's `{domain}`,
-//!   `{instance}.my.salesforce.com`, docusign's `{account_host}`/`{account_id}` pair, contentful's
-//!   `{space_id}`/`{environment_id}` in two service modules, and statuspage's `{page_id}`);
-//! - the **pin binds** C-187 added, one per operator-pinned value, each a literal that is nothing
+//! - a **templated base URL** — a literal carrying `://` — such as the ten across nine connectors
+//!   (`{subdomain}.zendesk.com`, `{shop}.myshopify.com`, `{site}.atlassian.net`, freshdesk's and
+//!   okta's `{domain}`, `{instance}.my.salesforce.com`, docusign's `{account_host}`/`{account_id}`
+//!   pair, contentful's `{space_id}`/`{environment_id}` in two service modules, and statuspage's
+//!   `{page_id}`);
+//! - a **pin bind** as C-187 added, one per operator-pinned value, each a literal that is nothing
 //!   but a placeholder — `zone_id = "{zone_id}"`, `teamId = "{teamId}"`. The emitter binds a `lit`
 //!   rather than a value precisely so that this module sees the pin at all.
 //!
-//! **"Exactly two kinds" is a statement about what ships, not a guarantee about what could.** C-110
-//! wrote a third — a GraphQL query document, a literal whose braces are the vendor's own selection
-//! syntax and not configuration at all — and the connector was withdrawn rather than the rule bent.
-//! Unconfigured it refused every call; configured, substitution rewrote the document. Both are
-//! measured in this module's tests, and `docs/designs/graphql-vendors.md` is the finding. The fix is
-//! C-87 — publish the configuration surface so this reads variables instead of inferring them — not
-//! a cleverer scan.
+//! # The two kinds are a **rule**, not an observation (C-232)
+//!
+//! This paragraph used to end "in the shipped catalogue", with a caveat recording that C-110 had
+//! written a third kind — a GraphQL query document, a literal whose braces are the vendor's own
+//! selection syntax and not configuration at all. Unconfigured that connector refused every call;
+//! configured, substitution rewrote the document. Both are measured in this module's tests, and
+//! `docs/designs/graphql-vendors.md` is the finding.
+//!
+//! A statement about what ships is not a rule: the next connector with a brace in a literal
+//! falsifies it again, silently, because nothing executes it. So [`unconfigurable`] classifies every
+//! brace-carrying literal into those two kinds and **refuses anything else** —
+//! [`Error::Unbuildable`], at projection and again at build, rather than a placeholder invented out
+//! of a vendor's syntax. That is the same choice the evaluator above already makes for a node it
+//! does not model, applied to the scan.
+//!
+//! The refusal is not the *repair*. Making a document literal opaque to this scan is C-87 — publish
+//! the configuration surface so this reads an operation's variables instead of inferring them from
+//! syntax. Until then a connector shaped like C-110's does not install, which is the honest answer
+//! and the one an implementor can act on.
 //!
 //! So [`endpoint_variables`] reads an operation's configuration variables off its own emitted Flux
 //! rather than waiting for C-87 to publish them, in the same spirit as everything else here: the
@@ -246,57 +259,143 @@ impl Request {
 
 /// **The endpoint-configuration variables `declaration` needs**, in stable order.
 ///
-/// Every `{name}` appearing in a string literal in the operation's body. See this module's
-/// documentation for why that set is exactly the connector's configuration and nothing else: flux
-/// interpolates `fmt` and never `lit`, so a brace surviving in a literal is by construction a name
-/// no evaluation fills.
+/// Every `{name}` appearing in a string literal of one of the **two declared kinds** — a templated
+/// URL or a pin bind. See this module's documentation for why those two are exactly the connector's
+/// configuration and nothing else: flux interpolates `fmt` and never `lit`, so a brace surviving in
+/// a literal of either shape is by construction a name no evaluation fills.
+///
+/// A brace-carrying literal that is neither kind contributes **nothing** here and is refused
+/// outright by [`refuse_unconfigurable`] instead. That ordering is the C-232 fix: a variable this
+/// function reports is a variable a `[[config]]` field declares, so a test that binds what this
+/// reports is no longer binding whatever the scan happened to find.
 ///
 /// Derived once, when the operation is projected, so a missing value is a refusal that can name the
 /// variable *before* anything is assembled — rather than a brace noticed in a finished URL.
 pub(crate) fn endpoint_variables(declaration: &CompositeOpDecl) -> Vec<String> {
     let mut found = BTreeSet::new();
-    scan(&declaration.body.body, &mut found);
+    walk_literals(&declaration.body.body, &mut |literal| {
+        if unconfigurable(literal).is_some() {
+            return;
+        }
+        scan_template(literal, |name| {
+            found.insert(name.to_owned());
+            None
+        });
+    });
     found.into_iter().collect()
 }
 
-/// Collect the placeholders of every string literal in `nodes`.
+/// **A brace-carrying literal that is neither of the two declared kinds**, or `None`.
+///
+/// The classification is deliberately the same pair of tests the rest of the module already makes,
+/// rather than a third opinion about what a placeholder is: [`sole_placeholder`] is what
+/// [`endpoint_slots`] calls a pin bind, and `://` is what [`place_in_url`] splits a templated URL
+/// on. Two spellings of "is this a URL" would eventually disagree, and the one that disagreed would
+/// be the one deciding whether a vendor's own syntax gets filled with a tenant's settings.
+fn unconfigurable(literal: &str) -> Option<&str> {
+    if !carries_placeholder(literal) {
+        return None;
+    }
+    if sole_placeholder(literal).is_some() || literal.contains("://") {
+        return None;
+    }
+    Some(literal)
+}
+
+/// Whether `literal` carries a `{…}` this module would read as a placeholder at all.
+///
+/// Asked through [`scan_template`] rather than by looking for a `{`, so an unterminated brace or a
+/// `{{` escape is answered exactly as substitution would answer it.
+fn carries_placeholder(literal: &str) -> bool {
+    let mut any = false;
+    scan_template(literal, |_| {
+        any = true;
+        None
+    });
+    any
+}
+
+/// **Refuse an operation whose body binds a literal this module cannot classify** (C-232).
+///
+/// Called at projection ([`crate::Operation::project`]) and again at [`build`]. Twice, because they
+/// are two entry points a host can reach and the answer must not depend on which: projection is
+/// where a connector fails to install, and `build` is the one gate every request passes through.
+///
+/// # Errors
+///
+/// [`Error::Unbuildable`], quoting the literal so an implementor can find it in their own emitted
+/// module.
+pub(crate) fn refuse_unconfigurable(
+    operation: &str,
+    declaration: &CompositeOpDecl,
+) -> Result<(), Error> {
+    let mut refused = None;
+    walk_literals(&declaration.body.body, &mut |literal| {
+        if refused.is_none() {
+            refused = unconfigurable(literal).map(str::to_owned);
+        }
+    });
+    match refused {
+        None => Ok(()),
+        Some(literal) => Err(Error::Unbuildable {
+            operation: operation.to_owned(),
+            message: format!(
+                "its body binds the string literal {}, whose `{{…}}` is neither a templated URL nor \
+                 a configuration pin — the only two kinds this pack reads a brace in a literal as \
+                 (C-193). Filling it would substitute a tenant's configuration into the vendor's \
+                 own syntax, which is what withdrew C-110's connector; making a literal opaque to \
+                 this scan is C-87, publishing the configuration surface",
+                abbreviated(&literal)
+            ),
+        }),
+    }
+}
+
+/// A literal, quoted and cut to a length a refusal can carry.
+///
+/// The cut is on a `char` boundary and the ellipsis is outside the quotes, so what is printed is
+/// never mistaken for the literal itself.
+fn abbreviated(literal: &str) -> String {
+    const KEEP: usize = 100;
+    match literal.char_indices().nth(KEEP) {
+        None => format!("{literal:?}"),
+        Some((end, _)) => format!("{:?}…", &literal[..end]),
+    }
+}
+
+/// Visit every string literal in `nodes`.
 ///
 /// The node set walked is exactly the one [`run`] and [`eval`] model; anything outside it is
 /// [`Error::Unbuildable`] at build time, so skipping it here cannot let a request through with a
 /// variable nobody resolved.
-fn scan(nodes: &[Node], found: &mut BTreeSet<String>) {
+fn walk_literals(nodes: &[Node], visit: &mut dyn FnMut(&str)) {
     for node in nodes {
-        scan_node(node, found);
+        walk_literals_node(node, visit);
     }
 }
 
-fn scan_node(node: &Node, found: &mut BTreeSet<String>) {
+fn walk_literals_node(node: &Node, visit: &mut dyn FnMut(&str)) {
     match node {
         Node::Lit {
             value: Value::String(text),
-        } => {
-            scan_template(text, |name| {
-                found.insert(name.to_owned());
-                None
-            });
-        }
-        Node::Bind { value, .. } => scan_node(value, found),
-        Node::Call { args, .. } => scan(args, found),
+        } => visit(text),
+        Node::Bind { value, .. } => walk_literals_node(value, visit),
+        Node::Call { args, .. } => walk_literals(args, visit),
         Node::Obj { fields } => {
             for value in fields.values() {
-                scan_node(value, found);
+                walk_literals_node(value, visit);
             }
         }
-        Node::List { items } => scan(items, found),
-        Node::Parse { value, .. } => scan_node(value, found),
+        Node::List { items } => walk_literals(items, visit),
+        Node::Parse { value, .. } => walk_literals_node(value, visit),
         Node::When {
             cond,
             then,
             otherwise,
         } => {
-            scan_node(cond, found);
-            scan(then, found);
-            scan(otherwise, found);
+            walk_literals_node(cond, visit);
+            walk_literals(then, visit);
+            walk_literals(otherwise, visit);
         }
         // `Var`, `Fmt` and `Return` carry no literal text: a `fmt` template's placeholders are
         // symbols the body binds, which is the opposite of what this is looking for.
@@ -700,10 +799,28 @@ fn collect_binds(
 
 /// The single variable `literal` consists of, if it is nothing else — the pin-bind shape
 /// `zone_id = "{zone_id}"`.
+///
+/// The inner text must be a **configuration field name**, not merely brace-delimited. Without that
+/// clause `{"already": "json"}` — a JSON object bound as a literal — reads as a pin named
+/// `"already": "json"`, and a shape this module cannot classify would slip through as one it can.
+/// The name grammar is the loader's: a `[[config]]` field's `binds` suffix is an identifier, so
+/// anything else was never a pin.
 fn sole_placeholder(literal: &str) -> Option<&str> {
     let inner = literal.strip_prefix('{')?.strip_suffix('}')?;
     let inner = inner.trim();
-    (!inner.is_empty() && !inner.contains(['{', '}'])).then_some(inner)
+    is_variable_name(inner).then_some(inner)
+}
+
+/// Whether `name` is spelled the way a configuration variable is: a leading ASCII letter or `_`,
+/// then ASCII alphanumerics, `_` or `-`. Every shipped variable — `subdomain`, `account_host`,
+/// `teamId`, `project_ref` — satisfies it.
+fn is_variable_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) if first.is_ascii_alphabetic() || first == '_' => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 /// Place every placeholder of a templated URL literal by where it falls in that URL.
@@ -853,6 +970,11 @@ pub(crate) fn build(
     endpoints: &BTreeMap<String, String>,
     slots: &BTreeMap<String, Slot>,
 ) -> Result<Request, Error> {
+    // **The invariant, executed** (C-232). Checked before a single parameter is bound, because the
+    // question it answers is whether this body's braces mean what this module thinks they mean —
+    // and every step below assumes they do.
+    refuse_unconfigurable(operation, declaration)?;
+
     let mut env = Env::new();
 
     // Every declared parameter must be supplied, exactly as flux's own composite dispatch requires
@@ -1298,9 +1420,7 @@ fn kind(node: &Node) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Configuration, Field};
     use serde_json::json;
-    use std::sync::Arc;
 
     /// **Every configuration variable in the shipped catalogue is placed** (C-214).
     ///
@@ -1648,132 +1768,205 @@ mod tests {
   return response
 "#;
 
-    /// **A GraphQL selection set is read as a set of configuration variables** — the finding that
-    /// withdrew the Linear connector (C-110), and the reason this module's "exactly two kinds"
-    /// paragraph is a statement about *what ships* rather than a guarantee.
+    /// **A GraphQL selection set is not configuration, and is no longer read as any** (C-232).
     ///
-    /// [`endpoint_variables`] scans every string literal for `{…}`. That is sound for the two kinds
-    /// the shipped catalogue has — templated base URLs and C-187's pin binds — because in both a
-    /// brace really does name a value a host supplies. A GraphQL query document is a third kind: it
-    /// is a literal, it is full of braces, and **not one of them is configuration**. They are the
-    /// vendor's own syntax.
+    /// [`endpoint_variables`] used to scan *every* string literal for `{…}`. That is sound for the
+    /// two declared kinds — templated base URLs and C-187's pin binds — because in both a brace
+    /// really does name a value a host supplies. A GraphQL query document is a third kind: it is a
+    /// literal, it is full of braces, and **not one of them is configuration**. They are the
+    /// vendor's own syntax, and the variable names the old scan produced were selection-set
+    /// fragments, which made the resulting refusal unreadable as well as wrong.
     ///
-    /// The variable names this produces are selection-set fragments, which is what makes the
-    /// resulting refusal unreadable as well as wrong.
+    /// The document is now classified as unconfigurable and contributes no variable at all. The
+    /// operation is refused instead — see the test below for the refusal, and this module's
+    /// documentation for why refusing rather than ignoring is the honest answer.
     #[test]
-    fn a_graphql_document_in_a_literal_is_read_as_configuration_variables() {
+    fn a_graphql_document_in_a_literal_is_not_read_as_configuration() {
         let declaration = crate::spec::declaration_of("probe-viewer", GRAPHQL_OP).expect("parses");
-        let variables = endpoint_variables(&declaration);
 
         assert_eq!(
-            variables.len(),
-            2,
-            "the document's two nested selection sets were not both read as variables: {variables:#?}"
+            endpoint_variables(&declaration),
+            Vec::<String>::new(),
+            "a selection-set fragment was reported as a configuration variable a tenant could supply"
+        );
+
+        // And it is reported as the thing it is, so the refusal below has something to quote.
+        let mut unclassified = Vec::new();
+        walk_literals(&declaration.body.body, &mut |literal| {
+            if let Some(literal) = unconfigurable(literal) {
+                unclassified.push(literal.to_owned());
+            }
+        });
+        assert_eq!(unclassified.len(), 1, "{unclassified:#?}");
+        assert!(unclassified[0].contains("displayName"), "{unclassified:#?}");
+    }
+
+    /// **The production shape: an empty configuration, and the operation is refused** (C-232).
+    ///
+    /// This is the check whose absence let a fully green gate coexist with eight dead operations.
+    /// `tests/request.rs::every_shipped_operation_builds_an_absolute_request` asserted only on the
+    /// **URL**, and its `configuration()` helper manufactured a value for every *discovered*
+    /// variable — so it fabricated exactly the values that hid this, and it would not have caught it
+    /// for a connector whose documents live in the body.
+    ///
+    /// Three things are asserted together, because the second is worse than the first and the third
+    /// is why the refusal has to come before either:
+    ///
+    /// 1. **Unconfigured, the operation refuses** — and it refuses for the *classification*, naming
+    ///    the literal, rather than for a missing value named after a fragment of GraphQL.
+    /// 2. **Configured, it still refuses.** Binding the fabricated values the old catalogue-wide
+    ///    helper would have bound no longer buys a request: the refusal does not depend on what a
+    ///    host was willing to answer, which is exactly the dependency C-232 is about.
+    /// 3. **Substitution, if it were reached, would rewrite the document.** Kept as the record of
+    ///    what the refusal prevents: `{ viewer { … } }` becomes the configuration value, so the
+    ///    "constant query a caller must not choose" is chosen after all, by whoever supplies the
+    ///    tenant's settings.
+    ///
+    /// Withdrawing the connector is what makes this a fixture rather than a shipped regression. The
+    /// mechanism that would let a literal be opaque to this scan *and still ship* belongs to
+    /// **C-87**, which publishes the configuration surface into the catalogue so the pack can
+    /// **read** an operation's variables instead of inferring them from syntax. See
+    /// `docs/designs/graphql-vendors.md`.
+    #[test]
+    fn a_graphql_operation_is_refused_rather_than_configured_or_corrupted() {
+        let declaration = crate::spec::declaration_of("probe-viewer", GRAPHQL_OP).expect("parses");
+        let slots = endpoint_slots(&declaration);
+
+        // 1. The production shape: this connector declares no `[[config]]` field binding an
+        //    endpoint, a path, a query or a header, so an operator supplies nothing.
+        let refusal = build(
+            "probe-viewer",
+            &declaration,
+            &json!({}),
+            &BTreeMap::new(),
+            &slots,
+        )
+        .expect_err("a document literal is not configuration and cannot be built through");
+        assert!(
+            matches!(refusal, Error::Unbuildable { .. }),
+            "refused, but for the wrong reason: {refusal}"
+        );
+
+        // 2. Configured with the fabricated values the old helper supplied — still refused.
+        let fabricated: BTreeMap<String, String> = ["viewer", "document"]
+            .iter()
+            .map(|name| ((*name).to_string(), "a-value".to_string()))
+            .collect();
+        assert!(
+            build(
+                "probe-viewer",
+                &declaration,
+                &json!({}),
+                &fabricated,
+                &slots
+            )
+            .is_err(),
+            "supplying values made the operation buildable again, which is the fabrication this \
+             story exists to remove"
+        );
+
+        // 3. What the refusal prevents, measured at the substitution point itself so that removing
+        //    the refusal cannot quietly remove the evidence for it too.
+        let document = "query Viewer {\n  viewer {\n    displayName\n  }\n}\n";
+        let endpoints: BTreeMap<String, String> = scan_names(document)
+            .into_iter()
+            .map(|name| (name, "a-value".to_string()))
+            .collect();
+        let corrupted = Build {
+            operation: "probe-viewer",
+            endpoints: &endpoints,
+            slots: &BTreeMap::new(),
+        }
+        .substitute(document)
+        .expect("substitution over a document has nothing to refuse it");
+        assert!(
+            !corrupted.contains("displayName"),
+            "the document survived, so this no longer measures the corruption it exists for: \
+             {corrupted}"
         );
         assert!(
-            variables
-                .iter()
-                .any(|variable| variable.contains("displayName")),
-            "a configuration variable should not be able to contain a GraphQL field name: \
-             {variables:#?}"
-        );
-        assert!(
-            variables.iter().any(|variable| variable.contains('\n')),
-            "a configuration variable should not be able to contain a newline: {variables:#?}"
+            corrupted.contains("a-value"),
+            "a configuration value did not reach the query document: {corrupted}"
         );
     }
 
-    /// **The production shape: an empty configuration, and the operation cannot be called at all.**
+    /// Every placeholder name in `template`, by the module's own brace grammar.
+    fn scan_names(template: &str) -> Vec<String> {
+        let mut names = Vec::new();
+        scan_template(template, |name| {
+            names.push(name.to_owned());
+            None
+        });
+        names
+    }
+
+    /// **The "exactly two kinds" invariant, executed rather than asserted in prose** (C-232).
     ///
-    /// This is the check whose absence let a fully green gate coexist with eight dead operations.
-    /// `tests/request.rs::every_shipped_operation_builds_an_absolute_request` asserts only on the
-    /// **URL**, and its `configuration()` helper manufactures a value for every *discovered*
-    /// variable — so it fabricates exactly the values that hide this, and it would not have caught
-    /// it for a connector whose documents live in the body.
+    /// This module's opening documentation used to state that the brace-carrying string literals in
+    /// the shipped catalogue "are of exactly two kinds, and both are configuration", and then record
+    /// in a caveat that C-110 had written a third. A statement about what ships is not a rule: the
+    /// next connector with a brace in a literal falsifies it again, silently, because nothing
+    /// executes it.
     ///
-    /// The two halves are asserted together because the second is worse than the first:
+    /// So the two kinds are now the *only* two this module will read braces out of, and anything
+    /// else is [`Error::Unbuildable`] rather than treated as configuration. That is the same choice
+    /// the evaluator already makes for a node it does not model, applied to the scan: a literal
+    /// whose braces are the vendor's own syntax is refused, not filled in with a tenant's settings.
     ///
-    /// 1. **Unconfigured, the operation refuses.** `Operation::build_request` resolves every
-    ///    endpoint variable through the bound port first, and a tenant supplies none of these,
-    ///    because they are not configuration and no `[[config]]` field could sensibly declare them.
-    /// 2. **Configured, the document is rewritten.** [`Build::substitute`] replaces the brace run
-    ///    with the host's value, so `{ viewer { … } }` becomes the value — and the "constant query a
-    ///    caller must not choose" is chosen, after all, by whoever supplies the tenant's settings.
-    ///
-    /// Withdrawing the connector is what makes this a fixture rather than a shipped regression. The
-    /// mechanism that would let a literal be opaque to this scan belongs to **C-87**, which
-    /// publishes the configuration surface into the catalogue so the pack can *read* an operation's
-    /// variables instead of inferring them from syntax. See `docs/designs/graphql-vendors.md`.
+    /// The fixture is C-110's `linear-viewer` exactly as it was emitted, which is the known
+    /// positive — see `crates/connector-flux/tests/linear_connector.rs` for the provider file it
+    /// came from.
     #[test]
-    fn a_graphql_operation_cannot_be_called_and_is_corrupted_when_it_is() {
+    fn a_braced_literal_that_is_neither_a_url_nor_a_pin_is_refused() {
         let declaration = crate::spec::declaration_of("probe-viewer", GRAPHQL_OP).expect("parses");
-        let variables = endpoint_variables(&declaration);
-        let slots = endpoint_slots(&declaration);
 
-        // 1. The production shape. This mirrors `Operation::build_request`, which resolves every
-        //    endpoint variable through the port before assembling anything.
-        let empty = Configuration::new(
-            Arc::new(crate::config::MemoryConfig::new()),
-            crate::tests::TEST_TENANT,
+        // The production shape: this connector declares no `[[config]]` field that binds an
+        // endpoint, a path, a query or a header, so the configuration an operator supplies is
+        // **empty**. Nothing may be fabricated to stand in for the document's braces.
+        let error = build(
+            "probe-viewer",
+            &declaration,
+            &json!({}),
+            &BTreeMap::new(),
+            &BTreeMap::new(),
         )
-        .expect("a valid tenant id");
-        let settings = empty.snapshot(
-            "linear",
-            "default",
-            variables.iter().map(|variable| Field::Endpoint(variable)),
+        .expect_err("a document literal is not configuration and cannot be built through");
+
+        assert!(
+            matches!(error, Error::Unbuildable { .. }),
+            "refused, but for the wrong reason: {error}"
         );
-        for variable in &variables {
-            let refusal = settings
-                .require("probe-viewer", Field::Endpoint(variable))
-                .expect_err("a value nobody can supply must not resolve");
+        let message = error.to_string();
+        assert!(
+            message.contains("displayName"),
+            "the refusal must quote the literal it could not classify, or an implementor cannot \
+             find it: {message}"
+        );
+    }
+
+    /// The two kinds themselves still classify, so the refusal above is not a refusal of everything.
+    #[test]
+    fn a_templated_url_and_a_pin_bind_are_the_two_kinds_that_do_classify() {
+        for literal in [
+            "https://{subdomain}.zendesk.com",
+            "https://api.cloudflare.com/client/v4",
+            "{zone_id}",
+            "{ teamId }",
+            "application/json",
+        ] {
             assert!(
-                matches!(refusal, Error::MissingConfig { .. }),
-                "unconfigured, the operation refused for an unrelated reason: {refusal}"
+                unconfigurable(literal).is_none(),
+                "{literal:?} is one of the two declared kinds and was refused"
             );
         }
-        assert!(
-            !variables.is_empty(),
-            "with no variables there would be nothing to refuse, and the connector would work"
-        );
-
-        // **C-214 is what would have caught this at integration**, and it is worth pinning that it
-        // does. `endpoint_slots` derives a request position for each variable, and a GraphQL
-        // fragment has none — it appears in no URL — so every one of these comes back unplaced.
-        // `every_shipped_configuration_variable_is_placed`, above, is therefore red for any
-        // catalogue carrying a connector like this. It postdates C-110's first attempt, which is
-        // exactly why that attempt's gate was green.
-        for variable in &variables {
+        for literal in [
+            "query Viewer {\n  viewer {\n    id\n  }\n}\n",
+            "{\"already\": \"json\"}",
+        ] {
             assert!(
-                !matches!(
-                    slots.get(variable),
-                    Some(Slot::Host | Slot::Path | Slot::Query)
-                ),
-                "`{variable}` was given a request position, so the C-214 guard would not fire"
+                unconfigurable(literal).is_some(),
+                "{literal:?} is neither a templated URL nor a pin bind and was accepted"
             );
         }
-
-        // 2. Configured — the half that is worse. Bind the fabricated values the existing
-        //    catalogue-wide test would have bound, and read what reaches the wire.
-        let endpoints: BTreeMap<String, String> = variables
-            .iter()
-            .map(|variable| (variable.clone(), "a-value".to_string()))
-            .collect();
-        let request = build("probe-viewer", &declaration, &json!({}), &endpoints, &slots)
-            .expect("with every variable bound, the request assembles");
-        let body = request.body.expect("a GraphQL call has a body");
-
-        assert!(
-            !body.contains("displayName"),
-            "the document survived, so this test no longer measures the corruption it exists for"
-        );
-        assert!(
-            body.contains("a-value"),
-            "a configuration value did not reach the query document: {body}"
-        );
-        assert!(
-            !body.contains("viewer {"),
-            "the `viewer` selection set should have been replaced by the configuration value, \
-             which is the whole finding: {body}"
-        );
     }
 }
