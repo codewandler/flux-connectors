@@ -2,11 +2,12 @@
 //! vendor also hides inside the credential**, and for **a Basic mechanism whose username is a
 //! constant rather than operator-supplied**. Both are measured here rather than described.
 //!
-//! Mailchimp's root URL is `https://<dc>.api.mailchimp.com/3.0`, and the vendor's own fundamentals
-//! page finds `<dc>` two ways: from the admin URL an operator signs in at, and from the suffix of
-//! the API key itself — *"if your API key is `0123456789abcdef0123456789abcde-us6`, then the data
-//! center subdomain is `us6`"*. The second route is the one this connector must not take, and the
-//! reason is one line: composing a **host** out of a **secret** would put a substring of the
+//! Mailchimp's root URL is `https://<dc>.api.mailchimp.com/3.0`, and the vendor's own Fundamentals
+//! page (read 2026-07-31) finds `<dc>` three ways: *"It's the first part of the URL you see in the
+//! API keys section of your account"*, *"It's also appended to your API key in the form key-dc"*,
+//! and — on an OAuth 2 connection — the OAuth metadata endpoint. The second route is the one this
+//! connector must not take, and the reason is one line: composing a **host** out of a **secret**
+//! would put a substring of the
 //! credential into every URL, log line and error message the connection produces, while the value
 //! the host registered with its redactor is the whole key — so the piece that travels in the clear
 //! is a piece nothing scrubs, and it is a piece an attacker can use to narrow the rest.
@@ -372,7 +373,10 @@ fn the_curated_set_declares_its_effects_and_puts_nothing_in_a_query_string() {
 
         let flux = emit_operation(&connector, operation)
             .unwrap_or_else(|error| panic!("{id} does not emit: {error}"));
-        assert!(!flux.contains('?'), "{id} emits a `?` into its URL:\n{flux}");
+        assert!(
+            !flux.contains('?'),
+            "{id} emits a `?` into its URL:\n{flux}"
+        );
     }
 
     // The one write, stated positively: the free text it carries is a body, and it is the only
@@ -411,9 +415,11 @@ fn the_curated_set_declares_its_effects_and_puts_nothing_in_a_query_string() {
 ///
 /// A "Test connection" button is pressed whenever someone opens a settings page, so it must be a
 /// read (the loader checks the declared risk) *and* it must need no argument, which the loader does
-/// not check and a connector can still get wrong. `GET /ping` is the request Mailchimp's own quick
-/// start makes first, and it is the one call that proves both halves of this connector's
-/// configuration at once: a wrong key and a wrong datacenter both answer `401`.
+/// not check and a connector can still get wrong. `GET /ping` proves both halves of this
+/// connector's configuration at once — a wrong key and a wrong datacentre label both fail it — and
+/// Mailchimp describes it as *"A health check for the API that won't return any account-specific
+/// information"*, which is less than the API root the vendor's own quick start calls and less than
+/// an unattended button should pull. `providers/mailchimp.toml` records why the root is excluded.
 #[test]
 fn verify_is_an_argument_free_read() {
     let connector = load();
