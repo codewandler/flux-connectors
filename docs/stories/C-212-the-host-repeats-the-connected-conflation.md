@@ -2,7 +2,7 @@
 id: C-212
 title: "The host's `connected` repeats C-206's conflation in the surface an operator actually looks at"
 pillar: Bridge
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/connectors-api.md
 epic: connectors-api

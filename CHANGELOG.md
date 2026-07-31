@@ -34,6 +34,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The host serves three wiring states where a boolean carried two (C-212).** `connected` was
+  `false` both for "supply a credential" and for "this vendor needs none" — two opposite situations,
+  one value, in the view a person uses to choose among 53 connectors.
+
+  It also fixes the second half: `all_stored` required **every** declared credential, so supplying
+  Anthropic's `api_key` — which nearly every operation uses — left the connector reading as unwired
+  because `admin_key`, a management-surface value no ordinary request carries, was unset. The code
+  already contained the argument against itself, excluding inbound signing secrets for exactly that
+  reason; the principle now holds by construction rather than as a special case, so Slack reads as
+  wired on its bot token alone.
+
+  Verified against a running host, not only by test: freshdesk `no-credential-required`; anthropic
+  `not-wired` 0/5 → `partly-wired` 2/5 → `wired` 5/5. Uses C-206's own `no-credential-required`
+  token rather than a second vocabulary for the same distinction.
+
 - **The route-level login guard had no coverage anywhere, and now does (C-228).** C-204's fix is
   sound — a security review reproduced the cross-account capture at the base and proved it dead on
   the fix. This is the residue: when a new guard runs *before* an old one, tests aimed at the old one
