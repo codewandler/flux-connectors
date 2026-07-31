@@ -11,6 +11,9 @@
 //! - [`emit_graph`] — one IR [`connector_spec::Graph`] becomes one formatted **composite** `op`
 //!   that calls the connector's own operations. It owns symbol generation and region nesting, and
 //!   it refuses every shape whose only other outcome is Flux that is wrong at runtime.
+//!   [`emit_graph_with_paths`] returns the [`NodePaths`] map beside the module — node id → the
+//!   flux node path (`body[3].then[0]`) of the statement that node produced — so an analyzer
+//!   finding about generated Flux can be shown on the node an author drew (C-96).
 //! - `names` — the wire-name/symbol-name mapping. A vendor may call a parameter `time.start`; Flux
 //!   may not, and the two names are kept apart rather than reconciled by mangling.
 //! - `types` — JSON Schema to Flux `TypeRef`, **including the documented `Any` fallback** for the
@@ -26,7 +29,7 @@ mod names;
 mod op;
 mod types;
 
-pub use graph::emit_graph;
+pub use graph::{emit_graph, emit_graph_with_paths, NodePaths};
 pub use op::{emit_operation, parameter_symbols};
 
 /// flux-lang's own token classification, re-exported so a consumer can name it without depending on
