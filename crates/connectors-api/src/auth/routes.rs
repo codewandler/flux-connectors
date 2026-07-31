@@ -1,0 +1,265 @@
+//! The four routes sign-in needs.
+//!
+//! `GET /auth/signin` · `GET /auth/callback` · `POST /auth/signout` · `GET /auth/me`, plus
+//! `GET /auth/status` so the page can say "not configured yet" instead of rendering a button that
+//! cannot work.
+
+use axum::extract::{Query, State};
+use axum::http::{header, StatusCode};
+use axum::response::{IntoResponse, Response};
+use axum::Json;
+use serde::Deserialize;
+use serde_json::json;
+
+use crate::api::Failure;
+use crate::auth::oidc::{Expectations, Settings, Setup, VerifyError, SCOPES};
+use crate::auth::session::Account;
+use crate::auth::{cleared_cookie, session_cookie, token_of, Principal};
+use crate::state::App;
+
+/// **Start a sign-in.**
+///
+/// Mints `state`, `nonce` and a PKCE pair, keeps the verifier and the nonce here, and sends the
+/// browser to Google with only the challenge. The code that comes back is therefore redeemable
+/// only by whoever holds the verifier — this process — which is what PKCE buys even for a
+/// confidential client whose secret could be stolen from a redirect.
+pub async fn signin(State(app): State<App>) -> Response {
+    let Some(oidc) = app.oidc() else {
+        return not_configured(&app);
+    };
+
+    let login = app.sessions().start_login();
+    // `oauth_authorize_url` reads only `challenge` from the pair. The verifier stays in the session
+    // store and never reaches a URL, which is the entire point of the exchange.
+    let pkce = flux_credentials::Pkce {
+        verifier: String::new(),
+        challenge: login.challenge,
+    };
+    let mut url = flux_credentials::oauth_authorize_url(
+        &oidc.settings.authorize_url,
+        &oidc.settings.client_id,
+        &oidc.settings.redirect_uri,
+        SCOPES,
+        &pkce,
+        &login.state,
+    );
+    // `oauth_authorize_url` is a generic RFC-6749 builder and OIDC's `nonce` is not one of its
+    // parameters, so it is appended here. It is the claim that binds the returned `id_token` to
+    // *this* sign-in; without it a token obtained in another session replays into this one.
+    url.push_str(&format!("&nonce={}", urlencoding::encode(&login.nonce)));
+
+    (StatusCode::SEE_OTHER, [(header::LOCATION, url)]).into_response()
+}
+
+/// What Google sends back.
+#[derive(Deserialize)]
+pub struct CallbackParams {
+    code: Option<String>,
+    state: Option<String>,
+    /// Present when the person declined, or the request was rejected.
+    error: Option<String>,
+}
+
+/// **Finish a sign-in.**
+///
+/// Everything that makes this safe happens between receiving the code and setting the cookie:
+/// the `state` must be one this host issued and has not already redeemed, the code is exchanged
+/// with the verifier, and the `id_token` passes all five checks before an account exists.
+pub async fn callback(State(app): State<App>, Query(params): Query<CallbackParams>) -> Response {
+    let Some(oidc) = app.oidc() else {
+        return not_configured(&app);
+    };
+
+    if let Some(error) = params.error {
+        // The provider's own error code, which is a fixed vocabulary (`access_denied`, …) and
+        // carries nothing of ours.
+        return refuse(format!(
+            "the identity provider refused the sign-in: {error}"
+        ));
+    }
+    let (Some(code), Some(state)) = (params.code, params.state) else {
+        return refuse("the callback carried no code and state".to_owned());
+    };
+
+    // Single-use, and unknown means unsolicited. This is the login-CSRF defence: an attacker who
+    // can make a browser fetch a callback URL of their choosing would otherwise sign the victim
+    // into the *attacker's* account, and everything the victim then connected would be connected
+    // for the attacker.
+    let Some((verifier, nonce)) = app.sessions().take_login(&state) else {
+        return refuse(
+            "this callback does not correspond to a sign-in this host started".to_owned(),
+        );
+    };
+
+    let id_token = match exchange(&oidc.settings, &code, &verifier).await {
+        Ok(token) => token,
+        Err(why) => return refuse(why),
+    };
+
+    let expect = Expectations {
+        issuers: &oidc.settings.issuers,
+        audience: &oidc.settings.client_id,
+        nonce: &nonce,
+    };
+
+    let claims = match verify_with_rotation(&app, &id_token, &expect).await {
+        Ok(claims) => claims,
+        Err(error) => return refuse(error.to_string()),
+    };
+
+    let account = match Account::from_claims(&claims) {
+        Ok(account) => account,
+        Err(why) => return refuse(format!("this identity cannot own a tenant: {why}")),
+    };
+    let account = app.accounts().of_subject(account);
+    let token = app.sessions().create(account);
+
+    (
+        StatusCode::SEE_OTHER,
+        [
+            (header::LOCATION, "/".to_owned()),
+            (header::SET_COOKIE, session_cookie(&token)),
+        ],
+    )
+        .into_response()
+}
+
+/// Verify, and survive a key rotation.
+///
+/// An unknown `kid` is what a rotation looks like from here, so it earns exactly one forced
+/// refetch — rate-limited inside the cache, so a stream of bogus `kid`s cannot turn this host into
+/// a load generator pointed at Google.
+async fn verify_with_rotation(
+    app: &App,
+    id_token: &str,
+    expect: &Expectations<'_>,
+) -> Result<crate::auth::oidc::IdClaims, VerifyError> {
+    let oidc = app.oidc().expect("checked by the caller");
+
+    let keys = oidc.jwks.current().await?;
+    match crate::auth::oidc::verify_id_token(id_token, &keys, expect) {
+        Err(VerifyError::UnknownKey(_)) => {
+            let keys = oidc.jwks.refresh_for_unknown_key().await?;
+            crate::auth::oidc::verify_id_token(id_token, &keys, expect)
+        }
+        other => other,
+    }
+}
+
+/// Redeem the authorization code for an `id_token`.
+///
+/// Written here rather than through `flux_credentials::oauth_token_grant`, and the reason is
+/// specific: that function returns an `OAuthToken` which **drops the raw `id_token`**, keeping only
+/// an OpenAI-specific account id read out of it with an *unverified* base64 decode. The raw token
+/// is precisely the artefact this story must verify, so the four lines of form encoding are written
+/// out. The PKCE half — which is where a fourth implementation would actually be a hazard — is
+/// still `flux-credentials`'.
+async fn exchange(settings: &Settings, code: &str, verifier: &str) -> Result<String, String> {
+    let response = reqwest::Client::new()
+        .post(&settings.token_url)
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("code", code),
+            ("redirect_uri", settings.redirect_uri.as_str()),
+            ("client_id", settings.client_id.as_str()),
+            ("client_secret", settings.form_secret()),
+            ("code_verifier", verifier),
+        ])
+        .send()
+        .await
+        .map_err(|error| format!("the token exchange did not complete: {error}"))?;
+
+    let status = response.status();
+    if !status.is_success() {
+        // **The body is deliberately not quoted.** A token endpoint that echoes the request back
+        // in an error — several do — would put this host's `client_secret` into a response body
+        // that `tests/host.rs` asserts is clean. The status is the diagnostic; the secret is not.
+        return Err(format!("the token endpoint answered {status}"));
+    }
+
+    let body: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|error| format!("the token endpoint's answer was not JSON: {error}"))?;
+    body.get("id_token")
+        .and_then(|value| value.as_str())
+        .map(str::to_owned)
+        .ok_or_else(|| "the token endpoint returned no id_token".to_owned())
+}
+
+/// **Sign out, server-side.**
+///
+/// Revokes the record and clears the cookie, in that order. Idempotent: signing out without a
+/// session is a success, because reporting "you were not signed in" tells an unauthenticated
+/// caller something about a token they presented.
+pub async fn signout(State(app): State<App>, request: axum::extract::Request) -> Response {
+    let (parts, _) = request.into_parts();
+    if let Some(token) = token_of(&parts) {
+        app.sessions().revoke(&token);
+    }
+    (
+        StatusCode::SEE_OTHER,
+        [
+            (header::LOCATION, "/".to_owned()),
+            (header::SET_COOKIE, cleared_cookie()),
+        ],
+    )
+        .into_response()
+}
+
+/// Who is signed in.
+///
+/// Carries the labels and the tenant, which is not a secret — it is the prefix of every credential
+/// address this account already sees in the connector view. It carries no session token, because a
+/// route that echoed one would turn any response-reflection bug into session theft.
+pub async fn me(principal: Principal) -> Json<serde_json::Value> {
+    let account = principal.account();
+    Json(json!({
+        "subject": account.subject(),
+        "tenant": account.tenant(),
+        "email": account.email,
+        "name": account.name,
+    }))
+}
+
+/// Whether sign-in is usable, and who is signed in if so.
+///
+/// Reachable without a session on purpose: it is what lets the page render "set these two
+/// environment variables" rather than a sign-in button that leads to a `503`.
+pub async fn status(
+    State(app): State<App>,
+    request: axum::extract::Request,
+) -> Json<serde_json::Value> {
+    let (parts, _) = request.into_parts();
+    let signed_in = token_of(&parts).and_then(|token| app.sessions().resolve(&token));
+
+    Json(json!({
+        "configured": app.oidc().is_some(),
+        "setup": app.setup_message(),
+        "signed_in": signed_in.is_some(),
+        "account": signed_in.map(|account| json!({
+            "subject": account.subject(),
+            "tenant": account.tenant(),
+            "email": account.email,
+            "name": account.name,
+        })),
+    }))
+}
+
+/// Sign-in is not set up. Say what is missing, in the response an operator is looking at.
+fn not_configured(app: &App) -> Response {
+    Failure::new(
+        StatusCode::SERVICE_UNAVAILABLE,
+        app.setup_message().unwrap_or_else(|| Setup::explain(&[])),
+    )
+    .into_response()
+}
+
+/// A refusal during sign-in.
+///
+/// `400` rather than `401`: the request is malformed or unsolicited, not unauthenticated. None of
+/// these messages carries a token, a code, a verifier or the client secret — they name the check
+/// that failed and nothing else, which is what makes them safe to show an operator.
+fn refuse(why: String) -> Response {
+    Failure::new(StatusCode::BAD_REQUEST, why).into_response()
+}

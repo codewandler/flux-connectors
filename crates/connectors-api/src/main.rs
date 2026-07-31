@@ -30,6 +30,23 @@ async fn main() -> anyhow::Result<()> {
     println!("  This host makes REAL calls to REAL vendors with REAL credentials.");
     println!("  Credentials are held in memory only: stopping the process is the cleanup.");
 
+    // **Sign-in state, said out loud at startup.**
+    //
+    // A missing Google registration is a first-run state, not a crash: the process binds, serves
+    // its page, and prints exactly which variables to set. Panicking here would turn a first
+    // `cargo run` into a stack trace, and starting silently would turn it into a sign-in button
+    // that leads nowhere — the two failure modes C-204 refuses by name.
+    println!();
+    match app.setup_message() {
+        Some(message) => {
+            println!("  ⚠ {}", message.replace('\n', "\n  "));
+        }
+        None => {
+            println!("  Google sign-in is configured. Every connector and credential belongs to");
+            println!("  the signed-in account's tenant, never to a tenant a request names.");
+        }
+    }
+
     axum::serve(listener, connectors_api::router(app))
         .with_graceful_shutdown(shutdown())
         .await?;
