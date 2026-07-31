@@ -7,7 +7,46 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Added
+### Changed
+
+- **The docs now say what a connector actually is, and the charter was amended twice.**
+
+  `vision.md` had defined a connector as *"auth + operations + quirks"* — true of an IR with three
+  surfaces. `Connector` has **sixteen fields**, and the three the vision named are not the
+  interesting ones any more: `quirks` reaches almost nothing and `auth` reaches neither the module
+  nor the manifest. `AGENTS.md` said *"a service has three member kinds"* directly above a five-row
+  table. `README.md` advertised v0.3.0 and 19 providers. The roadmap still said *"nothing is
+  implemented yet"* against 86 done stories.
+
+  New `docs/designs/connector-surfaces.md` is the single answer to *"what can a connector bring to
+  flux?"*, and its most useful content is the negative half: **six surfaces reach no artifact at
+  all** — `config`, `graphs`, `verify`, `roles`, `quirks.pagination`, `quirks.rate_limit`. They load,
+  they validate, they move `ir_sha256`, and nothing downstream can see them. Two of the six are dead
+  for a different reason worth separating: nothing *declares* a graph (the lowering in
+  `connector-flux/src/graph.rs` is complete, tested and never called), and hubspot records its
+  `rate_limit` non-declaration deliberately.
+
+  **Charter amendment 1 — the "no runtime" non-goal is now "no runtime *for production traffic*"**,
+  permitting `crates/connectors-app`: a loopback-bound reference host proving the seams end to end,
+  never published, never a production request path. This resolves **C-34** as yes-narrowed — yes to a
+  host that proves the seams, **no** to the credential-injecting proxy the story was filed about,
+  whose confused-deputy objection stands unamended.
+
+  **Charter amendment 2 — technology adapters stay a non-goal**, with a clarification: capability
+  *contracts* span both repos, so a hand-written flux plugin (Vault) and a generated connector
+  (1Password) can satisfy one and a host need not know which it holds. This moves nothing into this
+  repo; Vault stays a flux plugin.
+
+  Also new: `docs/designs/connector-contracts.md`, which measured the thing that blocks contracts.
+  The slot vocabulary fails in **both directions at once** — `get` fills 44 of 48 services (too loose
+  to discriminate) while `put` matches **zero operations** and no operation id even contains that
+  substring (too narrow to express), because all 13 `PUT` operations are named for their domain verb.
+  So a `secret_store` contract is not merely unbuilt, it is unspellable, and **C-23 (operation naming)
+  is a hard prerequisite** rather than a nice-to-have.
+
+  The counts in these documents remain **hand-typed**: C-81 (*declared counts are checked*) is still
+  `ready`, no mechanism derives them, and they had drifted five times before this pass. They drifted
+  again *during* it — two connectors merged between the docs being written and merged.
 
 - **The Okta connector (C-161) — the probe that produced the prefix axis, now shipping on it.**
   Five operations over `Authorization: SSWS <token>`, `okta-user-list` as `verify`, and

@@ -32,9 +32,9 @@ change to a story's `status`, `priority`, `title`, `epic`, or `note`, run `/trac
 
 ## Current project boundary
 
-**Snapshot: v0.5.0.** `cargo run -p connector-cli -- build` compiles **41 providers**, **48 services**
-and **232 curated connector operations** — plus 8 events, 2 channel bindings and 77 Flux core entries
-(29 operations, 43 node kinds, 5 capabilities) with 3 core JSON Schemas — into **454 artifacts**. The
+**Snapshot: v0.5.0.** `cargo run -p connector-cli -- build` compiles **43 providers**, **50 services**
+and **242 curated connector operations** — plus 8 events, 2 channel bindings and 77 Flux core entries
+(29 operations, 43 node kinds, 5 capabilities) with 3 core JSON Schemas — into **470 artifacts**. The
 compiler, the embedded Rust catalogue, the JSON catalogue, the Tool pack and the public explorer all
 work. **Nothing in this repository makes a live API call, because nothing in it is a host.** Read
 [Intentional gaps](#intentional-gaps) before changing code that appears broken.
@@ -97,7 +97,7 @@ cargo run -p connector-cli -- build
 cargo run -p connector-cli -- diff
 ```
 
-`diff` must finish with `454 artifacts up to date (41 providers checked)` for the current catalogue.
+`diff` must finish with `470 artifacts up to date (43 providers checked)` for the current catalogue.
 The artifact count may legitimately change when providers or operations change; do not encode it as
 a permanent invariant. It is also not currently checked against this file — see C-81 and the caveat
 under [Current project boundary](#current-project-boundary).

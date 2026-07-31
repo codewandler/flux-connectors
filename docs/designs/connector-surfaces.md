@@ -4,7 +4,7 @@
 **Pillar:** Spec · **Amends:** [vision.md](../vision.md)'s "auth + operations + quirks"
 
 > Every `path:line` below was read in this repository on **2026-07-31**, against a catalogue of
-> **41 providers / 232 operations / 48 services** (`jq '.providers|length'` and
+> **43 providers / 242 operations / 50 services** (`jq '.providers|length'` and
 > `jq '[.providers[].operations|length]|add'` over `web/public/catalog.json`). Symbol names are
 > stable; line numbers are not — re-grep by symbol rather than trusting a number that does not land.
 > Note that `AGENTS.md`'s "Snapshot: v0.5.0 — 19 providers and 110 curated operations" predates the
@@ -213,7 +213,7 @@ Each has a different reason and a different fix, and they should not be batched:
 | `quirks.rate_limit` | no consumer, **and no provider declares it** | probably deletion, not implementation |
 
 `quirks.rate_limit` is the one that should give a reader pause. It is a field in the IR, in the hash
-domain, and in the loader's `deny_unknown_fields` contract, and after 41 providers **not one author
+domain, and in the loader's `deny_unknown_fields` contract, and after 43 providers **not one author
 has used it** — three of them wrote comments explaining why they deliberately did not. A field with
 no producers and no consumers is not an unfinished feature; it is a shape the model does not need,
 and the cheapest correct action is to say so.
