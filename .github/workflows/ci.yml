@@ -49,3 +49,36 @@ jobs:
 
       - name: Format
         run: cargo fmt --all --check
+
+  package:
+    name: crates.io dry run
+    runs-on: ubuntu-latest
+    # A publish is the one irreversible thing this repository can do, and a packaging error —
+    # a missing `description`, a `readme` that points nowhere, a file the package excludes, a
+    # dependency without a version — is only visible at `cargo publish` time. Catching it here means
+    # catching it on a pull request rather than at the moment a version number is burning.
+    #
+    # Its own job, not a step in `check`: it needs the registry and a full verify build per crate,
+    # and the four gate commands above must stay the ones a developer runs locally.
+    #
+    # This uploads nothing. The real publish lives in `.github/workflows/crates-io.yml` and runs on a
+    # version tag only.
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        with:
+          toolchain: "1.97.0"
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Show the derived publish order
+        run: bash scripts/publish-crates-io.sh --print-order
+
+      # `--dry-run` packages and verifies every crate in the closure in one cargo invocation, so each
+      # is built against the others' freshly packaged copies — the situation the real publish creates
+      # one crate at a time. See the comment in the script for why it is not a loop.
+      - name: Package and verify the crates.io closure
+        run: bash scripts/publish-crates-io.sh --dry-run

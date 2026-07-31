@@ -510,6 +510,47 @@ README Flux examples must run `cargo test -p connector-cli --test readme_snippet
 `web/` must run the site build and tests. Changes to generated public catalogue data or Rust emitters
 are not docs-only and require the relevant Rust tests plus formatting and clippy.
 
+## Publishing contract
+
+**Publishing to crates.io is CI-only. Never run `cargo publish` by hand** — not locally, not with
+`--allow-dirty`, not "just to test". A published version cannot be withdrawn or corrected: a burned
+version number is burned, and a wrong `description`, `readme` or `keywords` is fixable only in the
+*next* version. `--dry-run` is the only form of `cargo publish` anyone runs outside CI.
+
+- A release is a consequence of pushing a `vX.Y.Z` tag.
+  [`.github/workflows/crates-io.yml`](.github/workflows/crates-io.yml) does the rest. It needs one
+  secret, `CARGO_REGISTRY_TOKEN`, checked before anything is packaged, and holds a `concurrency`
+  group so two runs cannot race. `workflow_dispatch` resumes a run that died partway.
+- **The publish closure is four crates, not three.** `connector-catalog`, `connector-spec`,
+  `connector-secrets`, `connector-pack`. `connector-cli` and `connector-flux` are not published.
+  The closure is *derived* from the manifests by
+  [`scripts/publish-crates-io.sh`](scripts/publish-crates-io.sh), which lists only the consumable
+  roots; the order is a topological sort, so a new edge changes it automatically.
+  `crates/connector-cli/tests/publish_closure.rs` asserts the derivation, the order and the
+  metadata.
+- **Adding a workspace dependency can enlarge the closure.** If a published crate gains an edge to
+  an unpublished workspace crate, that crate must be published too or consumers cannot resolve
+  anything — the path dependency that makes it work here does not travel. The test above fails on it
+  rather than letting a release discover it.
+- **The publish is idempotent.** A `crate@version` already live is skipped, so a run that trips the
+  crates.io new-crate rate limit can be re-run or the tag re-pushed to resume. Do not "fix" a
+  partial publish by hand.
+- **Metadata is checked, not assumed.** Every published crate carries `description`, `license`,
+  `repository`, `readme` and `keywords`; the `package` job in
+  [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `cargo publish --dry-run` over the
+  whole closure on every pull request, so a packaging error arrives as a review comment rather than
+  as a release incident.
+- **Crate names are not settled.** None of the four names is reserved on crates.io today, and
+  `connector-cli` is already taken by an unrelated crate — evidence that bare `connector-*` names
+  collide. Whether these publish as `connector-*` or `codewandler-connector-*` (matching the
+  `codewandler-flux-*` family) is an open decision recorded in
+  [docs/designs/crates-io-publishing.md](docs/designs/crates-io-publishing.md). **A name, once
+  published, is permanent** — settle it before the first tag, not after.
+
+See [docs/designs/crates-io-publishing.md](docs/designs/crates-io-publishing.md) for the reasoning
+and [C-190](docs/stories/C-190-publish-catalog-pack-secrets.md) for *when* the first publish
+happens. This contract is only about *how*.
+
 ## Relationship to flux
 
 - flux-connectors depends on `codewandler-flux-lang` (library `flux_lang`) from crates.io, pinned in

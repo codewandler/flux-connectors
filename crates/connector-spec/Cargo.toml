@@ -7,6 +7,10 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/connector-spec"
+keywords = ["flux", "connector", "openapi", "ir", "codegen"]
+categories = ["api-bindings", "development-tools"]
 
 [dependencies]
 thiserror.workspace = true

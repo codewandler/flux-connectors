@@ -7,6 +7,10 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/connector-catalog"
+keywords = ["flux", "connector", "catalog", "api", "codegen"]
+categories = ["api-bindings", "data-structures"]
 
 # The package carries the `connector-` prefix the workspace uses on the registry; the library is
 # `catalog`, so consumers write `catalog::operation(…)`. Same split as the `codewandler-flux-lang`

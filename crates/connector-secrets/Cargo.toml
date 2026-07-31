@@ -7,6 +7,10 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/connector-secrets"
+keywords = ["flux", "connector", "secrets", "vault", "credentials"]
+categories = ["api-bindings", "cryptography"]
 
 [features]
 # `VaultStore` and its HTTP transport are opt-in. Off by default so that a consumer wanting only
