@@ -2,12 +2,12 @@
 id: C-161
 title: Ship the Okta connector
 pillar: Spec
-status: ready
+status: in-progress
 priority: 2
 design:
 epic: provider-fleet-2
 areas: [providers]
-note: "UNBLOCKED by C-184, which built the prefix axis this story measured as missing. Okta now spells `scheme = { header = { name = \"Authorization\", prefix = \"SSWS \" } }`. The `## Progress` findings stand as the record of why the axis exists; what remains is the connector itself — no provider TOML was ever shipped for the probe"
+note: "Connector shipped on C-184's prefix axis — `providers/okta.toml` spells `scheme = { header = { name = \"Authorization\", prefix = \"SSWS \" } }`, five curated operations, one destructive write. The probe's findings stand as the record of why the axis exists; the probe test is now a per-provider contract test"
 ---
 
 # Ship the Okta connector
@@ -36,35 +36,40 @@ Read the `scheme` field's accepted values before designing. If it is closed to b
 
 ## Acceptance
 
-- [ ] `providers/okta.toml`, hand-authored and **curated** — a small set of operations this pipeline
-      can express honestly, not every endpoint the vendor documents. **Not done, deliberately** — see
-      `## Progress`. Every curated operation needs `Authorization: SSWS <token>`, and that scheme is
-      not expressible honestly with today's `AuthScheme`, so shipping the TOML would ship a connector
-      that fails closed with `401` on every call.
-- [ ] Declared `risk`, `idempotency` and effects per operation, and a `description` on each written for
-      a *model* to read rather than as UI copy. **N/A** — no operations authored, for the same reason.
-- [ ] A `[[config]]` surface with `label` and `help` on every field, and `secret` agreeing with `binds`.
-      **N/A** — same reason.
-- [ ] A `verify` operation that is a read and runs unattended. **N/A** — same reason.
+> The first attempt (2026-07-31, below) could not tick these and said so. C-184 built the missing
+> axis; this pass ships the connector. The annotations record what actually satisfies each item.
+
+- [x] `providers/okta.toml`, hand-authored and **curated** — a small set of operations this pipeline
+      can express honestly, not every endpoint the vendor documents. Five operations
+      (`providers/okta.toml:105,126,147,168,210`), with the excluded surface — `q`/`filter`/`search`,
+      the `after` cursor, every other lifecycle transition, `DELETE /users/{id}`, and a `maximum` on
+      `limit` — named and reasoned in the header comment rather than guessed at.
+- [x] Declared `risk`, `idempotency` and effects per operation, and a `description` on each written for
+      a *model* to read rather than as UI copy. Four `low`/`idempotent` reads and one
+      `destructive`/`non_idempotent` write (`providers/okta.toml:214`). *Effects* are derived, not
+      authored — the emitter writes `effects ["network"]` (`connectors/okta.flux`); there is no
+      `effects` field in the IR to declare.
+- [x] A `[[config]]` surface with `label` and `help` on every field, and `secret` agreeing with `binds`.
+      `providers/okta.toml:247` (`domain` → `endpoint.domain`, non-secret) and `:256` (`api_token` →
+      `credential.okta.api_token`, `secret = true`, and deliberately no `example`).
+- [x] A `verify` operation that is a read and runs unattended. `verify = "okta-user-list"`
+      (`providers/okta.toml:82`), a `GET` with no required parameter — asserted by
+      `the_user_deactivation_is_the_one_destructive_write_and_the_verify_is_a_read`.
 - [x] `crates/connector-flux/tests/okta_connector.rs` — a per-provider contract test asserting the
-      thing *this* connector is about (see the archetype above), not that the file parses. **Done, in
-      the shape the answer actually took**: it asserts the auth-scheme question directly (the closed
-      `AuthScheme` enum, the header scheme's missing prefix axis, and the credential-value trap) rather
-      than loading a `providers/okta.toml` that does not exist.
-- [ ] **Failing-first test:** the contract test must fail before `providers/okta.toml` exists. **Not
-      applicable in its literal form** — there is no `providers/okta.toml` to gate on. The nearest
-      honest equivalent: at `$(git merge-base main HEAD)` the test file itself does not exist (`cargo
-      test -p connector-flux --test okta_connector` errors `no test target named okta_connector`); see
-      `BASE_PROOF` in the report.
+      thing *this* connector is about (see the archetype above), not that the file parses. Rewritten
+      from the probe into the shape of `launchdarkly_connector.rs`, loading the shipped TOML. Findings
+      1 and 3 are kept verbatim as fixture tests; `no_provider_toml_was_shipped_for_this_probe` is
+      **inverted** into `the_shipped_connector_carries_the_ssws_scheme_word_the_probe_could_not`.
+- [x] **Failing-first test:** the contract test must fail before `providers/okta.toml` exists. At
+      `$(git merge-base main HEAD)` = `3457581`, five of the seven tests fail on the absent file and
+      the two kept probe findings pass. See `BASE_PROOF` in the report.
 - [x] The scoped gate is green: `build --provider okta`, `diff --provider okta` reporting no drift,
       `cargo build --workspace`, `cargo test --workspace --no-fail-fast`,
-      `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all --check`. See `GATE` in
-      the report — `build`/`diff --provider okta` correctly refuse (no such provider), everything else
-      is green including the new test.
-- [ ] **Exactly eight tests are red and reported, not silenced.** **Does not apply, and that is the
-      finding**: no provider, service or operation was added to `providers/`, so the whole-catalogue
-      staleness checks stay green. Zero new red tests, not eight, is the correct count for a story that
-      shipped no provider.
+      `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all --check`. `diff` reports
+      `8 artifacts up to date (1 provider checked)`.
+- [x] **Exactly eight tests are red and reported, not silenced.** Exactly eight, across the five
+      binaries AGENTS.md tabulates, and no ninth — `the_recorded_floor_is_the_measured_figure` is
+      green in this worktree. Listed in `## Progress` and in the report's `GATE`.
 
 ## Progress
 
@@ -168,6 +173,54 @@ Read the `scheme` field's accepted values before designing. If it is closed to b
   signal that nothing was shipped, rather than the eight AGENTS.md tabulates for a story that did.
 - **Board not regenerated** — `docs/stories/README.md` is coordinator-owned. `status` moved
   `ready` -> `blocked` here, so the board needs a `/track:board` run at integration.
+
+### 2026-07-31, second pass — the connector ships
+
+Everything above is the first attempt's record and is left intact. C-184 built the prefix axis it
+asked for, and commit `3457581` hardened the guard on it; this pass wrote the connector.
+
+- **`providers/okta.toml`, five curated operations**, `base_url = "https://{domain}/api/v1"`:
+  `okta-user-list` (the `verify`), `okta-user-get`, `okta-group-list`, `okta-user-group-list`, and
+  `okta-user-deactivate` (`risk = "destructive"`, `non_idempotent`). Four reads at `low`/`idempotent`.
+  Auth is `scheme = { header = { name = "Authorization", prefix = "SSWS " } }`
+  (`providers/okta.toml:96`) — **trailing space included**, and the loader now refuses it without one,
+  so the finding the probe recorded as uncatchable is caught.
+- **The probe test became the contract test.** `crates/connector-flux/tests/okta_connector.rs` now
+  loads the shipped TOML the way `launchdarkly_connector.rs` does. Findings 1 and 3 stay as fixture
+  tests, because they are about what the loader *refuses* and a refusal cannot be measured against a
+  file that ships. `no_provider_toml_was_shipped_for_this_probe` was inverted rather than deleted, so
+  the record reads as one continuous measurement rather than a deletion.
+- **Two things this connector cannot express, excluded and asserted rather than commented.**
+  `no_curated_operation_offers_a_free_text_filter_or_a_link_header_cursor` fails if a later story adds
+  `q`, `filter`, `search` or `after` back. The filters are the C-30 unencodable free-text shape — a
+  SCIM expression is *made of* punctuation, quotes and spaces, so it is the catalogue's worst case for
+  a query value interpolated verbatim, not a marginal one. `after` is only ever returned in a `Link`
+  **response header**, which this model cannot surface, so the parameter would be a knob nobody can
+  turn. `limit` ships with `minimum = 1` and **no `maximum`**: Okta's caps differ per endpoint and
+  nothing here can check one, so none is invented.
+- **`send_email` is the one parameter beyond `limit` and the path ids.** It is `wire = "sendEmail"` on
+  the deactivation, and the truthiness gating in emitted Flux happens to be exactly right: `true`
+  sends `?sendEmail=true`, anything else sends nothing, which lands on Okta's own default of no email.
+  Recorded here because it is a coincidence of the emitter that held, not a property to rely on.
+- **No `response_schema` on the deactivation.** Okta answers it with an empty body; declaring a
+  permissive placeholder would count toward coverage while telling a consumer nothing, which
+  `no_operation_publishes_a_permissive_response_schema` refuses. Same call `providers/miro.toml` makes.
+- **Exactly eight red, no ninth.** `the_provider_list_matches_the_repository`,
+  `the_catalog_is_not_empty`, `the_committed_tree_is_a_fixed_point_of_a_build`,
+  `a_build_plans_both_readme_images_and_they_are_current`, `the_shipped_artifacts_are_byte_identical`,
+  `the_published_catalogue_carries_the_service`, `every_shipped_operation_carries_its_metadata_and_its_flux`,
+  `the_build_writes_and_checks_site_catalog_json` — the AGENTS.md table exactly.
+  `the_recorded_floor_is_the_measured_figure` is **green** here; five operations with four response
+  shapes fit inside the slack alone, so this story does not consume the coordinator's ratchet.
+- **Fence respected.** `crates/catalog/src/generated.rs`, `web/public/catalog.json`, `COVERED_FLOOR`,
+  `CHANGELOG.md`, the board, the roadmap and the lockfiles are untouched. The per-provider
+  `crates/catalog/src/generated/okta.rs` and `crates/catalog/ops/okta/*.flux` are committed, as the
+  story's `## Notes` says they should be.
+- **Board still not regenerated** — `status` moved to `in-progress` here; the coordinator sets `done`
+  and runs `/track:board` at integration.
+- **Unverified, and named as such:** Okta's per-endpoint `limit` caps, and the exact set of `status`
+  and group `type` values. The response schemas describe the documented values in prose and declare
+  no `enum`, so a value Okta added later cannot make a consumer reject a valid document.
 
 ## Notes
 
