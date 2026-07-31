@@ -229,14 +229,23 @@ async function playground(op, after) {
 }
 
 // Sign-in gates everything below, so the page asks who is asking before it asks for anything else.
-// Three states, and each is a real one an operator lands in:
-//   - not configured  → say which environment variables to set, and where to register
-//   - configured, not signed in → a button
-//   - signed in       → the catalogue, scoped to that account's tenant
+// The states, and each is a real one an operator lands in:
+//   - no door at all   → say which environment variables to set, and where to register
+//   - a door, not signed in → a button per door that actually exists
+//   - signed in        → the catalogue, scoped to that account's tenant
+//
+// `status.dev` (C-234) is the *same* value the server built its route table from, so the page can
+// never offer a button that would 404. The dev button is drawn only when it is true; on an ordinary
+// host this branch produces nothing at all.
 async function start() {
   const status = await api('GET', '/auth/status');
 
-  if (!status.configured) {
+  if (status.dev) {
+    $('header .note').textContent =
+      'DEV MODE — authentication is disabled. Loopback only. Not a real account.';
+  }
+
+  if (!status.configured && !status.dev) {
     $('#who').textContent = 'sign-in not configured';
     // `textContent` on a <pre>, never innerHTML: the message is server-composed, but a page that
     // renders server strings as markup is one server change away from being an XSS sink.
@@ -248,12 +257,40 @@ async function start() {
 
   if (!status.signed_in) {
     $('#who').textContent = 'not signed in';
-    const button = el('button', {}, 'Sign in with Google');
-    button.onclick = () => { window.location.href = '/auth/signin'; };
-    $('#detail').replaceChildren(
-      el('p', { className: 'muted' },
-        'Connectors and credentials belong to the signed-in account.'),
-      button);
+    const doors = [el('p', { className: 'muted' },
+      'Connectors and credentials belong to the signed-in account.')];
+
+    if (status.configured) {
+      const button = el('button', {}, 'Sign in with Google');
+      button.onclick = () => { window.location.href = '/auth/signin'; };
+      doors.push(button);
+    }
+
+    if (status.dev) {
+      // Labelled so it cannot be mistaken for the real sign-in: it says what it is, it says the
+      // account is fake, and it is styled as a secondary action rather than the primary one.
+      const dev = el('button', { className: 'ghost' },
+        'Sign in as DEVELOPER — fake account, no Google, dev mode only');
+      dev.onclick = async () => {
+        // A POST rather than a link, for the reason `/auth/signout` is one: a route that changes
+        // state must not be reachable from a cross-site top-level GET.
+        await fetch('/auth/dev', { method: 'POST', redirect: 'manual' });
+        window.location.reload();
+      };
+      doors.push(dev);
+      doors.push(el('p', { className: 'err', style: 'font-size:.82rem' },
+        'The developer sign-in exists because this host was started with --dev. '
+        + 'It authenticates nobody. Its tenant is dev-local and it can see no real account’s data.'));
+    }
+
+    if (!status.configured) {
+      doors.push(
+        el('p', { className: 'muted', style: 'font-size:.82rem;margin-top:1rem' },
+          'Google sign-in is not set up. To use a real account instead:'),
+        el('pre', { textContent: status.setup ?? '' }));
+    }
+
+    $('#detail').replaceChildren(...doors);
     return;
   }
 
