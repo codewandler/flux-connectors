@@ -9,6 +9,53 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The PagerDuty connector (C-162) — the third and last vendor C-184's prefix axis unblocked.** Six
+  operations over `Authorization: Token token=<key>`, `pagerduty-service-list` as `verify`.
+
+  The story was filed claiming the credential is *"a substructure of the header value, not a
+  suffix"*, which would have needed an axis richer than a prefix. **That premise was wrong**, and
+  C-161 had already measured why: the value is a fixed literal followed directly by the raw key, so
+  `Token token=` is a prefix that happens to contain `=`. The `=` is its separator, which is why it
+  satisfies the guard structurally rather than by luck.
+
+  **The `From` header is a required parameter, because operator configuration is unspellable.**
+  PagerDuty requires an actor email on writes. `parse_binding` admits exactly `endpoint.*`,
+  `credential.*`, `username.*`, `oauth.client_id` and `oauth.client_secret` — there is **no
+  `header.*` destination** — so a configured `From` cannot be written at all. It ships as a required
+  `params.header` on the two writes only, on Stripe's `Idempotency-Key` precedent.
+
+  **Acknowledge and resolve are separate operations** though the vendor exposes one endpoint, so
+  acknowledging is not graded at the same risk as resolving (`medium` vs `high`).
+
+  **No pagination quirk is declared, and the absence is pinned.** PagerDuty pages by `limit`/`offset`
+  and `Pagination` has only `Page` and `Cursor` — `Page` describes a page number incremented by one,
+  where `offset` is a row count advanced by `limit`. Declaring it would record something false now,
+  and become a **bounded** wrong loop when C-12 compiles quirks into control flow. Bounded is the
+  harder failure to notice, not the easier.
+
+  One shared test guard was strengthened rather than worked around: `services.rs` asserted that a
+  single-service provider's canonical JSON holds no `"service"` **substring**. PagerDuty is the first
+  vendor whose own domain noun is "service" — `GET /services` answers `{"services": [...]}` — so the
+  scan was reporting a word collision. It is now a structural walk that finds an IR service key at
+  any depth outside a JSON Schema subtree, with each exemption independently pinned by mutation.
+
+### Changed
+
+- **The response-schema ratchet turned: `COVERED_FLOOR` 193 → 220.** Statuspage, Okta and PagerDuty
+  each fitted inside the slack alone — which is why each correctly reported eight red tests and left
+  the file untouched — and their accumulation crossed it. This is the per-wave-not-per-story case,
+  and why the constant is coordinator-owned.
+
+- **`RATIO_FLOOR_PERCENT` 82 → 87, correcting a guard that had stopped guarding.** Its doc specifies
+  *"one point under the measurement… there is no room in one point for a whole provider."* It was six
+  points under — roughly sixteen operations at this catalogue size, comfortably a whole provider
+  arriving with no response shapes and passing. Nothing failed because nothing could: the absolute
+  floor has a two-way ratchet and this one has none, so it can only drift. Filed as **C-196**, with a
+  recorded preference for deriving it from `COVERED_FLOOR` and deleting the constant rather than
+  adding a second ratchet — two numbers describing one measurement drift apart eventually.
+
+### Added
+
 - **A tenant's configuration is substituted into a templated base URL (C-193).** Nine providers'
   hosts carried a `{subdomain}`, `{shop}`, `{domain}`, `{site}`, `{instance}`, `{account_host}`,
   `{space_id}` or `{page_id}` to the wire verbatim. A bound `ConfigStore` port — handed in at

@@ -50,7 +50,16 @@ use connector_spec::JsonSchema;
 /// (Drive's default field projection is undocumented), jira 1 and zoom 1 (`204`, no body at all),
 /// hubspot 1 (its `PATCH` reference renders no response section). Every one of them says so in its
 /// provider file, next to the operation.
-const COVERED_FLOOR: usize = 193;
+///
+/// **Raised 193 → 220 by the 2026-07-31 wave, and the reason it had to be raised is the mechanism
+/// working.** Statuspage (C-181, 5 of 5), Okta (C-161, 4 of 5 — its deactivation answers with an
+/// empty body and declares no schema rather than a permissive placeholder) and PagerDuty (C-162,
+/// 6 of 6) each fitted inside the slack **alone**, so each correctly reported eight red tests and
+/// left this file untouched. Their *accumulation* crossed it: 220 of 248 against a floor of 193,
+/// where the slack is 24. That is exactly the per-wave-not-per-story case `AGENTS.md` records, and
+/// it is why this constant is coordinator-owned — three concurrent provider stories that each
+/// raised it would collide on one line.
+const COVERED_FLOOR: usize = 220;
 
 /// The same floor as a share of every shipped operation, in whole percent. This is the half that
 /// notices a connector arriving with no response shapes at all.
@@ -59,7 +68,19 @@ const COVERED_FLOOR: usize = 193;
 /// honest absence — one operation whose vendor documents no body — should not turn an unrelated
 /// provider story red on arrival, while a connector landing with nothing still does. There is no room
 /// in one point for a whole provider.
-const RATIO_FLOOR_PERCENT: usize = 82;
+///
+/// **Raised 82 → 87 on 2026-07-31, because it had drifted out of its own design.** 82 was one point
+/// under 83 when the measurement was 92 of 110. The measurement is now 220 of 248 — **88.7%** — so
+/// the gap had quietly become *six* points, which at 248 operations is room for roughly sixteen
+/// unschematized operations: a whole provider landing with nothing, which is precisely the arrival
+/// this constant exists to catch. It was doing the archaeology its sibling's ratchet was built to
+/// prevent.
+///
+/// **And that is the finding: this constant has no ratchet.** `the_recorded_floor_is_the_measured_
+/// figure` turns [`COVERED_FLOOR`] both ways; nothing turns this one, so it can only drift. Wiring
+/// the same two-way check here — or deriving this from `COVERED_FLOOR` rather than storing it twice
+/// — is worth a story. Until then it is raised by hand, which is the mechanism that just failed.
+const RATIO_FLOOR_PERCENT: usize = 87;
 
 fn providers_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -42,6 +42,7 @@ pub(crate) mod notion;
 pub(crate) mod okta;
 pub(crate) mod openai;
 pub(crate) mod openrouter;
+pub(crate) mod pagerduty;
 pub(crate) mod postmark;
 pub(crate) mod salesforce;
 pub(crate) mod sendgrid;
@@ -92,6 +93,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &okta::PROVIDER,
     &openai::PROVIDER,
     &openrouter::PROVIDER,
+    &pagerduty::PROVIDER,
     &postmark::PROVIDER,
     &salesforce::PROVIDER,
     &sendgrid::PROVIDER,
