@@ -212,11 +212,7 @@ The names are credential *references*. Resolve one against `provider.auth.creden
 |---|---|---|
 | `works` | boolean | Exactly `issues.length === 0`, restated so a consumer can filter on one boolean without knowing any code. A `note` does not enter into it. |
 | `issues` | array\<Issue\> | Every reason it does not. |
-| `notes` | array\<Note\> | Facts that are **not** reasons it fails. **Omitted entirely when empty** — read an absent key as `[]`. |
-
-`notes` is the one key in this document that is not always present, and the exception is deliberate.
-Writing `"notes": []` onto every operation would rewrite a whole-catalogue artifact to say nothing
-about any of them, and no operation shipped today carries one.
+| `notes` | array\<Note\> | Facts that are **not** reasons it fails. `[]` for every operation shipped today. |
 
 ### Issue
 
