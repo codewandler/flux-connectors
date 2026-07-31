@@ -635,10 +635,38 @@ npm run build
 npm test
 ```
 
+**The host's operator page has a third gate, and it is the one to run for a change to
+`crates/connectors-api/src/index.html`** (C-239):
+
+```bash
+cd crates/connectors-api/ui
+npm ci
+npm test
+```
+
+`node --test` + `happy-dom`, executing the served page against a stubbed `fetch`. It runs in CI as
+the `host-page` job in [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Deliberately a second
+Node tree rather than a directory under `web/`: the public site is forbidden by C-147 to collect a
+credential and this page exists to collect one, and the site's single-dependency property is not
+something a harness for the host should spend.
+
+It exists because that page was the one surface in this repository where "a behavioural change
+requires a failing-first test" could not be honoured. C-234's security review ran 16 mutations and
+M15 — drawing the developer sign-in unconditionally — stayed **green** because nothing could execute
+the file. Four properties are pinned there, each previously held only by a comment: the `status.dev`
+guard on the developer sign-in and its secondary styling; the three sign-in states; that no page
+source assigns through `innerHTML`; and that `/auth/signout` and `/auth/dev` are reached by `fetch`
+POST and never by a link, which is the `SameSite=Lax` property. A fifth is a **Rust** test —
+`crates/connectors-api/tests/wiring_vocabulary.rs` — asserting that every `Wiring` variant's token is
+one the page answers for, in both directions. It needs no Node and runs in `cargo test --workspace`
+with everything else.
+
 For a truly docs-only change, narrower checks are acceptable. State exactly what ran. Changes to
 README Flux examples must run `cargo test -p connector-cli --test readme_snippet`. Changes under
-`web/` must run the site build and tests. Changes to generated public catalogue data or Rust emitters
-are not docs-only and require the relevant Rust tests plus formatting and clippy.
+`web/` must run the site build and tests. Changes to `crates/connectors-api/src/index.html` — or to
+anything under `crates/connectors-api/ui/` — must run the host-page gate above. Changes to generated
+public catalogue data or Rust emitters are not docs-only and require the relevant Rust tests plus
+formatting and clippy.
 
 ## Publishing contract
 

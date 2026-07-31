@@ -50,6 +50,43 @@ jobs:
       - name: Format
         run: cargo fmt --all --check
 
+  host-page:
+    name: the host's operator page
+    runs-on: ubuntu-latest
+    # C-239. `crates/connectors-api/src/index.html` is ~260 lines of JavaScript, and until this job
+    # existed nothing could execute it: C-234's security review ran 16 mutations and M15 — drawing
+    # the developer sign-in unconditionally — stayed green for exactly that reason, while AGENTS.md
+    # requires a failing-first test for a behavioural change.
+    #
+    # Its own job, not a step in `check`: it needs Node rather than a Rust toolchain, and the four
+    # gate commands in `check` must stay the ones a developer runs locally. The Rust half of the
+    # same story — that every `Wiring` variant's token is one the page knows — is an ordinary
+    # integration test and runs in `check` with everything else.
+    #
+    # Deliberately not the same job as `web/`'s suite: that tree is the public site, this one is the
+    # loopback host, and the two have separate dependency trees on purpose.
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Install Node
+        # The same pin `pages.yml` already carries, and pinned for the same reason the Rust
+        # toolchain is: a moving version turns someone else's release into our red build.
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: crates/connectors-api/ui/package-lock.json
+
+      # `npm ci`, not `npm install`: the committed lockfile is what makes the tree CI resolves the
+      # same one a developer ran the suite against.
+      - name: Install the harness dependency
+        run: npm ci
+        working-directory: crates/connectors-api/ui
+
+      - name: Test the page
+        run: npm test
+        working-directory: crates/connectors-api/ui
+
   package:
     name: crates.io dry run
     runs-on: ubuntu-latest
