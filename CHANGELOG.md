@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-07-31
+
 ### Added
 
 - **A GraphQL vendor cannot be a connector yet, and the reason is recorded rather than rediscovered
