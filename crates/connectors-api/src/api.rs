@@ -193,7 +193,17 @@ pub struct OperationView {
 }
 
 /// One operation.
-pub async fn operation(Path(operation): Path<String>) -> Result<Json<OperationView>, Failure> {
+///
+/// Takes a `Principal` it does not read. Everything here is published catalogue data — the same
+/// facts `web/public/catalog.json` serves to the open internet — so nothing tenant-scoped could
+/// leak from it. It is gated anyway, so that "every route under `/v1` takes a `Principal`" is a
+/// rule with no exception to remember: an ungated route sitting among gated ones is the one a later
+/// change extends with a tenant-scoped field.
+#[allow(clippy::needless_pass_by_value)]
+pub async fn operation(
+    _principal: Principal,
+    Path(operation): Path<String>,
+) -> Result<Json<OperationView>, Failure> {
     let entry = catalog::operation(OperationKey::id(&operation)).ok_or_else(|| {
         Failure(
             StatusCode::NOT_FOUND,
