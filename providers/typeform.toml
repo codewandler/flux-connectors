@@ -1,0 +1,379 @@
+# Typeform — hand-authored, no vendor spec.
+#
+# Curated to five operations: get the authenticated account, list forms, get one form, list a form's
+# responses (the archetype), and delete responses (destructive). As with zendesk, freshdesk, github,
+# notion, calendly and launchdarkly, nothing is vendored under `specs/` for this connector, so drift
+# against Typeform's own documentation (`https://www.typeform.com/developers/`) is undetectable by
+# machine until C-14's fetch and C-4's ingest land (`docs/designs/provider-operation-inventory.md`
+# §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# THE FINDING THIS CONNECTOR EXISTS TO ESTABLISH: is a cursor-paginated `before`/`after` pair
+# expressible as a declared operation-level parameter, given this pipeline's unencoded-query gap?
+# ---------------------------------------------------------------------------------------------
+#
+# `GET /forms/{form_id}/responses` pages with `before` and `after` query parameters, and AGENTS.md
+# records that this pipeline never percent-encodes a query value: a value carrying a space, `&`, `#`
+# or `=` corrupts the request (`crates/connector-flux/src/op.rs:138-141`). `providers/calendly.toml`
+# answered a version of this question already, for Calendly's own `page_token`, and its answer was to
+# leave it out — "an opaque, server-issued token this pipeline cannot safely re-encode is excluded
+# rather than declared and hoped about." `providers/notion.toml`'s `start_cursor` and `asana.toml`'s
+# `offset`-adjacent cursor made the same call.
+#
+# **Typeform's case is different, and it rests on what a response `token` can and cannot contain, not
+# on hoping the emitter's behaviour changed.** A Typeform response `token` is documented and observed
+# as a fixed-length, lowercase-hexadecimal string: the vendor's own JSON-response-explanation page
+# shows an example value shaped `21085286190ffad1248d17c4135ee56f` (32 hex characters), and a former
+# Typeform engineer described it on the vendor's own community forum as "a random 32 characters
+# sha256 encoded string (yeah, hexadecimal)". `before` and `after` each take exactly this value.
+# `[0-9a-f]` is structurally disjoint from the four characters that corrupt this pipeline's query
+# interpolation (space, `&`, `#`, `=`), so the value this emitter puts on the wire unescaped is
+# exactly the value Typeform issued, byte for byte — the same argument `providers/calendly.toml` makes
+# for a Calendly resource URI, aimed at a different vendor-issued shape.
+#
+# **This is hand-authored confidence, not an OpenAPI-grade guarantee, and that gap is stated rather
+# than hidden.** Nothing here vendors a Typeform spec (`specs/` carries none), so "the token is always
+# 32 lowercase hex characters" rests on one vendor documentation example and one community statement
+# from a named ex-employee, not a published schema. Both `before` and `after` below carry a `pattern`
+# that enforces exactly that shape, so the failure mode if Typeform's token format ever widens is a
+# caller-visible schema rejection — the value is refused before it reaches the wire — never a silently
+# corrupted query string. That fail-closed direction is what makes declaring the pair honest even
+# though the character-set claim itself is not vendor-guaranteed the way an RFC or a published spec
+# would be. `crates/connector-flux/tests/typeform_connector.rs`'s
+# `the_cursor_pair_survives_because_it_avoids_the_pipelines_danger_set` pins the argument mechanically:
+# both parameters' declared `pattern`s are checked against the same four-character danger set
+# `op.rs` names, and the emitted Flux is checked to interpolate each cursor verbatim.
+#
+# This is the operation-level version of the member contract's "a poll binding requires a cursor"
+# rule (AGENTS.md, Member contract) — expressed here as a declared parameter pair on a plain `GET`,
+# with no `[[channels]]` poll binding anywhere in this file. See the next section for why.
+#
+# ---------------------------------------------------------------------------------------------
+# NO INBOUND SURFACE. Typeform has a webhook product; this connector does not model it.
+# ---------------------------------------------------------------------------------------------
+#
+# `every_shipped_event_and_binding_reaches_its_manifest` and C-151's manifest round-trip test both
+# read the **default-service** manifest only, so the first multi-service provider — or any provider —
+# with an inbound surface panics both (C-158's last note). This connector stays single-service
+# (`[[services]]` is never declared) with no `[[events]]` and no `[[channels]]`, which is what keeps
+# it out of that hazard entirely. Typeform's webhook surface is real and left for a story that reads
+# C-158 first.
+#
+# ---------------------------------------------------------------------------------------------
+# PRIVACY. A Typeform response is whatever a form's respondents typed.
+# ---------------------------------------------------------------------------------------------
+#
+# Every `response_schema` below that touches respondent-authored content (`typeform-response-list`'s
+# `items[].answers`, `.hidden`, `.metadata`) describes the *shape* only — a field's name and declared
+# type — and never carries a JSON Schema `example`, a captured value, or a plausible instance of a
+# name, an email address or any other answer. `crates/connector-flux/tests/typeform_connector.rs`'s
+# `no_response_field_carries_an_example_value` holds this as a property of the whole file, not a
+# promise kept by inspection alone.
+#
+# ---------------------------------------------------------------------------------------------
+# EXCLUDED, deliberately, rather than guessed at:
+# ---------------------------------------------------------------------------------------------
+#
+# - **`GET /insights/{form_id}/summary` (form insights) — a recorded refusal, not an oversight.** The
+#   path itself is corroborated by multiple independent sources (Typeform's own community forum and
+#   third-party API trackers agree on it), and it is documented as gated behind Typeform's Business
+#   plan. What this file could not corroborate with enough confidence to declare a `response_schema`
+#   for is the *response body's* exact shape — no vendor page or community post reachable at
+#   authoring time gave a field-level example. The repository's own rule is that a hallucinated shape
+#   ships as a `404` or a silently-wrong contract a test cannot catch, and a confident set of five
+#   operations beats a guessed sixth — so this one is left out and named here, exactly as C-107 first
+#   proved out for a whole connector rather than one operation.
+# - **`query` (free-text search within answers).** The same character-set hazard
+#   `zendesk-ticket-search` demonstrates: a caller-composed phrase can legitimately contain `&`, `#`,
+#   `+`/`=` or a space, unlike the hex cursor above. Box's and Notion's answer to an unknown or
+#   dangerous character set was to leave the parameter out; this file does the same.
+# - **`fields`, `included_response_ids` and `excluded_response_ids` on `typeform-response-list`.**
+#   Each is a comma-separated list and at least the latter two carry the same hex-token character set
+#   as `before`/`after`, but declaring them here would widen this operation past the one archetype it
+#   was chosen to demonstrate. `included_response_ids` is declared exactly once, where the connector
+#   cannot function without it: on `typeform-response-delete`, below.
+# - **`workspace_id` on `typeform-form-list`.** Confident the filter exists; not confident enough of
+#   its own character set (unlike the hex response token) to declare a `pattern` honestly, so it is
+#   left out rather than declared with a guessed constraint — the same reasoning
+#   `providers/launchdarkly.toml` gives for excluding its own tag filter.
+# - **`logic` and `variables` on `typeform-form-get`'s response.** Real fields on the vendor's form
+#   resource; this file's authoring could not corroborate their nested shape with enough confidence to
+#   enumerate them, so the response schema below stops at the fields it can name honestly — see that
+#   operation's own comment.
+# - **Every write to a form's own design** (create or update a form, its fields, its logic, its
+#   theme, workspaces, or webhooks). This connector reads forms and their responses and can delete
+#   responses; it is not a form builder.
+#
+# ---------------------------------------------------------------------------------------------
+
+id = "typeform"
+vendor = "Typeform"
+
+# One host for every account; Typeform has no per-tenant subdomain in its API host (the *form-filling*
+# UI does, `{workspace}.typeform.com/to/{form_id}`, but the API this connector calls does not), so
+# `base_url` is a bound literal exactly as calendly's and launchdarkly's are.
+base_url = "https://api.typeform.com"
+
+description = "Typeform: read the authenticated account, forms and their responses, and delete responses"
+
+# The "Test connection" operation: a bounded read of the authenticated account, taking no argument at
+# all — the natural `verify` a settings page can call unattended.
+verify = "typeform-user-me"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["typeform.access_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "typeform.access_token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; its value is never read
+# here and never reaches a generated artifact.
+#
+# A personal access token and an OAuth2 access token are the same thing on the wire —
+# `Authorization: Bearer <token>` — so which one an operator supplies is configuration rather than
+# connector shape, the same provenance calendly's and box's bearers already carry.
+env = ["TYPEFORM_ACCESS_TOKEN"]
+description = "Typeform access token sent as a bearer — a personal access token or an OAuth2 access token"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 5: four reads, one destructive delete
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "typeform-user-me"
+method = "GET"
+path = "/me"
+description = "Get the Typeform account this access token authenticates as: its account id, display alias, own account email and interface language. Confirms the token resolves. Takes no parameters"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["account_id"]
+properties = { account_id = { type = "string", description = "The account's own opaque id" }, alias = { type = "string", description = "The account's display alias, shown in Typeform's own UI" }, email = { type = "string", description = "The account owner's own email — never a form respondent's" }, language = { type = "string", description = "The account's interface language, as an IETF language tag, e.g. \"en\"" } }
+
+[operations.quirks.error_envelope]
+# Observed as `{"code": "...", "description": "..."}` on a Typeform error response (e.g.
+# `{"code":"NOT_FOUND","description":"Endpoint not found"}`, reported on Typeform's own community
+# forum) and consistent with the vendor's troubleshooting page, which documents that "all error
+# objects include a code" alongside a human-readable description. Recorded with the same hand-authored
+# confidence the header comment states for the cursor pattern above — this file vendors no formal
+# error schema.
+message_pointer = "/description"
+code_pointer = "/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "typeform-form-list"
+method = "GET"
+path = "/forms"
+description = "List the forms in the authenticated account, most recently updated forms sorting available. Returns each form's id, title and public/private status but not its questions — use typeform-form-get for a form's fields"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "page"
+description = "Page number, 1-based"
+required = false
+schema = { type = "integer", minimum = 1, default = 1 }
+
+[[operations.params.query]]
+name = "page_size"
+description = "Forms per page; Typeform defaults this to 10 and caps it at 200"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 200, default = 10 }
+
+[[operations.params.query]]
+name = "sort_by"
+description = "Field to sort by"
+required = false
+schema = { type = "string", enum = ["created_at", "last_updated_at"] }
+
+[[operations.params.query]]
+name = "order_by"
+description = "Sort direction"
+required = false
+schema = { type = "string", enum = ["asc", "desc"] }
+
+[operations.response_schema]
+type = "object"
+required = ["items", "total_items", "page_count"]
+properties = { items = { type = "array", description = "This page's forms", items = { type = "object", required = ["id", "title"], properties = { id = { type = "string", description = "The form's own id — pass this as `form_id` to every other operation below" }, title = { type = "string" }, last_updated_at = { type = "string", format = "date-time" }, settings = { type = "object", description = "At least `{is_public}`; the vendor's own resource carries more form-level settings this curated connector does not enumerate further", properties = { is_public = { type = "boolean" } } }, self = { type = "object", properties = { href = { type = "string" } } } } } }, total_items = { type = "integer", description = "Total forms in the account, which may exceed `items.length` on one page" }, page_count = { type = "integer" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/description"
+code_pointer = "/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "typeform-form-get"
+method = "GET"
+path = "/forms/{form_id}"
+description = "Get one form's own definition: its title, language, rendering type and questions (fields), plus its welcome and thank-you screens. Does not return any response data — use typeform-response-list for that"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "form_id"
+description = "The form's own id, from typeform-form-list's `id` field, or the trailing path segment of the form's own URL (the part after `/to/`)"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "title"]
+properties = { id = { type = "string" }, title = { type = "string" }, language = { type = "string", description = "IETF language tag, e.g. \"en\"" }, type = { type = "string", description = "The form's rendering type, e.g. \"quiz\" or \"form\"" }, settings = { type = "object", description = "Form-level settings (visibility, language, progress bar, meta tags among others); read through rather than assumed — this curated connector does not enumerate every key" }, theme = { type = "object", properties = { href = { type = "string" } } }, workspace = { type = "object", properties = { href = { type = "string" } } }, welcome_screens = { type = "array", items = { type = "object" } }, thankyou_screens = { type = "array", items = { type = "object" } }, fields = { type = "array", description = "One entry per question. Each carries at least an id, a ref, a title and a type; some carry nested `properties` and `validations` this curated connector does not enumerate further — read them through rather than assuming a shape", items = { type = "object", required = ["id", "type"], properties = { id = { type = "string" }, ref = { type = "string", description = "The field's own stable reference, distinct from its id — what an answer in a response names this question by" }, title = { type = "string", description = "The question text the form's own author wrote" }, type = { type = "string", description = "e.g. \"short_text\", \"multiple_choice\", \"email\", \"number\", \"date\", \"file_upload\"" } } } }, hidden = { type = "array", description = "The variable names of hidden fields this form accepts via URL parameter — the field names only, declared by the form's own author; never a respondent's value", items = { type = "string" } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/description"
+code_pointer = "/code"
+
+# ---------------------------------------------------------------------------------------------
+# THE ARCHETYPE. See the header comment for the full argument: `before`/`after` are cursor-shaped
+# query parameters carrying a fixed, hex-only vendor token, declared as a genuine pagination pair
+# rather than excluded the way an unknown-character-set cursor is elsewhere in this fleet.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "typeform-response-list"
+method = "GET"
+path = "/forms/{form_id}/responses"
+description = "List one form's responses, newest first by default. Paginate with `before`/`after`, each naming the `token` of a response already retrieved, to page toward older or newer responses respectively; `page_size` alone returns only the first page. Each response's `answers` holds whatever that respondent typed or selected — this connector never inspects or filters on answer content"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "form_id"
+description = "The form's own id, from typeform-form-list's `id` field, or the trailing path segment of the form's own URL (the part after `/to/`)"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.query]]
+name = "page_size"
+description = "Responses per page; Typeform defaults this to 25 and caps it at 1000"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 1000, default = 25 }
+
+# THE CURSOR PAIR. See the header comment for why this hex-only pattern is the safety argument
+# itself, not a decoration on top of it.
+[[operations.params.query]]
+name = "before"
+description = "Return only responses submitted before this response's own `token` (exclusive) — the cursor for paging toward older responses. Pass the `token` field of the oldest response already retrieved. Omit on the first page"
+required = false
+schema = { type = "string", pattern = "^[0-9a-f]{32}$", minLength = 32, maxLength = 32 }
+
+[[operations.params.query]]
+name = "after"
+description = "Return only responses submitted after this response's own `token` (exclusive) — the cursor for paging toward newer responses. Pass the `token` field of the newest response already retrieved. Omit on the first page"
+required = false
+schema = { type = "string", pattern = "^[0-9a-f]{32}$", minLength = 32, maxLength = 32 }
+
+# `since`/`until` are documented as UTC with no timezone offset at all — Typeform's own example is
+# the literal shape `2017-07-09T00:00:00`, with no trailing `Z` and no `+HH:MM`. The pattern below
+# enforces exactly that shape rather than the looser `format = "date-time"` freshdesk's operations
+# use, because a caller-supplied offset would introduce a `+` — the same query-corrupting character
+# `providers/calendly.toml`'s header comment excludes `min_start_time`/`max_start_time` over.
+[[operations.params.query]]
+name = "since"
+description = "Only include responses at or after this UTC instant, written with no timezone suffix at all, e.g. \"2017-07-09T00:00:00\" — never a trailing \"Z\" or a \"+HH:MM\" offset. Which timestamp this filters (submitted_at, staged_at or landed_at) depends on which response_type is requested"
+required = false
+schema = { type = "string", pattern = "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$" }
+
+[[operations.params.query]]
+name = "until"
+description = "Only include responses at or before this UTC instant, written with no timezone suffix at all, e.g. \"2017-07-09T00:00:00\" — never a trailing \"Z\" or a \"+HH:MM\" offset. Which timestamp this filters (submitted_at, staged_at or landed_at) depends on which response_type is requested"
+required = false
+schema = { type = "string", pattern = "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$" }
+
+[[operations.params.query]]
+name = "response_type"
+description = "Restrict to one or more submission states, comma-separated: started, partial, completed. Omit to receive every state"
+required = false
+schema = { type = "string", pattern = "^(started|partial|completed)(,(started|partial|completed)){0,2}$" }
+
+# Restricted to the fixed built-in sort keys (submitted_at, staged_at, landed_at) rather than an
+# arbitrary form field id, which Typeform's own `sort` parameter also accepts but whose character set
+# this file cannot corroborate — the same reasoning `providers/launchdarkly.toml` gives for excluding
+# a free-form filter instead of guessing its safe character set.
+[[operations.params.query]]
+name = "sort"
+description = "How to order the returned responses: a fixed field name and a direction, comma-separated"
+required = false
+schema = { type = "string", enum = ["submitted_at,asc", "submitted_at,desc", "staged_at,asc", "staged_at,desc", "landed_at,asc", "landed_at,desc"] }
+
+[operations.response_schema]
+type = "object"
+required = ["items", "total_items", "page_count"]
+properties = { total_items = { type = "integer" }, page_count = { type = "integer" }, items = { type = "array", description = "This page's responses, in the order `sort` (or the default) puts them", items = { type = "object", required = ["response_id", "token"], properties = { landing_id = { type = "string", description = "Identifies the browsing session that landed on the form — distinct from the response itself" }, token = { type = "string", pattern = "^[0-9a-f]{32}$", description = "This response's own opaque id: 32 lowercase hex characters. Pass it as `before` or `after` to page around it" }, response_id = { type = "string", description = "The same value as `token`, under Typeform's other name for it" }, response_type = { type = "string", enum = ["started", "partial", "completed"] }, landed_at = { type = "string", format = "date-time" }, submitted_at = { type = "string", format = "date-time", description = "Present once submitted; absent on a still-open partial response" }, metadata = { type = "object", description = "The submission's own browsing context — browser, platform, referer and network id. Not respondent-authored content" }, hidden = { type = "object", description = "Hidden-field values this response's session was launched with, keyed by the form's own hidden-field variable names (see typeform-form-get's `hidden`). Shape and content depend entirely on the form's own configuration — commonly an email address, a customer id or similar, so this connector never enumerates or exemplifies a value here" }, calculated = { type = "object", description = "Computed values Typeform's scoring feature attaches", properties = { score = { type = "integer" } } }, answers = { type = "array", description = "One entry per answered question: at minimum `{field: {id, ref, type}, type}` plus exactly one value key named after `type` (text, choice, choices, email, number, boolean, date, url, file_url or payment). The value itself is whatever the respondent typed or selected and is never enumerated or exemplified here", items = { type = "object" } } } } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/description"
+code_pointer = "/code"
+
+# ---------------------------------------------------------------------------------------------
+# THE DESTRUCTIVE WRITE. Irreversible: Typeform offers no undelete for a response.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "typeform-response-delete"
+method = "DELETE"
+path = "/forms/{form_id}/responses"
+description = "Permanently delete one or more of a form's responses by their own token. There is no undelete: once deleted, a response's answers are gone. Deletion is asynchronous — a successful call confirms the request was registered, not that the responses are already gone"
+# Irreversible and permanent, with no vendor-side recovery path. This is exactly the "deletes or
+# otherwise irreversible" tier (`crates/connector-spec/src/ir.rs`'s own doc comment on `Risk::Destructive`).
+risk = "destructive"
+# `DELETE` is an idempotent method under RFC 9110 §9.2.2, and `check_write_metadata` would accept
+# `idempotent` here, but Typeform documents no guarantee about repeating a delete once a named token
+# is already gone, and deletion is itself asynchronous — a retry issued while the first request is
+# still being processed is not verifiably a no-op. `non_idempotent` is the honest declaration, the
+# same call `providers/airtable.toml`'s `airtable-record-delete` and `providers/zoom.toml`'s
+# `zoom-meeting-delete` make for the same reason: no documented guarantee, even though the *practical*
+# effect of a second call would likely just be "already gone".
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "form_id"
+description = "The form's own id, from typeform-form-list's `id` field, or the trailing path segment of the form's own URL (the part after `/to/`)"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# The same hex-token character set `before`/`after` rest on, joined by commas — Typeform's own
+# reference names this "a comma-separated list of response_id values" and caps it at 1000.
+[[operations.params.query]]
+name = "included_response_ids"
+description = "Comma-separated list of up to 1000 response tokens (the same value as a response's own `token`/`response_id`, from typeform-response-list) to delete permanently"
+required = true
+schema = { type = "string", pattern = "^[0-9a-f]{32}(,[0-9a-f]{32})*$" }
+
+# NO `response_schema`, DELIBERATELY (C-126). Typeform's own reference does not detail a response
+# body for this call beyond confirming `200 OK` registers the request; `{}` or `{"type": "object"}`
+# would describe a document that may not exist rather than say nothing, the same choice
+# `providers/zoom.toml`'s `zoom-meeting-delete` makes for its own undocumented `204`.
+
+[operations.quirks.error_envelope]
+message_pointer = "/description"
+code_pointer = "/code"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a human supplies before any of the above can run
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "access_token"
+label = "Typeform access token"
+help = "Create one under Account (top-left menu next to your username) → Personal tokens in Typeform, or supply the access token from an OAuth2 app's authorization flow. Typeform shows a newly created personal token once"
+# No `example`, deliberately. Typeform's own personal access tokens carry a fixed `tfp_` prefix (its
+# own documentation shows one), and a placeholder shaped like a real token has already tripped
+# GitHub's push protection and blocked a release for this repository — see providers/notion.toml and
+# providers/shopify.toml. The shape belongs in `help`, not here, and even there this file names only
+# the prefix, never a full plausible value.
+format = "token"
+secret = true
+docs_url = "https://www.typeform.com/developers/get-started/personal-access-token/"
+binds = "credential.typeform.access_token"

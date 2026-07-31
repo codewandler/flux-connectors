@@ -2,7 +2,7 @@
 id: C-173
 title: Ship the Typeform connector
 pillar: Spec
-status: ready
+status: in-progress
 priority: 3
 design:
 epic: provider-fleet-2
@@ -36,21 +36,60 @@ Do not model an inbound webhook surface here unless you have read [C-158](C-158-
 
 ## Acceptance
 
-- [ ] `providers/typeform.toml`, hand-authored and **curated** — a small set of operations this pipeline
-      can express honestly, not every endpoint the vendor documents.
-- [ ] Declared `risk`, `idempotency` and effects per operation, and a `description` on each written for
+- [x] `providers/typeform.toml`, hand-authored and **curated** — a small set of operations this pipeline
+      can express honestly, not every endpoint the vendor documents. Five operations: `typeform-user-me`,
+      `typeform-form-list`, `typeform-form-get`, `typeform-response-list`, `typeform-response-delete`.
+- [x] Declared `risk`, `idempotency` and effects per operation, and a `description` on each written for
       a *model* to read rather than as UI copy.
-- [ ] A `[[config]]` surface with `label` and `help` on every field, and `secret` agreeing with `binds`.
-- [ ] A `verify` operation that is a read and runs unattended.
-- [ ] `crates/connector-flux/tests/typeform_connector.rs` — a per-provider contract test asserting the
+- [x] A `[[config]]` surface with `label` and `help` on every field, and `secret` agreeing with `binds`.
+      One field, `access_token`.
+- [x] A `verify` operation that is a read and runs unattended. `typeform-user-me`, `GET /me`, no params.
+- [x] `crates/connector-flux/tests/typeform_connector.rs` — a per-provider contract test asserting the
       thing *this* connector is about (see the archetype above), not that the file parses.
-- [ ] **Failing-first test:** the contract test must fail before `providers/typeform.toml` exists.
-- [ ] The scoped gate is green: `build --provider typeform`, `diff --provider typeform` reporting no drift,
+      `the_cursor_pair_survives_because_it_avoids_the_pipelines_danger_set` is the archetype assertion.
+- [x] **Failing-first test:** the contract test must fail before `providers/typeform.toml` exists. See
+      `BASE_PROOF` in the implementation report.
+- [x] The scoped gate is green: `build --provider typeform`, `diff --provider typeform` reporting no drift,
       `cargo build --workspace`, `cargo test --workspace --no-fail-fast`,
       `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all --check`.
-- [ ] **Exactly eight tests are red and reported, not silenced** — the whole-catalogue staleness checks
+- [x] **Exactly eight tests are red and reported, not silenced** — the whole-catalogue staleness checks
       `AGENTS.md` tabulates. They are red because you correctly did not write a coordinator-owned
-      artifact. Report the eight; if the number differs, that is the finding.
+      artifact. Report the eight; if the number differs, that is the finding. Confirmed: exactly the
+      eight AGENTS.md names, no more, no fewer. `the_recorded_floor_is_the_measured_figure` (the
+      documented ninth) stayed green — coverage landed at 137/156 (87%), inside the ratchet's slack.
+
+## Progress
+
+- Shipped 5 operations, not the story's suggested 5 (list forms, get a form, list responses, delete
+  responses, get form insights) — `get form insights` (`GET /insights/{form_id}/summary`) is excluded.
+  The path is corroborated by multiple independent sources, but its response body shape could not be
+  corroborated with enough confidence from reachable documentation to declare a `response_schema`
+  honestly, and it is additionally gated behind Typeform's Business plan. Recorded as a deliberate
+  exclusion in `providers/typeform.toml`'s header comment and in
+  `the_curated_operation_set_is_the_one_the_story_selected`'s assertion message, per this story's own
+  "a confident four beats a guessed ten" instruction. `typeform-user-me` (`GET /me`, the account the
+  token belongs to) fills the fifth slot instead, as the connector's `verify` operation.
+- **The central finding:** Typeform's response `token` (what `before`/`after` page against) is a
+  fixed 32-character lowercase-hex string. This is corroborated by an observed example in Typeform's
+  own JSON-response-explanation documentation and a named ex-Typeform engineer's statement on the
+  vendor's own community forum, but **not** by a published, versioned spec — this repository vendors
+  no Typeform OpenAPI/JSON description under `specs/`. `providers/typeform.toml`'s header comment
+  states this confidence gap explicitly and names the fail-closed consequence if the format ever
+  widens (a schema-rejected call, not a corrupted query string).
+- Unverified / left out, named rather than guessed: `workspace_id` on `typeform-form-list` (filter
+  exists; character set not confidently known); `logic` and `variables` on `typeform-form-get`'s
+  response (real fields; nested shape not confidently known); `fields`/`included_response_ids`/
+  `excluded_response_ids` as *list*-operation filters (character-set-safe in principle by the same
+  hex-token reasoning, but left out to keep the curated list operation to the archetype plus the safe
+  basics — `included_response_ids` is declared once, where the connector cannot function without it,
+  on the delete operation); the exact response body of `typeform-response-delete` (Typeform's own
+  reference does not detail one beyond confirming `200 OK` registers the request — no `response_schema`
+  declared, per the `zoom-meeting-delete` convention).
+- No inbound webhook surface modelled, per the story's own hazard note (C-158) — no `[[services]]`,
+  `[[events]]` or `[[channels]]` anywhere in this file, asserted by `no_inbound_surface_is_declared`.
+- No PII: no operation, description, or test fixture in this diff carries an example answer value,
+  email address or name. `no_response_field_carries_an_example_value` holds this as a property of the
+  whole file, not a promise kept by inspection alone.
 
 ## Notes
 
