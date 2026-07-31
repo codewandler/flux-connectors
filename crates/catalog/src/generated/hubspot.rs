@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "hubspot-contact-get",
         provider: "hubspot",
+        service: "default",
         description: "Read one contact by record id. Returns only HubSpot's default contact properties — name, email and record timestamps; a custom property needs a `properties` projection this connector cannot express yet",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "hubspot-contact-create",
         provider: "hubspot",
+        service: "default",
         description: "Create a contact from an email address. HubSpot treats email as the contact's unique identifier and rejects a duplicate with 409. The new record is visible to everyone in the portal and can be enrolled by a workflow, which may send it marketing email",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "hubspot-contact-update",
         provider: "hubspot",
+        service: "default",
         description: "Overwrite a contact's first and last name. Both are written on every call — this operation replaces them rather than merging, so re-send the one you are not changing (read it first with hubspot-contact-get). The change is visible to everyone in the portal and can trigger a workflow",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "hubspot-company-get",
         provider: "hubspot",
+        service: "default",
         description: "Read one company by record id. Returns only HubSpot's default company properties — name, domain and record timestamps",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "hubspot-deal-get",
         provider: "hubspot",
+        service: "default",
         description: "Read one deal by record id. Returns only HubSpot's default deal properties — name, amount, stage, pipeline and close date",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,

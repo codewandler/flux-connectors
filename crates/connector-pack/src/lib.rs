@@ -21,7 +21,10 @@
 //! // And this tenant's non-secret connection settings — the `{subdomain}` in Zendesk's base URL.
 //! // Without it `zendesk.ticket.show` refuses rather than calling a host that does not resolve.
 //! let configuration = Configuration::new(
-//!     Arc::new(MemoryConfig::new().with_endpoint("9f3a4b2c", "zendesk", "subdomain", "acme")),
+//! // `default` is zendesk's only service; a multi-service connector names the one it means.
+//!     Arc::new(
+//!         MemoryConfig::new().with_endpoint("9f3a4b2c", "zendesk", "default", "subdomain", "acme"),
+//!     ),
 //!     "9f3a4b2c",
 //! )?;
 //!
@@ -132,6 +135,13 @@
 //! environment. Note that `freshdesk` and `okta` both name their variable `domain` — the port is
 //! keyed by connector as well as by variable, so the two are different values rather than a
 //! collision.
+//!
+//! **And by service** (C-197), which is the same collision one level down and the one that was
+//! live. `contentful` declares `delivery_space_id` and `management_space_id`, both binding
+//! `endpoint.space_id`, under two services that reach two different hosts. Keyed by connector alone
+//! they were one slot, so a management write went to whichever space the delivery reads had been
+//! configured with — a `200` from a real server rather than a refusal. The key is now
+//! `(tenant, provider, service, kind, name)`; see [`ConfigStore::get`].
 //!
 //! Two consequences worth stating, because both are the kind that look like they work:
 //!
@@ -487,17 +497,27 @@ pub enum Error {
     /// `username.zendesk.api_token` — so the diagnostic names the same thing a connector's
     /// configuration surface will when C-87 publishes it.
     ///
+    /// **It names the service too** (C-197), because `binds` alone does not identify a field. Two
+    /// services of one connector may bind the same target and want different values — `contentful`
+    /// declares `delivery_space_id` and `management_space_id`, both `endpoint.space_id` — so a
+    /// refusal quoting only the connector and the target sends an operator to a field they have two
+    /// of.
+    ///
     /// No value is quoted, only the address of the missing one. A connection setting is not a
     /// secret, but it is a customer's, and the same care [`UnredactableCredential`] takes applies.
     #[error(
-        "`{operation}` needs `{field}` of connector `{provider}` for tenant `{tenant}`, and the \
-         bound configuration supplies none, so no URL composes; the request was not sent"
+        "`{operation}` needs `{field}` of service `{service}` of connector `{provider}` for tenant \
+         `{tenant}`, and the bound configuration supplies none, so no URL composes; the request \
+         was not sent"
     )]
     MissingConfig {
         /// The operation id.
         operation: String,
         /// The connector whose configuration is incomplete.
         provider: String,
+        /// The connector's service the value was looked up under — `default` for a connector with a
+        /// single API surface.
+        service: String,
         /// The tenant the value was looked up for.
         tenant: String,
         /// The missing field, as `binds` spells it.
@@ -755,23 +775,30 @@ pub(crate) mod tests {
         let values = VALUES.get_or_init(|| {
             let mut values = MemoryConfig::new();
             for provider in catalog::providers() {
-                for credential in provider.auth {
-                    if matches!(credential.acquire, catalog::Acquisition::BasicJoin { .. }) {
-                        values = values.with_username(
-                            TEST_TENANT,
-                            provider.id,
-                            credential.name,
-                            TEST_USERNAME_VALUE,
-                        );
-                    }
-                }
+                // Walked per **operation**, so every value lands under the service that operation
+                // reads it from (C-197). A connector's credentials are declared once, at connector
+                // level, but the configuration field supplying a Basic user half is declared under
+                // a service like every other — so the user halves are bound per service too, and
+                // repeating an insert for a service already covered is free.
                 for operation in provider.operations {
+                    for credential in provider.auth {
+                        if matches!(credential.acquire, catalog::Acquisition::BasicJoin { .. }) {
+                            values = values.with_username(
+                                TEST_TENANT,
+                                provider.id,
+                                operation.service,
+                                credential.name,
+                                TEST_USERNAME_VALUE,
+                            );
+                        }
+                    }
                     let declaration = spec::declaration_of(operation.id, operation.flux)
                         .unwrap_or_else(|error| panic!("`{}`: {error}", operation.id));
                     for variable in request::endpoint_variables(&declaration) {
                         values = values.with_endpoint(
                             TEST_TENANT,
                             provider.id,
+                            operation.service,
                             &variable,
                             TEST_ENDPOINT_VALUE,
                         );

@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "cloudflare-zone-list",
         provider: "cloudflare",
+        service: "default",
         description: "List the zones (domains) this API token can see, with each zone's id, name, status and assigned Cloudflare name servers. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note). The zone `id` returned here is what every other operation in this connector needs as `zone_id`",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "cloudflare-dns-record-list",
         provider: "cloudflare",
+        service: "default",
         description: "List the DNS records in a zone: each record's id, type, name, content, TTL and whether it is proxied through Cloudflare. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note)",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "cloudflare-dns-record-create",
         provider: "cloudflare",
+        service: "default",
         description: "Create a DNS record in a zone. Cloudflare does not deduplicate: creating the same name/type/content pair twice makes two records, so this is not idempotent. The created record, with its assigned id, is in the response",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "cloudflare-dns-record-delete",
         provider: "cloudflare",
+        service: "default",
         description: "Delete one DNS record. There is no API route back: Cloudflare's dashboard \"recently deleted\" surface is a retention-window UI feature, not an endpoint, so a flux run cannot undo this. Responds with just the deleted record's id",
         risk: crate::Risk::Destructive,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "cloudflare-cache-purge",
         provider: "cloudflare",
+        service: "default",
         description: "Purge every cached asset for a zone, immediately, for every visitor worldwide. There is no partial or selective purge in this connector (see its header note) — every call empties the whole zone's edge cache. Repeating it changes nothing further, but each call can spike load on the origin as the cache refills, so it should not be called more often than a real cache-affecting change warrants",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,

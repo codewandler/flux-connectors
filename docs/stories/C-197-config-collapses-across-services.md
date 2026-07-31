@@ -2,7 +2,7 @@
 id: C-197
 title: "The configuration port has no service, so two services' variables of the same name collapse into one"
 pillar: Bridge
-status: ready
+status: in-progress
 priority: 1
 design: docs/designs/connector-configuration.md
 areas: [bridge, connector-pack, connector-catalog]
@@ -60,23 +60,50 @@ artifact moved.
 
 ## Acceptance
 
-- [ ] **Failing-first test:** two operations of one provider, in different services, binding the same
+- [x] **Failing-first test:** two operations of one provider, in different services, binding the same
       variable name, resolve to **different** values. Contentful is the real case; assert against the
       shipped catalogue rather than only a fixture, so the test cannot pass while contentful stays
       broken.
-- [ ] `catalog::Operation` carries its `service`, and the generated tables carry it. Expect **every**
+- [x] `catalog::Operation` carries its `service`, and the generated tables carry it. Expect **every**
       provider's `generated/*.rs` and `catalog.json` to move; that is the point, not a regression.
       This is a **breaking change to `connector-catalog`'s public type** — see the sequencing note.
-- [ ] The port keys on `(tenant, provider, service, kind, name)`, and `Field::Endpoint`'s doc says so.
+- [x] The port keys on `(tenant, provider, service, kind, name)`, and `Field::Endpoint`'s doc says so.
       It currently reads *"a `{var}` in a service's `base_url`"* while the key has no service in it,
       which is the sentence that made this invisible.
-- [ ] A provider declaring two same-named bindings in two services is exercised, not merely
+- [x] A provider declaring two same-named bindings in two services is exercised, not merely
       supported — contentful is that provider today.
-- [ ] The scoped gate is green and the build is a fixed point after regeneration.
+- [x] The scoped gate is green and the build is a fixed point after regeneration.
 
 ## Progress
 
-- (not started)
+- **Done, on `impl/C-197`.** The defect was reproduced at the merge base before anything was changed:
+  with contentful's one `space_id` slot bound to `space-for-delivery`, `contentful-entry-create`
+  built `https://api.contentful.com/spaces/space-for-delivery/environments/master/entries` — the
+  management write into the delivery space, exactly as C-193's review traced it.
+- `catalog::Operation` gained `service: &'static str`. The struct is already `#[non_exhaustive]`, so
+  this is **additive** for an external consumer (it can neither construct one with a struct literal
+  nor destructure exhaustively) and breaking only for the generated tables inside the crate, which
+  the same build rewrites. Nothing is published yet either way.
+- `cargo run -p connector-cli -- build` moved **44 files, 248 operation rows** — every provider's
+  `crates/catalog/src/generated/<provider>.rs`. `crates/catalog/src/generated.rs` and
+  `web/public/catalog.json` came back **byte-identical**: the index carries no operation fields, and
+  `catalog.json` had carried the service all along, which is what made this an embedded-catalogue gap
+  rather than a whole-model one. `diff` then reports `479 artifacts up to date (44 providers
+  checked)`.
+- The configuration port keys on `(tenant, provider, service, kind, name)`:
+  `ConfigStore::get(tenant, provider, service, field)`, `Configuration::snapshot(provider, service,
+  fields)`, and `MemoryConfig::with_endpoint`/`with_username` both take the service. `Snapshot` holds
+  the service rather than putting it in its own map key — a snapshot is taken for exactly one
+  service, so every value in it is already that service's.
+- `Error::MissingConfig` gained a `service` field and quotes it. Without that, an operator told
+  `contentful` is missing `endpoint.space_id` has two fields answering to that description.
+- The user half (`Field::Username`) is keyed by service too, which follows the IR rather than the
+  credential *address*: `ConfigField::service` is exactly one concrete service for every field
+  whatever it binds. Consequence, and it fails closed: a two-service connector with one `basic`
+  credential must bind the user half under each service. No shipped connector is in that position —
+  `jira`, `zendesk` and `twilio` are the only `BasicJoin` providers and each has one service.
+- Recorded in `docs/designs/connector-configuration.md` (new section) and in `AGENTS.md`'s
+  configuration contract.
 
 ## Notes
 

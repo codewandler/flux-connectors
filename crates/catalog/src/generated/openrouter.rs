@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "openrouter-models-list",
         provider: "openrouter",
+        service: "default",
         description: "List every model OpenRouter routes to, with its context length, modalities and per-token pricing",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "openrouter-model-endpoints-list",
         provider: "openrouter",
+        service: "default",
         description: "List the upstream provider endpoints serving one model, with each one's pricing, context length and quantization",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "openrouter-chat-completion",
         provider: "openrouter",
+        service: "default",
         description: "Create a chat completion through OpenRouter, routed to the named model. Billed per input and output token, so the caller must state a token budget via max_completion_tokens",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "openrouter-credits-get",
         provider: "openrouter",
+        service: "default",
         description: "Read the account's total purchased credits and total usage, in credit units",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,

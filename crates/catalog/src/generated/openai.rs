@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "openai-models-list",
         provider: "openai",
+        service: "default",
         description: "List the models available to this API key, with their ids and owners",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "openai-model-get",
         provider: "openai",
+        service: "default",
         description: "Retrieve one model by id, with its ownership and permissions",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "openai-chat-completion",
         provider: "openai",
+        service: "default",
         description: "Create a chat completion. Billed per input and output token, so the caller must state a token budget via max_completion_tokens",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "openai-embeddings-create",
         provider: "openai",
+        service: "default",
         description: "Create embedding vectors for one or more input texts. Billed per input token",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,

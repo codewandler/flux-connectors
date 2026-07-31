@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "clickup-team-list",
         provider: "clickup",
+        service: "default",
         description: "List the workspaces (called \"teams\" in ClickUp's API) the token can see. Takes no parameters; used as the verify read to prove a token resolves, and as the source of the workspace-level context a space id is nested under",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "clickup-space-folder-list",
         provider: "clickup",
+        service: "default",
         description: "List a space's folders. Each folder's own lists are nested inline in the response — read a folder's `lists` field for the list ids clickup-list-task-list and clickup-task-create take, rather than looking for a separate folder-to-list operation",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "clickup-list-task-list",
         provider: "clickup",
+        service: "default",
         description: "List tasks in a list, most recently created first by default",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "clickup-task-get",
         provider: "clickup",
+        service: "default",
         description: "Get one task by id",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "clickup-task-create",
         provider: "clickup",
+        service: "default",
         description: "Create a task in a list. Created with `notify_all` left at its default (false), so nobody is emailed by this call",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -80,6 +85,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "clickup-task-update",
         provider: "clickup",
+        service: "default",
         description: "Update a task's plain fields (name, description, status, priority, due date). Every field below is optional and ClickUp's update is sparse: an omitted field is left unchanged. Reassigning or rewatching the task is not supported by this operation — ClickUp takes those as {add, rem} deltas naming specific people, which this connector does not declare",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,

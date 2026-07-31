@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "miro-board-list",
         provider: "miro",
+        service: "default",
         description: "List the boards this access token can see, with each board's id, name and description. Returns Miro's first page only; this connector declares no cursor or limit parameter (see the connector's header note). The board `id` returned here is what every other operation in this connector needs as `board_id`",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "miro-board-item-list",
         provider: "miro",
+        service: "default",
         description: "List the items on a board, of any type (sticky note, shape, text or frame). Each item's shape depends on its `type`: sticky notes and text carry `data.content`, shapes carry `data.content` and `data.shape`, frames carry `data.title`. Returns Miro's first page only; this connector declares no cursor or limit parameter (see the connector's header note)",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "miro-board-item-get",
         provider: "miro",
+        service: "default",
         description: "Get one item from a board, of any type (sticky note, shape, text or frame). Its shape depends on its `type` — see miro-board-item-list's description for what each carries",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "miro-sticky-note-create",
         provider: "miro",
+        service: "default",
         description: "Create a sticky note on a board. Miro does not deduplicate: creating the same content twice makes two sticky notes, so this is not idempotent. The created note, with its assigned id, is in the response",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "miro-sticky-note-update",
         provider: "miro",
+        service: "default",
         description: "Update a sticky note's text content. Setting the same content twice ends in the same state, but this is declared non_idempotent because check_write_metadata refuses idempotency = idempotent on any PATCH by method alone, regardless of vendor behaviour (see the header note, C-186). The updated note is in the response",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -80,6 +85,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "miro-sticky-note-delete",
         provider: "miro",
+        service: "default",
         description: "Delete one sticky note. There is no undo route in the API. Responds with no content",
         risk: crate::Risk::Destructive,
         idempotency: crate::Idempotency::NonIdempotent,

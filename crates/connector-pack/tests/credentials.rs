@@ -383,10 +383,24 @@ const BASIC_EXPECTED: &str = "b3BzQGFjbWUudGVzdC90b2tlbjpTRU5USU5FTC1OT1QtQS1SRU
 
 /// A configuration port holding zendesk's subdomain, and its user half only when `user` is set.
 fn basic_configuration(user: Option<&str>) -> Configuration {
-    let mut values =
-        MemoryConfig::new().with_endpoint(BASIC_TENANT, "zendesk", "subdomain", "acme");
+    // Keyed by service as well as by connector (C-197). zendesk declares one API surface, so both
+    // bind under `DEFAULT_SERVICE` — but the service is named rather than elided, because the port
+    // takes it for every field and a two-service connector would need one binding per service.
+    let mut values = MemoryConfig::new().with_endpoint(
+        BASIC_TENANT,
+        "zendesk",
+        DEFAULT_SERVICE,
+        "subdomain",
+        "acme",
+    );
     if let Some(user) = user {
-        values = values.with_username(BASIC_TENANT, "zendesk", "zendesk.api_token", user);
+        values = values.with_username(
+            BASIC_TENANT,
+            "zendesk",
+            DEFAULT_SERVICE,
+            "zendesk.api_token",
+            user,
+        );
     }
     Configuration::new(Arc::new(values), BASIC_TENANT).expect("a valid tenant id")
 }

@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "docusign-verify",
         provider: "docusign",
+        service: "default",
         description: "List the account's own top-level folders — Draft, Sent Items, Inbox, and any custom ones. Takes no parameters and succeeds for any account with API access, which is what makes it the connection check for a settings page's Test Connection button",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "docusign-envelope-list",
         provider: "docusign",
+        service: "default",
         description: "List envelopes whose status changed on or after a given date. DocuSign requires a from_date (or an explicit envelope_ids/transaction_ids list, which this operation does not offer) on every call to this resource — omitting it is a 400 from the vendor, not a limitation of this connector",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "docusign-envelope-get",
         provider: "docusign",
+        service: "default",
         description: "Get one envelope's own status and metadata. No recipient or document detail — see docusign-envelope-recipients-get for who is on it",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "docusign-envelope-recipients-get",
         provider: "docusign",
+        service: "default",
         description: "Get every recipient on an envelope and their signing status. Recipient name and email are personal data — see this operation's own response_schema before logging, displaying or forwarding it",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "docusign-envelope-create-from-template",
         provider: "docusign",
+        service: "default",
         description: "Create an envelope from an existing template. When status is sent, DocuSign dispatches it immediately to every named recipient — a real, legally binding signature request to a real person. Use status created to save it as an editable draft that notifies nobody instead",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -80,6 +85,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "docusign-envelope-void",
         provider: "docusign",
+        service: "default",
         description: "Void an envelope: cancel it permanently. Every recipient who has not yet finished signing is immediately locked out, and no further signing action is possible on this envelope id. Irreversible",
         risk: crate::Risk::Destructive,
         idempotency: crate::Idempotency::NonIdempotent,

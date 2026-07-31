@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "jira-issue-get",
         provider: "jira",
+        service: "default",
         description: "Read one Jira issue by key (`PROJ-123`) or numeric id — summary, description, status, assignee, reporter and every other configured field. Returns Jira's full default field set, including custom fields, because narrowing it needs the `fields` query parameter this connector cannot encode. Text fields are wiki markup, not rich content",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "jira-issue-create",
         provider: "jira",
+        service: "default",
         description: "Create a Jira issue in a project. Visible to everyone with access to the project and notifies its watchers. Only project, summary and issue type are set: a description cannot be sent yet (see the connector's notes), so file the detail as a comment afterwards. Returns the new issue's id, key and self URL",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "jira-issue-comment-list",
         provider: "jira",
+        service: "default",
         description: "Read the comments on a Jira issue, oldest first. Returns Jira's first default-sized page only: paging needs the `startAt` and `maxResults` query parameters this connector cannot encode, so an issue with a long discussion is truncated. Comment bodies are wiki markup",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "jira-issue-comment-add",
         provider: "jira",
+        service: "default",
         description: "Add a comment to a Jira issue. The comment is visible to everyone who can see the issue — including customers on a service-management portal — and notifies its watchers; restricting it to a project role or group is not supported yet. The body is Jira wiki markup (`*bold*`, `{code}`), not Markdown and not rich content",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "jira-issue-transitions-list",
         provider: "jira",
+        service: "default",
         description: "List the workflow transitions available on a Jira issue right now, with the id and target status of each. Call this before `jira-issue-transition`: transition ids are per-workflow, not global, and only the transitions valid from the issue's current status are returned",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -80,6 +85,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "jira-issue-transition",
         provider: "jira",
+        service: "default",
         description: "Move a Jira issue through a workflow transition — the way an issue is closed, reopened or advanced. Get the transition id from `jira-issue-transitions-list` first; ids are per-workflow and only transitions valid from the current status are accepted. The status change is visible on every board showing the issue, notifies watchers, and may fire project automation. Answers `204` with an empty body on success",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,

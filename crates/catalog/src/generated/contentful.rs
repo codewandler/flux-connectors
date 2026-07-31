@@ -36,6 +36,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "contentful-entry-get",
         provider: "contentful",
+        service: "delivery",
         description: "Get one published entry by id, with its fields resolved to one locale",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -46,6 +47,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "contentful-entries-list",
         provider: "contentful",
+        service: "delivery",
         description: "List published entries in this space and environment, most recently updated first. This connector's `verify` — a bounded read that runs unattended: space and environment are already resolved from configuration, and `limit`/`skip` are optional, so no required argument is ever needed",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -56,6 +58,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "contentful-asset-get",
         provider: "contentful",
+        service: "delivery",
         description: "Get one published asset (an uploaded file, e.g. an image) by id, with its metadata resolved to one locale",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -66,6 +69,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "contentful-entry-create",
         provider: "contentful",
+        service: "management",
         description: "Create a new entry from a content type's field values. Contentful assigns the entry's id. The entry is created as a draft — it is not visible through the Delivery API until contentful-entry-publish publishes it",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -76,6 +80,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "contentful-entry-publish",
         provider: "contentful",
+        service: "management",
         description: "Publish a draft entry, making it visible through the Delivery API. Sends no body",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::Idempotent,

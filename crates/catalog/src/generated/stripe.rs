@@ -36,6 +36,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "stripe-balance-get",
         provider: "stripe",
+        service: "default",
         description: "Get the account's current balance — what is available to pay out and what is still pending, per currency. Takes no parameters, and reports the balance of whichever mode the key belongs to: a test key returns the test balance",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -46,6 +47,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "stripe-customer-get",
         provider: "stripe",
+        service: "default",
         description: "Get one customer by id: name, email, phone, billing address, default payment method and account balance. This is personal data about a named individual — read it only when the task needs it, and do not repeat it further than the task requires. A deleted customer is returned with `deleted: true` and almost no other fields",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -56,6 +58,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "stripe-charge-get",
         provider: "stripe",
+        service: "default",
         description: "Get one charge by id: amount, currency, whether it was captured, whether it was refunded and how much of it, the card's last four digits and brand, and the failure or decline reason if it did not succeed. `amount` is in the currency's smallest unit — 1000 is ten dollars, and also ten thousand yen",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -66,6 +69,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "stripe-payment-intent-get",
         provider: "stripe",
+        service: "default",
         description: "Get one payment intent by id — the modern shape of a payment, covering the whole lifecycle from creation to capture. Its `status` is what says where the payment stands; `requires_capture` means the money is authorized but not yet taken",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -76,6 +80,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "stripe-refund-get",
         provider: "stripe",
+        service: "default",
         description: "Get one refund by id: its amount, the charge it belongs to, its reason and its status. A refund that reports `pending` has not reached the customer's bank yet, and one that reports `failed` means the money came back — the customer was not paid",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -86,6 +91,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "stripe-payment-intent-capture",
         provider: "stripe",
+        service: "default",
         description: "Capture an authorized payment intent, charging the customer the **full** authorized amount. Only a payment intent in `requires_capture` can be captured; a partial capture needs an `amount` this connector cannot send. Stripe answers 402 with an `error.code` such as `card_declined` when the capture is refused, and that arrives as data rather than as a failure",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::Conditional,
@@ -96,6 +102,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "stripe-payment-intent-cancel",
         provider: "stripe",
+        service: "default",
         description: "Cancel a payment intent, releasing any authorization hold on the customer's card. This cannot be undone — a canceled intent is final, and collecting the payment afterwards means creating a new one. An intent that has already succeeded cannot be canceled; refund it instead",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::Conditional,
@@ -106,6 +113,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "stripe-charge-refund-create",
         provider: "stripe",
+        service: "default",
         description: "Refund a charge **in full** and irreversibly: the entire un-refunded amount goes back to the customer's original payment method, usually within five to ten business days. A partial refund needs an `amount` this connector cannot send. Stripe's fee on the original charge is not returned. There is no way to undo a refund — collecting the money again means charging the customer again",
         risk: crate::Risk::Destructive,
         idempotency: crate::Idempotency::Conditional,

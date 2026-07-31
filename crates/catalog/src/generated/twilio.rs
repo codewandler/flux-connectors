@@ -36,6 +36,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "twilio-account-get",
         provider: "twilio",
+        service: "default",
         description: "Verify credentials by fetching the authenticated Twilio account",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -46,6 +47,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "twilio-message-list",
         provider: "twilio",
+        service: "default",
         description: "List messages sent from or received by this account",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -56,6 +58,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "twilio-message-get",
         provider: "twilio",
+        service: "default",
         description: "Fetch one message",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -66,6 +69,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "twilio-call-list",
         provider: "twilio",
+        service: "default",
         description: "List calls made from or received by this account",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -76,6 +80,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "twilio-call-get",
         provider: "twilio",
+        service: "default",
         description: "Fetch one call",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,

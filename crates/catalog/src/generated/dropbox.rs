@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "dropbox-user-me",
         provider: "dropbox",
+        service: "default",
         description: "Get the account this access token authenticates as, confirming the token resolves and naming the account it belongs to. Takes no parameters. Dropbox routes this read through POST, like every operation this connector declares — there is no GET anywhere in Dropbox's v2 API",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "dropbox-folder-list",
         provider: "dropbox",
+        service: "default",
         description: "List the files and folders directly inside a folder, first page only. Each entry names its own type (file, folder, or deleted), name and full path. Dropbox routes this read through POST, so it is declared as a write",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "dropbox-metadata-get",
         provider: "dropbox",
+        service: "default",
         description: "Get metadata for a file or folder at a given path: its type, name, id, and — for a file — size and content hash. Does not return a folder's contents (use dropbox-folder-list) or a file's content (use dropbox-temporary-link-get). Dropbox routes this read through POST, so it is declared as a write",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "dropbox-search",
         provider: "dropbox",
+        service: "default",
         description: "Search file and folder names across the account, returning the first page of matches. Dropbox matches on name, not file content. Dropbox routes this read through POST, so it is declared as a write",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "dropbox-folder-create",
         provider: "dropbox",
+        service: "default",
         description: "Create a new folder at the given path, including any missing parent folders. Naming a path that already exists answers 409 conflict rather than creating a duplicate, since autorename is not offered by this connector",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -80,6 +85,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "dropbox-temporary-link-get",
         provider: "dropbox",
+        service: "default",
         description: "Get a temporary, unauthenticated download link for an existing file's content, valid for approximately four hours. This connector cannot follow the link itself — it only returns the URL, for a caller to fetch separately. Dropbox routes this read through POST, so it is declared as a write",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,

@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "google-gmail-message-get",
         provider: "google",
+        service: "gmail",
         description: "Get one Gmail message by id, in Gmail's default `full` format: headers plus the parsed MIME structure, whose body parts are base64url-encoded. Needs the `gmail.readonly` scope (or `gmail.modify`)",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "google-gmail-message-send",
         provider: "google",
+        service: "gmail",
         description: "Send a Gmail message, supplied as a complete base64url-encoded RFC 2822 message. It is delivered immediately from the token owner's mailbox and cannot be recalled. Needs the `gmail.send` scope",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "google-gmail-labels-list",
         provider: "google",
+        service: "gmail",
         description: "List every label in a mailbox — the system labels (`INBOX`, `SENT`, `SPAM`) and the user's own — as `{\"labels\": [...]}`. Needs the `gmail.readonly` scope (or `gmail.labels`)",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "google-calendar-event-get",
         provider: "google",
+        service: "calendar",
         description: "Get one calendar event: its summary, start and end, organizer, attendee list and status. Needs the `calendar.events.readonly` scope (or `calendar.readonly`)",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "google-calendar-event-insert",
         provider: "google",
+        service: "calendar",
         description: "Create a timed event on a calendar. No attendees can be declared yet, so nobody is invited and no notification is sent; invite people in Calendar afterwards. Needs the `calendar.events` scope",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -80,6 +85,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "google-calendar-calendar-get",
         provider: "google",
+        service: "calendar",
         description: "Get one calendar's own metadata — its summary, description, location and time zone. This is the calendar, not its events: use `google-calendar-event-get` for one of those. Needs the `calendar.readonly` scope",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -90,6 +96,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "google-drive-file-get",
         provider: "google",
+        service: "drive",
         description: "Get one Drive file's metadata — its id, name and MIME type. This never returns file content: downloading needs `alt=media`, which is a query parameter and therefore unavailable (C-30). Needs the `drive.metadata.readonly` scope (or `drive.readonly`)",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -100,6 +107,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "google-drive-file-update",
         provider: "google",
+        service: "drive",
         description: "Rename a Drive file: sets its name and changes nothing else. It does not move, share, trash or replace the file's content. Needs the `drive.file` scope for files this token created, or `drive` for any other",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,

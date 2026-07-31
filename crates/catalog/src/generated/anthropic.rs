@@ -36,6 +36,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "anthropic-models-list",
         provider: "anthropic",
+        service: "models",
         description: "List the models available to this API key, most recently released first. Unpaginated — this connector cannot request a further page",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -46,6 +47,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "anthropic-model-get",
         provider: "anthropic",
+        service: "models",
         description: "Retrieve one model by id, or resolve an alias to the model id it currently points at",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -56,6 +58,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "anthropic-organization-get",
         provider: "anthropic",
+        service: "admin",
         description: "Get the organization this Admin API key belongs to. Takes no parameters; useful for confirming which organization a key resolves to",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -66,6 +69,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "anthropic-workspaces-list",
         provider: "anthropic",
+        service: "admin",
         description: "List the organization's workspaces. Unpaginated and excludes archived workspaces by default — this connector cannot request a further page or ask for archived ones",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -76,6 +80,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "anthropic-api-keys-list",
         provider: "anthropic",
+        service: "admin",
         description: "List the organization's API keys, with each key's name, status and a redacted hint — never the key itself. Unpaginated and unfiltered",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,

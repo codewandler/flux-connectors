@@ -53,7 +53,9 @@ const TENANT: &str = "t-projection";
 /// `ticket_id`: without a subdomain the first thing missing is the subdomain, which is a true
 /// answer to a different question.
 fn configuration() -> Configuration {
-    let values = MemoryConfig::new().with_endpoint(TENANT, "zendesk", "subdomain", "acme");
+    // `default` is zendesk's only service — see C-197 for why the port asks which one is meant.
+    let values =
+        MemoryConfig::new().with_endpoint(TENANT, "zendesk", "default", "subdomain", "acme");
     Configuration::new(Arc::new(values), TENANT).expect("a valid tenant id")
 }
 

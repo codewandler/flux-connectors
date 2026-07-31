@@ -128,7 +128,11 @@ impl Idempotency {
 /// One operation: its Flux source, and what a caller needs in order to decide whether to use it.
 ///
 /// `#[non_exhaustive]` because C-37 adds the global address to this struct and C-10 adds the
-/// resolved endpoint spec; neither should be a breaking change for a consumer.
+/// resolved endpoint spec; neither should be a breaking change for a consumer. C-197's
+/// [`service`](Self::service) is the first field to land on that headroom, and it is what the
+/// attribute was for: a consumer outside this crate can neither construct one with a struct literal
+/// nor destructure one exhaustively, so a field arriving is additive for them and breaking only for
+/// the generated tables in this crate, which the same build rewrites.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Operation {
@@ -137,6 +141,29 @@ pub struct Operation {
     pub id: &'static str,
     /// The [`Provider::id`] this operation belongs to.
     pub provider: &'static str,
+    /// The **service** this operation belongs to — `delivery`, `s3`, or the reserved `default` for
+    /// a provider with a single API surface. Never empty: the IR always names a service
+    /// (`connector_spec::ir::DEFAULT_SERVICE`), and the reserved name is elided from *addresses*
+    /// only, never from this field.
+    ///
+    /// # Why it is here, and what was wrong without it (C-197)
+    ///
+    /// Services partition the operation set, and a service owns its own `base_url` — so
+    /// [`Operation::hosts`] is already per service. What was missing was the *name*, and a consumer
+    /// that cannot read it cannot key anything by service.
+    ///
+    /// `connector-pack`'s configuration port is where that bit. It keyed a tenant's endpoint values
+    /// on `(tenant, provider, kind, name)`, because there was no service here to key on, so two
+    /// services of one connector that spell the same `{variable}` in their own `base_url` collapsed
+    /// to a single value. `contentful` is the shipped case: `delivery_space_id` and
+    /// `management_space_id` are two declared configuration fields, both binding `endpoint.space_id`
+    /// under different services, and `contentful-entry-create` on `api.contentful.com` resolved
+    /// whatever `contentful-entry-get` on `cdn.contentful.com` had. A tenant whose two environments
+    /// differ got a `200` from the wrong one rather than a refusal.
+    ///
+    /// `web/public/catalog.json` had carried the service all along; this is the embedded catalogue
+    /// catching up, which is why every provider's generated table moved when it landed.
+    pub service: &'static str,
     /// What the operation does, in one line — the same text the model sees as the tool description.
     pub description: &'static str,
     /// How much damage it can do.

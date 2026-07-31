@@ -71,7 +71,16 @@ fn configuration() -> Configuration {
     let mut values = MemoryConfig::new();
     for entry in catalog::operations() {
         for variable in probe(entry).endpoint_variables() {
-            values = values.with_endpoint(TENANT, entry.provider, variable, &value_for(variable));
+            // Under the entry's own service (C-197): the same variable name in two services of one
+            // connector is two values, so binding it once for the connector would leave every
+            // operation of the second service unconfigured and gated against a templated host.
+            values = values.with_endpoint(
+                TENANT,
+                entry.provider,
+                entry.service,
+                variable,
+                &value_for(variable),
+            );
         }
     }
     Configuration::new(Arc::new(values), TENANT).expect("a valid tenant id")

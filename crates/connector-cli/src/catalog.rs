@@ -286,6 +286,15 @@ fn entry(connector: &Connector, operation: &Operation, host: &str) -> String {
     let mut out = String::from("    crate::Operation {\n");
     out.push_str(&format!("        id: {},\n", string(&operation.id)));
     out.push_str(&format!("        provider: {},\n", string(&connector.id)));
+    // The service, carried rather than elided (C-197). It is what makes `hosts` below legible — a
+    // multi-service provider reaches a different host per service — and it is the key a consumer
+    // needs in order to keep two services' same-named configuration variables apart. The reserved
+    // `default` is written out here: elision is an *address* rule, and a consumer grouping by
+    // service unconditionally needs a name in every row.
+    out.push_str(&format!(
+        "        service: {},\n",
+        string(&operation.service)
+    ));
     out.push_str(&format!(
         "        description: {},\n",
         string(&operation.description)

@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "zendesk-test",
         provider: "zendesk",
+        service: "default",
         description: "Verify credentials by fetching the authenticated Zendesk user",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "zendesk-ticket-search",
         provider: "zendesk",
+        service: "default",
         description: "Search tickets with Zendesk search syntax, e.g. `type:ticket status:new`",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "zendesk-ticket-show",
         provider: "zendesk",
+        service: "default",
         description: "Show one ticket",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "zendesk-ticket-comment-list",
         provider: "zendesk",
+        service: "default",
         description: "List a ticket's comments",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "zendesk-ticket-update",
         provider: "zendesk",
+        service: "default",
         description: "Safe-update selected ticket fields against the caller's updated_stamp; at least one of status, priority, assignee_id, group_id or type must be supplied",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::Conditional,
@@ -80,6 +85,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "zendesk-ticket-comment-add",
         provider: "zendesk",
+        service: "default",
         description: "Add a comment to a ticket; the comment is an internal note unless public is explicitly true",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::Conditional,
@@ -90,6 +96,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "zendesk-ticket-tag-add",
         provider: "zendesk",
+        service: "default",
         description: "Add tags to a ticket without replacing the tags it already has",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::Conditional,
