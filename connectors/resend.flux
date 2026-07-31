@@ -12,9 +12,8 @@ op resend-email-send(from: String, to: Any, subject: String, html: String) -> An
   base = "https://api.resend.com"
   url = fmt("{base}/emails")
   content_type = "application/json"
-  User_Agent = "flux-connectors"
   payload = { from, html, subject, to }
-  response = http.request(body: payload, headers: { "User-Agent": User_Agent, "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response
 
 op resend-email-get(email_id: String) -> Any
@@ -26,8 +25,7 @@ op resend-email-get(email_id: String) -> Any
 
   base = "https://api.resend.com"
   url = fmt("{base}/emails/{email_id}")
-  User_Agent = "flux-connectors"
-  response = http.request(headers: { "User-Agent": User_Agent }, method: "GET", url)
+  response = http.request(method: "GET", url)
   return response
 
 op resend-domain-list -> Any
@@ -39,8 +37,7 @@ op resend-domain-list -> Any
 
   base = "https://api.resend.com"
   url = fmt("{base}/domains")
-  User_Agent = "flux-connectors"
-  response = http.request(headers: { "User-Agent": User_Agent }, method: "GET", url)
+  response = http.request(method: "GET", url)
   return response
 
 op resend-domain-get(domain_id: String) -> Any
@@ -52,6 +49,5 @@ op resend-domain-get(domain_id: String) -> Any
 
   base = "https://api.resend.com"
   url = fmt("{base}/domains/{domain_id}")
-  User_Agent = "flux-connectors"
-  response = http.request(headers: { "User-Agent": User_Agent }, method: "GET", url)
+  response = http.request(method: "GET", url)
   return response

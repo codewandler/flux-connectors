@@ -1014,66 +1014,174 @@ fn every_declared_operation_carries_exactly_one_user_agent() {
     );
 }
 
+/// The Resend operations the premise below is about, **named rather than discovered**. This is a
+/// claim about specific connectors, so `AGENTS.md` keeps it to a closed set: only these connectors
+/// changing can falsify it, and a forty-sixth connector cannot.
+const RESEND_OPERATIONS: &[&str] = &[
+    "resend-email-send",
+    "resend-email-get",
+    "resend-domain-list",
+    "resend-domain-get",
+];
+
+/// Resend declares no service, so its operations belong to the reserved `default`.
+const RESEND_SERVICE: &str = "default";
+
+/// **Resend inherits the versioned host identity rather than overriding it with a bare word**
+/// (C-241).
+///
+/// C-223 gave every connector
+/// [`DEFAULT_USER_AGENT`] and let a connector's own declaration win where it had one. Exactly four
+/// operations were unchanged by that — Resend's, because `providers/resend.toml` declared
+/// `const_headers = { "User-Agent" = "flux-connectors" }`. The declaration was correct when it was
+/// written and is now the *worse* of the two values available: it carries no version, so a vendor
+/// cannot tell one release from another, and a bare product word is what C-223's own acceptance
+/// rules out.
+///
+/// **The vendor requirement it was written for has not gone away** — Resend answers a request with
+/// no `User-Agent` with a `403` carrying a valid key — which is why this test asserts the header is
+/// *present and versioned* rather than merely that the declaration is gone. Removing a workaround
+/// and leaving the operation bare would satisfy the second half of that sentence and re-open the
+/// `403`.
+///
+/// Driven from the per-provider artifacts `build --provider resend` writes, like
+/// [`every_declared_operation_carries_exactly_one_user_agent`], so the two agree on where they read
+/// the connector from.
+#[test]
+fn resend_inherits_the_versioned_host_identity() {
+    let configuration = configuration();
+    let ops = root().join("crates/catalog/ops/resend");
+
+    for id in RESEND_OPERATIONS {
+        let flux = read(&ops.join(format!("{id}.flux")));
+        let rehearsal = Rehearsal::of(id, "resend", RESEND_SERVICE, &flux)
+            .unwrap_or_else(|error| panic!("`{id}` does not rehearse: {error}"));
+        let request = rehearsal
+            .request(&configuration, &params_from_schema(&rehearsal))
+            .unwrap_or_else(|error| panic!("`{id}` composes no request: {error}"));
+
+        // Presence and uniqueness first: this is what proves removing the declaration did not leave
+        // the operation with no identity at all, which is the failure Resend answers with a `403`.
+        let agents: Vec<&String> = request
+            .headers
+            .keys()
+            .filter(|name| name.eq_ignore_ascii_case("User-Agent"))
+            .collect();
+        assert_eq!(
+            agents,
+            vec!["User-Agent"],
+            "`{id}` must carry exactly one `User-Agent`, spelled canonically: {:?}",
+            request.headers.keys().collect::<Vec<_>>()
+        );
+
+        let value = &request.headers[agents[0]];
+        assert_eq!(
+            value, DEFAULT_USER_AGENT,
+            "`{id}` sends `{value}` rather than the versioned host identity"
+        );
+
+        // The first product token, whole — the form the design record settles on, because a value
+        // merely *containing* `flux-connectors` is satisfied by the repository URL in the trailing
+        // comment. A bare `flux-connectors` has no `/`, so this is exactly the assertion the shipped
+        // declaration fails.
+        let product = value
+            .split_whitespace()
+            .next()
+            .expect("a `User-Agent` value is not empty");
+        let (name, version) = product.split_once('/').unwrap_or_else(|| {
+            panic!(
+                "`{id}` sends `{product}`, a product token with no version — a vendor cannot tell \
+                 one release of this software from another"
+            )
+        });
+        assert_eq!(name, "flux-connectors");
+        assert!(
+            !version.is_empty(),
+            "`{id}` sends an empty version in `{product}`"
+        );
+    }
+}
+
 /// **A connector that declares its own `User-Agent` keeps it, and gains no second one** (C-223).
 ///
-/// This case exists in the shipped catalogue today — `providers/resend.toml` declares
-/// `const_headers = {{ "User-Agent" = "flux-connectors" }}`, because Resend answers a request
-/// without one with a `403` — so the first half is asserted against a real connector rather than a
-/// fixture. Named connectors, loaded by name: this is a premise about specific connectors, not about
-/// the catalogue, and only those connectors changing can falsify it.
+/// **Both halves are fixtures now, and that is a change of evidence rather than of claim** (C-241).
+/// The first half used to be asserted against `providers/resend.toml`, the one shipped connector
+/// that declared the header. C-241 removed that declaration — it had become a bare, versionless
+/// override of the host identity — and *no* connector declares one today. So there is no shipped
+/// case left to point at, and pinning this behaviour to whichever connector happens to declare one
+/// next would make the test's premise a coincidence.
 ///
-/// The second half needs a fixture, because no shipped connector spells the header in another case
-/// and the defect is invisible until one does. `user-agent` lowercase against a `User-Agent`
-/// default is two `BTreeMap` entries and two headers on the wire; the check is case-insensitive for
-/// exactly this, and this is where that is proved rather than asserted in a comment.
+/// What is doctored is a real emitted module rather than a hand-written string: `github-issue-get`
+/// ships a constant `Accept` header, which is the exact shape the emitter gives any constant header,
+/// and it is rewritten here into the two spellings that matter.
+///
+/// The `user-agent` half is the defect-prevention one and is invisible until some connector spells
+/// it that way. `Request::headers` is a `BTreeMap`, so a lowercase declaration against a
+/// `User-Agent` default is two entries, two JSON keys in `to_params`, and either two headers on the
+/// wire or a silent overwrite. `identify`'s guard is case-insensitive for exactly this, and this is
+/// where that is proved rather than asserted in a comment.
 #[test]
 fn a_connector_declaring_its_own_user_agent_wins_and_gains_no_second_one() {
-    // The shipped case. Resend's own value, not the default.
-    let entry = catalog::operation(OperationKey::id("resend-email-send"))
-        .expect("the shipped catalogue carries resend-email-send");
-    let sent = request(
-        "resend-email-send",
-        json!({"from": "a@b.c", "to": ["d@e.f"], "subject": "s", "html": "<p>h</p>"}),
-    );
-    assert_eq!(
-        sent.headers.get("User-Agent").map(String::as_str),
-        Some("flux-connectors"),
-        "a connector's declared `User-Agent` was overwritten by the host default"
-    );
-    assert_ne!(
-        sent.headers.get("User-Agent").map(String::as_str),
-        Some(DEFAULT_USER_AGENT),
-        "the fixture no longer distinguishes the two, so this test proves nothing"
-    );
+    /// A value that is plainly neither the host default nor a truncation of it, so a test failure
+    /// cannot be read as "the two happen to agree".
+    const DECLARED: &str = "vendor-pinned-agent/9.9";
 
-    // The case no connector spells yet: a lowercase declaration must still win, and must not sit
-    // beside a `User-Agent` the default inserted.
-    let lowercased = entry.flux.replace("\"User-Agent\"", "\"user-agent\"");
-    assert!(
-        lowercased.contains("\"user-agent\""),
-        "the doctoring did not apply, so this half proves nothing"
-    );
-    let rehearsal = Rehearsal::of(entry.id, entry.provider, entry.service, &lowercased)
-        .expect("the doctored declaration rehearses");
-    let request = rehearsal
-        .request(
-            &configuration(),
-            &json!({"from": "a@b.c", "to": ["d@e.f"], "subject": "s", "html": "<p>h</p>"}),
-        )
-        .expect("the doctored declaration builds its request");
+    let entry = catalog::operation(OperationKey::id("github-issue-get"))
+        .expect("the shipped catalogue carries github-issue-get");
 
-    let agents: Vec<&String> = request
-        .headers
-        .keys()
-        .filter(|name| name.eq_ignore_ascii_case("User-Agent"))
-        .collect();
-    assert_eq!(
-        agents,
-        vec!["user-agent"],
-        "a differently-cased declaration was joined by a second `User-Agent` rather than kept: {:?}",
-        request.headers.keys().collect::<Vec<_>>()
-    );
-    assert_eq!(request.headers["user-agent"], "flux-connectors");
+    // `Accept = "…"` bound to a symbol and named in the request's header record is what the emitter
+    // writes for every constant header, so rewriting it in place yields a module in exactly the
+    // shape a connector declaring a `User-Agent` would ship.
+    let declaring = |name: &str, symbol: &str| {
+        let flux = entry
+            .flux
+            .replace(
+                "Accept = \"application/vnd.github+json\"",
+                &format!("{symbol} = \"{DECLARED}\""),
+            )
+            .replace(
+                "headers: { Accept }",
+                &format!("headers: {{ \"{name}\": {symbol} }}"),
+            );
+        assert!(
+            flux.contains(&format!("\"{name}\": {symbol}")),
+            "the doctoring did not apply, so this half proves nothing:\n{flux}"
+        );
+        let rehearsal = Rehearsal::of(entry.id, entry.provider, entry.service, &flux)
+            .unwrap_or_else(|error| panic!("the doctored `{name}` declaration rehearses: {error}"));
+        rehearsal
+            .request(
+                &configuration(),
+                &json!({"owner": "codewandler", "repo": "flux-connectors", "issue_number": 1}),
+            )
+            .unwrap_or_else(|error| {
+                panic!("the doctored `{name}` declaration builds its request: {error}")
+            })
+    };
+
+    for (name, symbol) in [("User-Agent", "User_Agent"), ("user-agent", "user_agent")] {
+        let request = declaring(name, symbol);
+
+        let agents: Vec<&String> = request
+            .headers
+            .keys()
+            .filter(|header| header.eq_ignore_ascii_case("User-Agent"))
+            .collect();
+        assert_eq!(
+            agents,
+            vec![name],
+            "a declared `{name}` was joined by a second `User-Agent` rather than kept: {:?}",
+            request.headers.keys().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            request.headers[name], DECLARED,
+            "a connector's declared `{name}` was overwritten by the host default"
+        );
+        assert_ne!(
+            request.headers[name], DEFAULT_USER_AGENT,
+            "the fixture no longer distinguishes the two, so this proves nothing"
+        );
+    }
 }
 
 /// Projection reads variables and not values, so an unconfigured port still answers what an
