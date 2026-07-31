@@ -20789,6 +20789,653 @@
       "channels": []
     },
     {
+      "id": "okta",
+      "authority": null,
+      "vendor": "Okta",
+      "description": "Okta identity management: read users and groups in an org, read a user's group memberships, and deactivate a user",
+      "base_url": "https://{domain}/api/v1",
+      "api_version": null,
+      "hosts": [
+        "{domain}"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://{domain}/api/v1",
+          "hosts": [
+            "{domain}"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 5
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "header"
+        ],
+        "credentials": [
+          {
+            "name": "okta.api_token",
+            "scheme": {
+              "kind": "header",
+              "name": "Authorization",
+              "prefix": "SSWS "
+            },
+            "description": "Okta API token, sent as `Authorization: SSWS <token>`. The `SSWS ` scheme word is supplied by the connector; the token is the value alone",
+            "env": [
+              "OKTA_API_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "okta.api_token"
+          ]
+        ]
+      },
+      "operation_count": 5,
+      "operations": [
+        {
+          "id": "okta-user-list",
+          "provider": "okta",
+          "service": "default",
+          "description": "List users in the Okta org. Returns a JSON array of user objects, most recently created first. Without a filter this is the org's active user population, so use `limit` to bound it — see okta-user-get to read one user by id or login",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/users",
+          "parameters": [
+            {
+              "name": "limit",
+              "in": "query",
+              "wire": null,
+              "description": "Maximum number of users to return in this page. Okta caps this per endpoint and the cap is not declared here, so a value above it is reduced by Okta rather than rejected",
+              "required": false,
+              "schema": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "limit": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "description": "The org's users",
+            "items": {
+              "properties": {
+                "activated": {
+                  "type": "string"
+                },
+                "created": {
+                  "description": "When the user was created, ISO 8601",
+                  "type": "string"
+                },
+                "credentials": {
+                  "description": "Which authentication providers and recovery factors are configured for this user. Never carries a password or a secret value",
+                  "type": "object"
+                },
+                "id": {
+                  "description": "The user's Okta id, e.g. `00u1a2b3c4D5e6F7g8h9` — pass this as `user_id` to the other operations below",
+                  "type": "string"
+                },
+                "lastLogin": {
+                  "description": "When the user last authenticated; absent for a user who never has",
+                  "type": "string"
+                },
+                "lastUpdated": {
+                  "type": "string"
+                },
+                "passwordChanged": {
+                  "type": "string"
+                },
+                "profile": {
+                  "description": "The user's profile attributes. `login` and `email` are always present; an org may add custom attributes to its user schema, so this object is not exhaustively enumerated here",
+                  "properties": {
+                    "email": {
+                      "type": "string"
+                    },
+                    "firstName": {
+                      "type": "string"
+                    },
+                    "lastName": {
+                      "type": "string"
+                    },
+                    "login": {
+                      "description": "The user's unique sign-in identifier, usually their email address. Accepted in place of the id by okta-user-get",
+                      "type": "string"
+                    },
+                    "mobilePhone": {
+                      "type": "string"
+                    },
+                    "secondEmail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "status": {
+                  "description": "The user's lifecycle state. Okta's values include STAGED, PROVISIONED, ACTIVE, RECOVERY, PASSWORD_EXPIRED, LOCKED_OUT, SUSPENDED and DEPROVISIONED; treat this as an open string rather than a closed set, because Okta has added states over time",
+                  "type": "string"
+                },
+                "statusChanged": {
+                  "type": "string"
+                },
+                "type": {
+                  "description": "The user type this user was created with, as `{id, …}`",
+                  "type": "object"
+                }
+              },
+              "required": [
+                "id",
+                "status",
+                "profile"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "credentials": [
+            [
+              "okta.api_token"
+            ]
+          ],
+          "hosts": [
+            "{domain}"
+          ],
+          "flux": "op okta-user-list(limit: Number) -> Any\n  description \"List users in the Okta org. Returns a JSON array of user objects, most recently created first. Without a filter this is the org's active user population, so use `limit` to bound it — see okta-user-get to read one user by id or login\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{domain}/api/v1\"\n  url = fmt(\"{base}/users\")\n  sep = \"?\"\n  when limit\n    url = fmt(\"{url}{sep}limit={limit}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {domain} value before it has a valid destination URL.",
+                "params": [
+                  "domain"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "okta-user-get",
+          "provider": "okta",
+          "service": "default",
+          "description": "Get one user's full record, including their lifecycle status and profile attributes. Accepts the user's Okta id or their login, so a caller holding an email address does not need to list first",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/users/{user_id}",
+          "parameters": [
+            {
+              "name": "user_id",
+              "in": "path",
+              "wire": null,
+              "description": "The user's Okta id (from okta-user-list's `id`) or their login, e.g. `ada@example.com`. Okta resolves either",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "user_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "user_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "activated": {
+                "type": "string"
+              },
+              "created": {
+                "type": "string"
+              },
+              "credentials": {
+                "description": "Which authentication providers and recovery factors are configured for this user. Never carries a password or a secret value",
+                "type": "object"
+              },
+              "id": {
+                "type": "string"
+              },
+              "lastLogin": {
+                "type": "string"
+              },
+              "lastUpdated": {
+                "type": "string"
+              },
+              "passwordChanged": {
+                "type": "string"
+              },
+              "profile": {
+                "description": "The user's profile attributes; an org may add custom ones to its user schema",
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "firstName": {
+                    "type": "string"
+                  },
+                  "lastName": {
+                    "type": "string"
+                  },
+                  "login": {
+                    "type": "string"
+                  },
+                  "mobilePhone": {
+                    "type": "string"
+                  },
+                  "secondEmail": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "status": {
+                "description": "The user's lifecycle state — see okta-user-list for the values Okta documents. `DEPROVISIONED` is what okta-user-deactivate leaves behind",
+                "type": "string"
+              },
+              "statusChanged": {
+                "type": "string"
+              },
+              "type": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "status",
+              "profile"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "okta.api_token"
+            ]
+          ],
+          "hosts": [
+            "{domain}"
+          ],
+          "flux": "op okta-user-get(user_id: String) -> Any\n  description \"Get one user's full record, including their lifecycle status and profile attributes. Accepts the user's Okta id or their login, so a caller holding an email address does not need to list first\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{domain}/api/v1\"\n  url = fmt(\"{base}/users/{user_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {domain} value before it has a valid destination URL.",
+                "params": [
+                  "domain"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "okta-group-list",
+          "provider": "okta",
+          "service": "default",
+          "description": "List groups in the Okta org. Returns a JSON array of group objects. A group is how Okta grants application access in bulk, so this is the set a membership question is asked against",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/groups",
+          "parameters": [
+            {
+              "name": "limit",
+              "in": "query",
+              "wire": null,
+              "description": "Maximum number of groups to return in this page. Okta caps this per endpoint and the cap is not declared here, so a value above it is reduced by Okta rather than rejected",
+              "required": false,
+              "schema": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "limit": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "description": "The org's groups",
+            "items": {
+              "properties": {
+                "created": {
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The group's Okta id, e.g. `00g1a2b3c4D5e6F7g8h9`",
+                  "type": "string"
+                },
+                "lastMembershipUpdated": {
+                  "description": "When a member was last added or removed",
+                  "type": "string"
+                },
+                "lastUpdated": {
+                  "type": "string"
+                },
+                "objectClass": {
+                  "description": "The group's schema classes, e.g. `[\"okta:user_group\"]`",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "profile": {
+                  "description": "The group's own attributes",
+                  "properties": {
+                    "description": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "The group's display name",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": {
+                  "description": "Where the group comes from. Okta's values include OKTA_GROUP (created in Okta), APP_GROUP (sourced from an application such as an LDAP or AD directory) and BUILT_IN (Okta's own, e.g. Everyone); treat this as an open string",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "type",
+                "profile"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "credentials": [
+            [
+              "okta.api_token"
+            ]
+          ],
+          "hosts": [
+            "{domain}"
+          ],
+          "flux": "op okta-group-list(limit: Number) -> Any\n  description \"List groups in the Okta org. Returns a JSON array of group objects. A group is how Okta grants application access in bulk, so this is the set a membership question is asked against\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{domain}/api/v1\"\n  url = fmt(\"{base}/groups\")\n  sep = \"?\"\n  when limit\n    url = fmt(\"{url}{sep}limit={limit}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {domain} value before it has a valid destination URL.",
+                "params": [
+                  "domain"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "okta-user-group-list",
+          "provider": "okta",
+          "service": "default",
+          "description": "List the groups one user is a member of. This is the direct answer to \"what access does this person have\", because Okta grants application assignments through group membership",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/users/{user_id}/groups",
+          "parameters": [
+            {
+              "name": "user_id",
+              "in": "path",
+              "wire": null,
+              "description": "The user's Okta id (from okta-user-list's `id`) or their login, e.g. `ada@example.com`. Okta resolves either",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "limit",
+              "in": "query",
+              "wire": null,
+              "description": "Maximum number of groups to return in this page. Okta caps this per endpoint and the cap is not declared here, so a value above it is reduced by Okta rather than rejected",
+              "required": false,
+              "schema": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "limit": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "user_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "user_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "description": "The groups this user belongs to, in the same shape okta-group-list returns",
+            "items": {
+              "properties": {
+                "created": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "lastMembershipUpdated": {
+                  "type": "string"
+                },
+                "lastUpdated": {
+                  "type": "string"
+                },
+                "objectClass": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "profile": {
+                  "properties": {
+                    "description": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": {
+                  "description": "Where the group comes from — see okta-group-list",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "type",
+                "profile"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "credentials": [
+            [
+              "okta.api_token"
+            ]
+          ],
+          "hosts": [
+            "{domain}"
+          ],
+          "flux": "op okta-user-group-list(user_id: String, limit: Number) -> Any\n  description \"List the groups one user is a member of. This is the direct answer to \\\"what access does this person have\\\", because Okta grants application assignments through group membership\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{domain}/api/v1\"\n  url = fmt(\"{base}/users/{user_id}/groups\")\n  sep = \"?\"\n  when limit\n    url = fmt(\"{url}{sep}limit={limit}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {domain} value before it has a valid destination URL.",
+                "params": [
+                  "domain"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "okta-user-deactivate",
+          "provider": "okta",
+          "service": "default",
+          "description": "Deactivate a user, moving them to DEPROVISIONED. This takes effect immediately: Okta ends the person's active sessions, revokes their tokens and grants, and removes their access to every application the org assigns through Okta. They cannot sign in afterwards. An administrator can reactivate the account later, but that is a separate operation this connector does not offer, and it does not restore the sessions or tokens this call destroyed",
+          "risk": "destructive",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/users/{user_id}/lifecycle/deactivate",
+          "parameters": [
+            {
+              "name": "user_id",
+              "in": "path",
+              "wire": null,
+              "description": "The user's Okta id (from okta-user-list's `id`) or their login, e.g. `ada@example.com`. Okta resolves either — confirm with okta-user-get before calling this",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "send_email",
+              "in": "query",
+              "wire": "sendEmail",
+              "description": "Set true to have Okta send its deactivation notification email. Omit for Okta's default, which sends none",
+              "required": false,
+              "schema": {
+                "type": "boolean"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "send_email": {
+                "type": "boolean"
+              },
+              "user_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "user_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "okta.api_token"
+            ]
+          ],
+          "hosts": [
+            "{domain}"
+          ],
+          "flux": "op okta-user-deactivate(user_id: String, send_email: Bool) -> Any\n  description \"Deactivate a user, moving them to DEPROVISIONED. This takes effect immediately: Okta ends the person's active sessions, revokes their tokens and grants, and removes their access to every application the org assigns through Okta. They cannot sign in afterwards. An administrator can reactivate the account later, but that is a separate operation this connector does not offer, and it does not restore the sessions or tokens this call destroyed\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{domain}/api/v1\"\n  url = fmt(\"{base}/users/{user_id}/lifecycle/deactivate\")\n  sep = \"?\"\n  when send_email\n    url = fmt(\"{url}{sep}sendEmail={send_email}\")\n  response = http.request(method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {domain} value before it has a valid destination URL.",
+                "params": [
+                  "domain"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "openai",
       "authority": null,
       "vendor": "OpenAI",

@@ -2,7 +2,7 @@
 id: C-161
 title: Ship the Okta connector
 pillar: Spec
-status: in-progress
+status: done
 priority: 2
 design:
 epic: provider-fleet-2

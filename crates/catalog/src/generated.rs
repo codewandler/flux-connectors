@@ -39,6 +39,7 @@ pub(crate) mod launchdarkly;
 pub(crate) mod microsoft_graph;
 pub(crate) mod miro;
 pub(crate) mod notion;
+pub(crate) mod okta;
 pub(crate) mod openai;
 pub(crate) mod openrouter;
 pub(crate) mod postmark;
@@ -88,6 +89,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &microsoft_graph::PROVIDER,
     &miro::PROVIDER,
     &notion::PROVIDER,
+    &okta::PROVIDER,
     &openai::PROVIDER,
     &openrouter::PROVIDER,
     &postmark::PROVIDER,

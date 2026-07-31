@@ -9,6 +9,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Okta connector (C-161) — the probe that produced the prefix axis, now shipping on it.**
+  Five operations over `Authorization: SSWS <token>`, `okta-user-list` as `verify`, and
+  `okta-user-deactivate` as the one `destructive` write.
+
+  This story is the round trip. C-161 first ran while `AuthScheme` was a closed five-variant enum,
+  **refused to ship a connector that could not authenticate honestly**, and recorded why at
+  `path:line`. That refusal produced C-184, which built the `prefix` field; this pass ships the
+  connector on it. The probe's findings are kept rather than deleted — they are the measurement the
+  axis rests on — and `no_provider_toml_was_shipped_for_this_probe` was **inverted** rather than
+  removed, so the file still records that the refusal stood until the seam existed.
+
+  **Two curated exclusions, both made executable rather than left as prose.** Okta's `q`/`filter`/
+  `search` are free-text and SCIM-expression filters, which is the C-30 unencodable-query gap at its
+  worst case — a SCIM expression is made of quotes, spaces and punctuation, all interpolated
+  verbatim. And `after` is a cursor Okta only ever returns in a `Link` **response header**, which
+  this model cannot surface, so exposing the parameter would offer a knob nobody can turn. A test
+  fails if a later story adds either back. The cost is real and recorded: all three list operations
+  are first-page-only.
+
+  **The host is a bound `{domain}`, not a subdomain label**, because Okta orgs also live at
+  `.okta-emea.com`, `.oktapreview.com` and custom domains. The trade is recorded: `format =
+  "hostname"` validates the `example`, not the operator's input, so a mistyped host is a malformed
+  URL rather than a named error.
+
 - **The Statuspage connector (C-181) — the first shipped connector with a non-empty auth prefix.**
   Five operations over `Authorization: OAuth <key>`, with `statuspage-component-list` as `verify`.
   This is C-184's prefix axis proved end to end: `crates/catalog/src/generated/statuspage.rs` is the
