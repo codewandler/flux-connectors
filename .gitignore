@@ -25,5 +25,11 @@
 /web/.vitepress/dist/
 /web/.vitepress/cache/
 
+# The host's operator page (C-239). A second, separate Node tree — deliberately not `web/`'s, since
+# the public site is forbidden to collect a credential and this page exists to collect one. Same
+# rule as above: the lockfile is committed so CI installs the same tree, `node_modules` is not, and
+# no trailing slash so a symlinked one is still ignored.
+/crates/connectors-api/ui/node_modules
+
 # Agent worktrees (harness-owned, never tracked)
 .claude/

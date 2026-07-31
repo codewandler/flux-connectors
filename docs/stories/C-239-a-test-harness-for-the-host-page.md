@@ -2,7 +2,7 @@
 id: C-239
 title: "A behavioural change to the host's page cannot ship with a failing-first test, because nothing can test it"
 pillar: Build
-status: ready
+status: in-progress
 priority: 1
 design: docs/designs/host-explorer.md
 epic: host-explorer
@@ -39,20 +39,34 @@ unconfigured host). Nothing greps the HTML, so a redesign is free — and so is 
 
 ## Acceptance
 
-- [ ] **Failing-first test:** a mutation of the page's behaviour turns a test red. Demonstrate it
+- [x] **Failing-first test:** a mutation of the page's behaviour turns a test red. Demonstrate it
       against **C-234's M15** specifically — changing `if (status.dev)` to `if (true)` in
       `crates/connectors-api/src/index.html` must fail, which it does not today. That is the exact
       mutation a reviewer could not close, so it is the honest proof this story worked.
-- [ ] The harness follows `web/test/explorer.test.mjs`'s shape rather than inventing one: `node
+      → `ui/test/host-page.test.mjs:135` (`the developer sign-in is drawn only when the host says it
+      is in dev mode`). At the merge base with M15 applied, `cargo test --workspace --no-fail-fast`
+      is entirely green; with the harness present it is red, naming the button.
+- [x] The harness follows `web/test/explorer.test.mjs`'s shape rather than inventing one: `node
       --test`, zero dependencies, asserting against built output **and** the emitted stylesheet.
       That is how the site catches layout regressions without screenshots, and it already runs in
       this repository.
-- [ ] It runs in the gate, and `AGENTS.md` records where — a harness nobody is pointed at is a
+      → `crates/connectors-api/ui/`. `node --test`; the comment-stripping scanner is that file's,
+      carried over; assertions read the served bytes (`src/ui.rs`'s `include_str!` target, asserted)
+      and the emitted stylesheet through the CSSOM. **One dependency, not zero** — `happy-dom`, as
+      the story's own "The harness, concretely" section specifies; see the deviation note below.
+- [x] It runs in the gate, and `AGENTS.md` records where — a harness nobody is pointed at is a
       harness nobody uses.
-- [ ] The three sign-in states are each pinned: unconfigured → setup instructions; signed out →
+      → the `host-page` job in `.github/workflows/ci.yml`, and `AGENTS.md` §Validation, which also
+      names it as the required gate for a change to `index.html`.
+- [x] The three sign-in states are each pinned: unconfigured → setup instructions; signed out →
       doors; signed in → catalogue. The first is a first-run path a Rust test already covers at the
       status-code level and nothing covers at the content level.
-- [ ] The dev button's `status.dev` guard is pinned, closing C-234's M15 by name.
+      → `each of the three sign-in states renders its own surface`. The unconfigured case asserts the
+      `status.setup` text reaches the `<pre>` and that no sign-in button is offered.
+- [x] The dev button's `status.dev` guard is pinned, closing C-234's M15 by name.
+      → and its `ghost` class with it, plus the stylesheet rule that class depends on: deleting
+      `button.ghost` leaves every other assertion green and puts two identical primary buttons on
+      the page, one of which authenticates nobody.
 
 ## Sequencing — this lands before C-237, not after
 
@@ -84,6 +98,43 @@ Each pins a property currently held only by a comment:
 - **The wiring vocabulary cannot drift** — and this one is a **Rust** test in `connectors-api`, not a
   JS one: for each `Wiring` variant, serialise it and assert the token appears in the console source.
   Offline, no Node, and it is exactly the C-206 token identity the design calls non-negotiable.
+
+## Progress
+
+**Landed.** `crates/connectors-api/ui/` — `package.json`, a committed `package-lock.json`, and
+`test/host-page.test.mjs` (five tests). `crates/connectors-api/tests/wiring_vocabulary.rs` is the
+Rust half. CI runs the harness as the `host-page` job; `AGENTS.md` §Validation records it.
+
+Every guard was measured against its own mutation rather than asserted to work. In each case the
+named test went red and the others stayed green, except where noted:
+
+| mutation | red |
+|---|---|
+| **M15** — `if (status.dev)` → `if (true)` at `index.html:309` | `the developer sign-in is drawn only when the host says it is in dev mode` |
+| drop `className: 'ghost'` from the dev button | the same test, **and** the stylesheet test — the two halves of one property, as intended |
+| `el('pre', { textContent: … })` → `innerHTML` | `the page builds every node from text, never from markup` |
+| sign-out by `location.href` instead of `fetch` POST | `an auth state change is a POST, never a link` |
+| delete the `button.ghost` rule from the stylesheet | `the emitted stylesheet keeps the developer sign-in a secondary action` |
+| `Wiring`'s `rename_all` → `snake_case` | both tests in `wiring_vocabulary.rs` |
+| rename the page's `'not-wired'` key | both, from opposite directions |
+
+**Two deviations, both deliberate.**
+
+1. **One dependency, not the "zero dependencies" the Acceptance says.** The story's own §"The
+   harness, concretely" specifies `node --test` + `happy-dom`, "One dependency", and the two
+   statements cannot both hold: three of the five checks are about what the page *does* — a button
+   drawn, a click that POSTs and does not navigate — and a source grep would pass for a page
+   rewritten around the guard. `happy-dom` is taken; a browser driver is not, per the note below.
+   The *shape* copied from `web/test/explorer.test.mjs` is what the Acceptance is really after and
+   is honoured in full.
+2. **`crates/connectors-api/ui/package-lock.json` is committed**, matching `web/`'s and for the
+   reason `.gitignore` already records there: `npm ci` in CI installs the tree a developer ran the
+   suite against. It is a new lockfile in a new tree, not an edit to a shared one.
+
+**Left for C-238, which the harness is already shaped for.** `servedPage()` reads `src/index.html`
+after asserting `src/ui.rs` still `include_str!`s it; when a bundler lands, that one function moves
+to the emitted bundle and nothing else changes. `pageSources()` already walks `ui/src/**`, so the
+`innerHTML` guard covers the first component that appears there with no edit.
 
 ## Notes
 
