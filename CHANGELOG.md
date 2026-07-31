@@ -9,6 +9,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Cloudflare connector (C-169).** Five operations over a bearer token: DNS records (list, create,
+  delete), a cache purge, and `zone-list` as `verify`.
+
+  **The zone-id question was settled by the schema, not by preference.** A `[[config]]` binding can
+  reach `base_url` and never an operation path, so `zone_id` is a required per-call argument on
+  everything except `zone-list`, and a test asserts no config field binds a zone. The consequence is
+  deliberate: one installed connector can address every zone its token can, rather than being pinned to
+  one.
+
+  The two hazard declarations are the point of this connector: a DNS record delete is `destructive`, and
+  a cache purge is `high` risk. The purge is **genuinely idempotent and declared `non_idempotent`**
+  because the emitter refuses `idempotent` on POST by method — documented rather than absorbed, and now
+  filed as C-186 with a second instance from C-175.
+
 - **The SendGrid connector (C-168) — four operations, and deliberately not the send.** Templates,
   bounce suppressions and address validation ship over a bearer key.
 

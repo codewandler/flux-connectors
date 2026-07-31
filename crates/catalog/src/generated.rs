@@ -19,6 +19,7 @@ pub(crate) mod babelforce;
 pub(crate) mod r#box;
 pub(crate) mod calendly;
 pub(crate) mod clickup;
+pub(crate) mod cloudflare;
 pub(crate) mod dropbox;
 pub(crate) mod figma;
 pub(crate) mod fly;
@@ -53,6 +54,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &r#box::PROVIDER,
     &calendly::PROVIDER,
     &clickup::PROVIDER,
+    &cloudflare::PROVIDER,
     &dropbox::PROVIDER,
     &figma::PROVIDER,
     &fly::PROVIDER,

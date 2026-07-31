@@ -4366,6 +4366,742 @@
       "channels": []
     },
     {
+      "id": "cloudflare",
+      "authority": null,
+      "vendor": "Cloudflare",
+      "description": "Cloudflare zones and DNS: list zones, list and manage DNS records for a zone, and purge a zone's cache",
+      "base_url": "https://api.cloudflare.com/client/v4",
+      "api_version": null,
+      "hosts": [
+        "api.cloudflare.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.cloudflare.com/client/v4",
+          "hosts": [
+            "api.cloudflare.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 5
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "cloudflare.api_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "Cloudflare API Token, sent as a bearer token, scoped to Zone:Read, DNS:Edit and Cache Purge on the zones this connector should reach",
+            "env": [
+              "CLOUDFLARE_API_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "cloudflare.api_token"
+          ]
+        ]
+      },
+      "operation_count": 5,
+      "operations": [
+        {
+          "id": "cloudflare-zone-list",
+          "provider": "cloudflare",
+          "service": "default",
+          "description": "List the zones (domains) this API token can see, with each zone's id, name, status and assigned Cloudflare name servers. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note). The zone `id` returned here is what every other operation in this connector needs as `zone_id`",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/zones",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "errors": {
+                "items": {
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "result": {
+                "items": {
+                  "properties": {
+                    "id": {
+                      "description": "The zone's id, 32 lowercase hex characters — pass this as `zone_id` to every other operation",
+                      "pattern": "^[0-9a-f]{32}$",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "The registrable domain, e.g. example.com",
+                      "type": "string"
+                    },
+                    "name_servers": {
+                      "description": "The Cloudflare name servers this zone's registrar should point at",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "paused": {
+                      "description": "True when Cloudflare is bypassed for this zone",
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "description": "active, pending, initializing, moved, deleted, deactivated, or read only",
+                      "type": "string"
+                    },
+                    "type": {
+                      "description": "full (Cloudflare is authoritative) or partial (CNAME setup)",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "result_info": {
+                "description": "Pagination totals for this response: page, per_page, count and total_count",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "page": {
+                    "type": "integer"
+                  },
+                  "per_page": {
+                    "type": "integer"
+                  },
+                  "total_count": {
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "success": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "success",
+              "result"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "cloudflare.api_token"
+            ]
+          ],
+          "hosts": [
+            "api.cloudflare.com"
+          ],
+          "flux": "op cloudflare-zone-list -> Any\n  description \"List the zones (domains) this API token can see, with each zone's id, name, status and assigned Cloudflare name servers. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note). The zone `id` returned here is what every other operation in this connector needs as `zone_id`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.cloudflare.com/client/v4\"\n  url = fmt(\"{base}/zones\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "cloudflare-dns-record-list",
+          "provider": "cloudflare",
+          "service": "default",
+          "description": "List the DNS records in a zone: each record's id, type, name, content, TTL and whether it is proxied through Cloudflare. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note)",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/zones/{zone_id}/dns_records",
+          "parameters": [
+            {
+              "name": "zone_id",
+              "in": "path",
+              "wire": null,
+              "description": "The zone's id, 32 lowercase hex characters, as returned by cloudflare-zone-list",
+              "required": true,
+              "schema": {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "zone_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "zone_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "errors": {
+                "items": {
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "result": {
+                "items": {
+                  "properties": {
+                    "comment": {
+                      "description": "An operator-set note, empty string when none",
+                      "type": "string"
+                    },
+                    "content": {
+                      "description": "The record's value; its shape depends on `type` — an IP for A/AAAA, a hostname for CNAME, arbitrary text for TXT",
+                      "type": "string"
+                    },
+                    "created_on": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "The record's id, 32 lowercase hex characters",
+                      "pattern": "^[0-9a-f]{32}$",
+                      "type": "string"
+                    },
+                    "locked": {
+                      "type": "boolean"
+                    },
+                    "modified_on": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "The DNS name, e.g. www.example.com or example.com for the apex",
+                      "type": "string"
+                    },
+                    "proxiable": {
+                      "description": "Whether Cloudflare can proxy this record's type",
+                      "type": "boolean"
+                    },
+                    "proxied": {
+                      "description": "Whether Cloudflare currently proxies traffic for it, hiding the origin IP",
+                      "type": "boolean"
+                    },
+                    "tags": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "ttl": {
+                      "description": "Time to live in seconds; 1 means \"automatic\"",
+                      "type": "integer"
+                    },
+                    "type": {
+                      "description": "A, AAAA, CNAME, TXT, MX, NS, SRV or CAA, among others",
+                      "type": "string"
+                    },
+                    "zone_id": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "result_info": {
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "page": {
+                    "type": "integer"
+                  },
+                  "per_page": {
+                    "type": "integer"
+                  },
+                  "total_count": {
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "success": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "success",
+              "result"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "cloudflare.api_token"
+            ]
+          ],
+          "hosts": [
+            "api.cloudflare.com"
+          ],
+          "flux": "op cloudflare-dns-record-list(zone_id: String) -> Any\n  description \"List the DNS records in a zone: each record's id, type, name, content, TTL and whether it is proxied through Cloudflare. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.cloudflare.com/client/v4\"\n  url = fmt(\"{base}/zones/{zone_id}/dns_records\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "cloudflare-dns-record-create",
+          "provider": "cloudflare",
+          "service": "default",
+          "description": "Create a DNS record in a zone. Cloudflare does not deduplicate: creating the same name/type/content pair twice makes two records, so this is not idempotent. The created record, with its assigned id, is in the response",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/zones/{zone_id}/dns_records",
+          "parameters": [
+            {
+              "name": "zone_id",
+              "in": "path",
+              "wire": null,
+              "description": "The zone's id, 32 lowercase hex characters, as returned by cloudflare-zone-list",
+              "required": true,
+              "schema": {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "type",
+              "in": "body",
+              "wire": null,
+              "description": "The DNS record type",
+              "required": true,
+              "schema": {
+                "enum": [
+                  "A",
+                  "AAAA",
+                  "CNAME",
+                  "TXT",
+                  "MX",
+                  "NS",
+                  "SRV",
+                  "CAA"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "name",
+              "in": "body",
+              "wire": null,
+              "description": "The DNS name, e.g. www.example.com or example.com for the apex",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "content",
+              "in": "body",
+              "wire": null,
+              "description": "The record's value; its shape depends on `type` — an IP for A/AAAA, a hostname for CNAME, arbitrary text for TXT",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "A",
+                  "AAAA",
+                  "CNAME",
+                  "TXT",
+                  "MX",
+                  "NS",
+                  "SRV",
+                  "CAA"
+                ],
+                "type": "string"
+              },
+              "zone_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "zone_id",
+              "type",
+              "name",
+              "content"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "errors": {
+                "items": {
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "result": {
+                "properties": {
+                  "content": {
+                    "type": "string"
+                  },
+                  "created_on": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "id": {
+                    "pattern": "^[0-9a-f]{32}$",
+                    "type": "string"
+                  },
+                  "modified_on": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "proxiable": {
+                    "type": "boolean"
+                  },
+                  "proxied": {
+                    "type": "boolean"
+                  },
+                  "ttl": {
+                    "type": "integer"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "zone_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "success": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "success",
+              "result"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "cloudflare.api_token"
+            ]
+          ],
+          "hosts": [
+            "api.cloudflare.com"
+          ],
+          "flux": "op cloudflare-dns-record-create(zone_id: String, type: String, name: String, content: String) -> Any\n  description \"Create a DNS record in a zone. Cloudflare does not deduplicate: creating the same name/type/content pair twice makes two records, so this is not idempotent. The created record, with its assigned id, is in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.cloudflare.com/client/v4\"\n  url = fmt(\"{base}/zones/{zone_id}/dns_records\")\n  content_type = \"application/json\"\n  payload = { content, name, type }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "cloudflare-dns-record-delete",
+          "provider": "cloudflare",
+          "service": "default",
+          "description": "Delete one DNS record. There is no API route back: Cloudflare's dashboard \"recently deleted\" surface is a retention-window UI feature, not an endpoint, so a flux run cannot undo this. Responds with just the deleted record's id",
+          "risk": "destructive",
+          "idempotency": "non_idempotent",
+          "method": "DELETE",
+          "path": "/zones/{zone_id}/dns_records/{dns_record_id}",
+          "parameters": [
+            {
+              "name": "zone_id",
+              "in": "path",
+              "wire": null,
+              "description": "The zone's id, 32 lowercase hex characters, as returned by cloudflare-zone-list",
+              "required": true,
+              "schema": {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "dns_record_id",
+              "in": "path",
+              "wire": null,
+              "description": "The record's id, 32 lowercase hex characters, as returned by cloudflare-dns-record-list or cloudflare-dns-record-create",
+              "required": true,
+              "schema": {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "dns_record_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "zone_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "zone_id",
+              "dns_record_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "errors": {
+                "items": {
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "result": {
+                "properties": {
+                  "id": {
+                    "description": "The deleted record's id",
+                    "pattern": "^[0-9a-f]{32}$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              },
+              "success": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "success",
+              "result"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "cloudflare.api_token"
+            ]
+          ],
+          "hosts": [
+            "api.cloudflare.com"
+          ],
+          "flux": "op cloudflare-dns-record-delete(zone_id: String, dns_record_id: String) -> Any\n  description \"Delete one DNS record. There is no API route back: Cloudflare's dashboard \\\"recently deleted\\\" surface is a retention-window UI feature, not an endpoint, so a flux run cannot undo this. Responds with just the deleted record's id. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.cloudflare.com/client/v4\"\n  url = fmt(\"{base}/zones/{zone_id}/dns_records/{dns_record_id}\")\n  response = http.request(method: \"DELETE\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "cloudflare-cache-purge",
+          "provider": "cloudflare",
+          "service": "default",
+          "description": "Purge every cached asset for a zone, immediately, for every visitor worldwide. There is no partial or selective purge in this connector (see its header note) — every call empties the whole zone's edge cache. Repeating it changes nothing further, but each call can spike load on the origin as the cache refills, so it should not be called more often than a real cache-affecting change warrants",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/zones/{zone_id}/purge_cache",
+          "parameters": [
+            {
+              "name": "zone_id",
+              "in": "path",
+              "wire": null,
+              "description": "The zone's id, 32 lowercase hex characters, as returned by cloudflare-zone-list",
+              "required": true,
+              "schema": {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "purge_everything",
+              "in": "body",
+              "wire": null,
+              "description": "Constant `true` - this operation always purges the whole zone, never a selective file/tag/host list",
+              "required": true,
+              "schema": {
+                "const": true,
+                "type": "boolean"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "purge_everything": {
+                "const": true,
+                "type": "boolean"
+              },
+              "zone_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "zone_id",
+              "purge_everything"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "errors": {
+                "items": {
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "result": {
+                "properties": {
+                  "id": {
+                    "description": "The purged zone's id, echoed back",
+                    "pattern": "^[0-9a-f]{32}$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              },
+              "success": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "success",
+              "result"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "cloudflare.api_token"
+            ]
+          ],
+          "hosts": [
+            "api.cloudflare.com"
+          ],
+          "flux": "op cloudflare-cache-purge(zone_id: String) -> Any\n  description \"Purge every cached asset for a zone, immediately, for every visitor worldwide. There is no partial or selective purge in this connector (see its header note) — every call empties the whole zone's edge cache. Repeating it changes nothing further, but each call can spike load on the origin as the cache refills, so it should not be called more often than a real cache-affecting change warrants. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.cloudflare.com/client/v4\"\n  url = fmt(\"{base}/zones/{zone_id}/purge_cache\")\n  content_type = \"application/json\"\n  purge_everything = true\n  payload = { purge_everything }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "dropbox",
       "authority": null,
       "vendor": "Dropbox",
