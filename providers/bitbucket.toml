@@ -179,9 +179,20 @@
 #    it is exactly the operation that must not ship on an inference. It is a small, confident
 #    follow-on once the body is verified against a live response.
 #  - **`DELETE …/pullrequests/{id}/approve`** (withdraw an approval) and
-#    **`POST …/pullrequests/{id}/decline`** — the counterparts to `approve`. Left out with it rather
-#    than shipped as a half-pair; a first curated set that can approve and un-approve is a governance
-#    surface that deserves its own story, not a line item in this one.
+#    **`POST …/pullrequests/{id}/decline`** — the two ways to take a review back. Note what this
+#    excludes and what it does not: **`approve` itself ships**, below, at `risk = "high"`. What is
+#    left out is the pair that undoes or refuses a review, not the act of recording one.
+#
+#    That asymmetry is deliberate and it runs in the uncomfortable direction, so it is stated rather
+#    than left to be discovered: this connector can add an approval and cannot withdraw one. A
+#    mistaken approval is corrected in Bitbucket's own UI, not through this connector. It is on the
+#    shipped side of the line because it is what the curated set is *for* — reading a workspace's
+#    open pull requests and acting on one — and its consequences are carried by its `high` risk and
+#    by its own description, which are the declarations a host and a model actually read.
+#
+#    The withdrawal is the obvious follow-on and the more honest pair. It is not shipped here because
+#    `decline` belongs with it: a set that can approve, un-approve and decline is a governance surface
+#    that deserves its own story, not three line items appended to this one.
 #  - **Repository create/update/delete** (`POST`/`PUT`/`DELETE /2.0/repositories/{workspace}/{slug}`).
 #    Creating and destroying repositories is not what this connector is for, and a repository delete
 #    is unrecoverable.
