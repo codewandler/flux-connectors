@@ -167,3 +167,14 @@ The application id is **not** a secret, so `secret` must disagree with the API k
 - Whole-catalogue artifacts are coordinator-owned: `crates/catalog/src/generated.rs`,
   `web/public/catalog.json`, `web/public/v1/**`, `assets/readme-snippet-*.svg`. The per-provider
   `crates/catalog/src/generated/algolia.rs` is **not** in that set and is yours to commit.
+
+### Coordinator note at integration
+
+Blocked on [C-187](C-187-config-cannot-pin-a-request-component.md), where this finding is now folded in
+as its fourth and sharpest instance. The implementor was right not to edit C-187 itself — it is a shared
+ledger outside this story's fence.
+
+**Both of this story's original probes had already been answered elsewhere, and neither was the blocker.**
+Two credentials on one request work (C-160 Datadog, via the AND-set in `AuthRequirement`); a configured
+host works (C-163 Salesforce, via `Binding::Endpoint`). What stops Algolia is narrower and was not
+predicted by the story: **one non-secret value cannot reach both a hostname and a header.**

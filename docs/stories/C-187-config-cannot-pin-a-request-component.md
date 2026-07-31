@@ -40,6 +40,34 @@ call lands on the **personal account** instead of the team. So the connector shi
 omission silently redirects a write, and the only mitigation available was to say so in the
 `description` — which is text a model reads and may not act on.
 
+## The header case, measured — and it blocks a connector outright
+
+This story's Notes flagged *"whether a **header** can be operator-pinned"* as worth checking.
+[C-164](C-164-provider-algolia.md) checked, and the answer blocked the Algolia connector entirely.
+Algolia's application id must appear in the hostname (`{app_id}-dsn.algolia.net`) **and** as the
+`X-Algolia-Application-Id` header. Three routes exist and all three fail, each measured against the
+loader rather than reasoned about:
+
+1. **`ConfigField::binds` cannot reach a header.** It parses to exactly five destinations —
+   `Binding::{Endpoint, Credential, Username, OAuthClientId, OAuthClientSecret}`
+   (`crates/connector-spec/src/config.rs:178-202`, `parse_binding` at `:239-267`). No header among them.
+2. **The one route that does reach a header forces a lie.** An `[[auth]]`-declared credential reaches a
+   header, but `Binding::is_secret` (`config.rs:223-231`) makes `secret = true` unconditional for any
+   config field binding one, enforced at `crates/connector-spec/src/provider.rs:609-629`. An application
+   id is **not** a secret, so this route buys the header at the cost of a false declaration — and
+   `AGENTS.md` requires `secret` to agree with `binds` precisely so that field means something.
+3. **`ParamSet::header` pins nothing.** It has no connection to `[[config]]` (`ir.rs:259-266`), so it
+   only gives the operator a second, disconnected place to retype the same string — and a mismatch
+   between the two produces a vendor error that neither declaration would explain.
+
+**This is the instance that makes the story load-bearing rather than ergonomic.** Cloudflare and Vercel
+shipped with a worse surface; Algolia cannot ship at all.
+
+- [ ] A non-secret, operator-supplied value can reach a request header. Note the shape of the problem:
+      the fix is not "let a credential be non-secret" — that would weaken the `secret`/`binds` agreement
+      that makes the credential path trustworthy — but a binding that reaches a header **without**
+      routing through `[[auth]]`.
+
 ## A third instance, and it is about the config surface's own shape
 
 [C-177](C-177-provider-contentful.md) hit a different limit in the same surface, measured against the

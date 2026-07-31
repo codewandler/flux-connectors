@@ -7,6 +7,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Algolia cannot ship, and C-187 is now load-bearing rather than ergonomic (C-164).** Algolia's
+  application id must appear in the hostname *and* as a header. All three possible routes were measured
+  against the loader and all three fail: `ConfigField::binds` reaches five destinations and no header;
+  the one route that does reach a header forces `secret = true` unconditionally, which would be a false
+  declaration for a non-secret application id; and `ParamSet::header` has no connection to `[[config]]`,
+  so it pins nothing and only invites a mismatch.
+
+  Both of the story's original probes had already been answered and neither was the blocker — two
+  credentials on one request work (C-160), a configured host works (C-163). The blocker is narrower and
+  was unpredicted: **one non-secret value cannot reach two request positions.** Cloudflare and Vercel
+  shipped with a worse surface; Algolia cannot ship at all.
+
+
 ### Added
 
 - **The Contentful connector (C-177) — two hosts, two credentials, one vendor.** Delivery
