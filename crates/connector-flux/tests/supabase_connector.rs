@@ -341,6 +341,79 @@ fn every_shipped_operation_is_a_read_which_is_why_the_anon_key_is_enough() {
     }
 }
 
+/// **No caller-supplied value reaches this connector's request as free text.**
+///
+/// PostgREST's whole expressive power is in its query string — `select`, `order`, and a filter per
+/// column — and this emitter interpolates a query value verbatim and percent-encodes nothing
+/// (`crates/connector-flux/src/op.rs`; `AGENTS.md`, Intentional gaps). So `providers/supabase.toml`
+/// ships the *reading* half of PostgREST and not the *filtering* half, and its header comment names
+/// every parameter left out and why. That is a curation claim, and this test is what keeps it from
+/// decaying into a comment describing a file that has since grown a `select`.
+///
+/// Both positions a caller can steer are pinned, because both are substituted without a predicate
+/// at request time (C-214):
+///
+/// - **query** — the one parameter declared is a bare `integer`. A `string` here would be free text
+///   next to nothing that encodes it.
+/// - **path** — `{table}` is a Postgres relation name, and its schema carries a `pattern` that
+///   admits an identifier and refuses `/`, `?` and `.`. Without it a caller-supplied "table" could
+///   steer the path the operation builds.
+#[test]
+fn no_caller_supplied_value_reaches_the_request_as_free_text() {
+    let connector = load();
+
+    for operation in &connector.operations {
+        for param in &operation.params.query {
+            assert_eq!(
+                param.schema.get("type").and_then(|ty| ty.as_str()),
+                Some("integer"),
+                "`{}` declares query parameter `{}` as {}. Every query value this emitter writes is \
+                 interpolated verbatim with no percent-encoding, so a free-text query parameter \
+                 here is the `zendesk-ticket-search` defect reproduced knowingly — `select`, \
+                 `order` and PostgREST's column filters are excluded for exactly this reason and \
+                 the provider header says so",
+                operation.id,
+                param.name,
+                param.schema.get("type").unwrap_or(&serde_json::Value::Null)
+            );
+        }
+
+        for param in &operation.params.path {
+            let pattern = param
+                .schema
+                .get("pattern")
+                .and_then(|pattern| pattern.as_str())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "`{}`'s path parameter `{}` states no `pattern`. A path value is \
+                         substituted with no predicate at request time (C-214), so the declaration \
+                         is the only place the shape can be constrained",
+                        operation.id, param.name
+                    )
+                });
+            for steering in ['/', '?', '#', '.', ':', '%'] {
+                assert!(
+                    !regex_admits(pattern, steering),
+                    "`{}`'s path parameter `{}` has pattern `{pattern}`, which admits `{steering}` \
+                     — a caller could steer the path this operation builds",
+                    operation.id,
+                    param.name
+                );
+            }
+        }
+    }
+}
+
+/// Whether a character appears inside the character-class body of an anchored identifier pattern.
+///
+/// Deliberately not a regex engine: `connector-spec` carries no regex dependency and this crate is
+/// not the place to introduce one. The patterns this file pins are anchored character classes, so
+/// "does the pattern mention this character at all" is a sound over-approximation — it can only
+/// fail a pattern that a real engine would also have to be checked against by hand.
+fn regex_admits(pattern: &str, candidate: char) -> bool {
+    pattern.contains(candidate)
+}
+
 /// **The project ref is a bound endpoint variable, and its `help` warns about the host position.**
 ///
 /// `https://{project_ref}.supabase.co` is the same shape as `zendesk`'s `{subdomain}`, and it
