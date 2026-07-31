@@ -19,7 +19,9 @@ provider TOML, with the signature scheme that authenticates them compiled rather
 the subscription that registers them emitted as an ordinary op. An integration that only knows how to
 make calls is an API client; the reverse direction is the half real automations are built on. See
 [designs/inbound-events.md](designs/inbound-events.md). Note what this does *not* change: inbound is
-still **compiled, not hosted** — no endpoint, no relay, no daemon (see the non-goals below).
+still **compiled, not hosted** — no endpoint, no relay, no delivery daemon. The host the amended
+non-goal below now permits does not change this: it runs *operations*, and terminates no vendor
+webhook.
 
 The defining idea is **one abstraction level up from a plugin**. Integrating Zendesk into flux today
 means writing a stdio plugin — a large hand-written artifact for roughly seven operations.
@@ -90,15 +92,43 @@ reads directly is wrong, however convenient it looks.
   which one it holds. That is a shared vocabulary, and it moves nothing across the line: Vault stays a
   flux plugin, and no technology adapter becomes generatable here because a contract happens to name
   it. See [designs/connector-contracts.md](designs/connector-contracts.md).
-- **A runtime for production traffic.** flux executes connectors in anger. This repo may ship a
-  **reference host** — `crates/connectors-app` — that proves the seams end to end: the OAuth callback,
-  the credential store, an operation actually executing against a vendor. It is loopback-bound, never
-  published, and never a production request path. Its only job is to make the seams demonstrable
-  instead of asserted.
+- **Being flux's execution path.** flux executes connectors in anger. This repo ships a **host** —
+  `crates/connectors-api` — that binds the pack's ports and runs its operations: a credential store
+  per tenant, an operation actually executing against a vendor, and eventually the sign-in and
+  OAuth2 connect flows that make it usable by someone who is not its author. It is a way to *use*
+  what this repo compiles. It is not where flux's own connector traffic goes, and a proposal that
+  makes flux call this service instead of loading a `.flux` module is inverting the project.
 
-  That narrowing is how **C-34** resolves: **yes, narrowed** — yes to a host that proves the seams, no
-  to the credential-injecting proxy the story was filed about, which is still a server, a daemon and a
-  request path. See [designs/connectors-app.md](designs/connectors-app.md).
+  **This non-goal was amended on 2026-07-31, by the owner.** It previously read *"A runtime for
+  production traffic"* and narrowed the host to a `crates/connectors-app` that was *"loopback-bound,
+  never published, and never a production request path"* — the **yes-narrowed** resolution of
+  [C-34](stories/C-34-proxy-charter-decision.md). The owner directed the wider shape: a
+  deployed, multi-tenant service an operator signs into, connects providers to, and calls operations
+  from. [C-200](stories/C-200-connectors-api-epic.md) is the epic;
+  [C-201](stories/C-201-charter-multi-tenant-host.md) is this amendment.
+
+  The narrowing is **superseded, not deleted.** [designs/connectors-app.md](designs/connectors-app.md)
+  keeps the reasoning it rested on — the `Egress` analysis, the slice-1 sequence, and why a host that
+  builds its own requests is the failure mode — and
+  [designs/connectors-api.md](designs/connectors-api.md) records what replaces it and answers
+  [designs/connectors-proxy.md](designs/connectors-proxy.md)'s confused-deputy objection, which the
+  amendment does **not** get to skip. C-34's "no" to the credential-injecting proxy still stands: the
+  thing rejected was a service that adds authority to *whoever asks*, and no amount of deployment
+  makes that acceptable.
+
+  Four things the amendment does **not** license, none of which follow from it:
+
+  - **A second request path.** The host constructs no request of its own. This is the structural
+    reason `connectors-app` superseded `connectors-proxy`, it is unaffected by tenancy, and it
+    survives verbatim.
+  - **Publication.** `publish = false` on the host crate. The amendment is about *deployment*, not
+    crates.io; the publish closure stays four crates
+    ([C-190](stories/C-190-publish-catalog-pack-secrets.md)).
+  - **A reachable bind before an authenticated principal exists.** The host is loopback-only today
+    and stays that way until the session is what names the tenant. Widening the bind first is
+    precisely the rejected proxy.
+  - **Holding credentials the operator did not choose to give it.** A tenant's credentials are
+    reachable only by that tenant's own authenticated session.
 - **Universal API coverage.** A connector selects the members worth exposing — the operations, and the
   events with them. Mechanically emitting all 400 endpoints of a large spec produces an unusable tool
   catalog, not a good integration.

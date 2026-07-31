@@ -147,12 +147,13 @@ applying their scheme, and registering secret values with its redactor.
 These are stated plainly because a connector that merely looks executable is worse than one that
 fails closed:
 
-- **Nothing here makes a live call, because nothing here is a host.** This is no longer a missing flux
-  feature: `connector-pack` assembles auth in Rust — the `Bearer ` prefix, the base64-joined Basic
-  pair, query placement — and registers the value with flux's redactor before building the request. Two
-  pieces are missing from *this* workspace: an `http.request` implementation in the dependency graph
-  (`Egress` takes one as a constructor argument, and nothing here supplies it), and a process to bind
-  it. A loopback-only reference host is planned as `crates/connectors-app`.
+- **A generated provider cannot make a live call *as Flux*.** `connectors/*.flux` is unauthenticated:
+  `$auth` was taken off the critical path rather than landed, so the module path has no way to name a
+  credential. What closed instead is the *host* path — `connector-pack` assembles auth in Rust (the
+  `Bearer ` prefix, the base64-joined Basic pair, query placement) and registers the value with flux's
+  redactor before building the request, and `crates/connectors-api` binds that to a real
+  `http.request` from `codewandler-flux-web`. This repository has sent real bytes to a real vendor;
+  the exchange is recorded in `crates/connectors-api/README.md`.
 - **Six declarable surfaces reach no artifact.** `config` (45 fields across 28 providers), `verify`
   (28), a service's `roles`, `quirks.pagination`, `graphs` and `quirks.rate_limit` are modelled in the
   IR and validated by the loader, and then appear in neither the manifest nor the published catalogue.
