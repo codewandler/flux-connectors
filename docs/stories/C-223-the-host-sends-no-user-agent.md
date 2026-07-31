@@ -2,7 +2,7 @@
 id: C-223
 title: "Every outgoing request leaves the host with no `User-Agent`, and at least one shipped vendor answers that with a 403"
 pillar: Bridge
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/host-identity.md
 epic: connectors-api
@@ -118,7 +118,7 @@ from unanswerable to answerable, and the answer is *no*.
 
 ## Progress
 
-**Landed on `impl/C-223`. Gate fully green: 1282 passed, 0 failed across 136 binaries; clippy and
+**Landed on `impl/C-223-v2`. Gate fully green: 1282 passed, 0 failed across 136 binaries; clippy and
 `fmt --check` clean.** This story adds no provider, so none of the eight whole-catalogue staleness
 failures apply and none appeared.
 
