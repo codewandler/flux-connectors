@@ -9,6 +9,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Front connector (C-179).** Six operations over a bearer token, prefixed resource ids (`cnv_`,
+  `tea_`) declared so a model cannot invent one, and a bounded `GET /conversations?limit=1` as `verify` —
+  Front's `/me` identifies the OAuth-granting company rather than a plain token's owner, so it was not a
+  verified stand-in for "prove this token works."
+
+  **Pagination is unreachable and every listing operation says so**, asserted by
+  `every_listing_operation_documents_that_pagination_is_unreachable`. Front pages with an absolute URL in
+  `_pagination.next` — not `_links.next` as this story originally claimed; the implementor checked the
+  vendor reference and corrected it. An operation that silently only ever returns the first page is the
+  plausible-but-wrong output this pipeline refuses, so the limitation is declared instead.
+
+### Changed
+
+- **C-185's scope was too broad, and C-179 narrowed it by reading the emitter.** A flat, single-level
+  array **is** already expressible — Front's `tag_ids` emits as `List<String>`. What is blocked is an
+  array a `wire` path must **decompose across nested segments**, which is what SendGrid's
+  `personalizations[].to[]` needs. Cloudflare's `files[]` is flat and was wrongly listed as blocked.
+
+  The related wall is C-56, not C-185: Front's optional `to`/`cc`/`bcc` are arrays this pipeline can
+  build, but an optional body field cannot be omitted without sending an explicit `null`. Conflating the
+  two would send C-185's implementor down the wrong path.
+
 - **The Salesforce connector (C-163) — the first provider whose host comes from configuration.**
   `https://{instance}.my.salesforce.com`, bound by a `[[config]]` field and asserted by a load-bearing
   test. Five operations over an OAuth2 bearer token, with `GET /services/oauth2/userinfo` as `verify`.

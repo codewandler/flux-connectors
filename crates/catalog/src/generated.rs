@@ -25,6 +25,7 @@ pub(crate) mod dropbox;
 pub(crate) mod figma;
 pub(crate) mod fly;
 pub(crate) mod freshdesk;
+pub(crate) mod front;
 pub(crate) mod github;
 pub(crate) mod gitlab;
 pub(crate) mod google;
@@ -66,6 +67,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &figma::PROVIDER,
     &fly::PROVIDER,
     &freshdesk::PROVIDER,
+    &front::PROVIDER,
     &github::PROVIDER,
     &gitlab::PROVIDER,
     &google::PROVIDER,
