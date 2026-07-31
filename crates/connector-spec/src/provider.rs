@@ -1976,6 +1976,40 @@ fn validate_auth_prefix(
         ));
     }
 
+    // **The whitespace-corruption class, found by C-184's own review.**
+    //
+    // The separator rule above catches a prefix with *no* trailing separator. It does not catch one
+    // with too many, and neither did anything else: `"SSWS  "` and `" SSWS "` both loaded, and both
+    // send a header the vendor answers `401` to. Worse, nothing downstream could catch them either —
+    // a connector's own suite asserts the prefix against a constant in the same file, so an author
+    // editing both together leaves every test green.
+    //
+    // Deliberately narrow. It refuses *whitespace* corruption, which is an HTTP hygiene rule that
+    // holds for every vendor, and says nothing about repeated punctuation: `"Token token=="` is
+    // wrong for PagerDuty but this model has no basis to declare `==` wrong in general, and guessing
+    // at a vendor's syntax is how a checker starts refusing correct connectors.
+    if prefix.starts_with([' ', '\t']) {
+        problems.push(format!(
+            "credential {name:?} declares a header `prefix` beginning with whitespace. It would send \
+             a header value whose first character is a space, which RFC 9110 §5.5 field-content does \
+             not permit at the edges — and which a vendor answers with `401` rather than a message \
+             naming the space"
+        ));
+    }
+    if let Some(run) = prefix
+        .as_bytes()
+        .windows(2)
+        .position(|pair| pair.iter().all(|byte| matches!(byte, b' ' | b'\t')))
+    {
+        problems.push(format!(
+            "credential {name:?} declares a header `prefix` with two consecutive whitespace \
+             characters at byte {run}. One separator is what the scheme word needs — `\"SSWS \"`, \
+             `\"OAuth \"` — and a second one travels to the vendor verbatim, which answers `401` \
+             without saying why. Nothing downstream catches this: a connector's own test asserts the \
+             prefix against a constant beside it, so editing both together leaves the suite green"
+        ));
+    }
+
     // The value half of the grammar check `name` has had since C-3. A prefix reaches a header value
     // verbatim, so a CR or LF in one ends the header and begins another — header injection, from a
     // committed artifact. RFC 9110 §5.5 field-content: visible ASCII, plus space and horizontal tab.

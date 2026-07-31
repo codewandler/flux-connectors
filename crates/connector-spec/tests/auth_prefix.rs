@@ -262,6 +262,60 @@ fn a_prefix_missing_its_trailing_separator_is_refused() {
     }
 }
 
+/// **The whitespace-corruption class, found by C-184's own review** — and the reason it needed a
+/// rule of its own rather than being covered by the two above.
+///
+/// The separator rule refuses a prefix with *no* trailing separator; the whitespace-only rule
+/// refuses one that is *nothing but* separator. Between them sat `"SSWS  "` and `" SSWS "`, which
+/// loaded, sent a header the vendor answers `401` to, and were caught by **nothing** — a connector's
+/// own suite asserts its prefix against a constant in the same file, so an author editing both
+/// together leaves every test green. That is why this is checked at the loader and not left to the
+/// per-connector tests.
+#[test]
+fn a_prefix_may_not_carry_leading_or_doubled_whitespace() {
+    for (spelling, clause) in [
+        (
+            r#"scheme = { header = { name = "Authorization", prefix = " SSWS " } }"#,
+            "beginning with whitespace",
+        ),
+        (
+            r#"scheme = { header = { name = "Authorization", prefix = "SSWS  " } }"#,
+            "two consecutive whitespace",
+        ),
+        (
+            r#"scheme = { header = { name = "Authorization", prefix = "Token  token=" } }"#,
+            "two consecutive whitespace",
+        ),
+        (
+            "scheme = { header = { name = \"Authorization\", prefix = \"SSWS \\t\" } }",
+            "two consecutive whitespace",
+        ),
+    ] {
+        let message = refusal(spelling);
+        assert!(
+            message.contains("prefix") && message.contains(clause),
+            "expected the refusal to name {clause:?}, got: {message}"
+        );
+    }
+}
+
+/// The rule above is about **whitespace**, not about repeated punctuation, and this pins that line.
+///
+/// `"Token token=="` is wrong for PagerDuty, but nothing in this model can say `==` is wrong in
+/// general — a vendor is entitled to its own syntax, and a checker that guesses at it starts
+/// refusing correct connectors. Whitespace is different: a doubled space is an HTTP hygiene fault
+/// for every vendor there is.
+#[test]
+fn repeated_punctuation_is_the_vendors_business_and_still_loads() {
+    assert_eq!(
+        scheme_of(r#"scheme = { header = { name = "Authorization", prefix = "Token token==" } }"#),
+        AuthScheme::Header {
+            name: "Authorization".to_string(),
+            prefix: "Token token==".to_string(),
+        }
+    );
+}
+
 /// A prefix of only whitespace carries no scheme word and puts leading space in a header value,
 /// which `field-content` disallows at the edges. Omitting `prefix` is how a raw-value header is
 /// spelled.
