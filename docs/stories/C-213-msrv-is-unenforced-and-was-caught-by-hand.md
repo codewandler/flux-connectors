@@ -2,7 +2,7 @@
 id: C-213
 title: "The workspace MSRV is unenforced, and a dependency broke it without anything warning"
 pillar: Build
-status: in-progress
+status: done
 priority: 3
 design:
 epic:

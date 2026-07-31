@@ -70,6 +70,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The declared MSRV is a checked claim (C-213).** `resolver = "2"` performs no MSRV-aware
+  selection, so a caret requirement resolved to a version declaring a higher `rust-version` and
+  nothing warned — it was caught by a person reading the lock. The workspace now uses
+  `resolver = "3"`, proven rather than asserted: relaxing the pin back to a caret makes cargo report
+  `Unchanged jsonwebtoken v10.3.0 (available: v10.4.0)` — it saw the MSRV-breaking version and
+  declined it.
+
+  **The new fence was red before it changed anything**, for a breach nobody had filed: `connectors-api`
+  declared `rust-version` 1.87 while reaching `zip v8.6.0` through `flux-web` → `flux-plugin`, which
+  requires 1.88. That declaration has been false since C-202 put `flux-web` in the graph, and no pin
+  can make it true — every published `zip` 8.x declares 1.88. Corrected on that crate, which is
+  `publish = false`; the workspace-level decision belongs to the owner and is left open.
+
+  Recorded plainly: **CI compiles the declared MSRV nowhere.** All three workflows pin one toolchain
+  far above it and no job builds on `rust-version`, so the four crates published to crates.io carry
+  an MSRV nothing has ever checked. The fence asserts that gap rather than implying coverage.
+
 - **A repeatable write must state the condition it depends on (C-186).** The story was filed because
   `check_write_metadata` derives write-ness from the HTTP verb, so a POST or PATCH that genuinely is
   safe to repeat could not say so. The investigation found the premise was **false**:
