@@ -70,6 +70,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A repeatable write must state the condition it depends on (C-186).** The story was filed because
+  `check_write_metadata` derives write-ness from the HTTP verb, so a POST or PATCH that genuinely is
+  safe to repeat could not say so. The investigation found the premise was **false**:
+  `Idempotency::Conditional` on a POST always emitted. What actually blocked those connectors was
+  this repository's own gloss on a flux-owned value — `Conditional` was documented here as
+  *"idempotent only under a condition the caller supplies"*, and the refusal message repeated it — so
+  connectors whose repeatability comes from what the **endpoint** does read it as out of reach and
+  under-declared.
+
+  So this **tightens** rather than relaxes. `Idempotent` on a POST or PATCH is refused
+  unconditionally, and a mutating `Conditional` must now state its condition: flux says *"under
+  stated conditions"*, and nothing was making anyone state them. Nine shipped connectors are
+  corrected, six of them found during the rework at zero artifact cost because the condition reaches
+  only `catalog.json`.
+
+  Recorded and not resolved: flux's I3 coherence rule hits **twelve** mutating operations, not the
+  three this story began with. The other nine are `PUT`s, permitted by RFC 9110 §9.2.2 and refused by
+  flux, which ignores method entirely — replaying a PUT is safe, but *skipping* one is not. Pinned by
+  a two-way count so it cannot grow unnoticed.
+
 - **Resend inherits the versioned host identity (C-241).** It was the catalogue's sole `User-Agent`
   declaration and the worse of the two available values — no version, and the bare product word
   C-223's acceptance rules out. The vendor fact that made the workaround necessary is kept beside the

@@ -61,6 +61,7 @@
           "description": "Read one record from a table — its cell values are under `fields` in the response, keyed by column name. Returns every column the token can see, in Airtable's default JSON cell format: narrowing or reformatting them needs the `fields[]` and `cellFormat` query parameters this connector cannot encode",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v0/{baseId}/{tableIdOrName}/{recordId}",
           "parameters": [
@@ -174,6 +175,7 @@
           "description": "Create one record in a table. Cell values are supplied under `fields`, keyed by column name, and must already be in the exact JSON form each column expects — Airtable's `typecast` coercion cannot be requested yet (see the connector's notes). The created record, with its `rec…` id, is in the response",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/v0/{baseId}/{tableIdOrName}",
           "parameters": [
@@ -287,6 +289,7 @@
           "description": "Update one record's cell values. The write is sparse: only the columns named in `fields` change and every other column of the record is left exactly as it was. Values must already be in the form each column expects — `typecast` coercion cannot be requested yet. The updated record is in the response",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "PATCH",
           "path": "/v0/{baseId}/{tableIdOrName}/{recordId}",
           "parameters": [
@@ -416,6 +419,7 @@
           "description": "Delete one record and every cell value in it. There is no API route back: Airtable's trash and revision history are UI features on a retention window, not endpoints, so a flux run cannot undo this. Responds `{\"id\": …, \"deleted\": true}`",
           "risk": "destructive",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "DELETE",
           "path": "/v0/{baseId}/{tableIdOrName}/{recordId}",
           "parameters": [
@@ -605,6 +609,7 @@
           "description": "List the models available to this API key, most recently released first. Unpaginated — this connector cannot request a further page",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/models",
           "parameters": [],
@@ -689,6 +694,7 @@
           "description": "Retrieve one model by id, or resolve an alias to the model id it currently points at",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/models/{model_id}",
           "parameters": [
@@ -781,6 +787,7 @@
           "description": "Get the organization this Admin API key belongs to. Takes no parameters; useful for confirming which organization a key resolves to",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/organizations/me",
           "parameters": [],
@@ -838,6 +845,7 @@
           "description": "List the organization's workspaces. Unpaginated and excludes archived workspaces by default — this connector cannot request a further page or ask for archived ones",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/organizations/workspaces",
           "parameters": [],
@@ -920,6 +928,7 @@
           "description": "List the organization's API keys, with each key's name, status and a redacted hint — never the key itself. Unpaginated and unfiltered",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/organizations/api_keys",
           "parameters": [],
@@ -1062,6 +1071,7 @@
           "description": "Get one task — its name, notes, assignee, due date, completion state and the projects it belongs to. The task is under `data` in the response",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/1.0/tasks/{task_gid}",
           "parameters": [
@@ -1133,6 +1143,7 @@
           "description": "Create a task in a workspace. It is created unassigned and in no project, so nobody is notified; move it or assign it in Asana afterwards. The created task is under `data` in the response",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/api/1.0/tasks",
           "parameters": [
@@ -1220,6 +1231,7 @@
           "description": "Mark a task complete or incomplete. Asana's update is sparse: only completion changes, and every other field of the task is left as it was. The updated task is under `data` in the response",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "PUT",
           "path": "/api/1.0/tasks/{task_gid}",
           "parameters": [
@@ -1305,6 +1317,7 @@
           "description": "Add a comment to a task. Asana calls a comment a story. It is attributed to the token's owner, notifies every follower of the task by email and in-app, and cannot be un-sent. The created story is under `data` in the response",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/api/1.0/tasks/{task_gid}/stories",
           "parameters": [
@@ -1392,6 +1405,7 @@
           "description": "Get one project — its name, notes, owner, team, current status and whether it is archived. The project is under `data` in the response",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/1.0/projects/{project_gid}",
           "parameters": [
@@ -1519,6 +1533,7 @@
           "description": "List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v2/agents",
           "parameters": [
@@ -1778,6 +1793,7 @@
           "description": "Get one agent",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v2/agents/{id}",
           "parameters": [
@@ -1834,6 +1850,7 @@
           "description": "Update an agent's status. Supply at least one of enabled or presence.name — the request body's properties are all optional, so an empty PUT is schema-valid and does nothing",
           "risk": "medium",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "PUT",
           "path": "/api/v2/agents/{id}/status",
           "parameters": [
@@ -1916,6 +1933,7 @@
           "description": "List and filter calls from the reporting view",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v2/calls/reporting",
           "parameters": [
@@ -2308,6 +2326,7 @@
           "description": "Get one call",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v2/calls/{id}",
           "parameters": [
@@ -2364,6 +2383,7 @@
           "description": "Hang up a live call",
           "risk": "destructive",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/api/v2/calls/{id}/hangup",
           "parameters": [
@@ -2420,6 +2440,7 @@
           "description": "Set session variables on a live call. Variable keys must start with `app` — babelforce rejects other keys, and states the rule only in prose",
           "risk": "medium",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "PUT",
           "path": "/api/v2/calls/{id}/session/set",
           "parameters": [
@@ -2484,6 +2505,7 @@
           "description": "Get the IVR variables for a session",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v2/sessions/{id}",
           "parameters": [
@@ -2540,6 +2562,7 @@
           "description": "Update the user-scoped variables of a session",
           "risk": "medium",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "PUT",
           "path": "/api/v2/sessions/{id}",
           "parameters": [
@@ -2660,6 +2683,7 @@
           "description": "List the repositories in this connection's workspace, with each one's slug, name, description, main branch and privacy. Takes no argument at all: the workspace is pinned when the connection is made, so this reads exactly the workspace the operator chose and no other. Returns Bitbucket's first page only; this connector declares no page or filter parameters, and the response's `next` field carries the URL of the following page. The `slug` returned here is what every other operation in this connector takes as `repo_slug`. Also this connector's `verify`: a bounded read that runs unattended and needs nothing beyond the token and the pinned workspace",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/repositories/{workspace}",
           "parameters": [],
@@ -2803,6 +2827,7 @@
           "description": "Read one repository in this connection's workspace by its slug, with its main branch, privacy, project and size. Use it to confirm a repository exists and to learn its default branch before opening a pull request against it",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/repositories/{workspace}/{repo_slug}",
           "parameters": [
@@ -2941,6 +2966,7 @@
           "description": "List the open pull requests on one repository in this connection's workspace, newest activity first. Returns OPEN pull requests only — that is Bitbucket's default and this connector declares no `state` parameter to change it (see its header note), so merged and declined pull requests are not returned. Returns Bitbucket's first page only; the response's `next` field carries the URL of the following page. Each value's `id` is what bitbucket-pull-request-get, -comment and -approve take",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/repositories/{workspace}/{repo_slug}/pullrequests",
           "parameters": [
@@ -3098,6 +3124,7 @@
           "description": "Read one pull request by its number, including its description, its source and destination branches, its current state and who is participating. Reads a merged or declined pull request too, unlike bitbucket-pull-request-list",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}",
           "parameters": [
@@ -3292,6 +3319,7 @@
           "description": "Open a pull request from one branch to another in a repository of this connection's workspace. Both branches must already exist and be pushed. Bitbucket does not deduplicate: opening the same source-to-destination pull request twice creates two of them, and notifies the repository's watchers twice. The created pull request, with its assigned `id`, is in the response",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/repositories/{workspace}/{repo_slug}/pullrequests",
           "parameters": [
@@ -3467,6 +3495,7 @@
           "description": "Add a top-level comment to a pull request. The comment is attributed to the account the token belongs to and notifies everyone participating; Bitbucket sends no un-notification, so a comment posted in error can be deleted but not un-seen. This posts a general comment on the pull request, never an inline comment on a line of the diff",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments",
           "parameters": [
@@ -3605,6 +3634,7 @@
           "description": "Approve a pull request as the account this connection's token belongs to. This records a review that a human may not have performed, and in a repository with an approval merge check it can release a merge that gate was configured to hold — treat it as an assertion about a review, not as a bookmark. Bitbucket answers a repeat approval with 409 rather than approving twice. Sends no body: the approver is the token's own account",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/approve",
           "parameters": [
@@ -3763,6 +3793,7 @@
           "description": "Get the user this access token authenticates as, confirming the token resolves and naming the account it belongs to. Takes no parameters",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/2.0/users/me",
           "parameters": [],
@@ -3820,6 +3851,7 @@
           "description": "Get one folder's metadata: name, size, timestamps and parent. Does not return its contents — use box-folder-items-list for that",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/2.0/folders/{folder_id}",
           "parameters": [
@@ -3912,6 +3944,7 @@
           "description": "List the files and folders directly inside a folder, first page only (Box's own default page size). Each entry is a mini item representation — its type, id and name — not the full metadata box-file-get or box-folder-get returns",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/2.0/folders/{folder_id}/items",
           "parameters": [
@@ -3993,6 +4026,7 @@
           "description": "Get one file's metadata: name, size, timestamps and parent folder. This does NOT return the file's content — Box serves file content from a signed, time-limited URL reached only through a 302 redirect this connector does not follow, so file content is out of scope entirely",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/2.0/files/{file_id}",
           "parameters": [
@@ -4084,6 +4118,7 @@
           "description": "Create a new, empty folder as a child of an existing folder. Naming a folder that already exists under the same parent answers 409 conflict rather than creating a duplicate",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/2.0/folders",
           "parameters": [
@@ -4181,6 +4216,7 @@
           "description": "Copy an existing file into a different folder, keeping its original name. Each call creates a new, independent file — copying the same file twice produces two copies, not one",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/2.0/files/{file_id}/copy",
           "parameters": [
@@ -4333,6 +4369,7 @@
           "description": "Get the authenticated user: their own resource URI, name, scheduling slug, account email and current organization. The URI in the response is the value later operations expect as their `user` query parameter",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/users/me",
           "parameters": [],
@@ -4419,6 +4456,7 @@
           "description": "List event types owned by a user — the bookable meeting templates (name, duration, scheduling link). Takes the user's own URI, not a bare id",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/event_types",
           "parameters": [
@@ -4561,6 +4599,7 @@
           "description": "List a user's scheduled events (past and upcoming bookings). Takes the user's own URI, not a bare id",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/scheduled_events",
           "parameters": [
@@ -4745,6 +4784,7 @@
           "description": "Get one scheduled event by id",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/scheduled_events/{uuid}",
           "parameters": [
@@ -4874,6 +4914,7 @@
           "description": "List a scheduled event's invitees. Each invitee is personal data about a named third party — their name, email and any answers they gave to the event type's custom questions. Read it only for what the calling flow needs and do not persist or repeat it beyond that",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/scheduled_events/{uuid}/invitees",
           "parameters": [
@@ -5096,6 +5137,7 @@
           "description": "List the workspaces (called \"teams\" in ClickUp's API) the token can see. Takes no parameters; used as the verify read to prove a token resolves, and as the source of the workspace-level context a space id is nested under",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/team",
           "parameters": [],
@@ -5175,6 +5217,7 @@
           "description": "List a space's folders. Each folder's own lists are nested inline in the response — read a folder's `lists` field for the list ids clickup-list-task-list and clickup-task-create take, rather than looking for a separate folder-to-list operation",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/space/{space_id}/folder",
           "parameters": [
@@ -5290,6 +5333,7 @@
           "description": "List tasks in a list, most recently created first by default",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/list/{list_id}/task",
           "parameters": [
@@ -5531,6 +5575,7 @@
           "description": "Get one task by id",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/task/{task_id}",
           "parameters": [
@@ -5656,6 +5701,7 @@
           "description": "Create a task in a list. Created with `notify_all` left at its default (false), so nobody is emailed by this call",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/list/{list_id}/task",
           "parameters": [
@@ -5829,6 +5875,7 @@
           "description": "Update a task's plain fields (name, description, status, priority, due date). Every field below is optional and ClickUp's update is sparse: an omitted field is left unchanged. Reassigning or rewatching the task is not supported by this operation — ClickUp takes those as {add, rem} deltas naming specific people, which this connector does not declare",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "PUT",
           "path": "/task/{task_id}",
           "parameters": [
@@ -6051,6 +6098,7 @@
           "description": "List the zones (domains) this API token can see, with each zone's id, name, status and assigned Cloudflare name servers. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note). The zone `id` returned here is the value an operator pins as this connection's `zone_id`; every other operation in this connector is already scoped to that one zone and does not take it as an argument",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/zones",
           "parameters": [],
@@ -6169,6 +6217,7 @@
           "description": "List the DNS records in a zone: each record's id, type, name, content, TTL and whether it is proxied through Cloudflare. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note)",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/zones/{zone_id}/dns_records",
           "parameters": [],
@@ -6311,6 +6360,7 @@
           "description": "Create a DNS record in a zone. Cloudflare does not deduplicate: creating the same name/type/content pair twice makes two records, so this is not idempotent. The created record, with its assigned id, is in the response",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/zones/{zone_id}/dns_records",
           "parameters": [
@@ -6478,6 +6528,7 @@
           "description": "Delete one DNS record. There is no API route back: Cloudflare's dashboard \"recently deleted\" surface is a retention-window UI feature, not an endpoint, so a flux run cannot undo this. Responds with just the deleted record's id",
           "risk": "destructive",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "DELETE",
           "path": "/zones/{zone_id}/dns_records/{dns_record_id}",
           "parameters": [
@@ -6573,7 +6624,8 @@
           "service": "default",
           "description": "Purge every cached asset for a zone, immediately, for every visitor worldwide. There is no partial or selective purge in this connector (see its header note) — every call empties the whole zone's edge cache. Repeating it changes nothing further, but each call can spike load on the origin as the cache refills, so it should not be called more often than a real cache-affecting change warrants",
           "risk": "high",
-          "idempotency": "non_idempotent",
+          "idempotency": "conditional",
+          "repeatable_because": "`purge_everything` names a target state rather than applying a delta, so a repeat leaves the zone exactly where the first call left it — purging an already-empty edge cache is a no-op. Conditional rather than idempotent because the cache refills from origin between calls, so a stored result must never be served in place of running it",
           "method": "POST",
           "path": "/zones/{zone_id}/purge_cache",
           "parameters": [
@@ -6649,7 +6701,7 @@
           "hosts": [
             "api.cloudflare.com"
           ],
-          "flux": "op cloudflare-cache-purge -> Any\n  description \"Purge every cached asset for a zone, immediately, for every visitor worldwide. There is no partial or selective purge in this connector (see its header note) — every call empties the whole zone's edge cache. Repeating it changes nothing further, but each call can spike load on the origin as the cache refills, so it should not be called more often than a real cache-affecting change warrants. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.cloudflare.com/client/v4\"\n  zone_id = \"{zone_id}\"\n  url = fmt(\"{base}/zones/{zone_id}/purge_cache\")\n  content_type = \"application/json\"\n  purge_everything = true\n  payload = { purge_everything }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "flux": "op cloudflare-cache-purge -> Any\n  description \"Purge every cached asset for a zone, immediately, for every visitor worldwide. There is no partial or selective purge in this connector (see its header note) — every call empties the whole zone's edge cache. Repeating it changes nothing further, but each call can spike load on the origin as the cache refills, so it should not be called more often than a real cache-affecting change warrants. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"high\"\n  idempotency \"conditional\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.cloudflare.com/client/v4\"\n  zone_id = \"{zone_id}\"\n  url = fmt(\"{base}/zones/{zone_id}/purge_cache\")\n  content_type = \"application/json\"\n  purge_everything = true\n  payload = { purge_everything }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -6728,6 +6780,7 @@
           "description": "List the spaces on the Confluence site, with the id, key and name of each. Takes no argument, and is this connector's `verify`: a bounded read that runs unattended and needs nothing configured beyond the credential. Returns only Confluence's first page of 25 spaces — paging needs the `cursor` and `limit` query parameters this connector cannot send, so a site with more spaces is truncated with no further signal than a `_links.next` this connector cannot follow",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v2/spaces",
           "parameters": [],
@@ -6855,6 +6908,7 @@
           "description": "Get one space by its id, with its key, name, status and home page id. Addressed by the numeric space `id` from `confluence-space-list`, not by the space key that appears in a Confluence URL",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v2/spaces/{id}",
           "parameters": [
@@ -6978,6 +7032,7 @@
           "description": "List the pages in one space, with the id, title, parent and version of each — the way to discover what a space contains and to resolve a page title to the id the other operations take. **Page bodies are not returned**: the content of each page is empty here, because selecting a body format needs a query parameter this connector cannot send. Returns only Confluence's first page of 25 results; a larger space is truncated",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v2/spaces/{id}/pages",
           "parameters": [
@@ -7152,6 +7207,7 @@
           "description": "Read one page's metadata by id — title, space, parent, author, creation time, current version number and the link to open it in Confluence. **The page body is not returned**: selecting a content format needs a query parameter this connector cannot send, so the `body` field comes back empty regardless of whether the page has content. Use this to resolve a page id to its title and URL, not to read what the page says",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v2/pages/{id}",
           "parameters": [
@@ -7324,6 +7380,7 @@
           "description": "Publish a new page in a space. The page is created live and visible to everyone who can see the space, is indexed for search, and notifies the space's watchers. It is created at the top level of the space unless the space's own structure places it otherwise, with no labels and no restrictions. Returns the new page's id, title and links. The content is sent as Confluence storage format — XHTML-like markup, e.g. `<p>text</p>` — not Markdown and not wiki markup",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/api/v2/pages",
           "parameters": [
@@ -7510,6 +7567,7 @@
           "description": "Add a footer comment to a page — the comment thread at the bottom, not an inline annotation on selected text. The comment is visible to everyone who can see the page and notifies its watchers; it cannot be restricted to a subset of them. The content is sent as Confluence storage format (`<p>text</p>`), not Markdown. Note the page is named in the body rather than in the path, and that this connector cannot read a page's existing comments back",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/api/v2/footer-comments",
           "parameters": [
@@ -7737,6 +7795,7 @@
           "description": "Get one published entry by id, with its fields resolved to one locale",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/entries/{entry_id}",
           "parameters": [
@@ -7832,6 +7891,7 @@
           "description": "List published entries in this space and environment, most recently updated first. This connector's `verify` — a bounded read that runs unattended: space and environment are already resolved from configuration, and `limit`/`skip` are optional, so no required argument is ever needed",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/entries",
           "parameters": [
@@ -7944,6 +8004,7 @@
           "description": "Get one published asset (an uploaded file, e.g. an image) by id, with its metadata resolved to one locale",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/assets/{asset_id}",
           "parameters": [
@@ -8039,6 +8100,7 @@
           "description": "Create a new entry from a content type's field values. Contentful assigns the entry's id. The entry is created as a draft — it is not visible through the Delivery API until contentful-entry-publish publishes it",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/entries",
           "parameters": [
@@ -8146,6 +8208,7 @@
           "description": "Publish a draft entry, making it visible through the Delivery API. Sends no body",
           "risk": "high",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "PUT",
           "path": "/entries/{entry_id}/published",
           "parameters": [
@@ -8335,6 +8398,7 @@
           "description": "List every monitor visible to this API key. Also this connector's `verify` — a bounded read that runs unattended, needing no argument",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v1/monitor",
           "parameters": [],
@@ -8442,6 +8506,7 @@
           "description": "Get one monitor by id",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v1/monitor/{monitor_id}",
           "parameters": [
@@ -8563,6 +8628,7 @@
           "description": "List the organization's incidents",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v2/incidents",
           "parameters": [],
@@ -8603,6 +8669,7 @@
           "description": "Get one incident by id",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v2/incidents/{incident_id}",
           "parameters": [
@@ -8716,6 +8783,7 @@
           "description": "Read the bot user this token authenticates as — its snowflake id, username and application flags. Takes no argument. Also this connector's `verify`: the cheapest call that proves the token, the `Bot ` scheme word and the base URL are all correct together, and the one to run first when any other operation returns 401",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/users/@me",
           "parameters": [],
@@ -8811,6 +8879,7 @@
           "description": "List the guilds (servers) this bot has been installed into — the complete set of guild ids the rest of this connector can address. Returns a partial guild object per entry, not the full one: call discord-guild-get for a guild's settings. Discord returns at most 200 per page and this connector does not page, so a bot in more guilds than that sees only the first 200",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/users/@me/guilds",
           "parameters": [],
@@ -8894,6 +8963,7 @@
           "description": "Read one guild's settings and current state by id — its name, owner, moderation levels and enabled features. Membership counts are not included: they require a query flag this connector does not send, and Discord documents them as approximate",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/guilds/{guild_id}",
           "parameters": [
@@ -9066,6 +9136,7 @@
           "description": "List every channel in a guild — text, voice, category and forum — in Discord's own ordering. This is where a channel id comes from: read `type` to find the text channels (type 0) discord-channel-messages and discord-message-create can address. Threads are not included; Discord returns them from a separate route this connector does not expose",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/guilds/{guild_id}/channels",
           "parameters": [
@@ -9193,6 +9264,7 @@
           "description": "Read the most recent messages in a text channel, newest first. Requires the bot to have READ_MESSAGE_HISTORY in the channel; without it Discord answers 403 rather than an empty list. The response is personal content — what people said, with author identity attached — so read it for what the calling flow needs and do not persist it beyond that",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/channels/{channel_id}/messages",
           "parameters": [
@@ -9376,6 +9448,7 @@
           "description": "Post a message to a text channel, visible to everyone in it and notifying whoever is watching. Requires the bot to have SEND_MESSAGES in the channel. Posting twice posts two messages — Discord offers no idempotency key on this route. Discord rate-limits this route per channel and does not publish the figure: on a 429, wait the number of seconds in the `Retry-After` header before retrying, rather than retrying immediately",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/channels/{channel_id}/messages",
           "parameters": [
@@ -9616,6 +9689,7 @@
           "description": "List the account's own top-level folders — Draft, Sent Items, Inbox, and any custom ones. Takes no parameters and succeeds for any account with API access, which is what makes it the connection check for a settings page's Test Connection button",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/folders",
           "parameters": [],
@@ -9695,6 +9769,7 @@
           "description": "List envelopes whose status changed on or after a given date. DocuSign requires a from_date (or an explicit envelope_ids/transaction_ids list, which this operation does not offer) on every call to this resource — omitting it is a 400 from the vendor, not a limitation of this connector",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/envelopes",
           "parameters": [
@@ -9820,6 +9895,7 @@
           "description": "Get one envelope's own status and metadata. No recipient or document detail — see docusign-envelope-recipients-get for who is on it",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/envelopes/{envelope_id}",
           "parameters": [
@@ -9921,6 +9997,7 @@
           "description": "Get every recipient on an envelope and their signing status. Recipient name and email are personal data — see this operation's own response_schema before logging, displaying or forwarding it",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/envelopes/{envelope_id}/recipients",
           "parameters": [
@@ -10056,6 +10133,7 @@
           "description": "Create an envelope from an existing template. When status is sent, DocuSign dispatches it immediately to every named recipient — a real, legally binding signature request to a real person. Use status created to save it as an editable draft that notifies nobody instead",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/envelopes",
           "parameters": [
@@ -10229,6 +10307,7 @@
           "description": "Void an envelope: cancel it permanently. Every recipient who has not yet finished signing is immediately locked out, and no further signing action is possible on this envelope id. Irreversible",
           "risk": "destructive",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "PUT",
           "path": "/envelopes/{envelope_id}",
           "parameters": [
@@ -10399,6 +10478,7 @@
           "description": "Get the account this access token authenticates as, confirming the token resolves and naming the account it belongs to. Takes no parameters. Dropbox routes this read through POST, like every operation this connector declares — there is no GET anywhere in Dropbox's v2 API",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/2/users/get_current_account",
           "parameters": [],
@@ -10467,6 +10547,7 @@
           "description": "List the files and folders directly inside a folder, first page only. Each entry names its own type (file, folder, or deleted), name and full path. Dropbox routes this read through POST, so it is declared as a write",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/2/files/list_folder",
           "parameters": [
@@ -10544,6 +10625,7 @@
           "description": "Get metadata for a file or folder at a given path: its type, name, id, and — for a file — size and content hash. Does not return a folder's contents (use dropbox-folder-list) or a file's content (use dropbox-temporary-link-get). Dropbox routes this read through POST, so it is declared as a write",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/2/files/get_metadata",
           "parameters": [
@@ -10645,6 +10727,7 @@
           "description": "Search file and folder names across the account, returning the first page of matches. Dropbox matches on name, not file content. Dropbox routes this read through POST, so it is declared as a write",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/2/files/search_v2",
           "parameters": [
@@ -10722,6 +10805,7 @@
           "description": "Create a new folder at the given path, including any missing parent folders. Naming a path that already exists answers 409 conflict rather than creating a duplicate, since autorename is not offered by this connector",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/2/files/create_folder_v2",
           "parameters": [
@@ -10803,6 +10887,7 @@
           "description": "Get a temporary, unauthenticated download link for an existing file's content, valid for approximately four hours. This connector cannot follow the link itself — it only returns the URL, for a caller to fetch separately. Dropbox routes this read through POST, so it is declared as a write",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/2/files/get_temporary_link",
           "parameters": [
@@ -10929,6 +11014,7 @@
           "description": "Get the authenticated user's id, email, display handle and avatar URL. Used to verify a token works before running anything else",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/me",
           "parameters": [],
@@ -10992,6 +11078,7 @@
           "description": "Get a Figma file's document tree, components and styles by file key. Does not include comments or rendered images",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/files/{file_key}",
           "parameters": [
@@ -11097,6 +11184,7 @@
           "description": "Get one or more specific nodes from a file by id, without walking the whole document tree. Use this to read a particular frame or layer instead of downloading the entire file",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/files/{file_key}/nodes",
           "parameters": [
@@ -11202,6 +11290,7 @@
           "description": "Render one or more nodes to images and return download URLs for them. The URLs point at short-lived storage and expire — Figma does not guarantee they stay valid, so fetch or store the image promptly rather than caching the URL itself",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/images/{file_key}",
           "parameters": [
@@ -11299,6 +11388,7 @@
           "description": "List the files in a project: each file's key, name, thumbnail and last-modified time",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/projects/{project_id}/files",
           "parameters": [
@@ -11398,6 +11488,7 @@
           "description": "List a file's comments: who wrote each one, when, its text, what it is attached to, and whether it has been resolved",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/files/{file_key}/comments",
           "parameters": [
@@ -11567,6 +11658,7 @@
           "description": "List Fly's available regions and identify the nearest one; also verifies the configured access token",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/platform/regions",
           "parameters": [],
@@ -11619,6 +11711,7 @@
           "description": "List every Machine in one Fly app, without optional state filters or lease details",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/apps/{app_name}/machines",
           "parameters": [
@@ -11699,6 +11792,7 @@
           "description": "Get one Fly Machine's current configuration, state, region, addresses and recent events",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/apps/{app_name}/machines/{machine_id}",
           "parameters": [
@@ -11801,6 +11895,7 @@
           "description": "List the recorded lifecycle events for one Fly Machine; this is history, not a durable event subscription",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/apps/{app_name}/machines/{machine_id}/events",
           "parameters": [
@@ -11897,6 +11992,7 @@
           "description": "Create and launch a Fly Machine from one image using Fly's generated name and region placement; this begins billable compute",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/apps/{app_name}/machines",
           "parameters": [
@@ -11993,6 +12089,7 @@
           "description": "Start a stopped Fly Machine, restoring service and beginning billable compute",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/apps/{app_name}/machines/{machine_id}/start",
           "parameters": [
@@ -12067,6 +12164,7 @@
           "description": "Stop a running Fly Machine using the API's default signal and timeout, interrupting its service",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/apps/{app_name}/machines/{machine_id}/stop",
           "parameters": [
@@ -12141,6 +12239,7 @@
           "description": "Restart a Fly Machine using the API's default signal and timeout, causing a service interruption",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/apps/{app_name}/machines/{machine_id}/restart",
           "parameters": [
@@ -12215,6 +12314,7 @@
           "description": "Permanently delete a stopped Fly Machine. Forced deletion is intentionally unavailable, so a running Machine is refused instead of killed implicitly",
           "risk": "destructive",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "DELETE",
           "path": "/apps/{app_name}/machines/{machine_id}",
           "parameters": [
@@ -12323,6 +12423,7 @@
           "description": "Verify credentials with a bounded contact read",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/contacts",
           "parameters": [
@@ -12406,6 +12507,7 @@
           "description": "List and filter tickets",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/tickets",
           "parameters": [
@@ -12609,6 +12711,7 @@
           "description": "View one ticket",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/tickets/{id}",
           "parameters": [
@@ -12811,6 +12914,7 @@
           "description": "Create a ticket. The requester must be identified either by requester_id, or by phone together with name — Freshdesk states this only in prose and its required flags do not capture it",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/tickets",
           "parameters": [
@@ -13254,6 +13358,7 @@
           "description": "Update a ticket's fields",
           "risk": "medium",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "PUT",
           "path": "/tickets/{id}",
           "parameters": [
@@ -13659,6 +13764,7 @@
           "description": "Add a note to a ticket; the note is private unless explicitly made public",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/tickets/{id}/notes",
           "parameters": [
@@ -13851,6 +13957,7 @@
           "description": "List and filter contacts, e.g. to resolve a caller before filing a ticket",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/contacts",
           "parameters": [
@@ -14062,6 +14169,7 @@
           "description": "Get one contact",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/contacts/{id}",
           "parameters": [
@@ -14219,6 +14327,7 @@
           "description": "Create a contact",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/contacts",
           "parameters": [
@@ -14443,6 +14552,7 @@
           "description": "List one conversation, confirming the token resolves and carries at least read access. Takes no parameters other than the page bound",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/conversations",
           "parameters": [
@@ -14514,6 +14624,7 @@
           "description": "List the company's conversations in reverse chronological order (most recently updated first), first page only — this connector cannot follow Front's next-page link (see providers/front.toml's header comment). Front's structured search filter (`q`) is not accepted here: it is a bracket-notation object this pipeline cannot encode as a query string",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/conversations",
           "parameters": [
@@ -14616,6 +14727,7 @@
           "description": "Get one conversation's metadata: subject, status, assignee, recipient and tags. Does not return its messages — use front-conversation-message-list for those",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/conversations/{conversation_id}",
           "parameters": [
@@ -14737,6 +14849,7 @@
           "description": "List the messages in a conversation in reverse chronological order (newest first), first page only — this connector cannot follow Front's next-page link (see providers/front.toml's header comment). Each message's `body`/`text` is the actual correspondence exchanged on this conversation",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/conversations/{conversation_id}/messages",
           "parameters": [
@@ -14890,6 +15003,7 @@
           "description": "Reply to a conversation, using its own existing recipients, channel and sender identity — this connector cannot override any of those (see providers/front.toml's header comment). Front queues delivery: the response is an acknowledgement, not the sent message, and is not visible to the recipient until Front actually delivers it",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/conversations/{conversation_id}/messages",
           "parameters": [
@@ -14976,6 +15090,7 @@
           "description": "Apply one or more existing tags to a conversation. Applying a tag the conversation already carries changes nothing — Front does not duplicate it. Answers 204 with an empty body on success",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/conversations/{conversation_id}/tags",
           "parameters": [
@@ -15114,6 +15229,7 @@
           "description": "Get one repository's metadata, including its default branch, visibility and permissions",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/repos/{owner}/{repo}",
           "parameters": [
@@ -15264,6 +15380,7 @@
           "description": "Get one issue by number. GitHub treats a pull request as an issue, so a PR number returns that PR's issue view; use github-pull-get for its merge and review state",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/repos/{owner}/{repo}/issues/{issue_number}",
           "parameters": [
@@ -15446,6 +15563,7 @@
           "description": "Get one pull request by number, with its merge state, head and base refs and review counts",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/repos/{owner}/{repo}/pulls/{pull_number}",
           "parameters": [
@@ -15622,6 +15740,7 @@
           "description": "Open a new issue on a repository. The issue is immediately visible to everyone who can see the repository and notifies its subscribers",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/repos/{owner}/{repo}/issues",
           "parameters": [
@@ -15832,6 +15951,7 @@
           "description": "Add a comment to an issue or pull request. The comment is public to everyone who can see the repository and notifies its participants; GitHub has no private or internal comment here",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/repos/{owner}/{repo}/issues/{issue_number}/comments",
           "parameters": [
@@ -16049,6 +16169,7 @@
           "description": "Get the currently authenticated user. Takes no parameters; used as the verify read to prove a token resolves",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/user",
           "parameters": [],
@@ -16119,6 +16240,7 @@
           "description": "List issues in a project, optionally filtered by state, newest activity first",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/projects/{project_id}/issues",
           "parameters": [
@@ -16325,6 +16447,7 @@
           "description": "Get one issue by its project-scoped number (iid), not its global id",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/projects/{project_id}/issues/{issue_iid}",
           "parameters": [
@@ -16482,6 +16605,7 @@
           "description": "Open a new issue on a project. Visible immediately to everyone with access to the project (the whole world, if the project is public) and notifies its watchers",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/projects/{project_id}/issues",
           "parameters": [
@@ -16634,6 +16758,7 @@
           "description": "List merge requests in a project, optionally filtered by state, newest activity first",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/projects/{project_id}/merge_requests",
           "parameters": [
@@ -16839,6 +16964,7 @@
           "description": "Get one CI/CD pipeline's status and timing by its id",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/projects/{project_id}/pipelines/{pipeline_id}",
           "parameters": [
@@ -16988,6 +17114,7 @@
           "description": "List a project's repository branches",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/projects/{project_id}/repository/branches",
           "parameters": [
@@ -17201,6 +17328,7 @@
           "description": "Get one Gmail message by id, in Gmail's default `full` format: headers plus the parsed MIME structure, whose body parts are base64url-encoded. Needs the `gmail.readonly` scope (or `gmail.modify`)",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/gmail/v1/users/{userId}/messages/{id}",
           "parameters": [
@@ -17322,6 +17450,7 @@
           "description": "Send a Gmail message, supplied as a complete base64url-encoded RFC 2822 message. It is delivered immediately from the token owner's mailbox and cannot be recalled. Needs the `gmail.send` scope",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/gmail/v1/users/{userId}/messages/send",
           "parameters": [
@@ -17422,6 +17551,7 @@
           "description": "List every label in a mailbox — the system labels (`INBOX`, `SENT`, `SPAM`) and the user's own — as `{\"labels\": [...]}`. Needs the `gmail.readonly` scope (or `gmail.labels`)",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/gmail/v1/users/{userId}/labels",
           "parameters": [
@@ -17533,6 +17663,7 @@
           "description": "Get one calendar event: its summary, start and end, organizer, attendee list and status. Needs the `calendar.events.readonly` scope (or `calendar.readonly`)",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/calendar/v3/calendars/{calendarId}/events/{eventId}",
           "parameters": [
@@ -17699,6 +17830,7 @@
           "description": "Create a timed event on a calendar. No attendees can be declared yet, so nobody is invited and no notification is sent; invite people in Calendar afterwards. Needs the `calendar.events` scope",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/calendar/v3/calendars/{calendarId}/events",
           "parameters": [
@@ -17882,6 +18014,7 @@
           "description": "Get one calendar's own metadata — its summary, description, location and time zone. This is the calendar, not its events: use `google-calendar-event-get` for one of those. Needs the `calendar.readonly` scope",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/calendar/v3/calendars/{calendarId}",
           "parameters": [
@@ -17979,6 +18112,7 @@
           "description": "Get one Drive file's metadata — its id, name and MIME type. This never returns file content: downloading needs `alt=media`, which is a query parameter and therefore unavailable (C-30). Needs the `drive.metadata.readonly` scope (or `drive.readonly`)",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/drive/v3/files/{fileId}",
           "parameters": [
@@ -18039,6 +18173,7 @@
           "description": "Rename a Drive file: sets its name and changes nothing else. It does not move, share, trash or replace the file's content. Needs the `drive.file` scope for files this token created, or `drive` for any other",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "PATCH",
           "path": "/drive/v3/files/{fileId}",
           "parameters": [
@@ -18171,6 +18306,7 @@
           "description": "Read one contact by record id. Returns only HubSpot's default contact properties — name, email and record timestamps; a custom property needs a `properties` projection this connector cannot express yet",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/crm/v3/objects/contacts/{contact_id}",
           "parameters": [
@@ -18284,6 +18420,7 @@
           "description": "Create a contact from an email address. HubSpot treats email as the contact's unique identifier and rejects a duplicate with 409. The new record is visible to everyone in the portal and can be enrolled by a workflow, which may send it marketing email",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/crm/v3/objects/contacts",
           "parameters": [
@@ -18382,6 +18519,7 @@
           "description": "Overwrite a contact's first and last name. Both are written on every call — this operation replaces them rather than merging, so re-send the one you are not changing (read it first with hubspot-contact-get). The change is visible to everyone in the portal and can trigger a workflow",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "PATCH",
           "path": "/crm/v3/objects/contacts/{contact_id}",
           "parameters": [
@@ -18470,6 +18608,7 @@
           "description": "Read one company by record id. Returns only HubSpot's default company properties — name, domain and record timestamps",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/crm/v3/objects/companies/{company_id}",
           "parameters": [
@@ -18580,6 +18719,7 @@
           "description": "Read one deal by record id. Returns only HubSpot's default deal properties — name, amount, stage, pipeline and close date",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/crm/v3/objects/deals/{deal_id}",
           "parameters": [
@@ -18746,6 +18886,7 @@
           "description": "Get one Intercom contact by id — its role, email, name, custom attributes, tags and the companies it belongs to",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/contacts/{contact_id}",
           "parameters": [
@@ -18910,6 +19051,7 @@
           "description": "Create an email-identified Intercom contact. A contact created here is visible to every teammate in the workspace and is counted against its contact quota; creating one twice creates two contacts unless the workspace deduplicates on email",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/contacts",
           "parameters": [
@@ -19065,6 +19207,7 @@
           "description": "Get one conversation by id, with its state, the contacts on it and its message parts in Intercom's default rendering",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/conversations/{conversation_id}",
           "parameters": [
@@ -19223,6 +19366,7 @@
           "description": "Reply to a conversation as an admin. With message_type `comment` the reply is delivered to the end user by email or in-app message and cannot be un-sent; with `note` it is an internal comment only teammates see",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/conversations/{conversation_id}/reply",
           "parameters": [
@@ -19428,6 +19572,7 @@
           "description": "Add an internal note to a contact, visible to teammates in the workspace and never to the contact. Adding the same note twice adds two notes",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/contacts/{contact_id}/notes",
           "parameters": [
@@ -19607,6 +19752,7 @@
           "description": "Read one Jira issue by key (`PROJ-123`) or numeric id — summary, description, status, assignee, reporter and every other configured field. Returns Jira's full default field set, including custom fields, because narrowing it needs the `fields` query parameter this connector cannot encode. Text fields are wiki markup, not rich content",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/rest/api/2/issue/{issueIdOrKey}",
           "parameters": [
@@ -19711,6 +19857,7 @@
           "description": "Create a Jira issue in a project. Visible to everyone with access to the project and notifies its watchers. Only project, summary and issue type are set: a description cannot be sent yet (see the connector's notes), so file the detail as a comment afterwards. Returns the new issue's id, key and self URL",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/rest/api/2/issue",
           "parameters": [
@@ -19837,6 +19984,7 @@
           "description": "Read the comments on a Jira issue, oldest first. Returns Jira's first default-sized page only: paging needs the `startAt` and `maxResults` query parameters this connector cannot encode, so an issue with a long discussion is truncated. Comment bodies are wiki markup",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/rest/api/2/issue/{issueIdOrKey}/comment",
           "parameters": [
@@ -19970,6 +20118,7 @@
           "description": "Add a comment to a Jira issue. The comment is visible to everyone who can see the issue — including customers on a service-management portal — and notifies its watchers; restricting it to a project role or group is not supported yet. The body is Jira wiki markup (`*bold*`, `{code}`), not Markdown and not rich content",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/rest/api/2/issue/{issueIdOrKey}/comment",
           "parameters": [
@@ -20095,6 +20244,7 @@
           "description": "List the workflow transitions available on a Jira issue right now, with the id and target status of each. Call this before `jira-issue-transition`: transition ids are per-workflow, not global, and only the transitions valid from the issue's current status are returned",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/rest/api/2/issue/{issueIdOrKey}/transitions",
           "parameters": [
@@ -20217,6 +20367,7 @@
           "description": "Move a Jira issue through a workflow transition — the way an issue is closed, reopened or advanced. Get the transition id from `jira-issue-transitions-list` first; ids are per-workflow and only transitions valid from the current status are accepted. The status change is visible on every board showing the issue, notifies watchers, and may fire project automation. Answers `204` with an empty body on success",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/rest/api/2/issue/{issueIdOrKey}/transitions",
           "parameters": [
@@ -20355,6 +20506,7 @@
           "description": "Read the Klaviyo account this API key belongs to, with its timezone, currency, industry and contact details. Returns exactly one account — a private key is scoped to one — so this is the call that answers 'which account am I connected to'. Also this connector's verify: it takes no argument and needs only the accounts:read scope",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/accounts",
           "parameters": [],
@@ -20466,6 +20618,7 @@
           "description": "List customer profiles in the account, newest first. Returns the FIRST PAGE ONLY — Klaviyo pages with an opaque `page[cursor]` query parameter this connector cannot send, so there is no way to reach later pages and no way to filter. Every profile carries personal data: an email address, often a phone number and a postal location",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/profiles",
           "parameters": [],
@@ -20611,6 +20764,7 @@
           "description": "Read one customer profile by its Klaviyo id, with its identifiers, custom properties, consent state and location. Returns personal data about a named individual",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/profiles/{id}",
           "parameters": [
@@ -20768,6 +20922,7 @@
           "description": "Create a customer profile. At least one identifier is required — email, phone number or external id — and Klaviyo answers 409 Conflict if a profile with that identifier already exists, so this creates and never updates. The created profile can be marketed to only once it is subscribed, which this connector does not do",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/profiles",
           "parameters": [
@@ -21009,6 +21164,7 @@
           "description": "List the account's lists — static, opt-in collections of profiles, as opposed to segments, which are live queries and are not shipped here. Returns the FIRST PAGE ONLY; Klaviyo's `page[cursor]` query parameter cannot be sent by this connector. Returns the lists themselves, not their members",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/lists",
           "parameters": [],
@@ -21111,6 +21267,7 @@
           "description": "Post an event about a customer — a purchase, a page view, anything the account measures. THIS CAN CAUSE A MESSAGE TO BE SENT: an event triggers any Klaviyo flow built on its metric, so an email or SMS may reach the named profile immediately. Klaviyo creates the metric and the profile on first use if they do not exist. Answers 202 Accepted with no body: the event is queued, not confirmed. Pass unique_id to make a retry safe — Klaviyo records only the first event with a given unique_id for the same profile and metric",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/events",
           "parameters": [
@@ -21342,6 +21499,7 @@
           "description": "List every project in the LaunchDarkly account. A project is the top-level grouping that owns environments and feature flags",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/projects",
           "parameters": [
@@ -21457,6 +21615,7 @@
           "description": "List the environments (e.g. production, staging) that belong to one project",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/projects/{project_key}/environments",
           "parameters": [
@@ -21600,6 +21759,7 @@
           "description": "List the feature flags defined in one project",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/flags/{project_key}",
           "parameters": [
@@ -21772,6 +21932,7 @@
           "description": "Get one feature flag's full definition, including its current on/off state and targeting per environment",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/flags/{project_key}/{feature_flag_key}",
           "parameters": [
@@ -21912,7 +22073,8 @@
           "service": "default",
           "description": "Turn a feature flag on or off in one environment. This is a live production change: every SDK instance currently evaluating this flag in this environment — web, mobile and backend alike — switches to the other branch as soon as this call returns, for every real user it serves. It is reversible by toggling back, but it is not a private or staged edit",
           "risk": "high",
-          "idempotency": "non_idempotent",
+          "idempotency": "conditional",
+          "repeatable_because": "the body schema admits exactly one JSON Patch `replace` onto one environment's `on` bit (maxItems 1, op pinned to `replace`, path pinned to `/environments/{key}/on`), so it sets an absolute value and never a toggle or a delta — re-sending it lands the flag where the caller asked, however many times it runs",
           "method": "PATCH",
           "path": "/flags/{project_key}/{feature_flag_key}",
           "parameters": [
@@ -22052,7 +22214,7 @@
           "hosts": [
             "app.launchdarkly.com"
           ],
-          "flux": "op launchdarkly-flag-toggle(project_key: String, feature_flag_key: String, body: List<Any>) -> Any\n  description \"Turn a feature flag on or off in one environment. This is a live production change: every SDK instance currently evaluating this flag in this environment — web, mobile and backend alike — switches to the other branch as soon as this call returns, for every real user it serves. It is reversible by toggling back, but it is not a private or staged edit\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://app.launchdarkly.com/api/v2\"\n  url = fmt(\"{base}/flags/{project_key}/{feature_flag_key}\")\n  content_type = \"application/json\"\n  payload = parse(body, as: \"json\")\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PATCH\", url)\n  return response\n",
+          "flux": "op launchdarkly-flag-toggle(project_key: String, feature_flag_key: String, body: List<Any>) -> Any\n  description \"Turn a feature flag on or off in one environment. This is a live production change: every SDK instance currently evaluating this flag in this environment — web, mobile and backend alike — switches to the other branch as soon as this call returns, for every real user it serves. It is reversible by toggling back, but it is not a private or staged edit\"\n  risk \"high\"\n  idempotency \"conditional\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://app.launchdarkly.com/api/v2\"\n  url = fmt(\"{base}/flags/{project_key}/{feature_flag_key}\")\n  content_type = \"application/json\"\n  payload = parse(body, as: \"json\")\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PATCH\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -22129,6 +22291,7 @@
           "description": "Check that the API is reachable and the credential works. Takes no argument and returns no account data — Mailchimp calls it a health check that returns nothing account-specific. Also this connector's `verify`: it is the one call that proves both halves of the configuration at once, because a wrong key and a wrong datacentre label both fail it",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/ping",
           "parameters": [],
@@ -22187,6 +22350,7 @@
           "description": "List the audiences in the account, with the id every contact operation takes. Returns Mailchimp's default first page only — this connector declares no paging parameters, so compare the number of entries against `total_items` before treating the result as complete",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/lists",
           "parameters": [],
@@ -22312,6 +22476,7 @@
           "description": "Get one audience by id, with its settings and current member counts",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/lists/{list_id}",
           "parameters": [
@@ -22439,6 +22604,7 @@
           "description": "List the contacts in an audience, subscribed and unsubscribed alike. Returns Mailchimp's default first page only — this connector declares no paging or status filter, so compare the number of entries against `total_items` before treating the result as complete. Every entry is personal data",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/lists/{list_id}/members",
           "parameters": [
@@ -22624,6 +22790,7 @@
           "description": "Get one contact in an audience, including its subscription status and opt-in record. The contact is addressed by a hash of its own address, not by the address — see `subscriber_hash`. Returns personal data",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/lists/{list_id}/members/{subscriber_hash}",
           "parameters": [
@@ -22804,6 +22971,7 @@
           "description": "Add a contact to an audience, or update the one already there. Creating with `status_if_new = \"pending\"` makes Mailchimp send its own opt-in confirmation and record the consent; creating with \"subscribed\" asserts that the account already holds that consent and sends nothing. Setting `status` on an existing contact changes whether they receive mail. This writes personal data about a third party and is not undone by calling it again",
           "risk": "high",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "PUT",
           "path": "/lists/{list_id}/members/{subscriber_hash}",
           "parameters": [
@@ -23048,6 +23216,7 @@
           "description": "List the campaigns in the account — drafts, scheduled, sending and sent alike. Returns Mailchimp's default first page only, and this connector declares no status or date filter, so compare the number of entries against `total_items` before treating the result as complete",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/campaigns",
           "parameters": [],
@@ -23255,6 +23424,7 @@
           "description": "Get one Outlook message by id: subject, sender, recipients, timestamps and the body — HTML by default. This is personal correspondence; treat the sender, recipients and body as personal data",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1.0/me/messages/{message_id}",
           "parameters": [
@@ -23416,6 +23586,7 @@
           "description": "Reply to a message. Graph resolves the recipients automatically — the original message's `replyTo` if it specifies one, otherwise its `from` — and this operation cannot override, widen or add to that audience (C-56 excludes the `message` override Graph's own reply action accepts). Delivered within seconds and cannot be recalled",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/v1.0/me/messages/{message_id}/reply",
           "parameters": [
@@ -23490,6 +23661,7 @@
           "description": "List the top-level mail folders in the signed-in user's mailbox — Inbox, Drafts, Sent Items, and any custom top-level folders. Does not descend into subfolders. Graph's default page size here is 10; this connector cannot follow `@odata.nextLink` (an absolute URL, not a constructible cursor), so a mailbox with more than ten top-level folders is reported incompletely",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1.0/me/mailFolders",
           "parameters": [],
@@ -23571,6 +23743,7 @@
           "description": "Get one calendar event: its subject, start and end, organizer, attendee list and cancellation state. Returned in UTC unless a `Prefer: outlook.timezone` header is sent, which this connector does not do",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1.0/me/events/{event_id}",
           "parameters": [
@@ -23765,6 +23938,7 @@
           "description": "Create a single-instance event on the signed-in user's default calendar. No attendees can be declared yet (C-56), so nobody is invited and nobody is notified — the event appears only on the calendar it was created on",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/v1.0/me/events",
           "parameters": [
@@ -23963,6 +24137,7 @@
           "description": "Get the signed-in user's own default calendar: its name, colour and sharing/editing permissions. This is the calendar, not its events — use microsoft_graph-calendar-event-get for one of those. Takes no argument: `/me/calendar` always resolves to the token's own default calendar",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1.0/me/calendar",
           "parameters": [],
@@ -24064,6 +24239,7 @@
           "description": "Get one OneDrive item's metadata by id: its name, size and where it lives. This never returns file content — downloading needs the separate /content endpoint, which returns a binary body and is not shipped by this connector",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1.0/me/drive/items/{item_id}",
           "parameters": [
@@ -24230,6 +24406,7 @@
           "description": "Rename a OneDrive item: sets its name and changes nothing else. Does not move it — moving is a PATCH to the separate parentReference field, which this operation deliberately does not declare (C-56)",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "PATCH",
           "path": "/v1.0/me/drive/items/{item_id}",
           "parameters": [
@@ -24434,6 +24611,7 @@
           "description": "List the boards this access token can see, with each board's id, name and description. Returns Miro's first page only; this connector declares no cursor or limit parameter (see the connector's header note). The board `id` returned here is what every other operation in this connector needs as `board_id`",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/boards",
           "parameters": [],
@@ -24516,6 +24694,7 @@
           "description": "List the items on a board, of any type (sticky note, shape, text or frame). Each item's shape depends on its `type`: sticky notes and text carry `data.content`, shapes carry `data.content` and `data.shape`, frames carry `data.title`. Returns Miro's first page only; this connector declares no cursor or limit parameter (see the connector's header note)",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/boards/{board_id}/items",
           "parameters": [
@@ -24815,6 +24994,7 @@
           "description": "Get one item from a board, of any type (sticky note, shape, text or frame). Its shape depends on its `type` — see miro-board-item-list's description for what each carries",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/boards/{board_id}/items/{item_id}",
           "parameters": [
@@ -25109,6 +25289,7 @@
           "description": "Create a sticky note on a board. Miro does not deduplicate: creating the same content twice makes two sticky notes, so this is not idempotent. The created note, with its assigned id, is in the response",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/boards/{board_id}/sticky_notes",
           "parameters": [
@@ -25232,9 +25413,10 @@
           "id": "miro-sticky-note-update",
           "provider": "miro",
           "service": "default",
-          "description": "Update a sticky note's text content. Setting the same content twice ends in the same state, but this is declared non_idempotent because check_write_metadata refuses idempotency = idempotent on any PATCH by method alone, regardless of vendor behaviour (see the header note, C-186). The updated note is in the response",
+          "description": "Update a sticky note's text content. The content sent replaces what was there, so setting the same content twice ends in the same state. The updated note is in the response",
           "risk": "medium",
-          "idempotency": "non_idempotent",
+          "idempotency": "conditional",
+          "repeatable_because": "the request carries the note's whole content as an absolute value rather than a delta, so re-sending the same body leaves the note in the state the caller asked for, however many times it runs",
           "method": "PATCH",
           "path": "/boards/{board_id}/sticky_notes/{item_id}",
           "parameters": [
@@ -25354,7 +25536,7 @@
           "hosts": [
             "api.miro.com"
           ],
-          "flux": "op miro-sticky-note-update(board_id: String, item_id: String, content: String) -> Any\n  description \"Update a sticky note's text content. Setting the same content twice ends in the same state, but this is declared non_idempotent because check_write_metadata refuses idempotency = idempotent on any PATCH by method alone, regardless of vendor behaviour (see the header note, C-186). The updated note is in the response\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.miro.com/v2\"\n  url = fmt(\"{base}/boards/{board_id}/sticky_notes/{item_id}\")\n  content_type = \"application/json\"\n  payload = { data: { content } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PATCH\", url)\n  return response\n",
+          "flux": "op miro-sticky-note-update(board_id: String, item_id: String, content: String) -> Any\n  description \"Update a sticky note's text content. The content sent replaces what was there, so setting the same content twice ends in the same state. The updated note is in the response\"\n  risk \"medium\"\n  idempotency \"conditional\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.miro.com/v2\"\n  url = fmt(\"{base}/boards/{board_id}/sticky_notes/{item_id}\")\n  content_type = \"application/json\"\n  payload = { data: { content } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PATCH\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -25375,6 +25557,7 @@
           "description": "Delete one sticky note. There is no undo route in the API. Responds with no content",
           "risk": "destructive",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "DELETE",
           "path": "/boards/{board_id}/sticky_notes/{item_id}",
           "parameters": [
@@ -25501,6 +25684,7 @@
           "description": "List every application this account is monitoring with APM, each with its current health status and a summary of its response time, throughput and error rate. Takes no argument. Also this connector's `verify`: a bounded read that runs unattended and needs nothing beyond the configured host and key",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/applications.json",
           "parameters": [],
@@ -25608,6 +25792,7 @@
           "description": "Get one application by id, with its current health status and the same summary figures the list returns. Use this to re-read one application after a deploy rather than listing the whole account",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/applications/{application_id}.json",
           "parameters": [
@@ -25730,6 +25915,7 @@
           "description": "List the account's alert policies — the groupings New Relic evaluates conditions under, each with its incident rollup preference. Takes no argument. This lists the policies themselves, not the conditions inside them and not anything currently alerting; for that, read newrelic-alert-violation-list",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/alerts_policies.json",
           "parameters": [],
@@ -25816,6 +26002,7 @@
           "description": "List the account's alert violations from New Relic's default recent window. READ `closed_at` ON EVERY ENTRY: this returns closed violations as well as open ones, and a violation with a non-null `closed_at` has already resolved. Each entry names the policy and condition that fired and the entity that broke",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/alerts_violations.json",
           "parameters": [],
@@ -25923,6 +26110,7 @@
           "description": "List the deployment markers recorded against one application, most recent first. These are the markers New Relic overlays on its charts — read them to answer \"what shipped before this went wrong\"",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/applications/{application_id}/deployments.json",
           "parameters": [
@@ -26036,6 +26224,7 @@
           "description": "Record a deployment marker against an application, timestamped now. The marker appears on every chart for that application and is visible to everyone on the account; this connector cannot remove one once recorded. Calling this twice records two deployments",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/applications/{application_id}/deployments.json",
           "parameters": [
@@ -26257,6 +26446,7 @@
           "description": "Get the bot user this integration authenticates as, confirming the token resolves and naming the workspace it belongs to. Takes no parameters",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/users/me",
           "parameters": [],
@@ -26317,6 +26507,7 @@
           "description": "Get one page's properties, parent, icon, cover and timestamps. This does NOT return the page's text — in Notion a page's content is a separate tree of blocks, which this connector cannot read",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/pages/{page_id}",
           "parameters": [
@@ -26409,6 +26600,7 @@
           "description": "Query a database and return its first page of entries (up to 100), unfiltered and in the database's default order. Each entry is a page, and its `properties` are keyed by that database's own column names. Notion routes this read through POST, so it is declared as a write",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/v1/databases/{database_id}/query",
           "parameters": [
@@ -26491,6 +26683,7 @@
           "description": "Search the pages and databases shared with this integration by title, returning the first page of matches (up to 100). Notion matches on title only — it does not search page text. Notion routes this read through POST, so it is declared as a write",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/v1/search",
           "parameters": [
@@ -26568,6 +26761,7 @@
           "description": "Create a new empty page as a child of an existing page. The page is created with a title and no content — this connector cannot write page body text, which in Notion is a separate tree of blocks. The parent page must be shared with this integration",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/v1/pages",
           "parameters": [
@@ -26770,6 +26964,7 @@
           "description": "List users in the Okta org. Returns a JSON array of user objects, most recently created first. Without a filter this is the org's active user population, so use `limit` to bound it — see okta-user-get to read one user by id or login",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/users",
           "parameters": [
@@ -26908,6 +27103,7 @@
           "description": "Get one user's full record, including their lifecycle status and profile attributes. Accepts the user's Okta id or their login, so a caller holding an email address does not need to list first",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/users/{user_id}",
           "parameters": [
@@ -27039,6 +27235,7 @@
           "description": "List groups in the Okta org. Returns a JSON array of group objects. A group is how Okta grants application access in bulk, so this is the set a membership question is asked against",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/groups",
           "parameters": [
@@ -27157,6 +27354,7 @@
           "description": "List the groups one user is a member of. This is the direct answer to \"what access does this person have\", because Okta grants application assignments through group membership",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/users/{user_id}/groups",
           "parameters": [
@@ -27287,6 +27485,7 @@
           "description": "Deactivate a user, moving them to DEPROVISIONED. This takes effect immediately: Okta ends the person's active sessions, revokes their tokens and grants, and removes their access to every application the org assigns through Okta. They cannot sign in afterwards. An administrator can reactivate the account later, but that is a separate operation this connector does not offer, and it does not restore the sessions or tokens this call destroyed",
           "risk": "destructive",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/users/{user_id}/lifecycle/deactivate",
           "parameters": [
@@ -27422,6 +27621,7 @@
           "description": "List the models available to this API key, with their ids and owners",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/models",
           "parameters": [],
@@ -27499,6 +27699,7 @@
           "description": "Retrieve one model by id, with its ownership and permissions",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/models/{model}",
           "parameters": [
@@ -27580,6 +27781,7 @@
           "description": "Create a chat completion. Billed per input and output token, so the caller must state a token budget via max_completion_tokens",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/v1/chat/completions",
           "parameters": [
@@ -27734,6 +27936,7 @@
           "description": "Create embedding vectors for one or more input texts. Billed per input token",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/v1/embeddings",
           "parameters": [
@@ -27933,6 +28136,7 @@
           "description": "List every model OpenRouter routes to, with its context length, modalities and per-token pricing",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v1/models",
           "parameters": [],
@@ -27986,6 +28190,7 @@
           "description": "List the upstream provider endpoints serving one model, with each one's pricing, context length and quantization",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v1/models/{author}/{slug}/endpoints",
           "parameters": [
@@ -28071,6 +28276,7 @@
           "description": "Create a chat completion through OpenRouter, routed to the named model. Billed per input and output token, so the caller must state a token budget via max_completion_tokens",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/api/v1/chat/completions",
           "parameters": [
@@ -28224,6 +28430,7 @@
           "description": "Read the account's total purchased credits and total usage, in credit units",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v1/credits",
           "parameters": [],
@@ -28343,6 +28550,7 @@
           "description": "List the incidents this key can see, across every service it has access to. Returns one page; read `more` to learn whether another page exists, and page by adding `limit` to `offset`. No status, service, team or time filter is offered by this connector — see pagerduty-incident-get to inspect one incident in full",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/incidents",
           "parameters": [
@@ -28557,6 +28765,7 @@
           "description": "Fetch one incident in full, including its current status, urgency, service, assignments and acknowledgements. Read this before acknowledging or resolving, because PagerDuty refuses a status change that does not follow from the incident's current status",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/incidents/{id}",
           "parameters": [
@@ -28735,6 +28944,7 @@
           "description": "List the services this key can see. A service is what incidents are opened against and what an escalation policy is attached to, so this is how to discover the ids and names behind an incident's `service` reference. Also this connector's connection test",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/services",
           "parameters": [
@@ -28910,6 +29120,7 @@
           "description": "List who is currently on call, as one entry per escalation policy, escalation level and user. An entry with no `schedule` is a user attached directly to an escalation level rather than through a rotation. Time filtering is not offered by this connector, so this answers `who is on call now`",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/oncalls",
           "parameters": [
@@ -29039,6 +29250,7 @@
           "description": "Acknowledge one incident, on behalf of a named PagerDuty user. This stops the escalation clock and tells the rotation that somebody is working the incident; it does not close it. PagerDuty refuses the change if the incident is already resolved, and answers that as data rather than as a failure",
           "risk": "medium",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "PUT",
           "path": "/incidents/{id}",
           "parameters": [
@@ -29213,6 +29425,7 @@
           "description": "Resolve one incident, on behalf of a named PagerDuty user. This closes it: it leaves the open-incident view and notifications stop. If the underlying condition is still live, the next alert opens a brand-new incident rather than reopening this one, so resolve only what is actually fixed",
           "risk": "high",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "PUT",
           "path": "/incidents/{id}",
           "parameters": [
@@ -29466,6 +29679,7 @@
           "description": "Send a single email immediately from the token's server. Delivered within seconds and cannot be recalled",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/email",
           "parameters": [
@@ -29662,6 +29876,7 @@
           "description": "Get delivery statistics for this server: total inactive addresses and a breakdown of bounces by type. Also this connector's `verify` — a bounded read that runs unattended, needing no argument",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/deliverystats",
           "parameters": [],
@@ -29736,6 +29951,7 @@
           "description": "List bounces recorded on this server, most recent first",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/bounces",
           "parameters": [
@@ -29892,6 +30108,7 @@
           "description": "Get one recorded bounce by id",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/bounces/{bounce_id}",
           "parameters": [
@@ -30010,6 +30227,7 @@
           "description": "List every server on this account. Each entry also carries `ApiTokens`, that server's own live Server Token(s) in plaintext — see that field's own description before handling this response",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/servers",
           "parameters": [],
@@ -30126,6 +30344,7 @@
           "description": "Get one server's configuration by id. The response also carries `ApiTokens`, that server's own live Server Token(s) in plaintext — see that field's own description before handling this response",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/servers/{server_id}",
           "parameters": [
@@ -30300,6 +30519,7 @@
           "description": "Send one email immediately. Delivered within seconds and cannot be recalled once accepted. The sending domain must already be verified on this account — resend-domain-list names the ones that are",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/emails",
           "parameters": [
@@ -30442,6 +30662,7 @@
           "description": "Read one sent message and its current delivery state. This is how a flow learns whether a send bounced, was delivered, or is still queued",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/emails/{email_id}",
           "parameters": [
@@ -30599,6 +30820,7 @@
           "description": "List every sending domain on this account with its verification status. Also this connector's `verify` — a bounded read that runs unattended and needs nothing configured beyond the credential",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/domains",
           "parameters": [],
@@ -30693,6 +30915,7 @@
           "description": "Read one sending domain, including the DNS records it needs and the status of each. This is the diagnostic for a domain that will not verify, and therefore for a send refused with an invalid-from error",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/domains/{domain_id}",
           "parameters": [
@@ -30902,6 +31125,7 @@
           "description": "Get the authenticated user and org for the current access token — the identity check for a settings page's Test Connection button. Takes no parameters",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/services/oauth2/userinfo",
           "parameters": [],
@@ -30997,6 +31221,7 @@
           "description": "Read one SObject record by id. Returns every field of the record; narrowing to a subset needs the fields query parameter, which this connector cannot encode safely (see the provider file's header) so it is not offered",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/services/data/v59.0/sobjects/{sobject_type}/{id}",
           "parameters": [
@@ -31109,6 +31334,7 @@
           "description": "Create one SObject record. Which fields are required depends on the SObject type and the org's own validation rules and page layouts — check with salesforce-sobject-describe first",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/services/data/v59.0/sobjects/{sobject_type}",
           "parameters": [
@@ -31206,6 +31432,7 @@
           "description": "Update one or more fields on an existing SObject record. Only the supplied fields change; fields left out are untouched. Answers 204 with no body on success",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "PATCH",
           "path": "/services/data/v59.0/sobjects/{sobject_type}/{id}",
           "parameters": [
@@ -31296,6 +31523,7 @@
           "description": "Describe an SObject's schema: its label, whether it is custom, its create/update/delete/query permissions, and every field's name, type and constraints. The reference for what salesforce-record-create and salesforce-record-update may send",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/services/data/v59.0/sobjects/{sobject_type}/describe",
           "parameters": [
@@ -31500,6 +31728,7 @@
           "description": "List transactional templates (name, id, generation, and each template's versions). Also this connector's `verify` — a bounded read that runs unattended",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v3/templates",
           "parameters": [
@@ -31635,6 +31864,7 @@
           "description": "Get one transactional template by id, including every version's subject and content",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v3/templates/{template_id}",
           "parameters": [
@@ -31722,6 +31952,7 @@
           "description": "List addresses that have bounced and are suppressed from receiving further mail. Each entry is personal data about a third party — read it only for what the calling flow needs",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v3/suppression/bounces",
           "parameters": [
@@ -31823,6 +32054,7 @@
           "description": "Check whether an email address is well-formed and likely deliverable, without sending it any mail. Requires SendGrid's Email Address Validation add-on to be enabled on the account",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/v3/validations/email",
           "parameters": [
@@ -31993,6 +32225,7 @@
           "description": "Get one issue — its title, culprit, level, status, assignee, first and last seen timestamps and event counts. An issue is Sentry's group of like events, not a single occurrence; use `sentry-issue-event-latest` for the stack trace",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/",
           "parameters": [
@@ -32180,6 +32413,7 @@
           "description": "Change an issue's triage state: resolve it, ignore it, or return it to unresolved. This is the state the whole organization triages against — a resolved issue leaves the unresolved queue, and an ignored one stops alerting until it recurs on Sentry's terms. Recorded in the issue's activity feed under the token's owner",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "PUT",
           "path": "/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/",
           "parameters": [
@@ -32374,6 +32608,7 @@
           "description": "Get one project — its name, slug, platform, teams, DSN-bearing client keys' status and whether it is currently accepting events. This is the project an issue belongs to, so it is how a triage flow finds out which service is broken",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/0/projects/{organization_id_or_slug}/{project_id_or_slug}/",
           "parameters": [
@@ -32551,6 +32786,7 @@
           "description": "Get the most recent event of an issue — the actual occurrence, with its stack trace, breadcrumbs, request context and tags. This is what makes an issue diagnosable rather than merely countable; the event list itself is excluded because it pages with an opaque cursor",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/events/latest/",
           "parameters": [
@@ -32792,6 +33028,7 @@
           "description": "Get one order by id, with its line items, totals, fulfilment and financial status, and the customer and addresses attached to it. The response carries personal data: the customer's name, email, phone and shipping address",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/admin/api/2024-10/orders/{order_id}.json",
           "parameters": [
@@ -32961,6 +33198,7 @@
           "description": "Get one product by id, with its title, description, status, vendor, options, variants and images",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/admin/api/2024-10/products/{product_id}.json",
           "parameters": [
@@ -33108,6 +33346,7 @@
           "description": "Rename a product. The new title is live on the public storefront as soon as this returns, on every sales channel the product is published to. Shopify applies only the fields sent, so nothing else about the product changes",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "PUT",
           "path": "/admin/api/2024-10/products/{product_id}.json",
           "parameters": [
@@ -33267,6 +33506,7 @@
           "description": "Get one customer by id: name, email, phone, default address, marketing consent state and order count. This is personal data about a named individual — read it only when the task needs it, and do not repeat it further than the task requires",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/admin/api/2024-10/customers/{customer_id}.json",
           "parameters": [
@@ -33413,6 +33653,7 @@
           "description": "List the inventory levels held at one location — the available quantity per inventory item. Returns the first page only, so a location stocking more items than one page holds is reported incompletely",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/admin/api/2024-10/locations/{location_id}/inventory_levels.json",
           "parameters": [
@@ -33585,6 +33826,7 @@
           "description": "Post a message to a Slack channel, visible to everyone in it. Slack answers HTTP 200 even on failure: check `ok` in the response body before treating the message as sent",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/api/chat.postMessage",
           "parameters": [
@@ -33699,6 +33941,7 @@
           "description": "Read recent messages from a Slack channel, newest first. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `channel_not_found` appears at `error`",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/api/conversations.history",
           "parameters": [
@@ -33835,6 +34078,7 @@
           "description": "Look up one Slack user by id — display name, real name, time zone and whether they are a bot. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `user_not_found` appears at `error`",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/api/users.info",
           "parameters": [
@@ -33927,6 +34171,7 @@
           "description": "Add an emoji reaction to a message, visible to everyone in the channel. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `already_reacted` appears at `error`",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/api/reactions.add",
           "parameters": [
@@ -34283,6 +34528,7 @@
           "description": "List this status page's incidents, most recent first — both unresolved and already-resolved ones. Returns Statuspage's own first page of results; this connector declares no paging parameters, so a page with a long incident history is not enumerated exhaustively here",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/incidents",
           "parameters": [],
@@ -34419,6 +34665,7 @@
           "description": "Get one incident on this status page, including every update posted to it so far",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/incidents/{incident_id}",
           "parameters": [
@@ -34566,6 +34813,7 @@
           "description": "Open a new incident on this status page. It is public the moment this call returns — anyone loading the page sees it, and with deliver_notifications true Statuspage emails and texts every subscriber the page has. The incident itself is reversible (resolve it, or delete it), but a notification that has been sent cannot be recalled, so treat deliver_notifications as the irreversible half of this call",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/incidents",
           "parameters": [
@@ -34734,6 +34982,7 @@
           "description": "Post an update to an existing incident on this status page, moving it to a new lifecycle stage and adding a publicly visible message. The update appears on the page immediately, and with deliver_notifications true Statuspage emails and texts every subscriber. The incident's status can be moved again afterwards, but a notification that has been sent cannot be recalled. Does not rename the incident — this operation cannot change its title",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "PATCH",
           "path": "/incidents/{incident_id}",
           "parameters": [
@@ -34909,6 +35158,7 @@
           "description": "List the components this status page publishes — the individual services whose operational state the page shows. Takes no parameter at all and succeeds for any page the API key can administer, which is what makes it the connection check for a settings page's Test Connection button. Returns Statuspage's own first page of results; this connector declares no paging parameters",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/components",
           "parameters": [],
@@ -35092,6 +35342,7 @@
           "description": "Get the account's current balance — what is available to pay out and what is still pending, per currency. Takes no parameters, and reports the balance of whichever mode the key belongs to: a test key returns the test balance",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/balance",
           "parameters": [],
@@ -35161,6 +35412,7 @@
           "description": "Get one customer by id: name, email, phone, billing address, default payment method and account balance. This is personal data about a named individual — read it only when the task needs it, and do not repeat it further than the task requires. A deleted customer is returned with `deleted: true` and almost no other fields",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/customers/{customer}",
           "parameters": [
@@ -35248,6 +35500,7 @@
           "description": "Get one charge by id: amount, currency, whether it was captured, whether it was refunded and how much of it, the card's last four digits and brand, and the failure or decline reason if it did not succeed. `amount` is in the currency's smallest unit — 1000 is ten dollars, and also ten thousand yen",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/charges/{charge}",
           "parameters": [
@@ -35358,6 +35611,7 @@
           "description": "Get one payment intent by id — the modern shape of a payment, covering the whole lifecycle from creation to capture. Its `status` is what says where the payment stands; `requires_capture` means the money is authorized but not yet taken",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/payment_intents/{payment_intent}",
           "parameters": [
@@ -35470,6 +35724,7 @@
           "description": "Get one refund by id: its amount, the charge it belongs to, its reason and its status. A refund that reports `pending` has not reached the customer's bank yet, and one that reports `failed` means the money came back — the customer was not paid",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v1/refunds/{refund}",
           "parameters": [
@@ -35569,6 +35824,7 @@
           "description": "Capture an authorized payment intent, charging the customer the **full** authorized amount. Only a payment intent in `requires_capture` can be captured; a partial capture needs an `amount` this connector cannot send. Stripe answers 402 with an `error.code` such as `card_declined` when the capture is refused, and that arrives as data rather than as a failure",
           "risk": "high",
           "idempotency": "conditional",
+          "repeatable_because": "the connector requires an `Idempotency-Key` header on every call, and Stripe replays a keyed POST from its own cache for 24 hours rather than re-executing it, so a retried capture captures once and returns the first result",
           "method": "POST",
           "path": "/v1/payment_intents/{payment_intent}/capture",
           "parameters": [
@@ -35679,6 +35935,7 @@
           "description": "Cancel a payment intent, releasing any authorization hold on the customer's card. This cannot be undone — a canceled intent is final, and collecting the payment afterwards means creating a new one. An intent that has already succeeded cannot be canceled; refund it instead",
           "risk": "high",
           "idempotency": "conditional",
+          "repeatable_because": "the connector requires an `Idempotency-Key` header on every call, and Stripe replays a keyed POST from its own cache for 24 hours rather than re-executing it, so a retried cancel cancels once rather than racing a second attempt",
           "method": "POST",
           "path": "/v1/payment_intents/{payment_intent}/cancel",
           "parameters": [
@@ -35782,6 +36039,7 @@
           "description": "Refund a charge **in full** and irreversibly: the entire un-refunded amount goes back to the customer's original payment method, usually within five to ten business days. A partial refund needs an `amount` this connector cannot send. Stripe's fee on the original charge is not returned. There is no way to undo a refund — collecting the money again means charging the customer again",
           "risk": "destructive",
           "idempotency": "conditional",
+          "repeatable_because": "the connector requires an `Idempotency-Key` header on every call, and Stripe replays a keyed POST from its own cache for 24 hours rather than re-executing it, so a retried refund refunds once — without the key a retry would move money twice",
           "method": "POST",
           "path": "/v1/charges/{charge}/refunds",
           "parameters": [
@@ -36135,6 +36393,7 @@
           "description": "Describe the tables, views and columns this project's data API exposes, as an OpenAPI 2.0 document. Takes no argument. Call this first to discover the table names supabase-rows-list takes and what columns each one has — the document reflects only what the anon role may see, so a table absent from it is a table this key cannot read. Also this connector's `verify`: a bounded read that runs unattended and needs nothing configured beyond the project ref and the key",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/rest/v1/",
           "parameters": [],
@@ -36237,6 +36496,7 @@
           "description": "Read rows from one table or view in this project. Returns a JSON array of row objects with every column the anon role may read; the columns are the project's own, so call supabase-schema-describe first to learn them. Row-level security decides which rows come back — an empty array means the policies matched nothing, not that the table is empty. This connector cannot filter, project or sort: pass `limit` to bound the read and do the rest in the flow",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/rest/v1/{table}",
           "parameters": [
@@ -36322,6 +36582,7 @@
           "description": "Read which sign-in methods this project has enabled, and whether self-service sign-up is open. Takes no argument and returns configuration only — no user data and no identities. Use it to decide whether a flow can offer a given provider before it tries",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/auth/v1/settings",
           "parameters": [],
@@ -36473,6 +36734,7 @@
           "description": "List every board the token's own member can see, newest activity first. Takes no argument — `me` resolves to whoever the token belongs to. Also this connector's `verify`: a bounded read that runs unattended and needs nothing configured beyond the credential pair",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/members/me/boards",
           "parameters": [],
@@ -36581,6 +36843,7 @@
           "description": "Get one board by id, with its settings and current state",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/boards/{id}",
           "parameters": [
@@ -36705,6 +36968,7 @@
           "description": "List the open lists (columns) on a board, left to right. Each carries the `id` trello-list-cards and trello-card-create take",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/boards/{id}/lists",
           "parameters": [
@@ -36764,6 +37028,7 @@
           "description": "List the open cards in one list, in board order. Archived cards are not returned",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/lists/{id}/cards",
           "parameters": [
@@ -36920,6 +37185,7 @@
           "description": "Create a card at the bottom of a list. The card is created unassigned, with no due date and no labels; Trello notifies whoever watches the list",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/cards",
           "parameters": [
@@ -37084,6 +37350,7 @@
           "description": "Archive a card, or restore an archived one. Archiving is reversible and destroys nothing: the card leaves its list and stays readable in the board's archive",
           "risk": "medium",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "PUT",
           "path": "/cards/{id}",
           "parameters": [
@@ -37307,6 +37574,7 @@
           "description": "Verify credentials by fetching the authenticated Twilio account",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/Accounts/{account_sid}.json",
           "parameters": [
@@ -37410,6 +37678,7 @@
           "description": "List messages sent from or received by this account",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/Accounts/{account_sid}/Messages.json",
           "parameters": [
@@ -37631,6 +37900,7 @@
           "description": "Fetch one message",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/Accounts/{account_sid}/Messages/{message_sid}.json",
           "parameters": [
@@ -37801,6 +38071,7 @@
           "description": "List calls made from or received by this account",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/Accounts/{account_sid}/Calls.json",
           "parameters": [
@@ -38060,6 +38331,7 @@
           "description": "Fetch one call",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/Accounts/{account_sid}/Calls/{call_sid}.json",
           "parameters": [
@@ -38394,6 +38666,7 @@
           "description": "Get the Typeform account this access token authenticates as: its account id, display alias, own account email and interface language. Confirms the token resolves. Takes no parameters",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/me",
           "parameters": [],
@@ -38456,6 +38729,7 @@
           "description": "List the forms in the authenticated account, most recently updated forms sorting available. Returns each form's id, title and public/private status but not its questions — use typeform-form-get for a form's fields",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/forms",
           "parameters": [
@@ -38641,6 +38915,7 @@
           "description": "Get one form's own definition: its title, language, rendering type and questions (fields), plus its welcome and thank-you screens. Does not return any response data — use typeform-response-list for that",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/forms/{form_id}",
           "parameters": [
@@ -38788,6 +39063,7 @@
           "description": "List one form's responses, newest first by default. Paginate with `before`/`after`, each naming the `token` of a response already retrieved, to page toward older or newer responses respectively; `page_size` alone returns only the first page. Each response's `answers` holds whatever that respondent typed or selected — this connector never inspects or filters on answer content",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/forms/{form_id}/responses",
           "parameters": [
@@ -39072,6 +39348,7 @@
           "description": "Permanently delete one or more of a form's responses by their own token. There is no undelete: once deleted, a response's answers are gone. Deletion is asynchronous — a successful call confirms the request was registered, not that the responses are already gone",
           "risk": "destructive",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "DELETE",
           "path": "/forms/{form_id}/responses",
           "parameters": [
@@ -39210,6 +39487,7 @@
           "description": "List the projects of the team this connector is installed for. The team is pinned at install time and is not a parameter, so every call returns that team's projects and no other account's",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v10/projects",
           "parameters": [],
@@ -39249,6 +39527,7 @@
           "description": "Get one project of the team this connector is installed for, by its id or name. A project belonging to any other account is a 404 here: the team is pinned at install time and is not a parameter",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v9/projects/{idOrName}",
           "parameters": [
@@ -39340,6 +39619,7 @@
           "description": "List the deployments of the team this connector is installed for, newest first, optionally filtered to one project. The team is pinned at install time and is not a parameter, so every call returns that team's deployments and no other account's",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v7/deployments",
           "parameters": [
@@ -39506,6 +39786,7 @@
           "description": "Get one deployment of the team this connector is installed for, by its id or its unique hostname. A deployment belonging to any other account fails here: the team is pinned at install time and is not a parameter",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v13/deployments/{idOrUrl}",
           "parameters": [
@@ -39600,6 +39881,7 @@
           "description": "Cancel a deployment of the team this connector is installed for, stopping it before it completes; refused with 400 if it already finished (READY, ERROR or CANCELED). The team is pinned at install time and is not a parameter, so this cannot reach a deployment of another account",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "PATCH",
           "path": "/v12/deployments/{id}/cancel",
           "parameters": [
@@ -39738,6 +40020,7 @@
           "description": "List the sites this token can see, with each site's id, display name, hosted subdomain and last-published time. The `id` returned here is what every other operation in this connector needs as `site_id`",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/sites",
           "parameters": [],
@@ -39824,6 +40107,7 @@
           "description": "List the CMS collections defined on a site, with each collection's id, display name and slug. Does not include a collection's fields — call webflow-collection-get for that. Returns Webflow's first page only; this connector declares no offset or limit parameter",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/sites/{site_id}/collections",
           "parameters": [
@@ -39923,6 +40207,7 @@
           "description": "Get a collection's own schema: its display name, slug, and the full list of fields the site owner defined for it — each field's id, slug, display name, type, and whether it is required. This is the honest way to learn what an item's fieldData will contain, since that shape is tenant-defined and unknowable at compile time; this connector cannot type fieldData any more precisely than this lets a caller discover it",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/collections/{collection_id}",
           "parameters": [
@@ -40045,6 +40330,7 @@
           "description": "List the items in a collection, in Webflow's default order. Each item's fieldData is a flat object keyed by that collection's own field slugs — call webflow-collection-get to discover them; this connector cannot type fieldData beyond that, because it is defined per-tenant, per-collection. Returns Webflow's first page only; this connector declares no offset or limit parameter",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/collections/{collection_id}/items",
           "parameters": [
@@ -40156,6 +40442,7 @@
           "description": "Get one item from a collection. Its fieldData is a flat object keyed by that collection's own field slugs — call webflow-collection-get to discover them; this connector cannot type fieldData beyond that, because it is defined per-tenant, per-collection",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/collections/{collection_id}/items/{item_id}",
           "parameters": [
@@ -40267,6 +40554,7 @@
           "description": "Publish a site's currently staged changes to its live, public domains — every connected custom domain and the Webflow-hosted subdomain. This has immediate public effect: whatever is staged goes live for every visitor as soon as this call returns, with no separate confirmation step. Takes no body — Webflow's optional custom-domain selector is itself an array this connector cannot express (C-185), so this always publishes to every connected domain rather than a caller-chosen subset",
           "risk": "high",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/sites/{site_id}/publish",
           "parameters": [
@@ -40383,6 +40671,7 @@
           "description": "Verify credentials by fetching the authenticated Zendesk user",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v2/users/me.json",
           "parameters": [],
@@ -40492,6 +40781,7 @@
           "description": "Search tickets with Zendesk search syntax, e.g. `type:ticket status:new`",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v2/search.json",
           "parameters": [
@@ -40629,6 +40919,7 @@
           "description": "Show one ticket",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v2/tickets/{ticket_id}.json",
           "parameters": [
@@ -40774,6 +41065,7 @@
           "description": "List a ticket's comments",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/api/v2/tickets/{ticket_id}/comments.json",
           "parameters": [
@@ -40946,6 +41238,7 @@
           "description": "Safe-update selected ticket fields against the caller's updated_stamp; at least one of status, priority, assignee_id, group_id or type must be supplied",
           "risk": "medium",
           "idempotency": "conditional",
+          "repeatable_because": "the caller supplies `updated_stamp` and Zendesk applies the write only if the ticket has not moved since; a replay after any other change is rejected rather than applied, so a retry either lands the caller's intended edit or fails loudly",
           "method": "PUT",
           "path": "/api/v2/tickets/{ticket_id}.json",
           "parameters": [
@@ -41129,6 +41422,7 @@
           "description": "Add a comment to a ticket; the comment is an internal note unless public is explicitly true",
           "risk": "medium",
           "idempotency": "conditional",
+          "repeatable_because": "Zendesk does not deduplicate comments, so this is safe to repeat only when the caller supplies a fresh `updated_stamp` and lets the safe-update check reject a stale replay; without that condition a retry adds the comment a second time",
           "method": "PUT",
           "path": "/api/v2/tickets/{ticket_id}.json",
           "parameters": [
@@ -41274,6 +41568,7 @@
           "description": "Add tags to a ticket without replacing the tags it already has",
           "risk": "medium",
           "idempotency": "conditional",
+          "repeatable_because": "tags are a set on Zendesk's side and this endpoint adds without replacing, so re-sending the same tags leaves the same set — conditional rather than idempotent because the response reflects the merged set, which a stored result must not stand in for",
           "method": "PUT",
           "path": "/api/v2/tickets/{ticket_id}.json",
           "parameters": [
@@ -41468,6 +41763,7 @@
           "description": "Get one meeting — its topic, start time, duration, timezone, join URL and settings. The response also carries `start_url`, which starts the meeting as its host for anyone holding it",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v2/meetings/{meeting_id}",
           "parameters": [
@@ -41549,6 +41845,7 @@
           "description": "Schedule a one-off meeting for a user at a fixed time. Nobody is invited and nobody is notified — the meeting appears on the host's own Zoom schedule and the returned `join_url` is how anyone else learns of it. The response also carries `start_url`, which starts the meeting as its host for anyone holding it",
           "risk": "medium",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "POST",
           "path": "/v2/users/{user_id}/meetings",
           "parameters": [
@@ -41714,6 +42011,7 @@
           "description": "Cancel a meeting. It is gone — Zoom offers no undelete, and the meeting id, its join URL and any registrations go with it. Whether Zoom emails the host or the registrants about the cancellation is left to Zoom's own default; this operation cannot ask for either",
           "risk": "destructive",
           "idempotency": "non_idempotent",
+          "repeatable_because": null,
           "method": "DELETE",
           "path": "/v2/meetings/{meeting_id}",
           "parameters": [
@@ -41774,6 +42072,7 @@
           "description": "Get one user — their id, email, name, timezone, licence type and personal meeting id. This is how `me` is resolved to the id a meeting is created under",
           "risk": "low",
           "idempotency": "idempotent",
+          "repeatable_because": null,
           "method": "GET",
           "path": "/v2/users/{user_id}",
           "parameters": [

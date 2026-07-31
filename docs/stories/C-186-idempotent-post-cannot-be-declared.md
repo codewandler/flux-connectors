@@ -2,7 +2,7 @@
 id: C-186
 title: "An idempotent POST or PATCH cannot be declared, so two connectors ship a field that contradicts their own prose"
 pillar: Spec
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/repeatable-writes.md
 areas: [connector-spec, connector-flux]
