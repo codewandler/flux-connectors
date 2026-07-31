@@ -2,7 +2,7 @@
 id: C-222
 title: Ship the Resend connector
 pillar: Spec
-status: ready
+status: in-progress
 priority: 4
 design:
 epic: provider-fleet-2

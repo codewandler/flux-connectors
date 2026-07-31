@@ -1,0 +1,276 @@
+# Resend API — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Resend publishes reference prose at resend.com/docs, not a
+# vendored OpenAPI document, so there is nothing to point `[spec]` at even once ingest (C-4) and the
+# overlay (C-6) land. **Drift against the vendor's own docs is therefore undetectable by machine**,
+# the caveat zendesk, freshdesk, github, notion, postmark, datadog and trello already carry
+# (`docs/designs/provider-operation-inventory.md` §6.7). Every path, parameter and response field
+# below was read from resend.com/docs/api-reference — `introduction`, `emails/{send-email,
+# retrieve-email}`, `domains/{list-domains,get-domain}` and `errors` — on **2026-07-31**.
+#
+# ---------------------------------------------------------------------------------------------
+# C-222'S QUESTION: HOW SMALL CAN A GOOD CONNECTOR BE? THIS FILE IS THE ANSWER, AND THE ONE THING
+# THAT SURPRISED IT IS RECORDED FIRST.
+# ---------------------------------------------------------------------------------------------
+#
+# Every other provider in this wave was chosen because it forces something new. Resend was chosen
+# because it forces nothing: one bearer token, one fixed host, no service split, no tenant subdomain,
+# no OAuth grant, no signing secret, no pagination puzzle. What is left when all of that is gone is
+# the irreducible part of a connector, and the measurement — declaration lines, operation count, how
+# much of the authoring was mechanical — is recorded in the story's Progress section, because
+# `AGENTS.md` says the cost of hand-authoring is the thing C-14's spec ingest exists to remove and it
+# should be a number rather than a feeling.
+#
+# **THE ONE THING IT DOES FORCE: A `User-Agent`.** Resend's own introduction says, verbatim: *"All
+# API requests must include a `User-Agent` header."* … *"Requests without this header will be
+# rejected with a `403` status code."* … *"Most HTTP clients, all Resend SDKs, and the Resend CLI
+# include this header automatically, but if you're making direct HTTP requests, make sure to set
+# it"* — and this pipeline emits direct `http.request` calls. Nothing in this repository binds an
+# HTTP implementation (`AGENTS.md`, Intentional gaps: `flux-web` is not in `Cargo.lock` at all), so
+# whether the eventual host would supply one **cannot be checked here**, and a connector that
+# assumed it would is a connector that 403s on its first real call with a valid key. So it is
+# declared, in the one field that exists for a vendor-fixed request header — `const_headers`, whose
+# own doc comment names `User-Agent` as a case it was built for (C-55,
+# `crates/connector-spec/src/provider.rs`).
+#
+# That is the finding the floor probe actually produced: **the simplest vendor in the fleet still
+# needed one thing that is not derivable from its endpoints**, and it is the sort of thing an
+# endpoint-shaped spec ingest would not have carried either. `flux-connectors` is the value rather
+# than a version string, deliberately: the generated artifacts already carry
+# `generator = "flux-connectors <version>"`, and a version inside a request header would make every
+# release a diff on every emitted module.
+#
+# ---------------------------------------------------------------------------------------------
+# NO `[[config]]`, DELIBERATELY — AND THE EMPTY CASE IS NOT NEW.
+# ---------------------------------------------------------------------------------------------
+#
+# The only thing a human supplies is the API key, and a credential is declared in `[[auth]]`. A
+# `[[config]]` field binding `credential.resend.api_key` would restate what `[[auth]]` already says
+# and add nothing a host could act on — there is no subdomain, no account id, no region and no
+# `{variable}` in the base URL for a field to bind. `AGENTS.md`'s configuration contract is that a
+# connector "asks for everything it needs and nothing it cannot use", and here that is nothing.
+#
+# The story wondered whether the empty configuration surface was untested. It is not: thirteen
+# shipped providers already declare no `[[config]]` (airtable, asana, babelforce, fly, github,
+# google, hubspot, intercom, openai, openrouter, sentry, slack, zoom).
+# `crates/connector-flux/tests/resend_connector.rs` measures that rather than asserting it, so the
+# claim cannot rot.
+#
+# ---------------------------------------------------------------------------------------------
+# WHAT SHIPS: 4 operations — 1 write, 3 reads. Send a message; read what happened to it; list the
+# domains a key may send from, and inspect one.
+# ---------------------------------------------------------------------------------------------
+#
+# **Four is the answer, not a placeholder for more.** Resend also publishes batch send, scheduled
+# send with update/cancel, API-key management, audiences, contacts, broadcasts and webhooks. The
+# exclusions below are named rather than silently absent:
+#
+# - **`POST /emails/{id}/cancel` and `PATCH /emails/{id}`** — cancel and reschedule, and both are
+#   perfectly expressible here. They are out because **this connector cannot schedule an email**, so
+#   neither would have a reachable subject. `scheduled_at` is one of Resend's optional body
+#   parameters, and this emitter has no optional body field: `body_tree`
+#   (`crates/connector-flux/src/op.rs:1062-1103`) places every declared field into the payload record
+#   unconditionally, so a caller who omitted it would send `{"scheduled_at": null}` on every
+#   immediate send. Whether Resend tolerates that is undocumented either way, and `AGENTS.md` says a
+#   loud refusal beats plausible-but-unverified output. The same gap keeps `cc`, `bcc`, `reply_to`,
+#   `text`, `headers`, `tags` and `attachments` out. Closing it — a `when`-guarded body field,
+#   mirroring what query parameters already get — is a `connector-flux` change that would unblock all
+#   of them at once, and it is what this connector is waiting on rather than anything Resend does.
+# - **`POST /emails/batch`** — up to 100 messages in one call, and its body is a JSON *array* at the
+#   root. This pipeline's body is a record assembled from named fields; a root array is the
+#   free-form `body_schema` shape, and pairing a `high`-risk bulk send with the least checkable body
+#   form is not a first curated operation.
+# - **`GET /api-keys`, `POST /api-keys`, `DELETE /api-keys/{id}`** — an argument-free read that would
+#   have served as `verify`, and deliberately not used for it: a connection test runs unattended
+#   whenever someone opens a settings page, and it should not be the call that enumerates the
+#   account's credentials. `GET /domains` answers the same question ("is this key live?") and answers
+#   a second one a sender actually needs.
+# - **Audiences, contacts, broadcasts** — Resend's marketing surface, a different product from the
+#   transactional sending above. A connector earns operations by need.
+# - **`[[events]]`/`[[channels]]`** — Resend does publish webhooks with Svix signing. Declaring an
+#   inbound half means also declaring how it is registered and verified, which is its own story.
+#
+# **Not one operation declares a query parameter.** `GET /domains` documents `limit`, `after` and
+# `before`; the two cursors are opaque strings, and this emitter interpolates a query value verbatim
+# and percent-encodes nothing (`op.rs:138-143`, the standing `zendesk-ticket-search` gap in
+# `AGENTS.md`). Resend returns every domain when `limit` is omitted, so the read is complete without
+# them. They belong to whichever story closes the query-encoding gap
+# (`docs/designs/query-encoding-flux-stories.md`).
+#
+# **No email address appears anywhere in this file** — not in a description, not in an `example`, not
+# in a response schema. Sender and recipient are the caller's own input, and every address a
+# *response* echoes is documented as personal data with no example, the convention
+# `providers/postmark.toml` and `providers/sendgrid.toml` already carry.
+#
+# ---------------------------------------------------------------------------------------------
+
+id = "resend"
+vendor = "Resend"
+
+# The reverse-DNS authority this connector publishes under (C-92), keyed on the product: Resend
+# publishes its own API domain, `api.resend.com`, so it takes its own authority with the trailing
+# `api` label the shipped authorities carry. It leads every rendered address and every credential
+# path — `tenants/<tenant>/com.resend.api/<credential>` — and is **never repointed once published**.
+authority = "com.resend.api"
+
+# **No `api_version`: this vendor puts no version segment in the URL, and says so.** Resend's
+# introduction states there is "no versioning system in place" today, with calendar-based header
+# versioning planned. Every path below is unversioned, so there is nothing this file could spell
+# without asserting a vendor fact from outside it. A `pid` and a credential path render without one;
+# only a `gid` needs both halves. `providers/postmark.toml` gives the same answer for the same
+# reason.
+base_url = "https://api.resend.com"
+
+description = "Resend transactional email: send a message, read what happened to it, and list or inspect the domains a key may send from"
+verify = "resend-domain-list"
+
+# One alternative naming one credential. Resend documents no other mechanism for an API call.
+default_auth = [{ credentials = ["resend.api_key"] }]
+
+# An inline table deliberately — a `[const_headers]` section header would scope every provider scalar
+# after it into the table. See the header comment for why this one header is load-bearing: without it
+# Resend answers `403` even to a valid key.
+const_headers = { "User-Agent" = "flux-connectors" }
+
+# ---------------------------------------------------------------------------------------------
+# Credentials — one, and the whole of the connector's secret surface.
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "resend.api_key"
+scheme = "bearer"
+env = ["RESEND_API_KEY"]
+description = "Resend API key, sent as a bearer token on every request. Minted in the Resend dashboard and scoped there to full access or sending only; this repository holds the reference, never the value"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — the one write.
+#
+# `risk = "high"` and `idempotency = "non_idempotent"`, and neither is decoration: flux's approval
+# gate reads `risk`, and a message that has left the building cannot be recalled. The same
+# declaration `providers/postmark.toml` records for its own send.
+#
+# **Resend does document an `Idempotency-Key` request header** for this endpoint, expiring after 24
+# hours. It is not declared here and the operation stays `non_idempotent` regardless, because
+# `check_write_metadata` (`crates/connector-flux/src/op.rs:708-730`) refuses a `POST` declaring
+# itself idempotent outright — the method, not the vendor's guarantee, is what it keys on. Declaring
+# the header while leaving the metadata unchanged would put a claim in the request that the tool
+# contract contradicts, so the honest form is neither, and the gap is recorded rather than papered
+# over.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "resend-email-send"
+method = "POST"
+path = "/emails"
+description = "Send one email immediately. Delivered within seconds and cannot be recalled once accepted. The sending domain must already be verified on this account — resend-domain-list names the ones that are"
+risk = "high"
+idempotency = "non_idempotent"
+
+# Every body field below is `required = true`, and that is what bounds the operation rather than an
+# opinion about which fields matter: an unset optional field would travel as an explicit `null`.
+# See the header comment.
+[[operations.params.body]]
+name = "from"
+description = "The sending address, on a domain verified for this account. Accepts a bare address, or `Name <address>` to attach a friendly name. The caller's own input, never an example value here"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# `oneOf`, so it maps to `Any` in the emitted signature (`crates/connector-flux/src/types.rs`), which
+# is honest: Resend accepts a single address or an array of up to 50, and Flux has no sum type to
+# hold that union. Declaring it as `string` would silently refuse the batch form.
+[[operations.params.body]]
+name = "to"
+description = "Recipient address, or an array of up to 50 addresses. The caller's own input, never an example value here"
+required = true
+schema = { oneOf = [
+  { type = "string", minLength = 1 },
+  { type = "array", minItems = 1, maxItems = 50, items = { type = "string" } },
+] }
+
+[[operations.params.body]]
+name = "subject"
+description = "The email's subject line"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# Resend requires one of `html`, `text` or `react`; this connector always sends `html`, which
+# resolves the cross-field rule a JSON Schema cannot express into a single always-sent field. Nothing
+# is lost by it: the vendor documents that `text` is generated from `html` when omitted, and `react`
+# is a Node SDK construct with no wire form at all.
+[[operations.params.body]]
+name = "html"
+description = "The message body, as HTML. Resend generates the plain-text alternative from it, so a plain-text-only message is sent by putting the text here"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# The whole documented response: one id, and it is the handle every later lookup takes.
+[operations.response_schema]
+type = "object"
+required = ["id"]
+properties = { id = { type = "string", format = "uuid", description = "Resend's id for this message — the argument resend-email-get takes. The only field the send answers with" } }
+
+# ---------------------------------------------------------------------------------------------
+# Operations — the three reads. All `low`: each returns what the key's own account can already see in
+# Resend's dashboard.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "resend-email-get"
+method = "GET"
+path = "/emails/{email_id}"
+description = "Read one sent message and its current delivery state. This is how a flow learns whether a send bounced, was delivered, or is still queued"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "email_id"
+description = "The message's id, from resend-email-send's response"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# Resend's own documented example response for this endpoint, field for field. Every address member
+# is a recipient or a sender — personal data, described and never exemplified.
+[operations.response_schema]
+type = "object"
+required = ["object", "id", "to", "from", "created_at", "subject", "last_event"]
+properties = { object = { const = "email" }, id = { type = "string", format = "uuid", description = "The message's id, echoed back" }, message_id = { type = "string", description = "The RFC 5322 Message-ID Resend assigned, for correlating with a recipient's own mail logs" }, to = { type = "array", items = { type = "string" }, description = "The recipients this message was sent to — personal data, never an example value" }, from = { type = "string", description = "The sending address used — never an example value" }, created_at = { type = "string", description = "When Resend accepted the message, as a space-separated UTC timestamp rather than strict RFC 3339" }, subject = { type = "string" }, html = { type = "string", description = "The HTML body as sent" }, text = { type = "string", description = "The plain-text alternative, or null when none was generated" }, cc = { type = "array", items = { type = "string" }, description = "Copied recipients — personal data, never an example value" }, bcc = { type = "array", items = { type = "string" }, description = "Blind-copied recipients — personal data, never an example value" }, reply_to = { type = "array", items = { type = "string" }, description = "Reply-To addresses — personal data, never an example value" }, last_event = { type = "string", description = "The most recent delivery event: queued, scheduled, sent, delivered, delivery_delayed, complained, bounced, or canceled. This is the field a flow branches on" }, scheduled_at = { type = "string", description = "When a scheduled message is due, or null for an immediate send" }, tags = { type = "array", items = { type = "object", required = ["name", "value"], properties = { name = { type = "string" }, value = { type = "string" } } }, description = "The key/value metadata the send attached, if any" } }
+
+# ---------------------------------------------------------------------------------------------
+
+# This connector's `verify`: an argument-free read that a settings page can run unattended, and one
+# that answers a second question a sender needs — which domains are actually usable in `from`.
+[[operations]]
+id = "resend-domain-list"
+method = "GET"
+path = "/domains"
+description = "List every sending domain on this account with its verification status. Also this connector's `verify` — a bounded read that runs unattended and needs nothing configured beyond the credential"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["object", "data"]
+properties = { object = { const = "list" }, has_more = { type = "boolean", description = "Whether more domains exist beyond this page. This connector declares no cursor parameters, so it reads the unpaginated default, which returns every domain" }, data = { type = "array", description = "One entry per sending domain", items = { type = "object", required = ["id", "name", "status", "created_at"], properties = { id = { type = "string", format = "uuid", description = "The domain's id — what resend-domain-get addresses it by" }, name = { type = "string", description = "The domain itself, as registered with Resend" }, status = { type = "string", description = "not_started, pending, verified, failed or temporary_failure. Only a verified domain may appear in a send's `from`" }, created_at = { type = "string", description = "As a space-separated UTC timestamp rather than strict RFC 3339" }, region = { type = "string", description = "The sending region the domain was created in, e.g. us-east-1" }, capabilities = { type = "object", description = "Whether this domain may send and whether it may receive, each enabled or disabled" } } } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "resend-domain-get"
+method = "GET"
+path = "/domains/{domain_id}"
+description = "Read one sending domain, including the DNS records it needs and the status of each. This is the diagnostic for a domain that will not verify, and therefore for a send refused with an invalid-from error"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "domain_id"
+description = "The domain's id, from resend-domain-list"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# The list entry's shape plus the tracking settings and the `records` array, which is the reason this
+# operation exists at all.
+[operations.response_schema]
+type = "object"
+required = ["object", "id", "name", "status", "created_at"]
+properties = { object = { const = "domain" }, id = { type = "string", format = "uuid", description = "The domain's id" }, name = { type = "string", description = "The domain itself, as registered with Resend" }, status = { type = "string", description = "not_started, pending, verified, failed or temporary_failure. Only a verified domain may appear in a send's `from`" }, created_at = { type = "string", description = "As a space-separated UTC timestamp rather than strict RFC 3339" }, region = { type = "string", description = "The sending region the domain was created in, e.g. us-east-1" }, open_tracking = { type = "boolean", description = "Whether Resend rewrites messages to record opens" }, click_tracking = { type = "boolean", description = "Whether Resend rewrites links to record clicks" }, tracking_subdomain = { type = "string", description = "The subdomain link tracking is served from, when click tracking is on" }, capabilities = { type = "object", description = "Whether this domain may send and whether it may receive, each enabled or disabled" }, records = { type = "array", description = "The DNS records this domain needs, each with its own verification status. A domain stuck at not_started is one whose records have not been published", items = { type = "object", required = ["record", "name", "type", "value", "status"], properties = { record = { type = "string", description = "Which mechanism the entry serves: SPF, DKIM or Tracking" }, name = { type = "string", description = "The record's host name, relative to the domain" }, type = { type = "string", description = "The DNS record type: MX, TXT or CNAME" }, value = { type = "string", description = "The value to publish" }, ttl = { type = "string", description = "Resend states this as text, e.g. \"Auto\", not as a number of seconds" }, priority = { type = "integer", description = "MX priority; absent on TXT and CNAME entries" }, status = { type = "string", description = "This individual record's verification state" } } } } }
