@@ -41,11 +41,12 @@
 #    placement would leave the same two lines in the same state, minus the evidence that anyone
 #    reaches them. C-164's refusal was a different case — there the *declaration* could not be made
 #    honestly at all. Here it can: `?key=…&token=…` is exactly what the vendor documents.
-# 2. **The blast radius is one connector and is asserted to stay that way.**
-#    `crates/connector-flux/tests/trello_connector.rs::trello_is_the_only_query_placement_in_the_shipped_catalogue`
-#    scans every `providers/*.toml` and fails the moment a second query-placed credential lands. So
-#    C-159's reviewer has a complete, machine-checked list of the exposure rather than a survey to
-#    repeat.
+# 2. **The hazard is contained, and containment is asserted for whatever ships.**
+#    `crates/connector-flux/tests/query_placed_credentials.rs` scans every `providers/*.toml` and
+#    fails the moment any connector combines a query-placed credential with caller text in the same
+#    query string — which is the combination C-159 §2 is actually about. It used to assert instead
+#    that Trello was the *only* query placement, which was green only until a second one landed and
+#    would have failed in Trello's name for another connector's change (C-230).
 # 3. **Nothing in this repository executes any of it.** No host is bound here (`AGENTS.md`,
 #    Intentional gaps): `connector-pack` hands declarations to a host that supplies its own egress,
 #    and no `http.request` implementation is even in `Cargo.lock`. The exposure is real for the first

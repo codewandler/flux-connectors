@@ -175,6 +175,46 @@ are `catalog.json` and index staleness. Report them and stop; do **not** run a f
 them. The coordinator's full build at integration resolves all eight, and it is the only build that
 can, because it is the only one with every provider.
 
+### A per-provider test asserts about its provider, never about the catalogue
+
+The disjoint-write-set guarantee above is what lets provider stories run in parallel, and **a
+catalogue-walking assertion breaks it without touching a shared file.** A test that enumerates
+`providers/` and compares the result against a hand-written literal is invisible from its author's
+worktree, which holds one connector; invisible to the other implementor, whose diff is entirely
+disjoint; not among the eight staleness failures above, so it does not read as expected; and
+unresolvable the way those eight are, because they are *regenerated* and this is a literal in a
+shipped test. It surfaces for the first time at integration, attributed to whichever merge happened
+to be second.
+
+Two instances were measured on 2026-07-31. C-216's Discord test asserted a catalogue prefix census
+equalled a four-element literal; Klaviyo, landing in the same wave, declares a fifth — each branch
+green alone, red together. Review caught that one. The second had been on `main` since C-165:
+Trello's test asserted the query-placed credential set equalled a two-element literal, and was green
+only because no provider since Trello had placed a credential in the query string. The next one that
+did would have turned *Trello's* test red.
+
+**So: a file under `crates/*/tests/` named for a provider may not walk `providers/`.**
+`crates/connector-cli/tests/per_provider_test_scope.rs` enforces it, deriving the per-provider file
+set from `providers/` so it keeps no inventory of its own. Note it is deliberately wider than the
+defect — it refuses the walk, not just the literal — because the author of a per-provider test cannot
+review the population they are quantifying over, and a monotone claim written there is correct by
+luck rather than by construction.
+
+This is **not** "never measure the catalogue". A catalogue-wide claim has three homes, and choosing
+one is the whole of the rule:
+
+| the claim | where it goes | why it survives a new provider |
+|---|---|---|
+| a property true of **every** connector | a whole-catalogue test file — `crates/connector-flux/tests/query_placed_credentials.rs`, `shipped_modules.rs`, `input_schema_agreement.rs` | universally quantified, so a provider that satisfies it leaves the test green, and one that violates it is exactly when the test should fail |
+| a premise about **specific** connectors | the per-provider file, loading them **by name** — `discord_connector.rs::the_non_bearer_prefixes_this_connector_joins_were_already_shipped` | a closed set; only those connectors changing can falsify it, which is when the evidence stops being true |
+| a **measurement** of the catalogue | coordinator-owned and ratcheted — `crates/connector-spec/tests/response_schema_coverage.rs`, with `COVERED_FLOOR` in the fence above | a floor with slack, raised at integration by the only run that sees every provider |
+
+The reshaping to copy is C-216's, and the reasoning generalises past the example. Ask what premise
+the assertion is really testing. If it is about named connectors, name them. If it is about the
+catalogue, write it as a property over whatever ships — Trello's census became "every connector that
+places a credential in the query string puts nothing else there", which is the question C-159 §2's
+hazard actually poses, and which a fifty-fourth connector cannot falsify merely by existing.
+
 ### A ninth and tenth staleness check exist, and both are coordinator-owned
 
 `the_recorded_floor_is_the_measured_figure` (`crates/connector-spec/tests/response_schema_coverage.rs`)
