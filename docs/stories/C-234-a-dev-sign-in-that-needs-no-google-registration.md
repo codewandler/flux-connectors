@@ -156,3 +156,48 @@ then `/v1/connectors` → 200 with 53 connectors, a credential stored at
 vendor is live. Without `--dev` the same binary answers `404` on `/auth/dev` with an empty body.
 
 **Not done here:** the board, `CHANGELOG.md` and `docs/roadmap.md` are the coordinator's to write.
+
+### Rework round 1 — closing two unpinned properties
+
+Independent security review returned PASS (16 falsification mutations, 156 hand-written raw HTTP
+requests, C-204 verified untouched by blob hash). Thirteen mutations went red; two of the three that
+went green are closed here. Neither was a defect in the shipped code — both were properties the code
+*had* but that no test would have defended if somebody changed them later.
+
+**M16 — the dev identity is not steerable.** `auth/routes.rs` claims in prose that the dev route "is
+not an impersonation primitive: there is no parameter that would let a caller ask to be somebody".
+The review made `dev_signin` read `?tenant=` and route it through `Account::from_claims`, minting
+`google-<attacker-chosen>` sessions straight out of the dev door — and the suite stayed green. Now
+pinned by `tests/dev_signin.rs::the_dev_identity_cannot_be_steered_by_anything_a_caller_sends`, which
+mints through four channels (query string, JSON body, form body, headers including
+`X-Forwarded-User`/`X-Remote-User`) crossed with nine identity-shaped keys, and asserts the whole
+`/auth/me` document is **byte-identical to the unsteered one** every time. The steering values are
+deliberately *valid* subjects under `validate_subject`, so a handler that honoured them would
+succeed and mint a different tenant rather than erroring and falling back to the dev account — a
+test steering with `../../etc/passwd` would pass against a vulnerable handler. It closes the loop
+through the store too: a credential written by the unsteered session must still be readable by a
+steered one. Re-running the review's mutation turns this red with *"a query string carrying
+tenant=… changed who the dev sign-in signed in as; the dev door is an impersonation primitive"*.
+
+**M10 — unknown arguments are refused.** Deleting the `other => anyhow::bail!(…)` arm from
+`options()` left the suite green, and `AGENTS.md:23` requires a failing-first test for a behavioural
+change. `options()` is now split into a pure `options_from(args)` so the rule is reachable without
+spawning a subprocess, and `main.rs` has the `#[cfg(test)]` module it lacked. Four tests;
+`an_unknown_argument_is_refused` and `one_bad_argument_refuses_the_whole_command_line` both go red
+under the mutation. This is the guard the whole dev-door design rests on, since the loopback bind is
+what makes the door defensible.
+
+**Also done:** `--help`/`-h` now prints usage and exits 0 instead of `unknown argument "--help"` with
+exit 1. The usage text names `--bind` and `--port` as deliberately absent, because the person reading
+`--help` is exactly the person about to look for them; `usage_names_the_arguments_that_deliberately_do_not_exist`
+pins that.
+
+**Not done, by agreement:** M15 (`index.html`'s `if (status.dev)` guard) needs a JS harness this
+crate does not have — its own story. The server half is pinned; M12 turned `/auth/status` always-true
+red.
+
+**Recorded, not acted on:** the review could not rule out DNS rebinding — a rebound page sends
+`Sec-Fetch-Site: same-origin`, so the cross-site check correctly does not fire, and this crate has no
+Host/Origin allow-list anywhere. Pre-existing and not specific to the dev door, but it is the one
+avenue by which a browser could reach a loopback-only host from off-machine, so it is worth its own
+story now that a no-credential door exists.

@@ -609,3 +609,174 @@ async fn a_cross_site_post_cannot_mint_a_dev_session() {
     assert_eq!(allowed.status(), 303);
     assert!(cookie_named(&allowed, connectors_api::auth::SESSION_COOKIE).is_some());
 }
+
+// ---------------------------------------------------------------------------------------------
+// 6. The identity is fixed, and no caller can steer it
+// ---------------------------------------------------------------------------------------------
+
+/// **Nothing a caller sends can change who the dev sign-in signs them in as.**
+///
+/// `auth/routes.rs` claims, in prose, that this route "is not an impersonation primitive: there is
+/// no parameter that would let a caller ask to be somebody". That claim is load-bearing — it is the
+/// difference between a fixed fake account and a `POST /auth/dev?tenant=google-<victim>` that mints
+/// a session in somebody else's tenant — and until this test it was defended by nothing. An
+/// independent review confirmed the property holds today by adding exactly that parameter and
+/// watching the whole suite stay green.
+///
+/// So the assertion is not "the tenant is `dev-local`" (which a steered handler could still satisfy
+/// for an unsteered request). It is **the account document is byte-identical no matter what the
+/// request carried**, across every channel a handler could plausibly grow a read from: query
+/// string, JSON body, form body, and headers. Every steering value below is a *valid* subject under
+/// `validate_subject` — alphanumerics and dashes, under 100 characters — so a handler that did route
+/// it through `Account::from_claims` would succeed and mint a different tenant rather than erroring
+/// and falling back. A test steering with `../../etc/passwd` would pass against a vulnerable
+/// handler, which is the trap this avoids.
+///
+/// The last assertion closes the loop through the credential store: a value written by the
+/// unsteered session must be visible to a steered one. If steering ever produced a second tenant,
+/// that read goes to a different path and the test goes red there too.
+#[tokio::test]
+async fn the_dev_identity_cannot_be_steered_by_anything_a_caller_sends() {
+    let browser = client();
+    let base = serve_dev().await;
+
+    /// A value that is a legal subject, so a handler that honoured it would really mint
+    /// `google-attacker-chosen-subject` rather than failing validation and falling back.
+    const STEER: &str = "attacker-chosen-subject";
+
+    // The account a bare, unsteered POST produces. Everything else is compared against this.
+    let plain = sign_in_as_dev(&base, &browser).await;
+    let expected: serde_json::Value = browser
+        .get(format!("{base}/auth/me"))
+        .header("cookie", &plain)
+        .send()
+        .await
+        .expect("the call completes")
+        .json()
+        .await
+        .expect("json");
+    assert_eq!(
+        expected["tenant"], DEV_TENANT,
+        "the baseline is the dev account"
+    );
+
+    // Every channel a handler could read a caller-supplied identity out of.
+    let steering = [
+        ("tenant", STEER),
+        ("sub", STEER),
+        ("subject", STEER),
+        ("account", STEER),
+        ("user", STEER),
+        ("email", "attacker@example.test"),
+        ("name", STEER),
+        ("as", STEER),
+        ("tenant", "google-110169484474386276334"),
+    ];
+
+    for (key, value) in steering {
+        // The query string, which is what the review's mutation read.
+        let query = browser
+            .post(format!("{base}/auth/dev"))
+            .query(&[(key, value)])
+            .send()
+            .await
+            .expect("the call completes");
+        // A JSON body.
+        let json = browser
+            .post(format!("{base}/auth/dev"))
+            .json(&serde_json::json!({ key: value }))
+            .send()
+            .await
+            .expect("the call completes");
+        // A form body, written out rather than through `.form()` so this needs no extra feature.
+        let form = browser
+            .post(format!("{base}/auth/dev"))
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(format!("{key}={value}"))
+            .send()
+            .await
+            .expect("the call completes");
+        // A header, including the shapes a reverse proxy would add.
+        let header = browser
+            .post(format!("{base}/auth/dev"))
+            .header(format!("x-{key}"), value)
+            .header("x-forwarded-user", value)
+            .header("x-remote-user", value)
+            .send()
+            .await
+            .expect("the call completes");
+
+        for (channel, response) in [
+            ("query string", query),
+            ("json body", json),
+            ("form body", form),
+            ("header", header),
+        ] {
+            let cookie = support::session_cookie(&response).unwrap_or_else(|| {
+                panic!("{channel} {key}={value}: the dev sign-in set no session cookie")
+            });
+            let account: serde_json::Value = browser
+                .get(format!("{base}/auth/me"))
+                .header("cookie", &cookie)
+                .send()
+                .await
+                .expect("the call completes")
+                .json()
+                .await
+                .expect("json");
+
+            assert_eq!(
+                account, expected,
+                "a {channel} carrying {key}={value:?} changed who the dev sign-in signed in as; \
+                 the dev door is an impersonation primitive"
+            );
+            assert_eq!(
+                account["tenant"], DEV_TENANT,
+                "a {channel} carrying {key}={value:?} moved the dev session's tenant"
+            );
+        }
+    }
+
+    // Through the store, not only through the label: a credential written by the unsteered session
+    // is visible to a steered one, so no steering produced a second tenant.
+    let written = browser
+        .put(format!("{base}/v1/credentials/anthropic/anthropic.api_key"))
+        .header("cookie", &plain)
+        .json(&serde_json::json!({ "value": SENTINEL }))
+        .send()
+        .await
+        .expect("the store call completes");
+    assert_eq!(written.status(), 204);
+
+    let steered = browser
+        .post(format!("{base}/auth/dev"))
+        .query(&[("tenant", STEER)])
+        .send()
+        .await
+        .expect("the call completes");
+    let steered = support::session_cookie(&steered).expect("a session cookie");
+    let view: serde_json::Value = browser
+        .get(format!("{base}/v1/connectors/anthropic"))
+        .header("cookie", &steered)
+        .send()
+        .await
+        .expect("the view")
+        .json()
+        .await
+        .expect("json");
+    let credential = view["credentials"]
+        .as_array()
+        .expect("credentials")
+        .iter()
+        .find(|c| c["name"] == "anthropic.api_key")
+        .expect("the declared credential");
+    assert_eq!(
+        credential["address"],
+        format!("tenants/{DEV_TENANT}/com.anthropic.api/api_key"),
+        "a steered dev session resolved credentials at a different address"
+    );
+    assert_eq!(
+        credential["stored"], true,
+        "a steered dev session landed in a different tenant from the unsteered one"
+    );
+}
