@@ -77,6 +77,13 @@
 //! resolves no host: the transport is a constructor argument, so a host supplies the instance it has
 //! already configured with its SSRF guard, its private-network grant and its audit sink.
 //!
+//! Since C-145 that delegation is written down as [`Transport`], with [`Egress`] as its live arm
+//! and [`DryRunTransport`] as the arm that **cannot** send — a zero-sized type, so the claim is a
+//! property of the type rather than a flag a caller can forget. [`Operation::dry_run`] is the
+//! surface a host asks "what request would this make?" through, and it answers *before* a
+//! credential is resolved rather than after, so what it reports carries credential references and
+//! never values. See [`crate::dry_run`].
+//!
 //! That delegation calls `http.request`'s `execute` directly, which **bypasses
 //! `Executor::dispatch`** — so `http.request`'s own `permission_subjects` and `intents` are never
 //! consulted for the inner call. Both have default trait implementations returning empty, so a Tool
@@ -166,6 +173,7 @@
 mod auth;
 mod config;
 mod credentials;
+mod dry_run;
 mod name;
 mod request;
 mod spec;
@@ -173,6 +181,7 @@ mod tool;
 
 pub use config::{ConfigStore, Configuration, Field, MemoryConfig};
 pub use credentials::{Credentials, DEFAULT_SERVICE};
+pub use dry_run::{CredentialReference, DryRun, DryRunTransport, Transport};
 pub use name::{dotted_name, NameError};
 pub use request::Request;
 pub use spec::project;

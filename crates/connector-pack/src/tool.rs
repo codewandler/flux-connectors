@@ -12,6 +12,7 @@ use flux_spec::{
 use serde_json::Value;
 
 use crate::config::{Field, Snapshot};
+use crate::dry_run::{DryRun, DryRunTransport, Transport};
 use crate::request::{self, Request};
 use crate::{auth, spec, Configuration, Credentials, Error};
 
@@ -231,9 +232,37 @@ impl Operation {
         self.entry
     }
 
+    /// The connector this operation belongs to — its authority, and the credentials it declares.
+    pub(crate) fn provider(&self) -> &'static catalog::Provider {
+        self.provider
+    }
+
+    /// The dotted tool name a host resolves this operation by.
+    pub(crate) fn spec_name(&self) -> &str {
+        &self.spec.name
+    }
+
     /// The transport this operation delegates to — the instance the host supplied.
     pub fn egress(&self) -> &Egress {
         &self.http
+    }
+
+    /// **What this operation would send, without sending it** (C-145).
+    ///
+    /// Answered by [`DryRunTransport`], which holds no client and therefore cannot reach a socket
+    /// whatever it is asked to do. The credential port is not consulted: the request carries each
+    /// declared credential's *reference* rather than a resolved value, so a dry run is safe to show
+    /// before a token exists and answers identically over an empty store. See [`crate::dry_run`].
+    ///
+    /// # Errors
+    ///
+    /// Everything [`Operation::build_request`] refuses, plus the credential refusals that need no
+    /// store — an inbound signing secret, a mechanism naming nothing, a credential the connector
+    /// does not declare, and a header the operation's own module already sets. A dry run refuses
+    /// rather than reporting a partly-built request, which would be a *different* call presented as
+    /// the real one.
+    pub fn dry_run(&self, params: &Value) -> Result<DryRun, Error> {
+        DryRunTransport::new().dry_run(self, params)
     }
 
     /// **The request** this operation makes when called with `params`, before it is sent.
@@ -408,9 +437,14 @@ impl Tool for Operation {
     /// produced it — one flat string, `HTTP {status}\n{headers}\n{body}` — and is returned unshaped:
     /// it is a *result*, a 404 included, and field-selecting it needs `http.request` to return a
     /// record. That is a seam story on flux, filed rather than faked.
+    ///
+    /// It reads as one line because C-145 moved the two that were here behind
+    /// [`Transport`](crate::Transport), unchanged. The live arm is still the only thing a registered
+    /// operation dispatches through; the seam exists so that the dry run — which must run *before*
+    /// a credential is resolved rather than after — is an implementation of the same interface
+    /// instead of a second request path.
     async fn execute(&self, ctx: &ToolContext, params: Value) -> flux_core::Result<ToolResult> {
-        let request = self.build_authenticated_request(ctx, &params).await?;
-        self.http.tool().execute(ctx, request.to_params()).await
+        self.http.carry(ctx, self, &params).await
     }
 }
 
