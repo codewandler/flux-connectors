@@ -1,5 +1,5 @@
 [package]
-name = "connector-secrets"
+name = "codewandler-connector-secrets"
 description = "A host library: where a connector's CredentialRef resolves to a value. Deliberately outside this workspace's compile path."
 edition.workspace = true
 version.workspace = true
@@ -11,6 +11,14 @@ readme = "README.md"
 documentation = "https://docs.rs/connector-secrets"
 keywords = ["flux", "connector", "secrets", "vault", "credentials"]
 categories = ["api-bindings", "cryptography"]
+
+[lib]
+# Pinned so the published package name and the crate name are independent. The package is
+# `codewandler-*` on crates.io (C-195); the crate every dependent and every one of this
+# crate's own integration tests writes is `connector_secrets`. Without this, renaming the package
+# silently renames the crate and breaks every `use` of it.
+name = "connector_secrets"
+path = "src/lib.rs"
 
 [features]
 # `VaultStore` and its HTTP transport are opt-in. Off by default so that a consumer wanting only

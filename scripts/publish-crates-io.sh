@@ -45,9 +45,9 @@ cd "$(dirname "$0")/.."
 # Keep in sync with ROOTS in crates/connector-cli/tests/publish_closure.rs, which asserts both this
 # list and the order derived from it.
 ROOTS=(
-  connector-catalog
-  connector-secrets
-  connector-pack
+  codewandler-connector-catalog
+  codewandler-connector-secrets
+  codewandler-connector-pack
 )
 
 # The closure of ROOTS over this workspace's own crates, topologically sorted so a crate always
@@ -64,10 +64,16 @@ meta = json.load(sys.stdin)
 members = {p["name"]: p for p in meta["packages"]}
 
 # Edges to workspace crates only: a registry dependency is already published by definition.
+#
+# Match on `name`, never on `rename`. `members` is keyed by *package* name, while `rename` is the
+# local alias a dependent chose — `connector-spec = { package = "codewandler-connector-spec" }`.
+# Preferring the alias silently drops every aliased edge, which is not a hypothetical: this repo
+# aliases all four published crates (and every flux crate) exactly that way, and an earlier form of
+# this line read `d.get("rename") or d["name"]`. It looked correct for as long as nothing was
+# aliased, then dropped `codewandler-connector-spec` out of the closure entirely and emitted an
+# order that published a crate before its own dependency.
 edges = {
-    name: sorted(
-        {d.get("rename") or d["name"] for d in pkg["dependencies"]} & members.keys()
-    )
+    name: sorted({d["name"] for d in pkg["dependencies"]} & members.keys())
     for name, pkg in members.items()
 }
 
@@ -118,7 +124,7 @@ crate_version() {
 }
 
 # A dry run is ONE cargo invocation over the whole closure, not a loop, and that is not a shortcut:
-# `cargo publish --dry-run -p connector-secrets` on its own fails, because verifying it means
+# `cargo publish --dry-run -p codewandler-connector-secrets` on its own fails, because verifying it means
 # building it against a `connector-spec` that is not on crates.io yet. Given every package at once,
 # cargo verifies each against the others' freshly packaged copies — which is exactly the situation
 # the real publish creates one crate at a time. Nothing is uploaded.

@@ -15,15 +15,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 /// The host library. Nothing in the compiler may reach it.
-const HOST_LIBRARY: &str = "connector-secrets";
+const HOST_LIBRARY: &str = "codewandler-connector-secrets";
 
 /// The crates that make up the offline compiler. `connector-catalog` is in the list because it is
 /// the leaf the pipeline writes into and is documented as dependency-free.
 const COMPILER_CRATES: &[&str] = &[
     "connector-cli",
-    "connector-spec",
+    "codewandler-connector-spec",
     "connector-flux",
-    "connector-catalog",
+    "codewandler-connector-catalog",
 ];
 
 /// Acceptance: "`connector-cli` does not depend on it — asserted by a test over the dependency
@@ -190,8 +190,8 @@ fn the_walk_finds_an_edge_that_is_not_direct() {
     let lock = Lock::over(&[
         ("connector-cli", &["connector-spec", "helper"]),
         ("connector-spec", &["thiserror"]),
-        ("helper", &["connector-secrets"]),
-        ("connector-secrets", &["reqwest"]),
+        ("helper", &[HOST_LIBRARY]),
+        (HOST_LIBRARY, &["reqwest"]),
         ("reqwest", &[]),
         ("thiserror", &[]),
     ]);
@@ -204,7 +204,7 @@ fn the_walk_finds_an_edge_that_is_not_direct() {
     // And what the operator is told is the chain to break, not just that one exists.
     assert_eq!(
         lock.path_to("connector-cli", HOST_LIBRARY).as_deref(),
-        Some("connector-cli -> helper -> connector-secrets")
+        Some(format!("connector-cli -> helper -> {HOST_LIBRARY}").as_str())
     );
 
     // The control: with the middle crate's edge removed, the same walk reports nothing.
@@ -212,7 +212,7 @@ fn the_walk_finds_an_edge_that_is_not_direct() {
         ("connector-cli", &["connector-spec", "helper"]),
         ("connector-spec", &["thiserror"]),
         ("helper", &["thiserror"]),
-        ("connector-secrets", &["reqwest"]),
+        (HOST_LIBRARY, &["reqwest"]),
         ("reqwest", &[]),
         ("thiserror", &[]),
     ]);

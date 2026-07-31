@@ -1,5 +1,5 @@
 [package]
-name = "connector-pack"
+name = "codewandler-connector-pack"
 description = "Projects catalogue operations onto flux ToolSpecs and installs them as a Tool pack."
 edition.workspace = true
 version.workspace = true
@@ -12,9 +12,17 @@ documentation = "https://docs.rs/connector-pack"
 keywords = ["flux", "connector", "tools", "agent", "api"]
 categories = ["api-bindings", "web-programming"]
 
+[lib]
+# Pinned so the published package name and the crate name are independent. The package is
+# `codewandler-*` on crates.io (C-195); the crate every dependent and every one of this
+# crate's own integration tests writes is `connector_pack`. Without this, renaming the package
+# silently renames the crate and breaks every `use` of it.
+name = "connector_pack"
+path = "src/lib.rs"
+
 [dependencies]
 # The input is the catalogue, not the loader: this crate never sees `providers/*.toml`.
-connector-catalog.workspace = true
+catalog.workspace = true
 
 # The credential port (C-116). `SecretStore` is consumed, never redefined, and C-90's
 # `CredentialRef`/`Layout` come through it rather than from a second addressing scheme.

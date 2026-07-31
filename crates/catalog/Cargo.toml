@@ -1,5 +1,5 @@
 [package]
-name = "connector-catalog"
+name = "codewandler-connector-catalog"
 description = "Every generated connector operation, embedded at compile time and queryable by key."
 edition.workspace = true
 version.workspace = true

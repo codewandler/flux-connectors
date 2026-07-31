@@ -2,7 +2,7 @@
 id: C-195
 title: "Publish to crates.io from CI on a version tag, never from a laptop"
 pillar: Build
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/crates-io-publishing.md
 epic:
@@ -52,7 +52,7 @@ of first release.
       want: `description`, `license`, `repository`, `readme`, `keywords`. **Verify each crate has
       them before claiming this** — they are easy to miss and impossible to fix in a published
       version.
-- [ ] The **crate names** are settled and recorded. `catalog`'s package name is already
+- [x] The **crate names** are settled and recorded. `catalog`'s package name is already
       `connector-catalog` while its directory is `crates/catalog`; check what name is actually
       reserved and whether a `codewandler-` prefix is wanted for consistency with the flux family.
       A name, once published, is permanent.
@@ -62,7 +62,7 @@ of first release.
       The evidence and the `codewandler-` trade are in
       [docs/designs/crates-io-publishing.md](../designs/crates-io-publishing.md) §3. Choosing a
       permanent name is the owner's call, so this box stays open until they make it.
-- [ ] `docs/roadmap.md` and `AGENTS.md` say that publishing is CI-only, so nobody runs it by hand.
+- [x] `docs/roadmap.md` and `AGENTS.md` say that publishing is CI-only, so nobody runs it by hand.
       → **AGENTS.md done** (`## Publishing contract`). `docs/roadmap.md` is coordinator-owned and
       was not edited; the paragraph it needs is in the Progress note below.
 

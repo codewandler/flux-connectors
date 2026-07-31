@@ -68,6 +68,37 @@ The itemized history is [CHANGELOG.md](../CHANGELOG.md); this is its shape.
   and `AuthScheme::Header { prefix }` (C-184), so a credential can sit inside a header value it does
   not wholly occupy.
 
+## Publishing
+
+**Publishing to crates.io is CI-only, and nobody runs `cargo publish` by hand.** A release is a
+consequence of pushing a `vX.Y.Z` tag; `.github/workflows/crates-io.yml` publishes the closure
+idempotently from a single `CARGO_REGISTRY_TOKEN` secret, so a run that trips the new-crate rate
+limit resumes rather than stranding a half-published set that cannot be withdrawn. See
+[AGENTS.md § Publishing contract](../AGENTS.md) and
+[designs/crates-io-publishing.md](designs/crates-io-publishing.md).
+
+**The closure is four crates, not three** — `connector-secrets` re-exports `CredentialRef` from
+`connector-spec`, so `connector-spec` is in its public API and must ship or nothing outside this
+workspace resolves. In dependency order:
+
+```
+codewandler-connector-catalog → codewandler-connector-spec
+  → codewandler-connector-secrets → codewandler-connector-pack
+```
+
+The `codewandler-` prefix matches the flux family and was chosen deliberately: bare `connector-*`
+names are a contested namespace, and `connector-cli` is already taken on crates.io by an unrelated
+project. Package names are decoupled from crate names by `[lib] name`, so `use catalog::` and
+`use connector_spec::` are unaffected.
+
+**Nothing is published yet, and the order is deliberate.** [C-197](stories/C-197-config-collapses-across-services.md)
+adds `service` to `catalog::Operation` — a breaking change to the very type
+[C-190](stories/C-190-publish-catalog-pack-secrets.md) wants consumed — so it lands *before* the
+first tag rather than burning a major version days after it. Then
+[C-192](stories/C-192-flux-0-41-bump.md) (a consumer must link exactly one flux-runtime) and
+[C-92](stories/C-92-authorities-for-every-provider.md), plus one proven live call. One release, one
+stable public surface.
+
 ## Next
 
 The ranked, actionable form is the **Next** list on the [board](stories/README.md). In short: close

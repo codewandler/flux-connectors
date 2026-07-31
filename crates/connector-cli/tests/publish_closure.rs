@@ -31,7 +31,11 @@ use std::process::Command;
 ///
 /// Keep in sync with `ROOTS` in `scripts/publish-crates-io.sh`; the script is the executable copy
 /// and `roots_match_the_script` asserts they have not drifted.
-const ROOTS: &[&str] = &["connector-catalog", "connector-secrets", "connector-pack"];
+const ROOTS: &[&str] = &[
+    "codewandler-connector-catalog",
+    "codewandler-connector-secrets",
+    "codewandler-connector-pack",
+];
 
 /// Metadata every published crate must carry. Each of these is either required by crates.io or
 /// impossible to add to a version after the fact.
@@ -406,11 +410,21 @@ impl Manifest {
             };
             for (key, value) in entries {
                 // `foo = { package = "bar" }` renames: the *package* is what gets published.
+                //
+                // **And the rename usually is not here.** A member writes
+                // `connector-spec.workspace = true`, so the alias lives in the *root* manifest's
+                // `[workspace.dependencies]`, not beside the member's use of it. Reading only the
+                // member's table yields the alias and silently drops the edge — which is exactly
+                // what happened when the four published crates were renamed to `codewandler-*`:
+                // this recomputation lost `codewandler-connector-spec` from the closure and
+                // ordered a crate before its own dependency, while every crate still compiled.
                 let published = value
                     .get("package")
                     .and_then(toml::Value::as_str)
-                    .unwrap_or(key);
-                dependencies.insert(published.to_owned());
+                    .map(str::to_owned)
+                    .or_else(|| workspace_dependency_package(key))
+                    .unwrap_or_else(|| key.clone());
+                dependencies.insert(published);
             }
         }
 
@@ -458,4 +472,21 @@ fn workspace_root() -> PathBuf {
         .nth(2)
         .expect("the crate manifest lives two directories below the workspace root")
         .to_path_buf()
+}
+
+/// The package a `[workspace.dependencies]` key resolves to, when the root manifest aliases it.
+///
+/// `connector-spec = { package = "codewandler-connector-spec", … }` in the root means a member
+/// writing `connector-spec.workspace = true` depends on the package `codewandler-connector-spec`.
+/// Returns `None` when the key is not aliased, so the caller falls back to the key itself.
+fn workspace_dependency_package(key: &str) -> Option<String> {
+    let text = std::fs::read_to_string(workspace_root().join("Cargo.toml")).ok()?;
+    let document: toml::Value = text.parse().ok()?;
+    document
+        .get("workspace")?
+        .get("dependencies")?
+        .get(key)?
+        .get("package")
+        .and_then(toml::Value::as_str)
+        .map(str::to_owned)
 }
