@@ -2,7 +2,7 @@
 id: C-214
 title: "An operator-supplied configuration value reaches the URL unvalidated — and in a host position it can move the origin"
 pillar: Bridge
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/connector-configuration.md
 epic:

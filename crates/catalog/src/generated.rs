@@ -22,6 +22,7 @@ pub(crate) mod r#box;
 pub(crate) mod calendly;
 pub(crate) mod clickup;
 pub(crate) mod cloudflare;
+pub(crate) mod confluence;
 pub(crate) mod contentful;
 pub(crate) mod datadog;
 pub(crate) mod discord;
@@ -42,6 +43,7 @@ pub(crate) mod launchdarkly;
 pub(crate) mod mailchimp;
 pub(crate) mod microsoft_graph;
 pub(crate) mod miro;
+pub(crate) mod newrelic;
 pub(crate) mod notion;
 pub(crate) mod okta;
 pub(crate) mod openai;
@@ -80,6 +82,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &calendly::PROVIDER,
     &clickup::PROVIDER,
     &cloudflare::PROVIDER,
+    &confluence::PROVIDER,
     &contentful::PROVIDER,
     &datadog::PROVIDER,
     &discord::PROVIDER,
@@ -100,6 +103,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &mailchimp::PROVIDER,
     &microsoft_graph::PROVIDER,
     &miro::PROVIDER,
+    &newrelic::PROVIDER,
     &notion::PROVIDER,
     &okta::PROVIDER,
     &openai::PROVIDER,

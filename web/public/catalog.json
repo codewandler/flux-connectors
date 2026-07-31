@@ -6668,6 +6668,990 @@
       "channels": []
     },
     {
+      "id": "confluence",
+      "authority": "com.atlassian.confluence",
+      "vendor": "Confluence",
+      "description": "Confluence Cloud wiki: find spaces, list the pages in one, read a page's metadata, publish a new page, and comment on one. Page and comment *content* cannot be read back — see the connector's notes",
+      "base_url": "https://{site}.atlassian.net/wiki",
+      "api_version": "v2",
+      "hosts": [
+        "{site}.atlassian.net"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://{site}.atlassian.net/wiki",
+          "hosts": [
+            "{site}.atlassian.net"
+          ],
+          "api_version": "v2",
+          "gid": "com.atlassian.confluence:v2",
+          "operation_count": 6
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "basic"
+        ],
+        "credentials": [
+          {
+            "name": "confluence.api_token",
+            "scheme": {
+              "kind": "basic",
+              "name": null,
+              "prefix": "Basic "
+            },
+            "description": "Atlassian API token; the user half is the account email that minted it. This is the same token a Jira connection uses, but it is stored at a separate address and must be supplied again",
+            "env": [
+              "CONFLUENCE_API_TOKEN"
+            ],
+            "user_env": [
+              "CONFLUENCE_USER"
+            ],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "confluence.api_token"
+          ]
+        ]
+      },
+      "operation_count": 6,
+      "operations": [
+        {
+          "id": "confluence-space-list",
+          "provider": "confluence",
+          "service": "default",
+          "description": "List the spaces on the Confluence site, with the id, key and name of each. Takes no argument, and is this connector's `verify`: a bounded read that runs unattended and needs nothing configured beyond the credential. Returns only Confluence's first page of 25 spaces — paging needs the `cursor` and `limit` query parameters this connector cannot send, so a site with more spaces is truncated with no further signal than a `_links.next` this connector cannot follow",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v2/spaces",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "_links": {
+                "description": "Pagination envelope. `next` holds the RELATIVE URL of the following page with an opaque cursor embedded in it (`/wiki/api/v2/spaces?limit=25&cursor=…`). **This connector cannot follow it** — the cursor is a query parameter it cannot send (C-30), and the value is a URL rather than the bare token a cursor quirk would need. Its presence means only that more spaces exist",
+                "properties": {
+                  "base": {
+                    "description": "The Confluence site's base URL, for resolving the relative links above",
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "next": {
+                    "description": "Unusable here; see this field's own description. Absent when there is no further page",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "results": {
+                "description": "This page's spaces — at most 25, and there is no way to fetch the rest",
+                "items": {
+                  "properties": {
+                    "_links": {
+                      "description": "Carries `webui`, the space's path in the Confluence UI — append it to the site URL to give a human a link",
+                      "type": "object"
+                    },
+                    "authorId": {
+                      "description": "Account id of whoever created the space. An `accountId`, never a username or email",
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "description": {
+                      "description": "EMPTY IN THIS RESPONSE. Populating it needs the `description-format` query parameter, which this connector cannot send",
+                      "type": "object"
+                    },
+                    "homepageId": {
+                      "description": "The space's home page, as a page id — pass it to `confluence-page-get`. This is the usual entry point into a space's content",
+                      "type": "string"
+                    },
+                    "icon": {
+                      "description": "The space's icon, when it has one and `include-icon` was requested — which this connector cannot do, so absent",
+                      "type": "object"
+                    },
+                    "id": {
+                      "description": "The space's id, as a string. This is what `confluence-space-get` and `confluence-space-pages` address it by — **not** the `key`",
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "The space key, e.g. `ENG`. The short code that appears in a Confluence URL. Human-facing and stable, but the v2 API addresses spaces by `id`",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "The space's display name",
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "`current` for a live space or `archived`",
+                      "type": "string"
+                    },
+                    "type": {
+                      "description": "`global` for an ordinary space or `personal` for a user's own space",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "key",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "results"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "confluence.api_token"
+            ]
+          ],
+          "hosts": [
+            "{site}.atlassian.net"
+          ],
+          "flux": "op confluence-space-list -> Any\n  description \"List the spaces on the Confluence site, with the id, key and name of each. Takes no argument, and is this connector's `verify`: a bounded read that runs unattended and needs nothing configured beyond the credential. Returns only Confluence's first page of 25 spaces — paging needs the `cursor` and `limit` query parameters this connector cannot send, so a site with more spaces is truncated with no further signal than a `_links.next` this connector cannot follow\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{site}.atlassian.net/wiki\"\n  url = fmt(\"{base}/api/v2/spaces\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {site} value before it has a valid destination URL.",
+                "params": [
+                  "site"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "confluence-space-get",
+          "provider": "confluence",
+          "service": "default",
+          "description": "Get one space by its id, with its key, name, status and home page id. Addressed by the numeric space `id` from `confluence-space-list`, not by the space key that appears in a Confluence URL",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v2/spaces/{id}",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "The space's id, from `confluence-space-list`'s `id`. This is the numeric id as a string, not the space key (`ENG`) — the v2 API does not accept a key here",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "_links": {
+                "description": "Carries `webui`, the space's path in the Confluence UI, and `base`, the site URL to resolve it against",
+                "type": "object"
+              },
+              "authorId": {
+                "description": "Account id of the space's creator",
+                "type": "string"
+              },
+              "createdAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "description": {
+                "description": "EMPTY IN THIS RESPONSE, for the same reason as in `confluence-space-list`: it needs the `description-format` query parameter",
+                "type": "object"
+              },
+              "homepageId": {
+                "description": "The space's home page, as a page id — the usual entry point into its content",
+                "type": "string"
+              },
+              "icon": {
+                "description": "Absent — needs the `include-icon` query parameter",
+                "type": "object"
+              },
+              "id": {
+                "description": "The space's id, as a string",
+                "type": "string"
+              },
+              "key": {
+                "description": "The space key, e.g. `ENG` — the short code in a Confluence URL",
+                "type": "string"
+              },
+              "name": {
+                "description": "The space's display name",
+                "type": "string"
+              },
+              "spaceOwnerId": {
+                "description": "Account id of the space's current owner, or null when it has none",
+                "type": "string"
+              },
+              "status": {
+                "description": "`current` or `archived`. An archived space still reads",
+                "type": "string"
+              },
+              "type": {
+                "description": "`global` or `personal`",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "key",
+              "name"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "confluence.api_token"
+            ]
+          ],
+          "hosts": [
+            "{site}.atlassian.net"
+          ],
+          "flux": "op confluence-space-get(id: String) -> Any\n  description \"Get one space by its id, with its key, name, status and home page id. Addressed by the numeric space `id` from `confluence-space-list`, not by the space key that appears in a Confluence URL\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{site}.atlassian.net/wiki\"\n  url = fmt(\"{base}/api/v2/spaces/{id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {site} value before it has a valid destination URL.",
+                "params": [
+                  "site"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "confluence-space-pages",
+          "provider": "confluence",
+          "service": "default",
+          "description": "List the pages in one space, with the id, title, parent and version of each — the way to discover what a space contains and to resolve a page title to the id the other operations take. **Page bodies are not returned**: the content of each page is empty here, because selecting a body format needs a query parameter this connector cannot send. Returns only Confluence's first page of 25 results; a larger space is truncated",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v2/spaces/{id}/pages",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "The space's id, from `confluence-space-list`'s `id` — not the space key",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "_links": {
+                "description": "Pagination envelope; `next` is a relative URL with an opaque cursor embedded, which this connector cannot follow. See `confluence-space-list`'s own `_links` for the full reason",
+                "properties": {
+                  "base": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "next": {
+                    "description": "Unusable here; its presence means only that the space has more pages",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "results": {
+                "description": "This page's pages — at most 25 of the space's pages, with no way to fetch the rest",
+                "items": {
+                  "properties": {
+                    "_links": {
+                      "description": "Carries `webui`, the page's path in the Confluence UI — the link to give a human, resolved against the site URL",
+                      "type": "object"
+                    },
+                    "authorId": {
+                      "description": "Account id of whoever created the page",
+                      "type": "string"
+                    },
+                    "body": {
+                      "description": "**EMPTY (`{}`) IN THIS RESPONSE.** Confluence populates it only when a `body-format` query parameter selects a representation, and this connector sends none (C-30). Do not report a page as empty on the strength of this field — it says nothing about whether the page has content",
+                      "type": "object"
+                    },
+                    "createdAt": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "The page's id, as a string — what `confluence-page-get` and `confluence-comment-add` address it by",
+                      "type": "string"
+                    },
+                    "ownerId": {
+                      "description": "Account id of the page's current owner",
+                      "type": "string"
+                    },
+                    "parentId": {
+                      "description": "The page this one sits under in the space's tree, or null for a top-level page. This is how the page hierarchy is reconstructed",
+                      "type": "string"
+                    },
+                    "parentType": {
+                      "description": "What the parent is, e.g. `page` — a page can hang off a whiteboard or database, not only another page",
+                      "type": "string"
+                    },
+                    "position": {
+                      "description": "The page's sort position among its siblings, or null",
+                      "type": "integer"
+                    },
+                    "spaceId": {
+                      "description": "The space this page belongs to — the id that was passed in",
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "`current` for a live page, or `archived`/`draft`/`trashed`",
+                      "type": "string"
+                    },
+                    "title": {
+                      "description": "The page's title. This is the only content-bearing field this operation returns, and it is what a title-to-id lookup matches on",
+                      "type": "string"
+                    },
+                    "version": {
+                      "description": "The page's current version: `{number, createdAt, message, minorEdit, authorId}`. `number` is the version an update would have to increment — this connector declares no update (see its notes), so it is informational here",
+                      "properties": {
+                        "authorId": {
+                          "description": "Who made the most recent edit",
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "message": {
+                          "description": "The edit comment, when the editor left one",
+                          "type": "string"
+                        },
+                        "minorEdit": {
+                          "type": "boolean"
+                        },
+                        "number": {
+                          "description": "The current version number",
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "status"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "results"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "confluence.api_token"
+            ]
+          ],
+          "hosts": [
+            "{site}.atlassian.net"
+          ],
+          "flux": "op confluence-space-pages(id: String) -> Any\n  description \"List the pages in one space, with the id, title, parent and version of each — the way to discover what a space contains and to resolve a page title to the id the other operations take. **Page bodies are not returned**: the content of each page is empty here, because selecting a body format needs a query parameter this connector cannot send. Returns only Confluence's first page of 25 results; a larger space is truncated\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{site}.atlassian.net/wiki\"\n  url = fmt(\"{base}/api/v2/spaces/{id}/pages\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {site} value before it has a valid destination URL.",
+                "params": [
+                  "site"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "confluence-page-get",
+          "provider": "confluence",
+          "service": "default",
+          "description": "Read one page's metadata by id — title, space, parent, author, creation time, current version number and the link to open it in Confluence. **The page body is not returned**: selecting a content format needs a query parameter this connector cannot send, so the `body` field comes back empty regardless of whether the page has content. Use this to resolve a page id to its title and URL, not to read what the page says",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/api/v2/pages/{id}",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "The page's id, from `confluence-space-pages`, from a space's `homepageId`, or from `confluence-page-create`'s response",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "_links": {
+                "description": "`webui` is the page's path in the Confluence UI and `base` is the site URL — join them to give a human a link. `editui` and `tinyui` are the edit and short forms",
+                "properties": {
+                  "base": {
+                    "description": "The site's base URL, to resolve the paths above against",
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "editui": {
+                    "type": "string"
+                  },
+                  "tinyui": {
+                    "description": "Confluence's short link form",
+                    "type": "string"
+                  },
+                  "webui": {
+                    "description": "The page's path, relative to `base`",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "authorId": {
+                "description": "Account id of whoever created the page. An `accountId`, never a username — it identifies a named person, so read it for what the calling flow needs and do not persist it beyond that",
+                "type": "string"
+              },
+              "body": {
+                "description": "**EMPTY (`{}`).** Confluence populates this only when a `body-format` query parameter selects a representation (`storage`, `view`, `atlas_doc_format`…), and this connector sends none (C-30). An empty `body` here is a limitation of this connector and says nothing about the page — do not report the page as blank on the strength of it",
+                "type": "object"
+              },
+              "createdAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "description": "The page's id, as a string",
+                "type": "string"
+              },
+              "lastOwnerId": {
+                "description": "Account id of the previous owner, or null",
+                "type": "string"
+              },
+              "ownerId": {
+                "description": "Account id of the page's current owner",
+                "type": "string"
+              },
+              "parentId": {
+                "description": "The page this one sits under, or null for a top-level page",
+                "type": "string"
+              },
+              "parentType": {
+                "description": "What the parent is, e.g. `page`",
+                "type": "string"
+              },
+              "position": {
+                "description": "Sort position among siblings, or null",
+                "type": "integer"
+              },
+              "spaceId": {
+                "description": "The space the page belongs to — pass it to `confluence-space-get` for the space's name and key",
+                "type": "string"
+              },
+              "status": {
+                "description": "`current` for a live page, or `archived`/`draft`/`trashed`. A trashed page still reads here",
+                "type": "string"
+              },
+              "title": {
+                "description": "The page's title — the only content-bearing field this operation returns",
+                "type": "string"
+              },
+              "version": {
+                "description": "The page's current version — returned without asking, because the vendor's `include-version` defaults to true. `number` is what an update would have to increment; this connector declares no update, and its notes say why",
+                "properties": {
+                  "authorId": {
+                    "description": "Who made the most recent edit",
+                    "type": "string"
+                  },
+                  "createdAt": {
+                    "description": "When this version was created — i.e. when the page was last edited",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "message": {
+                    "description": "The edit comment, when the editor left one",
+                    "type": "string"
+                  },
+                  "minorEdit": {
+                    "description": "Whether the editor marked it a minor edit, suppressing notifications",
+                    "type": "boolean"
+                  },
+                  "number": {
+                    "description": "The current version number",
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "status"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "confluence.api_token"
+            ]
+          ],
+          "hosts": [
+            "{site}.atlassian.net"
+          ],
+          "flux": "op confluence-page-get(id: String) -> Any\n  description \"Read one page's metadata by id — title, space, parent, author, creation time, current version number and the link to open it in Confluence. **The page body is not returned**: selecting a content format needs a query parameter this connector cannot send, so the `body` field comes back empty regardless of whether the page has content. Use this to resolve a page id to its title and URL, not to read what the page says\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{site}.atlassian.net/wiki\"\n  url = fmt(\"{base}/api/v2/pages/{id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {site} value before it has a valid destination URL.",
+                "params": [
+                  "site"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "confluence-page-create",
+          "provider": "confluence",
+          "service": "default",
+          "description": "Publish a new page in a space. The page is created live and visible to everyone who can see the space, is indexed for search, and notifies the space's watchers. It is created at the top level of the space unless the space's own structure places it otherwise, with no labels and no restrictions. Returns the new page's id, title and links. The content is sent as Confluence storage format — XHTML-like markup, e.g. `<p>text</p>` — not Markdown and not wiki markup",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/api/v2/pages",
+          "parameters": [
+            {
+              "name": "space_id",
+              "in": "body",
+              "wire": "spaceId",
+              "description": "Id of the space to publish into, from `confluence-space-list`. The only field Confluence's schema strictly requires",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "status",
+              "in": "body",
+              "wire": null,
+              "description": "Constant `current` — not caller-supplied. This operation publishes a live page; a draft would be invisible and no operation here could publish it afterwards",
+              "required": true,
+              "schema": {
+                "const": "current",
+                "type": "string"
+              }
+            },
+            {
+              "name": "title",
+              "in": "body",
+              "wire": null,
+              "description": "The page's title, as it will appear in the space and in search. Confluence requires titles to be unique within a space and rejects a duplicate with a `400`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "body_representation",
+              "in": "body",
+              "wire": "body.representation",
+              "description": "Constant `storage` — not caller-supplied. It fixes how Confluence interprets the content sent below",
+              "required": true,
+              "schema": {
+                "const": "storage",
+                "type": "string"
+              }
+            },
+            {
+              "name": "body",
+              "in": "body",
+              "wire": "body.value",
+              "description": "The page content, in **Confluence storage format**: XHTML-like markup such as `<p>A paragraph.</p><h2>A heading</h2><ul><li>An item</li></ul>`. Plain text is accepted and renders as a single unformatted run. Markdown is **not** converted — it would be stored and displayed literally, asterisks and all",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "body": {
+                "type": "string"
+              },
+              "body_representation": {
+                "const": "storage",
+                "type": "string"
+              },
+              "space_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "status": {
+                "const": "current",
+                "type": "string"
+              },
+              "title": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "space_id",
+              "status",
+              "title",
+              "body_representation",
+              "body"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "_links": {
+                "description": "`webui` is the new page's path in the Confluence UI and `base` is the site URL; join them to give a human the link to what was just published",
+                "type": "object"
+              },
+              "authorId": {
+                "description": "The account the token belongs to — a published page is attributed to it, and that name is what other people in the space will see",
+                "type": "string"
+              },
+              "body": {
+                "description": "Echoes the storage-format content that was sent, under `storage`. This is the one response in this connector that carries a page body — because it is the body the caller supplied, not one Confluence was asked to render",
+                "type": "object"
+              },
+              "createdAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "description": "The new page's id — the only handle on it, and what `confluence-comment-add` and `confluence-page-get` address it by afterwards",
+                "type": "string"
+              },
+              "ownerId": {
+                "type": "string"
+              },
+              "parentId": {
+                "description": "The page it was placed under, which Confluence resolves to the space's home page when none was requested",
+                "type": "string"
+              },
+              "spaceId": {
+                "description": "The space the page was published into",
+                "type": "string"
+              },
+              "status": {
+                "description": "`current` on a page this operation created",
+                "type": "string"
+              },
+              "title": {
+                "description": "Echoes the title that was sent",
+                "type": "string"
+              },
+              "version": {
+                "description": "`{number, createdAt, authorId, minorEdit, message}`, with `number` = 1 on a page just created",
+                "properties": {
+                  "number": {
+                    "description": "1 on creation",
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "status"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "confluence.api_token"
+            ]
+          ],
+          "hosts": [
+            "{site}.atlassian.net"
+          ],
+          "flux": "op confluence-page-create(space_id: String, title: String, body: String) -> Any\n  description \"Publish a new page in a space. The page is created live and visible to everyone who can see the space, is indexed for search, and notifies the space's watchers. It is created at the top level of the space unless the space's own structure places it otherwise, with no labels and no restrictions. Returns the new page's id, title and links. The content is sent as Confluence storage format — XHTML-like markup, e.g. `<p>text</p>` — not Markdown and not wiki markup\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{site}.atlassian.net/wiki\"\n  url = fmt(\"{base}/api/v2/pages\")\n  content_type = \"application/json\"\n  status = \"current\"\n  body_representation = \"storage\"\n  payload = { body: { representation: body_representation, value: body }, spaceId: space_id, status, title }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {site} value before it has a valid destination URL.",
+                "params": [
+                  "site"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "confluence-comment-add",
+          "provider": "confluence",
+          "service": "default",
+          "description": "Add a footer comment to a page — the comment thread at the bottom, not an inline annotation on selected text. The comment is visible to everyone who can see the page and notifies its watchers; it cannot be restricted to a subset of them. The content is sent as Confluence storage format (`<p>text</p>`), not Markdown. Note the page is named in the body rather than in the path, and that this connector cannot read a page's existing comments back",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/api/v2/footer-comments",
+          "parameters": [
+            {
+              "name": "page_id",
+              "in": "body",
+              "wire": "pageId",
+              "description": "Id of the page to comment on, from `confluence-space-pages` or `confluence-page-create`. This creates a top-level footer comment on that page; replying to an existing comment is not supported by this operation",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "body_representation",
+              "in": "body",
+              "wire": "body.representation",
+              "description": "Constant `storage` — not caller-supplied. It fixes how Confluence interprets the comment content sent below",
+              "required": true,
+              "schema": {
+                "const": "storage",
+                "type": "string"
+              }
+            },
+            {
+              "name": "body",
+              "in": "body",
+              "wire": "body.value",
+              "description": "The comment text, in **Confluence storage format**: XHTML-like markup such as `<p>A comment.</p>`. Plain text is accepted and renders unformatted. Markdown is **not** converted and would be displayed literally",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "body": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "body_representation": {
+                "const": "storage",
+                "type": "string"
+              },
+              "page_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "page_id",
+              "body_representation",
+              "body"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "_links": {
+                "description": "Carries `webui`, the comment's anchored path in the Confluence UI — it opens the page scrolled to this comment — and `base`, the site URL to resolve it against",
+                "type": "object"
+              },
+              "body": {
+                "description": "Echoes the storage-format content that was sent, under `storage`",
+                "type": "object"
+              },
+              "id": {
+                "description": "The new comment's id, as a string",
+                "type": "string"
+              },
+              "pageId": {
+                "description": "The page the comment was attached to — echoes what was sent, and worth checking, since the parent is chosen by which body field was present rather than by the path",
+                "type": "string"
+              },
+              "parentCommentId": {
+                "description": "Null on a top-level comment, which is all this operation creates",
+                "type": "string"
+              },
+              "status": {
+                "description": "`current` on a comment just created",
+                "type": "string"
+              },
+              "title": {
+                "description": "Confluence's own generated title for the comment, e.g. `Re: <page title>`. Not something the caller sets",
+                "type": "string"
+              },
+              "version": {
+                "description": "`{number, createdAt, authorId, minorEdit, message}`, with `number` = 1 on a comment just created",
+                "properties": {
+                  "number": {
+                    "description": "1 on creation",
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "status"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "confluence.api_token"
+            ]
+          ],
+          "hosts": [
+            "{site}.atlassian.net"
+          ],
+          "flux": "op confluence-comment-add(page_id: String, body: String) -> Any\n  description \"Add a footer comment to a page — the comment thread at the bottom, not an inline annotation on selected text. The comment is visible to everyone who can see the page and notifies its watchers; it cannot be restricted to a subset of them. The content is sent as Confluence storage format (`<p>text</p>`), not Markdown. Note the page is named in the body rather than in the path, and that this connector cannot read a page's existing comments back\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{site}.atlassian.net/wiki\"\n  url = fmt(\"{base}/api/v2/footer-comments\")\n  content_type = \"application/json\"\n  body_representation = \"storage\"\n  payload = { body: { representation: body_representation, value: body }, pageId: page_id }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {site} value before it has a valid destination URL.",
+                "params": [
+                  "site"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "contentful",
       "authority": "com.contentful.api",
       "vendor": "Contentful",
@@ -24449,6 +25433,762 @@
                 "scope": "catalog",
                 "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
+              }
+            ],
+            "notes": []
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
+      "id": "newrelic",
+      "authority": "com.newrelic.api",
+      "vendor": "New Relic",
+      "description": "New Relic APM and alerting over the REST v2 API: list the applications an account is monitoring and read one in detail, read the account's alert policies and its current violations, and list or record deployment markers against an application. The account's region host is configured once, not chosen per call",
+      "base_url": "https://{host}/v2",
+      "api_version": "2",
+      "hosts": [
+        "{host}"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://{host}/v2",
+          "hosts": [
+            "{host}"
+          ],
+          "api_version": "2",
+          "gid": "com.newrelic.api:2",
+          "operation_count": 6
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "header"
+        ],
+        "credentials": [
+          {
+            "name": "newrelic.api_key",
+            "scheme": {
+              "kind": "header",
+              "name": "X-Api-Key",
+              "prefix": ""
+            },
+            "description": "New Relic User API key, authorizing REST v2 calls as the New Relic user it was created by. Travels as the `X-Api-Key` header on every request. A key is issued in one region and is not valid against the other region's host — a 401 from this connector is as likely to be a wrong `host` as a wrong key",
+            "env": [
+              "NEW_RELIC_API_KEY"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "newrelic.api_key"
+          ]
+        ]
+      },
+      "operation_count": 6,
+      "operations": [
+        {
+          "id": "newrelic-application-list",
+          "provider": "newrelic",
+          "service": "default",
+          "description": "List every application this account is monitoring with APM, each with its current health status and a summary of its response time, throughput and error rate. Takes no argument. Also this connector's `verify`: a bounded read that runs unattended and needs nothing beyond the configured host and key",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/applications.json",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "applications": {
+                "description": "Every application the account monitors. An account with no APM agents reporting returns an empty array, not an error",
+                "items": {
+                  "properties": {
+                    "application_summary": {
+                      "description": "The APM rollup for the last few minutes: `response_time` (ms), `throughput` (requests per minute), `error_rate` (percent), `apdex_target`, `apdex_score`, `host_count`, `instance_count`, `concurrency`. Absent on an application that is not reporting",
+                      "type": "object"
+                    },
+                    "end_user_summary": {
+                      "description": "The browser-side rollup, where browser monitoring is enabled: `response_time`, `throughput`, `apdex_target`, `apdex_score`",
+                      "type": "object"
+                    },
+                    "health_status": {
+                      "description": "New Relic's rollup of the application's alert state: `green`, `yellow`, `red`, `gray` (nothing reporting) or `unknown`. This is the field to read to answer \"is anything wrong\"",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "The application's id — what newrelic-application-get and the deployment operations address it by. An integer, not a string",
+                      "type": "integer"
+                    },
+                    "language": {
+                      "description": "The agent's language — `ruby`, `java`, `nodejs` and so on",
+                      "type": "string"
+                    },
+                    "last_reported_at": {
+                      "description": "When the agent last reported, as an ISO 8601 timestamp",
+                      "type": "string"
+                    },
+                    "links": {
+                      "description": "Related ids New Relic returns alongside — the alert policy, the application's hosts and instances. Ids only, not embedded objects",
+                      "type": "object"
+                    },
+                    "name": {
+                      "description": "The application name the agent reports under, as it reads in New Relic's UI",
+                      "type": "string"
+                    },
+                    "reporting": {
+                      "description": "Whether an agent has sent data recently. FALSE MEANS THE APPLICATION IS NOT SENDING DATA — its summary figures are stale, not zero",
+                      "type": "boolean"
+                    },
+                    "settings": {
+                      "description": "The application's Apdex thresholds and monitoring switches. Left untyped rather than enumerated; see New Relic's own Application object reference",
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "applications"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "newrelic.api_key"
+            ]
+          ],
+          "hosts": [
+            "{host}"
+          ],
+          "flux": "op newrelic-application-list -> Any\n  description \"List every application this account is monitoring with APM, each with its current health status and a summary of its response time, throughput and error rate. Takes no argument. Also this connector's `verify`: a bounded read that runs unattended and needs nothing beyond the configured host and key\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{host}/v2\"\n  url = fmt(\"{base}/applications.json\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {host} value before it has a valid destination URL.",
+                "params": [
+                  "host"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "newrelic-application-get",
+          "provider": "newrelic",
+          "service": "default",
+          "description": "Get one application by id, with its current health status and the same summary figures the list returns. Use this to re-read one application after a deploy rather than listing the whole account",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/applications/{application_id}.json",
+          "parameters": [
+            {
+              "name": "application_id",
+              "in": "path",
+              "wire": null,
+              "description": "The application's id, from newrelic-application-list's `id`. A New Relic application id is an integer; pass it as it was returned",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "application_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "application_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "application": {
+                "properties": {
+                  "application_summary": {
+                    "description": "The APM rollup for the last few minutes — response time, throughput, error rate, Apdex, host and instance counts. Absent on an application that is not reporting",
+                    "type": "object"
+                  },
+                  "end_user_summary": {
+                    "description": "The browser-side rollup, where browser monitoring is enabled",
+                    "type": "object"
+                  },
+                  "health_status": {
+                    "description": "New Relic's rollup of the application's alert state: `green`, `yellow`, `red`, `gray` or `unknown`",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "The application's id",
+                    "type": "integer"
+                  },
+                  "language": {
+                    "description": "The agent's language",
+                    "type": "string"
+                  },
+                  "last_reported_at": {
+                    "description": "When the agent last reported, as an ISO 8601 timestamp",
+                    "type": "string"
+                  },
+                  "links": {
+                    "description": "Related ids — the alert policy, the application's hosts and instances",
+                    "type": "object"
+                  },
+                  "name": {
+                    "description": "The application name the agent reports under",
+                    "type": "string"
+                  },
+                  "reporting": {
+                    "description": "Whether an agent has sent data recently. FALSE MEANS THE APPLICATION IS NOT SENDING DATA",
+                    "type": "boolean"
+                  },
+                  "settings": {
+                    "description": "The application's Apdex thresholds and monitoring switches. Left untyped rather than enumerated",
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "application"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "newrelic.api_key"
+            ]
+          ],
+          "hosts": [
+            "{host}"
+          ],
+          "flux": "op newrelic-application-get(application_id: String) -> Any\n  description \"Get one application by id, with its current health status and the same summary figures the list returns. Use this to re-read one application after a deploy rather than listing the whole account\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{host}/v2\"\n  url = fmt(\"{base}/applications/{application_id}.json\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {host} value before it has a valid destination URL.",
+                "params": [
+                  "host"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "newrelic-alert-policy-list",
+          "provider": "newrelic",
+          "service": "default",
+          "description": "List the account's alert policies — the groupings New Relic evaluates conditions under, each with its incident rollup preference. Takes no argument. This lists the policies themselves, not the conditions inside them and not anything currently alerting; for that, read newrelic-alert-violation-list",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/alerts_policies.json",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "policies": {
+                "items": {
+                  "properties": {
+                    "created_at": {
+                      "description": "When the policy was created, as an epoch timestamp in milliseconds — not seconds, and not an ISO string",
+                      "type": "integer"
+                    },
+                    "id": {
+                      "description": "The policy's id",
+                      "type": "integer"
+                    },
+                    "incident_preference": {
+                      "description": "How New Relic groups violations into incidents under this policy — `PER_POLICY`, `PER_CONDITION` or `PER_CONDITION_AND_TARGET`. It decides how many incidents one bad deploy produces",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "The policy name, as it reads in New Relic's UI",
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "description": "When the policy was last changed, as an epoch timestamp in milliseconds",
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "policies"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "newrelic.api_key"
+            ]
+          ],
+          "hosts": [
+            "{host}"
+          ],
+          "flux": "op newrelic-alert-policy-list -> Any\n  description \"List the account's alert policies — the groupings New Relic evaluates conditions under, each with its incident rollup preference. Takes no argument. This lists the policies themselves, not the conditions inside them and not anything currently alerting; for that, read newrelic-alert-violation-list\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{host}/v2\"\n  url = fmt(\"{base}/alerts_policies.json\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {host} value before it has a valid destination URL.",
+                "params": [
+                  "host"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "newrelic-alert-violation-list",
+          "provider": "newrelic",
+          "service": "default",
+          "description": "List the account's alert violations from New Relic's default recent window. READ `closed_at` ON EVERY ENTRY: this returns closed violations as well as open ones, and a violation with a non-null `closed_at` has already resolved. Each entry names the policy and condition that fired and the entity that broke",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/alerts_violations.json",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "violations": {
+                "description": "Violations in the default window, open and closed together",
+                "items": {
+                  "properties": {
+                    "closed_at": {
+                      "description": "When the violation closed, as an epoch timestamp in milliseconds, or null. NULL IS THE ONLY THING THAT MEANS STILL OPEN",
+                      "type": "integer"
+                    },
+                    "condition_name": {
+                      "description": "The condition inside that policy which fired",
+                      "type": "string"
+                    },
+                    "duration": {
+                      "description": "How long the violation lasted, in seconds. On an open violation this is how long it has been open so far",
+                      "type": "integer"
+                    },
+                    "entity": {
+                      "description": "What broke: `{product, type, group_id, id, name}`. `product` is `APM`, `Browser`, `Mobile` or `Infrastructure`, and `id` addresses the entity within that product — for an APM entity it is an application id newrelic-application-get takes",
+                      "type": "object"
+                    },
+                    "id": {
+                      "description": "The violation's id",
+                      "type": "integer"
+                    },
+                    "label": {
+                      "description": "New Relic's own one-line summary of what broke",
+                      "type": "string"
+                    },
+                    "links": {
+                      "description": "The `policy_id` and `condition_id` behind `policy_name` and `condition_name`. Ids only",
+                      "type": "object"
+                    },
+                    "opened_at": {
+                      "description": "When the violation opened, as an epoch timestamp in milliseconds",
+                      "type": "integer"
+                    },
+                    "policy_name": {
+                      "description": "The alert policy the violation belongs to — matches a `name` from newrelic-alert-policy-list",
+                      "type": "string"
+                    },
+                    "priority": {
+                      "description": "The condition's threshold severity — `Critical` or `Warning`",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "opened_at"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "violations"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "newrelic.api_key"
+            ]
+          ],
+          "hosts": [
+            "{host}"
+          ],
+          "flux": "op newrelic-alert-violation-list -> Any\n  description \"List the account's alert violations from New Relic's default recent window. READ `closed_at` ON EVERY ENTRY: this returns closed violations as well as open ones, and a violation with a non-null `closed_at` has already resolved. Each entry names the policy and condition that fired and the entity that broke\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{host}/v2\"\n  url = fmt(\"{base}/alerts_violations.json\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {host} value before it has a valid destination URL.",
+                "params": [
+                  "host"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "newrelic-deployment-list",
+          "provider": "newrelic",
+          "service": "default",
+          "description": "List the deployment markers recorded against one application, most recent first. These are the markers New Relic overlays on its charts — read them to answer \"what shipped before this went wrong\"",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/applications/{application_id}/deployments.json",
+          "parameters": [
+            {
+              "name": "application_id",
+              "in": "path",
+              "wire": null,
+              "description": "The application's id, from newrelic-application-list's `id`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "application_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "application_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "deployments": {
+                "items": {
+                  "properties": {
+                    "changelog": {
+                      "description": "What changed, as free text, or null",
+                      "type": "string"
+                    },
+                    "description": {
+                      "description": "A one-line summary of the deployment, or null",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "The deployment marker's id",
+                      "type": "integer"
+                    },
+                    "links": {
+                      "description": "The application id this marker belongs to",
+                      "type": "object"
+                    },
+                    "revision": {
+                      "description": "The version this deployment shipped, as the recorder spelled it — a commit sha, a tag or a build number",
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "description": "When the deployment was recorded, as an ISO 8601 timestamp",
+                      "type": "string"
+                    },
+                    "user": {
+                      "description": "Who recorded the deployment, as free text — whatever the recorder passed, not a verified New Relic identity. Identifies a person; read it for what the calling flow needs and do not persist it beyond that",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "timestamp"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "deployments"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "newrelic.api_key"
+            ]
+          ],
+          "hosts": [
+            "{host}"
+          ],
+          "flux": "op newrelic-deployment-list(application_id: String) -> Any\n  description \"List the deployment markers recorded against one application, most recent first. These are the markers New Relic overlays on its charts — read them to answer \\\"what shipped before this went wrong\\\"\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{host}/v2\"\n  url = fmt(\"{base}/applications/{application_id}/deployments.json\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {host} value before it has a valid destination URL.",
+                "params": [
+                  "host"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "newrelic-deployment-create",
+          "provider": "newrelic",
+          "service": "default",
+          "description": "Record a deployment marker against an application, timestamped now. The marker appears on every chart for that application and is visible to everyone on the account; this connector cannot remove one once recorded. Calling this twice records two deployments",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/applications/{application_id}/deployments.json",
+          "parameters": [
+            {
+              "name": "application_id",
+              "in": "path",
+              "wire": null,
+              "description": "The application the deployment shipped to, from newrelic-application-list's `id`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "revision",
+              "in": "body",
+              "wire": "deployment.revision",
+              "description": "The version that shipped — a commit sha, a tag or a build number. The only field New Relic requires, and the one every chart overlay is labelled with, so pass something a human can trace back to a build",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "changelog",
+              "in": "body",
+              "wire": "deployment.changelog",
+              "description": "What changed in this deployment, as free text. Shown when the marker is opened",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "description",
+              "in": "body",
+              "wire": "deployment.description",
+              "description": "A one-line summary of the deployment, shown on the marker itself",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "user",
+              "in": "body",
+              "wire": "deployment.user",
+              "description": "Who or what performed the deployment, as free text. New Relic records this verbatim and does not verify it against a New Relic identity — pass a service or pipeline name rather than a personal one unless the flow has a reason to name a person",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "application_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "changelog": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "revision": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "user": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "application_id",
+              "revision"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "deployment": {
+                "properties": {
+                  "changelog": {
+                    "description": "The changelog as recorded, or null",
+                    "type": "string"
+                  },
+                  "description": {
+                    "description": "The description as recorded, or null",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "The created marker's id",
+                    "type": "integer"
+                  },
+                  "links": {
+                    "description": "The application id this marker belongs to",
+                    "type": "object"
+                  },
+                  "revision": {
+                    "description": "The revision as recorded — echo it back to confirm the marker landed on the build you meant",
+                    "type": "string"
+                  },
+                  "timestamp": {
+                    "description": "When New Relic recorded the marker, as an ISO 8601 timestamp. New Relic sets this; it is not accepted from the request",
+                    "type": "string"
+                  },
+                  "user": {
+                    "description": "The user as recorded, verbatim and unverified",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "timestamp"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "deployment"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "newrelic.api_key"
+            ]
+          ],
+          "hosts": [
+            "{host}"
+          ],
+          "flux": "op newrelic-deployment-create(application_id: String, revision: String, changelog: String, description: String, user: String) -> Any\n  description \"Record a deployment marker against an application, timestamped now. The marker appears on every chart for that application and is visible to everyone on the account; this connector cannot remove one once recorded. Calling this twice records two deployments\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{host}/v2\"\n  url = fmt(\"{base}/applications/{application_id}/deployments.json\")\n  content_type = \"application/json\"\n  payload = { deployment: { changelog, description, revision, user } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {host} value before it has a valid destination URL.",
+                "params": [
+                  "host"
+                ]
               }
             ],
             "notes": []

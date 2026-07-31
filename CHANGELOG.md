@@ -9,6 +9,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Confluence and New Relic connectors (C-219, C-220).**
+
+  **Confluence** was shipped to answer a question, and the answer is its real deliverable: two
+  connectors sharing one vendor authority do **not** share a credential. `jira` and `confluence` use
+  the same host, account and token, and resolve to `com.atlassian.jira/api_token` and
+  `com.atlassian.confluence/api_token` — same tenant, same leaf, the authority segment the entire
+  difference. So the operator pastes the token twice. The addressing model is not broken; C-90's
+  "an address is a place, not a per-connector copy" holds *within* a connector and was never wired to
+  reach *across* two. The rejected alternative — one `atlassian` connector with both as services —
+  is **constructed in a test** rather than asserted, showing it would have delivered single-paste
+  sharing, and refused because `com.atlassian.jira` is published and a published address is never
+  repointed. Filed as C-226.
+
+  It also cannot read any content body: `body-format` is a query parameter and the connector declares
+  none, so it is curated as a connector that navigates and writes rather than one that reads back,
+  with every read saying so in the description a model receives. That drove two exclusions, both
+  named in the header. Filed as C-227.
+
+  **New Relic** ships with a gap written down and machine-checked rather than smoothed over: the IR
+  cannot express a closed set of values, so a two-region vendor's host field accepts
+  `api.not-new-relic.example`. A wrong region returns 401 on every call, indistinguishable from a bad
+  key. Filed as C-225.
+
 - **The Discord connector (C-216).** Six curated operations behind a bot token whose `Bot ` scheme
   word is the first prefix in the fleet whose *neighbouring* value is also valid vendor syntax for a
   different credential: `Bot <token>` sent as `Bearer ` is a well-formed Discord request for an
@@ -132,6 +155,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   bounds that to one connector and fails the moment a second lands.
 
 ### Fixed
+
+- **A configuration value is checked where it is substituted, not only where it is declared
+  (C-214).** `Position::validate_value` existed and was correct, and had exactly two call sites —
+  both in the loader, both running against an `example` or a parameter *name*. The value that
+  actually travels was substituted with no predicate at all.
+
+  The severe half was **pre-existing** and moved the origin: an `@` makes everything before it
+  userinfo, so `subdomain = "acme.zendesk.com@evil.example"` resolved to the authority
+  `evil.example.zendesk.com`. Nine shipped connectors carry a templated host. The check compares
+  against the **template's** authority rather than the built URL's, because the composed string is
+  itself a well-formed hostname and inspecting the finished URL sees nothing wrong.
+
+  Each position gets its own answer, since "escape it" is wrong for two of them: refuse for host,
+  path and header; refuse-then-encode through the existing `auth::query_encode` for query. No shipped
+  connector's behaviour changed — 53 providers, `diff` clean. Independently reviewed with 36 probes
+  against the host guard, including percent-encoded `%40`/`%2540`, CRLF, IPv6 literals, and fullwidth
+  and ideographic dot homographs; none moved the origin.
 
 - **A per-provider test no longer asserts a catalogue-wide literal (C-216).** Discord's prefix census
   walked every `providers/*.toml` and compared the result against a four-element list, which Klaviyo's
