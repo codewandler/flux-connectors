@@ -234,8 +234,13 @@ fn the_pinned_workspace_reaches_every_module_as_a_substitutable_placeholder() {
              substitutes into:\n{flux}",
             operation.id
         );
+        // No trailing slash in the needle. `bitbucket-repository-list`'s path is exactly
+        // `/repositories/{workspace}` — the pin is its *last* segment — and it is the one operation
+        // that must satisfy this, because it is the argument-free `verify` the pin exists to make
+        // possible. Requiring `{workspace}/` here would assert that the connector's own probe is not
+        // scoped.
         assert!(
-            flux.contains("/repositories/{workspace}/"),
+            flux.contains("/repositories/{workspace}"),
             "`{}` must interpolate the pinned symbol into its URL:\n{flux}",
             operation.id
         );
@@ -464,7 +469,9 @@ fn every_configuration_field_is_renderable_and_agrees_with_its_binding() {
     );
 
     for field in &connector.config {
-        let binding = field.binding().expect("a loaded connector parses its binds");
+        let binding = field
+            .binding()
+            .expect("a loaded connector parses its binds");
         assert_eq!(
             field.secret,
             binding.is_secret(),
