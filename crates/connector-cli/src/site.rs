@@ -977,21 +977,140 @@ mod tests {
         );
     }
 
-    /// An absent value is `null`, never a missing key: a consumer types the document once and never
-    /// tests for existence.
+    /// An absent value is `null` or `[]`, never a missing key: a consumer types the document once
+    /// and never tests for existence.
+    ///
+    /// # Derived, not listed (C-206)
+    ///
+    /// The predecessor named three fields — `body_schema`, `response_schema`, `user_suffix` — and so
+    /// it passed while a *fourth* field grew a `skip_serializing_if` and dropped its key from every
+    /// shipped operation. A list covers what someone remembered and stops covering the class the
+    /// moment a field is added, which is the same hand-maintained truth this repository exists to
+    /// correct.
+    ///
+    /// The rule instead: render the document **twice** from the same emitter, once with every
+    /// optional value absent and once with each of them present, and require that two objects at the
+    /// same position carry the same keys. A conditionally-encoded key is exactly a key that appears
+    /// in one rendering and not the other, and it fails here whichever direction it is missing in,
+    /// for any field, without this test knowing one by name.
+    ///
+    /// The fixture below is the guard's one maintained input, and it is a much better thing to
+    /// maintain than a field list: a new optional that nobody exercises here weakens the guard,
+    /// while a new optional that nobody *lists* used to defeat it outright.
     #[test]
     fn optional_fields_are_null_rather_than_absent() {
-        let document = rendered();
-        let operation = &document["providers"][0]["operations"][0];
+        let sparse = rendered();
+        let rich = rendered_with_optionals_present();
+
+        // The rule, first, so that it is the derived check that reports a conditional key rather
+        // than one of the sanity lines below happening to notice.
+        let mut visited = std::collections::BTreeSet::new();
+        same_published_shape(&sparse, &rich, "$", &mut visited);
+
+        // Anti-vacuity, and named as positions rather than as a count: a walk that stopped early
+        // would assert nothing and pass. `status` is the one the enumerated predecessor never
+        // reached, so it is the one worth naming.
+        for reached in [
+            "$.providers[0]",
+            "$.providers[0].auth.credentials[0]",
+            "$.providers[0].operations[0]",
+            "$.providers[0].operations[0].status",
+        ] {
+            assert!(
+                visited.contains(reached),
+                "the shape walk never reached `{reached}`, so it proves nothing about it"
+            );
+        }
+
+        // And the sparse rendering really is the empty case, so the comparison above had something
+        // to compare. These are examples of the class, not the guard for it.
+        let operation = &sparse["providers"][0]["operations"][0];
         assert_eq!(operation["body_schema"], Value::Null);
         assert_eq!(operation["response_schema"], Value::Null);
-
-        let credential = &document["providers"][0]["auth"]["credentials"][0];
-        assert_eq!(credential["user_suffix"], Value::Null);
+        assert_eq!(operation["status"]["notes"], json!([]));
         assert_eq!(
-            credential["scheme"],
-            json!({"kind": "header", "name": "X-Id", "prefix": ""})
+            sparse["providers"][0]["auth"]["credentials"][0]["user_suffix"],
+            Value::Null
         );
+    }
+
+    /// Positions whose value is **somebody else's JSON**, carried verbatim.
+    ///
+    /// A vendor schema, an event matcher, a binding map, and the independently owned core catalogue.
+    /// Their keys are the vendor's or another emitter's and differ between two operations
+    /// legitimately, so the shape walk stops at them.
+    ///
+    /// This is a list of *opaque positions*, not of optional fields, and the difference is the whole
+    /// point: an opaque position is a property of the format and does not drift, while an optional
+    /// field is precisely the thing that does.
+    const OPAQUE: &[&str] = &[
+        "schema",
+        "schemas",
+        "input_schema",
+        "body_schema",
+        "response_schema",
+        "when",
+        "payload",
+        "bind",
+        "tool_spec",
+        "core",
+    ];
+
+    /// Assert that two renderings publish the same keys everywhere, recording each position reached.
+    ///
+    /// Arrays are walked pairwise and a length difference is fine — one rendering may declare more
+    /// operations, or more notes, than the other. It is the *keys* of the objects inside that must
+    /// agree.
+    fn same_published_shape(
+        sparse: &Value,
+        rich: &Value,
+        path: &str,
+        visited: &mut std::collections::BTreeSet<String>,
+    ) {
+        match (sparse, rich) {
+            (Value::Object(left), Value::Object(right)) => {
+                assert_eq!(
+                    left.keys().collect::<Vec<_>>(),
+                    right.keys().collect::<Vec<_>>(),
+                    "`{path}` publishes a different set of keys depending on its content, so a \
+                     consumer has to test for existence"
+                );
+                visited.insert(path.to_string());
+                for (key, value) in left {
+                    if OPAQUE.contains(&key.as_str()) {
+                        continue;
+                    }
+                    same_published_shape(value, &right[key], &format!("{path}.{key}"), visited);
+                }
+            }
+            (Value::Array(left), Value::Array(right)) => {
+                for (index, value) in left.iter().enumerate() {
+                    let Some(counterpart) = right.get(index) else {
+                        break;
+                    };
+                    same_published_shape(value, counterpart, &format!("{path}[{index}]"), visited);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The same connector as [`rendered`], with each optional value it can carry supplied.
+    ///
+    /// Every mutation here exists to make one key non-empty in the rendering, so that the walk above
+    /// has something to compare the empty case against. `auth = Some(vec![])` is C-206's: it is what
+    /// puts an entry in `status.notes`, and it is the case the old enumerated guard could not see.
+    fn rendered_with_optionals_present() -> Value {
+        let mut connector = connector();
+        connector.authority = Some("com.acme.api".to_string());
+        connector.api_version = Some("v2".to_string());
+        connector.operations[0].auth = Some(vec![]);
+        connector.operations[0].response_schema = Some(json!({"type": "object"}));
+        connector.operations[0].params.body_schema = Some(json!({"type": "object"}));
+        connector.auth[0].user_suffix = Some("/token".to_string());
+
+        let entry = provider_entry(&connector, &renderings()).unwrap();
+        serde_json::from_str(&document(vec![entry]).unwrap()).unwrap()
     }
 
     /// The scheme is a fixed three-key object rather than the IR's externally tagged encoding, so a

@@ -176,11 +176,12 @@ pub struct Status {
     pub issues: Vec<Issue>,
     /// Facts about the operation that are not defects, in the same fixed order — see [`Note`].
     ///
-    /// **Omitted from the encoding when empty**, which is the one place this document departs from
-    /// its own "every key is always present" rule, and a deliberate trade: writing `"notes": []`
-    /// onto all 242 shipped operations would rewrite a whole-catalogue artifact to say nothing.
-    /// `docs/designs/catalog-json.md` records it, and a consumer reads an absent key as `[]`.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    /// **Always encoded, `[]` when there are none.** No `skip_serializing_if`, deliberately: the
+    /// published document promises that every key is present so a consumer types it once and never
+    /// tests for existence (`crate::site`, `docs/designs/catalog-json.md`). Omitting this one to
+    /// spare the committed whole-catalogue artifact a rewrite would have bought that saving with a
+    /// permanent hole in the promise — and the artifact is regenerated at integration anyway, which
+    /// is what `AGENTS.md` means by a story leaving whole-catalogue staleness checks red.
     pub notes: Vec<Note>,
 }
 
@@ -639,19 +640,32 @@ mod tests {
         assert!(!status.works);
     }
 
-    /// The note is **omitted** from the encoding when there is none, which is what keeps this change
-    /// off all 242 shipped operations in the committed whole-catalogue artifact.
+    /// **Every key is always present**, `notes` included — an operation with none encodes `[]` and
+    /// never drops the key.
+    ///
+    /// The published document's oldest promise (`crate::site`, `docs/designs/catalog-json.md`): a
+    /// consumer types it once and never tests for existence. An omitted-when-empty `notes` would
+    /// have spared the committed catalogue a rewrite and made that promise false for all 242 shipped
+    /// operations, every one of which has no note — so the exception would have been invisible in
+    /// exactly the case a consumer meets first.
     #[test]
-    fn a_status_with_no_note_encodes_exactly_as_it_did_before() {
+    fn a_status_with_no_note_still_carries_the_key() {
         let connector = connector();
         let encoded = serde_json::to_value(of(&connector, &connector.operations[0]))
             .expect("a status serializes");
+        assert_eq!(encoded["notes"], json!([]));
         assert_eq!(
-            encoded.as_object().expect("an object").keys().count(),
-            2,
-            "an operation with no note gains no key: {encoded}"
+            encoded
+                .as_object()
+                .expect("an object")
+                .keys()
+                .collect::<Vec<_>>(),
+            // Key-sorted, not declaration-ordered: `serde_json::Value` is `BTreeMap`-backed unless
+            // `preserve_order` is on, which is the same property `crate::site` relies on to make
+            // the whole document deterministic.
+            vec!["issues", "notes", "works"],
+            "the published status shape changed: {encoded}"
         );
-        assert!(encoded.get("notes").is_none());
     }
 
     /// Deterministic: the document is a checked artifact, so an unstable issue order would show up

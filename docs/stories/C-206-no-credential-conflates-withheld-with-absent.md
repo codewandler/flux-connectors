@@ -68,8 +68,17 @@ wrong for the public case too, since the operation *does* work.
 - [x] **Failing-first test:** a connector declaring no credential because its vendor needs none is
       published differently from freshdesk, which declares none because its key cannot yet be held
       safely. The test must fail before the change with both rendering identically.
-- [x] A **new** issue code is added rather than `NO_CREDENTIAL` changing meaning, per the stability
-      rule at `status.rs:64-70`. `NO_CREDENTIAL` keeps its freshdesk sense exactly.
+- [x] ~~A **new** issue code is added~~ **A new `notes` code, `no-credential-required`, is added**
+      rather than `NO_CREDENTIAL` changing meaning, per the stability rule at `status.rs:64-70`.
+      `NO_CREDENTIAL` keeps its freshdesk sense exactly.
+
+      *Amended during implementation, because the literal wording is unsatisfiable jointly with the
+      item below.* `works` is `issues.is_empty()` — a documented contract with a test on it — so a
+      new **issue** code would have forced `works: false` onto an operation the next item requires
+      to report `works: true`. That is the same lie `no-credential` was telling, one code further
+      along. The code is therefore published in a new `notes` list beside `issues`: additive,
+      switchable by a consumer, and it leaves `works` and every existing consumer untouched. The
+      item's actual intent — *no existing token changes meaning* — is met exactly.
 - [x] The IR can express the difference. Today "no `[[auth]]`" is one state carrying two meanings;
       an author must be able to say *"this vendor requires no credential"* as a positive declaration,
       distinct from *"a credential exists and we cannot hold it safely"*.
@@ -98,10 +107,30 @@ a **note** rather than a fifth issue.
   reports `works: true`, deliberately"). No shipped operation is public today, so nothing in the
   committed catalogue moves — but a consumer treating `works: true` as unreachable will be wrong the
   first time C-133 or C-157 lands, and that is now stated rather than discovered.
-- **Zero drift by construction.** `notes` is `skip_serializing_if = "Vec::is_empty"`, so
-  `web/public/catalog.json` is byte-identical and no whole-catalogue artifact needed regenerating.
-  `a_status_with_no_note_encodes_exactly_as_it_did_before` holds that. It is the one key in
-  `catalog-json.md` that is not always present, documented as such.
+**2026-07-31, rework after review — `notes` is always encoded.** The first cut gave it
+`skip_serializing_if = "Vec::is_empty"` to keep `web/public/catalog.json` byte-identical. That was
+wrong, and the reasoning behind it was wrong: `AGENTS.md:129-131` fences an implementor from
+*regenerating* a whole-catalogue artifact, not from making one stale, and `AGENTS.md:155-171`
+documents staleness as the normal case with a named procedure — report the red tests and stop, the
+coordinator's full build at integration resolves them. So the saving was never needed, and what it
+bought was a permanent hole in the document's oldest guarantee: `catalog-json.md` §Guarantees 1 says
+every key is always present, and `site.rs:27-29` says nothing there uses `skip_serializing_if`. Both
+sentences were false for all 242 shipped operations, none of which carries a note — the exception
+was invisible in exactly the case a consumer meets first.
+
+- `notes` is now unconditional, `[]` when empty.
+  `a_status_with_no_note_still_carries_the_key` pins the whole published key list.
+- The exception text is gone from `catalog-json.md`, so §Guarantees 1 stands unqualified again, and
+  `site.rs:27-29` is true again on its own.
+- **`optional_fields_are_null_rather_than_absent` (`site.rs`) is now derived rather than
+  enumerated.** It named three fields — `body_schema`, `response_schema`, `user_suffix` — which is
+  why it passed while a fourth grew a conditional key. It now renders the document twice from the
+  same emitter, once with every optional absent and once with each present, and requires two objects
+  at the same position to carry the same keys. Verified against the bug it missed: reintroducing the
+  `skip_serializing_if` fails it with
+  `` `$.providers[0].operations[0].status` publishes a different set of keys depending on its
+  content `` — `["issues","works"]` against `["issues","notes","works"]`.
+- **`web/public/catalog.json` is deliberately left stale.** Not regenerated, per the fence.
 
 ### For C-133 and C-157
 
