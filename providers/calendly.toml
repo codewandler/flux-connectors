@@ -1,0 +1,268 @@
+# Calendly — hand-authored, no vendor spec.
+#
+# Curated to the five operations `docs/stories/C-172-provider-calendly.md` selected: get the current
+# user, list event types, list scheduled events, get one scheduled event, list an event's invitees.
+# As with zendesk, freshdesk, github and notion, nothing is vendored under `specs/` for this
+# connector, so drift against Calendly's own documentation is undetectable by machine until C-14's
+# fetch and C-4's ingest land (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# THE FINDING THIS CONNECTOR EXISTS TO ESTABLISH: does a URI-valued query parameter survive?
+# ---------------------------------------------------------------------------------------------
+#
+# Calendly addresses every resource — a user, an event type, a scheduled event — by its own full
+# `https://api.calendly.com/…` URI, never by a bare id, and several collection endpoints take that
+# URI as a *query value*: `GET /event_types?user={uri}`. AGENTS.md records that this pipeline never
+# percent-encodes a query value, and names `zendesk-ticket-search` as the standing demonstration:
+# a free-text search term corrupts the request because it can carry `&`, `#`, `+`/`=` or a space that
+# the emitter's `fmt`-based interpolation cannot escape (`crates/connector-flux/src/op.rs:138-141`,
+# "Query values are interpolated verbatim — nothing percent-encodes them ... a value carrying a
+# space, `&`, `#` or `=` corrupts the query string"). `providers/notion.toml`'s answer to the same
+# gap was to declare no query parameter at all (C-30 is unimplemented).
+#
+# **The answer measured here is different, and it rests on what Calendly's URI can and cannot
+# contain, not on hoping the emitter's behaviour changed.** A Calendly resource URI is exactly
+# `https://api.calendly.com/` followed by a resource segment and a UUID — scheme, host, ASCII
+# path segments and hyphens, and nothing else. It structurally **cannot** contain a space, `&`, `#`
+# or `=`: those are not characters Calendly's own id generator emits, unlike a Zendesk search
+# expression, which is free text a caller composes and can legitimately contain any of them (an
+# agent searching `billing & invoicing` is an ordinary query, not an edge case). So the value this
+# emitter puts on the wire unescaped is exactly the value Calendly issued, byte for byte — the query
+# string is not "safe because URLs happen to allow colons and slashes unescaped" (RFC 3986's `query`
+# production is `*( pchar / "/" / "?" )` and does allow both, which is also why the design doc's own
+# measurement table records `type:ticket status:new` reaching Zendesk as `type:ticket%20status:new`
+# — "correct, by accident"), it is safe because the vendor-issued value never reaches the four
+# characters that the accident stops covering. `crates/connector-flux/tests/calendly_connector.rs`'s
+# `a_uri_valued_query_parameter_survives_because_it_avoids_the_pipelines_danger_set` is the argument
+# made mechanical: every `user` parameter's declared `pattern` is itself checked against the same
+# four-character danger set `op.rs` names, so the schema cannot silently drift into admitting one.
+#
+# **The inverse hazard, from the same story:** a *path* parameter must never accept the whole URI,
+# or the emitted `{base}/scheduled_events/{uuid}` template would embed a second URL inside the
+# first rather than address a resource — a template composing a URL from a value that is already a
+# URL. `calendly-scheduled-event-get` and `calendly-invitee-list` constrain their path parameter to
+# the bare 36-character UUID (the trailing segment of the resource's own `uri`) for exactly this
+# reason; each declares `maxLength = 36` and a hex-and-hyphen `pattern` that admits no scheme.
+#
+# ---------------------------------------------------------------------------------------------
+# EXCLUDED, deliberately, rather than guessed at:
+# ---------------------------------------------------------------------------------------------
+#
+# - **Cursor pagination (`page_token`).** It is an opaque, server-issued token
+#   (Calendly's own docs point callers at the collection's `next_page` URI rather than at
+#   constructing one), so its character set is unknown here in the way a Zendesk search term's is
+#   known to be dangerous. The same reasoning excludes it that excludes Asana's `offset` and
+#   Notion's `start_cursor` — an opaque token this pipeline cannot safely re-encode is excluded
+#   rather than declared and hoped about. `count` alone is declared for paging, and it is a plain
+#   integer with no encoding hazard at all.
+# - **`min_start_time` / `max_start_time`.** An ISO 8601 timestamp with a non-UTC offset is written
+#   `2024-01-01T00:00:00+05:00`, and that `+` is a second, unrelated hazard: a server that decodes a
+#   query value as `application/x-www-form-urlencoded` reads an unescaped `+` as a space, corrupting
+#   the offset. This is not the hazard this connector was chosen to demonstrate, and folding it in
+#   would blur the one URI-valued finding above with a second, timestamp-shaped one. Left out; a
+#   caller filters the returned collection instead.
+# - **Filtering invitees by `email`.** A real email address legitimately contains `+`
+#   (`agent+tag@example.com`), the same hazard as the timestamp case, and this filter additionally
+#   asks a caller to supply a specific person's email as an argument — the opposite of the "no
+#   invitee value anywhere in this repository" rule the story states. Excluded on both grounds.
+# - **Writes** (creating or canceling a scheduled event, inviting a guest). The curated set is reads
+#   only; every operation below is `risk = "low"`, `idempotency = "idempotent"`.
+#
+# ---------------------------------------------------------------------------------------------
+
+id = "calendly"
+vendor = "Calendly"
+
+# One host for every account; Calendly has no per-tenant subdomain the way zendesk or freshdesk do,
+# so `base_url` is a bound literal exactly as asana's and openai's are.
+base_url = "https://api.calendly.com"
+
+description = "Calendly scheduling: read the authenticated user, event types, scheduled events and their invitees"
+
+# The "Test connection" operation: a bounded read of the authenticated user, taking no argument at
+# all — the natural `verify` a settings page can call unattended.
+verify = "calendly-user-me"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["calendly.access_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "calendly.access_token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; its value is never read
+# here and never reaches a generated artifact.
+#
+# A personal access token and an OAuth-issued access token are the same thing on the wire —
+# `Authorization: Bearer <token>` — so which one an operator supplies is configuration, not
+# connector shape, exactly as asana's and github's bearer credentials record.
+env = ["CALENDLY_ACCESS_TOKEN"]
+description = "Calendly access token sent as a bearer — a personal access token or an OAuth-issued one"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 5, all reads
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "calendly-user-me"
+method = "GET"
+path = "/users/me"
+description = "Get the authenticated user: their own resource URI, name, scheduling slug, account email and current organization. The URI in the response is the value later operations expect as their `user` query parameter"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["resource"]
+properties = { resource = { type = "object", required = ["uri", "name"], properties = { uri = { type = "string", description = "This user's own canonical URI, e.g. `https://api.calendly.com/users/{uuid}`. Pass this whole string — not just its trailing id — as the `user` argument to calendly-event-type-list and calendly-scheduled-event-list" }, name = { type = "string" }, slug = { type = "string", description = "The scheduling-page slug, e.g. the last segment of `https://calendly.com/{slug}`" }, email = { type = "string", description = "The account owner's own email — not an invitee's" }, timezone = { type = "string", description = "IANA timezone name, e.g. `America/New_York`" }, current_organization = { type = "string", description = "URI of the organization this user currently belongs to" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" } } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "calendly-event-type-list"
+method = "GET"
+path = "/event_types"
+description = "List event types owned by a user — the bookable meeting templates (name, duration, scheduling link). Takes the user's own URI, not a bare id"
+risk = "low"
+idempotency = "idempotent"
+
+# THE FINDING'S QUERY PARAMETER. See the header comment for why this value survives this pipeline's
+# unencoded query interpolation intact: the `pattern` below whitelists exactly the characters a
+# Calendly URI is built from, which is also, not coincidentally, disjoint from the four characters
+# `op.rs:138-141` names as corrupting.
+[[operations.params.query]]
+name = "user"
+description = "The full URI of the Calendly user to list event types for, e.g. `https://api.calendly.com/users/{uuid}` — the `uri` field from calendly-user-me's response. Pass the whole URI unchanged, never just its trailing id"
+required = true
+schema = { type = "string", pattern = "^https://api\\.calendly\\.com/users/[A-Za-z0-9-]+$", minLength = 33 }
+
+[[operations.params.query]]
+name = "count"
+description = "Results per page; Calendly caps this at 100"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100, default = 20 }
+
+[operations.response_schema]
+type = "object"
+required = ["collection"]
+properties = { collection = { type = "array", description = "The user's event types", items = { type = "object", required = ["uri", "name", "active"], properties = { uri = { type = "string", description = "This event type's own canonical URI" }, name = { type = "string" }, active = { type = "boolean", description = "Whether the event type currently accepts new bookings" }, scheduling_url = { type = "string", description = "The public booking page for this event type" }, duration = { type = "integer", description = "Meeting length in minutes" }, kind = { type = "string", description = "`solo` or `group`" }, slug = { type = "string" }, color = { type = "string", description = "Hex color Calendly's UI displays this event type in" } } } }, pagination = { type = "object", description = "Cursor pagination. `next_page_token` is deliberately not a declared parameter here — it is an opaque server-issued token this connector does not attempt to re-encode; page through by reading `next_page` from the response instead" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "calendly-scheduled-event-list"
+method = "GET"
+path = "/scheduled_events"
+description = "List a user's scheduled events (past and upcoming bookings). Takes the user's own URI, not a bare id"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "user"
+description = "The full URI of the Calendly user to list scheduled events for, e.g. `https://api.calendly.com/users/{uuid}` — the `uri` field from calendly-user-me's response. Pass the whole URI unchanged, never just its trailing id"
+required = true
+schema = { type = "string", pattern = "^https://api\\.calendly\\.com/users/[A-Za-z0-9-]+$", minLength = 33 }
+
+[[operations.params.query]]
+name = "status"
+description = "Filter to `active` (not canceled) or `canceled` events"
+required = false
+schema = { type = "string", enum = ["active", "canceled"] }
+
+[[operations.params.query]]
+name = "count"
+description = "Results per page; Calendly caps this at 100"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100, default = 20 }
+
+# The same envelope calendly-scheduled-event-get returns for one event, here as a collection. See
+# that operation's own comment for what each field means and which are left loosely typed.
+[operations.response_schema]
+type = "object"
+required = ["collection"]
+properties = { collection = { type = "array", items = { type = "object", required = ["uri", "name", "status", "start_time", "end_time"], properties = { uri = { type = "string", description = "This event's own canonical URI; its trailing segment is the bare UUID calendly-scheduled-event-get and calendly-invitee-list take as their path parameter" }, name = { type = "string", description = "The event type's name at the time of booking" }, status = { type = "string", description = "`active` or `canceled`" }, start_time = { type = "string", format = "date-time" }, end_time = { type = "string", format = "date-time" }, event_type = { type = "string", description = "URI of the event type this booking was made against" }, location = { description = "Conferencing or physical-location details. Calendly documents several location kinds with different shapes (video call, phone, in person, custom), so no single object shape is declared here rather than guessing one" }, invitees_counter = { type = "object", properties = { active = { type = "integer" }, total = { type = "integer" }, limit = { type = "integer" } } }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" } } } }, pagination = { type = "object", description = "Cursor pagination; see calendly-event-type-list's response_schema comment for why no cursor parameter is declared" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "calendly-scheduled-event-get"
+method = "GET"
+path = "/scheduled_events/{uuid}"
+description = "Get one scheduled event by id"
+risk = "low"
+idempotency = "idempotent"
+
+# THE INVERSE HAZARD. This path parameter is the bare UUID — the trailing segment of the event's own
+# `uri` — never the whole URI, or the emitted `{base}/scheduled_events/{uuid}` template would embed a
+# second URL inside the first instead of addressing a resource. `maxLength = 36` and the hex-and-
+# hyphen `pattern` both refuse a full `https://…` value at the schema itself.
+[[operations.params.path]]
+name = "uuid"
+description = "The event's bare UUID — the last path segment of its own `uri`, e.g. the tail of `https://api.calendly.com/scheduled_events/{uuid}`. Pass only the UUID here, never the full URI"
+required = true
+schema = { type = "string", pattern = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", minLength = 36, maxLength = 36 }
+
+[operations.response_schema]
+type = "object"
+required = ["resource"]
+properties = { resource = { type = "object", required = ["uri", "name", "status", "start_time", "end_time"], properties = { uri = { type = "string" }, name = { type = "string", description = "The event type's name at the time of booking" }, status = { type = "string", description = "`active` or `canceled`" }, start_time = { type = "string", format = "date-time" }, end_time = { type = "string", format = "date-time" }, event_type = { type = "string", description = "URI of the event type this booking was made against" }, location = { description = "Conferencing or physical-location details; shape varies by kind and is not enumerated here — see calendly-scheduled-event-list's response_schema comment" }, invitees_counter = { type = "object", properties = { active = { type = "integer" }, total = { type = "integer" }, limit = { type = "integer" } } }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" } } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/title"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "calendly-invitee-list"
+method = "GET"
+path = "/scheduled_events/{uuid}/invitees"
+description = "List a scheduled event's invitees. Each invitee is personal data about a named third party — their name, email and any answers they gave to the event type's custom questions. Read it only for what the calling flow needs and do not persist or repeat it beyond that"
+risk = "low"
+idempotency = "idempotent"
+
+# The same bare-UUID constraint as calendly-scheduled-event-get, for the same reason.
+[[operations.params.path]]
+name = "uuid"
+description = "The event's bare UUID — the last path segment of its own `uri`. Pass only the UUID here, never the full URI"
+required = true
+schema = { type = "string", pattern = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", minLength = 36, maxLength = 36 }
+
+[[operations.params.query]]
+name = "status"
+description = "Filter to `active` (not canceled) or `canceled` invitees"
+required = false
+schema = { type = "string", enum = ["active", "canceled"] }
+
+[[operations.params.query]]
+name = "count"
+description = "Results per page; Calendly caps this at 100"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100, default = 20 }
+
+# No `example` anywhere below: every field here can hold a real person's name, email or free-text
+# answer, and this repository must never carry a captured or plausible instance of one.
+[operations.response_schema]
+type = "object"
+required = ["collection"]
+properties = { collection = { type = "array", description = "The event's invitees — personal data", items = { type = "object", required = ["uri", "email", "status"], properties = { uri = { type = "string" }, email = { type = "string", description = "The invitee's own email address — personal data, never an example value" }, name = { type = "string", description = "The invitee's own name — personal data, never an example value" }, status = { type = "string", description = "`active` or `canceled`" }, questions_and_answers = { type = "array", description = "The invitee's free-text answers to the event type's custom booking questions — personal data, shape not enumerated further" }, timezone = { type = "string", description = "IANA timezone name the invitee booked in" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" } } } }, pagination = { type = "object", description = "Cursor pagination; see calendly-event-type-list's response_schema comment for why no cursor parameter is declared" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/title"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any of the above can run
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "access_token"
+label = "Calendly access token"
+help = "Create one under Integrations & apps → API & Webhooks → Personal access tokens in Calendly. Calendly shows it once"
+format = "token"
+secret = true
+docs_url = "https://developer.calendly.com/getting-started"
+binds = "credential.calendly.access_token"
