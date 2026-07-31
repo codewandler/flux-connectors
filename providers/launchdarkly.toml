@@ -49,10 +49,12 @@
 # `medium` would let an agent flip production behaviour for real users without a human seeing it
 # first, which is exactly what flux's approval gate exists to stop. It is not `destructive`: the
 # effect is immediate and consequential, but it is a `replace` onto a boolean and trivially reversible
-# by toggling back, unlike a delete. `idempotency = "non_idempotent"`, not because repeating the same
-# patch would actually change the outcome, but because this repository's emitter refuses
-# `idempotent` on any `PATCH` under RFC 9110 §9.2.2 — only `PUT` and `DELETE` are left alone — and a
-# safe retry here would need a condition this endpoint does not offer.
+# by toggling back, unlike a delete. `idempotency = "idempotent"`, and getting to say so is C-186:
+# when C-175 landed, this file declared `non_idempotent` — not because repeating the same patch would
+# change the outcome, but because the emitter refused `idempotent` on any `PATCH` under RFC 9110
+# §9.2.2, with only `PUT` and `DELETE` left alone. The comment said one thing and the field said the
+# other, and the field is what a host reads. `idempotent_because` now carries the vendor behaviour
+# that backs the claim, into `web/public/catalog.json` where a reviewer sees it beside the claim.
 #
 # ---------------------------------------------------------------------------------------------
 # EXCLUDED, deliberately, rather than guessed at:
@@ -268,12 +270,13 @@ method = "PATCH"
 path = "/flags/{project_key}/{feature_flag_key}"
 description = "Turn a feature flag on or off in one environment. This is a live production change: every SDK instance currently evaluating this flag in this environment — web, mobile and backend alike — switches to the other branch as soon as this call returns, for every real user it serves. It is reversible by toggling back, but it is not a private or staged edit"
 risk = "high"
-# `PATCH` is not an idempotent method under RFC 9110 §9.2.2, and this repository's emitter refuses
-# `idempotency = "idempotent"` on one (`crates/connector-flux/src/lib.rs::WriteDeclaredIdempotent`) —
-# only `PUT` and `DELETE` are left alone. A caller wanting a safe retry needs a condition to attach it
-# to, and this endpoint offers none, so `non_idempotent` is the honest declaration even though a
-# `replace` onto the same boolean would, in isolation, land in the same state twice.
-idempotency = "non_idempotent"
+# `PATCH` is not an idempotent method under RFC 9110 §9.2.2, and the emitter still refuses
+# `idempotency = "idempotent"` on one (`crates/connector-flux/src/lib.rs::WriteDeclaredIdempotent`)
+# unless the operation says why — only `PUT` and `DELETE` are left alone by method. This body is a
+# narrow, verified slice of JSON Patch (`replace` onto one environment's `on` bit and nothing else),
+# which is exactly what makes the claim checkable rather than a guess about PATCH in general.
+idempotency = "conditional"
+repeatable_because = "the body schema admits exactly one JSON Patch `replace` onto one environment's `on` bit (maxItems 1, op pinned to `replace`, path pinned to `/environments/{key}/on`), so it sets an absolute value and never a toggle or a delta — re-sending it lands the flag where the caller asked, however many times it runs"
 
 [[operations.params.path]]
 name = "project_key"

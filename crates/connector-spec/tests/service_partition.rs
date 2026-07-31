@@ -39,6 +39,7 @@ fn operation(id: &str, service: &str) -> Operation {
         description: String::new(),
         risk: Risk::Low,
         idempotency: Idempotency::Idempotent,
+        repeatable_because: None,
         auth: None,
         params: ParamSet::default(),
         response_schema: None,

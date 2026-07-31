@@ -219,9 +219,48 @@ fn the_flag_toggle_is_declared_as_a_high_risk_write_with_immediate_live_effect()
     );
     assert_eq!(
         toggle.idempotency,
-        Idempotency::NonIdempotent,
-        "PATCH is not an idempotent method under RFC 9110 §9.2.2, and this repository's emitter \
-         refuses `idempotency = \"idempotent\"` on one; only PUT and DELETE are left alone"
+        Idempotency::Conditional,
+        "the body is a single `replace` onto one environment's `on` bit — an absolute value, not a \
+         toggle — so re-sending it lands the flag where the caller asked. `PATCH` is not an \
+         idempotent method under RFC 9110 §9.2.2 and `idempotent` stays refused on one outright; \
+         `conditional` is the value flux reserves for a write that is genuinely safe to repeat, and \
+         C-186's `repeatable_because` is what makes the condition readable"
+    );
+    let condition = toggle
+        .repeatability_condition()
+        .expect("the toggle states the condition under which repeating it is safe");
+    assert!(
+        condition.contains("replace") && condition.contains("absolute value"),
+        "the condition must rest on this connector's *narrow* body — a single `replace` onto an \
+         absolute value — and not on a claim about JSON Patch or about PATCH in general, neither of \
+         which is idempotent: {condition:?}"
+    );
+
+    // Both refusals still bite, which matters more on this operation than on any other in the
+    // catalogue: the thing being declared safe to repeat flips live production behaviour for every
+    // user the moment it returns.
+    let index = connector
+        .operations
+        .iter()
+        .position(|operation| operation.id == TOGGLE_OPERATION)
+        .expect("the toggle operation exists");
+
+    let mut over_claiming = connector.clone();
+    over_claiming.operations[index].idempotency = Idempotency::Idempotent;
+    // Cleared so that only `WriteDeclaredIdempotent` can refuse this — see the note in
+    // `cloudflare_connector.rs` for the false-green this avoids.
+    over_claiming.operations[index].repeatable_because = None;
+    assert!(
+        emit_operation(&over_claiming, &over_claiming.operations[index]).is_err(),
+        "`idempotent` on this PATCH must still be refused outright — it would license flux's op \
+         cache to serve a stored result instead of actually flipping the flag"
+    );
+
+    let mut unstated = connector.clone();
+    unstated.operations[index].repeatable_because = None;
+    assert!(
+        emit_operation(&unstated, &unstated.operations[index]).is_err(),
+        "a `conditional` PATCH that states no condition must be refused"
     );
 
     let description = toggle.description.to_lowercase();

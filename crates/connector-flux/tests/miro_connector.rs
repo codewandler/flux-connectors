@@ -211,36 +211,71 @@ fn no_body_field_declares_an_array_this_connector_does_not_need_c_185() {
     }
 }
 
-/// The sticky-note update is a `PATCH` that is genuinely idempotent by vendor behaviour (it always
-/// sets absolute values, never a delta) but `check_write_metadata` refuses `idempotency =
-/// "idempotent"` on any `PATCH` by method alone (C-186) — so it is declared `non_idempotent`, and the
-/// emitter's own refusal is what backs that claim.
+/// The sticky-note update is a `PATCH` that is genuinely safe to repeat by vendor behaviour — it
+/// sets absolute values, never a delta — and since C-186 it says so.
+///
+/// It used to declare `non_idempotent` with a comment instructing whoever landed C-186 to come back
+/// and fix it. This is that fix, and the value it lands on is `conditional`, not `idempotent`:
+/// `flux_spec::coherence` reserves `idempotent` for something stronger — it licenses flux's op cache
+/// to serve a stored result *instead of executing* — while naming `conditional` as the escape hatch
+/// for exactly this. Both refusals are asserted below rather than assumed.
 #[test]
-fn the_sticky_note_update_is_forced_non_idempotent_by_the_patch_rule() {
+fn the_sticky_note_update_is_conditional_and_states_its_condition() {
     let connector = miro();
     let update = op(&connector, "miro-sticky-note-update");
 
     assert_eq!(update.method, HttpMethod::Patch);
     assert_eq!(
         update.idempotency,
-        Idempotency::NonIdempotent,
-        "declared non_idempotent because check_write_metadata refuses `idempotent` on any PATCH \
-         outright, regardless of vendor truth — see the provider file's header comment (C-186)"
+        Idempotency::Conditional,
+        "the request carries the note's whole content as an absolute value, so re-sending it lands \
+         in one state — `non_idempotent` was the compiler's answer, never Miro's (C-186)"
+    );
+    let condition = update
+        .repeatability_condition()
+        .expect("the update states the condition under which repeating it is safe");
+    assert!(
+        condition.contains("absolute value") && condition.contains("delta"),
+        "the condition must name the vendor behaviour it rests on — an absolute value rather than \
+         a delta — since that is the whole difference between this PATCH and one that increments a \
+         counter: {condition:?}"
     );
 
-    let mut idempotent_update = connector.clone();
-    let index = idempotent_update
+    // The description must no longer explain this repository's compiler to a model. It carried a
+    // sentence about `check_write_metadata` — a fact about the build, in the one string that
+    // reaches a model as its tool contract (`AGENTS.md`: "`description` is not UI copy") — and once
+    // the rule changed, that sentence was false in a shipped artifact.
+    assert!(
+        !update.description.contains("check_write_metadata")
+            && !update.description.contains("non_idempotent"),
+        "the model-facing description must describe Miro, not the emitter: {:?}",
+        update.description
+    );
+
+    let index = connector
         .operations
         .iter()
         .position(|operation| operation.id == "miro-sticky-note-update")
         .expect("the update operation exists");
-    idempotent_update.operations[index].idempotency = Idempotency::Idempotent;
-    let attempt = emit_operation(&idempotent_update, &idempotent_update.operations[index]);
+
+    // `idempotent` on a PATCH stays refused outright — C-186 did not buy that.
+    let mut over_claiming = connector.clone();
+    over_claiming.operations[index].idempotency = Idempotency::Idempotent;
+    // Cleared so that only `WriteDeclaredIdempotent` can refuse this — see the note in
+    // `cloudflare_connector.rs` for the false-green this avoids.
+    over_claiming.operations[index].repeatable_because = None;
     assert!(
-        attempt.is_err(),
-        "declaring the update idempotent should be refused by check_write_metadata — if this now \
-         emits, the compiler rule changed (see C-186) and the provider file's comment should be \
-         revisited rather than this test silently passing"
+        emit_operation(&over_claiming, &over_claiming.operations[index]).is_err(),
+        "`idempotent` on this PATCH must still be refused; the escape C-186 added is `conditional`"
+    );
+
+    // And `conditional` without its condition is refused too, which is the rule C-186 added.
+    let mut unstated = connector.clone();
+    unstated.operations[index].repeatable_because = None;
+    assert!(
+        emit_operation(&unstated, &unstated.operations[index]).is_err(),
+        "a `conditional` PATCH that states no condition must be refused — otherwise the claim is \
+         back to meaning nothing, which is where six shipped operations sat before C-186"
     );
 }
 

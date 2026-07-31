@@ -389,8 +389,8 @@ code_pointer = "/error/code"
 #   It is not `destructive` because nothing was taken and no record is destroyed.
 #
 # IDEMPOTENCY is `conditional` on all three, and that word is earned rather than asserted.
-# `Idempotency::Conditional` is documented as "idempotent only under a condition the caller supplies
-# (e.g. an idempotency key)" — Stripe's idempotency keys are exactly that mechanism: a `POST` carrying
+# `Idempotency::Conditional` is flux's escape hatch for a write that is genuinely safe to repeat under
+# a *stated* condition — Stripe's idempotency keys are exactly such a condition: a `POST` carrying
 # `Idempotency-Key: <string>` is replayed from Stripe's cache for 24 hours rather than re-executed, so
 # a retried capture captures once.
 #
@@ -420,6 +420,7 @@ path = "/v1/payment_intents/{payment_intent}/capture"
 description = "Capture an authorized payment intent, charging the customer the **full** authorized amount. Only a payment intent in `requires_capture` can be captured; a partial capture needs an `amount` this connector cannot send. Stripe answers 402 with an `error.code` such as `card_declined` when the capture is refused, and that arrives as data rather than as a failure"
 risk = "high"
 idempotency = "conditional"
+repeatable_because = "the connector requires an `Idempotency-Key` header on every call, and Stripe replays a keyed POST from its own cache for 24 hours rather than re-executing it, so a retried capture captures once and returns the first result"
 
 [[operations.params.path]]
 name = "payment_intent"
@@ -452,6 +453,7 @@ path = "/v1/payment_intents/{payment_intent}/cancel"
 description = "Cancel a payment intent, releasing any authorization hold on the customer's card. This cannot be undone — a canceled intent is final, and collecting the payment afterwards means creating a new one. An intent that has already succeeded cannot be canceled; refund it instead"
 risk = "high"
 idempotency = "conditional"
+repeatable_because = "the connector requires an `Idempotency-Key` header on every call, and Stripe replays a keyed POST from its own cache for 24 hours rather than re-executing it, so a retried cancel cancels once rather than racing a second attempt"
 
 [[operations.params.path]]
 name = "payment_intent"
@@ -501,6 +503,7 @@ path = "/v1/charges/{charge}/refunds"
 description = "Refund a charge **in full** and irreversibly: the entire un-refunded amount goes back to the customer's original payment method, usually within five to ten business days. A partial refund needs an `amount` this connector cannot send. Stripe's fee on the original charge is not returned. There is no way to undo a refund — collecting the money again means charging the customer again"
 risk = "destructive"
 idempotency = "conditional"
+repeatable_because = "the connector requires an `Idempotency-Key` header on every call, and Stripe replays a keyed POST from its own cache for 24 hours rather than re-executing it, so a retried refund refunds once — without the key a retry would move money twice"
 
 [[operations.params.path]]
 name = "charge"

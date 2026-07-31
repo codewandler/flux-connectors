@@ -56,6 +56,7 @@ fn operation(
         description: format!("The {id} operation."),
         risk,
         idempotency,
+        repeatable_because: None,
         auth: None,
         params,
         response_schema: None,

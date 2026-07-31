@@ -705,7 +705,39 @@ fn mutates(method: HttpMethod) -> bool {
 /// `idempotency`, so a `POST` that inherited a `GET`'s `low`/`idempotent` would be auto-approved and
 /// treated as safe to retry. Both are refused rather than corrected: a silent correction hides the
 /// authoring mistake, and the IR omits `Default` on both enums for exactly that reason.
+///
+/// # What C-186 changed, and what it deliberately did not
+///
+/// Neither the `risk` refusal nor the `idempotent`-on-`POST`/`PATCH` refusal is relaxed. **Both are
+/// unconditional, exactly as they were.** C-186's first landing did relax the second one — it let a
+/// `POST` claim `Idempotent` behind a justification — and that was wrong on flux's own terms:
+/// `flux_spec::coherence`'s I3 records that `Idempotent` is what "licenses the dispatcher's op cache
+/// to serve a stored result *instead of executing*". "Safe to repeat" and "safe to skip" are
+/// different claims, and only the second is what `Idempotent` means. Purging a cache is the first.
+///
+/// What landed instead is a **tightening**, on the value flux actually reserves for this:
+/// [`Idempotency::Conditional`] is flux's stated escape hatch for a mutation that is genuinely
+/// replay-safe, and it was already permitted on every method here with nothing asked of it. Six
+/// operations used it before C-186 with the condition recorded nowhere. A mutating `conditional`
+/// must now state its condition, and the condition is refused where it means nothing.
 fn check_write_metadata(operation: &Operation) -> Result<()> {
+    // Checked ahead of the `mutates` gate, because the methods this refuses are exactly the ones the
+    // gate returns early on. A condition on a `GET` is where the field is most tempting and least
+    // meaningful: nothing about a read needs conditioning.
+    if operation.repeatable_because.is_some() && !mutates(operation.method) {
+        return Err(Error::RepeatabilityConditionUnneeded {
+            operation: operation.id.clone(),
+            method: method_word(operation.method),
+        });
+    }
+    // Likewise ahead of the gate for the same reason, and checked on the IR rather than only at the
+    // loader because an IR assembled in memory never passes through `provider::load`.
+    if operation.repeatable_because.is_some() && operation.idempotency != Idempotency::Conditional {
+        return Err(Error::RepeatabilityConditionWithoutTheClaim {
+            operation: operation.id.clone(),
+            idempotency: idempotency_tag(operation.idempotency),
+        });
+    }
     if !mutates(operation.method) {
         return Ok(());
     }
@@ -715,13 +747,30 @@ fn check_write_metadata(operation: &Operation) -> Result<()> {
             method: method_word(operation.method),
         });
     }
-    // `PUT` and `DELETE` *are* idempotent methods under RFC 9110 §9.2.2, so declaring them so is
-    // honest; `POST` and `PATCH` are not, and claiming otherwise makes a `retry` around the call
-    // unsound.
+    // `PUT` and `DELETE` *are* idempotent methods under RFC 9110 §9.2.2, so this repository has
+    // always let them declare `idempotent`; `POST` and `PATCH` are not, and claiming otherwise makes
+    // a `retry` around the call unsound.
+    //
+    // Worth knowing while reading this: the `PUT`/`DELETE` permission is in open conflict with
+    // flux's I3, which does not consider the HTTP method at all — it refuses `Idempotent` on
+    // anything consequence-bearing. Nine shipped `PUT`s sit in that gap today. Resolving it is a
+    // decision about whose vocabulary wins across eight providers, not something to settle inside a
+    // guard, so it is measured and filed rather than changed here — see
+    // `crates/connector-pack/tests/metadata_coherence.rs`.
     if operation.idempotency == Idempotency::Idempotent
         && matches!(operation.method, HttpMethod::Post | HttpMethod::Patch)
     {
         return Err(Error::WriteDeclaredIdempotent {
+            operation: operation.id.clone(),
+            method: method_word(operation.method),
+        });
+    }
+    // The tightening. `conditional` was the one metadata value a write could carry with nothing
+    // asked of it, and flux's word for what makes it honest is "stated".
+    if operation.idempotency == Idempotency::Conditional
+        && operation.repeatability_condition().is_none()
+    {
+        return Err(Error::ConditionalWithoutItsCondition {
             operation: operation.id.clone(),
             method: method_word(operation.method),
         });
@@ -1342,6 +1391,7 @@ mod tests {
             description: "Get a thing.".to_string(),
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
+            repeatable_because: None,
             auth: None,
             params: ParamSet {
                 path: path_params,

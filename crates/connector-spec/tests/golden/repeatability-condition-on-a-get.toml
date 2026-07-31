@@ -1,0 +1,17 @@
+# C-186. `repeatable_because` states the condition under which repeating a *write* is safe. A `GET`
+# changes nothing, so there is no repeat hazard to put a condition on and the field answers nothing.
+#
+# Refused rather than ignored, because a field that may be written anywhere and means something in
+# only one place is a field nobody reads anywhere — and the whole value of this one is that a
+# reviewer reads it when a write claims to be replay-safe.
+id = "acme"
+base_url = "https://api.acme.example"
+
+[[operations]]
+id = "acme-thing-get"
+method = "GET"
+path = "/v1/things"
+description = "List things."
+risk = "low"
+idempotency = "idempotent"
+repeatable_because = "reading a list twice reads the same list"

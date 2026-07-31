@@ -1,0 +1,2 @@
+providers/repeatability-condition-without-the-claim.toml is not a valid connector definition:
+  - operation "acme-cache-purge" declares `repeatable_because` but `idempotency = "non_idempotent"`. The condition describes a repeat that is safe while the field says otherwise — one of the two is wrong, and shipping both is the contradiction C-186 exists to end

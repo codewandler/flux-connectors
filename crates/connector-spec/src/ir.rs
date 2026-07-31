@@ -101,11 +101,37 @@ pub enum Risk {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Idempotency {
-    /// Repeating the call has the same effect as making it once.
+    /// Repeating the call has the same effect as making it once — **and the call may be skipped
+    /// entirely in favour of a stored result.**
+    ///
+    /// That second clause is not a gloss; it is what the value licenses downstream, and this
+    /// repository had it wrong. `flux_spec::coherence`'s **I3, the repeatability floor**, is
+    /// explicit: `Idempotent` "is what licenses the dispatcher's op cache to serve a stored result
+    /// *instead of executing*", and a consequence-bearing spec must not declare it. So `Idempotent`
+    /// is a claim about a **read**, not a claim that a write is replay-safe. Reserve it for
+    /// operations that change nothing.
     Idempotent,
     /// Repeating the call repeats its effect.
     NonIdempotent,
-    /// Idempotent only under a condition the caller supplies (e.g. an idempotency key).
+    /// **Safe to repeat under a stated condition** — flux's own escape hatch for a mutation that
+    /// really is replay-safe.
+    ///
+    /// The wording is flux's: I3 says the honest declaration for a mutating operation is
+    /// `NonIdempotent`, "or [`Conditional`](Self::Conditional) when it is genuinely safe to repeat
+    /// under stated conditions. `Conditional` — not a loosened rule — is the escape hatch for
+    /// 'safely repeatable'."
+    ///
+    /// **This doc comment used to read "idempotent only under a condition the caller supplies (e.g.
+    /// an idempotency key)", and that narrowing cost three connectors their honest declaration**
+    /// (C-186). Cloudflare's cache purge, LaunchDarkly's flag toggle and Miro's sticky-note update
+    /// are each safely repeatable because of what the *endpoint* does — a target state rather than
+    /// a delta — with no key for a caller to supply. Reading `Conditional` as "caller supplies a
+    /// key" put all three outside a value that was always meant for them, and each shipped
+    /// `NonIdempotent` with a comment saying the opposite. A condition the caller supplies is one
+    /// kind of stated condition; it was never the only kind.
+    ///
+    /// The condition itself is [`Operation::repeatable_because`], and stating it is mandatory on a
+    /// mutating method — flux says *stated* conditions, and a condition recorded nowhere is not one.
     Conditional,
 }
 
@@ -610,6 +636,20 @@ pub struct Service {
     pub roles: Vec<Role>,
 }
 
+/// **The shortest stated condition that counts as one**, in characters after trimming.
+///
+/// Not a measure of truth — nothing here can check whether a vendor really deduplicates — but a
+/// floor on effort, and the number is calibrated rather than invented: it is the length of
+/// `"purging twice is a no-op"`, the shortest honest reason anyone working on C-186 actually wrote.
+/// Below it live `"yes"`, `"idempotent"` and `"see above"`, which unlock the claim while telling a
+/// reviewer nothing, and an escape hatch that costs nothing is a deleted guard.
+///
+/// `crates/connector-spec/schema/provider-toml.schema.json` publishes this as the `minLength` of
+/// `repeatable_because`, and `tests/provider_schema.rs` reads *this constant* to check it rather
+/// than a second copy of the number — two statements of one fact with only one machine-checked is
+/// the defect class C-186 was filed for, and duplicating it here would have re-enacted it.
+pub const MIN_REPEATABILITY_CONDITION: usize = 24;
+
 /// One operation: a single HTTP call, and everything a Flux `op` declaration needs to wrap it.
 ///
 /// `description`, `risk` and `idempotency` map straight onto the metadata a Flux composite op
@@ -649,6 +689,42 @@ pub struct Operation {
     pub risk: Risk,
     /// Whether repeating it is safe. See [`Idempotency`].
     pub idempotency: Idempotency,
+    /// **The condition under which repeating this write is safe** — mandatory on a mutating method
+    /// declaring [`Idempotency::Conditional`], and meaningless anywhere else.
+    ///
+    /// flux's I3 (`flux_spec::coherence`) says a mutating operation that really is replay-safe
+    /// declares `Conditional` "when it is genuinely safe to repeat under **stated** conditions".
+    /// Nothing was making anyone state them. Six operations declared `Conditional` before C-186 —
+    /// three of them Stripe money movements — with the condition recorded in no field, no artifact
+    /// and, for four of the six, no comment either. A host reading `Conditional` learned that some
+    /// condition existed and nothing about what it was, which is barely more than `NonIdempotent`.
+    ///
+    /// This field is that condition, and stating it is the whole cost of the claim:
+    ///
+    /// - **Silence refuses.** A mutating operation declaring `Conditional` without one does not
+    ///   build. That is a rule this repository did not have before C-186 and is a tightening, not a
+    ///   loosening — the escape hatch was already wide open and unguarded.
+    /// - **The condition must be one.** Blank, whitespace, or shorter than
+    ///   [`MIN_REPEATABILITY_CONDITION`] is refused: an escape hatch anyone can take without saying
+    ///   anything is a deleted guard wearing the guard's clothes. What no compiler can check is
+    ///   whether the sentence is *true* — that is what publishing it into
+    ///   `web/public/catalog.json`, beside the claim it licenses, is for.
+    /// - **It is refused where it means nothing.** On a non-mutating method there is no repeat
+    ///   hazard to condition; and on an operation not declaring `Conditional` the prose asserts what
+    ///   its own field denies, which is C-186's defect arriving backwards.
+    ///
+    /// It deliberately does **not** unlock [`Idempotency::Idempotent`] on a `POST` or `PATCH`. The
+    /// first landing of C-186 made it do exactly that, and it was wrong for a reason worth keeping
+    /// here: `Idempotent` licenses flux's op cache to serve a stored result *instead of executing*,
+    /// so "safe to repeat" and "safe to skip" are different claims and only the second is what that
+    /// value means. Purging a cache is the first and not the second.
+    ///
+    /// `Option`, not a defaulted `String`: "stated nothing" and "stated the empty string" must not
+    /// be two spellings of one thing, and `skip_serializing_if` keeps every `ir_sha256` in the
+    /// repository exactly where it was for the operations that do not use it — asserted by
+    /// `tests/ir_roundtrip.rs`, not merely claimed here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repeatable_because: Option<String>,
     /// Which auth this operation requires, as a set of **alternatives** (OR); each alternative is
     /// an [`AuthRequirement`] — one mechanism — whose credentials must all be satisfied together
     /// (AND).
@@ -679,6 +755,32 @@ pub struct Operation {
 }
 
 impl Operation {
+    /// **The stated condition that licenses `conditional` on this operation**, or `None`.
+    ///
+    /// One reading of [`Operation::repeatable_because`], shared by the loader (which refuses a file
+    /// stating a condition that says nothing) and by `connector-flux`'s `check_write_metadata`
+    /// (which must not trust an IR assembled in memory rather than loaded). Two implementations of
+    /// "is this a real condition" would be two places for the floor to drift apart, and the emitter
+    /// is the one that has to be right.
+    ///
+    /// **The `trim` is load-bearing, not cosmetic**: without it
+    /// [`MIN_REPEATABILITY_CONDITION`] spaces would satisfy the floor and unlock the claim while
+    /// saying literally nothing. `tests/repeatability_condition.rs` asserts that case directly.
+    pub fn repeatability_condition(&self) -> Option<&str> {
+        let condition = self.repeatable_because.as_deref()?.trim();
+        (condition.chars().count() >= MIN_REPEATABILITY_CONDITION).then_some(condition)
+    }
+
+    /// Whether this operation *states* a condition at all, however poor.
+    ///
+    /// The difference from [`Operation::repeatability_condition`] is what the loader needs to tell
+    /// an author apart from silence: "you wrote nothing" and "you wrote `yes`" are different
+    /// mistakes and deserve different refusals, and a field present-but-rejected must never read as
+    /// a field absent.
+    pub fn states_repeatability_condition(&self) -> bool {
+        self.repeatable_because.is_some()
+    }
+
     /// **One JSON Schema describing everything the operation receives.**
     ///
     /// Derived, never authored: there is no `input_schema` key in a provider file, and one is a

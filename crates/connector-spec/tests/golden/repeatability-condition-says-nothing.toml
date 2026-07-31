@@ -1,0 +1,17 @@
+# C-186. An escape hatch anyone can take without saying anything is not a qualified guard, it is a
+# deleted one wearing the guard's clothes. The floor is 24 characters after trimming — the length of
+# "purging twice is a no-op", the shortest honest reason anyone working on this story wrote.
+#
+# What no compiler can check is whether the sentence is *true*. That is what publishing it into
+# `web/public/catalog.json`, beside the claim it licenses, is for.
+id = "acme"
+base_url = "https://api.acme.example"
+
+[[operations]]
+id = "acme-cache-purge"
+method = "POST"
+path = "/cache/purge"
+description = "Empty the cache."
+risk = "high"
+idempotency = "conditional"
+repeatable_because = "it is"

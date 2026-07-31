@@ -315,16 +315,79 @@ pub enum Error {
     /// whether wrapping the call in a `retry` is sound — the field's own IR documentation puts it
     /// as "guessing is how a retry turns one charge into three". `PUT` and `DELETE` *are* idempotent
     /// by RFC and are left alone.
+    ///
+    /// **This refusal is unconditional and C-186 did not weaken it**, though its first landing did.
+    /// The escape for a write that really is replay-safe is `idempotency = "conditional"` plus a
+    /// stated `repeatable_because`, which is the value `flux_spec::coherence` reserves for exactly
+    /// this: `Idempotent` licenses flux's op cache to serve a stored result *instead of executing*,
+    /// which is a stronger claim than "repeating is safe" and not one a cache purge can make.
     #[error(
         "operation `{operation}`: a {method} is not an idempotent method (RFC 9110 §9.2.2) and may \
-         not declare `idempotency = \"idempotent\"` — flux would treat a retry around it as safe. \
-         Use `non_idempotent`, or `conditional` when the caller supplies a key or stamp"
+         not declare `idempotency = \"idempotent\"` — flux would treat a retry around it as safe, \
+         and its op cache would be licensed to serve a stored result instead of running the call at \
+         all. If repeating this endpoint really is safe, declare `idempotency = \"conditional\"` \
+         and state the condition in `repeatable_because`; otherwise use `non_idempotent`"
     )]
     WriteDeclaredIdempotent {
         /// The operation id.
         operation: String,
         /// The HTTP method, as `http.request` spells it.
         method: &'static str,
+    },
+
+    /// A mutating operation declared `conditional` without stating the condition.
+    ///
+    /// flux's I3 names `Conditional` as the escape hatch for a write that is "genuinely safe to
+    /// repeat under **stated** conditions". Before C-186 nothing made anyone state them, and six
+    /// shipped operations — three of them Stripe money movements — declared `conditional` with the
+    /// condition in no field and no artifact. A host read that some condition existed and learned
+    /// nothing about what it was.
+    #[error(
+        "operation `{operation}`: a {method} declares `idempotency = \"conditional\"` but states no \
+         `repeatable_because`. `conditional` is the claim that repeating is safe *under a stated \
+         condition*; say what makes it safe — what the vendor does on a repeat — so a reviewer and a \
+         host can both read it"
+    )]
+    ConditionalWithoutItsCondition {
+        /// The operation id.
+        operation: String,
+        /// The HTTP method, as `http.request` spells it.
+        method: &'static str,
+    },
+
+    /// `repeatable_because` was stated on an operation that changes nothing.
+    ///
+    /// The field's whole meaning is "here is why repeating this *write* is safe". On a `GET`, `HEAD`
+    /// or `OPTIONS` there is no repeat hazard to condition. Left permitted, it would be copied onto
+    /// operations that never needed it until no reviewer read any of them, which is how an escape
+    /// hatch quietly becomes the norm.
+    #[error(
+        "operation `{operation}`: `repeatable_because` is stated on a {method}, which changes \
+         nothing and so has no repeat hazard to put a condition on. The field exists only to state \
+         the condition behind `idempotency = \"conditional\"` on a write; remove it"
+    )]
+    RepeatabilityConditionUnneeded {
+        /// The operation id.
+        operation: String,
+        /// The HTTP method, as `http.request` spells it.
+        method: &'static str,
+    },
+
+    /// `repeatable_because` was stated beside an `idempotency` that is not `conditional`.
+    ///
+    /// The condition describes a repeat that is safe while the field it sits next to says otherwise.
+    /// One of the two is wrong, and shipping both is C-186's own defect — prose and field
+    /// disagreeing about one fact — arriving from the other direction.
+    #[error(
+        "operation `{operation}`: `repeatable_because` is stated but `idempotency` is \
+         `{idempotency}`, not `conditional`. The condition says repeating is safe and the field says \
+         it is not; fix whichever one is wrong rather than shipping both"
+    )]
+    RepeatabilityConditionWithoutTheClaim {
+        /// The operation id.
+        operation: String,
+        /// The declared idempotency, as a provider file spells it.
+        idempotency: &'static str,
     },
 
     /// The operation id cannot be spelled as a Flux composite-op **declaration** name.

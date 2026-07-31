@@ -943,6 +943,11 @@
           "$ref": "#/$defs/idempotency",
           "description": "Whether repeating the call is safe. Mandatory: it decides whether a retry is sound."
         },
+        "repeatable_because": {
+          "type": "string",
+          "minLength": 24,
+          "description": "The condition under which repeating this write is safe. Required whenever a state-changing method (POST, PUT, PATCH, DELETE) declares `idempotency = \"conditional\"`, and refused anywhere else.\n\n`conditional` is flux's escape hatch for a write that really is replay-safe — flux's own wording is \"genuinely safe to repeat under STATED conditions\" — and this is where the condition is stated. Say what the vendor does on a repeat: that the body carries a target state rather than a delta, that an idempotency key deduplicates, that a second call returns the first result. Not the conclusion (\"it is idempotent\"), the mechanism.\n\nRefused in three cases, each a different mistake: on GET, HEAD or OPTIONS, which change nothing and so have no repeat hazard to condition; beside an `idempotency` that is not `conditional`, where the prose contradicts its own field; and when it is shorter than 24 characters after trimming, because an escape hatch that costs nothing is a deleted guard rather than a qualified one.\n\nIt does NOT permit `idempotency = \"idempotent\"` on a POST or PATCH; that stays refused unconditionally. `idempotent` licenses flux's op cache to serve a stored result INSTEAD of running the call, which is a stronger claim than \"repeating is safe\".\n\nPublished in `web/public/catalog.json` beside the claim it licenses, so a reader auditing a retry-safety claim on a write can see what it rests on."
+        },
         "auth": {
           "type": "array",
           "description": "The auth alternatives for this operation (OR of mechanisms).\n\nThree distinct states, all meaningful: OMIT the key to inherit `default_auth`; write `auth = []` for an operation that genuinely needs no credential, such as a health check, which then does NOT inherit; write a non-empty list to name the mechanisms that authorize it.",

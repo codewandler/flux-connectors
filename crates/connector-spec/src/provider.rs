@@ -45,8 +45,9 @@ use crate::inbound::{
 };
 use crate::lock::sha256_hex;
 use crate::{
-    AuthMethod, AuthRequirement, AuthScheme, Connector, Idempotency, JsonSchema, Operation, Param,
-    ParamSet, Provenance, Quirks, Risk, Role, Service, DEFAULT_SERVICE,
+    AuthMethod, AuthRequirement, AuthScheme, Connector, HttpMethod, Idempotency, JsonSchema,
+    Operation, Param, ParamSet, Provenance, Quirks, Risk, Role, Service, DEFAULT_SERVICE,
+    MIN_REPEATABILITY_CONDITION,
 };
 
 /// The documented JSON Schema for `providers/<name>.toml`.
@@ -2599,6 +2600,8 @@ fn validate_operations(connector: &Connector, problems: &mut Vec<String>) {
             }
         }
 
+        validate_repeatability_condition(operation, problems);
+
         if let Some(alternatives) = &operation.auth {
             validate_requirements(
                 connector,
@@ -2607,6 +2610,103 @@ fn validate_operations(connector: &Connector, problems: &mut Vec<String>) {
                 problems,
             );
         }
+    }
+}
+
+/// **A `conditional` write must state its condition, and the condition must mean something.**
+///
+/// flux's I3 (`flux_spec::coherence`) names [`Idempotency::Conditional`] as the escape hatch for a
+/// mutation that is genuinely replay-safe — "safe to repeat under **stated** conditions". This is
+/// what makes "stated" true. Before C-186 nothing did: six operations declared `conditional` with
+/// the condition written in no field and no artifact, so a host learned that a condition existed
+/// and nothing about what it was.
+///
+/// Four refusals, each a different author mistake:
+///
+/// - **a mutating `conditional` with no condition** — the claim without the thing that makes it
+///   checkable, and the reason this validator exists;
+/// - **a condition on a non-mutating method** — there is no repeat hazard to condition, so the
+///   field would spread as cargo-culted decoration until no reviewer read any of them;
+/// - **a condition on an operation not declaring `conditional`** — prose asserting what its own
+///   field denies, which is precisely the drift this story removes, arriving from the other side;
+/// - **a condition that says nothing** — `"yes"` unlocks the claim while telling a reviewer no more
+///   than silence did.
+///
+/// `connector-flux` refuses all four again on the IR rather than on the file. That overlap is
+/// deliberate and each layer is pinned on its own: this is the loud, early refusal an author sees,
+/// and `check_write_metadata` is the one an IR assembled in memory cannot walk past.
+fn validate_repeatability_condition(operation: &Operation, problems: &mut Vec<String>) {
+    let id = operation.id.as_str();
+    let mutating = matches!(
+        operation.method,
+        HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch | HttpMethod::Delete
+    );
+
+    if !operation.states_repeatability_condition() {
+        if mutating && operation.idempotency == Idempotency::Conditional {
+            problems.push(format!(
+                "operation {id:?} declares `idempotency = \"conditional\"` but no \
+                 `repeatable_because`. `conditional` is flux's escape hatch for a write that is \
+                 genuinely safe to repeat *under a stated condition* (`flux_spec::coherence`, I3), \
+                 and a condition stated nowhere leaves a host knowing only that one exists — say \
+                 what makes repeating this call safe"
+            ));
+        }
+        return;
+    }
+
+    if !mutating {
+        problems.push(format!(
+            "operation {id:?} is a {} and declares `repeatable_because`, but a method that changes \
+             nothing has no repeat hazard to put a condition on. The field exists only to state the \
+             condition behind `idempotency = \"conditional\"` on a write; remove it",
+            method_word(operation.method)
+        ));
+        return;
+    }
+
+    if operation.idempotency != Idempotency::Conditional {
+        problems.push(format!(
+            "operation {id:?} declares `repeatable_because` but `idempotency = {:?}`. The condition \
+             describes a repeat that is safe while the field says otherwise — one of the two is \
+             wrong, and shipping both is the contradiction C-186 exists to end",
+            idempotency_word(operation.idempotency)
+        ));
+        return;
+    }
+
+    if operation.repeatability_condition().is_none() {
+        problems.push(format!(
+            "operation {id:?} declares `repeatable_because` = {:?}, which is shorter than \
+             {MIN_REPEATABILITY_CONDITION} characters once trimmed and states no vendor behaviour. \
+             This is what a reviewer reads beside a retry-safety claim on a write; say what \
+             repeating the call actually does, as `cloudflare-cache-purge` and \
+             `launchdarkly-flag-toggle` do",
+            operation.repeatable_because.as_deref().unwrap_or_default()
+        ));
+    }
+}
+
+/// The `idempotency` value as an author spells it in a provider file. Exhaustive so a fourth variant
+/// is a compile error here rather than a refusal quoting the wrong word.
+fn idempotency_word(idempotency: Idempotency) -> &'static str {
+    match idempotency {
+        Idempotency::Idempotent => "idempotent",
+        Idempotency::NonIdempotent => "non_idempotent",
+        Idempotency::Conditional => "conditional",
+    }
+}
+
+/// The method as an author spells it in a provider file.
+fn method_word(method: HttpMethod) -> &'static str {
+    match method {
+        HttpMethod::Get => "GET",
+        HttpMethod::Post => "POST",
+        HttpMethod::Put => "PUT",
+        HttpMethod::Patch => "PATCH",
+        HttpMethod::Delete => "DELETE",
+        HttpMethod::Head => "HEAD",
+        HttpMethod::Options => "OPTIONS",
     }
 }
 

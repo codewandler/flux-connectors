@@ -1,0 +1,2 @@
+providers/repeatability-condition-says-nothing.toml is not a valid connector definition:
+  - operation "acme-cache-purge" declares `repeatable_because` = "it is", which is shorter than 24 characters once trimmed and states no vendor behaviour. This is what a reviewer reads beside a retry-safety claim on a write; say what repeating the call actually does, as `cloudflare-cache-purge` and `launchdarkly-flag-toggle` do

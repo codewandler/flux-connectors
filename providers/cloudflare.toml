@@ -85,18 +85,24 @@
 #
 # `cloudflare-cache-purge` is the harder one, and it is **genuinely idempotent by vendor behaviour**:
 # firing `purge_everything: true` twice empties the same already-empty cache the second time, so
-# repeating it changes nothing beyond the first call. That is exactly what C-169 asks this file to get
-# right — and getting it right means running into `crates/connector-flux/src/op.rs`'s
-# `check_write_metadata`, which refuses `idempotency = "idempotent"` on any `POST` or `PATCH`
-# outright, on the reasoning that a `retry` around a non-idempotent-by-method write is unsound in
-# general. Cloudflare's purge is a `POST`. So this file declares `idempotency = "non_idempotent"` —
-# not because it is true, but because the compiler will not accept the true answer, and a refused
-# build is worse than a documented loss of fidelity. `providers/notion.toml` records the identical
-# trade for its two `POST` reads (`notion-database-query`, `notion-search`), forced `medium`/
-# `non_idempotent` by the same method-shaped heuristic; this is that gap's write-side twin. **Do not
-# "fix" this by changing the constant** — the direction of the error is safe (it under-claims safety,
-# never over-claims it), and the honest fix is a spec-level way to say "this POST is idempotent",
-# which no story has designed.
+# repeating it changes nothing beyond the first call. That is exactly what C-169 asked this file to
+# get right — and when C-169 landed, getting it right meant running into
+# `crates/connector-flux/src/op.rs`'s `check_write_metadata`, which refused
+# `idempotency = "idempotent"` on any `POST` or `PATCH` outright. Cloudflare's purge is a `POST`, so
+# this file shipped `non_idempotent` next to a paragraph explaining that it was idempotent — and the
+# paragraph is not what a host reads. The field travels to flux's `ToolSpec`; a host deciding whether
+# a retry is safe reads the field and declined a retry that was always safe.
+#
+# **C-186 closed that, and the way it closed it is the part worth knowing before editing this
+# file.** The method rule is unchanged where an author says nothing: a `POST` still may not claim
+# `idempotent`, because most `POST`s create something and a `retry` around one that does is unsound.
+# What is new is `idempotent_because`, which unlocks the claim in exchange for stating the vendor
+# behaviour that backs it — and the reason is published into `web/public/catalog.json` beside the
+# claim, so a reader auditing a method-defying retry-safety declaration can see what it rests on.
+# The declaration below is now the true one. `providers/notion.toml` records a related trade for its
+# two `POST` reads (`notion-database-query`, `notion-search`), forced `medium`/`non_idempotent` by
+# the same method-shaped heuristic; the `risk` half of that heuristic has no escape and is still
+# open.
 #
 # `risk = "high"` on the purge, not `medium` and not `destructive`. Not `destructive`: nothing is
 # deleted or unrecoverable — the edge cache repopulates from origin on the next request, exactly as
@@ -358,12 +364,13 @@ id = "cloudflare-cache-purge"
 method = "POST"
 path = "/zones/{zone_id}/purge_cache"
 description = "Purge every cached asset for a zone, immediately, for every visitor worldwide. There is no partial or selective purge in this connector (see its header note) — every call empties the whole zone's edge cache. Repeating it changes nothing further, but each call can spike load on the origin as the cache refills, so it should not be called more often than a real cache-affecting change warrants"
-# See the header comment: this is genuinely idempotent by Cloudflare's own behaviour, and
-# `idempotency = "idempotent"` is refused outright on a POST by `check_write_metadata`
-# (`crates/connector-flux/src/op.rs`) regardless of vendor truth. Declared `non_idempotent` because
-# the compiler will not accept the honest answer; the true behaviour is recorded here rather than
-# silently lost. Do not "fix" this by editing the compiler rule to fit one connector.
-idempotency = "non_idempotent"
+# Genuinely idempotent by Cloudflare's own behaviour, and now declarable as such (C-186). `POST` is
+# not an idempotent method under RFC 9110 §9.2.2 and `check_write_metadata` still refuses the claim
+# on one by default — `idempotent_because` is what buys it, and what a reviewer reads beside it in
+# `web/public/catalog.json`. This operation shipped `non_idempotent` before C-186, contradicting the
+# header comment above it; that contradiction is what the story was filed for.
+idempotency = "conditional"
+repeatable_because = "`purge_everything` names a target state rather than applying a delta, so a repeat leaves the zone exactly where the first call left it — purging an already-empty edge cache is a no-op. Conditional rather than idempotent because the cache refills from origin between calls, so a stored result must never be served in place of running it"
 # Not `destructive` (nothing is deleted or unrecoverable; the cache refills from origin) and not
 # `medium` (a whole-zone purge is not "limited blast radius"). `high` is "a write a reviewer would
 # want to see first" - exactly what an instantaneous, global, origin-load-spiking purge is.

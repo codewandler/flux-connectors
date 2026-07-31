@@ -104,7 +104,7 @@ pub use inbound::{
 pub use ir::{
     BodyEncoding, Connector, ErrorEnvelope, HttpMethod, Idempotency, JsonSchema, Operation,
     Pagination, Param, ParamSet, Provenance, Quirks, RateLimit, Risk, Role, Service,
-    DEFAULT_SERVICE, FREE_FORM_BODY,
+    DEFAULT_SERVICE, FREE_FORM_BODY, MIN_REPEATABILITY_CONDITION,
 };
 pub use lock::{sha256_hex, LockEntry, Lockfile, LOCKFILE_NAME, LOCKFILE_VERSION};
 pub use provider::{

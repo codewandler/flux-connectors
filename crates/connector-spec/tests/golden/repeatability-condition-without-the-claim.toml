@@ -1,0 +1,16 @@
+# C-186, arriving backwards. This operation states the condition under which repeating is safe and
+# then declares that repeating is not safe. That is exactly the prose-versus-field contradiction the
+# story was filed to remove — `cloudflare-cache-purge` shipped a paragraph saying "genuinely
+# idempotent" beside `idempotency = "non_idempotent"` — so making it expressible in one field rather
+# than two would have moved the defect instead of closing it.
+id = "acme"
+base_url = "https://api.acme.example"
+
+[[operations]]
+id = "acme-cache-purge"
+method = "POST"
+path = "/cache/purge"
+description = "Empty the cache."
+risk = "high"
+idempotency = "non_idempotent"
+repeatable_because = "purging an already-purged cache is a no-op"

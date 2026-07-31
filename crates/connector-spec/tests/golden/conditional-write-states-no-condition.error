@@ -1,0 +1,2 @@
+providers/conditional-write-states-no-condition.toml is not a valid connector definition:
+  - operation "acme-payment-capture" declares `idempotency = "conditional"` but no `repeatable_because`. `conditional` is flux's escape hatch for a write that is genuinely safe to repeat *under a stated condition* (`flux_spec::coherence`, I3), and a condition stated nowhere leaves a host knowing only that one exists — say what makes repeating this call safe
