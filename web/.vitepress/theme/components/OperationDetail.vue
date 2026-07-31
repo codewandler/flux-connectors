@@ -12,12 +12,16 @@
 //   - a condition it **inherits** from its provider or from the catalogue is a neutral block further
 //     down, worded as context. Every operation in the catalogue carries at least one of those today,
 //     and none of them is a fault of the operation.
+//
+// C-206 adds a third level that is not a limitation at all: a published fact about the operation,
+// shown under Credentials, where a reader who wants to know what to supply is already looking.
 
 import { computed, inject } from 'vue'
 import {
   PATH_RESOLVER,
   identityPath,
   inheritedIssues,
+  notes,
   ownIssues,
   ownsDefect,
   signature,
@@ -53,6 +57,16 @@ function credential(name: string): Credential | undefined {
 
 const own = computed(() => (operation.value ? ownIssues(operation.value) : []))
 const inherited = computed(() => (operation.value ? inheritedIssues(operation.value) : []))
+
+/**
+ * The published facts that are not defects — see `notes` in the catalogue contract.
+ *
+ * Rendered inside **Credentials**, because that is the heading a reader is under when the question
+ * arises: an operation listing no credential is either waiting on one nobody can hold safely yet, or
+ * needs none at all, and the page used to answer both with the same sentence about live calls being
+ * disabled. The catalogue now says which, so the page stops guessing on its behalf.
+ */
+const clear = computed(() => (operation.value ? notes(operation.value) : []))
 </script>
 
 <template>
@@ -66,6 +80,7 @@ const inherited = computed(() => (operation.value ? inheritedIssues(operation.va
     :data-operation="operation.id"
     :data-defect="ownsDefect(operation) ? 'own' : 'none'"
     :data-inherited-issues="inherited.length"
+    :data-notes="clear.length"
   >
     <p class="op__lede">{{ operation.description }}</p>
 
@@ -112,10 +127,11 @@ const inherited = computed(() => (operation.value ? inheritedIssues(operation.va
     <FluxSource :source="operation.flux" />
 
     <h2>Credentials</h2>
-    <p v-if="!operation.credentials.length" class="op__note">
+    <IssueNotice title="Nothing to supply here" tone="clear" :issues="clear" />
+    <p v-if="!operation.credentials.length && !clear.length" class="op__note">
       No safe credential configuration is available for this operation. Live calls are disabled.
     </p>
-    <template v-else>
+    <template v-else-if="operation.credentials.length">
       <p class="op__note">
         Alternatives, any one of which authenticates the request. Each alternative lists every
         credential that must be supplied together. Environment variables are named, never read — no

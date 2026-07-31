@@ -15,9 +15,31 @@ export interface Issue {
   params: string[]
 }
 
+/**
+ * One published fact about an operation that is **not** a reason it fails (C-206).
+ *
+ * The sibling of {@link Issue}, and separate from it for the reason `works` exists at all: `works`
+ * is `issues.length === 0`, so a fact that is not a defect cannot live in that list without making
+ * an operation carry a listed reason and claim to work at the same time.
+ *
+ * It has no `params` and no `story`: a note is not something anyone is going to close.
+ */
+export interface Note {
+  code: string
+  scope: Scope
+  summary: string
+}
+
 export interface Status {
   works: boolean
   issues: Issue[]
+  /**
+   * **Optional in the encoding, and the one key in this contract that is.** The generator omits it
+   * when empty rather than writing it onto every operation in a whole-catalogue artifact, so an
+   * absent key means none. Read it through {@link notes}, never off the field, so that absence is
+   * resolved in one place.
+   */
+  notes?: Note[]
 }
 
 export interface Parameter {
@@ -301,6 +323,22 @@ export function coreEntryById(core: CoreCatalog, id: string): CoreEntry | undefi
  */
 export function ownIssues(operation: Operation): Issue[] {
   return operation.status.issues.filter((issue) => issue.scope === 'operation')
+}
+
+/**
+ * The facts about an operation that are not defects, with an absent key read as none.
+ *
+ * **The distinction this exists for.** An operation with no credentials is in one of two opposite
+ * situations, and until C-206 the catalogue published one sentence for both: a credential is being
+ * withheld because it cannot be held safely yet — the reader has to wait — or the vendor requires
+ * none at all, and the reader has nothing to do. The first is an issue and the second is a note, so
+ * a page can finally tell a visitor which one they are looking at.
+ *
+ * Nothing here names a code. A note carries the sentence it should be shown as, exactly as an issue
+ * does, and this file has never known what any of them are called.
+ */
+export function notes(operation: Operation): Note[] {
+  return operation.status.notes ?? []
 }
 
 /** The conditions an operation inherits from its provider or from the catalogue as a whole. */

@@ -20,14 +20,38 @@
 //!
 //! | Issue | Rule over the IR | Owning story |
 //! |---|---|---|
-//! | [`NO_CREDENTIAL`] | the operation's effective auth is empty | C-17 |
+//! | [`NO_CREDENTIAL`] | the operation's effective auth is empty, and it did not *declare* it so | C-17 |
 //! | [`CREDENTIAL_NOT_INJECTED`] | the operation's effective auth is **not** empty | C-10 |
 //! | [`UNENCODABLE_QUERY_VALUE`] | a query parameter whose schema is not numeric or boolean | C-30 |
 //! | [`UNBOUND_BASE_URL_TEMPLATE`] | the connector's base URL carries a `{name}` placeholder | C-17 |
 //!
-//! The first two are complementary and exhaustive: every operation gets exactly one of them, which
-//! is the machine-readable form of "no provider can make a live call yet, and freshdesk cannot even
-//! name the credential it would need".
+//! The first two are complementary over every operation that has *not* declared itself public: one
+//! of them fires, which is the machine-readable form of "no provider can make a live call yet, and
+//! freshdesk cannot even name the credential it would need".
+//!
+//! # Withheld is not the same as unnecessary (C-206)
+//!
+//! An empty effective auth has **two opposite meanings**, and publishing one sentence for both is
+//! what this module used to do:
+//!
+//! - **withheld** — a credential exists and this repository cannot hold it safely yet. Freshdesk is
+//!   the case: its API key occupies the Basic *username* position, which the IR cannot mark secret,
+//!   so `providers/freshdesk.toml` deliberately declares none and every request 401s. That is the
+//!   fail-closed outcome working, and [`NO_CREDENTIAL`] is its name.
+//! - **unnecessary** — the vendor requires nothing. Nothing is withheld, no credential exists to
+//!   withhold, and the unauthenticated call is the correct working call. [`NO_CREDENTIAL_REQUIRED`]
+//!   is its name, and it is a [`Note`] rather than an [`Issue`] because there is nothing wrong.
+//!
+//! **The difference is declared, never inferred.** [`Operation::auth`] already carries it and says
+//! so: `None` inherits [`Connector::default_auth`], while `Some(vec![])` is OpenAPI's *explicitly
+//! none* — "a health or ping endpoint", in the IR's own words. So an author writes `auth = []` on
+//! the operation to say the vendor needs nothing, and writes nothing at all when a credential is
+//! merely missing. Guessing "public" from the absence of a credential field would reproduce exactly
+//! the conflation this rule exists to end.
+//!
+//! One consequence is deliberate and visible: a public operation with a bound base URL and no
+//! free-text query parameter is the **first operation in this catalogue to report `works: true`**,
+//! because nothing is in fact standing in its way — see `docs/designs/catalog-json.md`.
 //!
 //! # The one fact that is not derived
 //!
@@ -62,7 +86,8 @@ use connector_spec::{Connector, JsonSchema, Operation, Param};
 /// someone would otherwise have to keep in step.
 const CREDENTIALS_REACH_THE_REQUEST: bool = false;
 
-/// A stable machine token naming one reason an operation does not work.
+/// A stable machine token naming one condition of an operation — for the four below, one reason it
+/// does not work.
 ///
 /// Consumers switch on these, so they are part of the published contract
 /// (`docs/designs/catalog-json.md`) and are not renamed once shipped. A *new* code is additive; an
@@ -74,6 +99,18 @@ pub const CREDENTIAL_NOT_INJECTED: &str = "credential-not-injected";
 pub const UNENCODABLE_QUERY_VALUE: &str = "unencodable-query-value";
 /// See [`NO_CREDENTIAL`].
 pub const UNBOUND_BASE_URL_TEMPLATE: &str = "unbound-base-url-template";
+
+/// The one token that names something **right** with an operation: its vendor requires no
+/// credential, so nothing is missing and nothing is withheld (C-206).
+///
+/// It is a [`Note`] code rather than an [`Issue`] code, and that is the whole point. Spelling it as
+/// a fifth issue would have kept `works: false` on an operation that works, which is the same lie
+/// [`NO_CREDENTIAL`] was telling — one code further along.
+///
+/// [`NO_CREDENTIAL`] is untouched and keeps its exact shipped sense: a credential exists and this
+/// repository cannot hold it safely yet. Every operation carrying it before this code existed
+/// carries it still.
+pub const NO_CREDENTIAL_REQUIRED: &str = "no-credential-required";
 
 /// How far an issue reaches — what a consumer needs in order to tell "this operation is broken"
 /// from "nothing can run yet".
@@ -105,16 +142,46 @@ pub struct Issue {
     pub params: Vec<String>,
 }
 
-/// Whether an operation currently works, and every reason it does not.
+/// One thing worth publishing about an operation that is **not** a reason it fails.
+///
+/// The sibling of [`Issue`], and deliberately a separate type rather than a flag on that one. The
+/// contract `works == issues.is_empty()` is what lets a consumer filter on one boolean without
+/// knowing a single code, and folding a non-defect into `issues` would have broken it for every
+/// consumer already reading the field — an operation would have carried a listed reason and claimed
+/// to work at the same time.
+///
+/// It has no `story`, because a note is not something anyone is going to close, and no `params`,
+/// because nothing here is about parameters. Both would be permanently empty fields inviting a
+/// consumer to look for meaning in them.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Note {
+    /// The stable machine token — see [`NO_CREDENTIAL_REQUIRED`].
+    pub code: &'static str,
+    /// How far the fact reaches. See [`Scope`].
+    pub scope: Scope,
+    /// One line a site can render as-is.
+    pub summary: String,
+}
+
+/// Whether an operation currently works, every reason it does not, and what else a consumer needs.
 ///
 /// [`works`](Self::works) is exactly `issues.is_empty()`, restated as a field so a consumer can
-/// filter on one boolean without knowing any of the codes.
+/// filter on one boolean without knowing any of the codes. [`notes`](Self::notes) does not enter
+/// into it: a note is never a reason to fail, which is what makes it a note.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Status {
-    /// True only when nothing below is wrong.
+    /// True only when nothing in [`issues`](Self::issues) is wrong.
     pub works: bool,
     /// Every reason it does not, in a fixed order — see [`of`].
     pub issues: Vec<Issue>,
+    /// Facts about the operation that are not defects, in the same fixed order — see [`Note`].
+    ///
+    /// **Omitted from the encoding when empty**, which is the one place this document departs from
+    /// its own "every key is always present" rule, and a deliberate trade: writing `"notes": []`
+    /// onto all 242 shipped operations would rewrite a whole-catalogue artifact to say nothing.
+    /// `docs/designs/catalog-json.md` records it, and a consumer reads an absent key as `[]`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<Note>,
 }
 
 /// Derive one operation's status from the connector that declares it.
@@ -123,14 +190,29 @@ pub struct Status {
 /// order, so equal inputs produce an equal — and equally ordered — result.
 pub fn of(connector: &Connector, operation: &Operation) -> Status {
     let mut issues = Vec::new();
+    let mut notes = Vec::new();
 
-    // 1. Credentials. The two rules are complementary, so exactly one of them fires.
+    // 1. Credentials. Three states over one axis, so exactly one of the arms fires.
     //
-    // `effective_auth` rather than `Operation::auth`, always: an operation that declares nothing
-    // inherits the connector default, and one that declares an explicit empty list inherits
-    // nothing. Reading the field directly would report freshdesk and a genuine ping endpoint the
-    // same way for opposite reasons.
-    if connector.effective_auth(operation).is_empty() {
+    // Both halves of `Operation::auth` are read, and that is the correction C-206 made: the
+    // *resolved* list says whether a credential applies, and the *declaration* says whether its
+    // absence was chosen. `effective_auth` alone answers only the first, so freshdesk — a credential
+    // withheld because the IR cannot hold it safely — and a genuine ping endpoint came out
+    // identical, and the endpoint was published as disabled for the reader's protection.
+    //
+    // Declared, never inferred. Treating "no credential field anywhere" as evidence of a public
+    // endpoint would put the guess back with more steps, and it would guess wrong on the one
+    // connector already shipping in that shape.
+    if declares_no_credential_is_needed(operation) {
+        notes.push(Note {
+            code: NO_CREDENTIAL_REQUIRED,
+            scope: Scope::Operation,
+            summary: format!(
+                "{} requires no credential for this operation, and none is withheld: the unauthenticated call is the correct one.",
+                connector.id
+            ),
+        });
+    } else if connector.effective_auth(operation).is_empty() {
         issues.push(Issue {
             code: NO_CREDENTIAL,
             scope: Scope::Provider,
@@ -202,7 +284,27 @@ pub fn of(connector: &Connector, operation: &Operation) -> Status {
     Status {
         works: issues.is_empty(),
         issues,
+        notes,
     }
+}
+
+/// Whether the operation **declares** that its vendor requires no credential.
+///
+/// The positive declaration C-206 needs, and it needed no new IR field: [`Operation::auth`] already
+/// separates the two empties and documents them as OpenAPI does — `None` is *unset* and inherits
+/// [`Connector::default_auth`], `Some(vec![])` is *explicitly none*, "a health or ping endpoint".
+/// Only the second is a statement about the vendor; the first is a statement about nothing.
+///
+/// # The limit this leaves, and why it is left
+///
+/// It is per **operation**. A connector whose whole vendor is public writes `auth = []` on each of
+/// its operations, because `Connector::default_auth` is a plain `Vec` — `default_auth = []` and an
+/// omitted key deserialize to the same value, so a connector cannot make this declaration once.
+/// Closing that means an `Option` on the connector field, which is `connector-spec`'s to change and
+/// touches the loader, the lockfile encoding and every provider file. Repetition that is visible in
+/// a diff is the better failure while it stands.
+fn declares_no_credential_is_needed(operation: &Operation) -> bool {
+    matches!(operation.auth.as_deref(), Some([]))
 }
 
 /// Whether a query parameter of this schema can be interpolated into a URL without encoding.
@@ -294,9 +396,13 @@ mod tests {
         status.issues.iter().map(|issue| issue.code).collect()
     }
 
-    /// The two credential rules are complementary: an operation gets exactly one of them, never
-    /// both and never neither. That is what makes "every operation has a credential story" true by
-    /// construction rather than by inspection.
+    fn note_codes(status: &Status) -> Vec<&str> {
+        status.notes.iter().map(|note| note.code).collect()
+    }
+
+    /// The two credential rules are complementary over every operation that has not declared itself
+    /// public: it gets exactly one of them, never both and never neither. That is what makes "every
+    /// operation has a credential story" true by construction rather than by inspection.
     #[test]
     fn every_operation_gets_exactly_one_credential_issue() {
         let connector = connector();
@@ -311,15 +417,93 @@ mod tests {
     }
 
     /// An operation that declares an explicit empty list inherits nothing — the distinction
-    /// `Connector::effective_auth` exists to preserve, and reading `Operation::auth` directly would
-    /// lose it.
+    /// `Connector::effective_auth` exists to preserve — **and it is a statement about the vendor**,
+    /// so it is published as a note and not as a defect (C-206).
+    ///
+    /// Note what does *not* change: the connector still declares `acme.token` and still defaults to
+    /// it. The declaration overrides that for this one operation, which is exactly what a ping
+    /// endpoint on an otherwise authenticated API is.
     #[test]
-    fn an_explicitly_unauthenticated_operation_reports_no_credential() {
+    fn an_explicitly_unauthenticated_operation_is_a_note_and_not_a_defect() {
         let mut connector = connector();
         connector.operations[0].auth = Some(vec![]);
+        let status = of(&connector, &connector.operations[0]);
+
+        assert_eq!(codes(&status), Vec::<&str>::new());
+        assert_eq!(note_codes(&status), vec![NO_CREDENTIAL_REQUIRED]);
+        assert!(status.works);
+        assert!(
+            status.notes[0].summary.contains(&connector.id),
+            "the note names the connector it is about, as the issue beside it does"
+        );
+    }
+
+    /// **The declaration is read off the operation, never inferred from an absence.**
+    ///
+    /// The bug C-206 closed was a rule that could not see the difference; a rule that *guessed* it
+    /// would be the same bug with more steps, and it would guess wrong on the one connector already
+    /// shipping with no credential declared for a reason that is not publicness.
+    #[test]
+    fn a_missing_credential_is_never_read_as_a_public_endpoint() {
+        let mut connector = connector();
+        connector.auth.clear();
+        connector.default_auth.clear();
+
+        // Nothing at all is declared — no method, no default, no operation-level list.
+        assert_eq!(connector.operations[0].auth, None);
+        let status = of(&connector, &connector.operations[0]);
+        assert_eq!(codes(&status), vec![NO_CREDENTIAL]);
+        assert_eq!(note_codes(&status), Vec::<&str>::new());
+        assert!(!status.works);
+    }
+
+    /// **C-206.** Two operations whose effective auth is empty for *opposite* reasons must not be
+    /// published the same way.
+    ///
+    /// Freshdesk's emptiness is a credential deliberately **withheld**: a real API key exists, the
+    /// IR cannot yet mark it secret in the Basic username position, and the resulting 401 is the
+    /// correct fail-closed outcome. A ping endpoint's emptiness is a vendor that requires nothing at
+    /// all. Reading only `effective_auth(op).is_empty()` reports both with freshdesk's wording,
+    /// which tells a consumer that a working public endpoint is disabled for their protection.
+    ///
+    /// Asserted over the **published** encoding rather than over the Rust value: "published
+    /// differently" is the property the story is about, and the catalogue is what a consumer reads.
+    #[test]
+    fn a_public_operation_is_not_published_as_a_withheld_credential() {
+        // Freshdesk's shape: the connector declares no credential and no default, so the operation
+        // inherits emptiness. Nothing here says a credential is unnecessary.
+        let mut withheld = connector();
+        withheld.auth.clear();
+        withheld.default_auth.clear();
+        let withheld_status = of(&withheld, &withheld.operations[0]);
+
+        // A vendor that requires none, as a positive declaration on the operation itself.
+        let mut public = withheld.clone();
+        public.operations[0].auth = Some(vec![]);
+        let public_status = of(&public, &public.operations[0]);
+
+        let published =
+            |status: &Status| serde_json::to_value(status).expect("a status serializes");
+        assert_ne!(
+            published(&withheld_status),
+            published(&public_status),
+            "a withheld credential and a vendor that needs none are published identically"
+        );
+
+        // The withheld half keeps freshdesk's code exactly — it is a published contract token.
+        assert_eq!(codes(&withheld_status), vec![NO_CREDENTIAL]);
+        assert!(!withheld_status.works);
+
+        // The public half is told apart by a code of its own, and nothing stands in its way.
+        assert!(!codes(&public_status).contains(&NO_CREDENTIAL));
         assert_eq!(
-            codes(&of(&connector, &connector.operations[0])),
-            vec![NO_CREDENTIAL]
+            published(&public_status)["notes"][0]["code"],
+            json!("no-credential-required"),
+            "the public declaration is published under a code of its own"
+        );
+        assert!(
+            public_status.works,
+            "a genuinely public operation has nothing left for anyone to close"
         );
     }
 
@@ -408,21 +592,66 @@ mod tests {
         );
     }
 
-    /// `works` restates `issues.is_empty()`, so the two can never disagree.
+    /// `works` restates `issues.is_empty()`, so the two can never disagree — **and a note does not
+    /// enter into it**, which is the property that let C-206 add a fifth code without breaking
+    /// every consumer already filtering on the boolean.
     #[test]
-    fn works_is_true_only_when_nothing_is_wrong() {
+    fn works_is_true_only_when_nothing_is_wrong_and_a_note_is_not_wrong() {
         let mut connector = connector();
         connector.default_auth.clear();
-        connector.operations[0].auth = Some(vec![]);
-        // Everything the rules can report is now absent: no credential is *expected*, so the
-        // no-credential rule is the only one left, and it fires.
+        // A credential is missing and nothing says it is unnecessary, so the withheld rule fires.
         assert!(!of(&connector, &connector.operations[0]).works);
+
+        // Declaring that the vendor needs none removes the last thing in the way. This is the first
+        // operation in the catalogue that can report `works: true`, and it carries a note while
+        // doing so.
+        connector.operations[0].auth = Some(vec![]);
+        let public = of(&connector, &connector.operations[0]);
+        assert!(public.works);
+        assert!(public.issues.is_empty());
+        assert!(!public.notes.is_empty());
 
         let status = Status {
             works: true,
             issues: Vec::new(),
+            notes: Vec::new(),
         };
         assert_eq!(status.works, status.issues.is_empty());
+    }
+
+    /// A note is a fact about the operation, not a licence to stop reporting defects.
+    ///
+    /// A public endpoint with a free-text query parameter and an unbound host is still broken in
+    /// both of those ways, and `works` says so.
+    #[test]
+    fn a_public_operation_still_reports_every_defect_it_has() {
+        let mut connector = connector();
+        connector.base_url = "https://{tenant}.acme.example".to_string();
+        connector.operations[0].auth = Some(vec![]);
+        connector.operations[0].params.query = vec![param("q", json!({"type": "string"}))];
+
+        let status = of(&connector, &connector.operations[0]);
+        assert_eq!(
+            codes(&status),
+            vec![UNENCODABLE_QUERY_VALUE, UNBOUND_BASE_URL_TEMPLATE]
+        );
+        assert_eq!(note_codes(&status), vec![NO_CREDENTIAL_REQUIRED]);
+        assert!(!status.works);
+    }
+
+    /// The note is **omitted** from the encoding when there is none, which is what keeps this change
+    /// off all 242 shipped operations in the committed whole-catalogue artifact.
+    #[test]
+    fn a_status_with_no_note_encodes_exactly_as_it_did_before() {
+        let connector = connector();
+        let encoded = serde_json::to_value(of(&connector, &connector.operations[0]))
+            .expect("a status serializes");
+        assert_eq!(
+            encoded.as_object().expect("an object").keys().count(),
+            2,
+            "an operation with no note gains no key: {encoded}"
+        );
+        assert!(encoded.get("notes").is_none());
     }
 
     /// Deterministic: the document is a checked artifact, so an unstable issue order would show up
