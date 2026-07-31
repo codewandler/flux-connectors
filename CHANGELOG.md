@@ -9,6 +9,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Contentful connector (C-177) — two hosts, two credentials, one vendor.** Delivery
+  (`cdn.contentful.com`) and management (`api.contentful.com`) are different authorities with different
+  tokens; five operations across them, and a test asserts every operation resolves to **its own service's
+  token only**.
+
+  It reuses Postmark's `Operation::auth` mechanism rather than inventing a second spelling, and adds a new
+  stress: **the first provider whose `base_url` carries two template variables per service**
+  (`space_id`, `environment_id`), which is what makes `entries-list` argument-free enough to serve as
+  `verify`.
+
+  **A new constraint was measured against the loader, not guessed:** `validate_config` enforces
+  `ConfigField` name uniqueness across the **whole connector**, not per service — unlike operations,
+  events and channels, which are per-service namespaces. So the two services cannot share a
+  `space_id`/`environment_id` pair, and the connector ships four fields where two would express the
+  operator's intent, with nothing checking that the duplicated space id matches. Folded into C-187, which
+  now tracks three instances of the config surface's reach being narrower than its neighbours'.
+
 - **The Datadog connector (C-160) — the first connector to send two credentials on one request.**
   `DD-API-KEY` and `DD-APPLICATION-KEY` together, four read operations, `monitor-list` as `verify`.
 

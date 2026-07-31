@@ -21,6 +21,7 @@ pub(crate) mod r#box;
 pub(crate) mod calendly;
 pub(crate) mod clickup;
 pub(crate) mod cloudflare;
+pub(crate) mod contentful;
 pub(crate) mod datadog;
 pub(crate) mod dropbox;
 pub(crate) mod figma;
@@ -65,6 +66,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &calendly::PROVIDER,
     &clickup::PROVIDER,
     &cloudflare::PROVIDER,
+    &contentful::PROVIDER,
     &datadog::PROVIDER,
     &dropbox::PROVIDER,
     &figma::PROVIDER,

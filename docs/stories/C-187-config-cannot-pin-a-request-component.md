@@ -40,6 +40,25 @@ call lands on the **personal account** instead of the team. So the connector shi
 omission silently redirects a write, and the only mitigation available was to say so in the
 `description` — which is text a model reads and may not act on.
 
+## A third instance, and it is about the config surface's own shape
+
+[C-177](C-177-provider-contentful.md) hit a different limit in the same surface, measured against the
+loader rather than guessed: **`validate_config` checks `ConfigField` name uniqueness across the whole
+connector, not per service** — unlike operations, events and channels, which are per-service namespaces
+(`AGENTS.md`'s member contract, *"one namespace per service"*).
+
+So Contentful's two services could not each declare a `space_id`/`environment_id` pair. It ships four
+fields — `delivery_space_id`, `delivery_environment_id`, `management_space_id`,
+`management_environment_id` — where two would express the operator's actual intent, and an operator now
+has to type the same space id twice with nothing checking they match.
+
+That is worth folding into whatever this story decides, because it is the same question from the other
+end: **the config surface is connector-scoped while almost everything else it interacts with is
+service-scoped.**
+
+- [ ] Say whether `ConfigField` should be a per-service namespace like operations and channels are, and
+      if so what happens to a field that legitimately spans services.
+
 ## Acceptance
 
 - [ ] A `[[config]]` field can bind a value that reaches a path segment and/or a query parameter, not
