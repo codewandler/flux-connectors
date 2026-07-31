@@ -51,6 +51,7 @@ pub(crate) mod shopify;
 pub(crate) mod slack;
 pub(crate) mod statuspage;
 pub(crate) mod stripe;
+pub(crate) mod trello;
 pub(crate) mod twilio;
 pub(crate) mod typeform;
 pub(crate) mod vercel;
@@ -102,6 +103,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &slack::PROVIDER,
     &statuspage::PROVIDER,
     &stripe::PROVIDER,
+    &trello::PROVIDER,
     &twilio::PROVIDER,
     &typeform::PROVIDER,
     &vercel::PROVIDER,

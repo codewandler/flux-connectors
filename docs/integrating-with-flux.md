@@ -4,8 +4,8 @@
 make real calls. **Not** a contributor guide — for that, start at [AGENTS.md](../AGENTS.md).
 
 > Measured against the working tree at **v0.6.0** on **2026-07-31**. Counts come from
-> `web/public/catalog.json`, not from prose: **44 providers, 51 services, 248 operations, 8 events,
-> 2 channel bindings**. All 44 providers declare an `authority`. Re-measure before quoting; the
+> `web/public/catalog.json`, not from prose: **45 providers, 52 services, 254 operations, 8 events,
+> 2 channel bindings**. All 45 providers declare an `authority`. Re-measure before quoting; the
 > hand-typed figures in `README.md` have drifted and [C-81](stories/C-81-declared-counts-are-checked.md) is the fix.
 
 ## The one thing to understand first
@@ -273,7 +273,7 @@ before "fixing" one.
 | 1 | **No `http.request` implementation in the dependency graph.** `Egress::new` takes a configured `Arc<dyn Tool>` and nothing here supplies one; `codewandler-flux-web` is not in `Cargo.lock` at all. | Path A needs a transport you bring. Trivial if your host links flux-web; otherwise you must not substitute a hand-rolled client — a demo of a substitute demonstrates the substitute. | [connectors-app.md](designs/connectors-app.md) |
 | 2 | **The crates are unpublished.** Verified 404 on 2026-07-31. | `path`/`git` dependency only, which some consuming repositories forbid outright. | [C-190](stories/C-190-publish-catalog-pack-secrets.md) `ready` |
 | 3 | **Six declared surfaces reach no artifact.** `config` (45 fields / 28 providers), `verify` (28 providers), service `roles`, `quirks.pagination`, `graphs`, `quirks.rate_limit` are in the IR and validated by the loader, and appear in neither the manifest nor the catalogue. | A host **cannot render a settings page**, cannot discover the "Test connection" operation, cannot page a list — for connectors that declare all of it. You must supply endpoint values (Step 3) knowing only the variable names, read off each operation's emitted Flux. `site.rs` also collapses the whole `OAuth2Spec` to `oauth2: bool`, so **no host can build an authorize URL from the published catalogue.** | [C-87](stories/C-87-configuration-codegen.md) `ready`, [connector-surfaces.md](designs/connector-surfaces.md) |
-| 4 | **Published `status.works` is false for every one of the 248 operations**, on a catalog-scoped `credential-not-injected` issue describing the module path. `unbound-base-url-template` reads as stale too, since C-193 closed it for the pack. | A host filtering the catalogue on `works` installs nothing, including operations the pack executes correctly. Filter on issue `code`/`scope`; treat `unencodable-query-value` and `no-credential` as real, `credential-not-injected` as Path-C-only. | none filed — worth one |
+| 4 | **Published `status.works` is false for every one of the 254 operations**, on a catalog-scoped `credential-not-injected` issue describing the module path. `unbound-base-url-template` reads as stale too, since C-193 closed it for the pack. | A host filtering the catalogue on `works` installs nothing, including operations the pack executes correctly. Filter on issue `code`/`scope`; treat `unencodable-query-value` and `no-credential` as real, `credential-not-injected` as Path-C-only. | none filed — worth one |
 | 5 | **The `.flux` module path is unauthenticated and uninstallable.** | Path C is unavailable. | [C-10](stories/C-10-auth-injection-and-manifest.md), [C-15](stories/C-15-install-and-live-e2e.md) |
 | 6 | **No inbound adapter.** Events and channels are published and unconsumed. | Webhooks, Socket Mode and polling are yours to build. | [C-118](stories/C-118-connector-channel-adapter.md) `ready` |
 | 7 | **`zendesk-ticket-search` is non-functional; `form` bodies share the gap.** Query values are not percent-encoded and flux exposes no encoder a Flux *program* can call. `&`, `#` and `+` corrupt the request; `x&per_page=1` injects a parameter. | Do not expose that operation. The body half now exists upstream as `L-101` and arrives when flux-lang publishes it; the query half is still open. | [query-encoding-flux-stories.md](designs/query-encoding-flux-stories.md) |
@@ -281,11 +281,11 @@ before "fixing" one.
 | 9 | **No response shaping.** `http.request` returns one flat string, `HTTP {status}\n{headers}\n{body}`, returned whole. | Field-selecting a response is the caller's problem; a `404` comes back as a result, not an error. | flux-side seam, filed |
 | 10 | **No token refresh, no OAuth acquisition, no multi-tenancy in one pack.** Out of scope since C-90: the store hands back a value and keeping it current is the host's. One `Credentials`/`Configuration` pair serves one tenant. | Build a pack per tenant; own your refresh loop. | by design |
 | 11 | **No reference host exists**, so every safety property above is asserted against stubs rather than demonstrated. No byte has left this repository towards a vendor. | Your host is the first real exercise of the seam. Budget for that. | [connectors-app.md](designs/connectors-app.md) |
-| 12 | **OpenAPI ingest is not wired.** All 44 providers are hand-authored and no vendor spec is vendored. | Drift from a vendor's real API is undetectable by machine. | [C-14](stories/C-14-fetch-and-drift-check.md) |
+| 12 | **OpenAPI ingest is not wired.** All 45 providers are hand-authored and no vendor spec is vendored. | Drift from a vendor's real API is undetectable by machine. | [C-14](stories/C-14-fetch-and-drift-check.md) |
 
 ### Not gaps, though they read like ones
 
-- **Credential addressing is complete.** All 44 providers declare an `authority`; the older
+- **Credential addressing is complete.** All 45 providers declare an `authority`; the older
   "only two of nineteen" and "exactly seven" notes in `crates/connector-pack/src/lib.rs` and
   `designs/connectors-app.md` predate C-92 and are stale.
 - **Templated base URLs resolve.** C-193 and C-197 closed this; the `Configuration` port is Step 3, and

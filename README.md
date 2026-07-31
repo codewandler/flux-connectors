@@ -15,7 +15,7 @@ queryable Rust catalogue, and a flux Tool pack.
 > end and the pack can authenticate and dispatch, but nothing in this repository is a *host*, so
 > nothing here makes a live API call on its own. See [Current limitations](#current-limitations).
 
-The repository currently contains **242 curated connector operations across 43 providers and 50
+The repository currently contains **254 curated connector operations across 45 providers and 52
 services**, plus 8 events and 2 channel bindings. It also publishes 77 Flux-owned core operations, node
 kinds and capability records, and 3 core JSON Schemas. A full build compiles everything into **454
 committed, reviewable artifacts** without contacting a vendor. Browse them in the
@@ -67,7 +67,7 @@ cargo run -p connector-cli -- build
 On a clean checkout, `diff` reports:
 
 ```text
-470 artifacts up to date (43 providers checked)
+488 artifacts up to date (45 providers checked)
 ```
 
 Then inspect [`connectors/zendesk.flux`](connectors/zendesk.flux), browse the
@@ -168,7 +168,7 @@ fails closed:
 - **Base URLs can contain template variables**, such as `https://{subdomain}.zendesk.com`. A connector
   binds each one with a `[[config]]` field — but since `config` reaches no artifact, a host cannot yet
   discover what to ask for.
-- **OpenAPI ingest is not wired.** All 43 providers are hand-authored, and `specs/` currently vendors
+- **OpenAPI ingest is not wired.** All 45 providers are hand-authored, and `specs/` currently vendors
   only flux's own core catalogue. A `[spec]`-backed provider is rejected rather than compiled into a
   plausible but empty module.
 - **`check`, `fetch`, and `install` are not implemented.** Their CLI entries fail explicitly and

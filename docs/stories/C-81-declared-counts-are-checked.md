@@ -62,3 +62,21 @@ implementor was following that file as instructions:
 The second is arguably not this story's job — a count checker will not catch a stale sentence. But it
 is the same failure with the same cause, so it is recorded here rather than lost: **the operating
 contract is not checked against the repository it describes.**
+
+## Drift observation, 2026-07-31 (coordinator, at C-165 integration)
+
+**Sixth drift, and the first where the documents disagreed with each other rather than merely with
+the build.** Three counts, three different answers, none correct:
+
+| document | claimed | actual |
+|---|---|---|
+| `README.md` | 43 providers, 50 services, 242 operations, 470 artifacts | 45 / 52 / 254 / 488 |
+| `docs/roadmap.md` | 43 providers, 50 services, 242 operations | 45 / 52 / 254 |
+| `docs/integrating-with-flux.md` | 44 providers, 51 services, 248 operations | 45 / 52 / 254 |
+
+Corrected by hand, again — which is the mechanism this story exists to replace, applied a sixth time.
+Worth noting for whoever implements it: `integrating-with-flux.md` **already** carries the instruction
+*"measured from `web/public/catalog.json`, not from prose … Re-measure before quoting"*, and it still
+drifted. A prose instruction to re-measure is not a check; the numbers have to be generated or
+asserted. The measurement is one `python3` pass over `web/public/catalog.json` plus
+`connector-cli -- diff` for the artifact count, so the checkable version is cheap.

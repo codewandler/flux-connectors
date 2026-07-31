@@ -8,7 +8,7 @@ document is the hand-written narrative around it.
 
 _As of 2026-07-31:_ the compiler is built, the catalogue is real, and **84 of 192 stories are
 closed** across seven releases up to **v0.5.0**. `cargo run -p connector-cli -- diff` reports
-`470 artifacts up to date (43 providers checked)` — 50 services, 242 curated operations, 8 events and
+`488 artifacts up to date (45 providers checked)` — 52 services, 254 curated operations, 8 events and
 2 channel bindings. Twenty epics carry the work, not the single **connectors-v1** this section once
 named; ten of them have a narrative below and the rest live on the board.
 
@@ -206,13 +206,13 @@ catalogue that grew by five without anyone editing a shared list by hand.
 
 The public explorer was designed against six providers and twenty-five operations. When this epic was
 filed it indexed sixteen providers, eighteen services and eighty-eight operations; as of 2026-07-31 it
-is **43 providers, 50 services and 242 operations**, and the decisions that were right at a fraction
+is **45 providers, 52 services and 254 operations**, and the decisions that were right at a fraction
 of the size are wrong at this one: VitePress's doc layout caps the content column at 688px, so
 a `minmax(320px, 1fr)` provider grid renders exactly two columns and the five-control filter bar wraps.
 Services — the middle addressing level C-49 established — are published in the catalogue and appear
 nowhere in the UI. Design: [designs/explorer-ux.md](designs/explorer-ux.md).
 
-The constraint that outlives the redesign: the explorer does **not** report "N of 242 operations
+The constraint that outlives the redesign: the explorer does **not** report "N of 254 operations
 working". `works` is false for every operation for a reason that is *shared* — no host runs them here —
 and a working-count headline would misrepresent the overwhelming majority that are exactly as designed
 and waiting on that one thing rather than on anything of their own. (The shared reason has changed

@@ -7,6 +7,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The `connectors-api` host — the caller this repository never had (C-202, C-203).** Everything
+  below it already worked and was tested: `connector-pack` projects a catalogue operation onto a flux
+  `ToolSpec`, evaluates `{ method, url, headers, body }` from the operation's own emitted Flux,
+  resolves the credential, registers it with the redactor, verifies the registration took, places it
+  per its declared scheme, and delegates the send. What was missing was something to bind the ports
+  and run the loop.
+
+  `codewandler-flux-web` 0.41.1 is pinned, giving `Egress` its first concrete implementation — and it
+  resolves inside the workspace's existing 0.41 line without dragging a 0.42 flux core into the lock.
+  The host constructs no request and ships no transport of its own; `WebOptions::default()` carries
+  `PrivateNetAllow::None`, so private, loopback and link-local hosts are refused.
+
+  `dependency_fence.rs` gains a `NETWORK_CRATES` allow-list and a third bucket, so the four compiler
+  crates are fenced *against the host* and a workspace member that is neither compiler, host library
+  nor declared network crate fails rather than passing in silence. The exception is visible rather
+  than merely unexamined.
+
+- **The Trello connector (C-165)** — 6 curated operations, and the catalogue's **first
+  `Placement::Query` credential**. `trello_is_the_only_query_placement_in_the_shipped_catalogue`
+  bounds that to one connector and fails the moment a second lands.
+
 ### Fixed
 
 - **The site's hand-maintained-data guard read prose as data, and the web gate was red on `main`

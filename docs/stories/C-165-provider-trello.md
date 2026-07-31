@@ -2,8 +2,7 @@
 id: C-165
 title: Ship the Trello connector
 pillar: Spec
-status: in-progress
-priority: 3
+status: done
 design:
 epic: provider-fleet-2
 areas: [providers]
@@ -145,3 +144,24 @@ exactly the set `AGENTS.md` tabulates: `the_provider_list_matches_the_repository
 `the_build_writes_and_checks_site_catalog_json` (`connector-cli::site_catalog`).
 `the_recorded_floor_is_the_measured_figure` is **green** here: this connector adds 5 covered
 operations of 6, well inside the floor's slack. `COVERED_FLOOR` was not touched.
+
+## Coordinator note at integration (2026-07-31)
+
+Reviewed independently and merged at `cfed868`. The eight whole-catalogue staleness checks were
+resolved by the coordinator's full build (`45 providers, 488 artifacts; 2 written` — the index and
+`catalog.json`), which is the only build with every provider. `the_recorded_floor_is_the_measured_figure`
+stayed green; `COVERED_FLOOR` was not raised.
+
+**One comment-accuracy defect recorded rather than fixed**, because correcting it means re-running the
+whole-catalogue build for a comment: the Card header claims the Card shape "is reused unchanged on both
+writes" and the Board header names a `limits` field. Measured, `trello-card-create` and
+`trello-card-archive` declare the `trello-list-cards` property set **minus** `labels` and `subscribed`,
+and `limits` is declared nowhere. The divergence under-claims — no operation claims a field the vendor
+does not return — so it is a comment defect, not a contract defect.
+
+**The query-placement probe returned a real finding, and it was not this story's.** `auth.rs` does
+percent-encode a query-placed credential, contrary to the note in this story's frontmatter; what was
+broken is that `credentials.rs` registered the *raw* value with the redactor while `auth.rs` placed the
+*encoded* one, so a credential containing reserved characters travelled in a form the redactor had
+never been told about. That is [C-159](C-159-request-debug-and-query-encoding.md)'s to close, and it
+does.
