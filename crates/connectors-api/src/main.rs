@@ -41,9 +41,15 @@ OPTIONS:
               The developer account owns tenant `dev-local` and can see no real account's data.
     --help    Print this and exit.
 
-There is deliberately no --bind and no --port. This process holds plaintext credentials in
-memory and listens on 127.0.0.1:8787 by construction; that property is what makes --dev safe
-enough to exist. See docs/designs/connectors-api.md.
+There is deliberately no --bind and no --port. This process holds plaintext credentials and
+listens on 127.0.0.1:8787 by construction; that property is what makes --dev safe enough to
+exist. See docs/designs/connectors-api.md.
+
+ENVIRONMENT:
+    CONNECTORS_CREDENTIAL_STORE
+              Where credentials are kept. Unset means a 0600 file under your data home, which
+              survives a restart and is NOT encrypted. `memory` keeps nothing at rest. The exact
+              path, and how to destroy it, are printed at startup.
 ";
 
 /// Read the process's command line.
@@ -75,8 +81,8 @@ fn options_from(arguments: impl IntoIterator<Item = String>) -> anyhow::Result<O
             other => anyhow::bail!(
                 "unknown argument {other:?}. This binary takes only `--dev`.\n\
                  There is deliberately no `--bind` and no `--port`: this process holds plaintext \
-                 credentials in memory, it listens on 127.0.0.1:{PORT} by construction, and that \
-                 is what makes the `--dev` sign-in safe enough to exist."
+                 credentials, it listens on 127.0.0.1:{PORT} by construction, and that is what \
+                 makes the `--dev` sign-in safe enough to exist."
             ),
         }
     }
@@ -98,7 +104,16 @@ async fn main() -> anyhow::Result<()> {
     // The workspace root a dispatch happens under. Nothing here reaches the filesystem through it;
     // `System` requires a root that exists, and the current directory is the honest answer.
     let root = std::env::current_dir()?;
-    let app = connectors_api::App::new(&root)?;
+    // **`deployed`, not `new`** (C-207). The difference is what an unset
+    // `CONNECTORS_CREDENTIAL_STORE` means: here it resolves to a `0600` file under the operator's
+    // data home, so wiring a connector and restarting keeps it wired. `App::new` — which resolves
+    // an unset variable to memory — stays the constructor for tests and embedders, and the two are
+    // documented against each other on `App::new`.
+    //
+    // A store that cannot be opened stops the process. There is deliberately no fallback to
+    // memory: a host that started anyway would look identical to a working one right up until the
+    // restart that lost everything.
+    let app = connectors_api::App::deployed(&root)?;
     // The flag, and the only thing that reads it. `--dev` is not refused when a Google registration
     // is also configured: the two doors mint disjoint tenants (`google-{sub}` and `dev-local`), so
     // they cannot contaminate each other, and refusing would make trying the real flow and the dev
@@ -121,7 +136,14 @@ async fn main() -> anyhow::Result<()> {
     );
     println!();
     println!("  This host makes REAL calls to REAL vendors with REAL credentials.");
-    println!("  Credentials are held in memory only: stopping the process is the cleanup.");
+    // **Where the credentials go, from the store that was actually bound** (C-207).
+    //
+    // This line used to be a sentence typed here — *"held in memory only: stopping the process is
+    // the cleanup"* — which was true while there was one store and became a lie the moment there
+    // were two. It is now assembled by `StoreChoice::banner` next to the store it describes, so it
+    // cannot drift from it, and it states what does *not* protect a credential at rest as plainly
+    // as what does. It carries no value: a `StoreChoice` holds a path and nothing else.
+    println!("  {}", app.storage_banner().replace('\n', "\n  "));
 
     // **Sign-in state, said out loud at startup.**
     //
@@ -156,7 +178,11 @@ async fn main() -> anyhow::Result<()> {
         println!("    this host with no credentials of their own. Only 127.0.0.1 can reach it —");
         println!("    that is the whole of what stands between this door and the network.");
         println!("    The dev account owns tenant `dev-local` and can see no real account's data.");
-        println!("    Credentials still live in memory only and still die with the process.");
+        // Deliberately not a second claim about the store. C-234 wrote "credentials still live in
+        // memory only and still die with the process" here, which was true then and is false
+        // whenever the file store is bound — and a *reassurance* that has gone stale is worse than
+        // none, because it is read as permission. The banner above states the real answer once.
+        println!("    Credentials outlive this process if the store above says they do.");
         println!("    Do not start a host this way to hold a credential you care about.");
     }
 
@@ -167,10 +193,14 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Stop on Ctrl-C. The credentials go with the process, which is the intended cleanup.
+/// Stop on Ctrl-C.
+///
+/// It no longer says what became of the credentials, and that is the point: since C-207 the answer
+/// depends on the store, the startup banner already gave it, and a farewell line repeating it is a
+/// second place for it to be wrong.
 async fn shutdown() {
     let _ = tokio::signal::ctrl_c().await;
-    println!("\nstopping; in-memory credentials discarded");
+    println!("\nstopping; sessions are discarded and every operator must sign in again");
 }
 
 #[cfg(test)]

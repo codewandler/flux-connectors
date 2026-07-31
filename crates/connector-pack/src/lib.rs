@@ -193,6 +193,11 @@ pub use tool::{Egress, Operation};
 pub use connector_secrets::{
     CredentialRef, Layout, MemoryStore, Secret, SecretStore, StoreError, TenantLayout,
 };
+// The store a host that must survive its own restart binds (C-207). Unix-only upstream, because
+// what protects a credential in it is a file mode; re-exported under the same condition rather than
+// papered over, so a platform without it gets a missing name instead of a weaker store.
+#[cfg(unix)]
+pub use connector_secrets::FileStore;
 
 use catalog::ProviderKey;
 use flux_runtime::{Tool, ToolRegistry};

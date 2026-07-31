@@ -1,0 +1,830 @@
+//! A [`SecretStore`] that survives the process, in one `0600` file.
+//!
+//! [`MemoryStore`](crate::MemoryStore) is honest about what it is — *"the process exiting is the
+//! cleanup"* — and that is the right store for a test and the wrong one for a deployment. A host
+//! with durable accounts whose credentials evaporate on restart makes an operator re-paste every
+//! token every time, which is the habit that gets a token pasted somewhere it should not be. This is
+//! the other end: a single file, owned by one operator, that a restart does not empty.
+//!
+//! # What protects a credential here, stated plainly
+//!
+//! **Nothing cryptographic. The values in this file are recoverable by anyone who can read it.**
+//!
+//! | | |
+//! |---|---|
+//! | file mode `0600`, directory mode `0700` | set in the `open(2)`/`mkdir(2)` call, not fixed up afterwards, and re-checked on every open |
+//! | the write is atomic | a full rewrite into a sibling temporary file, `fsync`, then `rename(2)` — a crash mid-write leaves the previous file whole |
+//! | the file never sits inside a served directory | the path is the caller's, and [`connectors_api`](https://docs.rs/) refuses one under its own workspace root |
+//! | hex encoding | **framing, not protection.** It exists so a value containing a newline cannot forge a second entry, and so a careless `grep` over the filesystem does not match a token. `xxd -r` undoes it. |
+//! | encryption at rest | **absent.** There is no key, no passphrase and no OS keychain integration. |
+//! | protection from root, or from a backup that copies the file | **absent.** |
+//!
+//! That table is the whole security argument, and it is deliberately short. A store that implied more
+//! would be worse than one that implies nothing: the operator's own decision — whether this machine
+//! is one they are willing to leave a vendor token on — is only theirs to make if it is stated.
+//! `VaultStore` remains the answer for a deployment that is not one operator's laptop.
+//!
+//! # Concurrency
+//!
+//! One process. The map is held in memory and every mutation rewrites the whole file, so two
+//! processes pointed at one path will each overwrite the other's last write. That is a correct trade
+//! for the host this exists for — a single-operator deployment is one process — and it is stated
+//! rather than defended: a store meant for several writers wants a real backend, which is what the
+//! [`SecretStore`] port is for.
+//!
+//! # The format
+//!
+//! ```text
+//! # codewandler-connector-secrets file store, v1
+//! tenants/dev-local/com.anthropic.api/api_key 53454e54494e454c
+//! tenants/dev-local/com.zendesk.api/support/api_token 53454e54494e454c
+//! ```
+//!
+//! One entry per line, `<address> <hex of the value>`, sorted. A blank line and a `#` comment are
+//! skipped. The separator is a space because **no address can contain one** — every segment of a
+//! [`CredentialRef`] is validated, so the split is unambiguous rather than merely conventional.
+//!
+//! Each address is parsed back through the store's [`Layout`] on load and re-rendered, so a line
+//! that is not the canonical spelling of the address it names is a loud error rather than a second
+//! entry for one credential. That is the `parse(render(r)) == r` law in [`Layout`]'s contract,
+//! enforced at the one place where a hand-edited file could break it.
+
+use std::collections::BTreeMap;
+use std::fmt;
+use std::fs::{DirBuilder, File, OpenOptions};
+use std::io::Write as _;
+use std::os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _, PermissionsExt as _};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
+
+use async_trait::async_trait;
+
+use crate::{CredentialRef, Layout, Secret, SecretStore, StoreError, TenantLayout};
+
+/// The first line of every file this store writes.
+const HEADER: &str = "# codewandler-connector-secrets file store, v1";
+
+/// The mode a store file is created with, and the widest mode one may be opened at.
+pub const FILE_MODE: u32 = 0o600;
+
+/// The mode the containing directory is created with, and the widest it may be opened at.
+pub const DIR_MODE: u32 = 0o700;
+
+/// Distinguishes one process's in-flight temporary files from another's.
+static NEXT_TEMPORARY: AtomicU64 = AtomicU64::new(0);
+
+/// A [`SecretStore`] kept in one file.
+///
+/// See the [module documentation](self) for what protects the values in it and what does not — the
+/// short answer is a file mode and nothing else.
+///
+/// # Unix only
+///
+/// The whole safety argument is `0600` and `0700`, and there is no honest way to spell those on a
+/// platform without them. A store that silently degraded to "whatever the default ACL was" would be
+/// the implied-safety this module's own documentation refuses, so the type is absent there instead.
+pub struct FileStore<L = TenantLayout> {
+    layout: L,
+    path: PathBuf,
+    // The whole store, held in memory and written through on every mutation. `BTreeMap` so the file
+    // is sorted and a diff between two versions of it is readable — and so `paths()` is ordered, the
+    // same property `MemoryStore` offers.
+    entries: Mutex<BTreeMap<String, Secret>>,
+}
+
+impl FileStore<TenantLayout> {
+    /// Open — or create — the store at `path`, using the blessed [`TenantLayout`].
+    ///
+    /// The containing directory is created at [`DIR_MODE`] if it is absent, and the file at
+    /// [`FILE_MODE`] if it is. An existing file or directory that is readable by anyone but its
+    /// owner is **refused**, not tightened: the file already had that mode while it held values, so
+    /// quietly `chmod`-ing it now would repair the symptom and hide the exposure.
+    ///
+    /// # Errors
+    ///
+    /// [`StoreError::Unreachable`] for an IO failure, [`StoreError::Denied`] for a mode this store
+    /// will not use, and [`StoreError::Backend`] for a file it cannot parse. Every one of them names
+    /// the file path and none of them carries a value.
+    pub fn open(path: impl Into<PathBuf>) -> Result<Self, StoreError> {
+        Self::open_with_layout(path, TenantLayout)
+    }
+}
+
+impl<L: Layout> FileStore<L> {
+    /// Open — or create — the store at `path`, rendering addresses through `layout`.
+    ///
+    /// # Errors
+    ///
+    /// As [`FileStore::open`].
+    pub fn open_with_layout(path: impl Into<PathBuf>, layout: L) -> Result<Self, StoreError> {
+        let path = path.into();
+
+        if let Some(directory) = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            ensure_directory(directory)?;
+        }
+
+        let entries = match std::fs::read_to_string(&path) {
+            Ok(contents) => {
+                check_mode(&path, FILE_MODE)?;
+                parse(&contents, &layout, &path)?
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => BTreeMap::new(),
+            Err(error) => return Err(unreachable(&path, &error)),
+        };
+
+        let store = Self {
+            layout,
+            path,
+            entries: Mutex::new(entries),
+        };
+
+        // Written eagerly so that "the store exists, with the right mode" is true after `open`
+        // rather than after the first `put`. An operator who is told where their credentials live
+        // should find something there, and a test asserting the mode should not have to store a
+        // credential first to have something to assert about.
+        if !store.path.exists() {
+            store.write_through(&store.locked())?;
+        }
+
+        Ok(store)
+    }
+
+    /// The file this store is kept in.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// The layout this store renders through.
+    pub fn layout(&self) -> &L {
+        &self.layout
+    }
+
+    /// The path `reference` resolves to under this store's layout.
+    ///
+    /// The *address*, not the file — the same question [`MemoryStore::path`](crate::MemoryStore)
+    /// answers.
+    pub fn address(&self, reference: &CredentialRef) -> String {
+        self.layout.render(reference)
+    }
+
+    /// The address a rendered path resolves back to — the inverse of [`address`](Self::address).
+    ///
+    /// # Errors
+    ///
+    /// [`StoreError::Layout`], carrying the layout's own explanation, when the path is not one this
+    /// layout writes.
+    pub fn reference(&self, path: &str) -> Result<CredentialRef, StoreError> {
+        self.layout
+            .parse(path)
+            .map_err(|reason| StoreError::Layout { reason })
+    }
+
+    /// Every address currently holding a value, in order. Values are deliberately not exposed.
+    pub fn paths(&self) -> Vec<String> {
+        self.locked().keys().cloned().collect()
+    }
+
+    /// How many values are held.
+    pub fn len(&self) -> usize {
+        self.locked().len()
+    }
+
+    /// Whether the store holds nothing.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// The map, with a poisoned lock recovered rather than propagated — as [`MemoryStore`].
+    ///
+    /// [`MemoryStore`]: crate::MemoryStore
+    fn locked(&self) -> std::sync::MutexGuard<'_, BTreeMap<String, Secret>> {
+        self.entries.lock().unwrap_or_else(|poisoned| {
+            self.entries.clear_poison();
+            poisoned.into_inner()
+        })
+    }
+
+    /// Rewrite the whole file, atomically.
+    ///
+    /// **Atomic by `rename(2)`**, which is the only way to get it: a file opened for truncation is
+    /// observably empty between the truncate and the write, and a crash in that window loses every
+    /// credential rather than the one being written. So the new contents go to a fresh sibling file
+    /// created at [`FILE_MODE`], are flushed to disk, and then replace the old file in one step. A
+    /// reader either sees the whole previous version or the whole new one.
+    ///
+    /// The temporary lives in the **same directory** deliberately — `rename(2)` is atomic only
+    /// within a filesystem, and a temporary in `/tmp` could be on another one. It is also created
+    /// with `create_new`, so this never writes through a name somebody else placed there.
+    fn write_through(&self, entries: &BTreeMap<String, Secret>) -> Result<(), StoreError> {
+        let directory = self
+            .path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        let temporary = directory.join(format!(
+            ".{}.{}.{}.tmp",
+            self.path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("credentials"),
+            std::process::id(),
+            NEXT_TEMPORARY.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let result = self.write_temporary(&temporary, entries);
+        if result.is_err() {
+            // Best effort: the write already failed, and a failure to clean up after it is not the
+            // error worth reporting.
+            let _ = std::fs::remove_file(&temporary);
+        }
+        result
+    }
+
+    /// The fallible half of [`write_through`](Self::write_through), split out so the caller has one
+    /// place to clean up from.
+    fn write_temporary(
+        &self,
+        temporary: &Path,
+        entries: &BTreeMap<String, Secret>,
+    ) -> Result<(), StoreError> {
+        let mut rendered = String::from(HEADER);
+        rendered.push('\n');
+        for (address, secret) in entries {
+            rendered.push_str(address);
+            rendered.push(' ');
+            rendered.push_str(&hex_encode(secret.expose_secret().as_bytes()));
+            rendered.push('\n');
+        }
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            // Set here rather than by `set_permissions` afterwards: between a `create` and a
+            // `chmod` the file exists at the default mode, and that window is the whole of what
+            // `0600` is protecting against. `umask` can only clear further bits, never add one.
+            .mode(FILE_MODE)
+            .open(temporary)
+            .map_err(|error| unreachable(temporary, &error))?;
+        file.write_all(rendered.as_bytes())
+            .map_err(|error| unreachable(temporary, &error))?;
+        // Without this the rename can land before the bytes do, and a power cut leaves a file that
+        // is present, correctly named, and empty.
+        file.sync_all()
+            .map_err(|error| unreachable(temporary, &error))?;
+        drop(file);
+
+        std::fs::rename(temporary, &self.path).map_err(|error| unreachable(&self.path, &error))?;
+
+        // The rename itself is a directory operation, so durability of *it* needs the directory
+        // flushed. Best effort: a filesystem that refuses to open a directory read-only is not a
+        // reason to report the write as failed, since it has already succeeded as far as any reader
+        // is concerned.
+        if let Some(directory) = self.path.parent() {
+            if let Ok(handle) = File::open(directory) {
+                let _ = handle.sync_all();
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<L: Layout + Send + Sync> SecretStore for FileStore<L> {
+    async fn get(&self, reference: &CredentialRef) -> Result<Secret, StoreError> {
+        let path = self.layout.render(reference);
+        self.locked()
+            .get(&path)
+            .cloned()
+            .ok_or(StoreError::NotFound { path })
+    }
+
+    async fn put(&self, reference: &CredentialRef, secret: &Secret) -> Result<(), StoreError> {
+        let address = self.layout.render(reference);
+        let mut entries = self.locked();
+        let replaced = entries.insert(address.clone(), secret.clone());
+        // Write while still holding the lock, so two concurrent writers cannot interleave a map
+        // mutation with the other's file rewrite and persist a state neither of them held.
+        if let Err(error) = self.write_through(&entries) {
+            // The file is the store. A value that reached the map but not the disk would be
+            // resolvable until the next restart and gone after it, which is a worse failure than
+            // refusing — so the map is put back the way it was and the caller is told.
+            match replaced {
+                Some(previous) => entries.insert(address, previous),
+                None => entries.remove(&address),
+            };
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    async fn delete(&self, reference: &CredentialRef) -> Result<(), StoreError> {
+        let address = self.layout.render(reference);
+        let mut entries = self.locked();
+        // Idempotent, per the trait.
+        let Some(previous) = entries.remove(&address) else {
+            return Ok(());
+        };
+        if let Err(error) = self.write_through(&entries) {
+            entries.insert(address, previous);
+            return Err(error);
+        }
+        Ok(())
+    }
+}
+
+/// Path and entry count. **Never a value, and never an address** — a derived `Debug` would print
+/// every key, and C-159 is this repository's precedent for a derived rendering becoming the leak.
+impl<L> fmt::Debug for FileStore<L> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let held: Box<dyn fmt::Debug> = match self.entries.try_lock() {
+            Ok(entries) => Box::new(entries.len()),
+            // Not worth deadlocking a `{:?}` over.
+            Err(_) => Box::new("<locked>"),
+        };
+        formatter
+            .debug_struct("FileStore")
+            .field("path", &self.path)
+            .field("entries", &held)
+            .finish()
+    }
+}
+
+/// Create `directory` at [`DIR_MODE`] if it is absent, and refuse it if it is too open.
+fn ensure_directory(directory: &Path) -> Result<(), StoreError> {
+    if !directory.exists() {
+        DirBuilder::new()
+            .recursive(true)
+            // Applied to every component this creates. As with the file mode, `umask` can only
+            // clear further bits.
+            .mode(DIR_MODE)
+            .create(directory)
+            .map_err(|error| unreachable(directory, &error))?;
+    }
+    check_mode(directory, DIR_MODE)
+}
+
+/// Refuse a path readable or writable by anyone but its owner.
+///
+/// Tightening it instead would be the wrong repair: the mode was wide while the file held values, so
+/// the exposure has already happened and an operator needs to know rather than to have it silently
+/// fixed under them.
+fn check_mode(path: &Path, widest: u32) -> Result<(), StoreError> {
+    let metadata = std::fs::metadata(path).map_err(|error| unreachable(path, &error))?;
+    let mode = metadata.permissions().mode() & 0o777;
+    if mode & !widest != 0 {
+        return Err(StoreError::Denied {
+            path: path.display().to_string(),
+            reason: format!(
+                "its mode is {mode:04o}, and a credential store must be no wider than {widest:04o} \
+                 — run `chmod {widest:o} {}` once you are satisfied nobody else has read it",
+                path.display()
+            ),
+        });
+    }
+    Ok(())
+}
+
+/// An IO failure, as a [`StoreError`].
+///
+/// `std::io::Error`'s own message names an errno and, for the calls used here, nothing else. It
+/// never carries file contents, so this cannot carry a value — which is why the reason is passed
+/// through rather than flattened to "an IO error".
+fn unreachable(path: &Path, error: &std::io::Error) -> StoreError {
+    StoreError::Unreachable {
+        path: path.display().to_string(),
+        reason: error.to_string(),
+    }
+}
+
+/// Read a whole store file into a map, refusing anything it cannot account for.
+///
+/// **Nothing is skipped.** A line this cannot read is a credential this store would silently stop
+/// resolving, and "the connector is not connected" is the wrong answer to "the file is damaged" for
+/// exactly the reason [`StoreError::NotFound`] and [`StoreError::Unreachable`] are different types.
+///
+/// No message below quotes a value or any part of one — a hex field that failed to decode is
+/// reported by its line number and its length, never its content.
+fn parse<L: Layout>(
+    contents: &str,
+    layout: &L,
+    file: &Path,
+) -> Result<BTreeMap<String, Secret>, StoreError> {
+    let mut entries = BTreeMap::new();
+    for (index, line) in contents.lines().enumerate() {
+        let number = index + 1;
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        let bad = |reason: String| StoreError::Backend {
+            path: file.display().to_string(),
+            reason: format!("line {number}: {reason}"),
+        };
+
+        let (address, encoded) = line
+            .split_once(' ')
+            .ok_or_else(|| bad("expected `<address> <hex>`, and there is no space".to_owned()))?;
+
+        // The address must be one this layout writes, and must be spelled the way this layout
+        // spells it. Both halves matter: the first is what keeps a hand-edited file from inventing
+        // a tenant, and the second is what keeps one credential from having two entries.
+        let reference = layout.parse(address).map_err(&bad)?;
+        let canonical = layout.render(&reference);
+        if canonical != address {
+            return Err(bad(format!(
+                "{address:?} is not how this layout spells the address it names ({canonical:?}), \
+                 so one credential would have two entries"
+            )));
+        }
+
+        let value = hex_decode(encoded).ok_or_else(|| {
+            bad(format!(
+                "the value field is {} characters and is not valid hex",
+                encoded.len()
+            ))
+        })?;
+        let value = String::from_utf8(value)
+            .map_err(|_| bad("the value does not decode to UTF-8".to_owned()))?;
+
+        if entries.insert(canonical, Secret::new(value)).is_some() {
+            return Err(bad(format!(
+                "{address:?} appears more than once, and nothing here can say which is current"
+            )));
+        }
+    }
+    Ok(entries)
+}
+
+/// Lowercase hex. **Framing, not protection** — see the module documentation.
+fn hex_encode(bytes: &[u8]) -> String {
+    use fmt::Write as _;
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        // Infallible: writing to a `String` cannot fail.
+        let _ = write!(out, "{byte:02x}");
+    }
+    out
+}
+
+/// The inverse of [`hex_encode`], or `None` for anything that is not lowercase-or-uppercase hex of
+/// even length.
+fn hex_decode(encoded: &str) -> Option<Vec<u8>> {
+    if !encoded.len().is_multiple_of(2) {
+        return None;
+    }
+    let bytes = encoded.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len() / 2);
+    for pair in bytes.chunks_exact(2) {
+        let high = (pair[0] as char).to_digit(16)?;
+        let low = (pair[1] as char).to_digit(16)?;
+        out.push((high * 16 + low) as u8);
+    }
+    Some(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Obviously not a credential, and long enough that a redactor would hold it.
+    const SENTINEL: &str = "SENTINEL-NOT-A-REAL-SECRET-file-store";
+
+    /// A directory of this test's own, removed when the guard drops.
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new(label: &str) -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "connector-secrets-{label}-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            let _ = std::fs::remove_dir_all(&path);
+            Self(path)
+        }
+
+        /// The store file inside it — one directory level down, so directory creation is exercised.
+        fn store(&self) -> PathBuf {
+            self.0.join("store").join("credentials")
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn reference() -> CredentialRef {
+        CredentialRef::new("9f3a4b2c", "com.zendesk.api", "support", "api_token").expect("valid")
+    }
+
+    fn mode_of(path: &Path) -> u32 {
+        std::fs::metadata(path)
+            .expect("it exists")
+            .permissions()
+            .mode()
+            & 0o777
+    }
+
+    /// **The point of the type.** A value stored through one instance is readable through the next
+    /// one built over the same file.
+    #[tokio::test]
+    async fn a_value_survives_the_store_being_dropped_and_reopened() {
+        let scratch = Scratch::new("round-trip");
+        let path = scratch.store();
+
+        {
+            let store = FileStore::open(&path).expect("open");
+            store
+                .put(&reference(), &Secret::new(SENTINEL))
+                .await
+                .expect("put");
+        }
+
+        let reopened = FileStore::open(&path).expect("reopen");
+        assert_eq!(
+            reopened
+                .get(&reference())
+                .await
+                .expect("get")
+                .expose_secret(),
+            SENTINEL
+        );
+
+        reopened.delete(&reference()).await.expect("delete");
+        let again = FileStore::open(&path).expect("reopen");
+        assert!(again.get(&reference()).await.unwrap_err().is_not_found());
+    }
+
+    /// **The full address round-trips, not merely the value.**
+    ///
+    /// Two tenants of one vendor and two services of one vendor are the two ways a store keyed
+    /// loosely collides — the first would undo C-204's per-account tenancy and the second C-219's
+    /// per-service addressing, and both would do it silently, by handing back *a* credential.
+    #[tokio::test]
+    async fn nothing_collides_across_tenants_or_across_services_of_one_vendor() {
+        let scratch = Scratch::new("addressing");
+        let path = scratch.store();
+
+        let addresses = [
+            ("tenant-a", "com.zendesk.api", "support", "api_token"),
+            ("tenant-b", "com.zendesk.api", "support", "api_token"),
+            ("tenant-a", "com.contentful.api", "delivery", "api_token"),
+            ("tenant-a", "com.contentful.api", "management", "api_token"),
+            ("tenant-a", "com.anthropic.api", "default", "api_key"),
+        ];
+
+        {
+            let store = FileStore::open(&path).expect("open");
+            for (tenant, authority, service, credential) in addresses {
+                let reference = CredentialRef::new(tenant, authority, service, credential)
+                    .expect("a valid address");
+                store
+                    .put(
+                        &reference,
+                        &Secret::new(format!("{SENTINEL}/{tenant}/{authority}/{service}")),
+                    )
+                    .await
+                    .expect("put");
+            }
+            assert_eq!(store.len(), addresses.len(), "two addresses collided");
+        }
+
+        let reopened = FileStore::open(&path).expect("reopen");
+        assert_eq!(reopened.len(), addresses.len(), "the reload lost an entry");
+        for (tenant, authority, service, credential) in addresses {
+            let reference =
+                CredentialRef::new(tenant, authority, service, credential).expect("valid");
+            assert_eq!(
+                reopened.get(&reference).await.expect("get").expose_secret(),
+                format!("{SENTINEL}/{tenant}/{authority}/{service}"),
+                "{tenant}/{authority}/{service} came back with another address's value"
+            );
+        }
+    }
+
+    /// `0600` and `0700`, on a store that has only just been created.
+    #[test]
+    fn a_fresh_store_is_0600_inside_a_0700_directory() {
+        let scratch = Scratch::new("modes");
+        let path = scratch.store();
+        let store = FileStore::open(&path).expect("open");
+
+        assert!(path.exists(), "`open` did not create the file");
+        assert_eq!(
+            mode_of(store.path()),
+            FILE_MODE,
+            "the store file is not 0600"
+        );
+        assert_eq!(
+            mode_of(path.parent().expect("a parent")),
+            DIR_MODE,
+            "the containing directory is not 0700"
+        );
+    }
+
+    /// A file somebody else can read is refused rather than repaired.
+    #[test]
+    fn a_world_readable_store_is_refused() {
+        let scratch = Scratch::new("mode-refusal");
+        let path = scratch.store();
+        drop(FileStore::open(&path).expect("open"));
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).expect("loosen it");
+
+        let error = FileStore::open(&path).expect_err("a 0644 store must be refused");
+        assert!(
+            matches!(error, StoreError::Denied { .. }),
+            "expected a refusal, got {error:?}"
+        );
+        assert!(
+            error.to_string().contains("0644"),
+            "the refusal must say what the mode is: {error}"
+        );
+        assert_eq!(
+            mode_of(&path),
+            0o644,
+            "the store tightened the mode instead of reporting it"
+        );
+    }
+
+    /// A rewrite leaves no temporary behind, and the file is whole at every point a reader could
+    /// look at it.
+    #[tokio::test]
+    async fn a_write_leaves_no_temporary_and_no_truncated_file() {
+        let scratch = Scratch::new("atomic");
+        let path = scratch.store();
+        let store = FileStore::open(&path).expect("open");
+
+        for index in 0..8 {
+            let reference = CredentialRef::new(
+                format!("tenant-{index}").as_str(),
+                "com.acme.api",
+                "default",
+                "token",
+            )
+            .expect("valid");
+            store
+                .put(&reference, &Secret::new(format!("{SENTINEL}-{index}")))
+                .await
+                .expect("put");
+        }
+
+        let leftovers: Vec<String> = std::fs::read_dir(path.parent().expect("a parent"))
+            .expect("read the directory")
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name != "credentials")
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "the directory holds files the store did not mean to leave: {leftovers:?}"
+        );
+        assert_eq!(FileStore::open(&path).expect("reopen").len(), 8);
+    }
+
+    /// A file this store cannot account for is an error, never a quietly emptier store.
+    ///
+    /// Silently skipping a line it could not read would report the tenant as *not connected*, which
+    /// is precisely the confusion [`StoreError::NotFound`] and [`StoreError::Unreachable`] are two
+    /// types in order to avoid — and it would invite the operator to paste the token again.
+    #[test]
+    fn a_damaged_file_is_refused_rather_than_partly_loaded() {
+        for (label, contents) in [
+            ("no separator", "tenants/a/com.acme.api/token\n"),
+            ("bad hex", "tenants/a/com.acme.api/token zzzz\n"),
+            ("odd hex", "tenants/a/com.acme.api/token abc\n"),
+            ("not an address", "wherever/a/token 4141\n"),
+            (
+                "the elided service spelled out",
+                "tenants/a/com.acme.api/default/token 4141\n",
+            ),
+            (
+                "the same address twice",
+                "tenants/a/com.acme.api/token 4141\ntenants/a/com.acme.api/token 4242\n",
+            ),
+        ] {
+            let scratch = Scratch::new("damaged");
+            let path = scratch.store();
+            drop(FileStore::open(&path).expect("open"));
+            std::fs::write(&path, contents).expect("write the damaged file");
+
+            let error = FileStore::open(&path)
+                .err()
+                .unwrap_or_else(|| panic!("a store with {label} was loaded rather than refused"));
+            assert!(
+                matches!(error, StoreError::Backend { .. }),
+                "{label}: expected a `Backend` refusal, got {error:?}"
+            );
+        }
+    }
+
+    /// Nothing a damaged file produces quotes the bytes it could not read.
+    #[test]
+    fn a_parse_failure_names_the_line_and_never_the_value() {
+        let scratch = Scratch::new("parse-message");
+        let path = scratch.store();
+        drop(FileStore::open(&path).expect("open"));
+        std::fs::write(
+            &path,
+            format!(
+                "{HEADER}\ntenants/a/com.acme.api/token {}!!\n",
+                hex_encode(SENTINEL.as_bytes())
+            ),
+        )
+        .expect("write");
+
+        let error = FileStore::open(&path).expect_err("invalid hex must be refused");
+        let message = error.to_string();
+        assert!(matches!(error, StoreError::Backend { .. }), "{error:?}");
+        assert!(message.contains("line 2"), "no line number: {message}");
+        assert!(
+            !message.contains(&hex_encode(SENTINEL.as_bytes())),
+            "the message quoted the undecodable field: {message}"
+        );
+        assert!(!message.contains(SENTINEL), "the message quoted a value");
+    }
+
+    /// The `Debug` rendering, which is the one C-159 warns about.
+    #[tokio::test]
+    async fn debug_carries_neither_a_value_nor_an_address() {
+        let scratch = Scratch::new("debug");
+        let store = FileStore::open(scratch.store()).expect("open");
+        store
+            .put(&reference(), &Secret::new(SENTINEL))
+            .await
+            .expect("put");
+
+        let rendered = format!("{store:?}");
+        assert!(!rendered.contains(SENTINEL), "Debug served a value");
+        assert!(
+            !rendered.contains("com.zendesk.api"),
+            "Debug served an address: {rendered}"
+        );
+    }
+
+    /// Neither does the error a failed write produces. The failure is manufactured by making the
+    /// directory unwritable, which is the closest thing to a full disk a test can arrange.
+    #[tokio::test]
+    async fn a_write_failure_names_no_value() {
+        let scratch = Scratch::new("write-failure");
+        let path = scratch.store();
+        let store = FileStore::open(&path).expect("open");
+        let directory = path.parent().expect("a parent").to_owned();
+        std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o500))
+            .expect("make it read-only");
+
+        let error = store
+            .put(&reference(), &Secret::new(SENTINEL))
+            .await
+            .expect_err("a read-only directory must refuse a write");
+
+        // Restored before the assertions so a failure still cleans up.
+        std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(DIR_MODE))
+            .expect("restore");
+
+        let message = error.to_string();
+        assert!(
+            !message.contains(SENTINEL),
+            "the write error quoted the value"
+        );
+        assert!(
+            message.contains("credentials"),
+            "the write error should name the file: {message}"
+        );
+        // And the value did not half-land: the map was rolled back with the file.
+        assert!(store.get(&reference()).await.unwrap_err().is_not_found());
+    }
+
+    /// Usable through the trait object, which is how a host binds it.
+    #[tokio::test]
+    async fn the_store_is_object_safe() {
+        let scratch = Scratch::new("object-safe");
+        let store: std::sync::Arc<dyn SecretStore> =
+            std::sync::Arc::new(FileStore::open(scratch.store()).expect("open"));
+        store
+            .put(&reference(), &Secret::new(SENTINEL))
+            .await
+            .expect("put");
+        assert_eq!(
+            store.get(&reference()).await.expect("get").expose_secret(),
+            SENTINEL
+        );
+    }
+
+    #[test]
+    fn hex_round_trips_every_byte() {
+        let bytes: Vec<u8> = (0..=255).collect();
+        assert_eq!(hex_decode(&hex_encode(&bytes)).as_deref(), Some(&bytes[..]));
+        assert_eq!(hex_decode("abc"), None, "odd length");
+        assert_eq!(hex_decode("zz"), None, "not hex");
+        assert_eq!(hex_decode("AA"), Some(vec![0xaa]), "uppercase is read");
+    }
+}
