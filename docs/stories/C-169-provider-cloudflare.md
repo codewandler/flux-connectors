@@ -2,7 +2,7 @@
 id: C-169
 title: Ship the Cloudflare connector
 pillar: Spec
-status: ready
+status: in-progress
 priority: 3
 design:
 epic: provider-fleet-2
@@ -36,21 +36,39 @@ honestly before C-55, and that attempt was worth more than a connector that answ
 
 ## Acceptance
 
-- [ ] `providers/cloudflare.toml`, hand-authored and **curated** — a small set of operations this pipeline
-      can express honestly, not every endpoint the vendor documents.
-- [ ] Declared `risk`, `idempotency` and effects per operation, and a `description` on each written for
-      a *model* to read rather than as UI copy.
-- [ ] A `[[config]]` surface with `label` and `help` on every field, and `secret` agreeing with `binds`.
-- [ ] A `verify` operation that is a read and runs unattended.
-- [ ] `crates/connector-flux/tests/cloudflare_connector.rs` — a per-provider contract test asserting the
-      thing *this* connector is about (see the archetype above), not that the file parses.
-- [ ] **Failing-first test:** the contract test must fail before `providers/cloudflare.toml` exists.
-- [ ] The scoped gate is green: `build --provider cloudflare`, `diff --provider cloudflare` reporting no drift,
+- [x] `providers/cloudflare.toml`, hand-authored and **curated** — a small set of operations this pipeline
+      can express honestly, not every endpoint the vendor documents. → `providers/cloudflare.toml`,
+      5 operations (list zones, list/create/delete DNS records, purge cache).
+- [x] Declared `risk`, `idempotency` and effects per operation, and a `description` on each written for
+      a *model* to read rather than as UI copy. → every `[[operations]]` block in
+      `providers/cloudflare.toml`; `effects` is derived by the emitter (`["network"]` in
+      `connectors/cloudflare.flux`), not authored.
+- [x] A `[[config]]` surface with `label` and `help` on every field, and `secret` agreeing with `binds`.
+      → `providers/cloudflare.toml`'s single `[[config]]` block (`api_token`); the loader itself
+      enforces the `secret`/`binds` agreement (`crates/connector-spec/src/config.rs`).
+- [x] A `verify` operation that is a read and runs unattended. → `verify = "cloudflare-zone-list"`,
+      a parameter-free `GET`, `risk = "low"`; asserted by
+      `the_connector_verifies_with_a_read_over_a_bearer_token`.
+- [x] `crates/connector-flux/tests/cloudflare_connector.rs` — a per-provider contract test asserting the
+      thing *this* connector is about (see the archetype above), not that the file parses. → 11 tests;
+      `the_zone_id_is_a_per_call_argument_everywhere_but_zone_list` and `no_config_field_binds_a_zone`
+      are the archetype tests, `the_dns_record_delete_is_destructive_and_not_claimed_idempotent` and
+      `the_cache_purge_is_high_risk_and_forced_non_idempotent_by_the_post_rule` are the hazard tests.
+- [x] **Failing-first test:** the contract test must fail before `providers/cloudflare.toml` exists. →
+      proved at `$(git merge-base main HEAD)` with `providers/cloudflare.toml` absent: all 11 tests
+      fail with "cannot read … providers/cloudflare.toml".
+- [x] The scoped gate is green: `build --provider cloudflare`, `diff --provider cloudflare` reporting no drift,
       `cargo build --workspace`, `cargo test --workspace --no-fail-fast`,
-      `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all --check`.
-- [ ] **Exactly eight tests are red and reported, not silenced** — the whole-catalogue staleness checks
+      `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all --check`. → all green
+      except the nine tests named below, which are expected.
+- [x] **Exactly eight tests are red and reported, not silenced** — the whole-catalogue staleness checks
       `AGENTS.md` tabulates. They are red because you correctly did not write a coordinator-owned
-      artifact. Report the eight; if the number differs, that is the finding.
+      artifact. Report the eight; if the number differs, that is the finding. → exactly the eight
+      AGENTS.md tabulates, confirmed by name (see `## Progress`). A **ninth**,
+      `the_recorded_floor_is_the_measured_figure`, is also red — expected per AGENTS.md's own note
+      that this check is red per *wave*, and this connector's five operations are 5/5 covered by
+      `response_schema`, which is what tips the aggregate over `COVERED_FLOOR`. Not edited, per the
+      dispatch.
 
 ## Notes
 
@@ -68,3 +86,55 @@ honestly before C-55, and that attempt was worth more than a connector that answ
 - Whole-catalogue artifacts are coordinator-owned: `crates/catalog/src/generated.rs`,
   `web/public/catalog.json`, `web/public/v1/**`, `assets/readme-snippet-*.svg`. The per-provider
   `crates/catalog/src/generated/cloudflare.rs` is **not** in that set and is yours to commit.
+
+## Progress
+
+**The design decision, answered by the schema rather than by preference.** `zone_id` is a per-call
+`params.path` argument on every operation except `cloudflare-zone-list` (the call that discovers zone
+ids and has nothing yet to scope). It could not have been `[[config]]`: `ConfigField::binds` /
+`parse_binding` (`crates/connector-spec/src/config.rs`) only ever reaches an `endpoint.<variable>`
+placeholder in `Connector::base_url`, and Cloudflare's `base_url` is one host
+(`https://api.cloudflare.com/client/v4`) shared by every zone, with no zone-shaped placeholder to
+bind. So this is not a case where either shape was viable and one was chosen for its properties — the
+schema has no vocabulary to express the configuration alternative at all. The full reasoning, including
+the named consequence (a model holding the token can address any zone the *token* can reach, not only
+"the" zone an operator meant to install it against, bounded by Cloudflare's own token-scoping UI), is
+in `providers/cloudflare.toml`'s header comment and is asserted by
+`the_zone_id_is_a_per_call_argument_everywhere_but_zone_list` and `no_config_field_binds_a_zone` in the
+contract test.
+
+**The two hazard declarations.** `cloudflare-dns-record-delete` is `risk = "destructive"`,
+`idempotency = "non_idempotent"` (Cloudflare answers a repeat with 404, not a repeat 200, and
+documents no idempotency guarantee — the same call `providers/airtable.toml` makes for its own
+delete). `cloudflare-cache-purge` is `risk = "high"` (instantaneous, zone-wide, externally visible, can
+spike origin load — not `destructive`, since the cache repopulates from origin) and, more subtly,
+`idempotency = "non_idempotent"` **despite being genuinely idempotent by Cloudflare's own behaviour**:
+`crates/connector-flux/src/op.rs`'s `check_write_metadata` refuses `idempotency = "idempotent"` on any
+`POST` outright, so the honest declaration cannot be expressed and the loss of fidelity is recorded in
+the provider file's comment rather than absorbed silently — the same trade `providers/notion.toml`
+already carries for its two `POST` reads. `the_cache_purge_is_high_risk_and_forced_non_idempotent_by_the_post_rule`
+proves the refusal directly, by cloning the connector, flipping the declared idempotency to
+`Idempotent`, and asserting `emit_operation` now errs.
+
+**Confidence and what was deliberately left out.** The five shipped operations
+(`GET /zones`, `GET /zones/{zone_id}/dns_records`, `POST /zones/{zone_id}/dns_records`,
+`DELETE /zones/{zone_id}/dns_records/{dns_record_id}`, `POST /zones/{zone_id}/purge_cache`), their
+methods, Cloudflare's `{success, errors, messages, result}` envelope, the 32-character lowercase-hex
+id shape, and the bearer API-token auth are all high-confidence — this is one of the most-documented,
+longest-stable HTTP APIs in the ecosystem. Left out, each named in the provider file's header comment
+rather than silently absorbed:
+- **DNS record read-one and update** (`GET`/`PATCH`/`PUT .../dns_records/{dns_record_id}`) — not in
+  the curated set; a confident, small follow-on rather than a gap.
+- **List pagination and filters** (`page`, `per_page`, `name`, `type`, …) — not a query-encoding
+  problem (integers and enums need no percent-encoding), but this file is not confident of the exact
+  `per_page` bounds per endpoint and would rather return Cloudflare's first page than assert a cap
+  that might be wrong. Named as the one place a future author should verify a vendor-documented number
+  before adding it, rather than as something this file got wrong.
+- **Selective cache purge** (`files`/`tags`/`hosts` in the purge body) — `tags`/`hosts` are
+  Enterprise-plan-only, and mixing them with `purge_everything` in one body is the ambiguous
+  free-form shape AGENTS.md refuses; `cloudflare-cache-purge` does the one thing every plan supports.
+- Optional DNS-record-create fields (`ttl`, `proxied`, `comment`, `tags`) — excluded per the C-56
+  null-on-omission gap, the same call `providers/shopify.toml` and `providers/airtable.toml` make.
+
+Nothing above is guessed at a level this file is not confident of; where confidence ran out, the
+operation or field was left out rather than shipped as a plausible guess.
