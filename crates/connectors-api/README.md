@@ -66,11 +66,16 @@ consent screen the operator sees when they connect a provider rather than when t
 
 ### Two things worth knowing about running it locally
 
-- **The session cookie is `Secure`**, and that is not relaxed for local use. Chrome and Firefox
-  treat `http://localhost` as a trustworthy origin and accept `Secure` cookies there, so this costs
-  nothing on those two. A browser that does not — Safari has historically been strict — will not
-  hold the session. The alternative was an environment variable that drops `Secure`, which is a
-  switch somebody forgets to unset in front of a real deployment.
+- **Both cookies this host sets are `Secure`**, and that is not relaxed for local use. Chrome and
+  Firefox treat `http://localhost` as a trustworthy origin and accept `Secure` cookies there, so it
+  costs nothing on those two. A browser that does not — Safari has historically been strict —
+  **cannot sign in at all**, and the failure is not the one you would guess: it drops
+  `connectors_login` at `/auth/signin`, so `/auth/callback` then finds no binding and answers `400`.
+  Sign-in fails at the callback rather than "succeeding and not sticking". The alternative was an
+  environment variable that drops `Secure`, which is a switch somebody forgets to unset in front of
+  a real deployment. The attributes themselves are not restated here — `session_cookie` and
+  `login_cookie` in `src/auth/mod.rs` are the only place they are written, and
+  `tests/tenancy.rs::the_login_cookie_is_scoped_short_lived_and_locked_down` asserts them.
 - **Sessions live in memory**, like credentials. Restarting the process signs everyone out, which
   is the same cleanup story the rest of this host has.
 
@@ -118,6 +123,36 @@ test, and it asserts on the resulting **identity** rather than a status code.
 `SameSite=Lax` on that cookie is not a weaker choice than `Strict` — it is the only workable one.
 The callback arrives as a cross-site top-level `GET` from Google, and `Strict` withholds cookies on
 exactly that navigation.
+
+#### What the binding does not cover, stated so nobody has to re-derive it
+
+**The binding is a double-submit, and the cookie's value *is* the `state` that appears in the URL.**
+So the check is "these two are equal", and anyone who can *set* the cookie satisfies it by
+construction: presenting `Cookie: connectors_login=<attacker state>` alongside that same attacker
+state does yield a session. Cookie integrity is the whole defence here — there is no server-side
+secret in the comparison.
+
+This is a real residual and it is also the ordinary property of most double-submit implementations,
+so it is recorded rather than treated as an open defect:
+
+- **It needs a cookie-injection foothold** — a sibling subdomain that can write a `Domain` cookie
+  for this host, an XSS on this origin, or an active network position on plaintext. Every one of
+  those is already game over for a session cookie by other routes.
+- **It is outside the threat model C-204 closes.** That attack needed nothing but a link or an
+  `<img>` — the victim's browser had no cookie at all, which is precisely why the fix refuses a
+  missing binding instead of skipping the check. An attacker who can already set cookies on this
+  origin was never in scope, and no version of a double-submit excludes them.
+- **The second guard still holds independently.** `take_login` requires the `state` to be one this
+  host issued and has not spent, so even a forged binding only opens the attacker's *own* live flow
+  — which is the sign-in they could complete anyway.
+
+**`__Host-` is what would close it, and it is foreclosed by the scoping.** The `__Host-` prefix
+would pin the cookie to this exact origin with no `Domain`, which is the sibling-subdomain half of
+the problem — but it also *requires* `Path=/`, and this cookie is deliberately
+`Path=/auth/callback` (`src/auth/mod.rs`) so it is not attached to every request the browser makes.
+The two cannot both be had. Narrow scoping was chosen; if this host is ever deployed under a domain
+with untrusted siblings, that is the decision to revisit, and widening the path to `/` is the price.
+The session cookie declines `__Host-` for a different reason, recorded on `SESSION_COOKIE`.
 
 ### The two requests that bypass the egress guard
 

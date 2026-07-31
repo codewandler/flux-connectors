@@ -100,15 +100,24 @@ async fn a_stored_credential_reaches_no_surface() {
         "/auth/status",
         "/",
     ] {
-        let body = client
+        let response = client
             .get(format!("{base}{path}"))
             .header("cookie", &cookie)
             .send()
             .await
-            .unwrap_or_else(|error| panic!("GET {path}: {error}"))
-            .text()
-            .await
-            .expect("a body");
+            .unwrap_or_else(|error| panic!("GET {path}: {error}"));
+        // **The sweep must run against the real surface, not an error page** (C-228). Every path
+        // here is fetched *with* a session precisely so it renders the thing that could leak. A
+        // refusal body contains no secret either, so without this line the guarantee would still be
+        // reported as held if a route started answering `401` — which is how `/v1/operations/…`
+        // came to be swept here while having no test that its gate was even reachable.
+        let status = response.status();
+        assert!(
+            status.is_success(),
+            "GET {path} answered {status} with a session, so the no-secrets sweep below would pass \
+             on an error page rather than on the surface it claims to cover"
+        );
+        let body = response.text().await.expect("a body");
         for (secret, what) in secrets {
             assert!(!body.contains(secret), "`{path}` served {what}");
         }
