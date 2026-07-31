@@ -11,7 +11,7 @@ use flux_spec::{
 };
 use serde_json::Value;
 
-use crate::config::Field;
+use crate::config::{Field, Snapshot};
 use crate::request::{self, Request};
 use crate::{auth, spec, Configuration, Credentials, Error};
 
@@ -92,9 +92,15 @@ pub struct Operation {
     http: Egress,
     /// **The credential port the host bound**, not a global. See [`Credentials`].
     credentials: Credentials,
-    /// **The connection-configuration port the host bound**, not a global and not the process
-    /// environment. See [`Configuration`].
-    configuration: Configuration,
+    /// **This tenant's connection settings, read once** from the port the host bound — not the port
+    /// itself, and deliberately so (C-198).
+    ///
+    /// `permission_subjects` and `execute` are two calls. Holding the [`Configuration`] would let
+    /// each of them read a [`ConfigStore`](crate::ConfigStore) with interior mutability
+    /// independently, and since this pack bypasses `Executor::dispatch` the first of those two reads
+    /// *is* the host's egress gate — so a drifting store could gate one host and call another.
+    /// Holding a [`Snapshot`] instead removes the second read rather than documenting it away.
+    settings: Snapshot,
     /// The configuration variables this operation's own emitted Flux carries, derived once at
     /// install for the same reason the spec is: so a connector that cannot be configured is a
     /// diagnosable refusal at the first call rather than a brace discovered in a URL.
@@ -161,15 +167,30 @@ impl Operation {
             })?;
 
         let declaration = spec::declaration_of(entry.id, entry.flux)?;
+        let spec = spec::project_declaration(entry.id, &declaration)?;
+        let endpoint_variables = request::endpoint_variables(&declaration);
+
+        // **The one read of the configuration port** (C-198). Everything this operation can ever ask
+        // for is knowable here — the endpoint variables off its own emitted Flux, the Basic user
+        // halves off its connector's declared credentials — so the port is consulted once and the
+        // result is frozen. See [`Operation::settings`] for why holding the port instead would be a
+        // hole through the host's egress gate.
+        let mut fields: Vec<Field<'_>> = endpoint_variables
+            .iter()
+            .map(|variable| Field::Endpoint(variable.as_str()))
+            .collect();
+        push_user_half_fields(provider, &mut fields);
+        let settings = configuration.snapshot(provider.id, fields);
+
         Ok(Self {
-            spec: spec::project_declaration(entry.id, &declaration)?,
-            endpoint_variables: request::endpoint_variables(&declaration),
+            spec,
+            endpoint_variables,
             declaration,
             entry,
             provider,
             http,
             credentials,
-            configuration,
+            settings,
         })
     }
 
@@ -193,11 +214,9 @@ impl Operation {
         self.endpoint_variables
             .iter()
             .map(|variable| {
-                let value = self.configuration.require(
-                    self.entry.id,
-                    self.provider.id,
-                    Field::Endpoint(variable),
-                )?;
+                let value = self
+                    .settings
+                    .require(self.entry.id, Field::Endpoint(variable))?;
                 Ok((variable.clone(), value))
             })
             .collect()
@@ -262,7 +281,7 @@ impl Operation {
     ) -> Result<Request, Error> {
         let credentials = self
             .credentials
-            .resolve(ctx, self.entry, self.provider, &self.configuration)
+            .resolve(ctx, self.entry, self.provider, &self.settings)
             .await?;
 
         let mut request = self.build_request(params)?;
@@ -311,22 +330,35 @@ impl Operation {
         }
     }
 
-    /// A declared host with whatever configuration values the port can supply filled in.
+    /// A declared host with whatever configuration values the snapshot carries filled in.
     ///
     /// Best-effort by necessity — see [`Operation::subjects`] — and it reads through
-    /// [`Configuration::lookup`] rather than [`Operation::endpoints`] precisely because it must not
-    /// be able to fail.
+    /// [`Snapshot::lookup`] rather than [`Operation::endpoints`] precisely because it must not be
+    /// able to fail.
     fn substituted_host(&self, host: &str) -> String {
         let mut out = host.to_owned();
         for variable in &self.endpoint_variables {
-            if let Some(value) = self
-                .configuration
-                .lookup(self.provider.id, Field::Endpoint(variable))
-            {
+            if let Some(value) = self.settings.lookup(Field::Endpoint(variable)) {
                 out = out.replace(&format!("{{{variable}}}"), &value);
             }
         }
         out
+    }
+}
+
+/// Add the [`Field::Username`] of every Basic credential `provider` declares.
+///
+/// The provider's whole set rather than one operation's, because a snapshot entry is cheap and the
+/// alternative is a per-operation filter over `Operation::credentials` that would have to stay in
+/// step with [`crate::credentials`]'s alternative-selection rule. A credential no mechanism of this
+/// operation names contributes one unused entry; a credential the filter *missed* would be a field
+/// the snapshot does not carry, and the honest way to answer that is a refusal rather than the live
+/// store read C-198 removed.
+fn push_user_half_fields(provider: &'static catalog::Provider, fields: &mut Vec<Field<'_>>) {
+    for credential in provider.auth {
+        if matches!(credential.acquire, catalog::Acquisition::BasicJoin { .. }) {
+            fields.push(Field::Username(credential.name));
+        }
     }
 }
 

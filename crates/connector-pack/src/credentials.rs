@@ -58,8 +58,8 @@ use connector_secrets::{validate_tenant, CredentialRef, SecretStore, StoreError}
 use flux_runtime::ToolContext;
 
 use crate::auth::{self, Assembled};
-use crate::config::Field;
-use crate::{Configuration, Error};
+use crate::config::{Field, Snapshot};
+use crate::Error;
 
 /// The reserved service name [`CredentialRef::new`] elides, spelled here because a credential is
 /// declared at **provider** level and therefore always addresses it.
@@ -174,7 +174,7 @@ impl Credentials {
         ctx: &ToolContext,
         operation: &'static catalog::Operation,
         provider: &'static catalog::Provider,
-        configuration: &Configuration,
+        settings: &Snapshot,
     ) -> Result<Vec<Assembled>, Error> {
         // An explicitly unauthenticated operation — a health check, a ping. Distinct from "nothing
         // resolved", and the IR keeps the two apart precisely so this branch can exist.
@@ -185,7 +185,7 @@ impl Credentials {
         let mut unmet: Vec<String> = Vec::new();
         for mechanism in operation.credentials {
             match self
-                .resolve_mechanism(ctx, operation, provider, mechanism, configuration)
+                .resolve_mechanism(ctx, operation, provider, mechanism, settings)
                 .await
             {
                 Ok(assembled) => return Ok(assembled),
@@ -214,7 +214,7 @@ impl Credentials {
         operation: &'static catalog::Operation,
         provider: &'static catalog::Provider,
         mechanism: &'static [&'static str],
-        configuration: &Configuration,
+        settings: &Snapshot,
     ) -> Result<Vec<Assembled>, Error> {
         // A mechanism naming nothing would authenticate nothing while looking satisfied. The loader
         // refuses a degenerate empty mechanism; this is the second lock, because "the request went
@@ -276,7 +276,7 @@ impl Credentials {
                 secret.expose_secret(),
             )?;
 
-            let user = user_half(operation.id, provider, credential, configuration)?;
+            let user = user_half(operation.id, credential, settings)?;
             let value = auth::acquire(credential, secret.expose_secret(), user.as_deref());
 
             // The second string: `base64(user:secret)` is as good as the secret to anyone holding it
@@ -319,9 +319,8 @@ impl Credentials {
 /// missing.
 fn user_half(
     operation: &str,
-    provider: &'static catalog::Provider,
     credential: &'static catalog::Credential,
-    configuration: &Configuration,
+    settings: &Snapshot,
 ) -> Result<Option<String>, Error> {
     let catalog::Acquisition::BasicJoin {
         user_env,
@@ -331,8 +330,8 @@ fn user_half(
         return Ok(None);
     };
 
-    let user = configuration
-        .require(operation, provider.id, Field::Username(credential.name))
+    let user = settings
+        .require(operation, Field::Username(credential.name))
         .map_err(|error| match error {
             // Re-stated with the vendor's own name for the value. `MissingConfig` alone would say
             // `username.zendesk.api_token`, which is right and is not what a Zendesk operator has
@@ -340,7 +339,7 @@ fn user_half(
             Error::MissingConfig { .. } => Error::MissingCredentialConfig {
                 operation: operation.to_owned(),
                 credential: credential.name.to_owned(),
-                tenant: configuration.tenant().to_owned(),
+                tenant: settings.tenant().to_owned(),
                 env: user_env.join(", "),
             },
             other => other,
@@ -402,7 +401,11 @@ fn not_found_path(error: &StoreError) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use connector_secrets::{Layout, MemoryStore, TenantLayout};
+    use crate::tests::recording_http;
+    use crate::{Configuration, MemoryConfig, Operation};
+    use connector_secrets::{Layout, MemoryStore, Secret, TenantLayout};
+    use flux_system::{System, Workspace};
+    use serde_json::json;
 
     /// **The guard on [`DEFAULT_SERVICE`]'s mirror.**
     ///
@@ -434,5 +437,184 @@ mod tests {
             .expect_err("a traversing tenant cannot address anything");
         assert!(matches!(error, Error::Tenant { .. }), "{error}");
         assert!(error.to_string().contains("../../etc"), "{error}");
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // The Basic user half, driven through the whole assembly (C-198)
+    //
+    // C-193 moved this input from the process environment to the configuration port, and nothing
+    // asserted it beyond `auth.rs`'s unit test over a synthetic `Credential`. These two tests drive
+    // the shipped zendesk declaration — `user_suffix: "/token"`, `Placement::Header { Authorization,
+    // "Basic " }` — through `resolve`, so the suffix join, the base64 and the placement are asserted
+    // against catalogue data rather than against a fixture that agrees with the code by
+    // construction.
+    //
+    // **They live here rather than in `tests/credentials.rs`, and the reason is a catalogue fact
+    // rather than a preference.** All three connectors declaring a `BasicJoin` credential — zendesk,
+    // jira and twilio — declare `authority: None`, so `reference` refuses with
+    // [`Error::NoCredentialAddress`] before the configuration port is ever consulted, and the public
+    // `Operation::build_authenticated_request` cannot reach this path for any shipped connector.
+    // That is C-92's gap, recorded in `AGENTS.md`, and closing it is not this story's. So the
+    // provider is doctored with an authority — the same `Box::leak` of a `Copy` catalogue struct
+    // `tool.rs` uses to test a host-less entry — and the *public* half of the wall is pinned in
+    // `tests/credentials.rs::a_basic_connector_refuses_because_it_has_no_credential_address`.
+    // ---------------------------------------------------------------------------------------------
+
+    /// The tenant both ports below answer for.
+    const BASIC_TENANT: &str = "t-c198";
+
+    /// An obvious non-credential, long enough that the host's redactor actually holds it.
+    const BASIC_SECRET: &str = "SENTINEL-NOT-A-REAL-SECRET-C198";
+
+    /// The account identifier a tenant binds — the non-secret half, without zendesk's `/token`.
+    const BASIC_USER: &str = "ops@acme.test";
+
+    /// `base64("ops@acme.test/token:SENTINEL-NOT-A-REAL-SECRET-C198")`, computed independently of
+    /// this crate's own encoder:
+    ///
+    /// ```text
+    /// printf 'ops@acme.test/token:SENTINEL-NOT-A-REAL-SECRET-C198' | base64 -w0
+    /// ```
+    ///
+    /// A literal rather than a call to [`auth::base64`], because an assertion computed the same way
+    /// as the code it checks would pass on any encoder, correct or not — and the suffix is visible
+    /// in the plaintext above, which is the part that has no other test.
+    const BASIC_EXPECTED: &str =
+        "b3BzQGFjbWUudGVzdC90b2tlbjpTRU5USU5FTC1OT1QtQS1SRUFMLVNFQ1JFVC1DMTk4";
+
+    /// zendesk's shipped declaration, under a connector that has an authority. See the block comment
+    /// above for why the doctoring is necessary and what it does *not* fake: the credential, its
+    /// acquisition, its suffix and its placement are all the catalogue's own.
+    fn zendesk_with_an_authority() -> &'static catalog::Provider {
+        let mut provider = *catalog::provider(catalog::ProviderKey::id("zendesk"))
+            .expect("the shipped catalogue carries zendesk");
+        provider.authority = Some("com.zendesk.api");
+        Box::leak(Box::new(provider))
+    }
+
+    fn zendesk_ticket_show() -> &'static catalog::Operation {
+        catalog::operation(catalog::OperationKey::id("zendesk-ticket-show"))
+            .expect("the shipped catalogue carries zendesk-ticket-show")
+    }
+
+    /// A `ToolContext` over this crate's own directory — `System` needs a workspace root that
+    /// exists, and nothing on this path reaches the filesystem through it.
+    fn context() -> ToolContext {
+        let workspace = Workspace::new(env!("CARGO_MANIFEST_DIR")).expect("the crate root exists");
+        ToolContext::new(Arc::new(System::new(workspace)))
+    }
+
+    /// A configuration port holding zendesk's subdomain, and its user half only when `user` is set.
+    fn basic_configuration(user: Option<&str>) -> Configuration {
+        let mut values =
+            MemoryConfig::new().with_endpoint(BASIC_TENANT, "zendesk", "subdomain", "acme");
+        if let Some(user) = user {
+            values = values.with_username(BASIC_TENANT, "zendesk", "zendesk.api_token", user);
+        }
+        Configuration::new(Arc::new(values), BASIC_TENANT).expect("a valid tenant id")
+    }
+
+    /// A credential port holding [`BASIC_SECRET`] at zendesk's api-token address.
+    async fn basic_credentials() -> Credentials {
+        let store = MemoryStore::new();
+        store
+            .put(
+                &CredentialRef::new(
+                    BASIC_TENANT,
+                    "com.zendesk.api",
+                    DEFAULT_SERVICE,
+                    "api_token",
+                )
+                .expect("a valid address"),
+                &Secret::new(BASIC_SECRET),
+            )
+            .await
+            .expect("an in-memory put cannot fail");
+        Credentials::new(Arc::new(store), BASIC_TENANT).expect("a valid tenant id")
+    }
+
+    /// **The Basic user half reaches the header, and it comes from the configuration port.**
+    ///
+    /// This is `Operation::build_authenticated_request`'s own body with one substitution — the
+    /// doctored provider — so what it asserts is the composed request as it would go out: the
+    /// tenant's subdomain in the URL, and `Authorization: Basic base64("<user>/token:<secret>")`
+    /// with the suffix the connector declares rather than one a host was asked to know.
+    #[tokio::test]
+    async fn a_basic_user_half_reaches_the_header_from_the_configuration_port() {
+        let ctx = context();
+        let configuration = basic_configuration(Some(BASIC_USER));
+        let credentials = basic_credentials().await;
+        let entry = zendesk_ticket_show();
+
+        let tool = Operation::project(
+            entry,
+            recording_http(),
+            credentials.clone(),
+            configuration.clone(),
+        )
+        .expect("zendesk-ticket-show projects");
+        let mut request = tool
+            .build_request(&json!({ "ticket_id": 1 }))
+            .expect("the request builds");
+
+        let settings = configuration.snapshot("zendesk", [Field::Username("zendesk.api_token")]);
+        let assembled = credentials
+            .resolve(&ctx, entry, zendesk_with_an_authority(), &settings)
+            .await
+            .expect("the store holds the token and the port holds the user half");
+        for credential in &assembled {
+            auth::place(entry.id, credential, &mut request).expect("a header placement");
+        }
+
+        assert_eq!(
+            request.url,
+            "https://acme.zendesk.com/api/v2/tickets/1.json"
+        );
+        assert_eq!(
+            request.headers.get("Authorization").map(String::as_str),
+            Some(format!("Basic {BASIC_EXPECTED}").as_str()),
+            "the Basic pair must join the configured user, the declared suffix and the stored secret"
+        );
+        // The assembled pair is what actually travels, and it contains neither the secret nor the
+        // user half in the clear — so scrubbing the header for `BASIC_SECRET` would assert nothing.
+        // What has to hold is that the redactor knows the **base64**, which is as good as the secret
+        // to anyone holding it.
+        assert_ne!(
+            ctx.redactor.redact(BASIC_EXPECTED),
+            BASIC_EXPECTED,
+            "the base64 pair travels, so the redactor must already hold it"
+        );
+    }
+
+    /// **And it refuses by name when the port has nothing bound.** Composing `base64("/token:…")`
+    /// instead would produce a header the vendor answers with a 401 that says nothing about what is
+    /// missing — and the refusal quotes `ZENDESK_USER`, which is what a zendesk operator has
+    /// actually seen this value called.
+    #[tokio::test]
+    async fn a_basic_credential_with_no_configured_user_is_refused_by_name() {
+        let ctx = context();
+        let settings =
+            basic_configuration(None).snapshot("zendesk", [Field::Username("zendesk.api_token")]);
+
+        let error = basic_credentials()
+            .await
+            .resolve(
+                &ctx,
+                zendesk_ticket_show(),
+                zendesk_with_an_authority(),
+                &settings,
+            )
+            .await
+            .expect_err("a Basic credential with no user half is not a credential");
+
+        assert!(
+            matches!(&error, Error::MissingCredentialConfig { credential, .. }
+                if credential == "zendesk.api_token"),
+            "{error}"
+        );
+        let rendered = error.to_string();
+        assert!(rendered.contains("ZENDESK_USER"), "{rendered}");
+        assert!(rendered.contains(BASIC_TENANT), "{rendered}");
+        assert!(!rendered.contains(BASIC_SECRET), "{rendered}");
     }
 }
