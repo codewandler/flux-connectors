@@ -18413,6 +18413,993 @@
       "channels": []
     },
     {
+      "id": "klaviyo",
+      "authority": "com.klaviyo.api",
+      "vendor": "Klaviyo",
+      "description": "Klaviyo marketing platform: read the account a key belongs to, read and create customer profiles, read lists, and post an event that can trigger a flow. Every request carries a dated API revision the vendor requires",
+      "base_url": "https://a.klaviyo.com/api",
+      "api_version": null,
+      "hosts": [
+        "a.klaviyo.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://a.klaviyo.com/api",
+          "hosts": [
+            "a.klaviyo.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 6
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "header"
+        ],
+        "credentials": [
+          {
+            "name": "klaviyo.api_key",
+            "scheme": {
+              "kind": "header",
+              "name": "Authorization",
+              "prefix": "Klaviyo-API-Key "
+            },
+            "description": "Klaviyo private API key for one account. Travels as the whole Authorization header behind Klaviyo's own scheme word. Keys are scoped per key: one minted without the scopes the shipped operations need will authenticate, pass verification, and fail on exactly the call that needs the missing scope",
+            "env": [
+              "KLAVIYO_API_KEY"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "klaviyo.api_key"
+          ]
+        ]
+      },
+      "operation_count": 6,
+      "operations": [
+        {
+          "id": "klaviyo-account-list",
+          "provider": "klaviyo",
+          "service": "default",
+          "description": "Read the Klaviyo account this API key belongs to, with its timezone, currency, industry and contact details. Returns exactly one account — a private key is scoped to one — so this is the call that answers 'which account am I connected to'. Also this connector's verify: it takes no argument and needs only the accounts:read scope",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/accounts",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "data": {
+                "description": "Always exactly one account: a private API key belongs to one account and cannot see another",
+                "items": {
+                  "properties": {
+                    "attributes": {
+                      "properties": {
+                        "contact_information": {
+                          "description": "The sender identity and postal address Klaviyo puts in email footers: `default_sender_name`, `default_sender_email`, `organization_name`, `website_url`, and a `street_address` object (`address1`, `address2`, `city`, `region`, `country`, `zip`). Left untyped below the first level rather than enumerated in full",
+                          "type": "object"
+                        },
+                        "industry": {
+                          "description": "The industry the account selected at signup",
+                          "type": "string"
+                        },
+                        "locale": {
+                          "description": "The account's locale, e.g. `en-US`",
+                          "type": "string"
+                        },
+                        "preferred_currency": {
+                          "description": "ISO 4217 code the account reports revenue in. This is what an event's `value_currency` should normally match",
+                          "type": "string"
+                        },
+                        "public_api_key": {
+                          "description": "The six-character public site id, repeated from `id`. Public by design — it is embedded in the account's own web pages",
+                          "type": "string"
+                        },
+                        "test_account": {
+                          "description": "Whether this is a test account. A test account still accepts events and still runs flows",
+                          "type": "boolean"
+                        },
+                        "timezone": {
+                          "description": "The account's IANA timezone. Klaviyo renders every date in the UI in this zone, while the API returns UTC",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "test_account"
+                      ],
+                      "type": "object"
+                    },
+                    "id": {
+                      "description": "The account id, which is also Klaviyo's public (site) API key for this account — a browser-side identifier, not a secret",
+                      "type": "string"
+                    },
+                    "links": {
+                      "description": "`{self}` — the JSON:API link to this resource",
+                      "type": "object"
+                    },
+                    "type": {
+                      "const": "account"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "id",
+                    "attributes"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "links": {
+                "description": "JSON:API document links. `next` is absent here; an account list is never paginated",
+                "type": "object"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "klaviyo.api_key"
+            ]
+          ],
+          "hosts": [
+            "a.klaviyo.com"
+          ],
+          "flux": "op klaviyo-account-list -> Any\n  description \"Read the Klaviyo account this API key belongs to, with its timezone, currency, industry and contact details. Returns exactly one account — a private key is scoped to one — so this is the call that answers 'which account am I connected to'. Also this connector's verify: it takes no argument and needs only the accounts:read scope\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://a.klaviyo.com/api\"\n  url = fmt(\"{base}/accounts\")\n  revision = \"2026-07-15\"\n  response = http.request(headers: { revision }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "klaviyo-profile-list",
+          "provider": "klaviyo",
+          "service": "default",
+          "description": "List customer profiles in the account, newest first. Returns the FIRST PAGE ONLY — Klaviyo pages with an opaque `page[cursor]` query parameter this connector cannot send, so there is no way to reach later pages and no way to filter. Every profile carries personal data: an email address, often a phone number and a postal location",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/profiles",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "data": {
+                "description": "One entry per profile, first page only",
+                "items": {
+                  "properties": {
+                    "attributes": {
+                      "properties": {
+                        "created": {
+                          "description": "When the profile was first seen, in UTC",
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "email": {
+                          "description": "The profile's email address, or null. Personal data",
+                          "format": "email",
+                          "type": "string"
+                        },
+                        "external_id": {
+                          "description": "The id this profile carries in the customer's own system, when one was supplied",
+                          "type": "string"
+                        },
+                        "first_name": {
+                          "type": "string"
+                        },
+                        "image": {
+                          "format": "uri",
+                          "type": "string"
+                        },
+                        "last_event_date": {
+                          "description": "When this profile last did anything Klaviyo recorded — the closest thing to an activity signal here",
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "last_name": {
+                          "type": "string"
+                        },
+                        "locale": {
+                          "type": "string"
+                        },
+                        "location": {
+                          "description": "`address1`, `address2`, `city`, `region`, `zip`, `country`, `timezone`, `ip`, and `latitude`/`longitude` which Klaviyo returns as either numbers or strings. Personal data, including a home address where one was collected",
+                          "type": "object"
+                        },
+                        "organization": {
+                          "type": "string"
+                        },
+                        "phone_number": {
+                          "description": "E.164 phone number, or null. Personal data",
+                          "type": "string"
+                        },
+                        "predictive_analytics": {
+                          "description": "Klaviyo's modelled figures (historic and predicted CLV, churn probability, expected date of next order). Present only on accounts with enough order history",
+                          "type": "object"
+                        },
+                        "properties": {
+                          "description": "Custom properties the account itself defined. Keys are chosen by whoever built the integration and are not knowable at build time; treat every value as potentially personal",
+                          "type": "object"
+                        },
+                        "subscriptions": {
+                          "description": "Consent state per channel — `email.marketing`, `sms.marketing`, `sms.transactional` — each with a `consent` value and timestamps. This connector reports it and never interprets it: deciding who may be contacted needs more than this shape",
+                          "type": "object"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "updated": {
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "id": {
+                      "description": "The profile's Klaviyo id — what klaviyo-profile-get addresses it by",
+                      "type": "string"
+                    },
+                    "links": {
+                      "type": "object"
+                    },
+                    "relationships": {
+                      "description": "JSON:API relationship links for `lists`, `segments`, `push-tokens` and `conversations`. Only links: this connector sends no `include`, so nothing is expanded",
+                      "type": "object"
+                    },
+                    "type": {
+                      "const": "profile"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "id",
+                    "attributes"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "links": {
+                "description": "`self`, and `next`/`prev` when more pages exist. **`next` is unusable here** — following it needs the `page[cursor]` query parameter (C-30)",
+                "type": "object"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "klaviyo.api_key"
+            ]
+          ],
+          "hosts": [
+            "a.klaviyo.com"
+          ],
+          "flux": "op klaviyo-profile-list -> Any\n  description \"List customer profiles in the account, newest first. Returns the FIRST PAGE ONLY — Klaviyo pages with an opaque `page[cursor]` query parameter this connector cannot send, so there is no way to reach later pages and no way to filter. Every profile carries personal data: an email address, often a phone number and a postal location\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://a.klaviyo.com/api\"\n  url = fmt(\"{base}/profiles\")\n  revision = \"2026-07-15\"\n  response = http.request(headers: { revision }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "klaviyo-profile-get",
+          "provider": "klaviyo",
+          "service": "default",
+          "description": "Read one customer profile by its Klaviyo id, with its identifiers, custom properties, consent state and location. Returns personal data about a named individual",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/profiles/{id}",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "The profile's Klaviyo id, from klaviyo-profile-list's `id` or from klaviyo-profile-create's response. Not an email address — Klaviyo addresses a profile by id here, and looking one up by email needs the `filter` query parameter this connector cannot send",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "data": {
+                "properties": {
+                  "attributes": {
+                    "properties": {
+                      "created": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "email": {
+                        "description": "The profile's email address, or null. Personal data",
+                        "format": "email",
+                        "type": "string"
+                      },
+                      "external_id": {
+                        "description": "The id this profile carries in the customer's own system",
+                        "type": "string"
+                      },
+                      "first_name": {
+                        "type": "string"
+                      },
+                      "image": {
+                        "format": "uri",
+                        "type": "string"
+                      },
+                      "last_event_date": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "last_name": {
+                        "type": "string"
+                      },
+                      "locale": {
+                        "type": "string"
+                      },
+                      "location": {
+                        "description": "Postal and network location — see klaviyo-profile-list for the field list. Personal data",
+                        "type": "object"
+                      },
+                      "organization": {
+                        "type": "string"
+                      },
+                      "phone_number": {
+                        "description": "E.164 phone number, or null. Personal data",
+                        "type": "string"
+                      },
+                      "predictive_analytics": {
+                        "description": "Modelled CLV and churn figures, when the account has enough history",
+                        "type": "object"
+                      },
+                      "properties": {
+                        "description": "Account-defined custom properties; keys are not knowable at build time",
+                        "type": "object"
+                      },
+                      "subscriptions": {
+                        "description": "Per-channel consent state. Reported, never interpreted",
+                        "type": "object"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "updated": {
+                        "format": "date-time",
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "id": {
+                    "description": "The profile's Klaviyo id, echoed back",
+                    "type": "string"
+                  },
+                  "links": {
+                    "type": "object"
+                  },
+                  "relationships": {
+                    "description": "Relationship links only; nothing is expanded",
+                    "type": "object"
+                  },
+                  "type": {
+                    "const": "profile"
+                  }
+                },
+                "required": [
+                  "type",
+                  "id",
+                  "attributes"
+                ],
+                "type": "object"
+              },
+              "links": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "klaviyo.api_key"
+            ]
+          ],
+          "hosts": [
+            "a.klaviyo.com"
+          ],
+          "flux": "op klaviyo-profile-get(id: String) -> Any\n  description \"Read one customer profile by its Klaviyo id, with its identifiers, custom properties, consent state and location. Returns personal data about a named individual\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://a.klaviyo.com/api\"\n  url = fmt(\"{base}/profiles/{id}\")\n  revision = \"2026-07-15\"\n  response = http.request(headers: { revision }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "klaviyo-profile-create",
+          "provider": "klaviyo",
+          "service": "default",
+          "description": "Create a customer profile. At least one identifier is required — email, phone number or external id — and Klaviyo answers 409 Conflict if a profile with that identifier already exists, so this creates and never updates. The created profile can be marketed to only once it is subscribed, which this connector does not do",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/profiles",
+          "parameters": [
+            {
+              "name": "resource_type",
+              "in": "body",
+              "wire": "data.type",
+              "description": "Constant profile — Klaviyo's JSON:API resource type for this endpoint, which has no other correct value",
+              "required": true,
+              "schema": {
+                "const": "profile",
+                "type": "string"
+              }
+            },
+            {
+              "name": "email",
+              "in": "body",
+              "wire": "data.attributes.email",
+              "description": "The profile's email address. Not required by Klaviyo on its own, but at least one of email, phone_number or external_id must be supplied or the call is rejected. Personal data about a named individual",
+              "required": false,
+              "schema": {
+                "format": "email",
+                "type": "string"
+              }
+            },
+            {
+              "name": "phone_number",
+              "in": "body",
+              "wire": "data.attributes.phone_number",
+              "description": "Phone number in E.164 form, e.g. +15005550006. Klaviyo rejects other formats. Counts as an identifier",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "external_id",
+              "in": "body",
+              "wire": "data.attributes.external_id",
+              "description": "The id this person carries in the calling system — an order-system customer id, say. Counts as an identifier, and is the one that lets a later call find this profile without holding an email address",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "first_name",
+              "in": "body",
+              "wire": "data.attributes.first_name",
+              "description": "Given name, as it should appear in a message greeting",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "last_name",
+              "in": "body",
+              "wire": "data.attributes.last_name",
+              "description": "Family name",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "organization",
+              "in": "body",
+              "wire": "data.attributes.organization",
+              "description": "The company this person belongs to",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "title",
+              "in": "body",
+              "wire": "data.attributes.title",
+              "description": "Job title",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "email": {
+                "format": "email",
+                "type": "string"
+              },
+              "external_id": {
+                "type": "string"
+              },
+              "first_name": {
+                "type": "string"
+              },
+              "last_name": {
+                "type": "string"
+              },
+              "organization": {
+                "type": "string"
+              },
+              "phone_number": {
+                "type": "string"
+              },
+              "resource_type": {
+                "const": "profile",
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "resource_type"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "data": {
+                "properties": {
+                  "attributes": {
+                    "properties": {
+                      "created": {
+                        "description": "When Klaviyo created the profile, in UTC",
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "email": {
+                        "description": "Echoes the address that was sent",
+                        "format": "email",
+                        "type": "string"
+                      },
+                      "external_id": {
+                        "type": "string"
+                      },
+                      "first_name": {
+                        "type": "string"
+                      },
+                      "last_event_date": {
+                        "description": "Null on a profile just created: it has done nothing yet",
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "last_name": {
+                        "type": "string"
+                      },
+                      "locale": {
+                        "type": "string"
+                      },
+                      "location": {
+                        "description": "Empty on a profile created by this operation, which sends no location",
+                        "type": "object"
+                      },
+                      "organization": {
+                        "type": "string"
+                      },
+                      "phone_number": {
+                        "type": "string"
+                      },
+                      "properties": {
+                        "description": "Empty unless the account has default properties",
+                        "type": "object"
+                      },
+                      "subscriptions": {
+                        "description": "**Not subscribed.** Creating a profile grants no marketing consent; the subscription endpoints this connector does not ship are what change this",
+                        "type": "object"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "updated": {
+                        "format": "date-time",
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "id": {
+                    "description": "The created profile's id — what klaviyo-profile-get reads back, and the only handle on it",
+                    "type": "string"
+                  },
+                  "links": {
+                    "type": "object"
+                  },
+                  "relationships": {
+                    "type": "object"
+                  },
+                  "type": {
+                    "const": "profile"
+                  }
+                },
+                "required": [
+                  "type",
+                  "id",
+                  "attributes"
+                ],
+                "type": "object"
+              },
+              "links": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "klaviyo.api_key"
+            ]
+          ],
+          "hosts": [
+            "a.klaviyo.com"
+          ],
+          "flux": "op klaviyo-profile-create(email: String, phone_number: String, external_id: String, first_name: String, last_name: String, organization: String, title: String) -> Any\n  description \"Create a customer profile. At least one identifier is required — email, phone number or external id — and Klaviyo answers 409 Conflict if a profile with that identifier already exists, so this creates and never updates. The created profile can be marketed to only once it is subscribed, which this connector does not do\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://a.klaviyo.com/api\"\n  url = fmt(\"{base}/profiles\")\n  content_type = \"application/json\"\n  revision = \"2026-07-15\"\n  resource_type = \"profile\"\n  payload = { data: { attributes: { email, external_id, first_name, last_name, organization, phone_number, title }, type: resource_type } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type, revision }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "klaviyo-list-list",
+          "provider": "klaviyo",
+          "service": "default",
+          "description": "List the account's lists — static, opt-in collections of profiles, as opposed to segments, which are live queries and are not shipped here. Returns the FIRST PAGE ONLY; Klaviyo's `page[cursor]` query parameter cannot be sent by this connector. Returns the lists themselves, not their members",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/lists",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "data": {
+                "description": "One entry per list, first page only",
+                "items": {
+                  "properties": {
+                    "attributes": {
+                      "properties": {
+                        "created": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "The list's name, as the account's marketers see it",
+                          "type": "string"
+                        },
+                        "opt_in_process": {
+                          "description": "How a profile joins: `single_opt_in`, or `double_opt_in` where Klaviyo sends a confirmation message first. A flow that adds members has to respect this, and this connector does not add members",
+                          "type": "string"
+                        },
+                        "updated": {
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
+                    },
+                    "id": {
+                      "description": "The list's id, a six-character code. This is what Klaviyo's own UI shows in a list URL",
+                      "type": "string"
+                    },
+                    "links": {
+                      "type": "object"
+                    },
+                    "relationships": {
+                      "description": "Relationship links for `profiles`, `tags` and `flow-triggers`. Links only — nothing is expanded, and the profiles endpoint behind the first is deliberately not shipped",
+                      "type": "object"
+                    },
+                    "type": {
+                      "const": "list"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "id",
+                    "attributes"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "links": {
+                "description": "`self`, plus `next`/`prev` when more pages exist. `next` is unusable here (C-30)",
+                "type": "object"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "klaviyo.api_key"
+            ]
+          ],
+          "hosts": [
+            "a.klaviyo.com"
+          ],
+          "flux": "op klaviyo-list-list -> Any\n  description \"List the account's lists — static, opt-in collections of profiles, as opposed to segments, which are live queries and are not shipped here. Returns the FIRST PAGE ONLY; Klaviyo's `page[cursor]` query parameter cannot be sent by this connector. Returns the lists themselves, not their members\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://a.klaviyo.com/api\"\n  url = fmt(\"{base}/lists\")\n  revision = \"2026-07-15\"\n  response = http.request(headers: { revision }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "klaviyo-event-create",
+          "provider": "klaviyo",
+          "service": "default",
+          "description": "Post an event about a customer — a purchase, a page view, anything the account measures. THIS CAN CAUSE A MESSAGE TO BE SENT: an event triggers any Klaviyo flow built on its metric, so an email or SMS may reach the named profile immediately. Klaviyo creates the metric and the profile on first use if they do not exist. Answers 202 Accepted with no body: the event is queued, not confirmed. Pass unique_id to make a retry safe — Klaviyo records only the first event with a given unique_id for the same profile and metric",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/events",
+          "parameters": [
+            {
+              "name": "resource_type",
+              "in": "body",
+              "wire": "data.type",
+              "description": "Constant event — Klaviyo's JSON:API resource type for this endpoint, which has no other correct value",
+              "required": true,
+              "schema": {
+                "const": "event",
+                "type": "string"
+              }
+            },
+            {
+              "name": "metric_type",
+              "in": "body",
+              "wire": "data.attributes.metric.data.type",
+              "description": "Constant metric — the resource type of the nested metric object, which has no other correct value",
+              "required": true,
+              "schema": {
+                "const": "metric",
+                "type": "string"
+              }
+            },
+            {
+              "name": "metric_name",
+              "in": "body",
+              "wire": "data.attributes.metric.data.attributes.name",
+              "description": "What happened, as the account's marketers name it — `Placed Order`, `Viewed Product`. Klaviyo creates the metric on first use, so a typo silently creates a second metric nobody has built a flow on rather than failing",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "profile_type",
+              "in": "body",
+              "wire": "data.attributes.profile.data.type",
+              "description": "Constant profile — the resource type of the nested profile object, which has no other correct value",
+              "required": true,
+              "schema": {
+                "const": "profile",
+                "type": "string"
+              }
+            },
+            {
+              "name": "profile_email",
+              "in": "body",
+              "wire": "data.attributes.profile.data.attributes.email",
+              "description": "The email address of the person this event is about. Klaviyo matches an existing profile on it and creates one if there is none, so an address typed wrongly creates a new profile rather than failing. Personal data",
+              "required": true,
+              "schema": {
+                "format": "email",
+                "type": "string"
+              }
+            },
+            {
+              "name": "properties",
+              "in": "body",
+              "wire": "data.attributes.properties",
+              "description": "The event's own detail, as a JSON object — order id, product names, values. Keys are whatever the account's flows and reports expect; Klaviyo imposes no shape. Pass an empty object when there is nothing to say",
+              "required": true,
+              "schema": {
+                "type": "object"
+              }
+            },
+            {
+              "name": "value",
+              "in": "body",
+              "wire": "data.attributes.value",
+              "description": "The monetary value of the event, as a number, for revenue reporting. Omit it on an event that is not worth money",
+              "required": false,
+              "schema": {
+                "type": "number"
+              }
+            },
+            {
+              "name": "value_currency",
+              "in": "body",
+              "wire": "data.attributes.value_currency",
+              "description": "ISO 4217 code for `value`, e.g. EUR. Klaviyo converts to the account's preferred currency; omitting it means the account's own currency is assumed",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "unique_id",
+              "in": "body",
+              "wire": "data.attributes.unique_id",
+              "description": "A caller-chosen id that makes this event's delivery safe to retry: Klaviyo records only the first event with a given unique_id for the same profile and metric. Omitting it means a retry posts a second event and may trigger a second message",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "metric_name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "metric_type": {
+                "const": "metric",
+                "type": "string"
+              },
+              "profile_email": {
+                "format": "email",
+                "type": "string"
+              },
+              "profile_type": {
+                "const": "profile",
+                "type": "string"
+              },
+              "properties": {
+                "type": "object"
+              },
+              "resource_type": {
+                "const": "event",
+                "type": "string"
+              },
+              "unique_id": {
+                "type": "string"
+              },
+              "value": {
+                "type": "number"
+              },
+              "value_currency": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "resource_type",
+              "metric_type",
+              "metric_name",
+              "profile_type",
+              "profile_email",
+              "properties"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "klaviyo.api_key"
+            ]
+          ],
+          "hosts": [
+            "a.klaviyo.com"
+          ],
+          "flux": "op klaviyo-event-create(metric_name: String, profile_email: String, properties: Any, value: Number, value_currency: String, unique_id: String) -> Any\n  description \"Post an event about a customer — a purchase, a page view, anything the account measures. THIS CAN CAUSE A MESSAGE TO BE SENT: an event triggers any Klaviyo flow built on its metric, so an email or SMS may reach the named profile immediately. Klaviyo creates the metric and the profile on first use if they do not exist. Answers 202 Accepted with no body: the event is queued, not confirmed. Pass unique_id to make a retry safe — Klaviyo records only the first event with a given unique_id for the same profile and metric\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://a.klaviyo.com/api\"\n  url = fmt(\"{base}/events\")\n  content_type = \"application/json\"\n  revision = \"2026-07-15\"\n  resource_type = \"event\"\n  metric_type = \"metric\"\n  profile_type = \"profile\"\n  payload = { data: { attributes: { metric: { data: { attributes: { name: metric_name }, type: metric_type } }, profile: { data: { attributes: { email: profile_email }, type: profile_type } }, properties, unique_id, value, value_currency }, type: resource_type } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type, revision }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "launchdarkly",
       "authority": "com.launchdarkly.api",
       "vendor": "LaunchDarkly",
@@ -19190,6 +20177,1110 @@
                 "scope": "catalog",
                 "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
+              }
+            ],
+            "notes": []
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
+      "id": "mailchimp",
+      "authority": "com.mailchimp.api",
+      "vendor": "Mailchimp",
+      "description": "Mailchimp Marketing API: check connectivity, read audiences and their contacts, add or update a contact, and list campaigns. Authenticates with a single API key sent as a bearer token, against a host whose datacentre label the operator supplies",
+      "base_url": "https://{dc}.api.mailchimp.com/3.0",
+      "api_version": "3.0",
+      "hosts": [
+        "{dc}.api.mailchimp.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://{dc}.api.mailchimp.com/3.0",
+          "hosts": [
+            "{dc}.api.mailchimp.com"
+          ],
+          "api_version": "3.0",
+          "gid": "com.mailchimp.api:3.0",
+          "operation_count": 7
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "mailchimp.api_key",
+            "scheme": {
+              "kind": "bearer",
+              "name": null,
+              "prefix": "Bearer "
+            },
+            "description": "Mailchimp Marketing API key, granting whatever the account that issued it can do. Travels as `Authorization: Bearer <key>`, the alternative Mailchimp documents beside its Basic form. The key's trailing `-us14`-style suffix names the account's datacentre; that value is asked for separately as configuration and is never read back out of this credential",
+            "env": [
+              "MAILCHIMP_API_KEY"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "mailchimp.api_key"
+          ]
+        ]
+      },
+      "operation_count": 7,
+      "operations": [
+        {
+          "id": "mailchimp-ping",
+          "provider": "mailchimp",
+          "service": "default",
+          "description": "Check that the API is reachable and the credential works. Takes no argument and returns no account data — Mailchimp calls it a health check that returns nothing account-specific. Also this connector's `verify`: it is the one call that proves both halves of the configuration at once, because a wrong key and a wrong datacentre label both fail it",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/ping",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "health_status": {
+                "description": "Mailchimp's fixed cheerful string when everything is working. Its presence is the signal; its wording is not a contract and must not be matched on",
+                "type": "string"
+              }
+            },
+            "required": [
+              "health_status"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "mailchimp.api_key"
+            ]
+          ],
+          "hosts": [
+            "{dc}.api.mailchimp.com"
+          ],
+          "flux": "op mailchimp-ping -> Any\n  description \"Check that the API is reachable and the credential works. Takes no argument and returns no account data — Mailchimp calls it a health check that returns nothing account-specific. Also this connector's `verify`: it is the one call that proves both halves of the configuration at once, because a wrong key and a wrong datacentre label both fail it\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{dc}.api.mailchimp.com/3.0\"\n  url = fmt(\"{base}/ping\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {dc} value before it has a valid destination URL.",
+                "params": [
+                  "dc"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "mailchimp-audience-list",
+          "provider": "mailchimp",
+          "service": "default",
+          "description": "List the audiences in the account, with the id every contact operation takes. Returns Mailchimp's default first page only — this connector declares no paging parameters, so compare the number of entries against `total_items` before treating the result as complete",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/lists",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "lists": {
+                "description": "The audiences on this page",
+                "items": {
+                  "properties": {
+                    "campaign_defaults": {
+                      "description": "Default from-name, from-address, subject and language for campaigns sent to this audience. Left untyped rather than enumerated",
+                      "type": "object"
+                    },
+                    "contact": {
+                      "description": "The physical mailing address printed in campaign footers, required by anti-spam law. Left untyped rather than enumerated",
+                      "type": "object"
+                    },
+                    "date_created": {
+                      "description": "When the audience was created",
+                      "type": "string"
+                    },
+                    "email_type_option": {
+                      "description": "Whether contacts may choose plain-text or HTML",
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "description": "The audience id — what every operation below calls `list_id`",
+                      "type": "string"
+                    },
+                    "list_rating": {
+                      "description": "Mailchimp's own 0-5 engagement rating for the audience",
+                      "type": "integer"
+                    },
+                    "name": {
+                      "description": "The audience name, as it reads in the UI",
+                      "type": "string"
+                    },
+                    "permission_reminder": {
+                      "description": "The line Mailchimp prints in every campaign reminding a contact why they are receiving it",
+                      "type": "string"
+                    },
+                    "stats": {
+                      "description": "Member counts and engagement averages. Left untyped rather than enumerated in full; `member_count` is the field most callers want",
+                      "type": "object"
+                    },
+                    "subscribe_url_long": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "subscribe_url_short": {
+                      "description": "The audience's hosted signup form — a link to give a human",
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "visibility": {
+                      "description": "`pub` or `prv` — whether the audience is listed publicly",
+                      "type": "string"
+                    },
+                    "web_id": {
+                      "description": "The id in Mailchimp's own web UI, which is not the API id",
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "total_items": {
+                "description": "How many audiences exist in total, which is how a caller sees that this page is a prefix",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "lists",
+              "total_items"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "mailchimp.api_key"
+            ]
+          ],
+          "hosts": [
+            "{dc}.api.mailchimp.com"
+          ],
+          "flux": "op mailchimp-audience-list -> Any\n  description \"List the audiences in the account, with the id every contact operation takes. Returns Mailchimp's default first page only — this connector declares no paging parameters, so compare the number of entries against `total_items` before treating the result as complete\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{dc}.api.mailchimp.com/3.0\"\n  url = fmt(\"{base}/lists\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {dc} value before it has a valid destination URL.",
+                "params": [
+                  "dc"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "mailchimp-audience-get",
+          "provider": "mailchimp",
+          "service": "default",
+          "description": "Get one audience by id, with its settings and current member counts",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/lists/{list_id}",
+          "parameters": [
+            {
+              "name": "list_id",
+              "in": "path",
+              "wire": null,
+              "description": "The audience id, from mailchimp-audience-list's `id`. Not the `web_id` shown in Mailchimp's own UI",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "list_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "list_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "campaign_defaults": {
+                "description": "Default from-name, from-address, subject and language for campaigns sent to this audience. Left untyped rather than enumerated",
+                "type": "object"
+              },
+              "contact": {
+                "description": "The physical mailing address printed in campaign footers, required by anti-spam law. Left untyped rather than enumerated",
+                "type": "object"
+              },
+              "date_created": {
+                "description": "When the audience was created",
+                "type": "string"
+              },
+              "email_type_option": {
+                "description": "Whether contacts may choose plain-text or HTML",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The audience id",
+                "type": "string"
+              },
+              "list_rating": {
+                "description": "Mailchimp's own 0-5 engagement rating for the audience",
+                "type": "integer"
+              },
+              "name": {
+                "description": "The audience name, as it reads in the UI",
+                "type": "string"
+              },
+              "permission_reminder": {
+                "description": "The line Mailchimp prints in every campaign reminding a contact why they are receiving it",
+                "type": "string"
+              },
+              "stats": {
+                "description": "Member counts and engagement averages. Left untyped rather than enumerated in full; `member_count` is the field most callers want",
+                "type": "object"
+              },
+              "subscribe_url_long": {
+                "format": "uri",
+                "type": "string"
+              },
+              "subscribe_url_short": {
+                "description": "The audience's hosted signup form — a link to give a human",
+                "format": "uri",
+                "type": "string"
+              },
+              "visibility": {
+                "description": "`pub` or `prv` — whether the audience is listed publicly",
+                "type": "string"
+              },
+              "web_id": {
+                "description": "The id in Mailchimp's own web UI, which is not the API id",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "mailchimp.api_key"
+            ]
+          ],
+          "hosts": [
+            "{dc}.api.mailchimp.com"
+          ],
+          "flux": "op mailchimp-audience-get(list_id: String) -> Any\n  description \"Get one audience by id, with its settings and current member counts\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{dc}.api.mailchimp.com/3.0\"\n  url = fmt(\"{base}/lists/{list_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {dc} value before it has a valid destination URL.",
+                "params": [
+                  "dc"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "mailchimp-audience-member-list",
+          "provider": "mailchimp",
+          "service": "default",
+          "description": "List the contacts in an audience, subscribed and unsubscribed alike. Returns Mailchimp's default first page only — this connector declares no paging or status filter, so compare the number of entries against `total_items` before treating the result as complete. Every entry is personal data",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/lists/{list_id}/members",
+          "parameters": [
+            {
+              "name": "list_id",
+              "in": "path",
+              "wire": null,
+              "description": "The audience id, from mailchimp-audience-list's `id`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "list_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "list_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "list_id": {
+                "description": "The audience that was read",
+                "type": "string"
+              },
+              "members": {
+                "description": "The contacts on this page. Personal data: addresses, names and signup IPs",
+                "items": {
+                  "properties": {
+                    "contact_id": {
+                      "description": "Mailchimp's newer per-contact identifier",
+                      "type": "string"
+                    },
+                    "email_address": {
+                      "description": "The contact's address. Personal data",
+                      "type": "string"
+                    },
+                    "email_type": {
+                      "description": "`html` or `text`",
+                      "type": "string"
+                    },
+                    "full_name": {
+                      "description": "The contact's name, if the account collects one. Personal data",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "The MD5 hash of the lowercase email address — this is the `subscriber_hash` the contact operations take, so a caller that has read a contact never has to compute one",
+                      "type": "string"
+                    },
+                    "interests": {
+                      "description": "Interest-group membership, keyed by group id. Left untyped rather than enumerated",
+                      "type": "object"
+                    },
+                    "ip_opt": {
+                      "description": "The IP the contact confirmed opt-in from. Personal data",
+                      "type": "string"
+                    },
+                    "ip_signup": {
+                      "description": "The IP the contact signed up from. Personal data; read it only if the flow genuinely needs it",
+                      "type": "string"
+                    },
+                    "language": {
+                      "type": "string"
+                    },
+                    "last_changed": {
+                      "description": "When this contact record last changed",
+                      "type": "string"
+                    },
+                    "list_id": {
+                      "description": "The audience this contact belongs to",
+                      "type": "string"
+                    },
+                    "location": {
+                      "description": "Approximate latitude, longitude and timezone. Left untyped rather than enumerated",
+                      "type": "object"
+                    },
+                    "member_rating": {
+                      "description": "Mailchimp's 1-5 engagement rating for this contact",
+                      "type": "integer"
+                    },
+                    "merge_fields": {
+                      "description": "The account's own merge tags and their values — FNAME, LNAME and whatever else the operator configured. Account-defined, so left untyped rather than enumerated. Frequently personal data",
+                      "type": "object"
+                    },
+                    "stats": {
+                      "description": "Open and click rates for this contact. Left untyped rather than enumerated",
+                      "type": "object"
+                    },
+                    "status": {
+                      "description": "`subscribed`, `unsubscribed`, `cleaned`, `pending`, `transactional` or `archived`. `cleaned` means Mailchimp stopped sending after hard bounces",
+                      "type": "string"
+                    },
+                    "tags": {
+                      "description": "The tags applied to this contact. Left untyped rather than enumerated",
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "timestamp_opt": {
+                      "description": "When the contact confirmed opt-in — the record that a double opt-in happened",
+                      "type": "string"
+                    },
+                    "timestamp_signup": {
+                      "type": "string"
+                    },
+                    "unique_email_id": {
+                      "description": "A stable id for the address across the account",
+                      "type": "string"
+                    },
+                    "vip": {
+                      "type": "boolean"
+                    },
+                    "web_id": {
+                      "description": "The id in Mailchimp's own web UI",
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "email_address",
+                    "status"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "total_items": {
+                "description": "How many contacts the audience holds in total, which is how a caller sees that this page is a prefix",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "members",
+              "list_id",
+              "total_items"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "mailchimp.api_key"
+            ]
+          ],
+          "hosts": [
+            "{dc}.api.mailchimp.com"
+          ],
+          "flux": "op mailchimp-audience-member-list(list_id: String) -> Any\n  description \"List the contacts in an audience, subscribed and unsubscribed alike. Returns Mailchimp's default first page only — this connector declares no paging or status filter, so compare the number of entries against `total_items` before treating the result as complete. Every entry is personal data\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{dc}.api.mailchimp.com/3.0\"\n  url = fmt(\"{base}/lists/{list_id}/members\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {dc} value before it has a valid destination URL.",
+                "params": [
+                  "dc"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "mailchimp-audience-member-get",
+          "provider": "mailchimp",
+          "service": "default",
+          "description": "Get one contact in an audience, including its subscription status and opt-in record. The contact is addressed by a hash of its own address, not by the address — see `subscriber_hash`. Returns personal data",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/lists/{list_id}/members/{subscriber_hash}",
+          "parameters": [
+            {
+              "name": "list_id",
+              "in": "path",
+              "wire": null,
+              "description": "The audience id, from mailchimp-audience-list's `id`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "subscriber_hash",
+              "in": "path",
+              "wire": null,
+              "description": "The MD5 hash of the contact's email address, lowercased first — Mailchimp's own addressing scheme for contacts. It is NOT the email address, and passing one answers 404. Compute it caller-side, or read it from mailchimp-audience-member-list, where it is each contact's `id`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "list_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "subscriber_hash": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "list_id",
+              "subscriber_hash"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "contact_id": {
+                "description": "Mailchimp's newer per-contact identifier",
+                "type": "string"
+              },
+              "email_address": {
+                "description": "The contact's address. Personal data",
+                "type": "string"
+              },
+              "email_type": {
+                "description": "`html` or `text`",
+                "type": "string"
+              },
+              "full_name": {
+                "description": "The contact's name, if the account collects one. Personal data",
+                "type": "string"
+              },
+              "id": {
+                "description": "The MD5 hash of the lowercase email address — the `subscriber_hash` this operation and the upsert take",
+                "type": "string"
+              },
+              "interests": {
+                "description": "Interest-group membership, keyed by group id. Left untyped rather than enumerated",
+                "type": "object"
+              },
+              "ip_opt": {
+                "description": "The IP the contact confirmed opt-in from. Personal data",
+                "type": "string"
+              },
+              "ip_signup": {
+                "description": "The IP the contact signed up from. Personal data; read it only if the flow genuinely needs it",
+                "type": "string"
+              },
+              "language": {
+                "type": "string"
+              },
+              "last_changed": {
+                "description": "When this contact record last changed",
+                "type": "string"
+              },
+              "list_id": {
+                "description": "The audience this contact belongs to",
+                "type": "string"
+              },
+              "location": {
+                "description": "Approximate latitude, longitude and timezone. Left untyped rather than enumerated",
+                "type": "object"
+              },
+              "member_rating": {
+                "description": "Mailchimp's 1-5 engagement rating for this contact",
+                "type": "integer"
+              },
+              "merge_fields": {
+                "description": "The account's own merge tags and their values. Account-defined, so left untyped rather than enumerated. Frequently personal data",
+                "type": "object"
+              },
+              "stats": {
+                "description": "Open and click rates for this contact. Left untyped rather than enumerated",
+                "type": "object"
+              },
+              "status": {
+                "description": "`subscribed`, `unsubscribed`, `cleaned`, `pending`, `transactional` or `archived`. `cleaned` means Mailchimp stopped sending after hard bounces",
+                "type": "string"
+              },
+              "tags": {
+                "description": "The tags applied to this contact. Left untyped rather than enumerated",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "timestamp_opt": {
+                "description": "When the contact confirmed opt-in — the record that a double opt-in happened",
+                "type": "string"
+              },
+              "timestamp_signup": {
+                "type": "string"
+              },
+              "unique_email_id": {
+                "description": "A stable id for the address across the account",
+                "type": "string"
+              },
+              "vip": {
+                "type": "boolean"
+              },
+              "web_id": {
+                "description": "The id in Mailchimp's own web UI",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "email_address",
+              "status",
+              "list_id"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "mailchimp.api_key"
+            ]
+          ],
+          "hosts": [
+            "{dc}.api.mailchimp.com"
+          ],
+          "flux": "op mailchimp-audience-member-get(list_id: String, subscriber_hash: String) -> Any\n  description \"Get one contact in an audience, including its subscription status and opt-in record. The contact is addressed by a hash of its own address, not by the address — see `subscriber_hash`. Returns personal data\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{dc}.api.mailchimp.com/3.0\"\n  url = fmt(\"{base}/lists/{list_id}/members/{subscriber_hash}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {dc} value before it has a valid destination URL.",
+                "params": [
+                  "dc"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "mailchimp-audience-member-upsert",
+          "provider": "mailchimp",
+          "service": "default",
+          "description": "Add a contact to an audience, or update the one already there. Creating with `status_if_new = \"pending\"` makes Mailchimp send its own opt-in confirmation and record the consent; creating with \"subscribed\" asserts that the account already holds that consent and sends nothing. Setting `status` on an existing contact changes whether they receive mail. This writes personal data about a third party and is not undone by calling it again",
+          "risk": "high",
+          "idempotency": "idempotent",
+          "method": "PUT",
+          "path": "/lists/{list_id}/members/{subscriber_hash}",
+          "parameters": [
+            {
+              "name": "list_id",
+              "in": "path",
+              "wire": null,
+              "description": "The audience id, from mailchimp-audience-list's `id`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "subscriber_hash",
+              "in": "path",
+              "wire": null,
+              "description": "The MD5 hash of the contact's email address, lowercased first. It is NOT the email address. Compute it caller-side from the same address passed as `email_address`, or read it from mailchimp-audience-member-list, where it is each contact's `id`. A hash that does not match `email_address` addresses a different contact",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "email_address",
+              "in": "body",
+              "wire": null,
+              "description": "The contact's email address. Must be the address `subscriber_hash` was computed from — Mailchimp addresses the record by the hash and takes this as the address to store",
+              "required": true,
+              "schema": {
+                "format": "email",
+                "type": "string"
+              }
+            },
+            {
+              "name": "status_if_new",
+              "in": "body",
+              "wire": null,
+              "description": "The status to give a contact this call creates; ignored when the contact already exists. \"pending\" makes Mailchimp send its own opt-in confirmation email and record the consent, and is the correct value unless the account already holds documented consent for this address; \"subscribed\" asserts that it does and sends nothing",
+              "required": true,
+              "schema": {
+                "enum": [
+                  "subscribed",
+                  "unsubscribed",
+                  "cleaned",
+                  "pending"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "status",
+              "in": "body",
+              "wire": null,
+              "description": "The status to set on a contact that already exists. \"unsubscribed\" stops mail to them; \"subscribed\" resumes it and carries the same consent obligation as creating one. \"cleaned\" is Mailchimp's own marker for an address it gave up on and is not a value to set by hand",
+              "required": false,
+              "schema": {
+                "enum": [
+                  "subscribed",
+                  "unsubscribed",
+                  "cleaned",
+                  "pending"
+                ],
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "email_address": {
+                "format": "email",
+                "type": "string"
+              },
+              "list_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "subscribed",
+                  "unsubscribed",
+                  "cleaned",
+                  "pending"
+                ],
+                "type": "string"
+              },
+              "status_if_new": {
+                "enum": [
+                  "subscribed",
+                  "unsubscribed",
+                  "cleaned",
+                  "pending"
+                ],
+                "type": "string"
+              },
+              "subscriber_hash": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "list_id",
+              "subscriber_hash",
+              "email_address",
+              "status_if_new"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "contact_id": {
+                "description": "Mailchimp's newer per-contact identifier",
+                "type": "string"
+              },
+              "email_address": {
+                "description": "The contact's address as stored. Personal data",
+                "type": "string"
+              },
+              "email_type": {
+                "description": "`html` or `text`",
+                "type": "string"
+              },
+              "full_name": {
+                "description": "The contact's name, if the account collects one. Personal data",
+                "type": "string"
+              },
+              "id": {
+                "description": "The MD5 hash of the lowercase email address — echo it back to confirm the call addressed the contact it meant to",
+                "type": "string"
+              },
+              "interests": {
+                "description": "Interest-group membership, keyed by group id. Left untyped rather than enumerated",
+                "type": "object"
+              },
+              "ip_opt": {
+                "description": "The IP the contact confirmed opt-in from. Personal data",
+                "type": "string"
+              },
+              "ip_signup": {
+                "description": "The IP the contact signed up from. Personal data",
+                "type": "string"
+              },
+              "language": {
+                "type": "string"
+              },
+              "last_changed": {
+                "description": "When this contact record last changed, which this call has just set",
+                "type": "string"
+              },
+              "list_id": {
+                "description": "The audience the contact was written to",
+                "type": "string"
+              },
+              "location": {
+                "description": "Approximate latitude, longitude and timezone. Left untyped rather than enumerated",
+                "type": "object"
+              },
+              "member_rating": {
+                "type": "integer"
+              },
+              "merge_fields": {
+                "description": "The account's own merge tags and their values. Account-defined, so left untyped rather than enumerated",
+                "type": "object"
+              },
+              "stats": {
+                "description": "Open and click rates for this contact. Left untyped rather than enumerated",
+                "type": "object"
+              },
+              "status": {
+                "description": "The contact's status after this call — `pending` means Mailchimp has sent a confirmation and is waiting for the person to answer it, so the write is not yet a subscription",
+                "type": "string"
+              },
+              "tags": {
+                "description": "The tags applied to this contact. Left untyped rather than enumerated",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "timestamp_opt": {
+                "description": "When the contact confirmed opt-in — the consent record this call may have just created",
+                "type": "string"
+              },
+              "timestamp_signup": {
+                "type": "string"
+              },
+              "unique_email_id": {
+                "type": "string"
+              },
+              "vip": {
+                "type": "boolean"
+              },
+              "web_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "email_address",
+              "status",
+              "list_id"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "mailchimp.api_key"
+            ]
+          ],
+          "hosts": [
+            "{dc}.api.mailchimp.com"
+          ],
+          "flux": "op mailchimp-audience-member-upsert(list_id: String, subscriber_hash: String, email_address: String, status_if_new: String, status: String) -> Any\n  description \"Add a contact to an audience, or update the one already there. Creating with `status_if_new = \\\"pending\\\"` makes Mailchimp send its own opt-in confirmation and record the consent; creating with \\\"subscribed\\\" asserts that the account already holds that consent and sends nothing. Setting `status` on an existing contact changes whether they receive mail. This writes personal data about a third party and is not undone by calling it again\"\n  risk \"high\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{dc}.api.mailchimp.com/3.0\"\n  url = fmt(\"{base}/lists/{list_id}/members/{subscriber_hash}\")\n  content_type = \"application/json\"\n  payload = { email_address, status, status_if_new }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {dc} value before it has a valid destination URL.",
+                "params": [
+                  "dc"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "mailchimp-campaign-list",
+          "provider": "mailchimp",
+          "service": "default",
+          "description": "List the campaigns in the account — drafts, scheduled, sending and sent alike. Returns Mailchimp's default first page only, and this connector declares no status or date filter, so compare the number of entries against `total_items` before treating the result as complete",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/campaigns",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "campaigns": {
+                "description": "The campaigns on this page",
+                "items": {
+                  "properties": {
+                    "archive_url": {
+                      "description": "The campaign's public archive page — a link to give a human",
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "content_type": {
+                      "description": "How the campaign's content was authored — `template`, `html` or `multichannel`",
+                      "type": "string"
+                    },
+                    "create_time": {
+                      "description": "When the campaign was created",
+                      "type": "string"
+                    },
+                    "emails_sent": {
+                      "description": "How many emails this campaign has delivered so far",
+                      "type": "integer"
+                    },
+                    "id": {
+                      "description": "The campaign id",
+                      "type": "string"
+                    },
+                    "long_archive_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "recipients": {
+                      "description": "The audience and segment this campaign targets; `list_id` and `recipient_count` are the fields most callers want. Left untyped rather than enumerated in full",
+                      "type": "object"
+                    },
+                    "report_summary": {
+                      "description": "Headline delivery statistics for a sent campaign — opens, clicks, unique rates. Absent on a campaign that has not been sent. Left untyped rather than enumerated",
+                      "type": "object"
+                    },
+                    "send_time": {
+                      "description": "When it was sent, or absent if it has not been",
+                      "type": "string"
+                    },
+                    "settings": {
+                      "description": "Subject line, title, from-name, reply-to and authoring options. Left untyped rather than enumerated in full",
+                      "type": "object"
+                    },
+                    "status": {
+                      "description": "`save`, `paused`, `schedule`, `sending` or `sent` — a draft and a delivered campaign are told apart here",
+                      "type": "string"
+                    },
+                    "tracking": {
+                      "description": "Which opens, clicks and third-party analytics this campaign records. Left untyped rather than enumerated",
+                      "type": "object"
+                    },
+                    "type": {
+                      "description": "`regular`, `plaintext`, `absplit`, `rss` or `variate`",
+                      "type": "string"
+                    },
+                    "web_id": {
+                      "description": "The id in Mailchimp's own web UI",
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "status"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "total_items": {
+                "description": "How many campaigns exist in total, which is how a caller sees that this page is a prefix",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "campaigns",
+              "total_items"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "mailchimp.api_key"
+            ]
+          ],
+          "hosts": [
+            "{dc}.api.mailchimp.com"
+          ],
+          "flux": "op mailchimp-campaign-list -> Any\n  description \"List the campaigns in the account — drafts, scheduled, sending and sent alike. Returns Mailchimp's default first page only, and this connector declares no status or date filter, so compare the number of entries against `total_items` before treating the result as complete\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{dc}.api.mailchimp.com/3.0\"\n  url = fmt(\"{base}/campaigns\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {dc} value before it has a valid destination URL.",
+                "params": [
+                  "dc"
+                ]
               }
             ],
             "notes": []
@@ -25511,6 +27602,608 @@
       "channels": []
     },
     {
+      "id": "resend",
+      "authority": "com.resend.api",
+      "vendor": "Resend",
+      "description": "Resend transactional email: send a message, read what happened to it, and list or inspect the domains a key may send from",
+      "base_url": "https://api.resend.com",
+      "api_version": null,
+      "hosts": [
+        "api.resend.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.resend.com",
+          "hosts": [
+            "api.resend.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 4
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "resend.api_key",
+            "scheme": {
+              "kind": "bearer",
+              "name": null,
+              "prefix": "Bearer "
+            },
+            "description": "Resend API key, sent as a bearer token on every request. Minted in the Resend dashboard and scoped there to full access or sending only; this repository holds the reference, never the value",
+            "env": [
+              "RESEND_API_KEY"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "resend.api_key"
+          ]
+        ]
+      },
+      "operation_count": 4,
+      "operations": [
+        {
+          "id": "resend-email-send",
+          "provider": "resend",
+          "service": "default",
+          "description": "Send one email immediately. Delivered within seconds and cannot be recalled once accepted. The sending domain must already be verified on this account — resend-domain-list names the ones that are",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/emails",
+          "parameters": [
+            {
+              "name": "from",
+              "in": "body",
+              "wire": null,
+              "description": "The sending address, on a domain verified for this account. Accepts a bare address, or `Name <address>` to attach a friendly name. The caller's own input, never an example value here",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "to",
+              "in": "body",
+              "wire": null,
+              "description": "Recipient address, or an array of up to 50 addresses. The caller's own input, never an example value here",
+              "required": true,
+              "schema": {
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 50,
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "subject",
+              "in": "body",
+              "wire": null,
+              "description": "The email's subject line",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "html",
+              "in": "body",
+              "wire": null,
+              "description": "The message body, as HTML. Resend generates the plain-text alternative from it, so a plain-text-only message is sent by putting the text here",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "from": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "html": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "subject": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "to": {
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 50,
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "from",
+              "to",
+              "subject",
+              "html"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "id": {
+                "description": "Resend's id for this message — the argument resend-email-get takes. The only field the send answers with",
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "resend.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.resend.com"
+          ],
+          "flux": "op resend-email-send(from: String, to: Any, subject: String, html: String) -> Any\n  description \"Send one email immediately. Delivered within seconds and cannot be recalled once accepted. The sending domain must already be verified on this account — resend-domain-list names the ones that are\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.resend.com\"\n  url = fmt(\"{base}/emails\")\n  content_type = \"application/json\"\n  User_Agent = \"flux-connectors\"\n  payload = { from, html, subject, to }\n  response = http.request(body: payload, headers: { \"User-Agent\": User_Agent, \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "resend-email-get",
+          "provider": "resend",
+          "service": "default",
+          "description": "Read one sent message and its current delivery state. This is how a flow learns whether a send bounced, was delivered, or is still queued",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/emails/{email_id}",
+          "parameters": [
+            {
+              "name": "email_id",
+              "in": "path",
+              "wire": null,
+              "description": "The message's id, from resend-email-send's response",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "email_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "email_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "bcc": {
+                "description": "Blind-copied recipients — personal data, never an example value",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "cc": {
+                "description": "Copied recipients — personal data, never an example value",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "created_at": {
+                "description": "When Resend accepted the message, as a space-separated UTC timestamp rather than strict RFC 3339",
+                "type": "string"
+              },
+              "from": {
+                "description": "The sending address used — never an example value",
+                "type": "string"
+              },
+              "html": {
+                "description": "The HTML body as sent",
+                "type": "string"
+              },
+              "id": {
+                "description": "The message's id, echoed back",
+                "format": "uuid",
+                "type": "string"
+              },
+              "last_event": {
+                "description": "The most recent delivery event: queued, scheduled, sent, delivered, delivery_delayed, complained, bounced, or canceled. This is the field a flow branches on",
+                "type": "string"
+              },
+              "message_id": {
+                "description": "The RFC 5322 Message-ID Resend assigned, for correlating with a recipient's own mail logs",
+                "type": "string"
+              },
+              "object": {
+                "const": "email"
+              },
+              "reply_to": {
+                "description": "Reply-To addresses — personal data, never an example value",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "scheduled_at": {
+                "description": "When a scheduled message is due, or null for an immediate send",
+                "type": "string"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "tags": {
+                "description": "The key/value metadata the send attached, if any",
+                "items": {
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "text": {
+                "description": "The plain-text alternative, or null when none was generated",
+                "type": "string"
+              },
+              "to": {
+                "description": "The recipients this message was sent to — personal data, never an example value",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "object",
+              "id",
+              "to",
+              "from",
+              "created_at",
+              "subject",
+              "last_event"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "resend.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.resend.com"
+          ],
+          "flux": "op resend-email-get(email_id: String) -> Any\n  description \"Read one sent message and its current delivery state. This is how a flow learns whether a send bounced, was delivered, or is still queued\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.resend.com\"\n  url = fmt(\"{base}/emails/{email_id}\")\n  User_Agent = \"flux-connectors\"\n  response = http.request(headers: { \"User-Agent\": User_Agent }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "resend-domain-list",
+          "provider": "resend",
+          "service": "default",
+          "description": "List every sending domain on this account with its verification status. Also this connector's `verify` — a bounded read that runs unattended and needs nothing configured beyond the credential",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/domains",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "data": {
+                "description": "One entry per sending domain",
+                "items": {
+                  "properties": {
+                    "capabilities": {
+                      "description": "Whether this domain may send and whether it may receive, each enabled or disabled",
+                      "type": "object"
+                    },
+                    "created_at": {
+                      "description": "As a space-separated UTC timestamp rather than strict RFC 3339",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "The domain's id — what resend-domain-get addresses it by",
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "The domain itself, as registered with Resend",
+                      "type": "string"
+                    },
+                    "region": {
+                      "description": "The sending region the domain was created in, e.g. us-east-1",
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "not_started, pending, verified, failed or temporary_failure. Only a verified domain may appear in a send's `from`",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "status",
+                    "created_at"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "has_more": {
+                "description": "Whether more domains exist beyond this page. This connector declares no cursor parameters, so it reads the unpaginated default, which returns every domain",
+                "type": "boolean"
+              },
+              "object": {
+                "const": "list"
+              }
+            },
+            "required": [
+              "object",
+              "data"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "resend.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.resend.com"
+          ],
+          "flux": "op resend-domain-list -> Any\n  description \"List every sending domain on this account with its verification status. Also this connector's `verify` — a bounded read that runs unattended and needs nothing configured beyond the credential\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.resend.com\"\n  url = fmt(\"{base}/domains\")\n  User_Agent = \"flux-connectors\"\n  response = http.request(headers: { \"User-Agent\": User_Agent }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "resend-domain-get",
+          "provider": "resend",
+          "service": "default",
+          "description": "Read one sending domain, including the DNS records it needs and the status of each. This is the diagnostic for a domain that will not verify, and therefore for a send refused with an invalid-from error",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/domains/{domain_id}",
+          "parameters": [
+            {
+              "name": "domain_id",
+              "in": "path",
+              "wire": null,
+              "description": "The domain's id, from resend-domain-list",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "domain_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "domain_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "capabilities": {
+                "description": "Whether this domain may send and whether it may receive, each enabled or disabled",
+                "type": "object"
+              },
+              "click_tracking": {
+                "description": "Whether Resend rewrites links to record clicks",
+                "type": "boolean"
+              },
+              "created_at": {
+                "description": "As a space-separated UTC timestamp rather than strict RFC 3339",
+                "type": "string"
+              },
+              "id": {
+                "description": "The domain's id",
+                "format": "uuid",
+                "type": "string"
+              },
+              "name": {
+                "description": "The domain itself, as registered with Resend",
+                "type": "string"
+              },
+              "object": {
+                "const": "domain"
+              },
+              "open_tracking": {
+                "description": "Whether Resend rewrites messages to record opens",
+                "type": "boolean"
+              },
+              "records": {
+                "description": "The DNS records this domain needs, each with its own verification status. A domain stuck at not_started is one whose records have not been published",
+                "items": {
+                  "properties": {
+                    "name": {
+                      "description": "The record's host name, relative to the domain",
+                      "type": "string"
+                    },
+                    "priority": {
+                      "description": "MX priority; absent on TXT and CNAME entries",
+                      "type": "integer"
+                    },
+                    "record": {
+                      "description": "Which mechanism the entry serves: SPF, DKIM or Tracking",
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "This individual record's verification state",
+                      "type": "string"
+                    },
+                    "ttl": {
+                      "description": "Resend states this as text, e.g. \"Auto\", not as a number of seconds",
+                      "type": "string"
+                    },
+                    "type": {
+                      "description": "The DNS record type: MX, TXT or CNAME",
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "The value to publish",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "record",
+                    "name",
+                    "type",
+                    "value",
+                    "status"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "region": {
+                "description": "The sending region the domain was created in, e.g. us-east-1",
+                "type": "string"
+              },
+              "status": {
+                "description": "not_started, pending, verified, failed or temporary_failure. Only a verified domain may appear in a send's `from`",
+                "type": "string"
+              },
+              "tracking_subdomain": {
+                "description": "The subdomain link tracking is served from, when click tracking is on",
+                "type": "string"
+              }
+            },
+            "required": [
+              "object",
+              "id",
+              "name",
+              "status",
+              "created_at"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "resend.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.resend.com"
+          ],
+          "flux": "op resend-domain-get(domain_id: String) -> Any\n  description \"Read one sending domain, including the DNS records it needs and the status of each. This is the diagnostic for a domain that will not verify, and therefore for a send refused with an invalid-from error\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.resend.com\"\n  url = fmt(\"{base}/domains/{domain_id}\")\n  User_Agent = \"flux-connectors\"\n  response = http.request(headers: { \"User-Agent\": User_Agent }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "salesforce",
       "authority": "com.salesforce.api",
       "vendor": "Salesforce",
@@ -30741,6 +33434,328 @@
           }
         }
       ],
+      "channels": []
+    },
+    {
+      "id": "supabase",
+      "authority": "com.supabase.api",
+      "vendor": "Supabase",
+      "description": "Supabase project data and configuration: describe the tables the API exposes, read a table's rows, and read which sign-in methods the project has enabled. Reads only, through the project's public anon key, so every row returned is bounded by the project's own row-level-security policies",
+      "base_url": "https://{project_ref}.supabase.co",
+      "api_version": "v1",
+      "hosts": [
+        "{project_ref}.supabase.co"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://{project_ref}.supabase.co",
+          "hosts": [
+            "{project_ref}.supabase.co"
+          ],
+          "api_version": "v1",
+          "gid": "com.supabase.api:v1",
+          "operation_count": 3
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "header"
+        ],
+        "credentials": [
+          {
+            "name": "supabase.anon_key",
+            "scheme": {
+              "kind": "header",
+              "name": "apikey",
+              "prefix": ""
+            },
+            "description": "Supabase project anon (publishable) key. Travels as the `apikey` header on every request. Requests made with it run as the project's `anon` Postgres role, so everything they return is bounded by the project's row-level-security policies — it is not the `service_role` key and confers none of that key's authority",
+            "env": [
+              "SUPABASE_ANON_KEY"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "supabase.anon_key"
+          ]
+        ]
+      },
+      "operation_count": 3,
+      "operations": [
+        {
+          "id": "supabase-schema-describe",
+          "provider": "supabase",
+          "service": "default",
+          "description": "Describe the tables, views and columns this project's data API exposes, as an OpenAPI 2.0 document. Takes no argument. Call this first to discover the table names supabase-rows-list takes and what columns each one has — the document reflects only what the anon role may see, so a table absent from it is a table this key cannot read. Also this connector's `verify`: a bounded read that runs unattended and needs nothing configured beyond the project ref and the key",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/rest/v1/",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "basePath": {
+                "description": "The path prefix every documented path hangs off — `/`",
+                "type": "string"
+              },
+              "consumes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "definitions": {
+                "description": "One key per exposed table or view, each carrying that relation's `properties` — the column names, their types, and PostgREST's own notes. This is where a caller reads what a row looks like",
+                "type": "object"
+              },
+              "host": {
+                "description": "The project's API host, as PostgREST sees it",
+                "type": "string"
+              },
+              "info": {
+                "description": "Title, description and version of the exposed schema, as PostgREST reports them",
+                "type": "object"
+              },
+              "parameters": {
+                "description": "PostgREST's shared query parameters — `select`, `order`, `limit`, `offset` and the filter operators. Note that this connector declares only `limit`; see the file header for the rest",
+                "type": "object"
+              },
+              "paths": {
+                "description": "One key per exposed table, view and function, each `/<name>`. The key without its leading slash is what supabase-rows-list's `table` argument takes",
+                "type": "object"
+              },
+              "produces": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "schemes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "swagger": {
+                "description": "The OpenAPI version of this document — `2.0`",
+                "type": "string"
+              }
+            },
+            "required": [
+              "swagger",
+              "paths",
+              "definitions"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "supabase.anon_key"
+            ]
+          ],
+          "hosts": [
+            "{project_ref}.supabase.co"
+          ],
+          "flux": "op supabase-schema-describe -> Any\n  description \"Describe the tables, views and columns this project's data API exposes, as an OpenAPI 2.0 document. Takes no argument. Call this first to discover the table names supabase-rows-list takes and what columns each one has — the document reflects only what the anon role may see, so a table absent from it is a table this key cannot read. Also this connector's `verify`: a bounded read that runs unattended and needs nothing configured beyond the project ref and the key\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{project_ref}.supabase.co\"\n  url = fmt(\"{base}/rest/v1/\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {project_ref} value before it has a valid destination URL.",
+                "params": [
+                  "project_ref"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "supabase-rows-list",
+          "provider": "supabase",
+          "service": "default",
+          "description": "Read rows from one table or view in this project. Returns a JSON array of row objects with every column the anon role may read; the columns are the project's own, so call supabase-schema-describe first to learn them. Row-level security decides which rows come back — an empty array means the policies matched nothing, not that the table is empty. This connector cannot filter, project or sort: pass `limit` to bound the read and do the rest in the flow",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/rest/v1/{table}",
+          "parameters": [
+            {
+              "name": "table",
+              "in": "path",
+              "wire": null,
+              "description": "The table or view to read, exactly as it appears under `paths` in supabase-schema-describe's response, without the leading slash. Must be a relation the project exposes to its API — a name the schema document does not list is not readable with this key",
+              "required": true,
+              "schema": {
+                "maxLength": 63,
+                "minLength": 1,
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "limit",
+              "in": "query",
+              "wire": null,
+              "description": "Maximum number of rows to return. Omitting it returns every row the policies match, up to the ceiling the project's own API settings impose (1000 by default) — pass a value rather than relying on that, because the ceiling is per-project and can be raised",
+              "required": false,
+              "schema": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "limit": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "table": {
+                "maxLength": 63,
+                "minLength": 1,
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "table"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "supabase.anon_key"
+            ]
+          ],
+          "hosts": [
+            "{project_ref}.supabase.co"
+          ],
+          "flux": "op supabase-rows-list(table: String, limit: Number) -> Any\n  description \"Read rows from one table or view in this project. Returns a JSON array of row objects with every column the anon role may read; the columns are the project's own, so call supabase-schema-describe first to learn them. Row-level security decides which rows come back — an empty array means the policies matched nothing, not that the table is empty. This connector cannot filter, project or sort: pass `limit` to bound the read and do the rest in the flow\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{project_ref}.supabase.co\"\n  url = fmt(\"{base}/rest/v1/{table}\")\n  sep = \"?\"\n  when limit\n    url = fmt(\"{url}{sep}limit={limit}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {project_ref} value before it has a valid destination URL.",
+                "params": [
+                  "project_ref"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "supabase-auth-settings",
+          "provider": "supabase",
+          "service": "default",
+          "description": "Read which sign-in methods this project has enabled, and whether self-service sign-up is open. Takes no argument and returns configuration only — no user data and no identities. Use it to decide whether a flow can offer a given provider before it tries",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/auth/v1/settings",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "disable_signup": {
+                "description": "True when self-service sign-up is off, so only an existing user can sign in",
+                "type": "boolean"
+              },
+              "external": {
+                "description": "One boolean per external identity provider the project may enable — `google`, `github`, `apple`, `azure` and the rest — true where it is configured and turned on. Left untyped rather than enumerated: the key set follows whichever providers Supabase currently supports, and a fixed list here would be wrong on their next release",
+                "type": "object"
+              },
+              "mailer_autoconfirm": {
+                "description": "True when a new email address is trusted without a confirmation link",
+                "type": "boolean"
+              },
+              "phone_autoconfirm": {
+                "description": "True when a new phone number is trusted without an SMS code",
+                "type": "boolean"
+              },
+              "saml_enabled": {
+                "description": "True when SAML single sign-on is available on this project",
+                "type": "boolean"
+              },
+              "sms_provider": {
+                "description": "The configured SMS provider's name, or empty when there is none",
+                "type": "string"
+              }
+            },
+            "required": [
+              "external",
+              "disable_signup"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "supabase.anon_key"
+            ]
+          ],
+          "hosts": [
+            "{project_ref}.supabase.co"
+          ],
+          "flux": "op supabase-auth-settings -> Any\n  description \"Read which sign-in methods this project has enabled, and whether self-service sign-up is open. Takes no argument and returns configuration only — no user data and no identities. Use it to decide whether a flow can offer a given provider before it tries\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{project_ref}.supabase.co\"\n  url = fmt(\"{base}/auth/v1/settings\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {project_ref} value before it has a valid destination URL.",
+                "params": [
+                  "project_ref"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        }
+      ],
+      "events": [],
       "channels": []
     },
     {
