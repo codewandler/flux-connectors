@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-08-01
+
 ### Added
 
 - **This software identifies itself on every outgoing request (C-223).** Every request left the host
@@ -43,7 +45,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   adversarial value containing a newline and a forged address line round-tripping as one entry with
   the forgery unresolvable.
 
-### Added
 
 - **A dev sign-in, so the app is usable without a Google registration (C-234).** `cargo run -p
   connectors-api -- --dev` mints a session through the same machinery a Google sign-in uses — same
