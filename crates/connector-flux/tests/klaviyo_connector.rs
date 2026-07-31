@@ -107,6 +107,39 @@ fn signature(emitted: &str) -> &str {
     emitted.lines().next().expect("a declaration line")
 }
 
+/// The `headers:` record of the emitted `http.request` call, without its braces.
+///
+/// flux's formatter puns a record key against a binding of the same name, so a header whose vendor
+/// spelling is already a legal Flux symbol is emitted as shorthand — `{ revision }`, exactly as
+/// `{ Accept }` is emitted across the shipped catalogue — while `Notion-Version`, which is not,
+/// keeps an explicit `"Notion-Version": Notion_Version`. Both spell the same wire key. So the
+/// assertions below read the record and ask which keys it binds, rather than pinning one of two
+/// renderings that flux, not this repository, chooses between.
+fn headers_record(emitted: &str) -> &str {
+    let request = emitted
+        .lines()
+        .find(|line| line.contains("http.request("))
+        .expect("every operation emits an http.request call");
+    let open = request
+        .find("headers: {")
+        .map(|at| at + "headers: {".len())
+        .unwrap_or_else(|| panic!("no `headers:` record in:\n{request}"));
+    let close = request[open..]
+        .find('}')
+        .map(|at| open + at)
+        .unwrap_or_else(|| panic!("unterminated `headers:` record in:\n{request}"));
+    request[open..close].trim()
+}
+
+/// Whether the emitted `headers:` record sends `name` — under either rendering.
+fn sends_header(emitted: &str, name: &str) -> bool {
+    let explicit = format!("\"{name}\": {name}");
+    headers_record(emitted)
+        .split(',')
+        .map(str::trim)
+        .any(|entry| entry == name || entry == explicit)
+}
+
 fn emit(connector: &Connector, id: &str) -> String {
     let operation = connector
         .operation(id)
@@ -151,7 +184,6 @@ fn the_klaviyo_connector_loads() {
 fn the_revision_reaches_every_emitted_operation_as_a_literal() {
     let connector = load();
     let expected_binding = format!(r#"{REVISION_HEADER} = "{REVISION}""#);
-    let expected_send = format!(r#""{REVISION_HEADER}": {REVISION_HEADER}"#);
 
     for id in OPERATIONS {
         let emitted = emit(&connector, id);
@@ -162,9 +194,10 @@ fn the_revision_reaches_every_emitted_operation_as_a_literal() {
              carries no `revision` header, so an operation missing it cannot work at all:\n{emitted}"
         );
         assert!(
-            emitted.contains(&expected_send),
+            sends_header(&emitted, REVISION_HEADER),
             "`{id}` binds the revision but never sends it — the literal must reach the request \
-             under Klaviyo's own spelling:\n{emitted}"
+             under Klaviyo's own spelling. Its `headers:` record is `{}`:\n{emitted}",
+            headers_record(&emitted)
         );
         assert!(
             !signature(&emitted).contains(REVISION_HEADER),
