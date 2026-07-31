@@ -17,6 +17,7 @@ pub(crate) mod airtable;
 pub(crate) mod asana;
 pub(crate) mod babelforce;
 pub(crate) mod r#box;
+pub(crate) mod figma;
 pub(crate) mod fly;
 pub(crate) mod freshdesk;
 pub(crate) mod github;
@@ -45,6 +46,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &asana::PROVIDER,
     &babelforce::PROVIDER,
     &r#box::PROVIDER,
+    &figma::PROVIDER,
     &fly::PROVIDER,
     &freshdesk::PROVIDER,
     &github::PROVIDER,

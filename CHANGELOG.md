@@ -9,6 +9,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Figma connector (C-176).** Six read operations over `X-Figma-Token`, following Shopify's
+  existing `header` scheme rather than inventing a second spelling — no change to the auth model.
+
+  Because Figma's API is read-only, **every operation is uniformly `risk = low` and idempotent, and
+  that uniformity is asserted** rather than varied for appearance. A catalogue entry that is honestly
+  all-idempotent is useful evidence for the tool-contract surface.
+
+  `figma-image-render-get` returns URLs that expire. The connector says so and deliberately states
+  **no duration** — a wrong number would be exactly the plausible-but-incorrect output this pipeline
+  refuses. The `ids` query parameter carries a `pattern` restricting it to a charset disjoint from the
+  emitter's unencoded-query danger set.
+
 - **The Box connector (C-171).** Six operations over a bearer token, with `GET /users/me` as
   `verify`. Box's root folder id is the literal `"0"` — a sentinel a model guesses wrong unless told,
   so it is declared as a JSON Schema `default` and in prose on every folder-id parameter.

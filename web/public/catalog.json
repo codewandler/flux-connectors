@@ -2661,6 +2661,637 @@
       "channels": []
     },
     {
+      "id": "figma",
+      "authority": null,
+      "vendor": "Figma",
+      "description": "Figma REST API: read a file, specific nodes, rendered images, a project's files and a file's comments — a read-only design surface",
+      "base_url": "https://api.figma.com",
+      "api_version": null,
+      "hosts": [
+        "api.figma.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.figma.com",
+          "hosts": [
+            "api.figma.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 6
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "header"
+        ],
+        "credentials": [
+          {
+            "name": "figma.token",
+            "scheme": {
+              "kind": "header",
+              "name": "X-Figma-Token"
+            },
+            "description": "Figma personal access token, sent as the whole value of X-Figma-Token. Grants read access to whatever files, projects and comments the token's account can see",
+            "env": [
+              "FIGMA_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "figma.token"
+          ]
+        ]
+      },
+      "operation_count": 6,
+      "operations": [
+        {
+          "id": "figma-user-me",
+          "provider": "figma",
+          "service": "default",
+          "description": "Get the authenticated user's id, email, display handle and avatar URL. Used to verify a token works before running anything else",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/me",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "email": {
+                "description": "Personal data",
+                "type": "string"
+              },
+              "handle": {
+                "description": "The display name shown on comments and file activity",
+                "type": "string"
+              },
+              "id": {
+                "description": "The user's Figma id, an opaque string — not necessarily numeric",
+                "type": "string"
+              },
+              "img_url": {
+                "description": "URL of the user's avatar image",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "email"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "figma.token"
+            ]
+          ],
+          "hosts": [
+            "api.figma.com"
+          ],
+          "flux": "op figma-user-me -> Any\n  description \"Get the authenticated user's id, email, display handle and avatar URL. Used to verify a token works before running anything else. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/err` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.figma.com\"\n  url = fmt(\"{base}/v1/me\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "figma-file-get",
+          "provider": "figma",
+          "service": "default",
+          "description": "Get a Figma file's document tree, components and styles by file key. Does not include comments or rendered images",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/files/{file_key}",
+          "parameters": [
+            {
+              "name": "file_key",
+              "in": "path",
+              "wire": null,
+              "description": "The file key from a Figma file URL — the segment after `/file/` or `/design/` and before the file's slug, e.g. `3xZfChRmL9Ykq4Qp2NHwR8` in `figma.com/design/3xZfChRmL9Ykq4Qp2NHwR8/My-File`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "file_key": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "file_key"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "components": {
+                "description": "Reusable components defined in the file, keyed by node id. Each entry carries at least `key`, `name` and `description`",
+                "type": "object"
+              },
+              "document": {
+                "description": "The root node of the file's recursive node tree: a node with `id`, `name`, `type` and (for container types) a `children` array of more nodes. Not modeled further here — JSON Schema without recursion cannot describe it faithfully, and `figma-file-nodes-get` is how a caller reaches one node's own subtree by id instead of walking this one",
+                "type": "object"
+              },
+              "editorType": {
+                "description": "`figma` or `figjam`. A FigJam board's document tree uses different node types than a design file's",
+                "type": "string"
+              },
+              "lastModified": {
+                "description": "When the file was last modified, ISO 8601",
+                "format": "date-time",
+                "type": "string"
+              },
+              "name": {
+                "description": "The file's name as shown in Figma",
+                "type": "string"
+              },
+              "role": {
+                "description": "The calling user's own permission on this file, e.g. `owner`, `editor`, `viewer` — not a property of the file itself",
+                "type": "string"
+              },
+              "styles": {
+                "description": "Shared text, color, effect and grid styles defined in the file, keyed by node id",
+                "type": "object"
+              },
+              "thumbnailUrl": {
+                "description": "A preview image URL. Like the image-render endpoint's URLs, treat this as not guaranteed stable long-term rather than a permanent asset address",
+                "type": "string"
+              },
+              "version": {
+                "description": "An opaque version identifier Figma bumps on every save — not a semantic version",
+                "type": "string"
+              }
+            },
+            "required": [
+              "document",
+              "name",
+              "lastModified",
+              "version"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "figma.token"
+            ]
+          ],
+          "hosts": [
+            "api.figma.com"
+          ],
+          "flux": "op figma-file-get(file_key: String) -> Any\n  description \"Get a Figma file's document tree, components and styles by file key. Does not include comments or rendered images. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/err` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.figma.com\"\n  url = fmt(\"{base}/v1/files/{file_key}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "figma-file-nodes-get",
+          "provider": "figma",
+          "service": "default",
+          "description": "Get one or more specific nodes from a file by id, without walking the whole document tree. Use this to read a particular frame or layer instead of downloading the entire file",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/files/{file_key}/nodes",
+          "parameters": [
+            {
+              "name": "file_key",
+              "in": "path",
+              "wire": null,
+              "description": "The file key — see figma-file-get",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "ids",
+              "in": "query",
+              "wire": null,
+              "description": "Comma-separated node ids to fetch, each in Figma's own `<page>:<node>` form, e.g. `1:23,1:45`. Copy these from a Figma share link (the `node-id` query parameter) or from a prior figma-file-get response",
+              "required": true,
+              "schema": {
+                "pattern": "^[0-9]+:[0-9]+(,[0-9]+:[0-9]+)*$",
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "file_key": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "ids": {
+                "pattern": "^[0-9]+:[0-9]+(,[0-9]+:[0-9]+)*$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "file_key",
+              "ids"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "err": {
+                "description": "Set when the whole request failed; absent otherwise. A per-node failure instead surfaces as that id being missing from `nodes`",
+                "type": "string"
+              },
+              "lastModified": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "name": {
+                "description": "The file's name",
+                "type": "string"
+              },
+              "nodes": {
+                "description": "Keyed by the requested node id. Each present entry carries a `document` object — that node's own subtree, in the same opaque shape figma-file-get's `document` describes — plus that node's own `components` and `styles`. A requested id that does not exist in the file is simply absent from this object rather than an error",
+                "type": "object"
+              }
+            },
+            "required": [
+              "nodes"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "figma.token"
+            ]
+          ],
+          "hosts": [
+            "api.figma.com"
+          ],
+          "flux": "op figma-file-nodes-get(file_key: String, ids: String) -> Any\n  description \"Get one or more specific nodes from a file by id, without walking the whole document tree. Use this to read a particular frame or layer instead of downloading the entire file. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/err` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.figma.com\"\n  url = fmt(\"{base}/v1/files/{file_key}/nodes?ids={ids}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
+                "params": [
+                  "ids"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "figma-image-render-get",
+          "provider": "figma",
+          "service": "default",
+          "description": "Render one or more nodes to images and return download URLs for them. The URLs point at short-lived storage and expire — Figma does not guarantee they stay valid, so fetch or store the image promptly rather than caching the URL itself",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/images/{file_key}",
+          "parameters": [
+            {
+              "name": "file_key",
+              "in": "path",
+              "wire": null,
+              "description": "The file key — see figma-file-get",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "ids",
+              "in": "query",
+              "wire": null,
+              "description": "Comma-separated node ids to render, each in Figma's own `<page>:<node>` form, e.g. `1:23,1:45` — see figma-file-nodes-get",
+              "required": true,
+              "schema": {
+                "pattern": "^[0-9]+:[0-9]+(,[0-9]+:[0-9]+)*$",
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "file_key": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "ids": {
+                "pattern": "^[0-9]+:[0-9]+(,[0-9]+:[0-9]+)*$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "file_key",
+              "ids"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "err": {
+                "description": "Set when the whole request failed; absent otherwise",
+                "type": "string"
+              },
+              "images": {
+                "description": "Keyed by the requested node id. Each value is either a URL string or null (that particular node failed to render). Every URL here is temporary — it is served from short-lived storage and is not guaranteed to remain valid, so treat it as something to fetch immediately rather than an address to keep",
+                "type": "object"
+              }
+            },
+            "required": [
+              "images"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "figma.token"
+            ]
+          ],
+          "hosts": [
+            "api.figma.com"
+          ],
+          "flux": "op figma-image-render-get(file_key: String, ids: String) -> Any\n  description \"Render one or more nodes to images and return download URLs for them. The URLs point at short-lived storage and expire — Figma does not guarantee they stay valid, so fetch or store the image promptly rather than caching the URL itself. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/err` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.figma.com\"\n  url = fmt(\"{base}/v1/images/{file_key}?ids={ids}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
+                "params": [
+                  "ids"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "figma-project-files-list",
+          "provider": "figma",
+          "service": "default",
+          "description": "List the files in a project: each file's key, name, thumbnail and last-modified time",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/projects/{project_id}/files",
+          "parameters": [
+            {
+              "name": "project_id",
+              "in": "path",
+              "wire": null,
+              "description": "The project's numeric id, from a Figma project URL or from a team's project listing",
+              "required": true,
+              "schema": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "project_id": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "project_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "files": {
+                "description": "One entry per file in the project, each `{key, name, thumbnail_url, last_modified}` and optionally `branches` when the file has any",
+                "items": {
+                  "properties": {
+                    "key": {
+                      "description": "The file key figma-file-get, figma-file-nodes-get, figma-image-render-get and figma-file-comments-list all take",
+                      "type": "string"
+                    },
+                    "last_modified": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "thumbnail_url": {
+                      "description": "Like other thumbnail URLs here, not guaranteed stable long-term",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "name": {
+                "description": "The project's own name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "files"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "figma.token"
+            ]
+          ],
+          "hosts": [
+            "api.figma.com"
+          ],
+          "flux": "op figma-project-files-list(project_id: Number) -> Any\n  description \"List the files in a project: each file's key, name, thumbnail and last-modified time. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/err` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.figma.com\"\n  url = fmt(\"{base}/v1/projects/{project_id}/files\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "figma-file-comments-list",
+          "provider": "figma",
+          "service": "default",
+          "description": "List a file's comments: who wrote each one, when, its text, what it is attached to, and whether it has been resolved",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/files/{file_key}/comments",
+          "parameters": [
+            {
+              "name": "file_key",
+              "in": "path",
+              "wire": null,
+              "description": "The file key — see figma-file-get",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "file_key": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "file_key"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "comments": {
+                "description": "Every comment on the file, oldest first",
+                "items": {
+                  "properties": {
+                    "client_meta": {
+                      "description": "Where the comment is pinned: either a canvas position or an offset within a frame, in one of two vendor-specific shapes. Not modeled further here",
+                      "type": "object"
+                    },
+                    "created_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "file_key": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "description": "The comment text. May quote or discuss design content and the commenter's own name is attached via `user` — treat both as data about a named individual",
+                      "type": "string"
+                    },
+                    "order_id": {
+                      "description": "Orders comments within their thread; not a public id anything else addresses",
+                      "type": "string"
+                    },
+                    "parent_id": {
+                      "description": "The id of the comment this replies to, or an empty string for a top-level comment — Figma uses an empty string here, not null",
+                      "type": "string"
+                    },
+                    "resolved_at": {
+                      "description": "When the comment was marked resolved, or absent while still open",
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "user": {
+                      "description": "Who wrote it: `{id, handle, img_url}` — the same shape figma-user-me returns for the caller",
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "message"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "comments"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "figma.token"
+            ]
+          ],
+          "hosts": [
+            "api.figma.com"
+          ],
+          "flux": "op figma-file-comments-list(file_key: String) -> Any\n  description \"List a file's comments: who wrote each one, when, its text, what it is attached to, and whether it has been resolved. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/err` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.figma.com\"\n  url = fmt(\"{base}/v1/files/{file_key}/comments\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "fly",
       "authority": "io.fly.api",
       "vendor": "Fly.io",
