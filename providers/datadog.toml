@@ -1,0 +1,233 @@
+# Datadog API — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Datadog does publish a machine-readable OpenAPI document, but
+# it is not vendored here yet (no C-4 ingest run has selected it), so this file is written directly
+# in the IR's shape, the same route babelforce, postmark, zendesk, freshdesk, github and notion
+# already take. Drift against the vendor's own docs is therefore undetectable by machine — the same
+# caveat those files carry (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# C-160'S QUESTION: DATADOG NEEDS `DD-API-KEY` *AND* `DD-APPLICATION-KEY` ON THE SAME REQUEST. NO
+# SHIPPED CONNECTOR HAD SENT TWO CREDENTIALS ON ONE REQUEST BEFORE THIS ONE. IS THAT EXPRESSIBLE, OR
+# IS THIS A REFUSAL STORY? MEASURED, AND THE ANSWER IS: IT IS ALREADY EXPRESSIBLE, UNSHIPPED UNTIL
+# NOW.
+# ---------------------------------------------------------------------------------------------
+#
+# `Operation::auth` / `Connector::default_auth` is `Vec<AuthRequirement>` — **alternatives (OR)** —
+# and each [`AuthRequirement`] is itself a set of credential names that "must all be satisfied
+# together" (crates/connector-spec/src/ir.rs:652-668, `AuthRequirement`'s own doc comment at
+# crates/connector-spec/src/auth.rs:272-288). The emitted catalogue's nested-slice `credentials`
+# field the story points at (`crates/catalog/src/generated/postmark.rs`) is exactly that two-level
+# shape rendered flat: `credentials: &[&[...]]` — outer slice is the OR list of mechanisms, inner
+# slice is the AND set of credentials one mechanism requires together
+# (`crates/connector-cli/src/catalog.rs:320-336`, whose own doc comment states the same rule and
+# gives the same worked example this file now ships for real: "babelforce's `accessId` + `accessToken`
+# travel together on one request").
+#
+# **That worked example was, until this connector, only a comment.** `providers/babelforce.toml`
+# deliberately *excludes* the `accessId`/`accessToken` AND-pair its own vendored document offers
+# (see that file's own header: the pair is deprecated and being scrubbed by babelforce's
+# maintainers), so no operation in this repository has ever actually declared an `AuthRequirement`
+# naming more than one credential. `crates/connector-spec/tests/ir_roundtrip.rs:22-23` and `:236-237`
+# exercise `AuthRequirement::all([...two credentials...])` at the IR level, and the loader's own
+# validation (`validate_requirements`, `crates/connector-spec/src/provider.rs:2216-2255`) places no
+# restriction on how many credentials one mechanism names — it refuses an *empty* mechanism and a
+# mechanism naming a `signing` credential, nothing else. So the mechanism was real, validated, and
+# tested in isolation, but genuinely unshipped. Datadog is the first connector to put it on a real
+# operation.
+#
+# **What ships below**: `default_auth = [{ credentials = ["datadog.api_key",
+# "datadog.application_key"] }]` — one alternative (no OR choice; Datadog offers none), naming both
+# credentials (an AND set — both travel on every request). No operation overrides it, so every
+# operation's `effective_auth` resolves to that same single two-credential mechanism.
+# `crates/connector-flux/tests/datadog_connector.rs` measures this directly, mirroring the shape
+# `postmark_connector.rs` uses to measure the OR case, so the two probes read as complements of each
+# other rather than as two different techniques.
+#
+# **The finding for C-164 (Algolia), which is waiting on the same answer**: two credentials on one
+# request do not need a new mechanism. `AuthRequirement::all` (or the equivalent `{ credentials =
+# [...] }` table syntax) already expresses "these credentials are required together, and there is no
+# alternative" — nothing in `connector-spec` needed to change, and this file needed no `[[patch...`
+# or engine work to ship. The unrelated finding `providers/postmark.toml`'s header already recorded —
+# that `Connector::credential_ref_for` (`ir.rs:1166-1178`) renders every declared credential under the
+# same elided `DEFAULT_SERVICE` regardless of which operations use it — still holds here and is
+# irrelevant to this question: that function distinguishes credentials by *leaf name*, not by
+# alternation vs. conjunction, and nothing below asks it to do otherwise.
+#
+# **No runtime consequence yet, for any connector.** `AGENTS.md`'s Intentional gaps section is
+# explicit that no generated connector can make a live call: flux has not grown the `$auth` seam that
+# would place a credential on an outgoing request at all (`docs/designs/auth-seam.md`). That gap is
+# not specific to a two-credential connector — it is the same absence every one of the 19 previously
+# shipped providers already lives with — so it is not a reason to withhold this one.
+#
+# ---------------------------------------------------------------------------------------------
+# WHAT SHIPS: 4 operations, all reads. Monitors — list, get one. Incidents — list, get one.
+# ---------------------------------------------------------------------------------------------
+#
+# Endpoint paths checked directly against docs.datadoghq.com on 2026-07-31: `GET /api/v1/monitor`,
+# `GET /api/v1/monitor/{monitor_id}`, `GET /api/v2/incidents`, `GET /api/v2/incidents/{incident_id}`
+# are current, documented operations, not guessed. The Monitors v1 object shape declared below
+# (`id`, `name`, `type`, `query`, `message`, `tags`, `options`, `overall_state`, `created`,
+# `modified`, `creator`, `multi`) is this pipeline's longest-standing, most widely reproduced public
+# Datadog shape and is declared with real field names; `options` and `creator` are left as untyped
+# nested objects rather than enumerated in full, because this file states only what it can name with
+# confidence and an object left untyped inside an otherwise-informative schema is honest, not
+# permissive (`crates/connector-spec/tests/response_schema_coverage.rs`'s own
+# `no_operation_publishes_a_permissive_response_schema` only refuses a *top-level* schema with no
+# informative key at all).
+#
+# **Incidents carry no `response_schema` at all, deliberately.** The Incident Management v2 payload's
+# `attributes` shape has changed more than once (a custom "fields" system replaced fixed
+# severity/state attributes), today's live docs page renders its field tables client-side and did not
+# yield them to a fetch this session, and guessing would be exactly the placeholder the coverage
+# test's own doc comment refuses ("declare the shape the vendor documents, or declare nothing").
+# Absence is the honest answer here, the same one `providers/babelforce.toml` gives for all nine of
+# its operations.
+#
+# **Two operations from the story's suggested starting point are deliberately not shipped:**
+#
+# - **Submit an event.** Datadog documents both a long-stood `POST /api/v1/events` and a newer
+#   `POST /api/v2/events`; this session could not retrieve either body's field-level shape from a
+#   live source (the docs page renders it client-side), and guessing which envelope is current and
+#   what it nests would be exactly the invented shape this repository refuses. Left out; unverified.
+# - **Query metrics over a time range.** Datadog's own metrics query syntax
+#   (`avg:system.load.1{*}`) is free text carrying `{`, `}`, `:`, and `*`, and this pipeline's query
+#   parameters are not percent-encoded (query values are interpolated verbatim into a `fmt` template;
+#   `zendesk-ticket-search`, listed under `AGENTS.md`'s Intentional gaps, is the standing
+#   demonstration, and `providers/sentry.toml` and `providers/fly.toml` already exclude free-text or
+#   even safe-looking optional query filters for the identical reason). Left out; a hallucinated
+#   *and* a mis-encoded operation are both worse than a smaller, honest set.
+
+id = "datadog"
+vendor = "Datadog"
+authority = "com.datadoghq.api"
+base_url = "https://api.datadoghq.com"
+description = "Datadog monitoring: list and inspect monitors, list and inspect incidents. Authenticates every request with an API key and an Application key together"
+verify = "datadog-monitor-list"
+
+# One alternative, naming both credentials together — Datadog offers no alternative mechanism, and
+# neither key alone authenticates anything this connector declares. See the header comment.
+default_auth = [{ credentials = ["datadog.api_key", "datadog.application_key"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials — two, and always sent together. See the header comment.
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "datadog.api_key"
+scheme = { header = { name = "DD-API-KEY" } }
+env = ["DATADOG_API_KEY"]
+description = "Datadog API key. Identifies the organization; required on every request together with the Application Key — neither key alone authenticates a call"
+
+[[auth]]
+name = "datadog.application_key"
+scheme = { header = { name = "DD-APPLICATION-KEY" } }
+env = ["DATADOG_APPLICATION_KEY"]
+description = "Datadog Application Key, scoped to the user who created it. Required on every request together with the API Key — neither key alone authenticates a call"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — Monitors: list, get one
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "datadog-monitor-list"
+method = "GET"
+path = "/api/v1/monitor"
+description = "List every monitor visible to this API key. Also this connector's `verify` — a bounded read that runs unattended, needing no argument"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "array"
+items = { type = "object", required = [
+  "id",
+  "name",
+  "type",
+  "query",
+  "message",
+  "tags",
+  "overall_state",
+  "created",
+  "modified",
+], properties = { id = { type = "integer", description = "Datadog's numeric id for this monitor" }, name = { type = "string" }, type = { type = "string", description = "The monitor's evaluation type, e.g. \"metric alert\", \"query alert\", \"service check\", \"log alert\", \"composite\"" }, query = { type = "string", description = "The monitor's evaluation query, in Datadog's own monitor query syntax" }, message = { type = "string", description = "The notification message template; may embed @-mentions and template variables" }, tags = { type = "array", items = { type = "string" } }, options = { type = "object", description = "Evaluation and notification settings (thresholds, notify_no_data, renotify_interval, evaluation_delay, and more) — left untyped rather than enumerated in full; see Datadog's own Monitor Options reference for the complete shape" }, overall_state = { type = "string", description = "The monitor's current alert state, e.g. \"OK\", \"Alert\", \"Warn\", \"No Data\"" }, created = { type = "string", description = "When this monitor was created" }, modified = { type = "string", description = "When this monitor was last modified" }, creator = { type = "object", description = "The user who created this monitor; may be absent for a system-authored monitor. Carries a name and an email address — personal data, never given an example value here" }, multi = { type = "boolean", description = "Whether this is a multi-alert monitor grouped by tag" } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "datadog-monitor-get"
+method = "GET"
+path = "/api/v1/monitor/{monitor_id}"
+description = "Get one monitor by id"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "monitor_id"
+description = "The monitor's id, from datadog-monitor-list"
+required = true
+schema = { type = "integer" }
+
+[operations.response_schema]
+type = "object"
+required = [
+  "id",
+  "name",
+  "type",
+  "query",
+  "message",
+  "tags",
+  "overall_state",
+  "created",
+  "modified",
+]
+properties = { id = { type = "integer", description = "Datadog's numeric id for this monitor" }, name = { type = "string" }, type = { type = "string", description = "The monitor's evaluation type, e.g. \"metric alert\", \"query alert\", \"service check\", \"log alert\", \"composite\"" }, query = { type = "string", description = "The monitor's evaluation query, in Datadog's own monitor query syntax" }, message = { type = "string", description = "The notification message template; may embed @-mentions and template variables" }, tags = { type = "array", items = { type = "string" } }, options = { type = "object", description = "Evaluation and notification settings (thresholds, notify_no_data, renotify_interval, evaluation_delay, and more) — left untyped rather than enumerated in full; see Datadog's own Monitor Options reference for the complete shape" }, overall_state = { type = "string", description = "The monitor's current alert state, e.g. \"OK\", \"Alert\", \"Warn\", \"No Data\"" }, created = { type = "string", description = "When this monitor was created" }, modified = { type = "string", description = "When this monitor was last modified" }, creator = { type = "object", description = "The user who created this monitor; may be absent for a system-authored monitor. Carries a name and an email address — personal data, never given an example value here" }, multi = { type = "boolean", description = "Whether this is a multi-alert monitor grouped by tag" } }
+
+# ---------------------------------------------------------------------------------------------
+# Operations — Incidents: list, get one. No `response_schema` on either — see the header comment.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "datadog-incident-list"
+method = "GET"
+path = "/api/v2/incidents"
+description = "List the organization's incidents"
+risk = "low"
+idempotency = "idempotent"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "datadog-incident-get"
+method = "GET"
+path = "/api/v2/incidents/{incident_id}"
+description = "Get one incident by id"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "incident_id"
+description = "The incident's id (a UUID), from datadog-incident-list"
+required = true
+schema = { type = "string" }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any of the above can run
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "api_key"
+label = "Datadog API Key"
+help = "Organization Settings > API Keys in the Datadog app. Sent as DD-API-KEY on every request, always together with the Application Key"
+format = "token"
+secret = true
+docs_url = "https://docs.datadoghq.com/account_management/api-app-keys/"
+binds = "credential.datadog.api_key"
+
+[[config]]
+name = "application_key"
+label = "Datadog Application Key"
+help = "Organization Settings > Application Keys in the Datadog app, scoped to the user who creates it. Sent as DD-APPLICATION-KEY on every request, always together with the API Key"
+format = "token"
+secret = true
+docs_url = "https://docs.datadoghq.com/account_management/api-app-keys/"
+binds = "credential.datadog.application_key"
