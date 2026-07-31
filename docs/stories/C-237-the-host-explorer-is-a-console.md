@@ -60,11 +60,21 @@ and is unreachable from the page. An operator can store a credential and cannot 
 - [ ] Operations are grouped by `service`, and `idempotency` and `hosts` are rendered rather than
       discarded.
 - [ ] A parameter editor that can hold a real body, with invalid JSON refused before sending rather
-      than by the vendor.
+      than by the vendor. **A schema-driven form needs no codegen**: `connector_pack::project(&entry)`
+      is public (`crates/connector-pack/src/spec.rs:110`) and yields a real `input_schema`, so
+      `OperationView` can carry one for ~5 lines. Every declared parameter is required by
+      construction, so the form is flat — one control per property, no optionality logic. Keep the
+      raw-JSON escape hatch.
 - [ ] The response is legible: status, headers and body distinguished, JSON bodies formatted. The
       redactor's output must pass through unchanged — it is what stops a vendor echoing a token onto
       this surface.
 - [ ] A credential can be removed through the page.
+- [ ] **Optional but high value: a dry-run preview.** `Operation::project(...).dry_run(params)`
+      (`crates/connector-pack/src/tool.rs:271`) renders the exact request without sending it and
+      without touching the secret store — C-145's seam. It answers *"why will this not work"*
+      precisely: `MissingConfig` names the field and its service, `MissingCredential` names the
+      address. Verify that it refuses usefully for an unbound configuration before committing to the
+      panel's copy; that has not been run.
 - [ ] **Layout hygiene, borrowed rather than rediscovered.** `min-width: 0` on flex and grid
       children, `flex-wrap: wrap`, `overflow-wrap: anywhere`. `OperationRow.vue`'s comment records
       what their absence cost the site: a path like `/v0/{baseId}/{tableIdOrName}/{recordId}` has no
@@ -82,8 +92,16 @@ and is unreachable from the page. An operator can store a credential and cannot 
 - **Scope: this file only.** No build step, no npm, no framework, no external assets. That is
   [C-238](C-238-the-host-mounts-the-explorer-components.md)'s job and doing it here would make both
   harder.
-- Nothing here needs a backend change. If something does, that is a finding worth its own story
-  rather than a widening of this one.
+- **The N+1 fix is a small backend change, not a client one.** Add `service`, `description`, `risk`,
+  `idempotency` and `tool` to `OperationWiring` (`crates/connectors-api/src/api.rs:137`), filled in
+  `view_of` from the entry already in hand. ~15 lines, and it turns ~30 requests per click into zero.
+  Watch the response size: 299 operations adds roughly 55 KB uncompressed. Make "the list response
+  stays under a stated size" an acceptance line rather than splitting the view type.
+- **The search and sort logic here is a knowing duplicate.** `web/data/catalog.mts` already has
+  `encodeView`/`decodeView`/`narrowView`/`sortOperations`/`facet`/`serviceFacet` as pure functions.
+  This story hand-rolls the subset it needs, in one file, deliberately —
+  [C-238](C-238-the-host-mounts-the-explorer-components.md) deletes the duplicate. Say so in the code
+  so nobody defends it later.
 - Two open stories will land in this file — [C-225](C-225-a-config-field-cannot-declare-a-closed-set-of-values.md)
   and [C-226](C-226-one-credential-cannot-be-shared-by-two-connectors.md). Leave room; do not
   implement them here.

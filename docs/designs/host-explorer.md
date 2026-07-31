@@ -77,8 +77,12 @@ teaching the components a second port for operational state — doubles the port
 `web/` to a shape it must never render, since `stored` is a fact about a credential the site is
 forbidden to know about.
 
-**The obstacle, named up front.** `catalog.json`'s shape is emitted by
-`crates/connector-cli/src/site.rs`, a **compiler crate**. `connectors-api` depends on `catalog`, not
+**The obstacle, named up front, and it is worse than the emitter's location.**
+`catalog::Operation` (`crates/catalog/src/lib.rs:138`) carries exactly `id, provider, service,
+description, risk, idempotency, credentials, hosts, flux` — **no `method`, no `path`, no
+`parameters`, no schemas, no `status`** — and `catalog::Provider` has no `services`. The host
+therefore cannot synthesise the catalogue shape at all, whatever it is willing to link. On top of
+that, `catalog.json`'s shape is emitted by `crates/connector-cli/src/site.rs`, a **compiler crate**. `connectors-api` depends on `catalog`, not
 on `connector-cli`, and linking the compiler into the host would be wrong even though
 `crates/connector-cli/tests/dependency_fence.rs` is directional and would not catch it. Two routes:
 
@@ -86,7 +90,9 @@ on `connector-cli`, and linking the compiler into the host would be wrong even t
   same bytes the site renders. Costs ~1.8 MB in the binary and a build-time path from a crate into
   `web/`.
 - **(b) Move the emitter into a crate both can use.** No duplicate emitter, but a larger refactor
-  that touches the publish closure.
+  that touches the publish closure. Growing `crates/catalog` to carry the missing fields is a third
+  option and is **rejected**: it is in the publish closure, is documented as dependency-free
+  `.rodata`, and would multiply its size for consumers that only want to execute.
 
 **Start with (a), record (b) as the follow-on.** (a) is reversible; a second emitter of the same
 document would be exactly the drift this repository exists to prevent, and is the one option that

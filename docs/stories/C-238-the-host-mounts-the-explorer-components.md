@@ -43,6 +43,17 @@ Neither shape is a subset of the other. Verified by reading the components:
 The host has `wiring`, `callable`, `stored`, `settings`; the catalogue has `status{works, issues}`,
 `parameters`, schemas.
 
+**The host cannot synthesise the catalogue shape, and this is sharper than the design first stated.**
+`catalog::Operation` (`crates/catalog/src/lib.rs:138`) carries exactly `id, provider, service,
+description, risk, idempotency, credentials, hosts, flux` — **no `method`, no `path`, no
+`parameters`, no schemas, no `status`** — and `catalog::Provider` has no `services`. So the
+components need fields the embedded catalogue does not hold, and the obstacle is not only that the
+emitter lives in a compiler crate. `include_bytes!` of the published document is the route.
+
+Growing `crates/catalog` to carry them is **rejected**: it is in the publish closure, is documented
+as dependency-free `.rodata`, and this would multiply its size for consumers that only want to
+execute.
+
 ## Acceptance
 
 - [ ] **Failing-first test:** the host serves catalogue-shaped JSON that the components render
@@ -58,7 +69,20 @@ The host has `wiring`, `callable`, `stored`, `settings`; the catalogue has `stat
       filesystem read would be the first in a binary whose current property is that the page is
       compiled in.
 - [ ] A staleness test rebuilds in CI and asserts the committed output is byte-identical, the same
-      shape as `connector-cli -- diff` for the catalogue.
+      shape as `connector-cli -- diff` for the catalogue. **Plus an offline Rust check**, so
+      `cargo test --workspace` stays self-sufficient: the build writes a `SOURCES.sha256` of every
+      input, and a Rust test recomputes it naming the file that changed. `sha2` is **already** a
+      dependency of `connectors-api`, so this needs no fenced-manifest edit.
+- [ ] **A test that the embedded catalogue and the embedded JSON agree** — equal provider-id sets and
+      equal per-provider operation-id sets, naming the first divergence and pointing at
+      `cargo run -p connector-cli -- build`. Two generated views of one IR now sit in one binary; this
+      is the check that keeps them honest, and it is stronger than anything that exists today.
+- [ ] **The new `/assets/*` routes are added to BOTH secret sweeps.** `tests/host.rs:101` and
+      `tests/dev_signin.rs:502` each enumerate the paths they check for the three sentinels; a new
+      served surface neither list covers is a hole in the guarantee, not a new file.
+- [ ] **A guard that the stylesheet defines every token the components use.** 25 distinct `--vp-*`
+      custom properties are referenced across the components; that set *is* the styling adapter.
+      Without the guard, a component upgrade renders a transparent element and nothing fails.
 - [ ] **No external or CDN asset.** The host's defence is that it has none, and a fetch from a CDN
       would be its first external dependency.
 - [ ] `no_component_imports_the_site_framework` still passes, and the packaging does not become a
@@ -72,7 +96,21 @@ The host has `wiring`, `callable`, `stored`, `settings`; the catalogue has `stat
 ## Notes
 
 - **Blocked, in order:** [C-158](C-158-typescript-catalogue-types-drift.md)
-  then [C-191](C-191-publish-the-explorer-components.md). C-191's other blocker, C-205, is done.
+  then [C-191](C-191-publish-the-explorer-components.md). C-191's other blocker, C-205, is done, and
+  this story makes the console C-191's **second consumer** — the integration proof its acceptance
+  asks for and cannot get from the site alone.
+- **The build root goes at `crates/connectors-api/ui/`, not under `web/`.** A credential-collecting
+  console living under the public site's tree would make *"the site never collects a credential"* a
+  fact about build configuration rather than about location. Keeping it with the host keeps the
+  C-147 boundary legible to a reviewer. The cost is honest: `AGENTS.md`'s gate section gains a second
+  Node command.
+- **No `build.rs`.** A build script shelling out to npm would put a Node toolchain and a network
+  fetch inside `cargo build --workspace`.
+- Two open stories land acceptance in the file this story replaces —
+  [C-225](C-225-a-config-field-cannot-declare-a-closed-set-of-values.md) and
+  [C-226](C-226-one-credential-cannot-be-shared-by-two-connectors.md) both name `index.html` by path.
+  Either land them first, or re-point those lines at a named component. Do not let an implementor
+  discover it mid-rewrite.
 - **A future CSP gets easier, not harder.** There is no Content-Security-Policy anywhere today, which
   is the only reason the current inline `<style>`/`<script>` works at all. External bundled files
   remove that obstacle; going further inline would entrench it. Say so where the decision is recorded
