@@ -2,7 +2,7 @@
 id: C-215
 title: Ship the Mailchimp connector
 pillar: Spec
-status: ready
+status: in-progress
 priority: 4
 design:
 epic: provider-fleet-2
