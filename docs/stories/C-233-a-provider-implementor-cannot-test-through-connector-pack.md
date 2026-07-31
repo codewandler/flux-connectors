@@ -2,7 +2,7 @@
 id: C-233
 title: "A provider implementor cannot exercise their own connector through `connector-pack`, so 'does it compose a request at all' is unanswerable until integration"
 pillar: Build
-status: in-progress
+status: done
 priority: 1
 design:
 epic:

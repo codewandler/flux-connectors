@@ -2,7 +2,7 @@
 id: C-232
 title: "The whole-catalogue request test fabricates a value for every variable it discovers, so an operation that refuses against a real configuration passes it"
 pillar: Build
-status: in-progress
+status: done
 priority: 1
 design:
 epic:
