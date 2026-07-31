@@ -34,9 +34,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   exists. Registering the prefixed form would repeat C-159 §2's divergence in the other direction —
   holding a public word while leaving the bare token, the form a 401 body echoes back, unheld.
 
-  **A full build wrote exactly one artifact: `web/public/catalog.json`.** Every `.flux` module, manifest,
-  the embedded Rust catalogue and `connectors.lock` are byte-identical, because an empty prefix does not
+  **A full build wrote exactly one artifact: `web/public/catalog.json`.** Every `.flux` module, manifest
+  and the embedded Rust catalogue are byte-identical, because an empty prefix does not
   serialize and the catalogue's `Header` arm already emitted `prefix: ""` when it was hard-coded. The
+  IR hash domain is JSON rather than TOML (`ir.rs:1258`), and `skip_serializing_if` applies there too,
+  so `ir_sha256` cannot move either — pinned by `ir_roundtrip.rs:203`. (An earlier draft of this entry
+  also claimed `connectors.lock` was byte-identical. **That file is not produced** — `lock.rs:48` says
+  writing it is `connector-cli`'s job and the CLI never does — so the claim was vacuous. Filed as
+  C-189.) The
   catalog.json diff is purely additive — one `prefix` key per credential (31 `"Bearer "`, 13 `""`, 3
   `"Basic "`). That key is published on purpose: without it, Okta's prefixed `Authorization` and
   LaunchDarkly's raw one flatten to the same two keys.

@@ -159,17 +159,34 @@ fn a_declared_prefix_round_trips_through_the_encoding() {
 /// must refuse is an author reaching the secret through it. Nothing interpolates a prefix — it is
 /// emitted as a literal — so a resolution marker is either a broken request or an attempt to smuggle
 /// a value, and both are refused by name.
+/// Each spelling asserts the **specific clause** that must fire, not merely that something refused.
+/// C-184's review found every refusal test here asserted only `contains("prefix")`, which a guard
+/// refusing for the wrong reason would satisfy — so `{{token}}` and `$secret` are chosen because no
+/// other clause catches them.
 #[test]
 fn a_prefix_may_not_spell_a_resolution_marker() {
-    for spelling in [
-        r#"scheme = { header = { name = "Authorization", prefix = "SSWS ${OKTA_API_TOKEN}" } }"#,
-        r#"scheme = { header = { name = "Authorization", prefix = "SSWS {{token}}" } }"#,
-        r#"scheme = { header = { name = "Authorization", prefix = "SSWS $secret" } }"#,
+    for (spelling, marker) in [
+        (
+            r#"scheme = { header = { name = "Authorization", prefix = "SSWS ${OKTA_API_TOKEN} " } }"#,
+            "${",
+        ),
+        (
+            r#"scheme = { header = { name = "Authorization", prefix = "SSWS {{token}} " } }"#,
+            "{{",
+        ),
+        (
+            r#"scheme = { header = { name = "Authorization", prefix = "SSWS $secret " } }"#,
+            "$secret",
+        ),
     ] {
         let message = refusal(spelling);
         assert!(
             message.contains("prefix") && message.contains("okta.api_token"),
             "expected a refusal naming the prefix and its credential, got: {message}"
+        );
+        assert!(
+            message.contains(marker),
+            "the refusal must name the marker {marker:?} it fired on, got: {message}"
         );
     }
 }
@@ -177,16 +194,87 @@ fn a_prefix_may_not_spell_a_resolution_marker() {
 /// A prefix naming the credential, or the environment variable that resolves it, is the same attempt
 /// spelled without a marker: nothing resolves either, so the only way to make it *work* is to paste
 /// the value in.
+///
+/// **Case-folded, and across every declared credential** — both corrections from C-184's review. The
+/// sibling guard `credential_shaped_value` has always iterated `connector.auth`, and a prefix naming
+/// another credential's variable is the same mistake spelled sideways.
 #[test]
 fn a_prefix_may_not_name_the_credential_or_its_env_var() {
     for spelling in [
-        r#"scheme = { header = { name = "Authorization", prefix = "SSWS okta.api_token" } }"#,
-        r#"scheme = { header = { name = "Authorization", prefix = "SSWS OKTA_API_TOKEN" } }"#,
+        r#"scheme = { header = { name = "Authorization", prefix = "SSWS okta.api_token " } }"#,
+        r#"scheme = { header = { name = "Authorization", prefix = "SSWS OKTA_API_TOKEN " } }"#,
+        // Folded: the same two, spelled in the other case.
+        r#"scheme = { header = { name = "Authorization", prefix = "SSWS OKTA.API_TOKEN " } }"#,
+        r#"scheme = { header = { name = "Authorization", prefix = "SSWS okta_api_token " } }"#,
     ] {
         let message = refusal(spelling);
         assert!(
-            message.contains("prefix"),
-            "expected a refusal naming the prefix, got: {message}"
+            message.contains("prefix") && message.contains("okta.api_token"),
+            "expected a refusal naming the prefix and the credential, got: {message}"
+        );
+    }
+}
+
+/// **The separator rule, and the pasted credential it exists to refuse.**
+///
+/// C-184's review found that a prefix of `Bearer sk-live-…` loaded, and would reach
+/// `providers/*.toml`, the generated Rust catalogue and the published catalogue verbatim. It could
+/// never produce a *working* request — the host still appends the real credential — but it is one
+/// keystroke from where someone types a scheme word next to a token.
+///
+/// The refusal is structural rather than a blocklist: the host appends the credential with nothing
+/// in between, so a prefix ending in an alphanumeric would send the two glued together. That is
+/// never what a vendor wants, whatever the scheme word is.
+#[test]
+fn a_prefix_may_not_end_in_an_alphanumeric_character() {
+    for spelling in [
+        // A pasted credential, in three vendors' spellings. Note a `CREDENTIAL_VALUE_PREFIXES`
+        // check would catch only the first — it is matched with `starts_with` over `"bearer "`,
+        // `"token "` and friends, and knows nothing of `SSWS` or `OAuth`.
+        r#"scheme = { header = { name = "Authorization", prefix = "Bearer sk-live-51H8ZaBcDeFgHiJkLmNoPqRs" } }"#,
+        r#"scheme = { header = { name = "Authorization", prefix = "SSWS 00aB3xYzQq7LmN0pR8sT1uV2wX3yZ4" } }"#,
+        r#"scheme = { header = { name = "Authorization", prefix = "OAuth 7f3a9c2e5b8d1064" } }"#,
+    ] {
+        let message = refusal(spelling);
+        assert!(
+            message.contains("prefix") && message.contains("alphanumeric"),
+            "expected the separator refusal, got: {message}"
+        );
+    }
+}
+
+/// **The missing trailing space, which was previously uncatchable — and is the same rule.**
+///
+/// `crates/connector-flux/tests/okta_connector.rs` documented `prefix = "SSWS"` as a mistake
+/// "nothing can catch for you". The separator rule catches it: `SSWS` + `<token>` is `SSWS<token>`,
+/// which Okta rejects, and the reason is the same one that refuses a pasted credential.
+#[test]
+fn a_prefix_missing_its_trailing_separator_is_refused() {
+    for spelling in [
+        r#"scheme = { header = { name = "Authorization", prefix = "SSWS" } }"#,
+        r#"scheme = { header = { name = "Authorization", prefix = "OAuth" } }"#,
+    ] {
+        let message = refusal(spelling);
+        assert!(
+            message.contains("prefix") && message.contains("alphanumeric"),
+            "expected the separator refusal, got: {message}"
+        );
+    }
+}
+
+/// A prefix of only whitespace carries no scheme word and puts leading space in a header value,
+/// which `field-content` disallows at the edges. Omitting `prefix` is how a raw-value header is
+/// spelled.
+#[test]
+fn a_whitespace_only_prefix_is_refused() {
+    for spelling in [
+        "scheme = { header = { name = \"Authorization\", prefix = \" \" } }",
+        "scheme = { header = { name = \"Authorization\", prefix = \"\\t\" } }",
+    ] {
+        let message = refusal(spelling);
+        assert!(
+            message.contains("prefix") && message.contains("whitespace"),
+            "expected the whitespace refusal, got: {message}"
         );
     }
 }

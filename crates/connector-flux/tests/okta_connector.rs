@@ -95,7 +95,12 @@ fn an_arbitrary_scheme_word_is_not_a_variant_of_auth_scheme() {
 ///
 /// The prefix is `"SSWS "` — **with the trailing space**, because the space is part of the literal
 /// and not a separator the host inserts. A prefix of `"SSWS"` would compose `Authorization:
-/// SSWS<token>`, which Okta rejects; nothing can catch that for the author, so it is stated here.
+/// SSWS<token>`, which Okta rejects.
+///
+/// This comment used to end "nothing can catch that for the author". That is **no longer true**: the
+/// loader now refuses a prefix ending in an alphanumeric, because the host appends the credential
+/// directly and the two would travel glued together. See `validate_auth_prefix` and
+/// `crates/connector-spec/tests/auth_prefix.rs::a_prefix_missing_its_trailing_separator_is_refused`.
 #[test]
 fn the_header_scheme_carries_the_ssws_prefix_it_once_could_not() {
     let source = fixture("scheme = { header = { name = \"Authorization\", prefix = \"SSWS \" } }");
