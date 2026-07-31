@@ -309,25 +309,59 @@ fn scan_node(node: &Node, found: &mut BTreeSet<String>) {
 /// | [`Path`](Self::Path) | refuse | a `zone_id` with a `/` in it is an operator's mistake, and silently encoding it produces a 404 they cannot diagnose |
 /// | [`Query`](Self::Query) | refuse the structural characters, then percent-encode with [`crate::auth::query_encode`] | the encoder already exists and is the identity over unreserved characters; a second one would put two spellings on one URL |
 /// | [`Header`](Self::Header) | refuse | a CR or LF appends a header of the value's choosing, and no encoding exists to make it safe |
-/// | [`Unplaced`](Self::Unplaced) | refuse unless **every** position would accept it | fail closed |
+/// | [`Unplaced`](Self::Unplaced) | refuse unless **every** rule above accepts it, the host rule included | fail closed |
 ///
 /// # This is a second spelling of `connector_spec::Position::validate_value`, deliberately
 ///
 /// C-214 asks for that predicate to be *reused* rather than reimplemented — "two spellings of one
-/// rule is the defect this story is an instance of" — and it could not be, because **this crate has
-/// no dependency edge to `connector-spec`**. Every `connector_spec` name in `connector-pack` today
-/// is prose in a doc comment; the pack's input is the *catalogue*, which carries no `binds` target
-/// and no `Position` (that is C-87). Adding the edge is a manifest change with an architectural
-/// argument behind it — `AGENTS.md` fences the compiler crates from the host-facing side, and this
-/// module opens by saying it does not re-lower `connector_spec`'s IR — so it is not a change to make
-/// in passing while closing a security finding.
+/// rule is the defect this story is an instance of" — and it takes the story's sanctioned
+/// alternative instead: replaced, with the reason recorded. Three facts, in the order they matter.
 ///
-/// So the story's sanctioned alternative is taken: replaced, with the reason recorded. The
-/// correspondence is exact and is worth checking by eye against
-/// `crates/connector-spec/src/config.rs:269-333` — [`Slot::validate`] refuses the same characters
-/// for the same three positions, in the same order, with the same reasoning. **Unifying the two
-/// behind one crate is the follow-up**, and it is the whole of the follow-up: the rule is one rule
-/// and it should live in one place.
+/// **Reuse could never have covered this type.** `connector_spec::Position` is a closed set of the
+/// three positions a *pinned* value lands on, and it has **no `Host` variant** — a templated host is
+/// `Binding::Endpoint`, a different binding asking a different question. So [`validate_authority`]
+/// had to be written here whatever else happened, and reuse could have covered at best three of
+/// these five slots: the severe half of this story, the half that predates C-187, was never
+/// reusable. That is the argument, and it stands on its own.
+///
+/// **The edge does not exist.** Every `connector_spec` name in `connector-pack` today is prose in a
+/// doc comment; the pack's input is the *catalogue*, which carries no `binds` target and no
+/// `Position` (that is C-87). Adding it is a manifest and lockfile change, both outside what this
+/// change is allowed to touch.
+///
+/// **It is not forbidden, and this comment previously implied it was.** `AGENTS.md`'s dependency
+/// fence is *directional* — it forbids the compiler crates from reaching the host and network side,
+/// and `connector-pack` → `connector-spec` is the opposite direction, unguarded. `connector-spec` is
+/// already in the publish closure, so the edge would not enlarge it either. The reason to weigh the
+/// edge carefully is the `Host` argument above plus the design intent this module opens with, not a
+/// rule that would refuse it.
+///
+/// # Where the two spellings actually differ
+///
+/// Not "exact" — an earlier revision of this comment claimed that, and it was wrong in a way someone
+/// would have trusted instead of re-measuring. Against
+/// `crates/connector-spec/src/config.rs:269-333`, the path and header rules match character for
+/// character. The query rule differs by exactly one character:
+///
+/// | | refuses in a query value |
+/// |---|---|
+/// | `connector-spec` | `&` `=` `?` `#` `+` **`%`**, whitespace, control |
+/// | here ([`validate_query`]) | `&` `=` `?` `#` `+`, whitespace, control |
+///
+/// **The difference is principled rather than accidental, and it is safe in this direction.** The
+/// loader's own stated reason for refusing `%` is that "nothing percent-encodes a query value on the
+/// way out" — true where it runs, because a declared `example` is never encoded by anything. Here a
+/// value *is* encoded: [`crate::auth::query_encode`] maps `%` to `%25` along with every other
+/// non-unreserved byte, so `50%off` travels as `50%25off` and cannot become an escape the vendor
+/// re-reads. Refusing it here would reject a legitimate value for a hazard the encoder removes.
+///
+/// The asymmetry runs the **fail-safe way**: the loader is the stricter of the two, so a provider
+/// author cannot ship `example = "50%off"` for a query pin, while a tenant may still supply one. A
+/// drift in the other direction — runtime stricter than loader — would ship an example no tenant
+/// could use, and that is the one worth a test if these ever move.
+///
+/// **Unifying the two behind one crate is the follow-up**, and unification has to settle this
+/// divergence rather than paper over it: one rule cannot both know about an encoder and not.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Slot {
     /// The authority of a templated base URL — the `{subdomain}` of
@@ -343,11 +377,15 @@ pub(crate) enum Slot {
     Header,
     /// **A placeholder this derivation could not place.**
     ///
-    /// Not reachable for anything the current emitter produces — `crates/connector-pack/tests/
-    /// configuration_value_guard.rs` asserts that over the whole shipped catalogue — and it exists
-    /// so that an emitter which grows a shape this does not model degrades into *more* refusal
-    /// rather than into none. That is the same choice [`Error::Unbuildable`] makes for the
-    /// evaluator, applied to the guard.
+    /// Not reachable for anything the current emitter produces — every brace-carrying literal in the
+    /// shipped catalogue is either a full URL with a `://` or a sole placeholder, and
+    /// [`tests::every_shipped_configuration_variable_is_placed`] is the tripwire that keeps it that
+    /// way. It exists so that an emitter which grows a shape this does not model degrades into
+    /// *more* refusal rather than into none, which is the same choice [`Error::Unbuildable`] makes
+    /// for the evaluator, applied to the guard.
+    ///
+    /// Being unreachable is exactly why its rule has to be right on inspection: nothing executing
+    /// will ever tell anyone it is wrong.
     Unplaced,
 }
 
@@ -423,12 +461,21 @@ impl Slot {
                 validate_header(value)?;
                 Ok(value.to_owned())
             }
-            // Fail closed: a placeholder nothing placed is held to every rule at once, and is not
-            // encoded — an encoding is only safe where the position is known.
+            // Fail closed: a placeholder nothing placed is held to **every** rule at once, the host
+            // rule included, and is not encoded — an encoding is only safe where the position is
+            // known.
+            //
+            // The host rule is load-bearing here rather than decorative. Without it this arm
+            // accepted `acme.zendesk.com@evil.example`: neither `@` nor `:` appears in the path,
+            // query or header charsets, because none of those three positions cares about them.
+            // Only the host does, and the host is the one position an unplaced value could be
+            // sitting in. A defence-in-depth layer that omits the defence it exists for is worse
+            // than none, because the comment above it gets believed.
             Self::Unplaced => {
                 validate_path(value)?;
                 validate_query(value)?;
                 validate_header(value)?;
+                validate_authority(value)?;
                 Ok(value.to_owned())
             }
         }
@@ -1377,6 +1424,60 @@ mod tests {
             assert!(
                 Slot::Unplaced.validate(bad).is_err(),
                 "{bad:?} was accepted"
+            );
+        }
+        // **Including the host rule**, which is the whole reason this arm is defence in depth. `@`
+        // and `:` appear in none of the path, query or header charsets — no such position cares
+        // about them — so without the host rule this arm accepted the exact value the story is
+        // about, while its own comment claimed it was fail-closed.
+        for bad in ["acme.zendesk.com@evil.example", "acme@evil", "acme:8080"] {
+            assert!(
+                Slot::Unplaced.validate(bad).is_err(),
+                "{bad:?} was accepted by the fail-closed arm"
+            );
+            // The other direction, so the *reason* the host rule is needed here is executed rather
+            // than asserted in a comment: all three of the other rules accept this value.
+            assert!(
+                validate_path(bad).is_ok()
+                    && validate_query(bad).is_ok()
+                    && validate_header(bad).is_ok(),
+                "{bad:?} is refused by a non-host rule, so it proves nothing about the host rule"
+            );
+        }
+    }
+
+    /// **The one place the two spellings of the rule disagree**, pinned so the next person reads a
+    /// measurement rather than a claim.
+    ///
+    /// `connector-spec`'s `Position::Query` refuses `%` (`crates/connector-spec/src/config.rs:303`,
+    /// charset `&=?#+%`); [`validate_query`] does not (charset `&=?#+`). The loader's reason is that
+    /// nothing percent-encodes a query value where *it* runs, which is true of a declared `example`
+    /// and false here — [`crate::auth::query_encode`] maps `%` to `%25`, so the escape cannot
+    /// survive to be re-read by the vendor.
+    ///
+    /// The asymmetry is fail-safe: the loader is stricter, so a provider author cannot ship an
+    /// `example` a tenant would then be unable to supply. A drift the other way is the one that
+    /// would hurt, and this test is where it would show up.
+    #[test]
+    fn the_query_rule_admits_a_percent_because_it_encodes_one() {
+        for value in ["a%2Fb", "a%b", "100%", "50%off"] {
+            assert_eq!(
+                Slot::Query.validate(value).as_deref(),
+                Ok(crate::auth::query_encode(value).as_str()),
+                "{value:?} should be admitted and encoded, not refused"
+            );
+            let encoded = crate::auth::query_encode(value);
+            assert!(
+                !encoded.contains('%') || encoded.contains("%25"),
+                "{value:?} encoded to {encoded:?}, leaving a `%` that was not itself escaped"
+            );
+        }
+        // What the shared half still refuses, so this is a one-character divergence and not a
+        // loosening of the query rule.
+        for value in ["a&b", "a=b", "a?b", "a#b", "a+b", "a b", "a\nb"] {
+            assert!(
+                Slot::Query.validate(value).is_err(),
+                "{value:?} was accepted"
             );
         }
     }

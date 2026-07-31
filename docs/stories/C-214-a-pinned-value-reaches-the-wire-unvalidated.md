@@ -172,3 +172,38 @@ The story's open question — whether a consuming host's egress allow-list match
 rather than host — still lives outside this repository. What changed here is that a value the guard
 refuses no longer reaches the subject either: `Operation::substituted_host` leaves the placeholder
 verbatim, which no allow-list matches.
+
+### Rework round 2 — three corrections from independent security review
+
+The review passed the guard itself: 36 probes against the host rule (percent-encoded `%40`/`%2540`,
+NUL, DEL, CRLF, `:8080`, `[::1]`, fullwidth `．` U+FF0E, ideographic `。` U+3002, one-dot-leader
+U+2024, BOM, ZWSP, NBSP, NEL, `%2e%2e`) moved the origin in no case, and every new guard was
+falsified individually. What it found was **three false or incomplete statements in my own
+comments** — the artefacts a later reader trusts instead of re-measuring.
+
+1. **"The correspondence is exact" was false.** Measured differentially over 33 values × 3
+   positions, the two spellings diverge in exactly one place: `connector-spec` refuses `%` in a
+   query value (`config.rs:303`, charset `&=?#+%`), this crate does not (`&=?#+`). The divergence
+   is *principled* — the loader's own reason for refusing `%` is that nothing encodes a query value
+   where it runs, which is true of an `example` and false here, because `query_encode` maps `%` to
+   `%25`. The `Slot` doc now carries the charset table, the reason, and the observation that the
+   asymmetry runs the **fail-safe** way: the loader is the stricter of the two, so a provider author
+   cannot ship `example = "50%off"` for a query pin while a tenant may still supply one. Drift in
+   the other direction is what would hurt, and
+   `the_query_rule_admits_a_percent_because_it_encodes_one` is now where it would surface.
+2. **`Slot::Unplaced` was documented as fail-closed and was not**, in the one position this story is
+   about. It applied the path, query and header rules — none of which refuses `@` or `:`, because no
+   such position cares about them — so `Slot::Unplaced.validate("acme.zendesk.com@evil.example")`
+   returned `Ok`. Unreachable today (the reviewer confirmed every brace-carrying literal in the
+   catalogue is either a full URL or a sole placeholder), so this was a defence-in-depth layer that
+   did not defend rather than a hole. **The host rule is now in that arm**, and the test asserts both
+   that `Unplaced` refuses the value *and* that the other three rules accept it — so the reason the
+   host rule is needed there is executed rather than claimed.
+3. **One of the three reasons for not reusing `Position::validate_value` did not survive checking.**
+   I wrote that `AGENTS.md`'s dependency fence stood in the way. It does not: the fence is
+   *directional*, forbidding compiler → host/network, and pack → spec is the opposite direction and
+   unguarded (`dependency_fence` 4 passed, `publish_closure` 6 passed with the edge added in a
+   throwaway copy). The recorded reason now leads with the stronger argument the reviewer surfaced:
+   **`connector_spec::Position` has no `Host` variant**, so reuse could have covered at best three of
+   these five slots, and `validate_authority` had to be written here regardless — the severe half of
+   this story, the half predating C-187, was never reusable at all.
