@@ -2,7 +2,7 @@
 id: C-216
 title: Ship the Discord connector
 pillar: Spec
-status: in-progress
+status: done
 priority: 4
 design:
 epic: provider-fleet-2

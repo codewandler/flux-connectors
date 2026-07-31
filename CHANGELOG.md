@@ -9,6 +9,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Discord connector (C-216).** Six curated operations behind a bot token whose `Bot ` scheme
+  word is the first prefix in the fleet whose *neighbouring* value is also valid vendor syntax for a
+  different credential: `Bot <token>` sent as `Bearer ` is a well-formed Discord request for an
+  OAuth2 user principal the caller does not hold, answered with a 401 indistinguishable from a
+  revoked token. The story's stated premise — that every shipped connector using the prefix axis
+  spells `Bearer ` — was measured and found false in both directions (okta ships `SSWS `, pagerduty
+  `Token token=`, statuspage `OAuth `; and no connector spells `Bearer ` as a header prefix at all,
+  because it is a preset variant). The correction is asserted by test rather than filed away.
+
+  No `quirks.rate_limit` is declared, deliberately: Discord's limits are per-route with a bucket per
+  major path parameter and are discovered from `X-RateLimit-*` headers, which the fixed
+  `requests`/`per_seconds` pair cannot express. Recorded as C-224.
+
+### Fixed
+
+- **A per-provider test no longer asserts a catalogue-wide literal (C-216).** Discord's prefix census
+  walked every `providers/*.toml` and compared the result against a four-element list, which Klaviyo's
+  fifth prefix falsified in the same wave — each branch green alone, red together, invisible from
+  either worktree. It now loads Okta, PagerDuty and Statuspage **by name** and checks what each
+  declares, because catalogue membership was never the evidence. The identical defect in
+  `trello_connector.rs` is filed as C-230.
+
+### Changed
+
+- **The Algolia probe closes with the space measured rather than surveyed (C-164, still blocked).**
+  [C-187] lifted half of its recorded blocker — a non-secret configuration field can now bind a
+  request header. The other half stands and is now the whole block: Algolia's application id must
+  reach both a hostname and a header, and the declaration that would express that is refused by name
+  — *"Two questions that share an answer are one question"*. Two tests now pin the refusals so the
+  boundary cannot be re-litigated, and the remaining gap is filed as C-229.
+
 - **Google sign-in, accounts and sessions (C-204).** The host now answers "who is asking" before it
   injects anything, which `docs/designs/connectors-proxy.md` names as the precondition for a
   credential-injecting service. Every `/v1` route refuses without a session, resolving the tenant
