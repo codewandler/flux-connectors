@@ -478,6 +478,41 @@ fn validate(loaded: &LoadedProvider, provider_headers: &BTreeMap<String, String>
 /// a comment: **a connector must ask for everything it needs**, and **it must not ask for anything it
 /// cannot use**. A template variable nobody declares is a connector that silently cannot be
 /// configured; a field binding nothing real is a question whose answer is discarded.
+///
+/// # Why `secret` + `example` is refused here and not asserted over `providers/` — C-231
+///
+/// The case against putting it in the loader is that an `example` is *documentation*, and a loader
+/// that polices documentation is a loader with an opinion about prose. **That argument is rejected,
+/// on three grounds:**
+///
+/// 1. **This loader already treats `example` as a checked property, not as prose.** It is validated
+///    against the field's own [`Format`](crate::Format) six lines below, and against the request
+///    position it pins in [`validate_pin`]. The precedent is not merely nearby, it is the same
+///    field; the documentation argument was already answered when those landed.
+/// 2. **The property being checked is not "is this placeholder good".** It is "no credential-shaped
+///    literal is committed", which is the rule
+///    `no_provider_file_carries_a_credential_value` states over the same files and which
+///    `validate_const_headers` already enforces at the loader for a header value. A secret field's
+///    `example` is the one remaining place in `[[config]]` where a credential-shaped literal is
+///    invited by the schema.
+/// 3. **A test over `providers/` protects this repository's 53 files and nobody else's.** These
+///    crates are published, so a downstream author writing their own provider TOML is a real
+///    person, and a refusal at [`load`] is the only form of this rule that reaches them. The cost
+///    asymmetry is what settles it: a placeholder that merely *looks* like a token blocks a push
+///    and costs an hour, and one that *is* a token is a disclosed credential.
+///
+/// Catalogue-wide, the rule is named by `no_shipped_provider_gives_a_secret_field_an_example`
+/// (`crates/connector-spec/tests/config_fields.rs`), which enumerates `providers/` from disk — the
+/// same shape `no_shipped_provider_has_an_unbound_template_variable` beside it already uses for a
+/// rule the loader also refuses, and the reason a provider landing tomorrow is covered without
+/// anyone adding it to a list. What does *not* belong anywhere is a **per-connector** restatement:
+/// C-219's `no_secret_config_field_carries_an_example` was reduced to the claim that is actually
+/// about Confluence. Measured while landing this: **24** per-connector tests spelled this rule out,
+/// and 14 of the 38 providers that declare a secret field had none — one rule with two dozen
+/// spellings that still missed a third of its surface, which is the defect C-230 is about.
+///
+/// **Scope.** Secret fields only. Whether a *non-secret* field's example is realistic is a
+/// documentation question, and those placeholders stay welcome.
 fn validate_config(connector: &Connector, problems: &mut Vec<String>) {
     let mut seen: Vec<&str> = Vec::new();
 
@@ -521,6 +556,19 @@ fn validate_config(connector: &Connector, problems: &mut Vec<String>) {
             problems.push(format!(
                 "configuration field {name:?} has an empty `help`; a field a user cannot answer is a \
                  field that stops the installation"
+            ));
+        }
+
+        // A secret field takes no placeholder at all — C-231. See `validate_config`'s own doc
+        // comment for why this is a loader refusal rather than a test over `providers/`.
+        if field.secret && field.example.is_some() {
+            problems.push(format!(
+                "configuration field {name:?} declares `secret = true` and an `example`. A secret \
+                 takes no placeholder: a token-shaped literal in a committed file has tripped \
+                 GitHub push protection and blocked a release here before, and a placeholder that \
+                 is a real token is a disclosed credential rather than a blocked push. Nobody \
+                 recognises their own secret from an example of someone else's — put the shape in \
+                 `help` instead"
             ));
         }
 

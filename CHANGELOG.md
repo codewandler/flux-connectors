@@ -34,6 +34,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An `example` on a secret configuration field is refused at load (C-231).** It was enforced by
+  per-connector goodwill, and the gap was three times wider than it looked: 38 providers declare a
+  secret field, **24 had a local test guarding it and 14 had nothing** — two dozen duplicated
+  spellings of one rule that still left a third of the exposed surface uncovered.
+
+  It lands as a **loader refusal** rather than a test, because these crates published today: a
+  downstream author writing their own provider TOML is now a real person, and `provider::load` is the
+  only form of the rule that reaches them. **This rejects input the live 0.7.0 accepted**, so it ships
+  as 0.8.0. No shipped provider is affected — all 43 secret fields across 53 files were parsed and
+  none carries an `example`.
+
+  Still open, and deliberately not smuggled in: nothing stops a credential-shaped literal in a `help`,
+  `description`, `label` or TOML comment. Push protection matches the string, not the key it sits
+  under.
+
+- **A per-provider test can no longer assert over the catalogue (C-230).** Trello's test asserted the
+  query-placed credential set equalled a two-element literal — green only because no provider since
+  Trello had placed a credential in the query string, and the next one that did would have turned
+  *Trello's* test red from a worktree that could not see it.
+
+  The guard refuses the **walk**, not the walk-plus-literal, because detecting "compared against a
+  literal" textually fails open — and because the author of a per-provider test cannot review the
+  population they quantify over, so even a monotone claim there is correct by luck. `AGENTS.md` now
+  names three homes for a genuine catalogue-wide claim, and the guard's failure message points at
+  them. All 122 test files were audited; no other instance.
+
 - **`RATIO_FLOOR_PERCENT` could only drift, and is replaced by a unit that cannot (C-196).** It
   guarded against a connector arriving with no response shapes at all, as a share of the catalogue,
   and nothing ratcheted it — it was moved by hand twice, each time *after* somebody noticed.
