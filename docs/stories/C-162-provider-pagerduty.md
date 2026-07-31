@@ -109,12 +109,22 @@ connector is not reads-only.
 ### No pagination quirk is declared, and that absence is pinned by a test
 
 PagerDuty pages with `limit`/`offset`. `Pagination` (`crates/connector-spec/src/ir.rs:355-378`) has
-`Page` and `Cursor` and nothing else, and `limit`/`offset` is neither: `Page { page_param = "offset" }`
-builds, reads correctly to a reviewer, and emits a loop advancing `offset` by **1** per iteration
-instead of by `limit`. `Cursor` needs a next-cursor pointer PagerDuty does not send — its responses
-carry `more`, a flag. So the query parameters ship and the quirk does not, following
-`providers/launchdarkly.toml:123`, and `no_pagerduty_operation_declares_a_pagination_quirk` exists so
-the absence cannot later be "completed" into the wrong loop. **A `limit`/`offset` variant is a real
+`Page` and `Cursor` and nothing else, and `limit`/`offset` is neither: `Page` describes a page
+*number* the next request increments by one, while `offset` is a row count the next request advances
+by `limit`, so `page_param = "offset"` would build, read correctly to a reviewer, and record
+something false about the vendor. `Cursor` needs a next-cursor pointer PagerDuty does not send — its
+responses carry `more`, a flag.
+
+**This is a claim about a declaration, not about emitted code, and the first draft of this note got
+that wrong.** Nothing emits a pagination loop today: `ir.rs:352` says compiling the enum into Flux
+control flow is C-12's work, and `connector-flux` reads only `quirks.error_envelope`. The absence is
+still worth pinning — a false declaration left in the file becomes a wrong loop the moment C-12
+lands, and `max_pages` is mandatory on every variant (`ir.rs:350-353`) so that loop would be bounded
+and silently wrong rather than obviously hung, which is the harder failure to spot.
+
+So the query parameters ship and the quirk does not, following `providers/launchdarkly.toml:123`, and
+`no_pagerduty_operation_declares_a_pagination_quirk` exists so the absence cannot later be
+"completed" into a declaration the IR cannot honestly make. **A `limit`/`offset` variant is a real
 gap in `Pagination`** and is worth its own story; it is not a change a provider story makes in
 passing.
 
@@ -144,7 +154,21 @@ encoding that finds a `service`/`services` key at any depth **except inside a JS
 IR positions carrying such a field (`Connector::services`, and the `service` on an operation, a config
 field, an event, a channel and a graph) and needs no hard-coded list, so a future IR struct is checked
 automatically. `the_service_key_walk_still_finds_an_ir_service_key_at_every_depth` was added to prove
-the guard still bites; it is a strengthening, not a relaxation, everywhere the scan was load-bearing.
+the guard still bites.
+
+Two caveats belong on the record rather than in a reviewer's head, both raised in review:
+
+- **The walk tolerates two things, not one.** Besides the schema case, it tolerates
+  `service`/`services` as a string **value** anywhere — it tests keys only, so a query parameter
+  *named* `service` on a default-only connector now passes where the scan flagged it. That widens the
+  text matched, not the property guarded: every IR field spelled `service`/`services` serialises as an
+  object key and never as a value.
+- **`SCHEMA_KEYS` is not the complete set of vendor-controlled keys.** `InboundEvent::when`
+  (`inbound.rs:262`), `Condition::right` (`graph.rs:171`), `NodeKind::Literal::value` (`graph.rs:220`)
+  and `NodeKind::Object::fields` (`graph.rs:215`) all carry vendor- or author-chosen names and are
+  descended into, so a future webhook narrowed by `when = { service = ... }` would trip this test. The
+  substring scan tripped on those too, so nothing was widened; it is left alone because every key added
+  to that list is a place the guard stops looking.
 
 ### Left out, and why — none of it guessed at
 

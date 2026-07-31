@@ -434,13 +434,27 @@ fn every_shipped_service_is_spellable_and_a_single_service_provider_declares_non
     );
 }
 
-/// **The relaxation above is exactly one word wide, and this is the proof.**
+/// **The guard still bites, and this is the proof.**
 ///
 /// [`service_key_outside_a_schema`] replaced a substring scan, so the question a reviewer must be
 /// able to answer is whether it still bites. It does: an IR-shaped `service` key is found at every
 /// depth the encoding can put one — top level, inside an operation, inside a config field, and
-/// inside an array element — and the *only* thing newly tolerated is the same word appearing as a
-/// vendor's own property name inside a schema.
+/// inside an array element.
+///
+/// # What the walk newly tolerates, stated exactly
+///
+/// Two things, neither of which is the guarded property:
+///
+/// 1. `service`/`services` as a **property name inside a JSON Schema** — the case that motivated the
+///    change, and the one the cases below pin.
+/// 2. `service`/`services` as a **string value anywhere**, schema or not. The walk tests keys only,
+///    so a query parameter *named* `service` on a default-only connector passes here where the old
+///    scan flagged it.
+///
+/// The second is a real widening of the *text* matched and not of the *property* guarded, because
+/// every IR field spelled `service`/`services` serialises as an object **key** and never as a value:
+/// `Connector::services`, and the `service` on an operation, a config field, an event, a channel and
+/// a graph. A value can never be one of them.
 #[test]
 fn the_service_key_walk_still_finds_an_ir_service_key_at_every_depth() {
     for (case, document) in [
@@ -519,6 +533,23 @@ fn the_service_key_walk_still_finds_an_ir_service_key_at_every_depth() {
 }
 
 /// The JSON keys whose values are **vendor JSON Schema**, not this repository's IR structure.
+///
+/// # This is not the complete set of vendor-controlled keys, deliberately
+///
+/// Four other IR positions carry names or literals a vendor or an author chooses, and the walk
+/// descends into all of them:
+///
+/// - `InboundEvent::when` (`crates/connector-spec/src/inbound.rs:262`) — a map keyed by the
+///   vendor's own payload field names (`{ action = "opened" }`);
+/// - `Condition::right` (`crates/connector-spec/src/graph.rs:171`) and `NodeKind::Literal::value`
+///   (`graph.rs:220`) — free `JsonSchema` literals;
+/// - `NodeKind::Object::fields` (`graph.rs:215`) — a map keyed by author-chosen field names.
+///
+/// So a future PagerDuty webhook narrowed by `when = { service = ... }` would trip this test. That
+/// is not a regression introduced here — the substring scan this replaced tripped on all four too —
+/// and it is left alone rather than pre-emptively widened: no shipped provider has hit one, and
+/// every key added to this list is a place the guard stops looking. Add the key when a vendor
+/// actually needs it, with the provider that proves it.
 ///
 /// A schema describes what a vendor sends and receives, so every key inside one is the vendor's
 /// word rather than ours. `service`/`services` are ordinary English, and a vendor is entitled to

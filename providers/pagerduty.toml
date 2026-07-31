@@ -63,20 +63,29 @@
 # PagerDuty pages every collection with `limit`/`offset`. `Pagination`
 # (`crates/connector-spec/src/ir.rs:355-378`) has exactly two variants and **neither is that shape**:
 #
-#   - `Page { page_param, size_param, page_size, max_pages }` advances a page *number* by one per
-#     iteration. Spelling `page_param = "offset"` compiles, reads correctly to a reviewer, and emits
-#     a loop that walks `offset` 0, 1, 2, 3 — re-reading all but one row of the previous window every
-#     time, forever, silently. It is the most dangerous kind of wrong: it looks right.
+#   - `Page { page_param, size_param, page_size, max_pages }` describes a page *number*, which the
+#     next request increments by one. `offset` is not a page number — it is a row count that the next
+#     request advances by `limit` — so `page_param = "offset"` would record a claim about PagerDuty
+#     that is simply false, while compiling clean and reading correctly to a reviewer.
 #   - `Cursor { cursor_param, next_cursor_pointer, max_pages }` needs the response to carry the next
 #     cursor. PagerDuty's list responses carry `limit`, `offset`, `more` and `total` — a *flag*, not
 #     a cursor — so there is no pointer to name.
 #
+# **Nothing emits a pagination loop today**, so the harm is latent rather than live: `Pagination` is a
+# declaration and no more (`crates/connector-spec/src/ir.rs:352`, "Compiling this into Flux control
+# flow is C-12; this is only its declaration"), and `connector-flux` reads only
+# `quirks.error_envelope`. That is exactly why declaring one falsely is worth refusing *now*: C-12
+# compiles these into control flow, and at that point a `Page` declared over an offset becomes a loop
+# that re-reads all but one row of each window. It would not run forever — `max_pages` is mandatory on
+# every variant precisely so a loop is bounded (`ir.rs:350-353`) — it would just be silently wrong
+# until the cap, which is the more expensive failure to notice.
+#
 # The parameters are therefore declared and the quirk is not, following the call
 # `providers/launchdarkly.toml:123` already made for the identical vendor shape: a caller pages by
 # incrementing `offset` by `limit` itself. `crates/connector-flux/tests/pagerduty_connector.rs::no_pagerduty_operation_declares_a_pagination_quirk`
-# pins the absence, so that it cannot later be "completed" into the wrong loop by someone who reads
-# the missing quirk as an oversight. A `limit`/`offset` variant is a real gap in `Pagination`; it is
-# a change to the IR that a connector story does not get to make on its way past.
+# pins the absence, so that it cannot later be "completed" into a false declaration by someone who
+# reads the missing quirk as an oversight. A `limit`/`offset` variant is a real gap in `Pagination`;
+# it is a change to the IR that a connector story does not get to make on its way past.
 #
 # ---------------------------------------------------------------------------------------------
 # EXCLUDED, deliberately, rather than guessed at:

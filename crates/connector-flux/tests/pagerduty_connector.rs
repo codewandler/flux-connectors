@@ -24,12 +24,16 @@
 //! - **No operation declares a pagination quirk, and that is the finding.** PagerDuty pages with
 //!   `limit`/`offset`, and [`Pagination`](connector_spec::Pagination)
 //!   (`crates/connector-spec/src/ir.rs:355-378`) has exactly two variants, `Page` and `Cursor`.
-//!   Neither is `limit`/`offset`: `Page { page_param = "offset" }` would compile, look right, and
-//!   emit a loop advancing `offset` by **1** instead of by `limit` — silently re-reading the same
-//!   window. So the query parameters are declared and the quirk is not, following
+//!   Neither is `limit`/`offset`: `Page` describes a page *number* incremented by one, and `offset`
+//!   is a row count advanced by `limit`, so `page_param = "offset"` would compile, look right, and
+//!   record a claim about PagerDuty that is false. **Nothing emits a pagination loop today** — the
+//!   enum is a declaration only (`crates/connector-spec/src/ir.rs:352`) and `connector-flux` reads
+//!   just `quirks.error_envelope` — which is why the false declaration must be refused now rather
+//!   than when C-12 compiles these into control flow and it becomes a loop re-reading all but one
+//!   row of each window. So the query parameters are declared and the quirk is not, following
 //!   `providers/launchdarkly.toml:123`'s precedent, and
 //!   [`no_pagerduty_operation_declares_a_pagination_quirk`] exists so that absence cannot later be
-//!   "fixed" into a wrong loop.
+//!   "fixed" into a declaration the IR cannot honestly make.
 
 use std::path::{Path, PathBuf};
 
@@ -260,10 +264,18 @@ fn every_pagerduty_write_requires_a_from_header_and_no_read_declares_one() {
 /// **No operation declares a pagination quirk, and the absence is deliberate.**
 ///
 /// PagerDuty pages with `limit`/`offset`. [`Pagination`](connector_spec::Pagination) offers `Page`
-/// and `Cursor` and nothing else, and `limit`/`offset` is neither: a `Page { page_param = "offset" }`
-/// would build, read correctly to a reviewer, and emit a loop that advances `offset` by **1** per
-/// iteration rather than by `limit`, re-reading almost the same window every time. `Cursor` needs a
-/// next-cursor pointer PagerDuty's responses do not carry.
+/// and `Cursor` and nothing else, and `limit`/`offset` is neither: `Page` describes a page *number*
+/// the next request increments by one, while `offset` is a row count the next request advances by
+/// `limit`. A `Page { page_param = "offset" }` would build and read correctly to a reviewer while
+/// recording something false about the vendor. `Cursor` needs a next-cursor pointer PagerDuty's
+/// responses do not carry — they carry `more`, a flag.
+///
+/// **This is a claim about a declaration, not about emitted code.** No pagination loop is emitted
+/// today: `ir.rs:352` says compiling the enum into Flux control flow is C-12's work, and
+/// `connector-flux` consults only `quirks.error_envelope`. The pin exists precisely because that
+/// day is coming — a false declaration sitting in the file until C-12 lands becomes a wrong loop the
+/// moment it does, and it would be bounded by `max_pages` rather than infinite, which makes it
+/// harder to notice rather than easier.
 ///
 /// So the parameters ship and the quirk does not — `providers/launchdarkly.toml:123` made the same
 /// call for the same vendor shape. This test is the pin: it fails the moment somebody "completes"
@@ -276,9 +288,11 @@ fn no_pagerduty_operation_declares_a_pagination_quirk() {
         assert!(
             operation.quirks.pagination.is_none(),
             "operation `{}` declares a pagination quirk. PagerDuty pages with `limit`/`offset`, \
-             which is neither `Pagination::Page` (whose loop advances a page *number* by one) nor \
-             `Pagination::Cursor` (which needs a next-cursor pointer PagerDuty does not send). \
-             Declaring one emits a wrong loop that looks right — see this file's module docs",
+             which is neither `Pagination::Page` (a page *number* incremented by one, where \
+             `offset` is a row count advanced by `limit`) nor `Pagination::Cursor` (which needs a \
+             next-cursor pointer PagerDuty does not send). Either would record something false \
+             about the vendor, and C-12 will turn that into a wrong loop — see this file's module \
+             docs",
             operation.id
         );
     }
