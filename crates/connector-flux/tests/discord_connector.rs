@@ -189,14 +189,21 @@ fn the_bot_token_travels_with_the_bot_prefix_and_never_bearer() {
 
     // The prefix is connector data and must stay out of the module: generated Flux names a
     // credential and nothing more (`AGENTS.md`, the authentication contract).
+    //
+    // The scan is over the emitted *code*, with the `description` line removed. A description is
+    // prose a model reads and `discord-current-user`'s deliberately names the scheme word — telling
+    // a caller which header arrangement a 401 would be blaming. The hazard this assertion guards is
+    // the module *assembling* the header, which would appear as a `headers:` argument or an
+    // interpolated string, never as documentation.
     for id in OPERATIONS {
         let operation = connector
             .operation(id)
             .unwrap_or_else(|| panic!("discord declares `{id}`"));
         let flux = emit_operation(&connector, operation)
             .unwrap_or_else(|error| panic!("{id} does not emit: {error}"));
+        let code = flux_without_descriptions(&flux);
         assert!(
-            !flux.contains(PREFIX.trim()) && !flux.contains("Bearer"),
+            !code.contains(PREFIX.trim()) && !code.contains("Bearer"),
             "{id} emits a scheme word into the module; the prefix belongs to the placement, and \
              the host applies it:\n{flux}"
         );
@@ -205,6 +212,15 @@ fn the_bot_token_travels_with_the_bot_prefix_and_never_bearer() {
             "{id} emits the credential's environment variable into the module:\n{flux}"
         );
     }
+}
+
+/// The emitted module with its `description` lines dropped, leaving the declaration and the
+/// statements — the part that becomes a request.
+fn flux_without_descriptions(flux: &str) -> String {
+    flux.lines()
+        .filter(|line| !line.trim_start().starts_with("description \""))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// **Finding 2: the catalogue's prefix census — and the correction to the claim that filed this
@@ -444,9 +460,8 @@ fn every_snowflake_is_declared_as_a_string() {
             .response_schema
             .as_ref()
             .unwrap_or_else(|| panic!("{operation_id} declares a response shape"));
-        let declared = find_property_type(schema, property).unwrap_or_else(|| {
-            panic!("{operation_id}'s response shape declares `{property}`")
-        });
+        let declared = find_property_type(schema, property)
+            .unwrap_or_else(|| panic!("{operation_id}'s response shape declares `{property}`"));
         assert_eq!(
             declared, "string",
             "{operation_id}'s `{property}` is a snowflake and is declared as {declared:?}"
@@ -584,5 +599,8 @@ fn verify_is_an_argument_free_read() {
         .iter()
         .map(|operation| operation.id.as_str())
         .collect();
-    assert_eq!(declared, OPERATIONS, "the curated set, in declaration order");
+    assert_eq!(
+        declared, OPERATIONS,
+        "the curated set, in declaration order"
+    );
 }
