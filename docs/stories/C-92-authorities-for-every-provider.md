@@ -2,12 +2,12 @@
 id: C-92
 title: Declare an authority for every shipped provider
 pillar: Spec
-status: in-progress
+status: done
 priority: 4
 design: docs/designs/global-addressing.md
 epic: credential-addressing
 areas: [providers, connector-spec]
-note: "15 of 16 declare none, so no gid and no credential path renders for them. Its own story because an authority is published under a never-reused contract — this is a decision, not a chore"
+note: "MEASURED 37 of 44 declared none (the original '15 of 16' was stale by two fleet waves); so no gid and no credential path renders for them. Its own story because an authority is published under a never-reused contract — this is a decision, not a chore"
 ---
 
 # Declare an authority for every shipped provider

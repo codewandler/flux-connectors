@@ -89,7 +89,6 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 
 ### credential addressing, and the secret-store seam
 _The [configuration surface](connector-configuration.md) modelled *what a human supplies*. It stopped_
-- [C-92 — Declare an authority for every shipped provider](C-92-authorities-for-every-provider.md) · Spec · 15 of 16 declare none, so no gid and no credential path renders for them. Its own story because an authority is published under a never-reused contract — this is a decision, not a chore
 - [C-93 — The flux adapter — a tenant-scoped store behind flux's CredentialStore](C-93-flux-credential-store-adapter.md) · Bridge · the trap: flux's CLI write path is hard-wired to the file backend, so an injected store is READ-ONLY in practice until flux changes. Say so before anyone deploys it
 
 ### the explorer at fleet scale
@@ -236,6 +235,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-83 — Publish events and channel bindings into the manifest and the catalogue](C-83-channel-binding-codegen.md) · Codegen · the strict split: bindings reach the manifest and catalog.json and NOTHING reaches the module. The emitter must refuse to dress a binding up as a pollable op
 - [C-84 — Design the flux-side generic connector channel kind and file its flux stories](C-84-flux-connector-channel-seam.md) · Bridge · this is what retires adapters/slack.rs — one generic `connector` arm in build_channels instead of one arm per vendor. Cross-repo handoff, per the C-16/C-64 precedent
 - [C-91 — `connector-secrets` — the store trait and a Vault implementation](C-91-connector-secrets-crate.md) · Bridge · a HOST LIBRARY, outside the compile path — connector-cli must not depend on it, asserted by test, so no_network.rs keeps meaning what it means
+- [C-92 — Declare an authority for every shipped provider](C-92-authorities-for-every-provider.md) · Spec · MEASURED 37 of 44 declared none (the original '15 of 16' was stale by two fleet waves); so no gid and no credential path renders for them. Its own story because an authority is published under a never-reused contract — this is a decision, not a chore
 - [C-95 — Lower a flow graph to a composite Flux op](C-95-graph-lowering.md) · Codegen · owns symbol generation and region nesting. MUST refuse a Select wired to an Operation output until http.request returns a record — today the response is one flat string
 - [C-100 — Render the explorer full-width](C-100-explorer-full-width.md) · Surfaces · the largest visible gain for the smallest diff — VPDoc.vue:191 caps content at 688px, so 16 provider cards render in two columns on a page allowed to be 1440px
 - [C-101 — Make services a visible, filterable dimension](C-101-services-in-the-explorer.md) · Surfaces · 18 services are published with base_url, api_version, gid and operation counts — the explorer mentions none of them, so Google's three read as one

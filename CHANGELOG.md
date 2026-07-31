@@ -7,6 +7,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Every shipped provider declares an authority (C-92) — and an entire authentication mechanism
+  became reachable as a result.** The story said "15 of 16 declare none"; the measured figure was
+  **37 of 44**, stale by two fleet waves. All 44 declare one now.
+
+  Without an authority, `Credentials::reference` refuses with `NoCredentialAddress` — the credential
+  path does not render, so the connector cannot authenticate at all. The sharper consequence, found
+  by C-198's implementor: **all three `BasicJoin` connectors** — zendesk, jira, twilio — lacked one,
+  so the refusal fired *before* the configuration port was consulted and **the entire Basic branch
+  of `auth::acquire` had no shipped consumer.** A whole authentication mechanism that had never run
+  against a real connector. It runs now: two tests moved out of `src/` into `tests/`, the `Box::leak`ed
+  doctored provider is gone, and they drive the shipped `zendesk-ticket-show` through the public
+  `Operation::build_authenticated_request` with nothing faked — asserting the composed
+  `Authorization: Basic …` against a base64 literal computed outside the crate rather than by the
+  crate's own encoder. The inverted test that pinned the old wall was **removed**, not relaxed.
+
+  **An authority is permanent** (`AGENTS.md`: an address, once published, is not reused) and it is
+  the second segment of every credential path, so each of the 37 is recorded with its reasoning in
+  the provider file. The rule: multi-product vendors spell the *product* (`com.atlassian.jira`,
+  `com.atlassian.statuspage` — separately provisioned credentials that must not share a directory),
+  single-product vendors spell `api`. Three are flagged in-file as genuinely uncertain and are the
+  ones to re-check before the first publish: `com.sendgrid.api` (vs `com.twilio.sendgrid` — SendGrid
+  keeps its own domain and its own key), `com.frontapp.api`, and `com.notion.api` (vs `so.notion`).
+
+  `api_version` landed on 12 of 44 — only where the connector's own file already spells it. The
+  other 25 were left rather than asserting vendor facts from memory, since a version is published
+  under the same never-reused contract.
+
 ### Fixed
 
 - **A mutable `ConfigStore` could show the egress gate one host and send the request to another
