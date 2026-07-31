@@ -1,0 +1,447 @@
+# New Relic REST API v2 — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. New Relic publishes its REST v2 reference as documentation
+# pages on docs.newrelic.com, not as a machine-readable document vendored here (no C-4 ingest run
+# has selected it), so this file is written directly in the IR's shape — the same route babelforce,
+# postmark, zendesk, freshdesk, github, notion, datadog and trello already take. **Drift against the
+# vendor's own docs is therefore undetectable by machine**, the caveat those files carry
+# (`docs/designs/provider-operation-inventory.md` §6.7, and `AGENTS.md` via C-14). Every path,
+# parameter and response field below was read from docs.newrelic.com's REST API v2 reference on
+# 2026-07-31 and is cited where it is not obvious.
+#
+# ---------------------------------------------------------------------------------------------
+# C-220'S QUESTION: THE OPERATOR CHOOSES BETWEEN TWO **VENDOR-OWNED** HOSTS, AND THE CREDENTIAL DOES
+# NOT SAY WHICH ONE IT BELONGS TO. CAN THE IR SAY "ONE OF THESE TWO"? MEASURED, AND THE ANSWER IS
+# **NO** — IT SHIPS ANYWAY, WITH THE GAP WRITTEN DOWN HERE AND ASSERTED IN A TEST RATHER THAN
+# SMOOTHED OVER WITH `help` TEXT.
+# ---------------------------------------------------------------------------------------------
+#
+# **The vendor shape.** New Relic serves one REST v2 API from two hosts: `api.newrelic.com` for an
+# account in the US region and `api.eu.newrelic.com` for one in the EU region. The paths, the
+# payloads, the header and the key format are identical; only the authority differs. An account
+# lives in exactly one of them, chosen when it was created and not changeable afterwards, and a
+# request for a US account sent to the EU host does not fail as a routing error — it fails as
+# `401 Unauthorized`, because the EU host has never heard of that key. **The credential is the thing
+# the failure names, and the credential is not the thing that is wrong.**
+#
+# **What this repository already had.** Nine shipped connectors template their host, and eight of
+# them template a label the *operator* owns — `{subdomain}.zendesk.com` (zendesk), `{site}`.
+# atlassian.net (jira), `{shop}.myshopify.com` (shopify), `{instance}.my.salesforce.com`
+# (salesforce), `{domain}` (freshdesk, okta). Those are free text with an unbounded answer set, and
+# `format = "subdomain"` is exactly the right thing to say about them.
+#
+# **The one near-precedent, named rather than ignored: `providers/docusign.toml`'s `account_host`.**
+# That is also a vendor-owned host bound through `endpoint.` with `format = "hostname"`, so this
+# connector is not the first to put a whole vendor host behind a `[[config]]` field. The difference
+# is what an operator does when they do not know the answer: DocuSign's value is **discoverable** —
+# it is a field of the OAuth UserInfo response, and the help text tells you which field to read, so
+# a wrong answer is a transcription error. New Relic's is a **choice from two**, made before any
+# call succeeds, with no endpoint that will tell you which one is yours until you have already
+# guessed right. `providers/intercom.toml` records the identical vendor shape
+# (`api.intercom.io` / `api.eu.intercom.io` / `api.au.intercom.io`) as an unclosed SCHEMA GAP and
+# ships US-only; this is the first connector in the catalogue to actually bind such a host, and
+# binding it is what turns the gap from "not attempted" into "attempted and measured".
+#
+# **The measurement, and it is the story's finding.** Nothing in the IR expresses a closed set of
+# *values*:
+#
+# - `Format` (`crates/connector-spec/src/config.rs:104-123`) is a closed enum of value **shapes** —
+#   `text`, `subdomain`, `hostname`, `url`, `email`, `token`. Its own doc comment says why it is
+#   closed ("a renderer given `^[a-z0-9]...$` can reject a value and cannot explain why") and every
+#   variant answers "what does a well-formed value look like", never "which values are permitted".
+#   `hostname` is the nearest fit and it admits every syntactically valid host on the internet.
+# - There is no second field for it. `ConfigField` (`config.rs:501-551`) carries `name`, `service`,
+#   `label`, `help`, `example`, `format`, `required`, `secret`, `docs_url` and `binds`, and it is
+#   `#[serde(deny_unknown_fields)]` — so a `values = [...]` key an author would reach for is a load
+#   error rather than a key quietly accepted and ignored. That refusal is the honest one, and
+#   `crates/connector-flux/tests/newrelic_connector.rs::the_closed_set_of_two_hosts_is_not_
+#   expressible_and_the_field_admits_any_host` asserts it against this very file, so the gap cannot
+#   be closed by accident and cannot be reopened by editing a comment.
+# - `Binding::Request` / `Position` (C-187) do not help. They pin a *request component* — a path
+#   segment, a query parameter, a header — and constrain the value's **characters** so it cannot
+#   reshape the request (`Position::validate_value`). The region is not a request component, and
+#   the hazard here is not a reshaped request: it is a perfectly well-formed request sent to a real
+#   server that does not hold this account.
+#
+# **So the honest statement of what ships:** an operator can type any hostname into `host`, the
+# loader will accept it, a form will accept it, and this connector will send an account's API key
+# to it. Two answers work; the rest produce a `401` that reads as a bad key. The only mitigation in
+# this file is prose — the `help` text names both hosts and tells the operator to read the region
+# off the URL they log in at — and prose is not a constraint.
+#
+# **Why it ships anyway, as a judgement rather than a discovery.** Three things weigh in:
+#
+# 1. **The alternative expressions are worse, not merely unavailable.** Templating only the varying
+#    label — `https://api.{region}newrelic.com/v2` with `region` of `""` or `"eu."` — does not work:
+#    the US host is `api.newrelic.com` and *not* `api.us.newrelic.com`, so the two hosts share no
+#    common template with one varying label, and `Format::validate` refuses an empty value
+#    (`config.rs:146-147`) so the US case has no spelling at all. Declaring two `[[services]]`, one
+#    per region, would duplicate all six operations across a partition that is not a partition of
+#    the *API* — services partition an operation set by surface (`AGENTS.md`, Service contract), and
+#    a region is the same surface twice. Shipping two connector files would double the maintenance
+#    of every path and schema below to encode one boolean.
+# 2. **The blast radius is bounded and stated.** The field reaches `base_url` and nothing else, so
+#    the worst a wrong answer does is send an authenticated request to the wrong host. It cannot
+#    reach a path segment, a query parameter or a header, and it is not a secret in either
+#    direction. That is a smaller surface than the hazard `providers/trello.toml` accepted for
+#    C-159 §2, and it is the whole of it.
+# 3. **Refusing here would not close the gap.** The gap is in `ConfigField`, and a connector that
+#    declined to bind its host would leave the model exactly as it is, minus the evidence that a
+#    real vendor needs the expression. `providers/intercom.toml` has been that evidence in comment
+#    form since it shipped, and the model did not grow.
+#
+# **What has to change before this is not a footgun**, in the terms a story can pick up: a closed
+# value set on `ConfigField` — an enumerated list of permitted values with a `label` per value, so a
+# renderer shows a two-item dropdown rather than a text box, and the loader can check `example`
+# against membership rather than against shape. Filed as this story's finding; see
+# `docs/stories/C-220-provider-newrelic.md` §Progress.
+#
+# ---------------------------------------------------------------------------------------------
+# WHAT SHIPS: 6 operations — 5 reads, 1 write. Applications: list, get one. Alerts: policies,
+# violations. Deployments: list an application's, record one.
+# ---------------------------------------------------------------------------------------------
+#
+# **NRQL is not here, and that is the second curation decision this file turns on.** New Relic's
+# query surface (`/v1/accounts/{id}/query` on the Insights host, and NerdGraph's `nrql` field) takes
+# a whole query *language* as a string. A free-form query string is not a curated operation: it makes
+# the connector's surface unbounded, and it makes the risk and the effects of a call a property of
+# text a caller supplied rather than of anything declared here. The story says so explicitly and
+# this file agrees with it.
+#
+# **NerdGraph is not here either.** It is GraphQL — one endpoint, one `query` string, and a schema
+# this IR has no vocabulary for. That belongs with C-110's (`providers/linear.toml`) decision about
+# how this repository models a GraphQL API at all, not ahead of it.
+#
+# **Not one operation declares a query parameter.** The emitter interpolates query values verbatim
+# and percent-encodes nothing, deliberately (`crates/connector-flux/src/op.rs:138-143`;
+# `zendesk-ticket-search` is the standing demonstration under `AGENTS.md`'s Intentional gaps, and
+# sentry, fly, clickup, datadog and trello each excluded filters for the same reason). The filters
+# left out are the ones a reader will look for, and every one is real, documented and useful:
+#
+# - **`filter[name]`, `filter[host]`, `filter[ids]`, `filter[language]`** on `GET /applications.json`
+#   — a caller-supplied name would be interpolated raw into the URL.
+# - **`only_open`** on `GET /alerts_violations.json`. Its absence is the sharpest of these and is
+#   called out in the operation's own description: without it the call returns violations New Relic
+#   considers in its default window whether open or closed, so a caller **must** read `closed_at`
+#   rather than assume every violation returned is live.
+# - **`start_date` / `end_date`** on violations and deployments, and **`page`** on every list.
+#   Pagination is therefore not expressible here at all; `quirks.pagination` reaches no artifact
+#   today in any case (`AGENTS.md`, Intentional gaps), so declaring it would state something no
+#   consumer can read.
+#
+# They belong to whichever story closes the query-encoding gap
+# (`docs/designs/query-encoding-flux-stories.md`), not to this one.
+#
+# **Endpoints deliberately not shipped, and named rather than silently absent:**
+#
+# - **`DELETE /v2/applications/{id}.json`** — documented, and it removes an application and its
+#   history from the account. Destroying observability data is not what a first curated set is for,
+#   and there is no undo.
+# - **`PUT /v2/applications/{id}.json`** — updates an application's name and Apdex settings. A
+#   write with no read-back value for the flows this connector is for, and renaming an application
+#   silently repoints every dashboard and alert that names it.
+# - **`GET /v2/applications/{id}/metrics.json` and `/metrics/data.json`** — the metric *names* list
+#   is a large unbounded projection, and `metrics/data.json` requires `names[]` and a time window as
+#   query parameters, which is exactly the shape excluded above. This is the endpoint an operator
+#   will miss most; it lands with the query-encoding story.
+# - **`GET /v2/users.json`, `GET /v2/users/{id}.json`** — a user directory is personal data this
+#   connector has no operation that needs, and reading it by default is the wrong direction.
+# - **`GET /v2/key_transactions.json`, `/v2/labels.json`, `/v2/plugins.json`, `/v2/mobile_
+#   applications.json`, `/v2/browser_applications.json`** — all documented, all out of a first
+#   curated set: a connector earns operations by need, and none is needed to express "see what is
+#   reporting, see what is alerting, and mark a deploy".
+# - **`POST /v2/alerts_policies.json` and the alerts condition endpoints** — creating alert policy
+#   structure is configuration management, a larger and riskier surface than reading what alerting
+#   already exists, and it belongs to its own story.
+# - **`[[events]]` / `[[channels]]`.** New Relic does publish webhook notification channels, and
+#   declaring an inbound half would mean also declaring how it is registered and how its payload is
+#   verified. New Relic's webhook notifications carry no HMAC signature this file can name, so the
+#   binding would have to state `verification = "none"` — a real answer, but one that deserves the
+#   deliberate story `AGENTS.md`'s member contract asks for, not a footnote here.
+#
+# ---------------------------------------------------------------------------------------------
+
+id = "newrelic"
+vendor = "New Relic"
+
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.newrelic.api/api_key` — so it is declared before
+# anything can authenticate.
+#
+# Derived from `newrelic.com`, the vendor's own primary domain, in reverse-DNS form, with the
+# trailing `api` label the already-shipped authorities carry (`com.trello.api`, `com.intercom.api`,
+# `com.slack.api`, `io.fly.api`).
+#
+# **One authority, not two, and the region does not enter it.** `api.newrelic.com` and
+# `api.eu.newrelic.com` are two *hosts* for one API, exactly as intercom's three are, and one API is
+# one authority. Putting the region in the authority would mint two addresses for one operation and
+# would tie a tenant's credential path to a value the tenant can restate — the opposite of what a
+# credential path is for.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused").
+authority = "com.newrelic.api"
+
+# **The region host is the one thing an operator supplies, and it is a placeholder rather than a
+# literal.** See the header comment for the whole of what that implies, including what has to change
+# before the closed set of two is expressible. Only the authority is templated: `/v2` and every
+# operation path below are literal, so a wrong answer misroutes a request and cannot restructure one.
+base_url = "https://{host}/v2"
+
+# `2` is the vendor's own spelling — the version is the leading path segment of every REST v2 URL.
+# Rendered addresses read `com.newrelic.api:2#newrelic-application-list`.
+api_version = "2"
+
+description = "New Relic APM and alerting over the REST v2 API: list the applications an account is monitoring and read one in detail, read the account's alert policies and its current violations, and list or record deployment markers against an application. The account's region host is configured once, not chosen per call"
+verify = "newrelic-application-list"
+
+# One alternative, one credential. New Relic's REST v2 accepts a User API key and nothing else for
+# these endpoints; there is no OAuth flow and no second mechanism to offer.
+default_auth = [{ credentials = ["newrelic.api_key"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials — one User API key, in New Relic's own header, with no prefix.
+# ---------------------------------------------------------------------------------------------
+
+# `X-Api-Key: <key>`: the whole header value is the key, so no `prefix` is declared (the default is
+# the empty string, and every value in the shipped catalogue before C-184 was exactly that). This is
+# not the `Authorization` header and must not be moved onto it — New Relic reads `X-Api-Key` and
+# ignores a bearer token.
+#
+# **This key is what the region hazard fails as.** Presented to the wrong regional host, a perfectly
+# valid key returns `401`, and nothing in the response distinguishes that from a revoked or
+# mistyped one. An operator debugging it will rotate the key first and will not fix anything; the
+# `host` field's `help` text below is where they are told to check the region instead.
+[[auth]]
+name = "newrelic.api_key"
+scheme = { header = { name = "X-Api-Key" } }
+env = ["NEW_RELIC_API_KEY"]
+description = "New Relic User API key, authorizing REST v2 calls as the New Relic user it was created by. Travels as the `X-Api-Key` header on every request. A key is issued in one region and is not valid against the other region's host — a 401 from this connector is as likely to be a wrong `host` as a wrong key"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — Applications. Both reads, both `low`: they expose what the key's user can already see
+# in New Relic's own UI.
+#
+# The response shapes below are New Relic's documented Application example, field for field.
+# `settings` and `links` are left as untyped objects rather than enumerated: this file states what
+# it can name with confidence, and an untyped object inside an otherwise-informative schema is
+# honest rather than permissive (`crates/connector-spec/tests/response_schema_coverage.rs` refuses a
+# *top-level* schema with no informative key, which is the placeholder it exists to catch).
+#
+# Every REST v2 response is **wrapped in a singular or plural key** — `{"applications": [...]}`,
+# `{"application": {...}}` — rather than being the list or object itself. That is easy to get wrong
+# reading the vendor's prose, and every schema below spells the wrapper out, because a caller that
+# indexes the response directly gets nothing and no error.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "newrelic-application-list"
+method = "GET"
+path = "/applications.json"
+description = "List every application this account is monitoring with APM, each with its current health status and a summary of its response time, throughput and error rate. Takes no argument. Also this connector's `verify`: a bounded read that runs unattended and needs nothing beyond the configured host and key"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["applications"]
+properties = { applications = { type = "array", description = "Every application the account monitors. An account with no APM agents reporting returns an empty array, not an error", items = { type = "object", required = [
+  "id",
+  "name",
+], properties = { id = { type = "integer", description = "The application's id — what newrelic-application-get and the deployment operations address it by. An integer, not a string" }, name = { type = "string", description = "The application name the agent reports under, as it reads in New Relic's UI" }, language = { type = "string", description = "The agent's language — `ruby`, `java`, `nodejs` and so on" }, health_status = { type = "string", description = "New Relic's rollup of the application's alert state: `green`, `yellow`, `red`, `gray` (nothing reporting) or `unknown`. This is the field to read to answer \"is anything wrong\"" }, reporting = { type = "boolean", description = "Whether an agent has sent data recently. FALSE MEANS THE APPLICATION IS NOT SENDING DATA — its summary figures are stale, not zero" }, last_reported_at = { type = "string", description = "When the agent last reported, as an ISO 8601 timestamp" }, application_summary = { type = "object", description = "The APM rollup for the last few minutes: `response_time` (ms), `throughput` (requests per minute), `error_rate` (percent), `apdex_target`, `apdex_score`, `host_count`, `instance_count`, `concurrency`. Absent on an application that is not reporting" }, end_user_summary = { type = "object", description = "The browser-side rollup, where browser monitoring is enabled: `response_time`, `throughput`, `apdex_target`, `apdex_score`" }, settings = { type = "object", description = "The application's Apdex thresholds and monitoring switches. Left untyped rather than enumerated; see New Relic's own Application object reference" }, links = { type = "object", description = "Related ids New Relic returns alongside — the alert policy, the application's hosts and instances. Ids only, not embedded objects" } } } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "newrelic-application-get"
+method = "GET"
+path = "/applications/{application_id}.json"
+description = "Get one application by id, with its current health status and the same summary figures the list returns. Use this to re-read one application after a deploy rather than listing the whole account"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "application_id"
+description = "The application's id, from newrelic-application-list's `id`. A New Relic application id is an integer; pass it as it was returned"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["application"]
+properties = { application = { type = "object", required = [
+  "id",
+  "name",
+], properties = { id = { type = "integer", description = "The application's id" }, name = { type = "string", description = "The application name the agent reports under" }, language = { type = "string", description = "The agent's language" }, health_status = { type = "string", description = "New Relic's rollup of the application's alert state: `green`, `yellow`, `red`, `gray` or `unknown`" }, reporting = { type = "boolean", description = "Whether an agent has sent data recently. FALSE MEANS THE APPLICATION IS NOT SENDING DATA" }, last_reported_at = { type = "string", description = "When the agent last reported, as an ISO 8601 timestamp" }, application_summary = { type = "object", description = "The APM rollup for the last few minutes — response time, throughput, error rate, Apdex, host and instance counts. Absent on an application that is not reporting" }, end_user_summary = { type = "object", description = "The browser-side rollup, where browser monitoring is enabled" }, settings = { type = "object", description = "The application's Apdex thresholds and monitoring switches. Left untyped rather than enumerated" }, links = { type = "object", description = "Related ids — the alert policy, the application's hosts and instances" } } } }
+
+# ---------------------------------------------------------------------------------------------
+# Operations — Alerts. Both reads, both `low`. These are the two that make this connector worth
+# having in a flow: what the account alerts on, and what is alerting now.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "newrelic-alert-policy-list"
+method = "GET"
+path = "/alerts_policies.json"
+description = "List the account's alert policies — the groupings New Relic evaluates conditions under, each with its incident rollup preference. Takes no argument. This lists the policies themselves, not the conditions inside them and not anything currently alerting; for that, read newrelic-alert-violation-list"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["policies"]
+properties = { policies = { type = "array", items = { type = "object", required = [
+  "id",
+  "name",
+], properties = { id = { type = "integer", description = "The policy's id" }, name = { type = "string", description = "The policy name, as it reads in New Relic's UI" }, incident_preference = { type = "string", description = "How New Relic groups violations into incidents under this policy — `PER_POLICY`, `PER_CONDITION` or `PER_CONDITION_AND_TARGET`. It decides how many incidents one bad deploy produces" }, created_at = { type = "integer", description = "When the policy was created, as an epoch timestamp in milliseconds — not seconds, and not an ISO string" }, updated_at = { type = "integer", description = "When the policy was last changed, as an epoch timestamp in milliseconds" } } } } }
+
+# ---------------------------------------------------------------------------------------------
+
+# **`only_open` is deliberately not declared**, so this call returns both open and closed violations
+# from the window New Relic applies by default. The description says so in the imperative, because a
+# caller that assumes everything returned is live will report resolved incidents as current — and
+# the field that settles it, `closed_at`, is right there in the response.
+[[operations]]
+id = "newrelic-alert-violation-list"
+method = "GET"
+path = "/alerts_violations.json"
+description = "List the account's alert violations from New Relic's default recent window. READ `closed_at` ON EVERY ENTRY: this returns closed violations as well as open ones, and a violation with a non-null `closed_at` has already resolved. Each entry names the policy and condition that fired and the entity that broke"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["violations"]
+properties = { violations = { type = "array", description = "Violations in the default window, open and closed together", items = { type = "object", required = [
+  "id",
+  "opened_at",
+], properties = { id = { type = "integer", description = "The violation's id" }, label = { type = "string", description = "New Relic's own one-line summary of what broke" }, duration = { type = "integer", description = "How long the violation lasted, in seconds. On an open violation this is how long it has been open so far" }, policy_name = { type = "string", description = "The alert policy the violation belongs to — matches a `name` from newrelic-alert-policy-list" }, condition_name = { type = "string", description = "The condition inside that policy which fired" }, priority = { type = "string", description = "The condition's threshold severity — `Critical` or `Warning`" }, opened_at = { type = "integer", description = "When the violation opened, as an epoch timestamp in milliseconds" }, closed_at = { type = "integer", description = "When the violation closed, as an epoch timestamp in milliseconds, or null. NULL IS THE ONLY THING THAT MEANS STILL OPEN" }, entity = { type = "object", description = "What broke: `{product, type, group_id, id, name}`. `product` is `APM`, `Browser`, `Mobile` or `Infrastructure`, and `id` addresses the entity within that product — for an APM entity it is an application id newrelic-application-get takes" }, links = { type = "object", description = "The `policy_id` and `condition_id` behind `policy_name` and `condition_name`. Ids only" } } } } }
+
+# ---------------------------------------------------------------------------------------------
+# Operations — Deployments. One read and the connector's one write.
+#
+# The Deployment shape below is New Relic's documented example, and it is reused on both, which
+# answer with the same object.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "newrelic-deployment-list"
+method = "GET"
+path = "/applications/{application_id}/deployments.json"
+description = "List the deployment markers recorded against one application, most recent first. These are the markers New Relic overlays on its charts — read them to answer \"what shipped before this went wrong\""
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "application_id"
+description = "The application's id, from newrelic-application-list's `id`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["deployments"]
+properties = { deployments = { type = "array", items = { type = "object", required = [
+  "id",
+  "timestamp",
+], properties = { id = { type = "integer", description = "The deployment marker's id" }, revision = { type = "string", description = "The version this deployment shipped, as the recorder spelled it — a commit sha, a tag or a build number" }, changelog = { type = "string", description = "What changed, as free text, or null" }, description = { type = "string", description = "A one-line summary of the deployment, or null" }, user = { type = "string", description = "Who recorded the deployment, as free text — whatever the recorder passed, not a verified New Relic identity. Identifies a person; read it for what the calling flow needs and do not persist it beyond that" }, timestamp = { type = "string", description = "When the deployment was recorded, as an ISO 8601 timestamp" }, links = { type = "object", description = "The application id this marker belongs to" } } } } }
+
+# ---------------------------------------------------------------------------------------------
+
+# **The one write.** `medium`: a deployment marker is visible to everyone on the account, it appears
+# on every chart for the application, and this connector ships no way to remove one (New Relic's
+# `DELETE .../deployments/{id}.json` exists and is deliberately out of the curated set — see the
+# header). It is not `destructive`: it adds a record and changes nothing that was already there.
+#
+# `non_idempotent`: New Relic documents no idempotency key on this endpoint, and this repository's
+# convention (first written for `providers/asana.toml`) is that a write earns `idempotent` only from
+# a vendor-documented guarantee, never from an accident of implementation. Calling it twice records
+# two deployments at two timestamps.
+#
+# The body is nested under a `deployment` object, which is a `wire` path rather than a caller-facing
+# name — the shape `providers/pagerduty.toml` (`incident.status`) and `providers/asana.toml`
+# (`data.name`) already ship.
+[[operations]]
+id = "newrelic-deployment-create"
+method = "POST"
+path = "/applications/{application_id}/deployments.json"
+description = "Record a deployment marker against an application, timestamped now. The marker appears on every chart for that application and is visible to everyone on the account; this connector cannot remove one once recorded. Calling this twice records two deployments"
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "application_id"
+description = "The application the deployment shipped to, from newrelic-application-list's `id`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "revision"
+wire = "deployment.revision"
+description = "The version that shipped — a commit sha, a tag or a build number. The only field New Relic requires, and the one every chart overlay is labelled with, so pass something a human can trace back to a build"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "changelog"
+wire = "deployment.changelog"
+description = "What changed in this deployment, as free text. Shown when the marker is opened"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "description"
+wire = "deployment.description"
+description = "A one-line summary of the deployment, shown on the marker itself"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "user"
+wire = "deployment.user"
+description = "Who or what performed the deployment, as free text. New Relic records this verbatim and does not verify it against a New Relic identity — pass a service or pipeline name rather than a personal one unless the flow has a reason to name a person"
+required = false
+schema = { type = "string" }
+
+[operations.response_schema]
+type = "object"
+required = ["deployment"]
+properties = { deployment = { type = "object", required = [
+  "id",
+  "timestamp",
+], properties = { id = { type = "integer", description = "The created marker's id" }, revision = { type = "string", description = "The revision as recorded — echo it back to confirm the marker landed on the build you meant" }, changelog = { type = "string", description = "The changelog as recorded, or null" }, description = { type = "string", description = "The description as recorded, or null" }, user = { type = "string", description = "The user as recorded, verbatim and unverified" }, timestamp = { type = "string", description = "When New Relic recorded the marker, as an ISO 8601 timestamp. New Relic sets this; it is not accepted from the request" }, links = { type = "object", description = "The application id this marker belongs to" } } } }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any of the above can run.
+#
+# Two fields: the account's region host and the key. Both connection level, derived from what they
+# bind — every New Relic account is its own tenant, in its own region, and there is no
+# operator-level registration this connector needs.
+#
+# **The `host` field is the story's subject and the header comment is its full account.** It is
+# free text with `format = "hostname"` because that is the closest the model gets; exactly two
+# values work; the loader, a form and this repository can all only check the shape. The `help` text
+# below is where the two answers are written down, and it gives an operator a way to find their own
+# region that does not require guessing — the URL they log in at.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "host"
+label = "New Relic API host"
+help = "Which region this New Relic account lives in, as a host without the https:// prefix. Enter api.newrelic.com for a US account or api.eu.newrelic.com for an EU one — those are the only two values that work. If you are not sure, look at the URL you log in at: one.newrelic.com is the US region and one.eu.newrelic.com is the EU region. Getting this wrong returns 401 on every call, exactly as a bad key would, so check it before you rotate anything"
+example = "api.newrelic.com"
+format = "hostname"
+docs_url = "https://docs.newrelic.com/docs/apis/rest-api-v2/get-started/introduction-new-relic-rest-api-v2/"
+binds = "endpoint.host"
+
+[[config]]
+name = "api_key"
+label = "New Relic User API key"
+help = "A User API key from New Relic's API keys page (one.newrelic.com, Administration -> API keys). Create a User key, not a License or Ingest key — a License key does not authenticate REST v2 and returns 401. The key inherits the permissions of the New Relic user it was created by"
+# No `example`, deliberately: a New Relic User key is a long opaque string, and a realistic-looking
+# placeholder for a secret field has already tripped GitHub's push protection and blocked a release
+# here (`providers/trello.toml`, `providers/notion.toml` and `providers/salesforce.toml` record the
+# same caution).
+format = "token"
+secret = true
+docs_url = "https://docs.newrelic.com/docs/apis/intro-apis/new-relic-api-keys/"
+binds = "credential.newrelic.api_key"

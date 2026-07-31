@@ -9,6 +9,97 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Confluence and New Relic connectors (C-219, C-220).**
+
+  **Confluence** was shipped to answer a question, and the answer is its real deliverable: two
+  connectors sharing one vendor authority do **not** share a credential. `jira` and `confluence` use
+  the same host, account and token, and resolve to `com.atlassian.jira/api_token` and
+  `com.atlassian.confluence/api_token` — same tenant, same leaf, the authority segment the entire
+  difference. So the operator pastes the token twice. The addressing model is not broken; C-90's
+  "an address is a place, not a per-connector copy" holds *within* a connector and was never wired to
+  reach *across* two. The rejected alternative — one `atlassian` connector with both as services —
+  is **constructed in a test** rather than asserted, showing it would have delivered single-paste
+  sharing, and refused because `com.atlassian.jira` is published and a published address is never
+  repointed. Filed as C-226.
+
+  It also cannot read any content body: `body-format` is a query parameter and the connector declares
+  none, so it is curated as a connector that navigates and writes rather than one that reads back,
+  with every read saying so in the description a model receives. That drove two exclusions, both
+  named in the header. Filed as C-227.
+
+  **New Relic** ships with a gap written down and machine-checked rather than smoothed over: the IR
+  cannot express a closed set of values, so a two-region vendor's host field accepts
+  `api.not-new-relic.example`. A wrong region returns 401 on every call, indistinguishable from a bad
+  key. Filed as C-225.
+
+- **The Discord connector (C-216).** Six curated operations behind a bot token whose `Bot ` scheme
+  word is the first prefix in the fleet whose *neighbouring* value is also valid vendor syntax for a
+  different credential: `Bot <token>` sent as `Bearer ` is a well-formed Discord request for an
+  OAuth2 user principal the caller does not hold, answered with a 401 indistinguishable from a
+  revoked token. The story's stated premise — that every shipped connector using the prefix axis
+  spells `Bearer ` — was measured and found false in both directions (okta ships `SSWS `, pagerduty
+  `Token token=`, statuspage `OAuth `; and no connector spells `Bearer ` as a header prefix at all,
+  because it is a preset variant). The correction is asserted by test rather than filed away.
+
+  No `quirks.rate_limit` is declared, deliberately: Discord's limits are per-route with a bucket per
+  major path parameter and are discovered from `X-RateLimit-*` headers, which the fixed
+  `requests`/`per_seconds` pair cannot express. Recorded as C-224.
+
+- **Google sign-in, accounts and sessions (C-204).** The host now answers "who is asking" before it
+  injects anything, which `docs/designs/connectors-proxy.md` names as the precondition for a
+  credential-injecting service. Every `/v1` route refuses without a session, resolving the tenant
+  from the session rather than from anything the caller supplies.
+
+  **A login-CSRF hole was found in review and fixed before this shipped.** `/auth/signin` returned a
+  redirect carrying no cookie, and the callback redeemed the OAuth `state` from a process-global map
+  keyed on `state` alone — so nothing bound a sign-in to the browser that began it, and an attacker
+  could land a victim's session on the attacker's account, after which every credential the victim
+  pasted went to the attacker's tenant. `/auth/signin` now sets an `HttpOnly`, `Secure`,
+  `SameSite=Lax` `connectors_login` cookie scoped to `Path=/auth/callback`, and the callback compares
+  it against the `state` parameter in constant time **before** redeeming it.
+
+  Independently re-reviewed by reproducing the attack end to end at the base and confirming it dead
+  on the merged fix, together with absent-cookie, mismatched-cookie, uppercase-name, duplicate-param,
+  replay, wrong-method and path-variant probes — all failing closed.
+
+- **Four more connectors: Mailchimp, Klaviyo, Supabase and Resend (C-215, C-218, C-221, C-222).**
+
+  **Mailchimp** asks for its datacentre as ordinary configuration rather than deriving it from the
+  key's suffix, and ships **bearer** because a Basic mechanism with a *constant* username is not
+  expressible in this IR — `user_env` names environment variables, not literals, and `user_suffix`
+  appends to a resolved value rather than replacing it. The vendor documents both forms, so this
+  routes around the gap rather than closing it; a vendor with a constant Basic username and no
+  bearer alternative is still unshippable, and the loader refusal is pinned by test.
+
+  **Klaviyo** carries a vendor-enforced API revision as a constant header, with the pin and the
+  response schemas asserted to name one date.
+
+  **Supabase** declares exactly one credential, named `anon_key` rather than `api_key` — both of its
+  keys are "the API key", and a slot called `api_key` presents a box rather than a choice while the
+  key that bypasses row-level security always works. `service_role` appears nowhere in the IR and is
+  explained in the `help` text instead. Every shipped operation is a read, which is the entire
+  justification for one key; a test fails the moment a write lands, reopening the question in review
+  rather than in production.
+
+  **Resend** declares a `User-Agent` as a constant header because the vendor rejects requests without
+  one — verified missing rather than assumed, and filed as C-223 since the host supplies none.
+
+- **The Bitbucket connector (C-217).** Seven curated operations — repository and pull-request
+  reads, plus create, comment and approve — behind an operator-pinned `workspace`, and the first
+  connector whose [C-187] pin is the **final** path segment rather than an inner one. That edge is
+  the whole reason its `verify` can be argument-free: `GET /repositories/{workspace}` needs nothing
+  from the caller once the workspace is pinned.
+
+  The curation runs in an uncomfortable direction and the provider header says so rather than
+  leaving it to be discovered: the connector can **add** an approval and cannot withdraw one.
+  Withdraw-approval and decline are held back together, because a set that can approve, un-approve
+  and decline is a governance surface deserving its own story. The PR merge endpoint is excluded
+  too — its `pullrequest_merge_parameters` discriminator is unverified against a live response, and
+  a merge is too consequential to ship on an inference.
+
+  Independently reviewed by falsification: nine single-fact mutations of the provider file each
+  turned exactly one contract test red.
+
 - **An operator can pin a tenant scope at install time, not only a base URL (C-187).** `[[config]]`
   bound `base_url` and nothing else, so Cloudflare's `zone_id` (a path segment) and Vercel's `teamId`
   (a query parameter) stayed per-call arguments a model chose on every request. For Vercel that was
@@ -63,7 +154,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `Placement::Query` credential**. `trello_is_the_only_query_placement_in_the_shipped_catalogue`
   bounds that to one connector and fails the moment a second lands.
 
+
+- **A graph's node ids now map to Flux AST paths, so a diagnostic lands on the node that produced it
+  (C-96).** `emit_graph_with_paths` returns the emitted module alongside a `NodePaths` map, and the
+  round trip is asserted in both directions against real `flux_lang::analyze` diagnostics: every
+  diagnostic path resolves to a recorded node, and that node's own path is the one the diagnostic
+  sits at or inside. No second attribution mechanism was invented — the path grammar is flux's own,
+  consumed from `analyze_flow` rather than re-spelled locally.
+
+  **Boundary nodes are deliberately absent from the map, and the test asserts each absence.** A
+  `trigger`, `schedule` or `endpoint` becomes a *parameter* of the emitted op rather than a
+  statement, and flux renders no path for a parameter finding. Spelling one anyway (`params[0]`)
+  would be exactly the second mechanism this story exists not to build.
+
+  **What did not land, and why it could not:** the map is not yet a committed, drift-checked
+  repository artifact. Nothing in `providers/` declares `[[graphs]]` and `connector-cli` never calls
+  `emit_graph`, so `build` writes no graph module for a map to sit beside. Both fixture graphs' maps
+  are committed as goldens instead, drift-checked on every run; the `connectors/*.paths.json` writer
+  belongs with whichever story first gives the lowering a producer.
+
 ### Changed
+
+- **The Algolia probe closes with the space measured rather than surveyed (C-164, still blocked).**
+  C-187 lifted half of its recorded blocker — a non-secret configuration field can now bind a
+  request header. The other half stands and is now the whole block: Algolia's application id must
+  reach both a hostname and a header, and the declaration that would express that is refused by name
+  — *"Two questions that share an answer are one question"*. Two tests now pin the refusals so the
+  boundary cannot be re-litigated, and the remaining gap is filed as C-229.
 
 - **The charter permits a deployed multi-tenant host, and the confused-deputy objection is re-argued
   rather than skipped (C-201).** `docs/vision.md`'s non-goal narrowed this repository's host to one
@@ -92,6 +209,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   likely to be misread in the optimistic direction.
 
 ### Fixed
+
+- **A configuration value is checked where it is substituted, not only where it is declared
+  (C-214).** `Position::validate_value` existed and was correct, and had exactly two call sites —
+  both in the loader, both running against an `example` or a parameter *name*. The value that
+  actually travels was substituted with no predicate at all.
+
+  The severe half was **pre-existing** and moved the origin: an `@` makes everything before it
+  userinfo, so `subdomain = "acme.zendesk.com@evil.example"` resolved to the authority
+  `evil.example.zendesk.com`. Nine shipped connectors carry a templated host. The check compares
+  against the **template's** authority rather than the built URL's, because the composed string is
+  itself a well-formed hostname and inspecting the finished URL sees nothing wrong.
+
+  Each position gets its own answer, since "escape it" is wrong for two of them: refuse for host,
+  path and header; refuse-then-encode through the existing `auth::query_encode` for query. No shipped
+  connector's behaviour changed — 53 providers, `diff` clean. Independently reviewed with 36 probes
+  against the host guard, including percent-encoded `%40`/`%2540`, CRLF, IPv6 literals, and fullwidth
+  and ideographic dot homographs; none moved the origin.
+
+- **A per-provider test no longer asserts a catalogue-wide literal (C-216).** Discord's prefix census
+  walked every `providers/*.toml` and compared the result against a four-element list, which Klaviyo's
+  fifth prefix falsified in the same wave — each branch green alone, red together, invisible from
+  either worktree. It now loads Okta, PagerDuty and Statuspage **by name** and checks what each
+  declares, because catalogue membership was never the evidence. The identical defect in
+  `trello_connector.rs` is filed as C-230.
+
 
 - **`no-credential` told a consumer that a public endpoint was disabled for their protection
   (C-206).** `effective_auth` answered `no-credential` for two opposite situations — a vendor that
@@ -157,26 +299,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   each language the sources are written in and requires each back; and on the integration branch,
   appending `export const FIRST_CONNECTOR = 'zendesk'` to `web/data/catalog.data.mts` turned it red.
   The gate is 30/30 — the 28 that existed plus this story's two.
-
-### Added
-
-- **A graph's node ids now map to Flux AST paths, so a diagnostic lands on the node that produced it
-  (C-96).** `emit_graph_with_paths` returns the emitted module alongside a `NodePaths` map, and the
-  round trip is asserted in both directions against real `flux_lang::analyze` diagnostics: every
-  diagnostic path resolves to a recorded node, and that node's own path is the one the diagnostic
-  sits at or inside. No second attribution mechanism was invented — the path grammar is flux's own,
-  consumed from `analyze_flow` rather than re-spelled locally.
-
-  **Boundary nodes are deliberately absent from the map, and the test asserts each absence.** A
-  `trigger`, `schedule` or `endpoint` becomes a *parameter* of the emitted op rather than a
-  statement, and flux renders no path for a parameter finding. Spelling one anyway (`params[0]`)
-  would be exactly the second mechanism this story exists not to build.
-
-  **What did not land, and why it could not:** the map is not yet a committed, drift-checked
-  repository artifact. Nothing in `providers/` declares `[[graphs]]` and `connector-cli` never calls
-  `emit_graph`, so `build` writes no graph module for a map to sit beside. Both fixture graphs' maps
-  are committed as goldens instead, drift-checked on every run; the `connectors/*.paths.json` writer
-  belongs with whichever story first gives the lowering a producer.
 
 ## [0.6.0] — 2026-07-31
 

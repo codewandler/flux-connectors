@@ -1,0 +1,433 @@
+# Discord HTTP API v10 — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Discord publishes its reference as documentation pages
+# (`discord.com/developers/docs`) and not as an OpenAPI document vendored here — no C-4 ingest run
+# has selected one — so this file is written directly in the IR's shape, the same route babelforce,
+# postmark, zendesk, freshdesk, github, notion, datadog, okta and trello already take. **Drift
+# against the vendor's own docs is therefore undetectable by machine**, the caveat those files carry
+# (`docs/designs/provider-operation-inventory.md` §6.7). Every path, parameter and response field
+# below was read from `discord.com/developers/docs` — Reference, Authentication, Rate Limits, and
+# the User, Guild, Channel and Message resource pages — on **2026-07-31**, at API version **v10**.
+#
+# ---------------------------------------------------------------------------------------------
+# C-216'S QUESTION: C-184 GAVE `AuthScheme::Header` A `prefix`. IS THAT A PARAMETER, OR A PARAMETER
+# WITH ONE VALUE? MEASURED — AND THE STORY'S PREMISE TURNED OUT TO BE WRONG IN A WAY THAT MAKES THE
+# PROBE BETTER, NOT REDUNDANT.
+# ---------------------------------------------------------------------------------------------
+#
+# `docs/stories/C-216-provider-discord.md` says every shipped connector using the prefix axis spells
+# `Bearer `. **That is not what the catalogue says**, and the correction is asserted rather than
+# written down: `crates/connector-flux/tests/discord_connector.rs::the_catalogue_prefix_census_is_
+# exactly_these_four` enumerates every `Header` prefix in `providers/*.toml`. Before this file there
+# were three, and not one of them was `Bearer `:
+#
+# | provider | credential | header | prefix |
+# |---|---|---|---|
+# | okta (C-161) | `okta.api_token` | `Authorization` | `SSWS ` |
+# | pagerduty (C-162) | `pagerduty.api_token` | `Authorization` | `Token token=` |
+# | statuspage (C-181) | `statuspage.api_key` | `Authorization` | `OAuth ` |
+#
+# `Bearer ` is not in the census at all and cannot be: it is `AuthScheme::Bearer`, a preset variant,
+# and `AuthScheme::Header`'s own documentation records why it stays one. So the prefix axis was
+# already carrying three distinct values, and "first non-`Bearer` prefix" is not this connector's
+# contribution.
+#
+# **What Discord actually adds is sharper, and it is the reason the story's instinct was right even
+# though its measurement was not: this is the first prefix whose neighbouring value is *also valid
+# vendor syntax, for a different credential*.**
+#
+# - `SSWS <token>` sent as `Bearer <token>` is rejected by a vendor that has no bearer scheme on that
+#   API at all. The mistake is loud; nothing else could have been meant.
+# - `Bot <token>` sent as `Bearer <token>` is a **well-formed Discord request**. `Bearer` selects an
+#   OAuth2 access token belonging to a Discord *person*; `Bot` selects an application's bot user.
+#   Discord parses the header, finds the scheme word it knows, looks the value up in the wrong
+#   credential space, and answers `401 {"message": "401: Unauthorized", "code": 0}` — the same body
+#   it returns for a revoked token, an expired token, or a typo.
+#
+# An operator debugging that reads "unauthorized", concludes the token is wrong, and regenerates it —
+# which invalidates the working credential and changes nothing. The prefix is the half of the header
+# this repository controls, so it is the half pinned by test, character for character, trailing space
+# included. The loader already refuses a prefix ending in an alphanumeric
+# (`crates/connector-spec/src/provider.rs::validate_auth_prefix`), so `"Bot"` cannot silently lose
+# its space here any more than `"SSWS"` could in `providers/okta.toml`.
+#
+# ---------------------------------------------------------------------------------------------
+# THE CREDENTIAL CHOICE, STATED RATHER THAN LEFT TO A READER: THIS IS THE **BOT TOKEN** CONNECTOR.
+# ---------------------------------------------------------------------------------------------
+#
+# Discord documents two authentication mechanisms for this API, and they are **different credentials
+# with different capabilities** — not two spellings of one thing, and not alternatives a host may
+# choose between:
+#
+# - A **bot token** belongs to an application's bot user. It is minted once in the Developer Portal,
+#   does not expire, and its reach is whatever the guilds that installed the bot granted it. Every
+#   operation below is reachable with one.
+# - An **OAuth2 access token** belongs to a Discord person and is scoped by what that person
+#   consented to. It expires and refreshes. Most of the routes below are simply unreachable with one:
+#   `/guilds/{id}` and `/channels/{id}/messages` are bot-token routes, and `/users/@me/guilds`
+#   answers a *different set* under each — the guilds the bot has joined versus the guilds the human
+#   is a member of.
+#
+# Declaring both as two `AuthRequirement` alternatives would tell a host that either satisfies any
+# operation here. Neither does — the sets barely overlap — and a host acting on that declaration
+# would send a valid token to a route it cannot reach and receive the same misleading `401` the
+# prefix mistake produces. So one credential is declared and the other is named here instead.
+# `discord_connector.rs::exactly_one_credential_is_declared_and_it_is_the_bot_token` pins it, so
+# widening the connector means overturning a test rather than appending an `[[auth]]` block.
+#
+# The OAuth2 half is a separate connector if it is ever wanted, with its own operations, its own
+# `[[config]]` (a client id and secret, at *operator* level — which is the level distinction
+# `docs/designs/connector-configuration.md` exists to keep apart from the per-tenant token below) and
+# its own `oauth2` grant declaration. It is not an override of this one.
+#
+# ---------------------------------------------------------------------------------------------
+# SNOWFLAKES: EVERY ID IS A STRING, AND THIS IS NOT A STYLE CHOICE.
+# ---------------------------------------------------------------------------------------------
+#
+# A Discord id is a **snowflake**: a 64-bit integer packing a millisecond timestamp, an internal
+# worker and process id, and a per-process sequence counter. Ids minted from about 2015 onward
+# already exceed **2^53**, which is the largest integer an IEEE-754 double represents exactly — and a
+# JSON number is a double in JavaScript, in Python's `json` by default for floats, and in most JSON
+# libraries a consumer of `web/public/catalog.json` might reach for.
+#
+# The failure is silent in the worst way. `1234567890123456789` parsed as a double comes back as
+# `1234567890123456800`: still nineteen digits, still a plausible snowflake, addressing a different
+# object or none at all. No exception is raised, no field is missing, and the request built from it
+# gets a `404` that reads like a deleted channel.
+#
+# Discord's own API serializes every snowflake as a **string** for exactly this reason, and so does
+# every declaration in this file: `type = "string"` with `pattern = "^[0-9]+$"`, on the path
+# parameters a caller supplies and on every id in a response shape. The pattern earns its place — it
+# refuses a channel *name* or a pasted URL before a request is built, which is the mistake a model
+# holding "#general" actually makes. `discord_connector.rs::every_snowflake_is_declared_as_a_string`
+# walks the declared schemas and fails on any id-shaped field typed as a number, so a later edit
+# cannot reintroduce the hazard one property at a time.
+#
+# **The same reasoning covers `permissions`.** A Discord permission set is a 64-bit *bitfield*, and
+# Discord serializes it as a decimal string for the same precision reason. It is declared here as a
+# string too, and the description says so — a consumer that treats it as a number loses the high
+# permission bits, which are the recently-added ones.
+#
+# ---------------------------------------------------------------------------------------------
+# RATE LIMITS: DELIBERATELY NOT DECLARED AS `quirks.rate_limit`, AND SAID IN PROSE INSTEAD.
+# ---------------------------------------------------------------------------------------------
+#
+# Discord rate-limits **per route**, with a separate bucket per *major* path parameter — so
+# `/channels/111/messages` and `/channels/222/messages` have independent budgets — and it does not
+# publish the numbers. A caller learns them from the response: `X-RateLimit-Limit`,
+# `X-RateLimit-Remaining`, `X-RateLimit-Reset-After` and `X-RateLimit-Bucket` on every reply, and
+# `Retry-After` on a `429`.
+#
+# `Quirks::rate_limit` takes an exact `requests` / `per_seconds` pair (`crates/connector-spec/src/ir.rs`,
+# `RateLimit`), which cannot express a bound that is *discovered* rather than declared. And the one
+# fixed number Discord does publish — a global **50 requests per second** per bot — is a budget shared
+# across every route, so writing it onto each of the six operations below would state six per-route
+# allowances that no route actually has, and a model pacing itself against any one of them would
+# still be rate-limited. That is `providers/hubspot.toml`'s argument about tier-dependent portal
+# limits, met at a different axis: declare nothing rather than a number that is wrong in a way a
+# consumer cannot detect.
+#
+# So the rule is stated in the `description` a model reads — at connector level, and again on the
+# write, which is the operation a caller is most likely to run in a loop — and
+# `discord_connector.rs::the_rate_limit_rule_is_stated_where_a_model_reads_it` asserts both, because
+# prose that nothing checks is how a caller discovers a limit by being rate-limited. **The
+# per-route figures themselves remain unmodelled**, and closing that needs a `RateLimit` variant for
+# a header-discovered budget, not an entry in this file.
+#
+# ---------------------------------------------------------------------------------------------
+# WHAT SHIPS: 6 operations — 5 reads, 1 write. Identity: who am I. Guilds: list mine, read one, read
+# its channels. Messages: read a channel's recent ones, post one.
+# ---------------------------------------------------------------------------------------------
+#
+# **Endpoints deliberately not shipped, and named rather than silently absent:**
+#
+# - **`GET /channels/{channel_id}`** — reads one channel. Documented and harmless, and left out
+#   because `discord-guild-channels` already returns the full channel object for every channel in a
+#   guild, which is where a caller holding a guild id starts. It comes back when something needs to
+#   address a channel it did not discover through its guild.
+# - **`DELETE /channels/{channel_id}/messages/{message_id}`** and **`PATCH .../{message_id}`** — a
+#   message delete is irreversible and a message edit rewrites what people have already read. Both
+#   are real operations for a later story with its own risk review; a first curated set that can post
+#   does not also need to be able to unsay.
+# - **Reactions** (`PUT /channels/{id}/messages/{id}/reactions/{emoji}/@me`). The emoji occupies a
+#   *path* segment and must be percent-encoded — a custom emoji is `name:id`, and a unicode emoji is
+#   multi-byte. This emitter percent-encodes nothing (`crates/connector-flux/src/op.rs`, and
+#   `zendesk-ticket-search` under `AGENTS.md`'s Intentional gaps), so the operation would build,
+#   format, ship and then fail on every emoji that is not a bare ASCII word. Refused rather than
+#   half-shipped.
+# - **Guild members, roles, bans, kicks** (`/guilds/{id}/members`, `/roles`, `/bans`). Moderation
+#   surface: every one of them changes what a real person can do in a community, several are
+#   irreversible, and the set needs a risk review of its own rather than an appendix to this one.
+#   `GET /guilds/{id}/members` also requires the privileged GUILD_MEMBERS intent, which is granted in
+#   the Developer Portal and has no representation in this model.
+# - **Interactions, application commands, threads, webhooks, the Gateway.** The Gateway is a
+#   WebSocket, not HTTP, and is out of this repository's charter entirely (`AGENTS.md`: a technology
+#   rather than a service belongs in flux's plugins). Interactions and application commands are a
+#   callback-driven surface whose inbound half would need `[[events]]` and `[[channels]]` — including
+#   how Discord's Ed25519 request signature is verified — and that is its own story, not a member
+#   kind added in passing. `[[events]]` and `[[channels]]` are therefore absent here, deliberately.
+#
+# **Query parameters left out, and why**, since a reader will look for them:
+#
+# - **`with_counts`** on the guild reads, which adds `approximate_member_count` and
+#   `approximate_presence_count`. A boolean is safe to interpolate; it is left out because the two
+#   fields it unlocks are documented as *approximate*, and an operation that quietly returns a
+#   different shape depending on a flag is a worse contract than one that always returns the same
+#   one.
+# - **`before` / `after` / `around`** on the message and guild lists. These are snowflake cursors, and
+#   they are digits-only so the encoder gap does not bite — but paging with them requires the caller
+#   to read the *last id of the previous page* and re-issue, which is a loop this repository does not
+#   model and `quirks.pagination` (declared, and reaching no artifact — `AGENTS.md`, Intentional
+#   gaps) cannot yet carry. `limit` is offered on the message read, so a caller controls how much it
+#   gets; walking backwards through a channel's history waits on the pagination surface landing.
+
+id = "discord"
+vendor = "Discord"
+
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.discord.api/bot_token`.
+#
+# Derived from `discord.com`, the vendor's own primary domain and the host every request below goes
+# to, in reverse-DNS form with the trailing `api` label the shipped authorities carry
+# (`com.slack.api`, `com.okta.api`, `com.trello.api`). The product publishes its own API domain and
+# is owned by nobody else, so the C-92 rule has only one branch to take here.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.discord.api"
+
+base_url = "https://discord.com/api/v10"
+
+# Discord's own spelling, and it is a required part of the path: `https://discord.com/api` without a
+# version selects a legacy default the vendor's own documentation tells callers not to rely on. `v10`
+# is the current version and the one every field below was read against. Rendered addresses read
+# `com.discord.api:v10#discord-message-create`.
+api_version = "v10"
+
+description = "Discord bot API v10: read the bot's own identity, list the guilds it has joined, read one guild and its channels, read a channel's recent messages, and post a message. Every request authenticates as a bot — `Authorization: Bot <token>`, never `Bearer`, which is Discord's scheme word for a different credential with different reach. Every Discord id is a snowflake and is carried as a string, because a 64-bit id does not survive a JSON number. Discord rate-limits per route and answers 429 with a `Retry-After` header instead of queueing: honour it rather than retrying immediately"
+
+# The "Test connection" read. `GET /users/@me` takes no argument, and it is the narrowest call that
+# distinguishes a wrong credential from a wrong scheme word — a bot token sent as `Bearer` fails here
+# exactly as it fails everywhere else, which is what makes it a real test of the arrangement.
+verify = "discord-current-user"
+
+# One mechanism, one credential. See the header comment for why the OAuth2 alternative is a different
+# connector rather than a second entry here.
+default_auth = [{ credentials = ["discord.bot_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials — the probe. `Bot ` is Discord's public scheme word, printed in its own Authentication
+# reference; the token is appended to it by the host and is never written in this repository. The
+# trailing space is part of the literal.
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "discord.bot_token"
+scheme = { header = { name = "Authorization", prefix = "Bot " } }
+env = ["DISCORD_BOT_TOKEN"]
+description = "Discord bot token, sent as `Authorization: Bot <token>`. The `Bot ` scheme word is supplied by the connector; the token is the value alone. `Bearer ` is a valid Discord scheme word for a different credential — an OAuth2 user token — so sending this token with that prefix yields a 401 indistinguishable from a revoked token"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — identity. One argument-free read, and the connector's `verify`.
+#
+# The response shape is Discord's documented User object. With a bot token this describes the
+# application's bot user: `bot` is true, and `email`/`verified` are absent because those belong to
+# the OAuth2 `email` scope, which a bot token does not carry. Declared anyway, as optional, because
+# the vendor documents them on the object and a consumer reading the schema should not conclude they
+# can never appear.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "discord-current-user"
+method = "GET"
+path = "/users/@me"
+description = "Read the bot user this token authenticates as — its snowflake id, username and application flags. Takes no argument. Also this connector's `verify`: the cheapest call that proves the token, the `Bot ` scheme word and the base URL are all correct together, and the one to run first when any other operation returns 401"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["id", "username"]
+properties = { id = { type = "string", pattern = "^[0-9]+$", description = "The bot user's snowflake id, as a string. A Discord id is a 64-bit integer and does not survive being parsed as a JSON number" }, username = { type = "string", description = "The bot's username, without the discriminator" }, discriminator = { type = "string", description = "The legacy four-digit tag, `\"0\"` for an account migrated to Discord's unique-username system" }, global_name = { type = "string", description = "The display name, or null for a bot, which has none" }, avatar = { type = "string", description = "The avatar image hash, or null. Not a URL — Discord's CDN path is built from the id and this hash" }, bot = { type = "boolean", description = "True for the user behind a bot token. False here means the credential is not the bot token this connector expects" }, system = { type = "boolean", description = "True only for Discord's own official system account" }, mfa_enabled = { type = "boolean" }, verified = { type = "boolean", description = "Present only for a token carrying the OAuth2 `email` scope; absent for a bot token" }, email = { type = "string", description = "Present only for a token carrying the OAuth2 `email` scope; absent for a bot token. Identifies a named person when it does appear — read it for what the calling flow needs and do not persist it beyond that" }, flags = { type = "integer", description = "The user's account flags as a bitfield. Fits a JSON number today, unlike a snowflake or a permission set" }, public_flags = { type = "integer", description = "The subset of `flags` Discord shows publicly — for a bot, its verification and badge state" } }
+
+# ---------------------------------------------------------------------------------------------
+# Operations — guilds. A guild is what Discord's UI calls a server.
+#
+# `discord-guild-list` is the discovery entry point: a bot token can only reach guilds it has been
+# installed into, so this is the exact set the rest of the connector can address.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "discord-guild-list"
+method = "GET"
+path = "/users/@me/guilds"
+description = "List the guilds (servers) this bot has been installed into — the complete set of guild ids the rest of this connector can address. Returns a partial guild object per entry, not the full one: call discord-guild-get for a guild's settings. Discord returns at most 200 per page and this connector does not page, so a bot in more guilds than that sees only the first 200"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "array"
+description = "The guilds this bot is a member of, as partial guild objects"
+items = { type = "object", required = [
+  "id",
+  "name",
+], properties = { id = { type = "string", pattern = "^[0-9]+$", description = "The guild's snowflake id, as a string — pass this as `guild_id` to discord-guild-get and discord-guild-channels" }, name = { type = "string", description = "The guild's display name" }, icon = { type = "string", description = "The icon image hash, or null. Not a URL" }, banner = { type = "string", description = "The banner image hash, or null" }, owner = { type = "boolean", description = "Whether this token's user owns the guild. False for a bot in almost every case — a bot is installed, not an owner" }, permissions = { type = "string", description = "The bot's permissions in this guild, as a decimal string. A 64-bit bitfield, serialized as a string for the same precision reason a snowflake is: reading it as a number loses the high bits, which are the recently-added permissions" }, features = { type = "array", items = { type = "string" }, description = "The guild's enabled features, e.g. `COMMUNITY`, `NEWS`, `VANITY_URL`. An open set — Discord adds to it" } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "discord-guild-get"
+method = "GET"
+path = "/guilds/{guild_id}"
+description = "Read one guild's settings and current state by id — its name, owner, moderation levels and enabled features. Membership counts are not included: they require a query flag this connector does not send, and Discord documents them as approximate"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "guild_id"
+description = "The guild's snowflake id, from discord-guild-list's `id`. A decimal string of digits, never a guild name and never a URL — Discord ids are 64-bit and are carried as strings"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$" }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "name", "owner_id"]
+properties = { id = { type = "string", pattern = "^[0-9]+$", description = "The guild's snowflake id, as a string" }, name = { type = "string" }, icon = { type = "string", description = "The icon image hash, or null. Not a URL" }, description = { type = "string", description = "The guild's public description, or null" }, owner_id = { type = "string", pattern = "^[0-9]+$", description = "The snowflake id of the guild's owner, as a string. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that" }, afk_channel_id = { type = "string", description = "The voice channel idle members are moved to, or null" }, system_channel_id = { type = "string", description = "The channel Discord posts join and boost notices into, or null" }, rules_channel_id = { type = "string", description = "The rules channel of a Community guild, or null" }, public_updates_channel_id = { type = "string", description = "The channel Discord sends moderator updates to, or null" }, application_id = { type = "string", description = "The application that created this guild, or null for a guild a person created" }, afk_timeout = { type = "integer", description = "Seconds of inactivity before a member is moved to the AFK channel" }, verification_level = { type = "integer", description = "How verified a member must be to speak, 0 (none) to 4 (highest)" }, default_message_notifications = { type = "integer", description = "0 notifies on all messages, 1 on mentions only" }, explicit_content_filter = { type = "integer", description = "Which members' attachments are scanned, 0 (none) to 2 (all)" }, mfa_level = { type = "integer", description = "Whether the guild requires two-factor authentication for moderator actions" }, nsfw_level = { type = "integer", description = "Discord's own age-restriction classification of the guild" }, premium_tier = { type = "integer", description = "The guild's boost tier, 0 to 3" }, premium_subscription_count = { type = "integer", description = "How many boosts the guild currently has" }, preferred_locale = { type = "string", description = "The locale of a Community guild, e.g. `en-US`" }, features = { type = "array", items = { type = "string" }, description = "The guild's enabled features. An open set — Discord adds to it" }, roles = { type = "array", description = "The guild's roles. Each carries a snowflake `id` and a decimal-string `permissions` bitfield; left otherwise untyped rather than enumerated in full, so this file states only what it can name with confidence", items = { type = "object", properties = { id = { type = "string", pattern = "^[0-9]+$", description = "The role's snowflake id, as a string" }, name = { type = "string" }, permissions = { type = "string", description = "The role's permissions as a decimal string — a 64-bit bitfield, not a number" } } } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "discord-guild-channels"
+method = "GET"
+path = "/guilds/{guild_id}/channels"
+description = "List every channel in a guild — text, voice, category and forum — in Discord's own ordering. This is where a channel id comes from: read `type` to find the text channels (type 0) discord-channel-messages and discord-message-create can address. Threads are not included; Discord returns them from a separate route this connector does not expose"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "guild_id"
+description = "The guild's snowflake id, from discord-guild-list's `id`. A decimal string of digits, never a guild name"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$" }
+
+[operations.response_schema]
+type = "array"
+description = "The guild's channels"
+items = { type = "object", required = [
+  "id",
+  "type",
+], properties = { id = { type = "string", pattern = "^[0-9]+$", description = "The channel's snowflake id, as a string — pass this as `channel_id` to discord-channel-messages and discord-message-create" }, type = { type = "integer", description = "The channel kind. 0 is a guild text channel — the only kind the message operations here accept. 2 is voice, 4 a category, 5 an announcement channel, 15 a forum. An open set; Discord has added kinds over time" }, guild_id = { type = "string", pattern = "^[0-9]+$", description = "The guild this channel belongs to, as a string" }, name = { type = "string", description = "The channel name without the leading `#`" }, position = { type = "integer", description = "The channel's sort position within the guild" }, topic = { type = "string", description = "The channel topic, or null" }, nsfw = { type = "boolean", description = "Whether the channel is marked age-restricted" }, parent_id = { type = "string", description = "The category this channel sits under, or null. A snowflake, as a string" }, last_message_id = { type = "string", description = "The most recent message in the channel, or null. A snowflake, as a string" }, rate_limit_per_user = { type = "integer", description = "Slowmode, in seconds between messages per member. 0 means no slowmode. This is a per-member setting of the channel and is unrelated to the API rate limits in this connector's own description" }, bitrate = { type = "integer", description = "Voice channels only" }, user_limit = { type = "integer", description = "Voice channels only; 0 means unlimited" }, permission_overwrites = { type = "array", items = { type = "object" }, description = "Per-role and per-member permission overrides for this channel. Left untyped rather than enumerated; each entry carries a snowflake `id` and decimal-string `allow`/`deny` bitfields" } } }
+
+# ---------------------------------------------------------------------------------------------
+# Operations — messages. One read and one write.
+#
+# The Message shape below is Discord's documented Message object, and it is reused on the write,
+# which answers with the message it created.
+#
+# **A privacy note that belongs next to the operation rather than in a design document.** A channel's
+# messages are what real people said to each other, with author identity attached. This is the one
+# read in the connector whose response is personal content rather than configuration; treat what it
+# returns as the calling flow's working data and do not persist it beyond that.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "discord-channel-messages"
+method = "GET"
+path = "/channels/{channel_id}/messages"
+description = "Read the most recent messages in a text channel, newest first. Requires the bot to have READ_MESSAGE_HISTORY in the channel; without it Discord answers 403 rather than an empty list. The response is personal content — what people said, with author identity attached — so read it for what the calling flow needs and do not persist it beyond that"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "channel_id"
+description = "The channel's snowflake id, from discord-guild-channels' `id`. A decimal string of digits, never a channel name like `#general` and never a Discord URL"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$" }
+
+# An integer, so the emitter's verbatim query interpolation (`crates/connector-flux/src/op.rs`) has
+# nothing to corrupt — this is the safe half of the gap `zendesk-ticket-search` records, not an
+# exception to it. Discord documents the cap as 100 and the default as 50, so both are declared
+# rather than guessed.
+[[operations.params.query]]
+name = "limit"
+description = "How many messages to return, 1 to 100. Discord's default when omitted is 50"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100 }
+
+[operations.response_schema]
+type = "array"
+description = "The channel's most recent messages, newest first"
+items = { type = "object", required = [
+  "id",
+  "channel_id",
+  "content",
+  "timestamp",
+], properties = { id = { type = "string", pattern = "^[0-9]+$", description = "The message's snowflake id, as a string" }, channel_id = { type = "string", pattern = "^[0-9]+$", description = "The channel the message was posted in, as a string" }, content = { type = "string", description = "The message text as Discord stores it, with mentions still in their raw `<@id>` form. Empty for a message that carries only an embed or an attachment — and empty for every message if the bot lacks the privileged MESSAGE_CONTENT intent, which is granted in the Developer Portal and has no representation in this connector" }, timestamp = { type = "string", description = "When the message was sent, ISO 8601" }, edited_timestamp = { type = "string", description = "When it was last edited, ISO 8601, or null if never" }, tts = { type = "boolean", description = "Whether the message was sent as text-to-speech" }, pinned = { type = "boolean" }, mention_everyone = { type = "boolean", description = "Whether the message contained an @everyone or @here mention that actually applied" }, type = { type = "integer", description = "The message kind. 0 is a normal message; other values are Discord's own system notices, such as a join or a pin" }, webhook_id = { type = "string", description = "Set when the message came from a webhook rather than a user, as a snowflake string" }, author = { type = "object", description = "Who sent the message. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that", properties = { id = { type = "string", pattern = "^[0-9]+$", description = "The author's snowflake id, as a string" }, username = { type = "string" }, global_name = { type = "string", description = "The author's display name, or null" }, bot = { type = "boolean", description = "True when another application sent this message" } } }, mentions = { type = "array", description = "The users this message mentioned, expanded", items = { type = "object", properties = { id = { type = "string", pattern = "^[0-9]+$", description = "The mentioned user's snowflake id, as a string" }, username = { type = "string" } } } }, attachments = { type = "array", items = { type = "object" }, description = "Files attached to the message. Left untyped rather than enumerated; each carries a snowflake `id`, a `filename`, a `size` and a CDN `url`" }, embeds = { type = "array", items = { type = "object" }, description = "Rich embeds on the message. Left untyped rather than enumerated — Discord's embed object is large and this file declares what it can name with confidence" } } }
+
+# ---------------------------------------------------------------------------------------------
+# THE WRITE. `risk = "high"` on the same reading `providers/slack.toml` gives chat.postMessage: a
+# message in a Discord channel is read by people, notifies them, and cannot be un-seen. That is the
+# "a reviewer would want to see this first" tier. It is not `destructive` — nothing is deleted, and
+# this connector deliberately ships no message delete or edit with which to take it back.
+#
+# `non_idempotent`: posting twice posts two messages. Discord documents a `nonce` field for
+# short-window client-side deduplication, and it is deliberately not offered here — it is best-effort
+# over a few minutes, not the vendor-documented idempotency guarantee this repository's convention
+# (first written for `providers/asana.toml`) requires before a write may claim `idempotent`. A
+# `retry` wrapped around this operation on the strength of a wrong claim posts the message again.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "discord-message-create"
+method = "POST"
+path = "/channels/{channel_id}/messages"
+description = "Post a message to a text channel, visible to everyone in it and notifying whoever is watching. Requires the bot to have SEND_MESSAGES in the channel. Posting twice posts two messages — Discord offers no idempotency key on this route. Discord rate-limits this route per channel and does not publish the figure: on a 429, wait the number of seconds in the `Retry-After` header before retrying, rather than retrying immediately"
+risk = "high"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "channel_id"
+description = "The channel to post into, from discord-guild-channels' `id`. A decimal string of digits, never a channel name like `#general`. Confirm it is a text channel (`type` 0) before posting"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$" }
+
+[[operations.params.body]]
+name = "content"
+description = "The message text, up to 2000 characters. Discord renders it as Markdown, and `@everyone`, `@here` and `<@id>` inside it mention real people if the bot has permission to — so text assembled from untrusted input can notify a whole guild"
+required = true
+schema = { type = "string", minLength = 1, maxLength = 2000 }
+
+[[operations.params.body]]
+name = "tts"
+description = "Set true to have Discord read the message aloud to everyone in the channel who has text-to-speech enabled. Omit for a normal message; this needs the SEND_TTS_MESSAGES permission"
+required = false
+schema = { type = "boolean" }
+
+[operations.response_schema]
+type = "object"
+description = "The message as Discord stored it"
+required = ["id", "channel_id", "content", "timestamp"]
+properties = { id = { type = "string", pattern = "^[0-9]+$", description = "The created message's snowflake id, as a string — what a later edit or delete would address it by, neither of which this connector offers" }, channel_id = { type = "string", pattern = "^[0-9]+$", description = "The channel the message landed in, as a string" }, content = { type = "string", description = "The message text as Discord stored it — echo it back to confirm what was posted" }, timestamp = { type = "string", description = "When the message was sent, ISO 8601" }, edited_timestamp = { type = "string", description = "Null on a message just created" }, tts = { type = "boolean" }, pinned = { type = "boolean", description = "False on a message just created" }, mention_everyone = { type = "boolean", description = "True if the posted text contained an @everyone or @here mention that actually applied — check this after posting text assembled from input the caller did not write" }, type = { type = "integer", description = "The message kind; 0 for a normal message" }, author = { type = "object", description = "The bot user this token authenticates as", properties = { id = { type = "string", pattern = "^[0-9]+$", description = "The bot's snowflake id, as a string" }, username = { type = "string" }, bot = { type = "boolean" } } }, mentions = { type = "array", description = "The users the posted message mentioned, expanded", items = { type = "object", properties = { id = { type = "string", pattern = "^[0-9]+$" }, username = { type = "string" } } } }, attachments = { type = "array", items = { type = "object" }, description = "Empty for a message posted through this connector, which sends no files" }, embeds = { type = "array", items = { type = "object" }, description = "Empty for a message posted through this connector, which sends no embeds" } }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any of the above can run.
+#
+# One field, because Discord's base URL is a fixed literal with no `{variable}` to bind: unlike
+# Zendesk or Okta there is no per-tenant host, and a bot reaches every guild it has been installed
+# into through the same `discord.com`. The token is the whole of the arrangement.
+#
+# Connection level, derived rather than authored (`Binding::Credential`): each tenant installs its
+# own bot and holds its own token. No `example`: a placeholder shaped like a real bot token is worse
+# than none — a user copies it, and one has already tripped GitHub's push protection in this
+# repository's history.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "bot_token"
+label = "Discord bot token"
+help = "From the Discord Developer Portal: open your application, go to the Bot tab, and use Reset Token to reveal one — Discord shows a token exactly once and resetting invalidates the previous one. The bot must then be invited to each server you want to reach, with at least View Channels, Read Message History and Send Messages. Paste the token alone: the `Bot ` prefix Discord's documentation shows is added for you, and pasting it as part of the value breaks the header"
+format = "token"
+secret = true
+docs_url = "https://discord.com/developers/docs/reference#authentication"
+binds = "credential.discord.bot_token"

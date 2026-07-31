@@ -1,0 +1,419 @@
+# Mailchimp Marketing API v3 — hand-authored, curated to the surface this pipeline can express
+# honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Mailchimp publishes its reference as a developer-portal site
+# rather than as a document vendored here (no C-4 ingest run has selected it), so this file is
+# written directly in the IR's shape — the same route babelforce, postmark, zendesk, freshdesk,
+# github, notion, datadog and trello already take. **Drift against the vendor's own docs is
+# therefore undetectable by machine**, the caveat those files carry
+# (`docs/designs/provider-operation-inventory.md` §6.7). Every path, parameter and response field
+# below was read from mailchimp.com/developer/marketing on 2026-07-31 — the Fundamentals page for
+# authentication and the data centre, and the per-endpoint reference pages for the seven operations
+# — and is cited where it is not obvious.
+#
+# ---------------------------------------------------------------------------------------------
+# C-215'S FIRST QUESTION: MAILCHIMP'S HOST CONTAINS A VALUE THE VENDOR ALSO HIDES INSIDE THE
+# CREDENTIAL. IT IS ASKED OF THE OPERATOR, AND THE REASON IS NOT TASTE.
+# ---------------------------------------------------------------------------------------------
+#
+# The root URL is `https://{dc}.api.mailchimp.com/3.0`, and Mailchimp's Fundamentals page gives
+# three ways to find `{dc}`: *"It's the first part of the URL you see in the API keys section of
+# your account"*, *"It's also appended to your API key in the form key-dc"*, and — for OAuth 2 — the
+# metadata endpoint. The second route is the one this connector must not take.
+#
+# **Composing a host out of a secret is not a shortcut, it is a redaction hole.** A key's `-us14`
+# suffix is a substring of the credential. Route it into `base_url` and it lands in every URL, every
+# log line and every error message the connection produces — while the value the host registered
+# with its redactor is the *whole* key, which does not match the substring and therefore does not
+# scrub it. The piece that travels in the clear is the piece nothing removes, and it is a piece an
+# attacker can use to narrow the rest of the key. So `{dc}` is a `[[config]]` field and nothing else.
+#
+# **The refusal is structural, not stylistic, which is the finding worth recording.** A field binding
+# `endpoint.*` answers `Binding::is_secret() == false` unconditionally
+# (`crates/connector-spec/src/config.rs`, and the same rule C-164 met on Algolia's application id),
+# and the loader's secret/binds agreement refuses the `secret = true` spelling of that same field.
+# There is therefore no edit to this file that routes the datacentre through the secret store; it is
+# not a convention a later author can quietly reverse.
+# `crates/connector-flux/tests/mailchimp_connector.rs::the_datacenter_is_asked_for_as_ordinary_configuration`
+# asserts both halves — what ships, and that the alternative does not load.
+#
+# The cost is one extra question at install time, and the `help` text below pays it back by naming
+# all three places an operator can read the value, including the suffix of their own key. Asking for
+# a value the operator can see on the page they are already on is cheap; deriving it from a secret
+# is not.
+#
+# ---------------------------------------------------------------------------------------------
+# C-215'S SECOND QUESTION: THE STORY ASKS WHETHER `anystring` IS SPELLED AS A CONSTANT IN THE
+# MECHANISM OR ASKED OF THE OPERATOR. THE ANSWER IS **NEITHER**, AND THE PROBE'S RESULT IS THAT THE
+# FIRST OF THOSE TWO IS NOT EXPRESSIBLE IN THIS IR AT ALL.
+# ---------------------------------------------------------------------------------------------
+#
+# Mailchimp's Basic form is `--user 'anystring:<TOKEN>'`: the username is a literal the vendor
+# ignores. This repository cannot say that.
+#
+# 1. **The constant spelling does not load.** `AuthScheme::Basic` composes
+#    `base64(<user_env value><user_suffix>:<secret>)`. `user_env` is a list of *environment variable
+#    keys*, not a literal, and `provider::validate` refuses a `basic` credential that declares none.
+#    `user_suffix` cannot carry the constant either — it *appends to* a resolved value rather than
+#    replacing it, and it exists for Zendesk's `/token` marker.
+# 2. **The operator-supplied spelling is worse than it looks, and it is not the unmet shape.** A
+#    declared `user_env` is not a deployment constant: `connector-pack` resolves the user half from
+#    the **configuration port, per tenant**, and refuses the request when it is absent (C-193,
+#    `crates/connector-pack/src/credentials.rs`). So it would put a mandatory "type the word
+#    anystring" field in front of every operator connecting an account — a required question whose
+#    answer the vendor documents as arbitrary. It would also be indistinguishable from zendesk, jira
+#    and twilio, which already ship operator-supplied Basic usernames; C-105 asks each connector to
+#    exercise something the model has not met, and a fourth of those is a row.
+#
+# **So this connector ships bearer, because the vendor publishes it as an equal alternative rather
+# than as an inference of ours.** Mailchimp's Fundamentals page, read 2026-07-31: *"You can either
+# use HTTP Basic Authentication or Bearer Authentication"*, with `--header "Authorization: Bearer
+# <TOKEN>"` shown beside the `--user 'anystring:TOKEN'` form on the same page and against the same
+# request. One value is asked for, it is the value Mailchimp's own key page hands out, and no
+# arbitrary string is demanded of anybody.
+#
+# **What is left open, stated as a gap rather than as a decision.** A vendor whose Basic username is
+# a documented constant *and* which publishes no bearer alternative would be unshippable here, and
+# nothing above fixes that — it is dodged, because Mailchimp happens to offer the second form. The
+# spelling the IR is missing is a `user_literal` beside `user_env` (or a `user_env` that admits a
+# quoted constant), and it belongs to whichever story adds it, not to this one.
+# `mailchimp_connector.rs::the_credential_is_a_bearer_token_because_a_constant_username_cannot_be_declared`
+# pins both halves: what ships, and the measured refusal of the `basic` spelling.
+#
+# ---------------------------------------------------------------------------------------------
+# WHAT SHIPS: 7 operations — 6 reads, 1 write. A health check; audiences (list, get); contacts
+# (list, get, upsert); campaigns (list).
+# ---------------------------------------------------------------------------------------------
+#
+# **Not one operation declares a query parameter, and that is the curation decision this file turns
+# on.** This emitter interpolates query values verbatim and percent-encodes nothing, deliberately
+# (`crates/connector-flux/src/op.rs`; `zendesk-ticket-search` is the standing demonstration under
+# `AGENTS.md`'s Intentional gaps, and sentry, fly, clickup, datadog and trello each excluded filters
+# for it). Every Mailchimp collection endpoint documents `fields`, `exclude_fields`, `count` and
+# `offset`; `GET /lists/{list_id}/members` adds `status`, `vip_only`, `unique_email_id`,
+# `email_type` and six `since_*`/`before_*` timestamp filters; `GET /campaigns` adds `type`,
+# `status`, `list_id`, `folder_id`, `sort_field` and `sort_dir`. **None of them is declared here.**
+# They are real, documented and useful, and every one would be interpolated raw into a URL. They
+# belong to whichever story closes the query-encoding gap
+# (`docs/designs/query-encoding-flux-stories.md`), not to this one.
+#
+# The practical consequence is named rather than hidden: the two collection reads below return
+# Mailchimp's default page — the first 10 items — and there is no way for a caller to ask for the
+# next one. `total_items` is in both response shapes so a caller can at least *see* that it is
+# reading a prefix, and both descriptions say so.
+#
+# **The contact endpoints address a member by an MD5 hash the caller must compute.** Mailchimp
+# documents `subscriber_hash` as the MD5 of the lowercase email address, and nothing in this
+# pipeline can produce one — there is no hashing primitive in Flux, and this repository would not be
+# the right place for one. The two operations still ship, because the hash is a pure function of a
+# value the caller already holds and every Mailchimp client library computes it in three lines, but
+# both descriptions state the rule in full rather than leaving a model to discover that an email
+# address in that position answers 404. This is a gap in what a *model* can call unaided, and it is
+# worth its own story.
+#
+# **Endpoints deliberately not shipped, and named rather than silently absent:**
+#
+# - **`GET /` (the API Root)** — the request Mailchimp's own quick start makes first, and the
+#   obvious `verify`. It answers with the account's own record (`account_name`, `email`, contact
+#   address, `total_subscribers`), which is more than a connection test needs to know and more than
+#   an unattended button should pull. `GET /ping` proves the same two things — key and datacentre —
+#   and Mailchimp describes it as *"A health check for the API that won't return any account-specific
+#   information"*. Same evidence, less data.
+# - **`POST /lists` and `PATCH /lists/{list_id}`** — creating and reconfiguring an audience is
+#   structural work with a billing consequence, and the `campaign_defaults`/`contact` blocks it
+#   requires are a form, not an API call. Out of a first curated set.
+# - **`DELETE /lists/{list_id}/members/{subscriber_hash}` and `.../actions/delete-permanent`** —
+#   documented, and deliberately absent. The first archives a contact; the second is irreversible
+#   and Mailchimp states the address can never be re-imported. Neither is needed to express "read
+#   audiences, read contacts, add or update one".
+# - **`POST /campaigns`, `POST /campaigns/{id}/actions/send`** — sending mail to an audience is the
+#   single most consequential thing this API does, and it is not something a first curated set
+#   should make one call away. It needs its own story, its own risk argument and probably its own
+#   approval gate.
+# - **Reports, automations, templates, e-commerce stores, batch operations, file manager, tags,
+#   merge fields, segments.** Mailchimp's surface is very large; a connector earns operations by
+#   need, and none of these is needed for the four things above.
+# - **`[[events]]`/`[[channels]]`.** Mailchimp publishes webhooks, and declaring an inbound half
+#   would mean also declaring how it is registered and verified. Its webhook verification is a
+#   shared-secret query parameter rather than an HMAC over the body, which is not a shape
+#   `HmacSpec` describes — its own story, not a footnote to this one.
+#
+# ---------------------------------------------------------------------------------------------
+
+id = "mailchimp"
+vendor = "Mailchimp"
+
+# The reverse-DNS authority this connector publishes under (C-92). Mailchimp is an Intuit product,
+# and the rule keys on the **product**: does it still publish its own API domain? It does —
+# `api.mailchimp.com` is the host every request below goes to, datacentre label and all — so it keeps
+# its own authority, exactly as `providers/slack.toml` is `com.slack.api` under Salesforce.
+authority = "com.mailchimp.api"
+
+# The datacentre label is a template variable, filled from `[[config]]`. See the header comment for
+# why it is asked for rather than read out of the credential.
+base_url = "https://{dc}.api.mailchimp.com/3.0"
+
+# `3.0` is the vendor's own spelling — it is the trailing path segment of the root URL, and Mailchimp
+# calls the product "Marketing API 3.0". Rendered addresses read `com.mailchimp.api:3.0#mailchimp-ping`.
+api_version = "3.0"
+
+description = "Mailchimp Marketing API: check connectivity, read audiences and their contacts, add or update a contact, and list campaigns. Authenticates with a single API key sent as a bearer token, against a host whose datacentre label the operator supplies"
+verify = "mailchimp-ping"
+
+# One mechanism, one credential. Mailchimp's OAuth 2 access token travels in the same header against
+# the same endpoints and is not a second declaration — a host that has one puts it where this one
+# goes.
+default_auth = [{ credentials = ["mailchimp.api_key"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credential — bearer, for the reason the header comment gives at length. No username half is
+# declared and none is asked for.
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "mailchimp.api_key"
+scheme = "bearer"
+env = ["MAILCHIMP_API_KEY"]
+description = "Mailchimp Marketing API key, granting whatever the account that issued it can do. Travels as `Authorization: Bearer <key>`, the alternative Mailchimp documents beside its Basic form. The key's trailing `-us14`-style suffix names the account's datacentre; that value is asked for separately as configuration and is never read back out of this credential"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — connectivity.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "mailchimp-ping"
+method = "GET"
+path = "/ping"
+description = "Check that the API is reachable and the credential works. Takes no argument and returns no account data — Mailchimp calls it a health check that returns nothing account-specific. Also this connector's `verify`: it is the one call that proves both halves of the configuration at once, because a wrong key and a wrong datacentre label both fail it"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["health_status"]
+properties = { health_status = { type = "string", description = "Mailchimp's fixed cheerful string when everything is working. Its presence is the signal; its wording is not a contract and must not be matched on" } }
+
+# ---------------------------------------------------------------------------------------------
+# Operations — audiences. Mailchimp's UI says "audience" everywhere and its API says "list"; the
+# operation ids below use the word an operator will recognise and the paths use the vendor's. All
+# reads, all `low`: an audience read exposes what the account holder already sees in Mailchimp's own
+# UI.
+#
+# `contact`, `campaign_defaults`, `stats` and `_links` are left as untyped objects rather than
+# enumerated. This file states what it can name with confidence, and an untyped object inside an
+# otherwise-informative schema is honest rather than permissive
+# (`crates/connector-spec/tests/response_schema_coverage.rs` refuses a *top-level* schema with no
+# informative key, which is the placeholder it exists to catch).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "mailchimp-audience-list"
+method = "GET"
+path = "/lists"
+description = "List the audiences in the account, with the id every contact operation takes. Returns Mailchimp's default first page only — this connector declares no paging parameters, so compare the number of entries against `total_items` before treating the result as complete"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["lists", "total_items"]
+properties = { lists = { type = "array", description = "The audiences on this page", items = { type = "object", required = ["id", "name"], properties = { id = { type = "string", description = "The audience id — what every operation below calls `list_id`" }, web_id = { type = "integer", description = "The id in Mailchimp's own web UI, which is not the API id" }, name = { type = "string", description = "The audience name, as it reads in the UI" }, permission_reminder = { type = "string", description = "The line Mailchimp prints in every campaign reminding a contact why they are receiving it" }, date_created = { type = "string", description = "When the audience was created" }, list_rating = { type = "integer", description = "Mailchimp's own 0-5 engagement rating for the audience" }, email_type_option = { type = "boolean", description = "Whether contacts may choose plain-text or HTML" }, subscribe_url_short = { type = "string", format = "uri", description = "The audience's hosted signup form — a link to give a human" }, subscribe_url_long = { type = "string", format = "uri" }, visibility = { type = "string", description = "`pub` or `prv` — whether the audience is listed publicly" }, contact = { type = "object", description = "The physical mailing address printed in campaign footers, required by anti-spam law. Left untyped rather than enumerated" }, campaign_defaults = { type = "object", description = "Default from-name, from-address, subject and language for campaigns sent to this audience. Left untyped rather than enumerated" }, stats = { type = "object", description = "Member counts and engagement averages. Left untyped rather than enumerated in full; `member_count` is the field most callers want" } } } }, total_items = { type = "integer", description = "How many audiences exist in total, which is how a caller sees that this page is a prefix" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "mailchimp-audience-get"
+method = "GET"
+path = "/lists/{list_id}"
+description = "Get one audience by id, with its settings and current member counts"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "list_id"
+description = "The audience id, from mailchimp-audience-list's `id`. Not the `web_id` shown in Mailchimp's own UI"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "name"]
+properties = { id = { type = "string", description = "The audience id" }, web_id = { type = "integer", description = "The id in Mailchimp's own web UI, which is not the API id" }, name = { type = "string", description = "The audience name, as it reads in the UI" }, permission_reminder = { type = "string", description = "The line Mailchimp prints in every campaign reminding a contact why they are receiving it" }, date_created = { type = "string", description = "When the audience was created" }, list_rating = { type = "integer", description = "Mailchimp's own 0-5 engagement rating for the audience" }, email_type_option = { type = "boolean", description = "Whether contacts may choose plain-text or HTML" }, subscribe_url_short = { type = "string", format = "uri", description = "The audience's hosted signup form — a link to give a human" }, subscribe_url_long = { type = "string", format = "uri" }, visibility = { type = "string", description = "`pub` or `prv` — whether the audience is listed publicly" }, contact = { type = "object", description = "The physical mailing address printed in campaign footers, required by anti-spam law. Left untyped rather than enumerated" }, campaign_defaults = { type = "object", description = "Default from-name, from-address, subject and language for campaigns sent to this audience. Left untyped rather than enumerated" }, stats = { type = "object", description = "Member counts and engagement averages. Left untyped rather than enumerated in full; `member_count` is the field most callers want" } }
+
+# ---------------------------------------------------------------------------------------------
+# Operations — contacts.
+#
+# **Every response below carries email addresses, names and signup IP addresses.** That is what the
+# endpoints are for, and it is stated here because it is the one thing about this connector a
+# calling flow must handle deliberately: read what the flow needs and do not persist the rest. The
+# per-field descriptions repeat it where it bites hardest.
+#
+# `merge_fields`, `interests`, `stats`, `location`, `tags` and `_links` are left untyped for the
+# reason the audience `stats` is: `merge_fields` in particular is *account-defined* — its keys are
+# whatever merge tags the operator configured — so there is no shape to enumerate.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "mailchimp-audience-member-list"
+method = "GET"
+path = "/lists/{list_id}/members"
+description = "List the contacts in an audience, subscribed and unsubscribed alike. Returns Mailchimp's default first page only — this connector declares no paging or status filter, so compare the number of entries against `total_items` before treating the result as complete. Every entry is personal data"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "list_id"
+description = "The audience id, from mailchimp-audience-list's `id`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["members", "list_id", "total_items"]
+properties = { members = { type = "array", description = "The contacts on this page. Personal data: addresses, names and signup IPs", items = { type = "object", required = ["id", "email_address", "status"], properties = { id = { type = "string", description = "The MD5 hash of the lowercase email address — this is the `subscriber_hash` the contact operations take, so a caller that has read a contact never has to compute one" }, email_address = { type = "string", description = "The contact's address. Personal data" }, unique_email_id = { type = "string", description = "A stable id for the address across the account" }, contact_id = { type = "string", description = "Mailchimp's newer per-contact identifier" }, full_name = { type = "string", description = "The contact's name, if the account collects one. Personal data" }, web_id = { type = "integer", description = "The id in Mailchimp's own web UI" }, email_type = { type = "string", description = "`html` or `text`" }, status = { type = "string", description = "`subscribed`, `unsubscribed`, `cleaned`, `pending`, `transactional` or `archived`. `cleaned` means Mailchimp stopped sending after hard bounces" }, merge_fields = { type = "object", description = "The account's own merge tags and their values — FNAME, LNAME and whatever else the operator configured. Account-defined, so left untyped rather than enumerated. Frequently personal data" }, interests = { type = "object", description = "Interest-group membership, keyed by group id. Left untyped rather than enumerated" }, stats = { type = "object", description = "Open and click rates for this contact. Left untyped rather than enumerated" }, ip_signup = { type = "string", description = "The IP the contact signed up from. Personal data; read it only if the flow genuinely needs it" }, timestamp_signup = { type = "string" }, ip_opt = { type = "string", description = "The IP the contact confirmed opt-in from. Personal data" }, timestamp_opt = { type = "string", description = "When the contact confirmed opt-in — the record that a double opt-in happened" }, member_rating = { type = "integer", description = "Mailchimp's 1-5 engagement rating for this contact" }, last_changed = { type = "string", description = "When this contact record last changed" }, language = { type = "string" }, vip = { type = "boolean" }, location = { type = "object", description = "Approximate latitude, longitude and timezone. Left untyped rather than enumerated" }, tags = { type = "array", items = { type = "object" }, description = "The tags applied to this contact. Left untyped rather than enumerated" }, list_id = { type = "string", description = "The audience this contact belongs to" } } } }, list_id = { type = "string", description = "The audience that was read" }, total_items = { type = "integer", description = "How many contacts the audience holds in total, which is how a caller sees that this page is a prefix" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "mailchimp-audience-member-get"
+method = "GET"
+path = "/lists/{list_id}/members/{subscriber_hash}"
+description = "Get one contact in an audience, including its subscription status and opt-in record. The contact is addressed by a hash of its own address, not by the address — see `subscriber_hash`. Returns personal data"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "list_id"
+description = "The audience id, from mailchimp-audience-list's `id`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# The parameter this connector cannot make easy, stated in full rather than left to a 404. Nothing
+# in Flux hashes, so the caller computes this; `mailchimp-audience-member-list` returns it as each
+# contact's `id`, which is the one route that needs no hashing at all.
+[[operations.params.path]]
+name = "subscriber_hash"
+description = "The MD5 hash of the contact's email address, lowercased first — Mailchimp's own addressing scheme for contacts. It is NOT the email address, and passing one answers 404. Compute it caller-side, or read it from mailchimp-audience-member-list, where it is each contact's `id`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "email_address", "status", "list_id"]
+properties = { id = { type = "string", description = "The MD5 hash of the lowercase email address — the `subscriber_hash` this operation and the upsert take" }, email_address = { type = "string", description = "The contact's address. Personal data" }, unique_email_id = { type = "string", description = "A stable id for the address across the account" }, contact_id = { type = "string", description = "Mailchimp's newer per-contact identifier" }, full_name = { type = "string", description = "The contact's name, if the account collects one. Personal data" }, web_id = { type = "integer", description = "The id in Mailchimp's own web UI" }, email_type = { type = "string", description = "`html` or `text`" }, status = { type = "string", description = "`subscribed`, `unsubscribed`, `cleaned`, `pending`, `transactional` or `archived`. `cleaned` means Mailchimp stopped sending after hard bounces" }, merge_fields = { type = "object", description = "The account's own merge tags and their values. Account-defined, so left untyped rather than enumerated. Frequently personal data" }, interests = { type = "object", description = "Interest-group membership, keyed by group id. Left untyped rather than enumerated" }, stats = { type = "object", description = "Open and click rates for this contact. Left untyped rather than enumerated" }, ip_signup = { type = "string", description = "The IP the contact signed up from. Personal data; read it only if the flow genuinely needs it" }, timestamp_signup = { type = "string" }, ip_opt = { type = "string", description = "The IP the contact confirmed opt-in from. Personal data" }, timestamp_opt = { type = "string", description = "When the contact confirmed opt-in — the record that a double opt-in happened" }, member_rating = { type = "integer", description = "Mailchimp's 1-5 engagement rating for this contact" }, last_changed = { type = "string", description = "When this contact record last changed" }, language = { type = "string" }, vip = { type = "boolean" }, location = { type = "object", description = "Approximate latitude, longitude and timezone. Left untyped rather than enumerated" }, tags = { type = "array", items = { type = "object" }, description = "The tags applied to this contact. Left untyped rather than enumerated" }, list_id = { type = "string", description = "The audience this contact belongs to" } }
+
+# ---------------------------------------------------------------------------------------------
+
+# **The one write, and the only operation here that is not `low`.**
+#
+# `risk = "high"` — "writes a reviewer would want to see first" — rather than `medium`, and the
+# reason is not the size of the blast radius but who absorbs it. Setting `status = "subscribed"` on
+# an address puts a real person on a marketing list, and in most of the world that is lawful only
+# with a consent record this call does not carry. Mailchimp itself draws the line here: its own
+# documentation restricts `status_if_new = "subscribed"` to addresses whose consent the account
+# already holds, and `"pending"` is the value that makes Mailchimp send its own confirmation email
+# and record the opt-in. The damage from getting this wrong lands on someone who is not the
+# operator, is not undone by a second API call, and is the kind of thing a regulator asks about — so
+# it goes in front of an approval gate. `providers/postmark.toml` records the same reasoning for the
+# one operation of its own that reaches a stranger's inbox.
+#
+# `idempotency = "idempotent"`: `PUT` is idempotent under RFC 9110 §9.2.2, and this call is a field
+# replacement addressed by a hash of the address itself — sending the same body twice leaves the
+# contact in the state it was already in. It is *not* "safe": the first call may create.
+[[operations]]
+id = "mailchimp-audience-member-upsert"
+method = "PUT"
+path = "/lists/{list_id}/members/{subscriber_hash}"
+description = "Add a contact to an audience, or update the one already there. Creating with `status_if_new = \"pending\"` makes Mailchimp send its own opt-in confirmation and record the consent; creating with \"subscribed\" asserts that the account already holds that consent and sends nothing. Setting `status` on an existing contact changes whether they receive mail. This writes personal data about a third party and is not undone by calling it again"
+risk = "high"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "list_id"
+description = "The audience id, from mailchimp-audience-list's `id`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "subscriber_hash"
+description = "The MD5 hash of the contact's email address, lowercased first. It is NOT the email address. Compute it caller-side from the same address passed as `email_address`, or read it from mailchimp-audience-member-list, where it is each contact's `id`. A hash that does not match `email_address` addresses a different contact"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "email_address"
+description = "The contact's email address. Must be the address `subscriber_hash` was computed from — Mailchimp addresses the record by the hash and takes this as the address to store"
+required = true
+schema = { type = "string", format = "email" }
+
+[[operations.params.body]]
+name = "status_if_new"
+description = "The status to give a contact this call creates; ignored when the contact already exists. \"pending\" makes Mailchimp send its own opt-in confirmation email and record the consent, and is the correct value unless the account already holds documented consent for this address; \"subscribed\" asserts that it does and sends nothing"
+required = true
+schema = { type = "string", enum = ["subscribed", "unsubscribed", "cleaned", "pending"] }
+
+[[operations.params.body]]
+name = "status"
+description = "The status to set on a contact that already exists. \"unsubscribed\" stops mail to them; \"subscribed\" resumes it and carries the same consent obligation as creating one. \"cleaned\" is Mailchimp's own marker for an address it gave up on and is not a value to set by hand"
+required = false
+schema = { type = "string", enum = ["subscribed", "unsubscribed", "cleaned", "pending"] }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "email_address", "status", "list_id"]
+properties = { id = { type = "string", description = "The MD5 hash of the lowercase email address — echo it back to confirm the call addressed the contact it meant to" }, email_address = { type = "string", description = "The contact's address as stored. Personal data" }, unique_email_id = { type = "string" }, contact_id = { type = "string", description = "Mailchimp's newer per-contact identifier" }, full_name = { type = "string", description = "The contact's name, if the account collects one. Personal data" }, web_id = { type = "integer" }, email_type = { type = "string", description = "`html` or `text`" }, status = { type = "string", description = "The contact's status after this call — `pending` means Mailchimp has sent a confirmation and is waiting for the person to answer it, so the write is not yet a subscription" }, merge_fields = { type = "object", description = "The account's own merge tags and their values. Account-defined, so left untyped rather than enumerated" }, interests = { type = "object", description = "Interest-group membership, keyed by group id. Left untyped rather than enumerated" }, stats = { type = "object", description = "Open and click rates for this contact. Left untyped rather than enumerated" }, ip_signup = { type = "string", description = "The IP the contact signed up from. Personal data" }, timestamp_signup = { type = "string" }, ip_opt = { type = "string", description = "The IP the contact confirmed opt-in from. Personal data" }, timestamp_opt = { type = "string", description = "When the contact confirmed opt-in — the consent record this call may have just created" }, member_rating = { type = "integer" }, last_changed = { type = "string", description = "When this contact record last changed, which this call has just set" }, language = { type = "string" }, vip = { type = "boolean" }, location = { type = "object", description = "Approximate latitude, longitude and timezone. Left untyped rather than enumerated" }, tags = { type = "array", items = { type = "object" }, description = "The tags applied to this contact. Left untyped rather than enumerated" }, list_id = { type = "string", description = "The audience the contact was written to" } }
+
+# ---------------------------------------------------------------------------------------------
+# Operations — campaigns. One read, `low`. Nothing here sends anything; see the header comment for
+# why `POST /campaigns/{id}/actions/send` is out of a first curated set.
+#
+# `recipients`, `settings`, `tracking`, `report_summary` and `_links` are left untyped for the reason
+# the audience `stats` is.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "mailchimp-campaign-list"
+method = "GET"
+path = "/campaigns"
+description = "List the campaigns in the account — drafts, scheduled, sending and sent alike. Returns Mailchimp's default first page only, and this connector declares no status or date filter, so compare the number of entries against `total_items` before treating the result as complete"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["campaigns", "total_items"]
+properties = { campaigns = { type = "array", description = "The campaigns on this page", items = { type = "object", required = ["id", "status"], properties = { id = { type = "string", description = "The campaign id" }, web_id = { type = "integer", description = "The id in Mailchimp's own web UI" }, type = { type = "string", description = "`regular`, `plaintext`, `absplit`, `rss` or `variate`" }, create_time = { type = "string", description = "When the campaign was created" }, send_time = { type = "string", description = "When it was sent, or absent if it has not been" }, status = { type = "string", description = "`save`, `paused`, `schedule`, `sending` or `sent` — a draft and a delivered campaign are told apart here" }, emails_sent = { type = "integer", description = "How many emails this campaign has delivered so far" }, archive_url = { type = "string", format = "uri", description = "The campaign's public archive page — a link to give a human" }, long_archive_url = { type = "string", format = "uri" }, content_type = { type = "string", description = "How the campaign's content was authored — `template`, `html` or `multichannel`" }, recipients = { type = "object", description = "The audience and segment this campaign targets; `list_id` and `recipient_count` are the fields most callers want. Left untyped rather than enumerated in full" }, settings = { type = "object", description = "Subject line, title, from-name, reply-to and authoring options. Left untyped rather than enumerated in full" }, tracking = { type = "object", description = "Which opens, clicks and third-party analytics this campaign records. Left untyped rather than enumerated" }, report_summary = { type = "object", description = "Headline delivery statistics for a sent campaign — opens, clicks, unique rates. Absent on a campaign that has not been sent. Left untyped rather than enumerated" } } } }, total_items = { type = "integer", description = "How many campaigns exist in total, which is how a caller sees that this page is a prefix" } }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any of the above can run. Two fields, both
+# connection level: one per Mailchimp account, supplied by whoever connects it.
+#
+# The datacentre label is NOT secret and structurally cannot be — it binds `endpoint.dc`, and
+# `Binding::is_secret` answers `false` for that unconditionally. The API key is, for the mirror-image
+# reason: it binds `credential.*`. Neither classification is a judgement call this file gets to make,
+# and the header comment says why that is the point rather than a limitation.
+#
+# The key carries no `example`. A placeholder shaped like a real key is worse than none, and one has
+# already tripped GitHub's push protection in this repository's history. The datacentre label does
+# carry one, because `us14` is a two-letter region and a number — it is not credential-shaped, it is
+# validated against `format = "subdomain"`, and it is the single most useful thing a form can show
+# for a field most operators have never heard of.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "server_prefix"
+label = "Mailchimp datacentre"
+help = "The short region code in front of `api.mailchimp.com` for your account, like us14 or us6. Find it three ways, whichever is easiest: it is the first part of the URL on your Mailchimp API keys page; it is the last part of your API key, after the final - character; or, on an OAuth connection, the OAuth metadata endpoint returns it. Enter the code alone, not a full URL"
+example = "us14"
+format = "subdomain"
+docs_url = "https://mailchimp.com/developer/marketing/docs/fundamentals/"
+binds = "endpoint.dc"
+
+[[config]]
+name = "api_key"
+label = "Mailchimp API key"
+help = "Generate one under Account & billing, Extras, API keys in your Mailchimp account. It grants everything your Mailchimp user can do, so treat it as a password. Copy the datacentre code above from the same page before you leave it"
+format = "token"
+secret = true
+docs_url = "https://mailchimp.com/developer/marketing/guides/quick-start/"
+binds = "credential.mailchimp.api_key"

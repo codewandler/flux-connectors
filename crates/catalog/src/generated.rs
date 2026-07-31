@@ -17,12 +17,15 @@ pub(crate) mod airtable;
 pub(crate) mod anthropic;
 pub(crate) mod asana;
 pub(crate) mod babelforce;
+pub(crate) mod bitbucket;
 pub(crate) mod r#box;
 pub(crate) mod calendly;
 pub(crate) mod clickup;
 pub(crate) mod cloudflare;
+pub(crate) mod confluence;
 pub(crate) mod contentful;
 pub(crate) mod datadog;
+pub(crate) mod discord;
 pub(crate) mod docusign;
 pub(crate) mod dropbox;
 pub(crate) mod figma;
@@ -35,15 +38,19 @@ pub(crate) mod google;
 pub(crate) mod hubspot;
 pub(crate) mod intercom;
 pub(crate) mod jira;
+pub(crate) mod klaviyo;
 pub(crate) mod launchdarkly;
+pub(crate) mod mailchimp;
 pub(crate) mod microsoft_graph;
 pub(crate) mod miro;
+pub(crate) mod newrelic;
 pub(crate) mod notion;
 pub(crate) mod okta;
 pub(crate) mod openai;
 pub(crate) mod openrouter;
 pub(crate) mod pagerduty;
 pub(crate) mod postmark;
+pub(crate) mod resend;
 pub(crate) mod salesforce;
 pub(crate) mod sendgrid;
 pub(crate) mod sentry;
@@ -51,6 +58,7 @@ pub(crate) mod shopify;
 pub(crate) mod slack;
 pub(crate) mod statuspage;
 pub(crate) mod stripe;
+pub(crate) mod supabase;
 pub(crate) mod trello;
 pub(crate) mod twilio;
 pub(crate) mod typeform;
@@ -69,12 +77,15 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &anthropic::PROVIDER,
     &asana::PROVIDER,
     &babelforce::PROVIDER,
+    &bitbucket::PROVIDER,
     &r#box::PROVIDER,
     &calendly::PROVIDER,
     &clickup::PROVIDER,
     &cloudflare::PROVIDER,
+    &confluence::PROVIDER,
     &contentful::PROVIDER,
     &datadog::PROVIDER,
+    &discord::PROVIDER,
     &docusign::PROVIDER,
     &dropbox::PROVIDER,
     &figma::PROVIDER,
@@ -87,15 +98,19 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &hubspot::PROVIDER,
     &intercom::PROVIDER,
     &jira::PROVIDER,
+    &klaviyo::PROVIDER,
     &launchdarkly::PROVIDER,
+    &mailchimp::PROVIDER,
     &microsoft_graph::PROVIDER,
     &miro::PROVIDER,
+    &newrelic::PROVIDER,
     &notion::PROVIDER,
     &okta::PROVIDER,
     &openai::PROVIDER,
     &openrouter::PROVIDER,
     &pagerduty::PROVIDER,
     &postmark::PROVIDER,
+    &resend::PROVIDER,
     &salesforce::PROVIDER,
     &sendgrid::PROVIDER,
     &sentry::PROVIDER,
@@ -103,6 +118,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &slack::PROVIDER,
     &statuspage::PROVIDER,
     &stripe::PROVIDER,
+    &supabase::PROVIDER,
     &trello::PROVIDER,
     &twilio::PROVIDER,
     &typeform::PROVIDER,

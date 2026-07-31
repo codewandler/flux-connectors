@@ -1,0 +1,588 @@
+# Confluence Cloud REST API v2 — hand-authored, no vendor spec vendored here.
+#
+# Atlassian publishes a machine-readable OpenAPI description of this API at
+# `developer.atlassian.com/cloud/confluence/openapi-v2.v3.json` (`info.title` = "The Confluence Cloud
+# REST API v2", `info.version` = 2.0.0). It is **not** pointed at with a `[spec]` block, for the same
+# reason `providers/jira.toml`, zendesk's and github's are not: ingest (C-4) and the overlay (C-6) do
+# not exist yet, and pointing at the document without a selection mechanism would be pointing at
+# every endpoint it describes. When C-14's fetch and C-4's ingest land, this file becomes a `[spec]`
+# pointer plus a `[[patch.operations]]` selection, and **the six operations below are the selection
+# to reproduce**: `getSpaces`, `getSpaceById`, `getPagesInSpace`, `getPageById`, `createPage`,
+# `createFooterComment`.
+#
+# Every path, parameter, body shape and response member below was read from that OpenAPI document
+# and from `developer.atlassian.com/cloud/confluence/rest/v2/intro/` on **2026-07-31**. Until ingest
+# lands, **drift against the vendor is undetectable by machine**, exactly as for jira, zendesk,
+# freshdesk, github and trello (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# =============================================================================================
+# C-219'S QUESTION, AND ITS ANSWER: CONFLUENCE SHARES JIRA'S HOST, ACCOUNT AND TOKEN. DOES AN
+# OPERATOR WHO CONNECTED JIRA HAVE TO PASTE THE SAME TOKEN AGAIN?
+#
+#                                    **YES, THEY DO.**
+# =============================================================================================
+#
+# This is the first time two shipped connectors legitimately describe *one physical credential*, and
+# it is the probe C-90's credential-addressing model had never had. The answer is measured, not
+# argued: `crates/connector-flux/tests/confluence_connector.rs::the_two_atlassian_connectors_do_not_share_a_credential_address`
+# loads both provider files and renders both addresses.
+#
+#   tenants/<tenant>/com.atlassian.jira/api_token
+#   tenants/<tenant>/com.atlassian.confluence/api_token
+#
+# Two sibling directories, sharing nothing. Same tenant, same leaf name (`api_token` — the vendor
+# prefix is dropped by `local_credential_name`), and **the authority segment is the entire
+# difference**.
+#
+# **The model is not broken; it is being read too generously.** C-90's premise — an address is a
+# *place*, not a per-connector copy — is true, and it is what stops one connector holding two copies
+# of its own credential. What it does not do, and was never wired to do, is make two *connectors*
+# resolve to one place. `Connector::credential_ref_for` (`crates/connector-spec/src/ir.rs:1166-1178`)
+# derives an address from `self.authority` plus the credential leaf, and C-92 derives an `authority`
+# per **product**. Two products therefore never collide, however identical the token is in the world.
+#
+# So the honest summary is: **the addressing model is sound and the sharing does not fall out of
+# it.** Nothing before this file had two connectors close enough together to show that. A connector
+# cannot today say "my credential is the same place as that one's", and inventing a way to say it is
+# a story of its own — it needs an alias direction, a rule for which side owns the value, and a
+# migration for tenants already provisioned. Do not improvise one here.
+#
+# ---------------------------------------------------------------------------------------------
+# THE DESIGN DECISION THIS FORCED: A STANDALONE `confluence` CONNECTOR, NOT A SECOND **SERVICE** ON
+# AN `atlassian` CONNECTOR. RECORDED WITH ITS COST, BECAUSE THE REJECTED BRANCH WOULD HAVE WORKED.
+# ---------------------------------------------------------------------------------------------
+#
+# C-49 established services for exactly this shape — `google` carries gmail, calendar and drive on
+# one authority — so the alternative was real and is the one the story tells this file not to decide
+# by default.
+#
+# **The rejected design would in fact have delivered the sharing.** One `atlassian` connector,
+# authority `com.atlassian`, services `jira` and `confluence`, one `[[auth]]` entry
+# `atlassian.api_token` — and one address, `tenants/<tenant>/com.atlassian/api_token`, for both
+# products. The operator pastes once. This is not speculation: `credential_ref_for` renders the
+# elided `default` service for every connector regardless of which service an operation belongs to
+# (`ir.rs:1153-1160`; `crates/connector-flux/tests/postmark_connector.rs` measures the same
+# elision), so one connector with two services really does mean one credential.
+# `confluence_connector.rs::a_service_split_would_have_shared_the_credential_and_is_still_refused`
+# constructs that address so the branch not taken is on the record as a trade-off rather than as an
+# oversight.
+#
+# **It is refused because the cost lands on tenants, not on this repository.**
+# `com.atlassian.jira` is a *published* authority. AGENTS.md's service contract is flat about it:
+# *"An address, once published, is not reused. Renaming a service or an operation mints a new
+# address and deprecates the old one; it never repoints an existing one."* Folding Jira into an
+# `atlassian` connector repoints every Jira `gid`, every rendered operation address, and — the part
+# that actually hurts — every credential path a tenant has already provisioned under
+# `com.atlassian.jira`. Those tenants would have to re-provision to fix a problem they do not have.
+#
+# Three further reasons, none of them decisive alone:
+#
+# 1. **The two products' operation sets share nothing.** A service exists to partition an operation
+#    set that a caller thinks of as one vendor surface. Nobody reaches for "the Atlassian API";
+#    they reach for Jira or for Confluence, and a `roles`-bearing service split would be describing
+#    an org chart rather than an API.
+# 2. **They version independently.** Jira is pinned to `2` for the Atlassian Document Format reason
+#    its own header records at length; Confluence is on `v2` of a different API with a different
+#    lifecycle. A service *may* carry its own `api_version`, so this is survivable, but it is
+#    evidence the two are not one surface.
+# 3. **Trello is already the precedent for keeping Atlassian products apart.**
+#    `providers/trello.toml` is `com.trello.api`, not a service under Atlassian, and its header
+#    argues the case at length.
+#
+# **What would change the answer.** If a later story gives a connector a way to declare a shared
+# credential address, this connector should adopt it — it is the exact shape that motivates it, and
+# nothing here is built in a way that resists it. That is a strictly better outcome than a service
+# split, because it fixes the sharing without repointing anything already published.
+#
+# ---------------------------------------------------------------------------------------------
+# THE CURATION CONSTRAINT, AND IT IS UNUSUALLY EXPENSIVE ON THIS VENDOR:
+# **NO QUERY PARAMETER, WHICH MEANS THIS CONNECTOR CANNOT READ ANY CONTENT BODY.**
+# ---------------------------------------------------------------------------------------------
+#
+# The emitter interpolates a query value into the URL with `fmt` and percent-encodes nothing
+# (`crates/connector-flux/src/op.rs`, C-28, C-30). That is the standing `zendesk-ticket-search`
+# defect under AGENTS.md's Intentional gaps, and notion, okta, intercom, front, jira and trello each
+# excluded their filters for it.
+#
+# On Confluence v2 the same constraint costs far more than a filter, because of one parameter:
+#
+#   **`body-format` is a QUERY parameter, and a v2 read that omits it returns `"body": {}`.**
+#
+# The vendor documents `body-format` as optional with no default ("The content format types to be
+# returned in the `body` field of the response"). What it does *not* document — and what Atlassian's
+# own developer community consistently reports, with `body-format=storage` as the fix — is that
+# omitting it yields an empty `body` object rather than a default representation. That behaviour is
+# **not stated in the OpenAPI document or the reference pages**, so it is recorded here as
+# corroborated-but-officially-undocumented rather than as a vendor guarantee.
+#
+# Either way the connector's position is the same, because the *good* case is the one it cannot
+# reach: it cannot send `body-format`, so it must not promise page content. Hence:
+#
+#   **This connector navigates and writes a Confluence site. It does not read content back.**
+#
+# Every read below says so in its own `description`, which is the text a model receives as its tool
+# contract — `confluence_connector.rs::no_confluence_read_promises_page_content_it_cannot_fetch`
+# asserts that rather than trusting it. A read that quietly returned `body: {}` while describing
+# itself as fetching a page is worse than a missing operation: a model would report the page as
+# empty, which is a false statement about a customer's content, not an error anyone would see.
+#
+# **The workaround that was considered and refused: baking `?body-format=storage` into `path`.**
+# It is tempting and it would work — the value is a literal the author writes, not a caller value,
+# so there is no percent-encoding hazard, and it would restore every page body in this file. It is
+# refused on two grounds. First, no provider in the fleet puts a `?` in a `path`, and nothing
+# validates that they do not, so the first one would be establishing a convention silently. Second
+# and worse, it is a latent trap: the emitter appends `?` itself when an operation declares a query
+# parameter, so the day C-30 lands and someone adds a real parameter beside it, the emitted URL
+# becomes `/pages/{id}?body-format=storage?limit=25` — malformed, and produced by a build that
+# reports success. `confluence_connector.rs::no_confluence_module_assembles_a_query_string` refuses
+# a `?` in any path for that reason.
+#
+# **What this actually is: the missing third case of C-55.** C-55 gave the pipeline vendor-fixed
+# *headers* (`const_headers`) and vendor-fixed *body* fields (a JSON Schema `const`, which `op.rs`
+# sends as a literal and never declares as an argument — this file uses it twice below). There is no
+# equivalent for a vendor-fixed **query** parameter, and `body-format=storage` is exactly that: a
+# constant this connector would always send and a caller would never choose. That mechanism, not
+# C-30's encoder, is the smallest change that would give this connector its content reads back — a
+# constant query parameter needs no encoding machinery at all, because no caller value passes
+# through it. **Filed as a finding of this story; do not build it here.**
+#
+# ---------------------------------------------------------------------------------------------
+# PAGINATION: CONFLUENCE'S CURSOR IS DOUBLY INEXPRESSIBLE, AND THE READS SAY SO.
+# ---------------------------------------------------------------------------------------------
+#
+# The story asks for this to be stated rather than papered over, and it is stated twice — here and
+# in each list read's own `description`.
+#
+# Confluence v2 pages every list with an opaque cursor: `?cursor=<token>&limit=<n>` (default 25, max
+# 250), and the next page's relative URL comes back both in a `Link` response header
+# (`</wiki/api/v2/pages?limit=5&cursor=…>; rel="next"`) and at `_links.next` in the body.
+# `Quirks::Pagination::Cursor` cannot carry it, for **two independent reasons**, either of which
+# alone would be enough:
+#
+# 1. `cursor_param` is defined as a **query** parameter, and this connector declares none (C-30).
+#    Declaring the quirk would mean declaring the parameter. This is the same wall notion, okta,
+#    intercom and openrouter each record.
+# 2. `next_cursor_pointer` is a JSON Pointer to **the cursor value**, and `_links.next` holds a
+#    *relative URL with the cursor embedded in it*, not a bare token. Even with the query surface
+#    open, the pointer would locate `/wiki/api/v2/pages?limit=25&cursor=…` and a consumer would have
+#    to parse a query string back out of it. `providers/front.toml` records this exact shape for
+#    `_pagination.next` and refuses it too.
+#
+# So **no operation declares a pagination quirk**, every list read returns Confluence's first
+# default-sized page of 25, and each one says that in its `description`.
+# `confluence_connector.rs::no_confluence_operation_declares_a_pagination_quirk_and_every_list_read_says_so`
+# holds both halves.
+#
+# ---------------------------------------------------------------------------------------------
+# ENDPOINTS DELIBERATELY EXCLUDED — named, not silently absent. Every one is a pipeline gap or a
+# curation judgement, never a claim that the endpoint is uninteresting.
+# ---------------------------------------------------------------------------------------------
+#
+# - **`PUT /pages/{id}` (update a page) — excluded, and this is the sharpest exclusion in the file.**
+#   The vendor requires `id`, `status`, `title`, `body` *and* `version.number` on every update, with
+#   `version.number` documented as "the current version number plus one… If you don't know the
+#   current version number, use Get page by id". So an update is a genuine read-modify-write of the
+#   whole page. **This connector cannot read a page body** (see `body-format` above), so it cannot
+#   perform the "read" half — every update it could offer would blindly replace the page's content
+#   with whatever the caller happened to send. A model asked to "add a line to this page" would
+#   replace the page with that line. That is silent data loss on a customer's document, and it is
+#   the same reason `providers/jira.toml` excludes `PUT /rest/api/2/issue/{issueIdOrKey}`. It
+#   returns when a page body can be read — i.e. with the constant-query mechanism above, not with
+#   C-56, since every update field is already required.
+# - **`DELETE /pages/{id}` — excluded.** Destructive, and out of a first curated set on the same
+#   judgement `providers/trello.toml` applies to `DELETE /1/cards/{id}`. Its `purge` query parameter
+#   (permanent, unrecoverable deletion) is additionally unreachable here.
+# - **`GET /pages/{id}/footer-comments` (read a page's comments) — excluded, and it hurts.** It is
+#   the natural partner to `confluence-comment-add` below. It is excluded because a comment list is
+#   *only* its comment bodies, and `body-format` applies to it exactly as to a page read: the
+#   operation would return a list of comment ids, versions and links with every `body` an empty
+#   object. Unlike a page read — which still yields a title, a space, a version and a `webui` link
+#   worth having — a comment carries no useful metadata once its text is gone. Shipping it would be
+#   shipping an operation that cannot do the only thing it is for.
+# - **`GET /pages` (every page on the site) — excluded** in favour of `confluence-space-pages`,
+#   which scopes the same read to one space. An unscoped, unfilterable, unpaginated first-25 of an
+#   entire Confluence site is not a useful answer to any question, and its `space-id`, `title` and
+#   `status` filters are all query parameters.
+# - **Every `include-*` expansion** (`include-labels`, `include-properties`, `include-operations`,
+#   `include-likes`, `include-versions`, `include-permissions`, `include-direct-children`) and
+#   `description-format` on the space reads — all query parameters (C-30). Their absence is why the
+#   response schemas below stop where they do: those members simply are not present.
+# - **Content search (CQL)** — Confluence's search lives on the v1 surface (`/wiki/rest/api/search`)
+#   and takes a CQL expression as a query value. It is the single largest capability this connector
+#   does not have, and it is excluded for the reason `providers/jira.toml` excludes JQL: a CQL
+#   expression is full of spaces, quotes, `=` and `~`, and an unencoded one does not merely
+#   mis-query — any `&` in it appends a parameter of the caller's choosing. It stays excluded until
+#   C-30 lands.
+# - **Blog posts, attachments, labels, whiteboards, databases, custom content, space permissions and
+#   the admin surface** — all documented, all out of a first curated set. A connector earns
+#   operations by need, and none of these is needed to express "find a space, see what is in it,
+#   read a page's metadata, publish a page, comment on one".
+# - **`[[events]]` / `[[channels]]`** — absent. Confluence webhooks exist, and declaring an inbound
+#   half means also declaring how it is registered and verified (AGENTS.md's member contract). That
+#   is its own story.
+#
+# ---------------------------------------------------------------------------------------------
+# STILL CANNOT MAKE A LIVE CALL AS FLUX, for the same reason as every shipped connector: generated
+# modules are unauthenticated, and auth is assembled host-side in `connector-pack` (C-116). This
+# connector is a catalogue entry and a declaration, not a working client.
+# ---------------------------------------------------------------------------------------------
+
+id = "confluence"
+vendor = "Confluence"
+
+# The reverse-DNS authority this connector publishes under (C-92), and the segment the probe above
+# turns on.
+#
+# **`com.atlassian.confluence`, by the same rule `providers/jira.toml` records**, which keys on the
+# *product* and asks: does this product still publish its own API domain? Confluence does not —
+# `confluence.com` is not a domain Atlassian serves this API from, and every request below goes to
+# `{site}.atlassian.net/wiki`. So the parent's domain takes the product as its trailing label,
+# exactly as Jira's does. (The other branch of the same rule is why `providers/trello.toml` is
+# `com.trello.api` and `providers/statuspage.toml` is `io.statuspage.api` despite both being
+# Atlassian-owned: those products *do* publish their own API domains.)
+#
+# This is the segment that makes an operator paste the Atlassian token a second time. That is a
+# consequence worth stating at the line that causes it — and it is still the correct spelling, because
+# the alternatives are worse: `com.atlassian.jira` would file Confluence's operations under Jira's
+# published identity, and a bare `com.atlassian` is the service split refused above.
+#
+# **Never repointed once published** (AGENTS.md: "an address, once published, is not reused").
+authority = "com.atlassian.confluence"
+
+# The vendor's own spelling. The API's version is the `v2` path segment under `/wiki/api/`, and the
+# OpenAPI document titles itself "The Confluence Cloud REST API v2". Rendered addresses read
+# `com.atlassian.confluence:v2#confluence-page-get`.
+#
+# A credential path deliberately carries no version, so the token survives Confluence's next one —
+# which is the whole reason the probe above compares authorities rather than gids.
+api_version = "v2"
+
+# Every Confluence Cloud tenant lives on its own `*.atlassian.net` subdomain — the same host Jira is
+# served from — and Confluence occupies the `/wiki` prefix on it. The prefix belongs to the base URL
+# rather than to each path, so a service that ever needed to move it has one place to change.
+#
+# `{site}` is tenant configuration and is bound by the `[[config]]` field at the end of this file.
+# As with jira, no field declares where a base-URL template is *resolved* from, so
+# `crates/connector-cli/src/status.rs` publishes `unbound-base-url-template` for every operation
+# here. **C-68 is where that binding is designed; do not invent one here.**
+base_url = "https://{site}.atlassian.net/wiki"
+
+description = "Confluence Cloud wiki: find spaces, list the pages in one, read a page's metadata, publish a new page, and comment on one. Page and comment *content* cannot be read back — see the connector's notes"
+
+# The argument-free read that proves the arrangement works. It needs nothing configured beyond the
+# site and the credential, which is what lets a settings page run it unattended.
+verify = "confluence-space-list"
+
+# Every operation authenticates the same way, so the requirement is declared once here rather than
+# repeated on all six.
+default_auth = [{ credentials = ["confluence.api_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+#
+# **The same physical credential `providers/jira.toml` declares**, and a different address. See the
+# probe at the top of this file. Atlassian's basic-auth guide documents the pairing verbatim: "Build
+# a string of the form `your_email@domain.com:your_user_api_token`", with the token minted at
+# id.atlassian.com — the same page, the same account, the same token an operator already pasted for
+# Jira.
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "confluence.api_token"
+scheme = "basic"
+# The sole secret: an Atlassian API token. Gated and registered with flux's redactor by the host;
+# its value is never read here and never reaches a generated artifact.
+#
+# The variable is `CONFLUENCE_*` rather than shared with jira's `JIRA_API_TOKEN` deliberately. An
+# environment variable is a *host* resolution detail, and two connectors sharing one variable name
+# would be a second, undeclared answer to the credential-sharing question — one that works only for
+# a single-tenant process and silently does nothing for the addressed store. The sharing question is
+# answered at the address or not at all.
+env = ["CONFLUENCE_API_TOKEN"]
+# The non-secret identity half: the Atlassian account email, on its own.
+#
+# **The halves are not interchangeable.** Basic auth sends `<user>:<password>` and Atlassian's
+# documented pairing is `<account email>:<API token>`. Declaring them the other way round would
+# route a live credential through `user_env` — the non-secret path, which is not gated and not
+# registered with the redactor — which is the security regression C-19's acceptance names.
+user_env = ["CONFLUENCE_USER"]
+# No `user_suffix`. Zendesk's user half is `<email>/token`, where the literal `/token` is Zendesk's
+# public syntax for "this password is an API token". Atlassian has no equivalent marker: the user
+# half is the bare email address, and inventing a suffix here would corrupt every request.
+description = "Atlassian API token; the user half is the account email that minted it. This is the same token a Jira connection uses, but it is stored at a separate address and must be supplied again"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 6: four reads and two writes.
+#
+# Curated to what an agent working a wiki actually does: find the space, see what is in it, resolve
+# a page to its title and link, publish a page, and comment on one. Everything administrative is
+# excluded — permissions, space settings, user and group management — on the same selection
+# principle as babelforce's 9-of-163 (`docs/designs/provider-operation-inventory.md` §5.2), and
+# everything content-reading is excluded for the `body-format` reason in the header.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only, so `op confluence.page.get` is undeclarable (C-8, C-23).
+#
+# **Ids are strings throughout, in both directions.** Confluence's ids are numeric in appearance and
+# the v2 schemas type them as `string` in every response; a path parameter is declared `string` here
+# to match, which is also what the emitter interpolates. Declaring an integer would invite a
+# consumer to round-trip a large id through a float.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "confluence-space-list"
+method = "GET"
+path = "/api/v2/spaces"
+description = "List the spaces on the Confluence site, with the id, key and name of each. Takes no argument, and is this connector's `verify`: a bounded read that runs unattended and needs nothing configured beyond the credential. Returns only Confluence's first page of 25 spaces — paging needs the `cursor` and `limit` query parameters this connector cannot send, so a site with more spaces is truncated with no further signal than a `_links.next` this connector cannot follow"
+risk = "low"
+idempotency = "idempotent"
+
+# `MultiEntityResult<Space>`: the array under `results`, plus the pagination envelope. `description`
+# and `icon` are declared because the vendor types them, and described as the empty things they are
+# here — `description` needs the `description-format` query parameter, which is excluded (C-30).
+[operations.response_schema]
+type = "object"
+required = ["results"]
+properties = { results = { type = "array", description = "This page's spaces — at most 25, and there is no way to fetch the rest", items = { type = "object", required = ["id", "key", "name"], properties = { id = { type = "string", description = "The space's id, as a string. This is what `confluence-space-get` and `confluence-space-pages` address it by — **not** the `key`" }, key = { type = "string", description = "The space key, e.g. `ENG`. The short code that appears in a Confluence URL. Human-facing and stable, but the v2 API addresses spaces by `id`" }, name = { type = "string", description = "The space's display name" }, type = { type = "string", description = "`global` for an ordinary space or `personal` for a user's own space" }, status = { type = "string", description = "`current` for a live space or `archived`" }, authorId = { type = "string", description = "Account id of whoever created the space. An `accountId`, never a username or email" }, createdAt = { type = "string", format = "date-time" }, homepageId = { type = "string", description = "The space's home page, as a page id — pass it to `confluence-page-get`. This is the usual entry point into a space's content" }, description = { type = "object", description = "EMPTY IN THIS RESPONSE. Populating it needs the `description-format` query parameter, which this connector cannot send" }, icon = { type = "object", description = "The space's icon, when it has one and `include-icon` was requested — which this connector cannot do, so absent" }, _links = { type = "object", description = "Carries `webui`, the space's path in the Confluence UI — append it to the site URL to give a human a link" } } } }, _links = { type = "object", description = "Pagination envelope. `next` holds the RELATIVE URL of the following page with an opaque cursor embedded in it (`/wiki/api/v2/spaces?limit=25&cursor=…`). **This connector cannot follow it** — the cursor is a query parameter it cannot send (C-30), and the value is a URL rather than the bare token a cursor quirk would need. Its presence means only that more spaces exist", properties = { next = { type = "string", description = "Unusable here; see this field's own description. Absent when there is no further page" }, base = { type = "string", format = "uri", description = "The Confluence site's base URL, for resolving the relative links above" } } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "confluence-space-get"
+method = "GET"
+path = "/api/v2/spaces/{id}"
+description = "Get one space by its id, with its key, name, status and home page id. Addressed by the numeric space `id` from `confluence-space-list`, not by the space key that appears in a Confluence URL"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The space's id, from `confluence-space-list`'s `id`. This is the numeric id as a string, not the space key (`ENG`) — the v2 API does not accept a key here"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# `SpaceSingle`. Same members as the bulk shape minus `currentActiveAlias`; the `labels`,
+# `properties`, `operations` and `permissions` expansions are absent because each needs an
+# `include-*` query parameter this connector cannot send.
+[operations.response_schema]
+type = "object"
+required = ["id", "key", "name"]
+properties = { id = { type = "string", description = "The space's id, as a string" }, key = { type = "string", description = "The space key, e.g. `ENG` — the short code in a Confluence URL" }, name = { type = "string", description = "The space's display name" }, type = { type = "string", description = "`global` or `personal`" }, status = { type = "string", description = "`current` or `archived`. An archived space still reads" }, authorId = { type = "string", description = "Account id of the space's creator" }, spaceOwnerId = { type = "string", description = "Account id of the space's current owner, or null when it has none" }, createdAt = { type = "string", format = "date-time" }, homepageId = { type = "string", description = "The space's home page, as a page id — the usual entry point into its content" }, description = { type = "object", description = "EMPTY IN THIS RESPONSE, for the same reason as in `confluence-space-list`: it needs the `description-format` query parameter" }, icon = { type = "object", description = "Absent — needs the `include-icon` query parameter" }, _links = { type = "object", description = "Carries `webui`, the space's path in the Confluence UI, and `base`, the site URL to resolve it against" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "confluence-space-pages"
+method = "GET"
+path = "/api/v2/spaces/{id}/pages"
+description = "List the pages in one space, with the id, title, parent and version of each — the way to discover what a space contains and to resolve a page title to the id the other operations take. **Page bodies are not returned**: the content of each page is empty here, because selecting a body format needs a query parameter this connector cannot send. Returns only Confluence's first page of 25 results; a larger space is truncated"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The space's id, from `confluence-space-list`'s `id` — not the space key"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# `MultiEntityResult<Page>` with `PageBulk` items. `body` is declared and described as empty rather
+# than omitted: it *is* in the response, and a consumer that found it undeclared would reasonably
+# assume this connector had simply not documented it.
+[operations.response_schema]
+type = "object"
+required = ["results"]
+properties = { results = { type = "array", description = "This page's pages — at most 25 of the space's pages, with no way to fetch the rest", items = { type = "object", required = ["id", "title", "status"], properties = { id = { type = "string", description = "The page's id, as a string — what `confluence-page-get` and `confluence-comment-add` address it by" }, title = { type = "string", description = "The page's title. This is the only content-bearing field this operation returns, and it is what a title-to-id lookup matches on" }, status = { type = "string", description = "`current` for a live page, or `archived`/`draft`/`trashed`" }, spaceId = { type = "string", description = "The space this page belongs to — the id that was passed in" }, parentId = { type = "string", description = "The page this one sits under in the space's tree, or null for a top-level page. This is how the page hierarchy is reconstructed" }, parentType = { type = "string", description = "What the parent is, e.g. `page` — a page can hang off a whiteboard or database, not only another page" }, position = { type = "integer", description = "The page's sort position among its siblings, or null" }, authorId = { type = "string", description = "Account id of whoever created the page" }, ownerId = { type = "string", description = "Account id of the page's current owner" }, createdAt = { type = "string", format = "date-time" }, version = { type = "object", description = "The page's current version: `{number, createdAt, message, minorEdit, authorId}`. `number` is the version an update would have to increment — this connector declares no update (see its notes), so it is informational here", properties = { number = { type = "integer", description = "The current version number" }, createdAt = { type = "string", format = "date-time" }, authorId = { type = "string", description = "Who made the most recent edit" }, minorEdit = { type = "boolean" }, message = { type = "string", description = "The edit comment, when the editor left one" } } }, body = { type = "object", description = "**EMPTY (`{}`) IN THIS RESPONSE.** Confluence populates it only when a `body-format` query parameter selects a representation, and this connector sends none (C-30). Do not report a page as empty on the strength of this field — it says nothing about whether the page has content" }, _links = { type = "object", description = "Carries `webui`, the page's path in the Confluence UI — the link to give a human, resolved against the site URL" } } } }, _links = { type = "object", description = "Pagination envelope; `next` is a relative URL with an opaque cursor embedded, which this connector cannot follow. See `confluence-space-list`'s own `_links` for the full reason", properties = { next = { type = "string", description = "Unusable here; its presence means only that the space has more pages" }, base = { type = "string", format = "uri" } } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "confluence-page-get"
+method = "GET"
+path = "/api/v2/pages/{id}"
+description = "Read one page's metadata by id — title, space, parent, author, creation time, current version number and the link to open it in Confluence. **The page body is not returned**: selecting a content format needs a query parameter this connector cannot send, so the `body` field comes back empty regardless of whether the page has content. Use this to resolve a page id to its title and URL, not to read what the page says"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The page's id, from `confluence-space-pages`, from a space's `homepageId`, or from `confluence-page-create`'s response"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# `PageSingle`. `version` is present without any query parameter — the vendor's `include-version`
+# defaults to `true`, which is the one expansion this connector gets for free and the reason this
+# operation is worth shipping at all despite the empty body.
+[operations.response_schema]
+type = "object"
+required = ["id", "title", "status"]
+properties = { id = { type = "string", description = "The page's id, as a string" }, title = { type = "string", description = "The page's title — the only content-bearing field this operation returns" }, status = { type = "string", description = "`current` for a live page, or `archived`/`draft`/`trashed`. A trashed page still reads here" }, spaceId = { type = "string", description = "The space the page belongs to — pass it to `confluence-space-get` for the space's name and key" }, parentId = { type = "string", description = "The page this one sits under, or null for a top-level page" }, parentType = { type = "string", description = "What the parent is, e.g. `page`" }, position = { type = "integer", description = "Sort position among siblings, or null" }, authorId = { type = "string", description = "Account id of whoever created the page. An `accountId`, never a username — it identifies a named person, so read it for what the calling flow needs and do not persist it beyond that" }, ownerId = { type = "string", description = "Account id of the page's current owner" }, lastOwnerId = { type = "string", description = "Account id of the previous owner, or null" }, createdAt = { type = "string", format = "date-time" }, version = { type = "object", description = "The page's current version — returned without asking, because the vendor's `include-version` defaults to true. `number` is what an update would have to increment; this connector declares no update, and its notes say why", properties = { number = { type = "integer", description = "The current version number" }, createdAt = { type = "string", format = "date-time", description = "When this version was created — i.e. when the page was last edited" }, authorId = { type = "string", description = "Who made the most recent edit" }, minorEdit = { type = "boolean", description = "Whether the editor marked it a minor edit, suppressing notifications" }, message = { type = "string", description = "The edit comment, when the editor left one" } } }, body = { type = "object", description = "**EMPTY (`{}`).** Confluence populates this only when a `body-format` query parameter selects a representation (`storage`, `view`, `atlas_doc_format`…), and this connector sends none (C-30). An empty `body` here is a limitation of this connector and says nothing about the page — do not report the page as blank on the strength of it" }, _links = { type = "object", description = "`webui` is the page's path in the Confluence UI and `base` is the site URL — join them to give a human a link. `editui` and `tinyui` are the edit and short forms", properties = { webui = { type = "string", description = "The page's path, relative to `base`" }, editui = { type = "string" }, tinyui = { type = "string", description = "Confluence's short link form" }, base = { type = "string", format = "uri", description = "The site's base URL, to resolve the paths above against" } } } }
+
+# ---------------------------------------------------------------------------------------------
+# Writes — 2. Both `high`, and both `non_idempotent`.
+#
+# `high` matches `jira-issue-create` and `jira-issue-comment-add` rather than trello's `medium`, and
+# the reason is the audience: a Confluence space is a shared document store that a whole
+# organisation reads and that Confluence indexes for search and emails watchers about. A published
+# page or comment cannot be un-seen, and deleting one needs a permission an integration usually
+# lacks — this connector cannot delete at all.
+#
+# Neither is idempotent: Confluence offers no idempotency key on either endpoint, so posting twice
+# publishes twice. This repository's convention (first written for `providers/asana.toml`) is that a
+# write earns `idempotent` only from a vendor-documented guarantee, never from an accident of
+# implementation.
+#
+# **Both bodies nest, and both nestings are objects rather than arrays** — `body.representation` and
+# `body.value`. That is what C-29's `wire` paths express (`BodyNode` is `Leaf` or `Branch`), and it
+# is precisely the thing Jira's v3 comment body could not be expressed as. Confluence's write shape
+# is the well-behaved twin of the one that pushed jira to API v2.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "confluence-page-create"
+method = "POST"
+path = "/api/v2/pages"
+description = "Publish a new page in a space. The page is created live and visible to everyone who can see the space, is indexed for search, and notifies the space's watchers. It is created at the top level of the space unless the space's own structure places it otherwise, with no labels and no restrictions. Returns the new page's id, title and links. The content is sent as Confluence storage format — XHTML-like markup, e.g. `<p>text</p>` — not Markdown and not wiki markup"
+risk = "high"
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "space_id"
+wire = "spaceId"
+description = "Id of the space to publish into, from `confluence-space-list`. The only field Confluence's schema strictly requires"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# Pinned, not asked for: this operation publishes, it does not draft. `status` is a two-valued vendor
+# field (`current`/`draft`) whose other value would produce an invisible page that no operation here
+# can then publish — a silent no-op from the caller's point of view. A JSON Schema `const` is sent as
+# a literal and never declared as an argument (`crates/connector-flux/src/op.rs:486-494`), which is
+# the mechanism `providers/intercom.toml` and `providers/cloudflare.toml` already use.
+[[operations.params.body]]
+name = "status"
+description = "Constant `current` — not caller-supplied. This operation publishes a live page; a draft would be invisible and no operation here could publish it afterwards"
+required = true
+schema = { type = "string", const = "current" }
+
+[[operations.params.body]]
+name = "title"
+description = "The page's title, as it will appear in the space and in search. Confluence requires titles to be unique within a space and rejects a duplicate with a `400`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# Pinned for the same reason, and this one has a sharper failure mode than `status`. Confluence
+# accepts three write representations (`storage`, `wiki`, `atlas_doc_format`) and **stores whatever
+# it is told without validating that the value matches the label**. A model that sent Markdown or
+# wiki markup labelled `storage` would get a `200` and a page rendering broken markup as literal
+# text — a corrupted document, not an error anyone would see. Pinning removes the choice rather than
+# documenting it; the `body` field below states the required format in its own description.
+[[operations.params.body]]
+name = "body_representation"
+wire = "body.representation"
+description = "Constant `storage` — not caller-supplied. It fixes how Confluence interprets the content sent below"
+required = true
+schema = { type = "string", const = "storage" }
+
+[[operations.params.body]]
+name = "body"
+wire = "body.value"
+description = "The page content, in **Confluence storage format**: XHTML-like markup such as `<p>A paragraph.</p><h2>A heading</h2><ul><li>An item</li></ul>`. Plain text is accepted and renders as a single unformatted run. Markdown is **not** converted — it would be stored and displayed literally, asterisks and all"
+required = true
+schema = { type = "string" }
+
+# `PageSingle`, `200` — note **not** `201`, which is what this endpoint's sibling comment write
+# answers with. The created page's `body` echoes what was sent, so it is the one place in this
+# connector where a content body is legible; the reads cannot do the same.
+[operations.response_schema]
+type = "object"
+required = ["id", "title", "status"]
+properties = { id = { type = "string", description = "The new page's id — the only handle on it, and what `confluence-comment-add` and `confluence-page-get` address it by afterwards" }, title = { type = "string", description = "Echoes the title that was sent" }, status = { type = "string", description = "`current` on a page this operation created" }, spaceId = { type = "string", description = "The space the page was published into" }, parentId = { type = "string", description = "The page it was placed under, which Confluence resolves to the space's home page when none was requested" }, authorId = { type = "string", description = "The account the token belongs to — a published page is attributed to it, and that name is what other people in the space will see" }, ownerId = { type = "string" }, createdAt = { type = "string", format = "date-time" }, version = { type = "object", description = "`{number, createdAt, authorId, minorEdit, message}`, with `number` = 1 on a page just created", properties = { number = { type = "integer", description = "1 on creation" } } }, body = { type = "object", description = "Echoes the storage-format content that was sent, under `storage`. This is the one response in this connector that carries a page body — because it is the body the caller supplied, not one Confluence was asked to render" }, _links = { type = "object", description = "`webui` is the new page's path in the Confluence UI and `base` is the site URL; join them to give a human the link to what was just published" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "confluence-comment-add"
+method = "POST"
+path = "/api/v2/footer-comments"
+description = "Add a footer comment to a page — the comment thread at the bottom, not an inline annotation on selected text. The comment is visible to everyone who can see the page and notifies its watchers; it cannot be restricted to a subset of them. The content is sent as Confluence storage format (`<p>text</p>`), not Markdown. Note the page is named in the body rather than in the path, and that this connector cannot read a page's existing comments back"
+risk = "high"
+idempotency = "non_idempotent"
+
+# **The page is a body field, not a path parameter** — the vendor's endpoint is the unscoped
+# `/footer-comments` collection, and the parent is chosen by which of `pageId`, `blogPostId`,
+# `attachmentId`, `customContentId` or `parentCommentId` is present. Only `pageId` is declared, so
+# this operation comments on a page and nothing else: the vendor expresses the constraint in prose
+# ("Do not provide if creating a reply") and its schema enforces nothing, so declaring the
+# alternatives would hand a model five mutually exclusive fields with no way to state the exclusion.
+# A reply to a comment is a different operation and is not declared.
+[[operations.params.body]]
+name = "page_id"
+wire = "pageId"
+description = "Id of the page to comment on, from `confluence-space-pages` or `confluence-page-create`. This creates a top-level footer comment on that page; replying to an existing comment is not supported by this operation"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# Pinned, exactly as on `confluence-page-create` and for the same reason — a mislabelled
+# representation is stored verbatim and renders as broken markup with a `200`.
+[[operations.params.body]]
+name = "body_representation"
+wire = "body.representation"
+description = "Constant `storage` — not caller-supplied. It fixes how Confluence interprets the comment content sent below"
+required = true
+schema = { type = "string", const = "storage" }
+
+[[operations.params.body]]
+name = "body"
+wire = "body.value"
+description = "The comment text, in **Confluence storage format**: XHTML-like markup such as `<p>A comment.</p>`. Plain text is accepted and renders unformatted. Markdown is **not** converted and would be displayed literally"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# `FooterCommentModel`, `201 Created` — and it is a **bare comment**, not the page and not the
+# `{results, _links}` envelope a comment list would return. A consumer that reused a list shape and
+# read `results[0]` would find nothing.
+[operations.response_schema]
+type = "object"
+required = ["id", "status"]
+properties = { id = { type = "string", description = "The new comment's id, as a string" }, status = { type = "string", description = "`current` on a comment just created" }, title = { type = "string", description = "Confluence's own generated title for the comment, e.g. `Re: <page title>`. Not something the caller sets" }, pageId = { type = "string", description = "The page the comment was attached to — echoes what was sent, and worth checking, since the parent is chosen by which body field was present rather than by the path" }, parentCommentId = { type = "string", description = "Null on a top-level comment, which is all this operation creates" }, version = { type = "object", description = "`{number, createdAt, authorId, minorEdit, message}`, with `number` = 1 on a comment just created", properties = { number = { type = "integer", description = "1 on creation" } } }, body = { type = "object", description = "Echoes the storage-format content that was sent, under `storage`" }, _links = { type = "object", description = "Carries `webui`, the comment's anchored path in the Confluence UI — it opens the page scrolled to this comment — and `base`, the site URL to resolve it against" } }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any of the above can run.
+#
+# Three fields, and **the operator will have typed two of them before**, for Jira. That duplication
+# is the probe's answer made visible in a settings form, and the `help` text says so plainly rather
+# than letting someone wonder whether they have the right token. See the header for why the address
+# does not resolve to the value they already supplied.
+#
+# The token field carries **no `example`**: a placeholder shaped like a real token is worse than
+# none, because a user copies it, and one has already tripped GitHub's push protection in this
+# repository's history. `confluence_connector.rs::no_secret_config_field_carries_an_example` asserts
+# it for every secret field rather than for this one.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "site"
+label = "Atlassian site name"
+help = "The part of your Confluence URL before `.atlassian.net` — if you sign in at `acme.atlassian.net/wiki`, this is `acme`. It is the same site name as your Jira connection, if you have one"
+example = "acme"
+format = "subdomain"
+docs_url = "https://support.atlassian.com/confluence-cloud/docs/what-is-confluence-cloud/"
+binds = "endpoint.site"
+
+[[config]]
+name = "email"
+label = "Atlassian account email"
+help = "The email of the account that minted the API token. It travels as the username half of the request"
+example = "you@acme.com"
+format = "email"
+# Not secret — the same non-gated `user_env` path jira's and zendesk's account email take. As with
+# jira there is no `user_suffix`, so the value is sent exactly as typed.
+binds = "username.confluence.api_token"
+
+[[config]]
+name = "api_token"
+label = "API token"
+help = "Create one at id.atlassian.com under Security → API tokens. Atlassian shows it once. This is the same kind of token a Jira connection uses — and if you already made one for Jira, that token works here too, but it has to be pasted again: the two connections store it separately"
+format = "token"
+secret = true
+docs_url = "https://id.atlassian.com/manage-profile/security/api-tokens"
+binds = "credential.confluence.api_token"

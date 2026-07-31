@@ -6,7 +6,7 @@ status: blocked
 design:
 epic: provider-fleet-2
 areas: [providers]
-note: "blocked — measured, not predicted. `ConfigField::binds` parses to exactly one of five destinations (crates/connector-spec/src/config.rs:178-202,239-267) and none is a request header; the one route that reaches a header — an `[[auth]]` credential — forces `secret = true` on whatever config field binds it (provider.rs:609-629), and the application id is not a secret. The hostname and the header cannot share one declared value; filed as a finding for C-187."
+note: "blocked, and re-measured after C-187 — the original blocker half lifted. C-187 shipped `Binding::Request { position: Position::Header }`, a non-secret connection-level destination (config.rs:237, is_secret at :426-438), so a `[[config]]` field now reaches a header without the false `secret = true` an `[[auth]]` credential forced. What still blocks is narrower: one declared value cannot occupy the hostname *and* the header. All three unifying shapes are measured in crates/connector-flux/tests/algolia_connector.rs — spelling both with one name is refused by validate_pin's C-197 shared-slot pass (provider.rs:795-820), a header pin does not bind a `base_url` variable (provider.rs:831-855), and two differently-named fields load but ship two host-side slots with one answer. Needs a config surface that can declare one value reaching two positions."
 ---
 
 # Ship the Algolia connector
@@ -39,8 +39,11 @@ The application id is **not** a secret, so `secret` must disagree with the API k
       can express honestly, not every endpoint the vendor documents. **Not done, deliberately** — see
       `## Progress`. Every curated operation needs `X-Algolia-Application-Id` on the wire, and no
       declared value can reach both that header and the `{app_id}-dsn.algolia.net` hostname honestly
-      with today's config surface, so shipping the TOML would either ask an operator for the same
-      value twice with no guard against a mismatch, or mislabel a public identifier as a secret.
+      with today's config surface. **Updated after C-187:** the header itself is now expressible
+      without mislabelling a public identifier as a secret, so the remaining reason is only the
+      second one — shipping the TOML would ask an operator for the same value twice, in two
+      host-side slots, with no guard against a mismatch. The declaration that would avoid that is
+      refused by the loader's own shared-slot rule.
 - [ ] Declared `risk`, `idempotency` and effects per operation, and a `description` on each written for
       a *model* to read rather than as UI copy. **N/A** — no operations authored, for the same reason.
 - [ ] A `[[config]]` surface with `label` and `help` on every field, and `secret` agreeing with `binds`.
@@ -69,7 +72,78 @@ The application id is **not** a secret, so `secret` must disagree with the API k
 
 ## Progress
 
-- **2026-07-31 — attempted, blocked at the config surface. Nothing shipped, deliberately.** The probe
+- **2026-07-31 (second attempt, after C-187 landed) — the block half lifted, and the story is still
+  blocked on the half that remains.** Re-measured against the loader, not re-read off the note.
+
+  **What C-187 removed.** The original blocker's first clause is gone.
+  `Binding::Request { position: Position::Header, name }` exists
+  (`crates/connector-spec/src/config.rs:237`), `parse_binding` accepts `header.<name>`, and
+  `Binding::is_secret` returns **false** for it (`config.rs:426-438`) with a doc comment that names
+  this case directly: a pinned request value "travels in a URL or a header the module itself
+  composes, where a secret must never be". `Position`'s own documentation cites *this story's*
+  header as one of its three motivating vendors. So the application id no longer has to be
+  mislabelled as a credential to reach `X-Algolia-Application-Id`, and
+  `a_config_field_reaches_a_header_without_routing_through_auth` plus
+  `a_pinned_header_reaches_the_emitted_request_and_not_the_signature` prove it reaches the emitted
+  wire, not just the declaration. **Finding 1 of the original three is overturned; finding 2 is now
+  avoidable rather than merely refused.**
+
+  **What still blocks, stated more sharply than the first attempt could.** The original note's last
+  sentence — *"the hostname and the header cannot share one declared value"* — is still true, and it
+  is now the whole of the blocker rather than a consequence of the first clause. `binds` names
+  exactly one destination, and Algolia's application id needs two: the hostname
+  (`{app_id}-dsn.algolia.net`) and the header, on every call. The three ways to make them share are
+  now each **measured**, which is what this attempt adds:
+
+  | shape | outcome | pinned by |
+  |---|---|---|
+  | two fields, different names — `endpoint.app_id` + `header.X-Algolia-Application-Id` | **loads** | `the_hostname_and_the_header_are_still_two_declared_fields_with_two_slots` |
+  | two fields, one name — both spelled `X-Algolia-Application-Id` | **refused** | `one_name_for_both_destinations_is_refused_as_a_shared_slot` |
+  | one field, header pin alone, hostname resolving from it | **refused** | `a_header_pin_does_not_bind_the_hostname_template` |
+
+  The middle row is the finding. The declaration that would give Algolia exactly what it needs — one
+  collected value substituted into both positions — is refused **by name**, by `validate_pin`'s
+  shared-slot pass (`crates/connector-spec/src/provider.rs:795-820`): *"both resolve `{app_id}` in
+  service `default`, so a host would key them to one value under one slot. Two questions that share
+  an answer are one question."* The rule is correct on its own terms — two *fields* keyed to one
+  slot means one field's answer is silently discarded — and it is precisely what makes this
+  connector unshippable. The rule and the vendor want opposite things, and there is no way to write
+  the one question that would satisfy both. The bottom row closes the last escape: only
+  `Binding::Endpoint` binds a `base_url` variable (`provider.rs:831-855`), so a header pin cannot
+  stand in for the hostname.
+
+  **Why the top row is not "good enough".** It loads, so shipping was a real option, and it was
+  weighed rather than dismissed. It fails on the configuration contract's own terms: a second
+  `[[config]]` field for the same value has no honest `label`/`help` — the only truthful help text
+  is *"type the same value again"* — against a rule that a connector "asks for everything it needs
+  and nothing it cannot use", and a rule that a field must be renderable. It would also be a
+  deliberate circumvention of the shared-slot refusal above, passing only because `app_id` and
+  `X-Algolia-Application-Id` are different *strings*. And the failure mode is the bad one: an
+  operator who typos one of the two gets a DNS error or an Algolia `403` that neither declaration
+  explains.
+
+  **Algolia is the only one of C-187's three motivating vendors whose scope sits in two positions.**
+  Cloudflare's `zone_id` is a path segment; Vercel's `teamId` is a query parameter; each sits in
+  exactly one place, which is why both ship and this does not. C-187 was not wrong to cite Algolia —
+  it delivered the header the note asked for — it just could not deliver the sharing, and the
+  sharing is what this connector needs.
+
+  **Still no `providers/algolia.toml`, and no operations authored**, for the reason the first attempt
+  gave and which has not changed: authoring paths, schemas and risk/idempotency for a connector that
+  cannot express its own configuration honestly would need re-deriving once the config question is
+  actually answered. Zero new red whole-catalogue tests, again, which is the correct count for a
+  story that shipped no provider.
+
+  **What would unblock it** — and this is a new story, not this one: a `[[config]]` field that can
+  declare **one value reaching more than one position**. The narrow shape that fits the existing
+  model is to let a single field name a set of destinations rather than one (`binds` becoming a list,
+  or an `also_binds`), keeping one field, one `name`, one host-side slot, one question — which is
+  what the shared-slot rule is protecting and what Algolia needs. Note the interaction to design
+  against: `Position`'s `name` is deliberately "the placeholder *and* the wire spelling", so a
+  multi-destination field needs a story about which placeholder the emitted module carries when the
+  two destinations spell it differently.
+
+- **2026-07-31 (first attempt) — blocked at the config surface. Nothing shipped, deliberately.** The probe
   question this story exists to answer — *can one declared value reach both the hostname and a
   header?* — is **no**, and it was measured against the loader rather than read off the design doc.
 
