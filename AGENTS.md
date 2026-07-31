@@ -77,6 +77,7 @@ accepted design explicitly changes this charter.
 | `connector-catalog` | Static provider/operation metadata and embedded Flux | Execute operations, touch the network/filesystem, or gain runtime dependencies |
 | `connector-pack` | Projecting catalogue operations onto flux `ToolSpec`s, assembling auth onto a request, and handing the registry declarations | Open a socket, hold an HTTP client, resolve a host, or construct a runtime — egress is a constructor argument (`Egress`), and `permission_subjects`/`intents` must never be defaulted away |
 | `connector-secrets` | Resolving a `CredentialRef` **address** to a **value**: the `SecretStore` port, `MemoryStore`, and the optional Vault KV v2 client | Be reachable from `connector-cli` — it opens sockets, and that edge would end the offline guarantee; also: no expiry, refresh, rotation or revocation |
+| `connectors-api` | **The host** (C-200): binding the pack's ports, holding the transport and the per-tenant credential store, serving the catalogue, and running operations | Construct a request of its own — every route ends in `connector_pack::pack`; ship a transport of its own; be depended on by anything (it is a **leaf**, and `dependency_fence.rs` holds both directions); be published (`publish = false`) |
 
 The first four are the **compiler**; the last two are **host libraries**, built and tested here and
 excluded from the compile path. `crates/connector-cli/tests/dependency_fence.rs` asserts that fence
@@ -580,7 +581,7 @@ happens. This contract is only about *how*.
 - flux-connectors depends on `codewandler-flux-lang` (library `flux_lang`) from crates.io, pinned in
   `[workspace.dependencies]`. Do not replace it with a git or `../flux` path dependency; those do not
   resolve in a fresh clone and couple the build to an unpublished tree.
-- The **compiler** crates — `connector-spec`, `connector-flux`, `connector-cli` — depend on no part of the flux runtime, and `connector-catalog` stays dependency-free. `connector-pack` alone links `flux-runtime`/`flux-spec`, because a declaration handed to a host must be spelled in the host's own `ToolSpec`/`Tool` vocabulary. This repository still constructs no runtime: it compiles; flux executes.
+- The **compiler** crates — `connector-spec`, `connector-flux`, `connector-cli` — depend on no part of the flux runtime, and `connector-catalog` stays dependency-free. `connector-pack` alone links `flux-runtime`/`flux-spec` among them, because a declaration handed to a host must be spelled in the host's own `ToolSpec`/`Tool` vocabulary. **The compiler still constructs no runtime: it compiles; flux executes.** What changed on 2026-07-31 is that the repository also ships a host — `connectors-api` (C-200) — which does construct a runtime, links `flux-web`'s `http.request`, and is fenced away from the compiler in both directions by `crates/connector-cli/tests/dependency_fence.rs`. The offline guarantee is a property of the compile path, not of the workspace.
 - **flux's `$auth` support for `http.request` is no longer the critical path**, and had been listed
   here as though it were. C-114/C-115/C-116 assemble auth in Rust inside `connector-pack`, so the
   whole-value `{"$secret"}` marker never has to grow a prefix or an encoder.
