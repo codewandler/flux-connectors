@@ -1,0 +1,364 @@
+# Front Core API — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Front does publish an OpenAPI document
+# (`https://dev.frontapp.com` renders it, and no copy is vendored under `specs/`), but ingest (C-4)
+# and the overlay (C-6) do not exist yet, so there is nothing for `[spec]` plus a
+# `[[patch.operations]]` selection to point at. Drift is undetectable by machine until then, the same
+# caveat zendesk, freshdesk, github, notion and box already carry
+# (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# EVERY FRONT ID CARRIES A TYPE PREFIX. THIS IS THE FIRST REASON THIS CONNECTOR IS HERE.
+# ---------------------------------------------------------------------------------------------
+#
+# A conversation id is `cnv_55c8c149`; a message id is `msg_...`; a tag id is `tag_...`. None of these
+# is guessable, and none of them is the vendor's numeric-or-UUID shape this repository has already
+# shipped connectors around (Box's numeric folder ids, Notion's UUIDs) — a model that has only ever
+# seen those two shapes has no particular reason to expect an underscore-delimited prefix here. So
+# every path parameter naming one of these ids says so twice: once as a JSON Schema `pattern`
+# requiring the prefix, which a validator can check, and once in `description` prose a model reads
+# even if it never looks at the schema. `crates/connector-flux/tests/front_connector.rs` pins both
+# halves on every occurrence of `conversation_id`, `message_id` and `tag_id`.
+#
+# ---------------------------------------------------------------------------------------------
+# PAGINATION IS AN OPAQUE, SERVER-ISSUED TOKEN, AND THIS CONNECTOR CANNOT FOLLOW IT. THIS IS THE
+# SECOND, AND MORE IMPORTANT, REASON THIS CONNECTOR IS HERE.
+# ---------------------------------------------------------------------------------------------
+#
+# Front's collection endpoints (`GET /conversations`, `GET /conversations/{id}/messages`) answer:
+#
+#   { "_pagination": { "next": "https://api2.frontapp.com/conversations?page_token=..." },
+#     "_links": { "self": "..." },
+#     "_results": [ ... ] }
+#
+# (verified against `dev.frontapp.com`'s own reference documentation, not assumed from a generic
+# pattern). Front's underlying OpenAPI document also names `page_token` as a first-class query
+# parameter in its own right — so, unlike Box's `/2.0/folders/{id}/items`, this is not a case where no
+# pagination mechanism exists at all. It is the Notion/Slack/Asana shape instead: an opaque,
+# server-issued cursor a caller can only ever obtain from a *previous response*, never construct.
+# `providers/notion.toml`'s own header comment records the same thing of `start_cursor` and refuses it
+# for the same reason nothing here percent-encodes a query value at all (C-30) — `zendesk-ticket-search`
+# is the standing demonstration, and a token containing `+` or `/` corrupts the request exactly as a
+# free-text search term would. So `front-conversation-list` and `front-conversation-message-list`
+# return Front's first page only, and each says so plainly in its own `response_schema` rather than
+# silently truncating — the "plausible but incorrect" shape AGENTS.md refuses is an operation that
+# calls itself "list" and quietly never returns page 2.
+#
+# `_pagination.next` is a **full absolute URL**, not a bare token — an even harder case than a cursor
+# query parameter. Nothing in this pipeline's operation model can take a runtime response value from
+# one call and use it as the literal request target of a later one: an `Operation`'s `path` is a
+# compile-time template bound to this connector's one `base_url`, never a value read out of a prior
+# response body. So even leaving C-30 aside, following that link is not a shape this pipeline's
+# request model can express at all — it would need a wholly different, dynamic-URL request primitive
+# that does not exist here.
+#
+# ---------------------------------------------------------------------------------------------
+# THE REPLY OPERATION IS ASYNCHRONOUS AND SENDS TO FRONT'S OWN DEFAULT RECIPIENTS.
+# ---------------------------------------------------------------------------------------------
+#
+# `POST /conversations/{conversation_id}/messages` answers `202 Accepted` with `{"status":
+# "accepted", "message_uid": "..."}` — not the sent message. Front queues delivery; the message a
+# caller just sent is not the response body's shape, and `front-conversation-reply`'s
+# `response_schema` says so rather than describing a message object nothing here would actually
+# return.
+#
+# Front documents every other field on this endpoint — `to`, `cc`, `bcc`, `author_id`, `channel_id`,
+# `subject`, `text`, `options`, `attachments` — as **optional**, defaulting respectively to the
+# conversation's last recipients, the token's own identity, the conversation's existing channel, and
+# so on. This pipeline's body emitter binds every declared body field unconditionally
+# (`crates/connector-flux/src/op.rs`, `body_tree`): an unsupplied optional field would still travel as
+# an explicit `null`, which C-56 ("omit an optional body field instead of sending an explicit null",
+# still open) is what would fix. Until then, declaring any of those fields would mean a caller who
+# does not set it sends `{"to": null, ...}`, which Front may reject or misread — the exact failure
+# `providers/notion.toml` already refuses for the same reason on `notion-database-query`. So this
+# operation declares `body` only, and always replies to the conversation's own default recipients,
+# channel and sender identity.
+#
+# Note for whoever reads this expecting `to`/`cc`/`bcc` excluded because they are *arrays*: they are
+# not. Front documents them as flat arrays of recipient-handle strings, and a single array-typed body
+# field with no nested `wire` path is mechanically fine here — `providers/notion.toml`'s own
+# `notion-page-create` ships exactly that shape for its `title` field, and C-185 (arrays SendGrid-style,
+# decomposed across a nested envelope) does not apply to a flat, undecomposed array. The reason these
+# three fields are absent is C-56 alone, verified by reading `body_tree` directly rather than assumed.
+#
+# ---------------------------------------------------------------------------------------------
+# CONVERSATION AND MESSAGE CONTENT IS CUSTOMER CORRESPONDENCE. NO EXAMPLE BODY, ADDRESS OR NAME
+# APPEARS ANYWHERE IN THIS FILE.
+# ---------------------------------------------------------------------------------------------
+#
+# Every `description` and `response_schema` below names fields (`body`, `text`, `recipient.handle`)
+# without ever showing a value for one. A message's `body`/`text` genuinely does carry a customer's
+# own words once this connector runs; nothing here invents or repeats any.
+#
+# ---------------------------------------------------------------------------------------------
+# EXCLUDED, each for a stated reason
+# ---------------------------------------------------------------------------------------------
+#
+# - `page_token` / following `_pagination.next` — the pagination section above. The largest exclusion
+#   and the one a reader is most likely to want.
+# - `q` on `GET /conversations` — Front's structured search filter (`{"statuses": [...]}`), which this
+#   pipeline has no bracket-notation query encoding for (`q[statuses][]=...`) and which is unencodable
+#   regardless (C-30). The same shape exclusion `providers/notion.toml` makes of `filter`/`sorts`.
+# - `to`, `cc`, `bcc`, `author_id`, `channel_id`, `subject`, `text`, `options`, `attachments` on the
+#   reply — C-56, above.
+# - `POST /channels/{channel_id}/messages` (compose a new outbound message, as opposed to replying to
+#   an existing conversation) — a distinct endpoint from the reply this file ships, requiring a
+#   `channel_id` this connector never lists (Front's channel-management endpoints are entirely out of
+#   scope for a first curated set) and a recipient shape not yet verified against Front's own
+#   reference. Left out rather than guessed at.
+# - Drafts, comments, contacts, inboxes, teammates, rules, exports, the analytics API, custom fields,
+#   custom channels, and the OAuth token exchange (`POST /oauth/token`). Out of scope for a first
+#   curated set, not blocked by anything.
+
+id = "front"
+vendor = "Front"
+
+# One host for every company — Front has no tenant subdomain, so `base_url` carries no `{placeholder}`
+# for an operator to bind and `status.rs` reports no `unbound-base-url-template` issue.
+base_url = "https://api2.frontapp.com"
+
+description = "Front shared inbox: read and reply to conversations, and tag them"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["front.api_token"] }]
+
+# The "Test connection" button. `GET /conversations?limit=1` is a genuine read, bounded to the
+# smallest page Front allows, so pressing it cannot do anything except prove the token resolves —
+# the same bound-listing shape `freshdesk-test` already uses for the same reason (§4.2). A dedicated
+# `GET /me`-style identity endpoint exists in Front's OAuth flow but is documented as identifying the
+# *company* that completed an OAuth grant, not a plain API token's owner, so it is not a verified
+# stand-in for "prove this token works" and is left out rather than guessed at.
+verify = "front-verify"
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "front.api_token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; its value is never read
+# here and never reaches a generated artifact.
+env = ["FRONT_API_TOKEN"]
+description = "Front API token sent as a bearer"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a human supplies before any of this runs
+#
+# One field. Front is single-host with no tenant subdomain, so unlike zendesk's `{subdomain}` and
+# freshdesk's `{domain}` there is no address to bind and the token is the only thing an operator can
+# supply. `binds` makes this connection-level (per tenant) rather than operator-level; `Level` is
+# derived from that and is never authored.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "api_token"
+label = "API token"
+help = "In Front, open Settings → API & Integrations → API, and create a new token. A token is scoped to the teammate who creates it and to the scopes granted when it is created — replying and tagging require write scopes, not just read ones"
+# No `example`, deliberately. A placeholder for a secret field has to be recognisable as fake, and a
+# Front API token is an opaque string with no fixed prefix a placeholder could safely imitate without
+# risking a shape secret scanners match — `providers/box.toml` and `providers/notion.toml` record the
+# release this repository actually lost that way. The shape belongs in `help`, where it cannot be
+# mistaken for a value or copied into a form.
+format = "token"
+secret = true
+docs_url = "https://dev.frontapp.com/docs/authentication"
+binds = "credential.front.api_token"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 6 of Front's several hundred endpoints
+#
+# Curated to what a shared-inbox triage flow executes at runtime: list conversations, read one, read
+# its messages, reply, and tag it — plus the connection check. Everything administrative, everything
+# needing an unencodable query value, and the reply's optional recipient/channel override are
+# excluded; see the header comment for the full list and the reasons.
+#
+# Front's Core API carries no path version prefix and is not dated like Notion's; there is nothing to
+# pin beyond the base URL.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only, so `op front.conversations.list` is undeclarable (C-8, C-23).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "front-verify"
+method = "GET"
+path = "/conversations"
+description = "List one conversation, confirming the token resolves and carries at least read access. Takes no parameters other than the page bound"
+risk = "low"
+idempotency = "idempotent"
+
+# Ours, not the vendor's: bounding a liveness check to one record is a deliberate addition, the same
+# choice `freshdesk-test` makes of `GET /contacts?per_page=1` (inventory §4.2).
+[[operations.params.query]]
+name = "limit"
+description = "Records to fetch; one is enough to prove the credential works"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100, default = 1 }
+
+[operations.response_schema]
+type = "object"
+properties = { _results = { type = "array", description = "Up to `limit` conversations. Empty is still a successful credential check — a company can genuinely have none yet", items = { type = "object" } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/_error/message"
+code_pointer = "/_error/status"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "front-conversation-list"
+method = "GET"
+path = "/conversations"
+description = "List the company's conversations in reverse chronological order (most recently updated first), first page only — this connector cannot follow Front's next-page link (see providers/front.toml's header comment). Front's structured search filter (`q`) is not accepted here: it is a bracket-notation object this pipeline cannot encode as a query string"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "limit"
+description = "Max conversations to return in this one page, up to Front's own cap of 100. Does not change how many pages exist, only how large this one is"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100, default = 50 }
+
+[operations.response_schema]
+type = "object"
+properties = { _pagination = { type = "object", description = "Carries `next`, a full absolute URL to the following page when more conversations exist. This connector cannot follow it — Front's cursor is an opaque, server-issued token unconstructable by a caller, and unencodable here regardless (C-30) — so a non-null `next` means more conversations exist beyond this first page only", properties = { next = { type = "string", description = "Unusable here; see this field's own description" } } }, _results = { type = "array", description = "This page's conversations, each `{id, subject, status, assignee, recipient, tags, created_at, ...}`", items = { type = "object", properties = { id = { type = "string", pattern = "^cnv_[0-9a-z]+$", description = "The conversation's id, prefixed `cnv_`" }, subject = { type = "string" }, status = { type = "string", description = "Front's own conversation status, e.g. `assigned`, `unassigned`, `archived` or `deleted`" }, is_private = { type = "boolean" }, created_at = { type = "number", description = "Unix timestamp, seconds" } } } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/_error/message"
+code_pointer = "/_error/status"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "front-conversation-get"
+method = "GET"
+path = "/conversations/{conversation_id}"
+description = "Get one conversation's metadata: subject, status, assignee, recipient and tags. Does not return its messages — use front-conversation-message-list for those"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "conversation_id"
+description = "The conversation's id, an opaque string prefixed `cnv_` (e.g. `cnv_55c8c149`) that a model must not invent — discover it from front-conversation-list or front-verify"
+required = true
+schema = { type = "string", pattern = "^cnv_[0-9a-z]+$" }
+
+[operations.response_schema]
+type = "object"
+properties = { id = { type = "string", pattern = "^cnv_[0-9a-z]+$" }, subject = { type = "string" }, status = { type = "string", description = "e.g. `assigned`, `unassigned`, `archived` or `deleted`" }, assignee = { type = "object", description = "The assigned teammate, `{id, email, first_name, last_name}` — absent (`null`) when unassigned", properties = { id = { type = "string", pattern = "^tea_[0-9a-z]+$" } } }, recipient = { type = "object", description = "The conversation's primary counterparty, `{name, handle, role}` — `handle` is an email address or phone number depending on the originating channel", properties = { name = { type = "string" }, handle = { type = "string" }, role = { type = "string" } } }, tags = { type = "array", description = "Tags currently applied, each `{id, name}`", items = { type = "object", properties = { id = { type = "string", pattern = "^tag_[0-9a-z]+$" }, name = { type = "string" } } } }, is_private = { type = "boolean" }, created_at = { type = "number", description = "Unix timestamp, seconds" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/_error/message"
+code_pointer = "/_error/status"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "front-conversation-message-list"
+method = "GET"
+path = "/conversations/{conversation_id}/messages"
+description = "List the messages in a conversation in reverse chronological order (newest first), first page only — this connector cannot follow Front's next-page link (see providers/front.toml's header comment). Each message's `body`/`text` is the actual correspondence exchanged on this conversation"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "conversation_id"
+description = "The conversation's id, an opaque string prefixed `cnv_` (e.g. `cnv_55c8c149`) that a model must not invent — discover it from front-conversation-list or front-verify"
+required = true
+schema = { type = "string", pattern = "^cnv_[0-9a-z]+$" }
+
+[[operations.params.query]]
+name = "limit"
+description = "Max messages to return in this one page, up to Front's own cap of 100"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100, default = 50 }
+
+[operations.response_schema]
+type = "object"
+properties = { _pagination = { type = "object", description = "Carries `next`, a full absolute URL to the following page. This connector cannot follow it — see front-conversation-list's own response_schema for why — so a non-null `next` means more messages exist beyond this first page only", properties = { next = { type = "string", description = "Unusable here; see this field's own description" } } }, _results = { type = "array", description = "This page's messages, each `{id, type, is_inbound, author, recipients, subject, body, text, created_at}`", items = { type = "object", properties = { id = { type = "string", pattern = "^msg_[0-9a-z]+$", description = "The message's id, prefixed `msg_`" }, type = { type = "string", description = "The channel kind this message travelled over, e.g. `email`, `sms` or `intercom`" }, is_inbound = { type = "boolean", description = "True for a message received from the outside party, false for one sent from Front" }, author = { type = "object", description = "The teammate who sent this message — absent (`null`) on an inbound message, since nobody on the team authored it", properties = { id = { type = "string", pattern = "^tea_[0-9a-z]+$" } } }, recipients = { type = "array", description = "Each `{name, handle, role}`; `role` is one of `from`, `to`, `cc`, `bcc` or `reply-to`", items = { type = "object", properties = { name = { type = "string" }, handle = { type = "string" }, role = { type = "string" } } } }, body = { type = "string", description = "The message content, HTML for most channels" }, text = { type = "string", description = "A plain-text rendering of `body`" }, created_at = { type = "number", description = "Unix timestamp, seconds" } } } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/_error/message"
+code_pointer = "/_error/status"
+
+# ---------------------------------------------------------------------------------------------
+# The two writes.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "front-conversation-reply"
+method = "POST"
+path = "/conversations/{conversation_id}/messages"
+description = "Reply to a conversation, using its own existing recipients, channel and sender identity — this connector cannot override any of those (see providers/front.toml's header comment). Front queues delivery: the response is an acknowledgement, not the sent message, and is not visible to the recipient until Front actually delivers it"
+# `high`, not `medium`. Unlike an internal write (a Box folder, a Notion page, a Slack message in a
+# workspace channel), this reaches a real customer outside the company entirely — the same reasoning
+# `providers/google.toml` gives `gmail-messages-send` `high` rather than `medium`: the blast radius is
+# wider because the recipient need not be inside any workspace this operator controls.
+risk = "high"
+# Front documents no idempotency key on this endpoint, and `check_write_metadata`
+# (`crates/connector-flux/src/op.rs`) refuses `idempotent` on any POST regardless. Posting the same
+# body twice sends two messages.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "conversation_id"
+description = "The conversation's id, an opaque string prefixed `cnv_` (e.g. `cnv_55c8c149`) that a model must not invent — discover it from front-conversation-list or front-verify"
+required = true
+schema = { type = "string", pattern = "^cnv_[0-9a-z]+$" }
+
+[[operations.params.body]]
+name = "body"
+description = "The reply's content. Sent as-is to the conversation's existing recipients over its existing channel — this operation cannot redirect it to a different recipient list, channel or sender (C-56; see providers/front.toml's header comment)"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+description = "An acknowledgement that Front accepted the reply for delivery, not the sent message itself"
+properties = { status = { const = "accepted" }, message_uid = { type = "string", description = "A resource alias for the queued message. Not a `msg_`-prefixed id and not usable as one — Front assigns the real id only once delivery completes" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/_error/message"
+code_pointer = "/_error/status"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "front-conversation-tag-add"
+method = "POST"
+path = "/conversations/{conversation_id}/tags"
+description = "Apply one or more existing tags to a conversation. Applying a tag the conversation already carries changes nothing — Front does not duplicate it. Answers 204 with an empty body on success"
+# `medium`, not `high`. A tag is visible only to the team, notifies nobody, and is trivially removed —
+# the same limited-blast-radius reasoning `box-folder-create` carries. Not `low`: `check_write_metadata`
+# refuses `low` on any state-changing method.
+risk = "medium"
+# Front's own behaviour is idempotent (re-applying an existing tag is a no-op), but
+# `check_write_metadata` refuses `idempotent` on any POST regardless of what the vendor actually does
+# — the same over-declaration `providers/notion.toml` records of its two POST reads. `non_idempotent`
+# is the honest spelling this pipeline can make, even though repeating this call is in fact safe.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "conversation_id"
+description = "The conversation's id, an opaque string prefixed `cnv_` (e.g. `cnv_55c8c149`) that a model must not invent — discover it from front-conversation-list or front-verify"
+required = true
+schema = { type = "string", pattern = "^cnv_[0-9a-z]+$" }
+
+# A flat array of tag ids — one Flux argument, no nested `wire` path, and so none of C-185's
+# array-composed-from-an-envelope hazard applies (see providers/front.toml's header comment).
+[[operations.params.body]]
+name = "tag_ids"
+description = "The existing tag ids to apply, each an opaque string prefixed `tag_` that a model must not invent — discover them from a conversation's own `tags` field (front-conversation-get) or from Front's tag settings"
+required = true
+schema = { type = "array", minItems = 1, items = { type = "string", pattern = "^tag_[0-9a-z]+$" } }
+
+# NO `response_schema`, DELIBERATELY (C-126, the same choice `providers/jira.toml` and
+# `providers/miro.toml` record). Front answers this one `204 No Content`: there is no body at all, and
+# `{}` or `{"type": "object"}` would both describe an empty JSON object rather than the true absence of
+# one. The honest record is the `description` above ("Answers 204 with an empty body on success"),
+# which reaches the tool contract a model actually reads.
+
+[operations.quirks.error_envelope]
+message_pointer = "/_error/message"
+code_pointer = "/_error/status"
