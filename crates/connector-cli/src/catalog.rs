@@ -445,7 +445,7 @@ fn acquisition(method: &connector_spec::AuthMethod) -> String {
 ///
 /// The `prefix` is what makes this a mapping rather than a translation table: `Bearer` and `Basic`
 /// differ from a raw-value header only by the literal text in front of the value.
-fn placement(scheme: &AuthScheme) -> String {
+pub(crate) fn placement(scheme: &AuthScheme) -> String {
     match scheme {
         AuthScheme::Bearer => {
             "crate::Placement::Header { name: \"Authorization\", prefix: \"Bearer \" }".to_string()
@@ -453,9 +453,14 @@ fn placement(scheme: &AuthScheme) -> String {
         AuthScheme::Basic => {
             "crate::Placement::Header { name: \"Authorization\", prefix: \"Basic \" }".to_string()
         }
-        AuthScheme::Header { name } => format!(
-            "crate::Placement::Header {{ name: {}, prefix: \"\" }}",
-            string(name)
+        // The declared prefix, and the reason this arm reads like the two above it: `Bearer ` and a
+        // vendor's `SSWS ` differ only in who wrote the literal. An empty prefix — every shipped
+        // `header` credential before C-184 — emits exactly the string this arm emitted when it was
+        // hard-coded, which is what keeps the committed catalogue byte-identical.
+        AuthScheme::Header { name, prefix } => format!(
+            "crate::Placement::Header {{ name: {}, prefix: {} }}",
+            string(name),
+            string(prefix)
         ),
         AuthScheme::Query { name } => {
             format!("crate::Placement::Query {{ name: {} }}", string(name))
@@ -589,6 +594,80 @@ mod tests {
         let first = render(&connector(), &renderings()).unwrap();
         let second = render(&connector(), &renderings()).unwrap();
         assert_eq!(first, second);
+    }
+
+    /// **The generated artifact carries the scheme word and a credential *reference*, and nothing
+    /// that resolves to a secret (C-184).**
+    ///
+    /// This is the constraint the prefix axis is built around, asserted where it can actually fail:
+    /// on the emitted table rather than on the IR. `SSWS ` is connector data — the vendor prints it
+    /// in its own documentation — and it is *supposed* to be committed verbatim. What must never be
+    /// here is the value it precedes.
+    ///
+    /// The positive assertions are what keep the negative ones from passing vacuously: a table that
+    /// emitted neither the prefix nor the credential name would satisfy "no secret" trivially while
+    /// publishing a connector that cannot authenticate.
+    #[test]
+    fn a_prefixed_credential_emits_its_scheme_word_and_only_a_credential_reference() {
+        /// Shapes a real Okta credential carries. None is in this repository; the assertion is that
+        /// the emitter has no path that could put one here.
+        const VALUE_SHAPES: [&str; 3] = ["00a1b2c3", "SSWS00", "ssws_token_value"];
+
+        let mut connector = connector();
+        connector.auth = vec![AuthMethod::prefixed_header(
+            "acme.api_token",
+            "Authorization",
+            "SSWS ",
+            vec!["ACME_API_TOKEN".to_string()],
+        )];
+        connector.default_auth = vec![AuthRequirement::single("acme.api_token")];
+
+        let table = render(&connector, &renderings()).unwrap();
+
+        // The scheme word reaches the placement, spelled exactly — trailing space included, since
+        // the space is part of the literal and not a separator anything inserts later.
+        assert!(
+            table
+                .contains(r#"crate::Placement::Header { name: "Authorization", prefix: "SSWS " }"#),
+            "the declared prefix must reach the emitted placement: {table}"
+        );
+        // A reference to the credential — its flat-namespace name and its leaf — and that is the
+        // whole of what the table says about how the value is obtained.
+        assert!(table.contains(r#"name: "acme.api_token""#), "{table}");
+        assert!(table.contains(r#"leaf: "api_token""#), "{table}");
+        // **Not even the environment variable.** A `Static` acquisition emits no `env` at all: the
+        // value is addressed through the secret store, and the declared variables are a `[[config]]`
+        // concern rather than something the pack reads from here. Only `BasicJoin` emits names, and
+        // those are the *user* half, which is config and not a gated secret.
+        assert!(
+            !table.contains("ACME_API_TOKEN"),
+            "a static credential's env var is not part of the emitted table: {table}"
+        );
+        // And nothing that is, or looks like, the value itself.
+        for shape in VALUE_SHAPES {
+            assert!(
+                !table.contains(shape),
+                "a credential value shaped {shape:?} reached the emitted catalogue: {table}"
+            );
+        }
+    }
+
+    /// The empty prefix emits the identical string the arm produced when it was hard-coded, which is
+    /// what keeps every provider authored before C-184 byte-identical. The whole-tree version of this
+    /// is `tests/catalog_artifacts.rs::the_committed_tree_is_a_fixed_point_of_a_build`; this is the
+    /// one line that decides it.
+    #[test]
+    fn an_absent_prefix_emits_exactly_what_the_hard_coded_arm_emitted() {
+        let table = render(&connector(), &renderings()).unwrap();
+        assert!(
+            table.contains(r#"crate::Placement::Header { name: "X-Id", prefix: "" }"#),
+            "{table}"
+        );
+        assert_eq!(
+            placement(&AuthScheme::Bearer),
+            r#"crate::Placement::Header { name: "Authorization", prefix: "Bearer " }"#,
+            "the two presets are prefixes with names; respelling one moves 31 credentials' artifacts"
+        );
     }
 
     /// The table embeds the file the same build wrote, at the path it wrote it to. A wrong relative

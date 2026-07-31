@@ -67,7 +67,13 @@ export interface Operation {
 
 export interface Credential {
   name: string
-  scheme: { kind: string; name: string | null }
+  /**
+   * `prefix` is the literal text in front of the credential in a header value, trailing space
+   * included — `'Bearer '`, `'SSWS '`, `'Token token='`, or `''` for a header whose whole value is
+   * the secret. It is published because without it `Authorization: SSWS <token>` and a raw
+   * `Authorization: <token>` are the same two keys (C-184). Never any part of a credential value.
+   */
+  scheme: { kind: string; name: string | null; prefix: string }
   description: string
   env: string[]
   user_env: string[]

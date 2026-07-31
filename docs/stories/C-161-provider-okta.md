@@ -2,11 +2,12 @@
 id: C-161
 title: Ship the Okta connector
 pillar: Spec
-status: blocked
+status: ready
+priority: 2
 design:
 epic: provider-fleet-2
 areas: [providers]
-note: "blocked — measured, not predicted. `AuthScheme` is a closed five-variant enum (crates/connector-spec/src/auth.rs:70-102) with no prefix axis; Okta's `Authorization: SSWS <token>` cannot be expressed honestly without either extending that enum (a connector-spec change four other auth stories are also waiting on) or baking `SSWS ` into a credential value, which AGENTS.md forbids outright"
+note: "UNBLOCKED by C-184, which built the prefix axis this story measured as missing. Okta now spells `scheme = { header = { name = \"Authorization\", prefix = \"SSWS \" } }`. The `## Progress` findings stand as the record of why the axis exists; what remains is the connector itself — no provider TOML was ever shipped for the probe"
 ---
 
 # Ship the Okta connector
@@ -92,7 +93,7 @@ Read the `scheme` field's accepted values before designing. If it is closed to b
      `auth.rs:78-82` declares `Header { name: String }` — the header key — and nothing else. A probe
      fixture declaring `scheme = { header = { name = "Authorization", prefix = "SSWS " } }` is
      refused the same way (`deny_unknown_fields`, `unexpected keys in table: prefix`) —
-     `the_header_scheme_carries_no_prefix_to_smuggle_ssws_onto` in the same file.
+     `the_header_scheme_carries_the_ssws_prefix_it_once_could_not` in the same file.
   3. **`docs/designs/unified-auth.md:75-77` proposed exactly this field** — `prefix` on header
      placement, called "the single highest-value element of this whole design" because it turns
      `Bearer `, `Basic `, `Token ` and `GenieKey ` into one code path — **and it was never
@@ -102,7 +103,7 @@ Read the `scheme` field's accepted values before designing. If it is closed to b
   4. **A bare `header` placement aimed at `Authorization` loads — and that is the trap, not the
      answer.** `AuthScheme::Header` does not know or care what header name it is given, so
      `scheme = { header = { name = "Authorization" } }` is legal
-     (`the_header_scheme_would_load_but_cannot_honestly_spell_okta_s_prefix`). But the header's whole
+     (`a_bare_header_placement_still_omits_the_scheme_word_it_does_not_declare`). But the header's whole
      *value* is the resolved secret and nothing else — the same shape Shopify uses honestly
      (`providers/shopify.toml:166-171`, because `X-Shopify-Access-Token`'s entire value really is the
      secret). Applied to Okta it would emit `Authorization: <token>`, silently missing the literal
@@ -118,6 +119,16 @@ Read the `scheme` field's accepted values before designing. If it is closed to b
      generic to add to `shipped_modules.rs` for it, because a wrong-but-well-formed scheme is not a
      shape violation.
 
+- **RESOLVED by [C-184](C-184-auth-scheme-prefix-axis.md) (2026-07-31).** The prefix axis is built.
+  `AuthScheme::Header` now carries `{ name, prefix }`, and Okta's scheme word is
+  `prefix = "SSWS "` — trailing space included, since the space is part of the literal. The findings
+  below stand exactly as measured and are *why* the axis exists; two of the probe tests they cite now
+  assert the opposite of what they asserted, which this story's own doc comments said would happen.
+  C-184 chose a prefix over a `prefix`+`suffix` pair and over a value template, on the evidence in
+  the next bullet — this story had already measured PagerDuty's `Token token=` as "a prefix exactly
+  like `SSWS `, just longer", so all three blocked vendors put the credential at the **tail**.
+  What C-184 did *not* do is write `providers/okta.toml`; that is still this story's job.
+
 - **What would unblock this, and what it means for the four stories waiting on this answer.**
   Extending `AuthScheme` with a `prefix` field on `Header` (exactly what `unified-auth.md:75-77`
   already proposed and C-19 never finished) is a `connector-spec` change, not a per-provider one — it
@@ -131,7 +142,7 @@ Read the `scheme` field's accepted values before designing. If it is closed to b
   - **C-175 (LaunchDarkly, `Authorization: <token>` raw)** and **C-178 (ClickUp, same)** ask a
     *different* question — whether "no prefix at all" is expressible distinctly from `bearer` — and
     the answer to theirs is **yes, already, today**: `scheme = { header = { name = "Authorization" }
-    }` is exactly what `the_header_scheme_would_load_but_cannot_honestly_spell_okta_s_prefix` proves
+    }` is exactly what `a_bare_header_placement_still_omits_the_scheme_word_it_does_not_declare` proves
     loads and round-trips cleanly, and an empty prefix is precisely what a raw value needs. Neither
     is blocked by this finding.
 

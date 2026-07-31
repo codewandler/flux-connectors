@@ -34,7 +34,8 @@
             "name": "airtable.access_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Airtable access token sent as a bearer — a personal access token or an OAuth-issued one",
             "env": [
@@ -558,7 +559,8 @@
             "name": "anthropic.api_key",
             "scheme": {
               "kind": "header",
-              "name": "x-api-key"
+              "name": "x-api-key",
+              "prefix": ""
             },
             "description": "Anthropic API key, sent as x-api-key",
             "env": [
@@ -572,7 +574,8 @@
             "name": "anthropic.admin_key",
             "scheme": {
               "kind": "header",
-              "name": "x-api-key"
+              "name": "x-api-key",
+              "prefix": ""
             },
             "description": "Anthropic Admin API key (starts sk-ant-admin), sent as x-api-key. Required only for the organization, workspace and API-key operations below — the model catalogue uses the regular API key",
             "env": [
@@ -1023,7 +1026,8 @@
             "name": "asana.access_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Asana access token sent as a bearer — a personal access token or an OAuth-issued one",
             "env": [
@@ -1474,7 +1478,8 @@
             "name": "babelforce.access_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "SSO-issued babelforce access token, minted outside flux and supplied through the environment",
             "env": [
@@ -2605,7 +2610,8 @@
             "name": "box.access_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Box access token sent as a bearer — an OAuth2 access token or a Developer Console token",
             "env": [
@@ -3168,7 +3174,8 @@
             "name": "calendly.access_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Calendly access token sent as a bearer — a personal access token or an OAuth-issued one",
             "env": [
@@ -3925,7 +3932,8 @@
             "name": "clickup.token",
             "scheme": {
               "kind": "header",
-              "name": "Authorization"
+              "name": "Authorization",
+              "prefix": ""
             },
             "description": "ClickUp personal API token, sent as the raw value of the Authorization header with no scheme word. Grant access to the workspaces, spaces and lists the operations below need to read or write",
             "env": [
@@ -4873,7 +4881,8 @@
             "name": "cloudflare.api_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Cloudflare API Token, sent as a bearer token, scoped to Zone:Read, DNS:Edit and Cache Purge on the zones this connector should reach",
             "env": [
@@ -5621,7 +5630,8 @@
             "name": "contentful.delivery_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Contentful Content Delivery API (CDA) access token, sent as a bearer. Read-only: published content in one space only, and only the Delivery API accepts it",
             "env": [
@@ -5635,7 +5645,8 @@
             "name": "contentful.management_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Contentful Content Management API (CMA) access token, sent as a bearer. Read and write in one space; the Delivery API rejects it. Required only for contentful-entry-create and contentful-entry-publish — every read above uses the Delivery token instead",
             "env": [
@@ -6211,7 +6222,8 @@
             "name": "datadog.api_key",
             "scheme": {
               "kind": "header",
-              "name": "DD-API-KEY"
+              "name": "DD-API-KEY",
+              "prefix": ""
             },
             "description": "Datadog API key. Identifies the organization; required on every request together with the Application Key — neither key alone authenticates a call",
             "env": [
@@ -6225,7 +6237,8 @@
             "name": "datadog.application_key",
             "scheme": {
               "kind": "header",
-              "name": "DD-APPLICATION-KEY"
+              "name": "DD-APPLICATION-KEY",
+              "prefix": ""
             },
             "description": "Datadog Application Key, scoped to the user who created it. Required on every request together with the API Key — neither key alone authenticates a call",
             "env": [
@@ -6602,7 +6615,8 @@
             "name": "docusign.access_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "DocuSign OAuth2 access token sent as a bearer; already minted, supplied through the environment",
             "env": [
@@ -7378,7 +7392,8 @@
             "name": "dropbox.access_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Dropbox access token sent as a bearer — a scoped app access token or an OAuth2 access token",
             "env": [
@@ -7901,7 +7916,8 @@
             "name": "figma.token",
             "scheme": {
               "kind": "header",
-              "name": "X-Figma-Token"
+              "name": "X-Figma-Token",
+              "prefix": ""
             },
             "description": "Figma personal access token, sent as the whole value of X-Figma-Token. Grants read access to whatever files, projects and comments the token's account can see",
             "env": [
@@ -8532,7 +8548,8 @@
             "name": "fly.api_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Fly access token, preferably scoped to the app or organization this connection manages",
             "env": [
@@ -11389,7 +11406,8 @@
             "name": "front.api_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Front API token sent as a bearer",
             "env": [
@@ -12053,7 +12071,8 @@
             "name": "github.token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "GitHub token sent as a bearer — a GitHub App installation token, a fine-grained PAT, or a classic PAT",
             "env": [
@@ -12982,7 +13001,8 @@
             "name": "gitlab.token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "GitLab personal access token sent as a bearer. A token scoped to read_api is enough for every read below; the api scope is required for gitlab-issue-create",
             "env": [
@@ -14126,7 +14146,8 @@
             "name": "google.access_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Google OAuth2 access token sent as a bearer; short-lived, and refreshed by the host rather than by generated Flux",
             "env": [
@@ -15087,7 +15108,8 @@
             "name": "hubspot.access_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "HubSpot private-app access token (pat-…) with crm.objects.contacts.read/write, crm.objects.companies.read and crm.objects.deals.read",
             "env": [
@@ -15656,7 +15678,8 @@
             "name": "intercom.access_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Intercom access token sent as a bearer — an OAuth app token or a workspace access token",
             "env": [
@@ -16509,7 +16532,8 @@
             "name": "jira.api_token",
             "scheme": {
               "kind": "basic",
-              "name": null
+              "name": null,
+              "prefix": "Basic "
             },
             "description": "Atlassian API token; the user half is the account email that minted it",
             "env": [
@@ -17252,7 +17276,8 @@
             "name": "launchdarkly.api_token",
             "scheme": {
               "kind": "header",
-              "name": "Authorization"
+              "name": "Authorization",
+              "prefix": ""
             },
             "description": "LaunchDarkly API access token, sent as the entire value of the Authorization header with no scheme word in front of it — LaunchDarkly rejects a `Bearer `-prefixed value",
             "env": [
@@ -18055,7 +18080,8 @@
             "name": "microsoft_graph.access_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Microsoft Entra ID OAuth2 access token sent as a bearer; short-lived, minted outside flux (delegated sign-in or application client-credentials), and refreshed by the host rather than by generated Flux",
             "env": [
@@ -19225,7 +19251,8 @@
             "name": "miro.access_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Miro access token (a personal access token or an OAuth2 access token), sent as a bearer token, scoped to read and write boards, board items and sticky notes",
             "env": [
@@ -20285,7 +20312,8 @@
             "name": "notion.token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Notion integration token sent as a bearer — an internal integration token or an OAuth-issued access token",
             "env": [
@@ -20792,7 +20820,8 @@
             "name": "openai.api_key",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "OpenAI API key, sent as a bearer token",
             "env": [
@@ -21298,7 +21327,8 @@
             "name": "openrouter.api_key",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "OpenRouter API key, sent as a bearer token",
             "env": [
@@ -21714,7 +21744,8 @@
             "name": "postmark.server_token",
             "scheme": {
               "kind": "header",
-              "name": "X-Postmark-Server-Token"
+              "name": "X-Postmark-Server-Token",
+              "prefix": ""
             },
             "description": "Postmark Server API token, scoped to one server. Authenticates sending and that server's own message history; cannot list or manage servers",
             "env": [
@@ -21728,7 +21759,8 @@
             "name": "postmark.account_token",
             "scheme": {
               "kind": "header",
-              "name": "X-Postmark-Account-Token"
+              "name": "X-Postmark-Account-Token",
+              "prefix": ""
             },
             "description": "Postmark Account API token. Authenticates account-wide server administration only; Postmark rejects it for sending",
             "env": [
@@ -22555,7 +22587,8 @@
             "name": "salesforce.access_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Salesforce OAuth2 access token sent as a bearer; already minted, supplied through the environment",
             "env": [
@@ -23147,7 +23180,8 @@
             "name": "sendgrid.api_key",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "SendGrid API key sent as a bearer",
             "env": [
@@ -23635,7 +23669,8 @@
             "name": "sentry.auth_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Sentry auth token sent as a bearer — an organization, user or internal-integration token",
             "env": [
@@ -24429,7 +24464,8 @@
             "name": "shopify.access_token",
             "scheme": {
               "kind": "header",
-              "name": "X-Shopify-Access-Token"
+              "name": "X-Shopify-Access-Token",
+              "prefix": ""
             },
             "description": "Shopify Admin API access token, sent as the whole value of X-Shopify-Access-Token, with read_orders, read_products, write_products, read_customers and read_inventory scopes",
             "env": [
@@ -25201,7 +25237,8 @@
             "name": "slack.bot_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Slack bot user OAuth token (xoxb-…) with chat:write, channels:history, users:read and reactions:write",
             "env": [
@@ -25215,7 +25252,8 @@
             "name": "slack.signing_secret",
             "scheme": {
               "kind": "signing",
-              "name": null
+              "name": null,
+              "prefix": ""
             },
             "description": "Slack app signing secret, used to verify inbound Events API requests. Never sent to Slack",
             "env": [
@@ -25909,7 +25947,8 @@
             "name": "stripe.secret_key",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Stripe secret key sent as a bearer. A live key moves real money; a test key does not. A restricted key limited to Charges, PaymentIntents, Refunds, Customers and Balance is sufficient",
             "env": [
@@ -25923,7 +25962,8 @@
             "name": "stripe.webhook_signing_secret",
             "scheme": {
               "kind": "signing",
-              "name": null
+              "name": null,
+              "prefix": ""
             },
             "description": "Stripe webhook endpoint signing secret, used to verify inbound events. Never sent to Stripe",
             "env": [
@@ -26958,7 +26998,8 @@
             "name": "twilio.basic_auth",
             "scheme": {
               "kind": "basic",
-              "name": null
+              "name": null,
+              "prefix": "Basic "
             },
             "description": "Twilio Account SID and Auth Token, sent as HTTP Basic credentials",
             "env": [
@@ -26974,7 +27015,8 @@
             "name": "twilio.webhook_signing_secret",
             "scheme": {
               "kind": "signing",
-              "name": null
+              "name": null,
+              "prefix": ""
             },
             "description": "The same Auth Token as twilio.basic_auth, used here to verify X-Twilio-Signature on inbound status callbacks. Never sent to Twilio",
             "env": [
@@ -28055,7 +28097,8 @@
             "name": "typeform.access_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Typeform access token sent as a bearer — a personal access token or an OAuth2 access token",
             "env": [
@@ -28865,7 +28908,8 @@
             "name": "vercel.token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Vercel access token sent as a bearer",
             "env": [
@@ -29497,7 +29541,8 @@
             "name": "webflow.token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Webflow API token (a Site API token or an OAuth2 access token), sent as a bearer token, scoped to read sites, collections and items, and to publish",
             "env": [
@@ -30133,7 +30178,8 @@
             "name": "zendesk.api_token",
             "scheme": {
               "kind": "basic",
-              "name": null
+              "name": null,
+              "prefix": "Basic "
             },
             "description": "Zendesk API token; the user half is the agent email with Zendesk's /token marker",
             "env": [
@@ -31212,7 +31258,8 @@
             "name": "zoom.access_token",
             "scheme": {
               "kind": "bearer",
-              "name": null
+              "name": null,
+              "prefix": "Bearer "
             },
             "description": "Zoom server-to-server OAuth access token, sent as a bearer. Minted outside flux and supplied through the environment; it expires within the hour and nothing here can refresh it",
             "env": [

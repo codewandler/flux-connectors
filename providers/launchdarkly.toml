@@ -21,18 +21,18 @@
 # This is a genuinely different question from Okta's (`Authorization: SSWS <token>`), PagerDuty's
 # (`Authorization: Token token=<key>`) and Statuspage's (`Authorization: OAuth <key>`), even though
 # all four share one header. Those three need a **prefix axis** — a literal word plus the secret —
-# that `AuthScheme` does not have and that C-161 recorded as blocked pending C-184
-# (`crates/connector-spec/src/auth.rs:70-102`, closed five-variant enum, `Header { name: String }`
-# with no second field, `#[serde(deny_unknown_fields)]`). LaunchDarkly needs no prefix at all: the
-# *entire* header value is the secret, which is precisely what `AuthScheme::Header { name:
-# "Authorization" }` already expresses — the same shape Shopify's `X-Shopify-Access-Token` uses
-# honestly, just aimed at a different header name. C-161's own test proves this exact spelling loads
-# and round-trips (`crates/connector-flux/tests/okta_connector.rs::the_header_scheme_would_load_but_cannot_honestly_spell_okta_s_prefix`),
+# which C-161 recorded as blocked and **C-184 has since built**: `AuthScheme::Header` now carries
+# `{ name, prefix }`, so Okta spells `prefix = "SSWS "` and PagerDuty `prefix = "Token token="`.
+# LaunchDarkly needs no prefix at all: the *entire* header value is the secret, which is precisely
+# what `AuthScheme::Header { name = "Authorization" }` with its prefix omitted expresses — the same
+# shape Shopify's `X-Shopify-Access-Token` uses honestly, just aimed at a different header name.
+# C-161's own test proves this exact spelling loads and round-trips
+# (`crates/connector-flux/tests/okta_connector.rs::a_bare_header_placement_still_omits_the_scheme_word_it_does_not_declare`),
 # and `crates/connector-flux/tests/launchdarkly_connector.rs` in this story exercises it end to end
 # against a connector that actually ships, rather than against a fixture that does not.
 #
-# So this connector needs **no change to `connector-spec`** — the auth model is already closed over
-# this case, and C-184 owns the (separate) prefix axis the other three stories are waiting on.
+# So this connector needed **no change to `connector-spec`**, and still needs none: an omitted prefix
+# is the empty prefix, it does not serialize, and this file is byte-identical across C-184.
 #
 # ---------------------------------------------------------------------------------------------
 # THE SECOND FINDING: a flag toggle is a live production change, and its `risk` must say so.

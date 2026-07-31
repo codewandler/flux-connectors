@@ -93,7 +93,8 @@ fn the_datadog_connector_declares_two_independent_header_credentials() {
     assert_eq!(
         api_key.scheme,
         AuthScheme::Header {
-            name: API_KEY_HEADER.to_string()
+            name: API_KEY_HEADER.to_string(),
+            prefix: String::new(),
         }
     );
     assert_eq!(api_key.env, [API_KEY_ENV]);
@@ -104,7 +105,8 @@ fn the_datadog_connector_declares_two_independent_header_credentials() {
     assert_eq!(
         application_key.scheme,
         AuthScheme::Header {
-            name: APPLICATION_KEY_HEADER.to_string()
+            name: APPLICATION_KEY_HEADER.to_string(),
+            prefix: String::new(),
         }
     );
     assert_eq!(application_key.env, [APPLICATION_KEY_ENV]);

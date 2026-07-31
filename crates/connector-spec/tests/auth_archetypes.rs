@@ -137,7 +137,8 @@ fn raw_value_header_renders_the_same_form_as_a_bearer() {
     assert_eq!(
         method.scheme,
         AuthScheme::Header {
-            name: "X-Shopify-Access-Token".to_owned()
+            name: "X-Shopify-Access-Token".to_owned(),
+            prefix: String::new(),
         }
     );
 

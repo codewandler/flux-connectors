@@ -119,7 +119,8 @@ fn the_postmark_connector_declares_two_independent_header_credentials() {
     assert_eq!(
         server.scheme,
         AuthScheme::Header {
-            name: SERVER_HEADER.to_string()
+            name: SERVER_HEADER.to_string(),
+            prefix: String::new(),
         }
     );
     assert_eq!(server.env, [SERVER_TOKEN_ENV]);
@@ -130,7 +131,8 @@ fn the_postmark_connector_declares_two_independent_header_credentials() {
     assert_eq!(
         account.scheme,
         AuthScheme::Header {
-            name: ACCOUNT_HEADER.to_string()
+            name: ACCOUNT_HEADER.to_string(),
+            prefix: String::new(),
         }
     );
     assert_eq!(account.env, [ACCOUNT_TOKEN_ENV]);

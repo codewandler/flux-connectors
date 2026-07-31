@@ -1871,6 +1871,71 @@ fn validate_operation_service(
     });
 }
 
+/// Checks a header credential's literal prefix (C-184).
+///
+/// The prefix is the closest this repository gets to authoring a credential value — it is the text
+/// immediately before one — so it is the seam where "no credential value" has to be enforced rather
+/// than assumed. Everything refused here is refused because it is either an attempt to reach the
+/// secret through the prefix, or a request the connector did not describe.
+///
+/// **`CREDENTIAL_VALUE_PREFIXES` is deliberately not consulted.** That list catches a *constant
+/// header* whose value begins `bearer `/`token `, where the author has pasted a whole credential. A
+/// scheme word is that same text in the one position where it is correct — PagerDuty's prefix is
+/// literally `Token token=` — so reusing the list here would refuse the three vendors this story
+/// exists to unblock.
+fn validate_auth_prefix(method: &AuthMethod, prefix: &str, problems: &mut Vec<String>) {
+    if prefix.is_empty() {
+        return;
+    }
+    let name = method.name.as_str();
+    let folded = prefix.to_ascii_lowercase();
+
+    // A prefix is emitted as a literal and nothing interpolates it, so a marker is either a broken
+    // request or an author reaching for the value. Both end the same way: the only spelling that
+    // "works" is the credential itself, pasted in.
+    if let Some(marker) = RESOLUTION_MARKERS
+        .iter()
+        .find(|marker| folded.contains(*marker))
+    {
+        problems.push(format!(
+            "credential {name:?} declares a header `prefix` spelling {marker:?}, but a prefix is a \
+             literal and nothing interpolates it — the vendor would receive those characters. The \
+             prefix carries the vendor's scheme word (`SSWS `, `Token token=`); the credential is \
+             appended by the host and is never written here"
+        ));
+    }
+    if prefix.contains(name) {
+        problems.push(format!(
+            "credential {name:?} declares a header `prefix` naming the credential itself. A prefix \
+             is a literal, not a reference — nothing resolves the name, and the value that would \
+             make it work is one this file must never hold"
+        ));
+    }
+    for key in method.env.iter().chain(&method.user_env) {
+        if !key.trim().is_empty() && prefix.contains(key.as_str()) {
+            problems.push(format!(
+                "credential {name:?} declares a header `prefix` naming the environment variable \
+                 {key:?} that resolves it. A prefix is emitted as a literal, so the name would \
+                 travel as text and the value it stands for must never be written here at all"
+            ));
+        }
+    }
+
+    // The value half of the grammar check `name` has had since C-3. A prefix reaches a header value
+    // verbatim, so a CR or LF in one ends the header and begins another — header injection, from a
+    // committed artifact. RFC 9110 §5.5 field-content: visible ASCII, plus space and horizontal tab.
+    if let Some(bad) = prefix
+        .chars()
+        .find(|c| !matches!(c, ' ' | '\t') && !c.is_ascii_graphic())
+    {
+        problems.push(format!(
+            "credential {name:?} declares a header `prefix` containing {bad:?}, which is not \
+             visible ASCII, space or tab. A prefix is placed into a header value verbatim, so a \
+             newline in one would end the header and begin another (RFC 9110 §5.5 field-content)"
+        ));
+    }
+}
+
 /// Checks the connector's own credential declarations.
 fn validate_credentials(connector: &Connector, problems: &mut Vec<String>) {
     let mut seen: Vec<&str> = Vec::new();
@@ -1907,6 +1972,10 @@ fn validate_credentials(connector: &Connector, problems: &mut Vec<String>) {
             problems.push(format!(
                 "credential {name:?} declares `user_suffix`, which only the `basic` scheme uses"
             ));
+        }
+
+        if let AuthScheme::Header { prefix, .. } = &method.scheme {
+            validate_auth_prefix(method, prefix, problems);
         }
 
         // A credential resolved from no env var and minted by no grant can never produce a value.
@@ -2047,7 +2116,7 @@ fn check_const_header_table(
             ));
         }
         for method in &connector.auth {
-            if let AuthScheme::Header { name: owned } = &method.scheme {
+            if let AuthScheme::Header { name: owned, .. } = &method.scheme {
                 if owned.eq_ignore_ascii_case(name) {
                     problems.push(format!(
                         "{context}: header {name:?} is where credential {:?} is injected, so a \

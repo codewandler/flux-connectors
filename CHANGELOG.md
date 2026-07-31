@@ -9,6 +9,41 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A credential can sit inside a header value it does not wholly occupy (C-184).**
+  `AuthScheme::Header` now carries `{ name, prefix }`, so `Authorization: SSWS <token>` is expressible
+  without any credential value being authored. Unblocks Okta (C-161, back to `ready`), PagerDuty
+  (C-162) and Statuspage (C-181); none of the three connectors ships here — this is the seam only.
+
+  **The axis is `prefix` alone — no `suffix`, no template**, and C-161's own measurement is why. It had
+  already recorded PagerDuty's `Token token=<key>` as *"a prefix exactly like `SSWS `, just longer"*, so
+  the story's framing that PagerDuty needs text *after* the credential was the one premise that did not
+  survive: all three vendors put the credential at the **tail**. A template was rejected for being
+  expressive in the wrong direction — it can spell a credential substituted zero times, which is an
+  unauthenticated request that every artifact describes as authenticated. A prefix makes that
+  unspellable rather than merely refused.
+
+  **A prefix is connector data and the loader keeps it that way**: it refuses a resolution marker
+  (`${…}`, `$secret`), a prefix naming a declared credential or its env var, and anything outside
+  visible ASCII, space and tab — the last being header injection from a committed artifact. It
+  deliberately does *not* consult `CREDENTIAL_VALUE_PREFIXES`, which catches a pasted credential in a
+  constant header; a scheme word is that same text where it is correct.
+
+  **Redaction is unchanged, and the reason is the finding worth keeping.** Acquisition can *transform* a
+  secret (`base64(user:secret)` does not contain it — hence its second registration); placement only
+  *surrounds* it, so `SSWS <token>` scrubs to `SSWS <redacted>` off the registration that already
+  exists. Registering the prefixed form would repeat C-159 §2's divergence in the other direction —
+  holding a public word while leaving the bare token, the form a 401 body echoes back, unheld.
+
+  **A full build wrote exactly one artifact: `web/public/catalog.json`.** Every `.flux` module, manifest,
+  the embedded Rust catalogue and `connectors.lock` are byte-identical, because an empty prefix does not
+  serialize and the catalogue's `Header` arm already emitted `prefix: ""` when it was hard-coded. The
+  catalog.json diff is purely additive — one `prefix` key per credential (31 `"Bearer "`, 13 `""`, 3
+  `"Basic "`). That key is published on purpose: without it, Okta's prefixed `Authorization` and
+  LaunchDarkly's raw one flatten to the same two keys.
+
+  The runtime needed no change — `Placement::Header { name, prefix }` has composed `Bearer ` as data
+  since the pack landed. The gap was only ever in the half an author writes.
+
 - **The Twilio connector (C-109) — reads only, and `PARTIAL` for two separately-recorded reasons.** Five
   operations over a Basic join with the account SID as username, messages and calls, `account-get` as
   `verify`.

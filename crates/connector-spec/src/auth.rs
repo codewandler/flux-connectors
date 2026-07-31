@@ -75,10 +75,46 @@ pub enum AuthScheme {
     Bearer,
     /// `Authorization: Basic base64(<user>:<secret>)` — `<user>` from the method's `user_env`.
     Basic,
-    /// A custom header `<name>: <secret>` (e.g. `X-Auth-Access-Id`, `PRIVATE-TOKEN`).
+    /// A custom header `<name>: <prefix><secret>` (e.g. `X-Auth-Access-Id`, `PRIVATE-TOKEN`, or
+    /// `Authorization: SSWS <token>`).
     Header {
         /// The header name.
         name: String,
+        /// Literal text placed **in front of** the credential, trailing space included. Empty — the
+        /// default, and every value in the shipped catalogue before C-184 — is a header whose whole
+        /// value is the secret.
+        ///
+        /// # This is connector data, never a credential
+        ///
+        /// `SSWS `, `OAuth ` and `Token token=` are public API syntax, printed in the vendor's own
+        /// documentation; `<token>` is a runtime secret this repository never holds. The seam is
+        /// deliberately shaped so that only the first can be written here: the credential is always
+        /// appended by the host, so there is no substitution point an author could aim at. The
+        /// loader additionally refuses a prefix that spells a resolution marker, names a declared
+        /// credential or its environment variable, or contains anything but visible ASCII —
+        /// see `provider::validate`.
+        ///
+        /// # Why there is no `suffix`, and no template
+        ///
+        /// [C-161](../../../docs/stories/C-161-provider-okta.md) measured all three blocked vendors
+        /// and found one shape, not three: the credential **ends the value** in every case, PagerDuty
+        /// included, whose `Token token=` is a prefix that happens to contain `=`. A template with a
+        /// substitution point would be more expressive and strictly worse — it can spell a credential
+        /// substituted twice, or zero times, and the zero case sends an unauthenticated request that
+        /// reads as authenticated. A prefix makes both unspellable rather than merely refused.
+        /// `docs/designs/unified-auth.md` §"The prefix axis, as built" records the decision.
+        ///
+        /// # Why the presets are still variants
+        ///
+        /// [`Bearer`](Self::Bearer) and [`Basic`](Self::Basic) *are* prefixes — `"Bearer "` and
+        /// `"Basic "` on `Authorization` — and the catalogue lowers all three to one
+        /// `Placement::Header { name, prefix }`. They stay named variants because `Basic` also
+        /// selects an *acquisition* (the base64 join), and because collapsing `Bearer` into a
+        /// spelled-out prefix would move 15 providers' committed artifacts to say something they
+        /// already say. Being unit variants is also what makes `bearer` + a second prefix
+        /// unspellable.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        prefix: String,
     },
     /// A query parameter `?<name>=<secret>`.
     Query {
@@ -256,12 +292,26 @@ impl AuthMethod {
         }
     }
 
-    /// A custom-header credential: `<header>: <env>`.
+    /// A custom-header credential whose whole value is the secret: `<header>: <env>`.
     pub fn header(name: impl Into<String>, header: impl Into<String>, env: Vec<String>) -> Self {
+        Self::prefixed_header(name, header, "", env)
+    }
+
+    /// A custom-header credential carrying a literal scheme word: `<header>: <prefix><env>`.
+    ///
+    /// `prefix` is public API syntax — `"SSWS "`, `"OAuth "`, `"Token token="` — and never any part
+    /// of a credential value. See [`AuthScheme::Header::prefix`].
+    pub fn prefixed_header(
+        name: impl Into<String>,
+        header: impl Into<String>,
+        prefix: impl Into<String>,
+        env: Vec<String>,
+    ) -> Self {
         Self {
             name: name.into(),
             scheme: AuthScheme::Header {
                 name: header.into(),
+                prefix: prefix.into(),
             },
             env,
             ..Self::default()

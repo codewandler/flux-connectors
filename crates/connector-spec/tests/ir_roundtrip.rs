@@ -42,6 +42,7 @@ fn babelforce_auth_methods() -> Vec<AuthMethod> {
             name: "babelforce.access_id".into(),
             scheme: AuthScheme::Header {
                 name: "X-Auth-Access-Id".into(),
+                prefix: String::new(),
             },
             env: vec!["BABELFORCE_ACCESS_ID".into()],
             ..AuthMethod::default()
@@ -50,6 +51,7 @@ fn babelforce_auth_methods() -> Vec<AuthMethod> {
             name: "babelforce.access_token".into(),
             scheme: AuthScheme::Header {
                 name: "X-Auth-Access-Token".into(),
+                prefix: String::new(),
             },
             env: vec!["BABELFORCE_ACCESS_TOKEN".into()],
             ..AuthMethod::default()
@@ -201,6 +203,7 @@ fn auth_scheme_matches_the_flux_plugin_protocol_vocabulary() {
         (
             AuthScheme::Header {
                 name: "PRIVATE-TOKEN".into(),
+                prefix: String::new(),
             },
             json!({"header": {"name": "PRIVATE-TOKEN"}}),
         ),
@@ -483,10 +486,12 @@ fn credentials_resolve_to_declared_auth_methods() {
         resolved,
         vec![
             &AuthScheme::Header {
-                name: "X-Auth-Access-Id".into()
+                name: "X-Auth-Access-Id".into(),
+                prefix: String::new(),
             },
             &AuthScheme::Header {
-                name: "X-Auth-Access-Token".into()
+                name: "X-Auth-Access-Token".into(),
+                prefix: String::new(),
             },
         ],
         "the AND case must resolve to two header injections on one request"

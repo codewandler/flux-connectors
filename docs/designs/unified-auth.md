@@ -76,6 +76,77 @@ Never a literal value, in any artifact, ever.
 turns "Bearer" from an enum variant into data. With it, `Bearer `, `Basic `, `Token `, `GenieKey ` and
 the empty prefix are all one code path.
 
+#### The prefix axis, as built (C-184)
+
+The paragraph above was written and then not implemented for four waves. The runtime got it —
+`catalog::Placement::Header { name, prefix }` has composed `Bearer ` as data since the pack landed —
+but `AuthScheme`, the thing an author writes, stayed closed at five variants with no prefix field.
+[C-161](../stories/C-161-provider-okta.md) measured the gap rather than predicting it, and three
+connectors were blocked on it. [C-184](../stories/C-184-auth-scheme-prefix-axis.md) closed it. What
+landed differs from the sketch above in two ways worth recording.
+
+**It is a `prefix` alone — no `suffix`, and no value template.** The three blocked vendors looked like
+three shapes and measured as one:
+
+| vendor | header | prefix | credential position |
+|---|---|---|---|
+| Okta | `Authorization: SSWS <token>` | `SSWS ` | tail |
+| Statuspage | `Authorization: OAuth <key>` | `OAuth ` | tail |
+| PagerDuty | `Authorization: Token token=<key>` | `Token token=` | tail |
+
+PagerDuty is the one that argued for a richer axis and then did not need it. Its credential reads
+like a *field inside* structured syntax, but the value is a fixed literal followed directly by the raw
+key — `=` is just a character in a prefix. **In every vendor this repository has met, the credential
+ends the header value.**
+
+A single-substitution template (`"Token token={cred}"`) was the alternative, and it is strictly more
+expressive and strictly worse. It can spell things this repository must not be able to author, and
+each one fails quietly:
+
+- **zero substitution points** — the template is a complete header value, the credential is silently
+  dropped, and the request goes out unauthenticated while every artifact says it is authenticated;
+- **two substitution points** — the credential is sent twice, doubling its exposure for no vendor;
+- **text after the credential** — expressible, unused, and unreviewable, since no vendor's behaviour
+  pins what belongs there.
+
+A checker could reject all three. A prefix makes them **unspellable**, which is the stronger property
+and the one this seam is worth paying for: the credential is appended by the host, so there is no
+substitution point for an author to aim at. `suffix` was not built because nothing needs it, and an
+unused axis would have put an empty field in 41 providers' catalogue rows with no vendor proving what
+belongs in it.
+
+**What the seam refuses.** A prefix is the closest this repository gets to authoring a credential
+value — it is the text immediately before one — so `provider::validate` guards it rather than
+trusting it. It refuses a prefix that spells a resolution marker (`${…}`, `$secret`), names a declared
+credential or the environment variable that resolves it, or contains anything but visible ASCII,
+space and tab. The last is header injection: a prefix reaches a header value verbatim, so a CR or LF
+in one would end the header and begin another, from a committed artifact.
+
+Notably it does **not** consult `CREDENTIAL_VALUE_PREFIXES`, the list that catches a constant header
+whose value begins `bearer `/`token `. That list exists to catch a pasted credential; a scheme word is
+the same text in the one position where it is correct, and PagerDuty's prefix is literally
+`Token token=`.
+
+**Redaction: the bare credential is registered, and the prefix is not.** The rule is that the redactor
+holds every value not recoverable from a value it already holds, and the two axes divide on it.
+Acquisition can *transform* the secret — `base64(user:secret)` does not contain it as a substring, so
+the composed blob is registered separately. Placement only *surrounds* it — `SSWS <token>` contains
+`<token>` verbatim, so a redactor holding the bare token already scrubs it, leaving `SSWS <redacted>`.
+Registering the prefixed form instead would repeat [C-159](../stories/C-159-request-debug-and-query-encoding.md)
+§2's finding, where the registered string and the travelling string diverged: it would put the public
+word `SSWS ` into the redactor, and leave the *bare* token — the form a vendor's 401 body echoes back —
+unheld.
+
+**`Bearer` and `Basic` stay named variants.** They are prefixes, and all three lower to one
+`Placement::Header { name, prefix }`. They keep their names because `Basic` also selects an
+*acquisition* (the base64 join), and because respelling `Bearer` as data would move 31 credentials'
+committed artifacts to say what they already say. Being unit variants is also what makes `bearer` plus
+a second prefix unspellable rather than merely refused.
+
+**`Query { name }` has the same expressive gap, and it stays open.** A query credential has no prefix
+axis. Nothing needs one — the committed catalogue has zero query placements — so C-184 recorded the
+gap instead of building for it.
+
 #### `basic_join` must say *which position holds the secret*
 
 Discovered while curating Freshdesk, and it is a security bug rather than a modelling nicety.

@@ -119,7 +119,8 @@ fn the_launchdarkly_connector_authenticates_with_a_raw_unprefixed_header() {
     assert_eq!(
         method.scheme,
         AuthScheme::Header {
-            name: AUTH_HEADER.to_string()
+            name: AUTH_HEADER.to_string(),
+            prefix: String::new(),
         },
         "LaunchDarkly's token is the entire value of `{AUTH_HEADER}` — no `Bearer `, no `Basic `, no \
          scheme word of any kind — which `AuthScheme::Header` already expresses, distinctly from \

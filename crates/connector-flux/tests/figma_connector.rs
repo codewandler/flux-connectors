@@ -115,7 +115,8 @@ fn the_figma_connector_authenticates_with_a_plain_custom_header() {
     assert_eq!(
         method.scheme,
         AuthScheme::Header {
-            name: AUTH_HEADER.to_string()
+            name: AUTH_HEADER.to_string(),
+            prefix: String::new(),
         },
         "Figma's personal access token is the entire value of `{AUTH_HEADER}` — no `Bearer `, no \
          scheme word — the same shape `providers/shopify.toml` ships first"

@@ -100,7 +100,8 @@ fn the_clickup_connector_authenticates_with_a_bare_authorization_header() {
     assert_eq!(
         method.scheme,
         AuthScheme::Header {
-            name: AUTH_HEADER.to_string()
+            name: AUTH_HEADER.to_string(),
+            prefix: String::new(),
         },
         "ClickUp's personal API token is the entire value of `{AUTH_HEADER}` — no `Bearer `, no \
          scheme word — the same shape C-161 measured as legal but wrong for Okta's `SSWS ` prefix; \

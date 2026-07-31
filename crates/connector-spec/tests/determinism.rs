@@ -39,6 +39,7 @@ fn connector(reversed: bool) -> Connector {
                 name: "b.access_id".into(),
                 scheme: AuthScheme::Header {
                     name: "X-Auth-Access-Id".into(),
+                    prefix: String::new(),
                 },
                 env: vec!["B_ACCESS_ID".into()],
                 ..AuthMethod::default()
@@ -47,6 +48,7 @@ fn connector(reversed: bool) -> Connector {
                 name: "b.access_token".into(),
                 scheme: AuthScheme::Header {
                     name: "X-Auth-Access-Token".into(),
+                    prefix: String::new(),
                 },
                 env: vec!["B_ACCESS_TOKEN".into()],
                 ..AuthMethod::default()

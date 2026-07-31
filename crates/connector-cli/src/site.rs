@@ -370,18 +370,27 @@ struct CredentialEntry {
     oauth2: bool,
 }
 
-/// An [`AuthScheme`], flattened to a fixed two-key shape.
+/// An [`AuthScheme`], flattened to a fixed three-key shape.
 ///
 /// The IR's own encoding is externally tagged — `"bearer"` for one variant and
 /// `{"header": {"name": "…"}}` for another — which is a JSON shape that changes with the value. A
-/// consumer would need a discriminated union to read it. Here the kind is always a string and the
-/// name is always present, `null` when the variant carries none.
+/// consumer would need a discriminated union to read it. Here the kind is always a string, the name
+/// is always present (`null` when the variant carries none), and the prefix is always a string.
+///
+/// **`prefix` is published rather than dropped, and that is the point of C-184.** Without it, Okta's
+/// `Authorization: SSWS <token>` and LaunchDarkly's raw `Authorization: <token>` flatten to the same
+/// two keys, so a consumer reading this document would build one of them wrong while believing the
+/// catalogue had described it. It is a literal scheme word — never any part of a credential.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 struct SchemeEntry {
     /// `bearer`, `basic`, `header` or `query`.
     kind: &'static str,
     /// The header or query-parameter name, for the two variants that carry one.
     name: Option<String>,
+    /// The literal text in front of the credential in a header value, **trailing space included**.
+    /// Empty for a raw-value header and for every non-header scheme. The two presets spell theirs
+    /// out here rather than leaving a consumer to know them: `bearer` is `"Bearer "`.
+    prefix: String,
 }
 
 /// One operation: the metadata, the typed parameters, the generated Flux, and whether it works.
@@ -744,6 +753,7 @@ fn provider_auth(connector: &Connector) -> ProviderAuth {
                 scheme: SchemeEntry {
                     kind: scheme_kind(&method.scheme),
                     name: scheme_name(&method.scheme),
+                    prefix: scheme_prefix(&method.scheme),
                 },
                 description: method.description.clone(),
                 env: method.env.clone(),
@@ -785,7 +795,26 @@ fn scheme_name(scheme: &AuthScheme) -> Option<String> {
         // signature *arrives* in belongs to the channel binding that verifies it, not to the
         // credential — the same secret can verify two bindings that spell their header differently.
         AuthScheme::Bearer | AuthScheme::Basic | AuthScheme::Signing => None,
-        AuthScheme::Header { name } | AuthScheme::Query { name } => Some(name.clone()),
+        AuthScheme::Header { name, .. } | AuthScheme::Query { name } => Some(name.clone()),
+    }
+}
+
+/// The literal text in front of the credential in a header value.
+///
+/// The two presets are resolved to the strings they stand for rather than reported as empty: a
+/// consumer building `Authorization` for a `bearer` credential needs `"Bearer "`, and making it
+/// derive that from `kind` would be asking it to re-implement the one mapping this document exists
+/// to publish. `crate::catalog::placement` lowers the same three variants to the same three strings,
+/// and `a_published_prefix_matches_the_placement_the_catalogue_emits` holds them together.
+fn scheme_prefix(scheme: &AuthScheme) -> String {
+    match scheme {
+        AuthScheme::Bearer => "Bearer ".to_string(),
+        AuthScheme::Basic => "Basic ".to_string(),
+        AuthScheme::Header { prefix, .. } => prefix.clone(),
+        // Neither is a header value, so neither has a prefix. Query placement has no prefix axis at
+        // all — the committed catalogue has zero query placements, and C-184 recorded the gap
+        // rather than building for it.
+        AuthScheme::Query { .. } | AuthScheme::Signing => String::new(),
     }
 }
 
@@ -961,12 +990,16 @@ mod tests {
         assert_eq!(credential["user_suffix"], Value::Null);
         assert_eq!(
             credential["scheme"],
-            json!({"kind": "header", "name": "X-Id"})
+            json!({"kind": "header", "name": "X-Id", "prefix": ""})
         );
     }
 
-    /// The scheme is a fixed two-key object rather than the IR's externally tagged encoding, so a
+    /// The scheme is a fixed three-key object rather than the IR's externally tagged encoding, so a
     /// consumer reads `scheme.kind` without a discriminated union.
+    ///
+    /// `bearer` publishes the prefix it stands for rather than an empty string: the mapping from
+    /// `kind` to wire syntax is exactly what this document exists to spare a consumer, and a
+    /// consumer that had to hard-code `"Bearer "` would be re-deriving it (C-184).
     #[test]
     fn a_scheme_without_a_name_still_carries_the_key() {
         let mut connector = connector();
@@ -976,12 +1009,61 @@ mod tests {
         let document: Value = serde_json::from_str(&document(vec![entry]).unwrap()).unwrap();
         assert_eq!(
             document["providers"][0]["auth"]["credentials"][0]["scheme"],
-            json!({"kind": "bearer", "name": null})
+            json!({"kind": "bearer", "name": null, "prefix": "Bearer "})
         );
         assert_eq!(
             document["providers"][0]["auth"]["schemes"],
             json!(["bearer"])
         );
+    }
+
+    /// **A declared scheme word reaches the published document (C-184).** Without this key, Okta's
+    /// `Authorization: SSWS <token>` and LaunchDarkly's raw `Authorization: <token>` are the same two
+    /// keys, and a consumer building the first from the catalogue would build the second — a request
+    /// the vendor rejects, from a document that looked complete.
+    #[test]
+    fn a_declared_header_prefix_is_published() {
+        let mut connector = connector();
+        connector.auth = vec![AuthMethod::prefixed_header(
+            "acme.token",
+            "Authorization",
+            "SSWS ",
+            vec!["ACME".to_string()],
+        )];
+        connector.default_auth = vec![AuthRequirement::single("acme.token")];
+        let entry = provider_entry(&connector, &renderings()).unwrap();
+        let document: Value = serde_json::from_str(&document(vec![entry]).unwrap()).unwrap();
+        assert_eq!(
+            document["providers"][0]["auth"]["credentials"][0]["scheme"],
+            json!({"kind": "header", "name": "Authorization", "prefix": "SSWS "})
+        );
+    }
+
+    /// The published prefix and the prefix the embedded Rust catalogue emits are the same string, for
+    /// all three header-bearing schemes. They are produced by two functions in two modules, and a
+    /// consumer that trusted the document while the pack sent something else would be debugging a
+    /// 401 against a catalogue that agreed with itself everywhere it could see.
+    #[test]
+    fn a_published_prefix_matches_the_placement_the_catalogue_emits() {
+        for scheme in [
+            AuthScheme::Bearer,
+            AuthScheme::Basic,
+            AuthScheme::Header {
+                name: "Authorization".to_string(),
+                prefix: "Token token=".to_string(),
+            },
+            AuthScheme::Header {
+                name: "X-Figma-Token".to_string(),
+                prefix: String::new(),
+            },
+        ] {
+            let published = scheme_prefix(&scheme);
+            let emitted = crate::catalog::placement(&scheme);
+            assert!(
+                emitted.contains(&format!("prefix: {:?}", published)),
+                "site publishes {published:?} but the catalogue emits {emitted}"
+            );
+        }
     }
 
     /// The Flux is the text the module carries, not a re-emission of it.

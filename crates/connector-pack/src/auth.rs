@@ -39,6 +39,32 @@
 //! as the secret to anyone holding it, so [`crate::Credentials`] registers the assembled value with
 //! the redactor as well as the raw one; registering only the raw secret would leave the thing that
 //! actually travels unredacted.
+//!
+//! # What is registered with the redactor, and why a prefix does not change it (C-184)
+//!
+//! The rule is one line: **the redactor holds every value that is not recoverable from a value it
+//! already holds.** Registration happens on the *acquisition* axis, never on the placement axis, and
+//! the two axes divide cleanly on that test:
+//!
+//! - [`acquire`] can **transform** the secret. `base64(user:secret)` does not contain the secret as
+//!   a substring, so scrubbing the secret would leave the travelling blob intact — hence the second
+//!   registration in [`crate::Credentials`].
+//! - [`place`] only **surrounds** it. `SSWS <token>` contains `<token>` verbatim, so a redactor
+//!   holding the bare token already scrubs every surface the prefixed value reaches; what survives
+//!   is `SSWS <redacted>`, which is the scheme word the vendor prints in its own documentation.
+//!
+//! So a prefixed header registers the bare credential and nothing else. Registering the *prefixed*
+//! form instead would be actively worse in two ways, and both are the failure C-159 §2 found for
+//! query placement, where the registered string and the travelling string diverged:
+//!
+//! 1. It would put `SSWS ` — a public literal — into the redactor, so the word would be scrubbed out
+//!    of unrelated prose, including the error messages a human reads to fix a broken credential.
+//! 2. It would leave the **bare** token unregistered, and the bare token is what a vendor's 401 body
+//!    echoes back and what an operator pastes into a shell. The prefixed form is not the only form
+//!    the value appears in; the bare one is.
+//!
+//! `a_prefixed_header_travels_prefixed_and_still_contains_the_registered_secret` below pins the
+//! substring property the argument rests on.
 
 use catalog::{Acquisition, Credential, Placement};
 
@@ -312,6 +338,53 @@ mod tests {
                 .map(String::as_str),
             Some(SENTINEL)
         );
+    }
+
+    /// **C-184's three vendors, and the redaction property that lets them register only the bare
+    /// secret.**
+    ///
+    /// Okta's `SSWS `, Statuspage's `OAuth ` and PagerDuty's `Token token=` are one code path here —
+    /// there is no arm for any of them, which is the same claim the `Bearer` preset makes. What the
+    /// assertion is really for is the second half: the travelling value **contains the secret
+    /// verbatim**, so the redactor registration made on the acquisition axis already covers it. That
+    /// is the property that distinguishes a placement prefix from a basic join, which transforms the
+    /// secret and therefore needs a registration of its own.
+    #[test]
+    fn a_prefixed_header_travels_prefixed_and_still_contains_the_registered_secret() {
+        for prefix in ["SSWS ", "OAuth ", "Token token="] {
+            let mut request = request();
+            let credential = credential(
+                Acquisition::Static,
+                Placement::Header {
+                    name: "Authorization",
+                    prefix,
+                },
+            );
+            let value = acquire(credential, SENTINEL, None);
+            let assembled = Assembled {
+                credential: credential.name,
+                value,
+                place: credential.place,
+            };
+            place("acme-thing-show", &assembled, &mut request).expect("a header placement");
+
+            let travelled = request
+                .headers
+                .get("Authorization")
+                .expect("the credential was placed");
+            assert_eq!(travelled, &format!("{prefix}{SENTINEL}"));
+            // The load-bearing one: scrubbing the registered value scrubs the travelling value, so
+            // registering the prefixed form would add a public word to the redactor and leave the
+            // bare secret — the form a 401 body echoes — unheld. See the module docs.
+            assert!(
+                travelled.contains(SENTINEL),
+                "a placement prefix must surround the secret, never transform it: {travelled}"
+            );
+            assert_eq!(
+                travelled.replace(SENTINEL, "<redacted>"),
+                format!("{prefix}<redacted>")
+            );
+        }
     }
 
     /// **Axis 2, basic base64.** Zendesk's shape: an env-sourced user half plus the literal `/token`

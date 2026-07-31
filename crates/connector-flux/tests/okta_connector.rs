@@ -10,12 +10,10 @@
 //!
 //! 1. [`AuthScheme`] is a closed, five-member enum. Naming Okta's own scheme word (`ssws`) directly
 //!    is refused at deserialization — it is not `bearer`, `basic`, `header`, `query` or `signing`.
-//! 2. The one variant shaped like it *could* carry an arbitrary word — `Header` — has no field to
+//! 2. The one variant shaped like it *could* carry an arbitrary word — `Header` — had no field to
 //!    carry one on. `docs/designs/unified-auth.md` proposed exactly that field (a `prefix` on
 //!    header placement, "the single highest-value element of this whole design") and it was never
-//!    implemented: `AuthScheme::Header` declares `name` and nothing else
-//!    (`crates/connector-spec/src/auth.rs:78-82`), and `#[serde(deny_unknown_fields)]` on the enum
-//!    (`:70-71`) refuses an unrecognized `prefix` key rather than silently dropping it.
+//!    implemented.
 //! 3. A bare `header` placement aimed at `Authorization` *does* load — legally, because
 //!    `AuthScheme::Header` does not know or care what header name it is given — but its whole value
 //!    is the resolved secret and nothing else, so the wire form would be `Authorization: <token>`
@@ -24,10 +22,20 @@
 //!    credential-value rule AGENTS.md refuses ("no credential value enters provider TOML, generated
 //!    Flux, a manifest, the public catalogue, or the lockfile").
 //!
-//! So the refusal is at the model, not at Okta's API: the enum has no seam for an arbitrary prefix,
-//! and inventing one is a change to `connector-spec` this story deliberately does not make — see the
-//! story's `## Progress` for why, and for the four later stories (C-162, C-175, C-178, C-181) that
-//! were waiting on this exact answer.
+//! # C-184 answered finding 2, and this file was updated deliberately
+//!
+//! [C-184](../../../docs/stories/C-184-auth-scheme-prefix-axis.md) built the prefix axis this probe
+//! showed was missing, so the second test below now asserts the **opposite** of what it asserted when
+//! it was written — that was the plan, and C-161's own doc comment said the day would come. The
+//! finding it recorded is unchanged and still worth reading: it is *why* the axis exists, and it is
+//! what stopped a dishonest Okta connector from shipping in the meantime.
+//!
+//! Findings 1 and 3 still hold exactly as written, and are the reason the axis is a `prefix` on
+//! `Header` rather than a sixth variant: `ssws` is still not a scheme, because a vendor's scheme word
+//! is data.
+//!
+//! **What is still true: no `providers/okta.toml` ships.** C-184 unblocked the connector; it did not
+//! write it. C-161 remains the story that does.
 
 use connector_spec::{provider, AuthScheme};
 use std::path::Path;
@@ -77,40 +85,58 @@ fn an_arbitrary_scheme_word_is_not_a_variant_of_auth_scheme() {
     );
 }
 
-/// **The `header` scheme has no prefix axis to carry `SSWS ` on.**
+/// **The `header` scheme now carries `SSWS `, which is what C-161 asked for and C-184 built.**
 ///
-/// `AuthScheme::Header` (`crates/connector-spec/src/auth.rs:78-82`) declares one field, `name` — the
-/// header key — and nothing else. `docs/designs/unified-auth.md:75-77` proposed a `prefix` field on
-/// header placement as "the single highest-value element of this whole design", so that `Bearer `,
-/// `Basic `, `Token ` and Okta's `SSWS ` would all be one code path; it was never implemented in
-/// this enum. Naming a `prefix` key is refused the same way any unknown field is, by
-/// `#[serde(deny_unknown_fields)]`.
+/// This test is the inverted one. When C-161 wrote it, it asserted that `prefix` was refused as an
+/// unknown key — the measurement that produced C-184. `AuthScheme::Header` now declares
+/// `{ name, prefix }`, `docs/designs/unified-auth.md` §"The prefix axis, as built" records why the
+/// axis is a prefix and not a template, and Okta's scheme word is expressible without any credential
+/// value being authored.
+///
+/// The prefix is `"SSWS "` — **with the trailing space**, because the space is part of the literal
+/// and not a separator the host inserts. A prefix of `"SSWS"` would compose `Authorization:
+/// SSWS<token>`, which Okta rejects; nothing can catch that for the author, so it is stated here.
 #[test]
-fn the_header_scheme_carries_no_prefix_to_smuggle_ssws_onto() {
+fn the_header_scheme_carries_the_ssws_prefix_it_once_could_not() {
     let source = fixture("scheme = { header = { name = \"Authorization\", prefix = \"SSWS \" } }");
-    let error = provider::load("providers/okta.toml", &source)
-        .expect_err("`prefix` is not a field of AuthScheme::Header and must be refused");
-    let message = error.to_string();
-    assert!(
-        message.to_lowercase().contains("unexpected keys")
-            && message.to_lowercase().contains("prefix"),
-        "expected an unexpected-key error naming `prefix`, got: {message}"
+    let connector = provider::load("providers/okta.toml", &source)
+        .expect("C-184 built the prefix axis; Okta's scheme word is now expressible")
+        .connector;
+    let method = connector
+        .auth_method("okta.api_token")
+        .expect("the fixture declares it");
+    assert_eq!(
+        method.scheme,
+        AuthScheme::Header {
+            name: "Authorization".to_string(),
+            prefix: "SSWS ".to_string(),
+        }
     );
+
+    // The credential-value rule, on the seam that sits closest to breaking it: the loaded connector
+    // holds the vendor's public scheme word and the *name* of an environment variable, and nothing
+    // that resolves to a secret.
+    let encoded = toml::to_string(&method.scheme).expect("AuthScheme serializes");
+    assert_eq!(
+        encoded.trim(),
+        "[header]\nname = \"Authorization\"\nprefix = \"SSWS \"",
+    );
+    assert_eq!(method.env, vec!["OKTA_API_TOKEN".to_string()]);
 }
 
-/// **A bare `header` placement on `Authorization` loads, and that is exactly the trap.**
+/// **A bare `header` placement on `Authorization` still loads, and it is still the trap.**
 ///
-/// It is legal — `AuthScheme::Header` does not know or care what header name it is given, including
-/// `Authorization` — but its whole value is the resolved secret and nothing else. For Okta that
-/// means the wire form would be `Authorization: <token>` with the literal word `SSWS` simply
-/// missing, which fails at the vendor rather than being expressed honestly. Reaching
-/// `Authorization: SSWS <token>` from here would mean baking `"SSWS "` into the credential value
-/// itself, which this repository must never author (AGENTS.md, "no credential value").
+/// C-184 did not close this one, and could not: omitting `prefix` is *correct* for LaunchDarkly and
+/// ClickUp, whose whole Authorization value is the token, so a connector that omits it is
+/// indistinguishable at the model from one that forgot. Applied to Okta the wire form is
+/// `Authorization: <token>` with the literal word `SSWS` simply missing — a request the vendor
+/// rejects, and the reason C-161 called this the trap rather than the gap.
 ///
-/// The round-trip back through `toml` is the sharpest way to say it: one field, `name`, and no
-/// second field this connector could have put `SSWS ` in.
+/// What changed is the *escape*: reaching `Authorization: SSWS <token>` no longer requires baking
+/// `"SSWS "` into the credential value, which this repository must never author (AGENTS.md, "no
+/// credential value"). It requires declaring the prefix, as the test above does.
 #[test]
-fn the_header_scheme_would_load_but_cannot_honestly_spell_okta_s_prefix() {
+fn a_bare_header_placement_still_omits_the_scheme_word_it_does_not_declare() {
     let source = fixture("scheme = { header = { name = \"Authorization\" } }");
     let connector = provider::load("providers/okta.toml", &source)
         .expect("a bare `header` placement on `Authorization` is legal — that is exactly the trap")
@@ -121,7 +147,8 @@ fn the_header_scheme_would_load_but_cannot_honestly_spell_okta_s_prefix() {
     assert_eq!(
         method.scheme,
         AuthScheme::Header {
-            name: "Authorization".to_string()
+            name: "Authorization".to_string(),
+            prefix: String::new(),
         }
     );
 
@@ -129,8 +156,8 @@ fn the_header_scheme_would_load_but_cannot_honestly_spell_okta_s_prefix() {
     assert_eq!(
         round_tripped.trim(),
         "[header]\nname = \"Authorization\"",
-        "if AuthScheme::Header ever gains a second field this assertion is the first thing to \
-         reconsider — today it proves there is nowhere on this variant to put a scheme word"
+        "an empty prefix must not reach the encoding — 23 providers' committed artifacts depend on \
+         a connector authored before C-184 serializing exactly as it did"
     );
 }
 
