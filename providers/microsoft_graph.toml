@@ -1,0 +1,594 @@
+# Microsoft Graph — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Microsoft publishes Graph's OpenAPI description in pieces per
+# workload (`github.com/microsoftgraph/msgraph-metadata`), but nothing is vendored under `specs/`
+# here: ingest (C-4) and the overlay (C-6) do not exist yet, and the full metadata document
+# describes several thousand operations across mail, calendar, files, Teams, directory, security,
+# device management and more — pointing at it without a selection mechanism would be pointing
+# several thousand LLM tools at a tenant's entire Microsoft 365 estate. Checked directly against
+# `learn.microsoft.com/en-us/graph/api/*` reference pages on 2026-07-31 (message-get, message-reply,
+# user-list-mailfolders, event-get, the `event` resource, user-post-events, user-list-calendars,
+# driveitem-get), not assumed from a generic REST shape. Until C-4/C-14 land, drift against those
+# pages is undetectable by machine, the same caveat zendesk, freshdesk, github, notion, front and
+# google already carry (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# C-108'S QUESTION: DOES A SERVICE STILL EARN ITS PLACE WHEN NEITHER HOST NOR VERSION DIFFERS?
+# ---------------------------------------------------------------------------------------------
+#
+# `providers/google.toml` is this pipeline's first multi-service provider, and its three services
+# justify themselves two ways at once: Gmail is served on a different host than Calendar and Drive
+# (`gmail.googleapis.com` vs `www.googleapis.com`), and all three version independently (`v1`, `v3`,
+# `v3`). That leaves an open question C-49's design flagged but could not settle with only one
+# example: is `Service` a genuine addressing level, or was it always just Google's differing-host
+# problem wearing a hat?
+#
+# Microsoft Graph is built to answer it, because Graph gives the opposite case for free. **Every
+# operation below is served from `graph.microsoft.com` and versioned `v1.0`** — mail, calendar and
+# files share both facts completely. So this file's three `[[services]]` entries cannot lean on a
+# differing `base_url` or `api_version` the way Google's did; each one declares the *identical*
+# value its siblings do (asserted directly:
+# `crates/connector-flux/tests/microsoft_graph_connector.rs::graph_services_share_a_host_and_version_but_still_partition_cleanly`).
+#
+# **The finding: yes, the level still earns its place, and for a different reason than Google's.**
+# What a service buys here is not routing (there is only ever one host to route to) or versioning
+# (there is only ever one version to be at) — it is **the installable unit**. `AGENTS.md`'s service
+# contract says a service is "the unit you address, version, select and install", and install is the
+# operative word once routing and versioning stop varying: an operator who wants an agent to read and
+# reply to mail, and nothing about calendars or files, installs `microsoft_graph-mail` and gets
+# exactly those three operations in `microsoft_graph-mail.flux` — never `microsoft_graph-calendar.flux`
+# or `microsoft_graph-files.flux`, and never a combined module carrying all eight. `--service mail`
+# on `build`/`diff` narrows to precisely that set (C-49). Google's case conflated three justifications
+# — host, version, install-scope — into one connector; this one isolates the third and shows it holds
+# on its own. That is the answer for C-49 this story exists to produce, not a shortcoming of Graph.
+#
+# One honest consequence of that isolation: **the `api_version` declared on each service below is
+# inert metadata.** `Connector::api_version_of` only feeds `Connector::gid_of`
+# (`crates/connector-spec/src/ir.rs`), and this connector declares no `authority`, so no `gid` ever
+# renders (see below) — measured directly in `connector-flux/src/op.rs`, which builds the request URL
+# from `connector.base_url_of(&operation.service)` (the host) and `operation.path` alone; `api_version`
+# never reaches it. That is also why every `path` below still spells `/v1.0/` literally rather than
+# leaving it to composition — the same shape `providers/shopify.toml`'s header comment records for
+# the identical reason, and the same shape **`providers/google.toml` itself uses even though it does
+# declare a real, varying `api_version`**: Gmail's paths still read `/gmail/v1/...` in full. Declaring
+# `api_version = "v1.0"` here anyway keeps the three services' declarations shaped alike and keeps the
+# value ready for the day an `authority` is minted.
+#
+# No `authority` is declared, for the same reason `providers/google.toml` gives: an address, once
+# published, is never repointed (C-37), so choosing microsoft_graph's reverse-DNS spelling is a
+# permanent decision this story does not get to make. `gid` is therefore `null` in
+# `web/public/catalog.json`, the state most of this fleet is in.
+#
+# ---------------------------------------------------------------------------------------------
+# AUTH: BEARER, ALREADY MINTED — COORDINATING WITH C-88 RATHER THAN DUPLICATING IT.
+# ---------------------------------------------------------------------------------------------
+#
+# Every Graph call takes `Authorization: Bearer <token>`, where the token is a Microsoft Entra ID
+# (formerly Azure AD) OAuth2 access token — delegated (a signed-in user, via an authorization-code or
+# device-code grant) or application (client-credentials, for daemon access). The two are indistinguishable
+# on the wire, exactly as Google's user-token-vs-service-account distinction is, so which one an
+# operator supplies is configuration rather than connector shape — the same reasoning
+# `providers/google.toml`'s header comment gives.
+#
+# [C-88](../docs/stories/C-88-prove-oauth2.md) is the story that proves `OAuth2Spec` — the
+# `[auth.oauth2]` block — on a real provider, and as of this writing it is still `ready` and has
+# already earmarked Slack or HubSpot as the provider to carry it, not this one. So this file does not
+# duplicate that work: it takes the same already-minted-bearer-token shape `providers/google.toml`
+# and `providers/zoom.toml` already ship, sourced from an environment variable, with no `[auth.oauth2]`
+# block. If C-88 lands on a different connector before this one needs revisiting, this connector is a
+# natural second candidate for the OAuth2 grant declaration — Entra ID's app-registration model is a
+# textbook operator-level `client_id`/`client_secret` pair — but that is a follow-on, not this story's
+# job.
+#
+# The access token Graph issues is short-lived (delegated tokens typically expire in about an hour,
+# the same order of magnitude as Zoom's), and refreshing it is *effectful acquisition* that belongs to
+# the host (C-21), never to generated Flux — see `providers/zoom.toml`'s header comment for the full
+# reasoning, which applies here without change.
+#
+# ---------------------------------------------------------------------------------------------
+# NO OPERATOR-PINNED TENANT VALUE IS NEEDED (C-187 DOES NOT APPLY HERE).
+# ---------------------------------------------------------------------------------------------
+#
+# C-187 found that `[[config]]` can pin a base URL and nothing else, so a connector that needs an
+# operator-scoped path segment (Cloudflare's `zone_id`) or query parameter (Vercel's `teamId`) cannot
+# express it yet. This connector never hits that wall: every operation below addresses `/me/...`,
+# which Graph resolves from the bearer token's own claims rather than from a path segment or query
+# parameter a caller or an operator supplies. There is no tenant id, workspace id or account id
+# anywhere in this file's request surface — the token *is* the tenant scope. So, unlike Cloudflare and
+# Vercel, Microsoft Graph is a multi-tenant API this pipeline can already address correctly without
+# C-187, precisely because Graph put tenant scoping in the credential rather than in the URL.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: NO QUERY PARAMETER OF ANY KIND (C-30) — CHECKED AND EXCLUDED, NOT ASSUMED.
+# ---------------------------------------------------------------------------------------------
+#
+# Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim into a
+# `fmt` template and flux registers no encoding op. `zendesk-ticket-search` is the standing
+# demonstration AGENTS.md lists under *Intentional gaps* — a value carrying `&` does not filter, it
+# injects a parameter. Graph's query surface is its OData system query options, and every one of them
+# was checked against that trap before being excluded, per this story's own warning that OData
+# parameters are "full of spaces and quotes":
+#
+# - **`$filter` and `$search`** — free-form OData filter expressions and full-text search strings,
+#   exactly the shape that motivated the warning. `me/messages?$search="from:alice"` and
+#   `me/events?$filter=start/dateTime ge '2026-01-01'` both carry spaces and quotes verbatim.
+#   Excluded outright, the same reasoning `notion-database-query`'s `filter`/`sorts` and
+#   `zendesk-ticket-search`'s `query` already carry.
+# - **`$select`, `$expand`, `$orderby`** — comma-separated property-name lists and simple property
+#   references. These do not carry spaces or quotes in the common case, but a display name or a
+#   custom-extension property name legitimately can (`$orderby=displayName`), and nothing here
+#   validates that the caller-supplied value is actually a property name rather than an arbitrary
+#   string appended to the query. Excluded for the same reason `google.toml` excludes `fields=`: a
+#   parameter that *usually* looks safe is still unencoded, and "usually" is not a property this
+#   pipeline can check at compile time.
+# - **`$top` and `$skip`** — plain integers, which *would* survive verbatim interpolation today.
+#   Excluded anyway: `providers/zoom.toml`'s header comment names this exact shape as "the trap" —
+#   an integer that looks encodable today is where the next author reaches for a text filter
+#   tomorrow — and this connector holds that line rather than being the provider that starts eroding
+#   it. The cost is real and is named per operation below: every list operation returns Graph's
+#   default first page only, and this connector cannot follow `@odata.nextLink` (a full absolute URL,
+#   the same shape `providers/front.toml`'s `_pagination.next` already demonstrates this pipeline's
+#   request model cannot construct — an `Operation.path` is a compile-time template, never a value
+#   read out of a prior response body).
+# - **`includeHiddenFolders`** on the mail-folder list — a plain boolean, excluded for the same
+#   `$top`/`$skip` reasoning: harmless today, and the query-assembly path a future author reaches for
+#   first.
+#
+# So the query surface is empty, in the strong sense `providers/google.toml` asserts it in: not "no
+# string-ish parameter", but no query parameter of any kind
+# (`no_microsoft_graph_operation_declares_a_query_parameter`).
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: NO OPTIONAL REQUEST-BODY FIELD CAN BE DECLARED (C-56).
+# ---------------------------------------------------------------------------------------------
+#
+# The emitter binds every declared body field into the payload record unconditionally, so a caller
+# who leaves an optional field alone sends an explicit `null`. Graph's write validators are not
+# documented to accept `null` in place of an absent member. Until C-56 lands, this file declares
+# required fields only, and what that costs is:
+#
+# - `microsoft_graph-mail-message-reply`: the `message` override Graph's own `reply` action accepts —
+#   a `toRecipients`/`ccRecipients`/`bccRecipients` object that would let a caller redirect or widen
+#   the reply's audience. Without it, every reply goes to exactly whoever Graph resolves
+#   automatically (the original message's `replyTo`, or its `from` if none), which is the quiet
+#   direction: nobody the caller did not already see in the thread is added.
+# - `microsoft_graph-calendar-event-create`: `body`, `location`, `attendees`, `categories`,
+#   `sensitivity`, `showAs`, `isReminderOn`, `reminderMinutesBeforeStart`, `recurrence`, and the
+#   dedup-friendly `transactionId`. Losing `attendees` is what keeps this operation quiet — see its
+#   own `risk` comment. `recurrence`'s absence is what keeps this operation to single-instance events;
+#   Graph's `patternedRecurrence` object is itself deeply nested and out of scope for a first curated
+#   set regardless.
+# - `microsoft_graph-files-item-update`: every `DriveItem` field but `name` — `description`,
+#   `parentReference` (which would *move* rather than rename the item), `fileSystemInfo`. The excluded
+#   `parentReference` is the interesting one: Graph documents that PATCHing it moves the item, so its
+#   absence is what keeps this operation to a pure rename rather than accidentally becoming a move,
+#   the same reasoning that keeps `trashed` off `google-drive-file-update`.
+#
+# A second, narrower facet of the same gap: `comment` on the mail reply is declared **required**
+# even though Graph's own reference marks it optional and states it "can be an empty string" — C-56
+# forbids sending an optional field as `null`, so it is required here and an empty string remains a
+# legitimate value a caller can supply. The alternative was an operation with no settable field at
+# all, which is not an operation — the same choice `providers/google.toml` and `providers/zoom.toml`
+# make of `summary` and `waiting_room` respectively.
+#
+# ---------------------------------------------------------------------------------------------
+# NOT NEEDED HERE: C-185's array-of-objects decomposition.
+# ---------------------------------------------------------------------------------------------
+#
+# Every body field below is a body-root scalar or nests under a `wire` object path
+# (`start.dateTime`, `start.timeZone`) with no array anywhere in the tree — checked directly
+# (`no_microsoft_graph_body_field_is_an_array`). Graph's `attendees` and `toRecipients` are exactly
+# the SendGrid-shaped array-of-objects C-185 refuses, which is one more reason (beside C-56) neither
+# is declared: even if C-56 landed tomorrow, an array of `{emailAddress: {address, name}}` objects
+# would still need C-185.
+#
+# ---------------------------------------------------------------------------------------------
+# CHECKED FOR A CREDENTIAL-SHAPED RESPONSE FIELD (`providers/zoom.toml`'s `start_url`,
+# `providers/postmark.toml`'s `ApiTokens`) — AND FOUND NONE.
+# ---------------------------------------------------------------------------------------------
+#
+# Every link Graph returns below — a message's `webLink`, an event's `webLink`, a file's `webUrl` —
+# opens the item in a browser that still requires its own sign-in; none embeds a bearer-equivalent
+# token the way Zoom's `start_url` does. Graph's Teams meeting join links (`onlineMeeting.joinUrl`)
+# are exactly the shape that would need this treatment, which is one reason they are not declared
+# here at all: this connector never sets `isOnlineMeeting`, so no operation below can return one.
+#
+# ---------------------------------------------------------------------------------------------
+# PERSONAL DATA. Mail and calendar are, definitionally, about named people and their correspondence.
+# ---------------------------------------------------------------------------------------------
+#
+# No example value, no fixture, and no literal name, email address or id appears anywhere in this
+# file — every response below names *which* fields carry a person's name or address in its
+# `description` without ever showing one. `from`, `toRecipients`, `organizer`, `attendees`,
+# `createdBy` and `lastModifiedBy` are personal data throughout; treat them as such and repeat them no
+# further than a task requires, the same convention `providers/shopify.toml`'s customer read and
+# `providers/zoom.toml`'s user read already carry.
+#
+# ---------------------------------------------------------------------------------------------
+# EXCLUDED, each for a stated reason
+# ---------------------------------------------------------------------------------------------
+#
+# - **Sending new mail** (`POST /me/sendMail`) — its `toRecipients` is the array-of-objects C-185
+#   refuses and C-56 could not fix alone. `microsoft_graph-mail-message-reply` ships instead, whose
+#   recipients Graph resolves automatically and whose body is a body-root scalar.
+# - **Everything paginated beyond a first page** — every list operation's `$top`/`$skip`/`$filter`
+#   exclusion above.
+# - **Attachments, categories, delegation, mailbox rules, shared/delegate mailboxes, Teams, contacts,
+#   the directory/user-administration surface, OneDrive sharing links, SharePoint sites, and every
+#   `/users/{id}` form of these endpoints** (as opposed to `/me/...`) — out of scope for a first
+#   curated set, not blocked by anything. The Notes below name the specific unverified candidates.
+# - **File content download** (`GET /me/drive/items/{id}/content`) — a distinct endpoint from the
+#   metadata read this file ships, returning a binary body rather than JSON; out of scope for a first
+#   curated set, the same restraint `google-drive-file-get` takes of `alt=media` (there, blocked by
+#   C-30; here, simply not attempted, since the endpoint needs no query parameter at all and a binary
+#   response is its own, unexplored shape for this pipeline).
+
+id = "microsoft_graph"
+vendor = "Microsoft Graph"
+
+# The one host every service resolves to. No tenant subdomain — unlike zendesk's `{subdomain}` and
+# shopify's `{shop}`, Graph is multi-tenant through the bearer token alone, so `base_url` is a bound
+# literal and `status.rs` reports no `unbound-base-url-template` issue.
+base_url = "https://graph.microsoft.com"
+
+description = "Microsoft Graph: read and reply to Outlook mail, read and create Calendar events, read and rename OneDrive files"
+
+# Every operation of every service authenticates the same way.
+default_auth = [{ credentials = ["microsoft_graph.access_token"] }]
+
+# A zero-argument, low-risk read: the signed-in user's own default calendar. Bounded (one object, no
+# collection, no paging) and needs nothing a settings page cannot already supply.
+verify = "microsoft_graph-calendar-calendar-get"
+
+# ---------------------------------------------------------------------------------------------
+# Services — three curated surfaces, one host, one version. See the header comment: the point of
+# this connector is that all three facts below are identical across every entry.
+# ---------------------------------------------------------------------------------------------
+
+[[services]]
+name = "mail"
+description = "Outlook Mail: read a message, reply to one, list mail folders"
+api_version = "v1.0"
+
+[[services]]
+name = "calendar"
+description = "Outlook Calendar: read an event, create one, read the signed-in user's default calendar"
+api_version = "v1.0"
+
+[[services]]
+name = "files"
+description = "OneDrive: read and rename a file's metadata"
+api_version = "v1.0"
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "microsoft_graph.access_token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; its value is never read
+# here and never reaches a generated artifact.
+env = ["MICROSOFT_GRAPH_ACCESS_TOKEN"]
+description = "Microsoft Entra ID OAuth2 access token sent as a bearer; short-lived, minted outside flux (delegated sign-in or application client-credentials), and refreshed by the host rather than by generated Flux"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a human supplies before any of this runs.
+#
+# One field: the token itself. `ConfigField::service` must name one declared service (a provider
+# with named services has no implicit `default` for it to fall into either), even though the same
+# token authenticates all three — there is no "shared across services" spelling, and declaring the
+# field three times under three names would ask an operator to paste one token into three form
+# fields, which is worse than picking one. Attached to `mail` because Outlook access is the surface
+# an operator is most likely to configure this connector for first; the choice is otherwise arbitrary
+# and does not narrow which services the token actually authenticates.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "access_token"
+service = "mail"
+label = "Microsoft Graph access token"
+help = "An OAuth2 access token for Microsoft Graph, minted through an Entra ID app registration with the delegated or application permissions the enabled operations need (Mail.Read and Mail.Send for the mail operations, Calendars.ReadWrite for calendar, Files.ReadWrite for files). flux is handed an already-minted token; it does not perform the sign-in or client-credentials grant itself"
+format = "token"
+secret = true
+docs_url = "https://learn.microsoft.com/en-us/graph/auth/auth-concepts"
+binds = "credential.microsoft_graph.access_token"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 8: three mail, three calendar, two files. See the header comment for what each
+# service's own SCHEMA GAP sections exclude.
+#
+# Op ids carry the service — `microsoft_graph-mail-message-get`, not `microsoft_graph-message-get` —
+# the same reasoning `providers/google.toml` gives: several of these are "get one thing by id" and
+# would collide on shorter names, and the op id is what a model sees as a tool name. Ids are
+# hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII alphanumerics, `_` and
+# `-` only.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "microsoft_graph-mail-message-get"
+service = "mail"
+method = "GET"
+path = "/v1.0/me/messages/{message_id}"
+description = "Get one Outlook message by id: subject, sender, recipients, timestamps and the body — HTML by default. This is personal correspondence; treat the sender, recipients and body as personal data"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "message_id"
+description = "The message's id, an opaque string Graph itself reports on a prior list or get — never invented. Excludes `/`, `?`, `#` and `&`, the four characters that could change the shape of the request; the emitted Flux does not enforce this, so it is a contract a model reads rather than a validator"
+required = true
+schema = { type = "string", pattern = "^[^/?#&]+$", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "subject"]
+properties = { id = { type = "string", description = "The message's id — what this operation takes" }, subject = { type = "string" }, bodyPreview = { type = "string", description = "A plain-text extract of the body, truncated. Personal correspondence — never an example value here" }, body = { type = "object", description = "`{contentType, content}` — HTML by default. Send `Prefer: outlook.body-content-type=\"text\"` to get plain text instead, which this connector does not do: no header parameter is declared, so every body here arrives as HTML", properties = { contentType = { type = "string", enum = ["text", "html"] }, content = { type = "string" } } }, from = { type = "object", description = "`{emailAddress: {name, address}}` — the sender. Personal data, never an example value here", properties = { emailAddress = { type = "object", properties = { name = { type = "string" }, address = { type = "string" } } } } }, toRecipients = { type = "array", description = "Each `{emailAddress: {name, address}}`. Personal data, never an example value here", items = { type = "object" } }, receivedDateTime = { type = "string", format = "date-time" }, sentDateTime = { type = "string", format = "date-time" }, hasAttachments = { type = "boolean" }, isRead = { type = "boolean" }, isDraft = { type = "boolean" }, importance = { type = "string", enum = ["low", "normal", "high"] }, conversationId = { type = "string", description = "Groups messages in the same thread" }, internetMessageId = { type = "string", description = "The RFC 2822 `Message-ID`, distinct from Graph's own `id`" }, parentFolderId = { type = "string", description = "The mail folder this message currently lives in" }, webLink = { type = "string", format = "uri", description = "Opens the message in Outlook on the web. Requires the viewer's own sign-in session; does not itself carry a credential" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "microsoft_graph-mail-message-reply"
+service = "mail"
+method = "POST"
+path = "/v1.0/me/messages/{message_id}/reply"
+description = "Reply to a message. Graph resolves the recipients automatically — the original message's `replyTo` if it specifies one, otherwise its `from` — and this operation cannot override, widen or add to that audience (C-56 excludes the `message` override Graph's own reply action accepts). Delivered within seconds and cannot be recalled"
+# Irreversible external delivery, the same reasoning `google-gmail-message-send` carries: the reply
+# leaves the organization, is attributed to the token's own identity, and lands in an inbox within
+# seconds. The one thing narrower than Gmail's send is that this operation cannot choose or widen the
+# recipient list — but the delivery itself is just as final, so `high` rather than `medium`.
+risk = "high"
+# Graph documents no idempotency key on `message: reply`, so the same call posted twice sends two
+# replies. `POST` is also refused `idempotent` by method regardless (C-186).
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "message_id"
+description = "The id of the message being replied to"
+required = true
+schema = { type = "string", pattern = "^[^/?#&]+$", minLength = 1 }
+
+# Graph's JSON reply body takes `comment` (a string, prepended above the quoted original) and an
+# optional `message` object that can override the recipients — declaring the latter is exactly the
+# array-of-objects C-185 refuses and C-56 could not fix alone, so only `comment` is declared. Graph
+# itself marks `comment` optional and states it "can be an empty string"; it is required here because
+# C-56 forbids sending an omitted optional field as `null`, and an empty string remains available as
+# a real value a caller can supply.
+[[operations.params.body]]
+name = "comment"
+description = "Text to prepend above the quoted original message. May be an empty string — Graph accepts that — but the field itself must always be sent"
+required = true
+schema = { type = "string" }
+
+# Graph answers `202 Accepted` with an empty body — no `response_schema`, deliberately (C-126), the
+# same honest-absence convention `zoom-meeting-delete` and `front-conversation-reply`'s queuing
+# acknowledgement both carry. A `{}` here would assert a body that never arrives.
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "microsoft_graph-mail-folder-list"
+service = "mail"
+method = "GET"
+path = "/v1.0/me/mailFolders"
+description = "List the top-level mail folders in the signed-in user's mailbox — Inbox, Drafts, Sent Items, and any custom top-level folders. Does not descend into subfolders. Graph's default page size here is 10; this connector cannot follow `@odata.nextLink` (an absolute URL, not a constructible cursor), so a mailbox with more than ten top-level folders is reported incompletely"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["value"]
+properties = { value = { type = "array", description = "First page only — see this operation's own description. Each folder is `{id, displayName, parentFolderId, childFolderCount, unreadItemCount, totalItemCount, isHidden}`", items = { type = "object", required = ["id", "displayName"], properties = { id = { type = "string" }, displayName = { type = "string", description = "e.g. `Inbox`, `Drafts`, `Sent Items` — localized to the mailbox's own language" }, parentFolderId = { type = "string" }, childFolderCount = { type = "integer" }, unreadItemCount = { type = "integer" }, totalItemCount = { type = "integer" }, isHidden = { type = "boolean" } } } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "microsoft_graph-calendar-event-get"
+service = "calendar"
+method = "GET"
+path = "/v1.0/me/events/{event_id}"
+description = "Get one calendar event: its subject, start and end, organizer, attendee list and cancellation state. Returned in UTC unless a `Prefer: outlook.timezone` header is sent, which this connector does not do"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "event_id"
+description = "The event's id, as Calendar's own listings report it"
+required = true
+schema = { type = "string", pattern = "^[^/?#&]+$", minLength = 1 }
+
+# **`isCancelled` is a real, separate field, and a cancelled event is still returned here** — the
+# same trap `google-calendar-event-get`'s `status` field records. `start`/`end` are `DateTimeTimeZone`
+# objects (`{dateTime, timeZone}`) rather than the offset-carrying string Google Calendar uses;
+# `isAllDay` is Graph's own discriminator for a day-long event rather than a `date`-vs-`dateTime`
+# split.
+[operations.response_schema]
+type = "object"
+required = ["id", "subject", "isCancelled"]
+properties = { id = { type = "string", description = "The event's id — what this operation takes" }, subject = { type = "string", description = "Absent-titled events render as an empty string, not a missing member" }, bodyPreview = { type = "string" }, body = { type = "object", description = "`{contentType, content}` — HTML by default, the same convention as the mail body above", properties = { contentType = { type = "string", enum = ["text", "html"] }, content = { type = "string" } } }, start = { type = "object", description = "`{dateTime, timeZone}`. By default `dateTime` is UTC; a `Prefer: outlook.timezone` header (not sent here) would change it", properties = { dateTime = { type = "string" }, timeZone = { type = "string" } } }, end = { type = "object", description = "Same shape as `start`", properties = { dateTime = { type = "string" }, timeZone = { type = "string" } } }, isAllDay = { type = "boolean", description = "When true, `start`/`end` represent midnight in the stated time zone rather than a real time of day" }, isCancelled = { type = "boolean", description = "**A cancelled event is still returned by this operation**, with `isCancelled: true`. Check this before treating the event as live" }, location = { type = "object", description = "`{displayName, ...}` — free text, not a structured address", properties = { displayName = { type = "string" } } }, organizer = { type = "object", description = "`{emailAddress: {name, address}}` — who owns the event. Personal data, never an example value here", properties = { emailAddress = { type = "object", properties = { name = { type = "string" }, address = { type = "string" } } } } }, attendees = { type = "array", description = "Each `{type, status: {response, time}, emailAddress: {name, address}}`, where `status.response` is `none`, `accepted`, `declined` or `tentativelyAccepted`. Personal data throughout, never an example value here", items = { type = "object" } }, seriesMasterId = { type = "string", description = "Present when this event is one instance of a recurring series" }, showAs = { type = "string", enum = ["free", "tentative", "busy", "oof", "workingElsewhere", "unknown"] }, sensitivity = { type = "string", enum = ["normal", "personal", "private", "confidential"] }, iCalUId = { type = "string", description = "Identifies this event across calendars, distinct from Graph's own `id`" }, webLink = { type = "string", format = "uri", description = "Opens the event in Outlook on the web. Requires the viewer's own sign-in session; does not itself carry a credential" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "microsoft_graph-calendar-event-create"
+service = "calendar"
+method = "POST"
+path = "/v1.0/me/events"
+description = "Create a single-instance event on the signed-in user's default calendar. No attendees can be declared yet (C-56), so nobody is invited and nobody is notified — the event appears only on the calendar it was created on"
+# The same reasoning `google-calendar-event-insert` and `zoom-meeting-create` both carry: a new
+# object on a calendar, but a quiet one, because `attendees` is not declarable yet and Graph sends no
+# invitation without one. `medium` rather than `high`.
+#
+# WHEN C-56 LANDS AND `attendees` BECOMES DECLARABLE, REVISIT THIS. Adding an attendee sends a meeting
+# request under the token owner's name, which is the `high` case.
+risk = "medium"
+# Graph documents `transactionId` as the client-supplied dedup key for this endpoint, and this
+# connector does not declare it (C-56 would make it an always-sent required field, which defeats its
+# own purpose as an idempotency key a caller opts into). Without it, the same body posted twice
+# creates two events. `POST` is also refused `idempotent` by method regardless (C-186).
+idempotency = "non_idempotent"
+
+# Not vendor-required — Graph accepts an event with an empty subject — but C-56 forbids an optional
+# field, and an event nobody can identify on a calendar grid is not worth creating. The same choice
+# `google-calendar-event-insert`'s `summary` makes.
+[[operations.params.body]]
+name = "subject"
+description = "The event's title, as it appears on the calendar grid"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# `start`/`end` are `DateTimeTimeZone` objects on the wire — `{"start": {"dateTime": ..., "timeZone":
+# ...}, "end": {...}}` — hence the `wire` paths (C-29). Graph documents `timeZone` as optional,
+# defaulting to UTC when omitted; declaring it required here costs nothing extra, because C-56
+# forbids an optional field regardless, and stating it explicitly removes any ambiguity about which
+# zone a bare `dateTime` is in.
+[[operations.params.body]]
+name = "start_date_time"
+wire = "start.dateTime"
+description = "When the event starts, as a local date-time with no UTC designator — `2026-01-30T09:00:00` — interpreted in `start_time_zone`"
+required = true
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "start_time_zone"
+wire = "start.timeZone"
+description = "The IANA or Windows time zone name `start_date_time` is expressed in, e.g. `UTC` or `Pacific Standard Time`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "end_date_time"
+wire = "end.dateTime"
+description = "When the event ends, in the same local, no-designator form as `start_date_time`. Must be after it; Graph rejects an end that precedes its start"
+required = true
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "end_time_zone"
+wire = "end.timeZone"
+description = "The time zone `end_date_time` is expressed in"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# The created Event — the same resource the get returns. `attendees` will be absent, because this
+# operation cannot declare any (C-56) — which is the same thing as saying nobody was invited and
+# nobody was notified, the same convention `google-calendar-event-insert`'s response carries.
+[operations.response_schema]
+type = "object"
+required = ["id", "subject", "isCancelled"]
+properties = { id = { type = "string", description = "The new event's id — the only handle on it, and what `microsoft_graph-calendar-event-get` reads back" }, subject = { type = "string", description = "Echoes the title that was sent" }, start = { type = "object", description = "`{dateTime, timeZone}` as created", properties = { dateTime = { type = "string" }, timeZone = { type = "string" } } }, end = { type = "object", description = "Same shape", properties = { dateTime = { type = "string" }, timeZone = { type = "string" } } }, isAllDay = { type = "boolean" }, isCancelled = { type = "boolean", description = "`false` on a freshly created event" }, organizer = { type = "object", description = "The token's own account. Personal data, never an example value here", properties = { emailAddress = { type = "object", properties = { name = { type = "string" }, address = { type = "string" } } } } }, attendees = { type = "array", description = "ABSENT on every event this operation creates: no attendee can be declared yet (C-56), so nobody was invited and nobody was notified", items = { type = "object" } }, iCalUId = { type = "string" }, webLink = { type = "string", format = "uri", description = "Opens the event in Outlook on the web. Requires the viewer's own sign-in session; does not itself carry a credential" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "microsoft_graph-calendar-calendar-get"
+service = "calendar"
+method = "GET"
+path = "/v1.0/me/calendar"
+description = "Get the signed-in user's own default calendar: its name, colour and sharing/editing permissions. This is the calendar, not its events — use microsoft_graph-calendar-event-get for one of those. Takes no argument: `/me/calendar` always resolves to the token's own default calendar"
+risk = "low"
+idempotency = "idempotent"
+
+# The Calendar resource, no envelope, no path or query parameter at all — the cleanest possible read
+# in this connector, and this connector's `verify`.
+[operations.response_schema]
+type = "object"
+required = ["id", "name"]
+properties = { id = { type = "string", description = "The calendar's own id, distinct from any event's id" }, name = { type = "string", description = "The calendar's display name, e.g. `Calendar` for the default one" }, color = { type = "string", description = "A named colour preset, or `auto`" }, hexColor = { type = "string", description = "A custom hex colour when `color` is set to a custom value; empty string otherwise" }, canShare = { type = "boolean" }, canViewPrivateItems = { type = "boolean" }, canEdit = { type = "boolean" }, allowedOnlineMeetingProviders = { type = "array", description = "Which online-meeting providers can be attached to events on this calendar, e.g. `teamsForBusiness`", items = { type = "string" } }, defaultOnlineMeetingProvider = { type = "string" }, isTallyingResponses = { type = "boolean" }, isRemovable = { type = "boolean", description = "`false` for the default calendar — it cannot be deleted" }, owner = { type = "object", description = "`{name, address}` — the mailbox this calendar belongs to. Personal data, never an example value here", properties = { name = { type = "string" }, address = { type = "string" } } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "microsoft_graph-files-item-get"
+service = "files"
+method = "GET"
+path = "/v1.0/me/drive/items/{item_id}"
+description = "Get one OneDrive item's metadata by id: its name, size and where it lives. This never returns file content — downloading needs the separate /content endpoint, which returns a binary body and is not shipped by this connector"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "item_id"
+description = "The item's id, an opaque string OneDrive itself reports on a prior listing or get — never invented"
+required = true
+schema = { type = "string", pattern = "^[^/?#&]+$", minLength = 1 }
+
+# The DriveItem resource. `file` and `folder` are mutually exclusive facts about the one item —
+# whichever is present says which kind of item this is. `createdBy`/`lastModifiedBy` carry a named
+# person's identity and are personal data, never given an example value here.
+[operations.response_schema]
+type = "object"
+required = ["id", "name"]
+properties = { id = { type = "string", description = "The item's id — what this operation takes" }, name = { type = "string" }, size = { type = "integer", description = "Size in bytes" }, webUrl = { type = "string", format = "uri", description = "Opens the item in a browser. Requires the viewer's own sign-in session; does not itself carry a credential" }, createdDateTime = { type = "string", format = "date-time" }, lastModifiedDateTime = { type = "string", format = "date-time" }, eTag = { type = "string" }, cTag = { type = "string", description = "Changes when the item's content changes; `eTag` also changes on a metadata-only edit" }, file = { type = "object", description = "Present when this item is a file rather than a folder — `{mimeType, hashes}`", properties = { mimeType = { type = "string" } } }, folder = { type = "object", description = "Present when this item is a folder rather than a file — `{childCount}`. `file` and `folder` never both appear on the same item", properties = { childCount = { type = "integer" } } }, parentReference = { type = "object", description = "`{driveId, id, path}` — the folder this item lives in", properties = { driveId = { type = "string" }, id = { type = "string" }, path = { type = "string" } } }, createdBy = { type = "object", description = "`{user: {id, displayName}}` — whoever created the item. Personal data, never an example value here", properties = { user = { type = "object", properties = { id = { type = "string" }, displayName = { type = "string" } } } } }, lastModifiedBy = { type = "object", description = "Same shape as `createdBy`. Personal data, never an example value here", properties = { user = { type = "object", properties = { id = { type = "string" }, displayName = { type = "string" } } } } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "microsoft_graph-files-item-update"
+service = "files"
+method = "PATCH"
+path = "/v1.0/me/drive/items/{item_id}"
+description = "Rename a OneDrive item: sets its name and changes nothing else. Does not move it — moving is a PATCH to the separate parentReference field, which this operation deliberately does not declare (C-56)"
+# A write visible to anyone with access to the item, the same reasoning `google-drive-file-update`
+# carries: not `low` (the old name is not kept anywhere a caller can read it back), not `destructive`
+# (the item, its content and its location all survive, and a human can rename it back).
+risk = "medium"
+# Graph documents no idempotency guarantee on this endpoint, and each PATCH bumps `eTag`/`cTag` and
+# `lastModifiedDateTime`, so a retried rename is observably a second edit. `PATCH` is also refused
+# `idempotent` by method regardless (C-186).
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "item_id"
+description = "The item to rename"
+required = true
+schema = { type = "string", pattern = "^[^/?#&]+$", minLength = 1 }
+
+# The wire body is flat — `{"name": "..."}` at the root, no envelope — so no `wire` path is needed.
+# Not vendor-required (Graph's PATCH accepts a body touching only the fields it names, and an empty
+# body changes nothing), but an operation with no settable field is not an operation, and `name` is
+# the one field a rename needs. C-56 forbids declaring it optional.
+[[operations.params.body]]
+name = "name"
+description = "The item's new name"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# The updated DriveItem, same shape as the get above. Reading `name` back is what distinguishes a
+# rename that applied from one Graph silently ignored.
+[operations.response_schema]
+type = "object"
+required = ["id", "name"]
+properties = { id = { type = "string" }, name = { type = "string", description = "The name **after** the update. Compare it against what was sent" }, size = { type = "integer" }, webUrl = { type = "string", format = "uri", description = "Opens the item in a browser. Requires the viewer's own sign-in session; does not itself carry a credential" }, createdDateTime = { type = "string", format = "date-time" }, lastModifiedDateTime = { type = "string", format = "date-time", description = "Moves on an accepted rename" }, eTag = { type = "string", description = "Changes on an accepted rename" }, cTag = { type = "string" }, file = { type = "object", description = "Present when this item is a file rather than a folder", properties = { mimeType = { type = "string" } } }, folder = { type = "object", description = "Present when this item is a folder rather than a file", properties = { childCount = { type = "integer" } } }, parentReference = { type = "object", description = "Unchanged by this call — a rename never moves the item", properties = { driveId = { type = "string" }, id = { type = "string" }, path = { type = "string" } } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/code"
