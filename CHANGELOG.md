@@ -9,6 +9,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Microsoft Graph connector (C-108).** Three services — mail, calendar, files — eight curated
+  operations over a bearer token, with the zero-argument `GET /v1.0/me/calendar` as `verify`.
+
+  **All three services share one host *and* one API version**, which is stricter than Google's case and
+  makes the finding sharper: the service level earns its place as **the installable unit**, not as a
+  routing or versioning mechanism. A test asserts it rather than the header comment claiming it.
+
+  **A provider id must be a valid Rust identifier**, so this ships as `microsoft_graph`, not
+  `microsoft-graph`: `catalog.rs::module_ident` requires `^[a-z_][a-z0-9_]*$` because a full build declares
+  `mod <id>;`. Caught by the implementor's own gate via `core_catalog`'s full-build simulation. Same family
+  as C-171's `box`-is-a-keyword finding — the provider id is the one author-chosen string that must survive
+  becoming Rust.
+
+  `POST /me/sendMail` is excluded, blocked on C-185: its `toRecipients` is an array of objects, the
+  genuinely-blocked decomposed case. The reply operation ships instead. Binary file download is left out as
+  an unexplored response shape rather than guessed at.
+
 - **The DocuSign connector (C-174).** Six operations over an OAuth2 bearer token, envelopes and
   recipients, with `GET /folders` as `verify`.
 

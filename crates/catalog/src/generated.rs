@@ -36,6 +36,7 @@ pub(crate) mod hubspot;
 pub(crate) mod intercom;
 pub(crate) mod jira;
 pub(crate) mod launchdarkly;
+pub(crate) mod microsoft_graph;
 pub(crate) mod miro;
 pub(crate) mod notion;
 pub(crate) mod openai;
@@ -82,6 +83,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &intercom::PROVIDER,
     &jira::PROVIDER,
     &launchdarkly::PROVIDER,
+    &microsoft_graph::PROVIDER,
     &miro::PROVIDER,
     &notion::PROVIDER,
     &openai::PROVIDER,

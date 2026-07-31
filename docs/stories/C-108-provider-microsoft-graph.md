@@ -2,8 +2,7 @@
 id: C-108
 title: Ship the Microsoft Graph connector
 pillar: Spec
-status: in-progress
-priority: 5
+status: done
 design:
 epic: provider-fleet-2
 areas: [providers]
@@ -100,3 +99,21 @@ level.
   `providers/shopify.toml` uses and, notably, the same shape `providers/google.toml` uses even on
   services whose `api_version` genuinely varies (`/gmail/v1/...`) — declaring the field does not
   change how the path is written.
+
+### Coordinator note at integration
+
+**It caught a defect in the story's own premise, in its own gate.** The story implied a provider id of
+`microsoft-graph`. A provider id must be a valid Rust identifier — `catalog.rs::module_ident` requires
+`^[a-z_][a-z0-9_]*$` because a full build declares `mod <id>;` — so a hyphen fails. It found this through
+`connector-cli::core_catalog`'s full-build simulation *before* handing over, rather than leaving me to hit
+it at integration, and renamed the id to `microsoft_graph` while keeping hyphens in service names and
+operation-id suffixes where they are legal.
+
+That is the same family as C-171's finding (`box` is a Rust keyword and `module_ident` escapes it to
+`r#box`): **the provider id is the one author-chosen string that has to survive becoming Rust.** Two
+connectors in one run hit it from different directions and both traced it rather than working around it.
+
+Its answer on the service question is worth keeping too: all three services share the host **and** the API
+version, which is stricter than Google's case. The conclusion is not that the service level is unnecessary
+but that it earns its place as **the installable unit**, not as a routing or versioning mechanism — and a
+test asserts exactly that.

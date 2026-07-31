@@ -18002,6 +18002,1198 @@
       "channels": []
     },
     {
+      "id": "microsoft_graph",
+      "authority": null,
+      "vendor": "Microsoft Graph",
+      "description": "Microsoft Graph: read and reply to Outlook mail, read and create Calendar events, read and rename OneDrive files",
+      "base_url": "https://graph.microsoft.com",
+      "api_version": null,
+      "hosts": [
+        "graph.microsoft.com"
+      ],
+      "services": [
+        {
+          "name": "mail",
+          "description": "Outlook Mail: read a message, reply to one, list mail folders",
+          "base_url": "https://graph.microsoft.com",
+          "hosts": [
+            "graph.microsoft.com"
+          ],
+          "api_version": "v1.0",
+          "gid": null,
+          "operation_count": 3
+        },
+        {
+          "name": "calendar",
+          "description": "Outlook Calendar: read an event, create one, read the signed-in user's default calendar",
+          "base_url": "https://graph.microsoft.com",
+          "hosts": [
+            "graph.microsoft.com"
+          ],
+          "api_version": "v1.0",
+          "gid": null,
+          "operation_count": 3
+        },
+        {
+          "name": "files",
+          "description": "OneDrive: read and rename a file's metadata",
+          "base_url": "https://graph.microsoft.com",
+          "hosts": [
+            "graph.microsoft.com"
+          ],
+          "api_version": "v1.0",
+          "gid": null,
+          "operation_count": 2
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "microsoft_graph.access_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "Microsoft Entra ID OAuth2 access token sent as a bearer; short-lived, minted outside flux (delegated sign-in or application client-credentials), and refreshed by the host rather than by generated Flux",
+            "env": [
+              "MICROSOFT_GRAPH_ACCESS_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "microsoft_graph.access_token"
+          ]
+        ]
+      },
+      "operation_count": 8,
+      "operations": [
+        {
+          "id": "microsoft_graph-mail-message-get",
+          "provider": "microsoft_graph",
+          "service": "mail",
+          "description": "Get one Outlook message by id: subject, sender, recipients, timestamps and the body — HTML by default. This is personal correspondence; treat the sender, recipients and body as personal data",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1.0/me/messages/{message_id}",
+          "parameters": [
+            {
+              "name": "message_id",
+              "in": "path",
+              "wire": null,
+              "description": "The message's id, an opaque string Graph itself reports on a prior list or get — never invented. Excludes `/`, `?`, `#` and `&`, the four characters that could change the shape of the request; the emitted Flux does not enforce this, so it is a contract a model reads rather than a validator",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[^/?#&]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "message_id": {
+                "minLength": 1,
+                "pattern": "^[^/?#&]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "message_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "body": {
+                "description": "`{contentType, content}` — HTML by default. Send `Prefer: outlook.body-content-type=\"text\"` to get plain text instead, which this connector does not do: no header parameter is declared, so every body here arrives as HTML",
+                "properties": {
+                  "content": {
+                    "type": "string"
+                  },
+                  "contentType": {
+                    "enum": [
+                      "text",
+                      "html"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "bodyPreview": {
+                "description": "A plain-text extract of the body, truncated. Personal correspondence — never an example value here",
+                "type": "string"
+              },
+              "conversationId": {
+                "description": "Groups messages in the same thread",
+                "type": "string"
+              },
+              "from": {
+                "description": "`{emailAddress: {name, address}}` — the sender. Personal data, never an example value here",
+                "properties": {
+                  "emailAddress": {
+                    "properties": {
+                      "address": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              },
+              "hasAttachments": {
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The message's id — what this operation takes",
+                "type": "string"
+              },
+              "importance": {
+                "enum": [
+                  "low",
+                  "normal",
+                  "high"
+                ],
+                "type": "string"
+              },
+              "internetMessageId": {
+                "description": "The RFC 2822 `Message-ID`, distinct from Graph's own `id`",
+                "type": "string"
+              },
+              "isDraft": {
+                "type": "boolean"
+              },
+              "isRead": {
+                "type": "boolean"
+              },
+              "parentFolderId": {
+                "description": "The mail folder this message currently lives in",
+                "type": "string"
+              },
+              "receivedDateTime": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "sentDateTime": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "toRecipients": {
+                "description": "Each `{emailAddress: {name, address}}`. Personal data, never an example value here",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "webLink": {
+                "description": "Opens the message in Outlook on the web. Requires the viewer's own sign-in session; does not itself carry a credential",
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "subject"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "microsoft_graph.access_token"
+            ]
+          ],
+          "hosts": [
+            "graph.microsoft.com"
+          ],
+          "flux": "op microsoft_graph-mail-message-get(message_id: String) -> Any\n  description \"Get one Outlook message by id: subject, sender, recipients, timestamps and the body — HTML by default. This is personal correspondence; treat the sender, recipients and body as personal data. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://graph.microsoft.com\"\n  url = fmt(\"{base}/v1.0/me/messages/{message_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "microsoft_graph-mail-message-reply",
+          "provider": "microsoft_graph",
+          "service": "mail",
+          "description": "Reply to a message. Graph resolves the recipients automatically — the original message's `replyTo` if it specifies one, otherwise its `from` — and this operation cannot override, widen or add to that audience (C-56 excludes the `message` override Graph's own reply action accepts). Delivered within seconds and cannot be recalled",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/v1.0/me/messages/{message_id}/reply",
+          "parameters": [
+            {
+              "name": "message_id",
+              "in": "path",
+              "wire": null,
+              "description": "The id of the message being replied to",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[^/?#&]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "comment",
+              "in": "body",
+              "wire": null,
+              "description": "Text to prepend above the quoted original message. May be an empty string — Graph accepts that — but the field itself must always be sent",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "comment": {
+                "type": "string"
+              },
+              "message_id": {
+                "minLength": 1,
+                "pattern": "^[^/?#&]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "message_id",
+              "comment"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "microsoft_graph.access_token"
+            ]
+          ],
+          "hosts": [
+            "graph.microsoft.com"
+          ],
+          "flux": "op microsoft_graph-mail-message-reply(message_id: String, comment: String) -> Any\n  description \"Reply to a message. Graph resolves the recipients automatically — the original message's `replyTo` if it specifies one, otherwise its `from` — and this operation cannot override, widen or add to that audience (C-56 excludes the `message` override Graph's own reply action accepts). Delivered within seconds and cannot be recalled. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://graph.microsoft.com\"\n  url = fmt(\"{base}/v1.0/me/messages/{message_id}/reply\")\n  content_type = \"application/json\"\n  payload = { comment }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "microsoft_graph-mail-folder-list",
+          "provider": "microsoft_graph",
+          "service": "mail",
+          "description": "List the top-level mail folders in the signed-in user's mailbox — Inbox, Drafts, Sent Items, and any custom top-level folders. Does not descend into subfolders. Graph's default page size here is 10; this connector cannot follow `@odata.nextLink` (an absolute URL, not a constructible cursor), so a mailbox with more than ten top-level folders is reported incompletely",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1.0/me/mailFolders",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "value": {
+                "description": "First page only — see this operation's own description. Each folder is `{id, displayName, parentFolderId, childFolderCount, unreadItemCount, totalItemCount, isHidden}`",
+                "items": {
+                  "properties": {
+                    "childFolderCount": {
+                      "type": "integer"
+                    },
+                    "displayName": {
+                      "description": "e.g. `Inbox`, `Drafts`, `Sent Items` — localized to the mailbox's own language",
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "isHidden": {
+                      "type": "boolean"
+                    },
+                    "parentFolderId": {
+                      "type": "string"
+                    },
+                    "totalItemCount": {
+                      "type": "integer"
+                    },
+                    "unreadItemCount": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "displayName"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "value"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "microsoft_graph.access_token"
+            ]
+          ],
+          "hosts": [
+            "graph.microsoft.com"
+          ],
+          "flux": "op microsoft_graph-mail-folder-list -> Any\n  description \"List the top-level mail folders in the signed-in user's mailbox — Inbox, Drafts, Sent Items, and any custom top-level folders. Does not descend into subfolders. Graph's default page size here is 10; this connector cannot follow `@odata.nextLink` (an absolute URL, not a constructible cursor), so a mailbox with more than ten top-level folders is reported incompletely. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://graph.microsoft.com\"\n  url = fmt(\"{base}/v1.0/me/mailFolders\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "microsoft_graph-calendar-event-get",
+          "provider": "microsoft_graph",
+          "service": "calendar",
+          "description": "Get one calendar event: its subject, start and end, organizer, attendee list and cancellation state. Returned in UTC unless a `Prefer: outlook.timezone` header is sent, which this connector does not do",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1.0/me/events/{event_id}",
+          "parameters": [
+            {
+              "name": "event_id",
+              "in": "path",
+              "wire": null,
+              "description": "The event's id, as Calendar's own listings report it",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[^/?#&]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "event_id": {
+                "minLength": 1,
+                "pattern": "^[^/?#&]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "event_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "attendees": {
+                "description": "Each `{type, status: {response, time}, emailAddress: {name, address}}`, where `status.response` is `none`, `accepted`, `declined` or `tentativelyAccepted`. Personal data throughout, never an example value here",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "body": {
+                "description": "`{contentType, content}` — HTML by default, the same convention as the mail body above",
+                "properties": {
+                  "content": {
+                    "type": "string"
+                  },
+                  "contentType": {
+                    "enum": [
+                      "text",
+                      "html"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "bodyPreview": {
+                "type": "string"
+              },
+              "end": {
+                "description": "Same shape as `start`",
+                "properties": {
+                  "dateTime": {
+                    "type": "string"
+                  },
+                  "timeZone": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "iCalUId": {
+                "description": "Identifies this event across calendars, distinct from Graph's own `id`",
+                "type": "string"
+              },
+              "id": {
+                "description": "The event's id — what this operation takes",
+                "type": "string"
+              },
+              "isAllDay": {
+                "description": "When true, `start`/`end` represent midnight in the stated time zone rather than a real time of day",
+                "type": "boolean"
+              },
+              "isCancelled": {
+                "description": "**A cancelled event is still returned by this operation**, with `isCancelled: true`. Check this before treating the event as live",
+                "type": "boolean"
+              },
+              "location": {
+                "description": "`{displayName, ...}` — free text, not a structured address",
+                "properties": {
+                  "displayName": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "organizer": {
+                "description": "`{emailAddress: {name, address}}` — who owns the event. Personal data, never an example value here",
+                "properties": {
+                  "emailAddress": {
+                    "properties": {
+                      "address": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              },
+              "sensitivity": {
+                "enum": [
+                  "normal",
+                  "personal",
+                  "private",
+                  "confidential"
+                ],
+                "type": "string"
+              },
+              "seriesMasterId": {
+                "description": "Present when this event is one instance of a recurring series",
+                "type": "string"
+              },
+              "showAs": {
+                "enum": [
+                  "free",
+                  "tentative",
+                  "busy",
+                  "oof",
+                  "workingElsewhere",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              "start": {
+                "description": "`{dateTime, timeZone}`. By default `dateTime` is UTC; a `Prefer: outlook.timezone` header (not sent here) would change it",
+                "properties": {
+                  "dateTime": {
+                    "type": "string"
+                  },
+                  "timeZone": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "subject": {
+                "description": "Absent-titled events render as an empty string, not a missing member",
+                "type": "string"
+              },
+              "webLink": {
+                "description": "Opens the event in Outlook on the web. Requires the viewer's own sign-in session; does not itself carry a credential",
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "subject",
+              "isCancelled"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "microsoft_graph.access_token"
+            ]
+          ],
+          "hosts": [
+            "graph.microsoft.com"
+          ],
+          "flux": "op microsoft_graph-calendar-event-get(event_id: String) -> Any\n  description \"Get one calendar event: its subject, start and end, organizer, attendee list and cancellation state. Returned in UTC unless a `Prefer: outlook.timezone` header is sent, which this connector does not do. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://graph.microsoft.com\"\n  url = fmt(\"{base}/v1.0/me/events/{event_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "microsoft_graph-calendar-event-create",
+          "provider": "microsoft_graph",
+          "service": "calendar",
+          "description": "Create a single-instance event on the signed-in user's default calendar. No attendees can be declared yet (C-56), so nobody is invited and nobody is notified — the event appears only on the calendar it was created on",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/v1.0/me/events",
+          "parameters": [
+            {
+              "name": "subject",
+              "in": "body",
+              "wire": null,
+              "description": "The event's title, as it appears on the calendar grid",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "start_date_time",
+              "in": "body",
+              "wire": "start.dateTime",
+              "description": "When the event starts, as a local date-time with no UTC designator — `2026-01-30T09:00:00` — interpreted in `start_time_zone`",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "start_time_zone",
+              "in": "body",
+              "wire": "start.timeZone",
+              "description": "The IANA or Windows time zone name `start_date_time` is expressed in, e.g. `UTC` or `Pacific Standard Time`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "end_date_time",
+              "in": "body",
+              "wire": "end.dateTime",
+              "description": "When the event ends, in the same local, no-designator form as `start_date_time`. Must be after it; Graph rejects an end that precedes its start",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "end_time_zone",
+              "in": "body",
+              "wire": "end.timeZone",
+              "description": "The time zone `end_date_time` is expressed in",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "end_date_time": {
+                "type": "string"
+              },
+              "end_time_zone": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "start_date_time": {
+                "type": "string"
+              },
+              "start_time_zone": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "subject": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "subject",
+              "start_date_time",
+              "start_time_zone",
+              "end_date_time",
+              "end_time_zone"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "attendees": {
+                "description": "ABSENT on every event this operation creates: no attendee can be declared yet (C-56), so nobody was invited and nobody was notified",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "end": {
+                "description": "Same shape",
+                "properties": {
+                  "dateTime": {
+                    "type": "string"
+                  },
+                  "timeZone": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "iCalUId": {
+                "type": "string"
+              },
+              "id": {
+                "description": "The new event's id — the only handle on it, and what `microsoft_graph-calendar-event-get` reads back",
+                "type": "string"
+              },
+              "isAllDay": {
+                "type": "boolean"
+              },
+              "isCancelled": {
+                "description": "`false` on a freshly created event",
+                "type": "boolean"
+              },
+              "organizer": {
+                "description": "The token's own account. Personal data, never an example value here",
+                "properties": {
+                  "emailAddress": {
+                    "properties": {
+                      "address": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              },
+              "start": {
+                "description": "`{dateTime, timeZone}` as created",
+                "properties": {
+                  "dateTime": {
+                    "type": "string"
+                  },
+                  "timeZone": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "subject": {
+                "description": "Echoes the title that was sent",
+                "type": "string"
+              },
+              "webLink": {
+                "description": "Opens the event in Outlook on the web. Requires the viewer's own sign-in session; does not itself carry a credential",
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "subject",
+              "isCancelled"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "microsoft_graph.access_token"
+            ]
+          ],
+          "hosts": [
+            "graph.microsoft.com"
+          ],
+          "flux": "op microsoft_graph-calendar-event-create(subject: String, start_date_time: String, start_time_zone: String, end_date_time: String, end_time_zone: String) -> Any\n  description \"Create a single-instance event on the signed-in user's default calendar. No attendees can be declared yet (C-56), so nobody is invited and nobody is notified — the event appears only on the calendar it was created on. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://graph.microsoft.com\"\n  url = fmt(\"{base}/v1.0/me/events\")\n  content_type = \"application/json\"\n  payload = { end: { dateTime: end_date_time, timeZone: end_time_zone }, start: { dateTime: start_date_time, timeZone: start_time_zone }, subject }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "microsoft_graph-calendar-calendar-get",
+          "provider": "microsoft_graph",
+          "service": "calendar",
+          "description": "Get the signed-in user's own default calendar: its name, colour and sharing/editing permissions. This is the calendar, not its events — use microsoft_graph-calendar-event-get for one of those. Takes no argument: `/me/calendar` always resolves to the token's own default calendar",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1.0/me/calendar",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "allowedOnlineMeetingProviders": {
+                "description": "Which online-meeting providers can be attached to events on this calendar, e.g. `teamsForBusiness`",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "canEdit": {
+                "type": "boolean"
+              },
+              "canShare": {
+                "type": "boolean"
+              },
+              "canViewPrivateItems": {
+                "type": "boolean"
+              },
+              "color": {
+                "description": "A named colour preset, or `auto`",
+                "type": "string"
+              },
+              "defaultOnlineMeetingProvider": {
+                "type": "string"
+              },
+              "hexColor": {
+                "description": "A custom hex colour when `color` is set to a custom value; empty string otherwise",
+                "type": "string"
+              },
+              "id": {
+                "description": "The calendar's own id, distinct from any event's id",
+                "type": "string"
+              },
+              "isRemovable": {
+                "description": "`false` for the default calendar — it cannot be deleted",
+                "type": "boolean"
+              },
+              "isTallyingResponses": {
+                "type": "boolean"
+              },
+              "name": {
+                "description": "The calendar's display name, e.g. `Calendar` for the default one",
+                "type": "string"
+              },
+              "owner": {
+                "description": "`{name, address}` — the mailbox this calendar belongs to. Personal data, never an example value here",
+                "properties": {
+                  "address": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "microsoft_graph.access_token"
+            ]
+          ],
+          "hosts": [
+            "graph.microsoft.com"
+          ],
+          "flux": "op microsoft_graph-calendar-calendar-get -> Any\n  description \"Get the signed-in user's own default calendar: its name, colour and sharing/editing permissions. This is the calendar, not its events — use microsoft_graph-calendar-event-get for one of those. Takes no argument: `/me/calendar` always resolves to the token's own default calendar. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://graph.microsoft.com\"\n  url = fmt(\"{base}/v1.0/me/calendar\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "microsoft_graph-files-item-get",
+          "provider": "microsoft_graph",
+          "service": "files",
+          "description": "Get one OneDrive item's metadata by id: its name, size and where it lives. This never returns file content — downloading needs the separate /content endpoint, which returns a binary body and is not shipped by this connector",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1.0/me/drive/items/{item_id}",
+          "parameters": [
+            {
+              "name": "item_id",
+              "in": "path",
+              "wire": null,
+              "description": "The item's id, an opaque string OneDrive itself reports on a prior listing or get — never invented",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[^/?#&]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "item_id": {
+                "minLength": 1,
+                "pattern": "^[^/?#&]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "item_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "cTag": {
+                "description": "Changes when the item's content changes; `eTag` also changes on a metadata-only edit",
+                "type": "string"
+              },
+              "createdBy": {
+                "description": "`{user: {id, displayName}}` — whoever created the item. Personal data, never an example value here",
+                "properties": {
+                  "user": {
+                    "properties": {
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              },
+              "createdDateTime": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "eTag": {
+                "type": "string"
+              },
+              "file": {
+                "description": "Present when this item is a file rather than a folder — `{mimeType, hashes}`",
+                "properties": {
+                  "mimeType": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "folder": {
+                "description": "Present when this item is a folder rather than a file — `{childCount}`. `file` and `folder` never both appear on the same item",
+                "properties": {
+                  "childCount": {
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "id": {
+                "description": "The item's id — what this operation takes",
+                "type": "string"
+              },
+              "lastModifiedBy": {
+                "description": "Same shape as `createdBy`. Personal data, never an example value here",
+                "properties": {
+                  "user": {
+                    "properties": {
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              },
+              "lastModifiedDateTime": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parentReference": {
+                "description": "`{driveId, id, path}` — the folder this item lives in",
+                "properties": {
+                  "driveId": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "size": {
+                "description": "Size in bytes",
+                "type": "integer"
+              },
+              "webUrl": {
+                "description": "Opens the item in a browser. Requires the viewer's own sign-in session; does not itself carry a credential",
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "microsoft_graph.access_token"
+            ]
+          ],
+          "hosts": [
+            "graph.microsoft.com"
+          ],
+          "flux": "op microsoft_graph-files-item-get(item_id: String) -> Any\n  description \"Get one OneDrive item's metadata by id: its name, size and where it lives. This never returns file content — downloading needs the separate /content endpoint, which returns a binary body and is not shipped by this connector. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://graph.microsoft.com\"\n  url = fmt(\"{base}/v1.0/me/drive/items/{item_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "microsoft_graph-files-item-update",
+          "provider": "microsoft_graph",
+          "service": "files",
+          "description": "Rename a OneDrive item: sets its name and changes nothing else. Does not move it — moving is a PATCH to the separate parentReference field, which this operation deliberately does not declare (C-56)",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "PATCH",
+          "path": "/v1.0/me/drive/items/{item_id}",
+          "parameters": [
+            {
+              "name": "item_id",
+              "in": "path",
+              "wire": null,
+              "description": "The item to rename",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "pattern": "^[^/?#&]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "name",
+              "in": "body",
+              "wire": null,
+              "description": "The item's new name",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "item_id": {
+                "minLength": 1,
+                "pattern": "^[^/?#&]+$",
+                "type": "string"
+              },
+              "name": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "item_id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "cTag": {
+                "type": "string"
+              },
+              "createdDateTime": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "eTag": {
+                "description": "Changes on an accepted rename",
+                "type": "string"
+              },
+              "file": {
+                "description": "Present when this item is a file rather than a folder",
+                "properties": {
+                  "mimeType": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "folder": {
+                "description": "Present when this item is a folder rather than a file",
+                "properties": {
+                  "childCount": {
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "id": {
+                "type": "string"
+              },
+              "lastModifiedDateTime": {
+                "description": "Moves on an accepted rename",
+                "format": "date-time",
+                "type": "string"
+              },
+              "name": {
+                "description": "The name **after** the update. Compare it against what was sent",
+                "type": "string"
+              },
+              "parentReference": {
+                "description": "Unchanged by this call — a rename never moves the item",
+                "properties": {
+                  "driveId": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "size": {
+                "type": "integer"
+              },
+              "webUrl": {
+                "description": "Opens the item in a browser. Requires the viewer's own sign-in session; does not itself carry a credential",
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "microsoft_graph.access_token"
+            ]
+          ],
+          "hosts": [
+            "graph.microsoft.com"
+          ],
+          "flux": "op microsoft_graph-files-item-update(item_id: String, name: String) -> Any\n  description \"Rename a OneDrive item: sets its name and changes nothing else. Does not move it — moving is a PATCH to the separate parentReference field, which this operation deliberately does not declare (C-56). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://graph.microsoft.com\"\n  url = fmt(\"{base}/v1.0/me/drive/items/{item_id}\")\n  content_type = \"application/json\"\n  payload = { name }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PATCH\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "miro",
       "authority": null,
       "vendor": "Miro",
