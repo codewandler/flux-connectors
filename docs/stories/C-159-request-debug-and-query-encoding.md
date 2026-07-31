@@ -2,8 +2,7 @@
 id: C-159
 title: "The bigger plaintext exposure is `Request`'s derived Debug, and a query credential does not travel as registered"
 pillar: Bridge
-status: in-progress
-priority: 2
+status: done
 design: docs/designs/connector-tool-pack.md
 epic: authentication-surface
 areas: [bridge]
@@ -132,3 +131,32 @@ asserts anything else.
 
 **Not done, deliberately:** the two items the Notes defer (a host-side registration count, and naming
 the six-character threshold in the refusal). Neither is in the Acceptance.
+
+## Coordinator note at integration (2026-07-31)
+
+Merged after independent review that re-ran the failing-first proof itself, in its own worktree with
+its own `CARGO_TARGET_DIR`. All three named tests fail at the merge base `e350ed5` and pass at
+`6f4c7e3`, with the base failures showing the actual leak rather than a compile error — the plaintext
+sentinel in `url`, in the `Authorization` header, and the encoded form the redactor had never been
+told about.
+
+**This closed a defect found independently by C-165's review**, which is the strongest evidence the
+story was real: Trello landed the catalogue's first `Placement::Query` credential, and its reviewer
+measured that `credentials.rs` registered the raw value while `auth.rs` placed
+`query_encode(value)`. For a credential carrying reserved characters those are different strings, so
+the redactor held one form and the wire carried another. `auth::placed_form` now registers the form
+that travels.
+
+Two residual surfaces recorded rather than closed, both outside this story's scope:
+
+- `Request`'s fields are `pub` and `to_params()` hands the credential back inside a `Debug`-able
+  `serde_json::Value` (`request.rs:197`). That is inherent — it is the payload `http.request` is
+  invoked with — and no `Debug` on `Request` can close it.
+- Whether one `Redactor` lives per turn or per process is decided by a binding in the flux repo, not
+  here. The implementation is correct either way because it asks the redactor in hand rather than
+  remembering what it registered.
+
+The implementor strengthened the *text* of Acceptance item 3 beyond what was specified (keying the
+idempotence check on the value alone, verified against the redactor in hand, rather than on a
+`(CredentialRef, value)` memo). The deviation is argued in the story's Progress and in the design
+record, and is strictly stronger than the specified behaviour, so it is ticked as met.

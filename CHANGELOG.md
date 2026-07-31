@@ -32,6 +32,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A `Request`'s derived `Debug` printed every credential in plaintext, and a query-placed
+  credential travelled in a form the redactor was never told about (C-159).** `Request` is `pub` and
+  derived `Debug` over `url`, `headers` and `body`, and it carries the plaintext *after*
+  `auth::place` — the larger of the two exposures C-152 half-closed when it hardened `Assembled`.
+  The hand-written `Debug` redacts every header value with no auth-name allow-list and every query
+  value, while keeping what debugging actually needs: method, host, path, header *names*, and
+  whether a body is present.
+
+  The second half was found independently by C-165's review, which is why it is worth stating
+  plainly: `credentials.rs` registered the **raw** credential with the redactor while `auth.rs`
+  placed `query_encode(value)` on the URL. For any credential containing a reserved character those
+  are different strings, so the redactor held one form and the wire carried another. `placed_form`
+  now registers the form that travels. Trello (C-165) is the catalogue's first query placement and
+  is what made the path reachable at all.
+
+  Registration is also idempotent now, keyed on the value and verified against the redactor in hand
+  rather than on a remembered `(CredentialRef, value)` pair — so a repeated resolve does not grow
+  the registered set.
+
+
 - **The site's hand-maintained-data guard read prose as data, and the web gate was red on `main`
   (C-205).** `npm run build && npm test` reported 27 of 28 at v0.6.0. The guard collected every
   catalogue service name into a forbidden-substring set and grepped the explorer sources with
