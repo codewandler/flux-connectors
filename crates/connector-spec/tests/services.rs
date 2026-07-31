@@ -383,12 +383,13 @@ fn every_shipped_service_is_spellable_and_a_single_service_provider_declares_non
 
         if connector.is_default_only() {
             let encoded = connector.canonical_json().expect("the IR encodes");
-            for absent in ["services", "service"] {
-                assert!(
-                    !encoded.contains(&format!("\"{absent}\"")),
-                    "providers/{name} has one API surface, so it must encode no `{absent}` — \
+            let document: serde_json::Value =
+                serde_json::from_str(&encoded).expect("the canonical encoding is JSON");
+            if let Some(position) = service_key_outside_a_schema(&document, "$") {
+                panic!(
+                    "providers/{name} has one API surface, so it must encode no service key — \
                      otherwise its lockfile entry and every artifact keyed by it churn for a \
-                     provider nobody edited:\n{encoded}"
+                     provider nobody edited. Found one at {position}:\n{encoded}"
                 );
             }
             continue;
@@ -431,6 +432,142 @@ fn every_shipped_service_is_spellable_and_a_single_service_provider_declares_non
          vacuous and only fixtures cover the emitted-per-service path — C-69's `google` is the one \
          that keeps them honest"
     );
+}
+
+/// **The relaxation above is exactly one word wide, and this is the proof.**
+///
+/// [`service_key_outside_a_schema`] replaced a substring scan, so the question a reviewer must be
+/// able to answer is whether it still bites. It does: an IR-shaped `service` key is found at every
+/// depth the encoding can put one — top level, inside an operation, inside a config field, and
+/// inside an array element — and the *only* thing newly tolerated is the same word appearing as a
+/// vendor's own property name inside a schema.
+#[test]
+fn the_service_key_walk_still_finds_an_ir_service_key_at_every_depth() {
+    for (case, document) in [
+        (
+            "top level",
+            serde_json::json!({ "id": "x", "services": [{ "name": "s3" }] }),
+        ),
+        (
+            "on an operation",
+            serde_json::json!({ "operations": [{ "id": "x-get", "service": "s3" }] }),
+        ),
+        (
+            "on a config field",
+            serde_json::json!({ "config": [{ "name": "token", "service": "s3" }] }),
+        ),
+        (
+            "under an unrelated nesting the walk has never been told about",
+            serde_json::json!({ "a": { "b": [{ "c": { "service": "s3" } }] } }),
+        ),
+    ] {
+        assert!(
+            service_key_outside_a_schema(&document, "$").is_some(),
+            "the walk missed an IR service key {case}; it would no longer guard the encoding"
+        );
+    }
+
+    // The one tolerated shape, and the reason the walk exists: a vendor whose own domain noun is
+    // "service". PagerDuty's `GET /services` answers `{"services": [...]}` and its incidents carry a
+    // `service` reference — vendor data inside a schema, at any depth, in any of the three
+    // schema-bearing keys.
+    for (case, document) in [
+        (
+            "a response schema's own property",
+            serde_json::json!({
+                "operations": [{
+                    "id": "pagerduty-service-list",
+                    "response_schema": {
+                        "type": "object",
+                        "properties": { "services": { "type": "array" } }
+                    }
+                }]
+            }),
+        ),
+        (
+            "nested deep inside a response schema",
+            serde_json::json!({
+                "operations": [{
+                    "response_schema": {
+                        "properties": {
+                            "incidents": {
+                                "items": { "properties": { "service": { "type": "object" } } }
+                            }
+                        }
+                    }
+                }]
+            }),
+        ),
+        (
+            "a parameter's schema and a free-form body schema",
+            serde_json::json!({
+                "operations": [{
+                    "params": {
+                        "query": [{ "name": "q", "schema": { "properties": { "service": {} } } }],
+                        "body_schema": { "properties": { "services": {} } }
+                    }
+                }]
+            }),
+        ),
+    ] {
+        assert_eq!(
+            service_key_outside_a_schema(&document, "$"),
+            None,
+            "the walk flagged {case}, which is the vendor's word and not this repository's field"
+        );
+    }
+}
+
+/// The JSON keys whose values are **vendor JSON Schema**, not this repository's IR structure.
+///
+/// A schema describes what a vendor sends and receives, so every key inside one is the vendor's
+/// word rather than ours. `service`/`services` are ordinary English, and a vendor is entitled to
+/// both.
+const SCHEMA_KEYS: [&str; 3] = ["schema", "response_schema", "body_schema"];
+
+/// Finds a `service` or `services` key in the encoded IR, ignoring anything inside a JSON Schema,
+/// and returns the path to the first one.
+///
+/// # Why this is a walk and not `encoded.contains("\"service\"")`
+///
+/// A substring scan was the original spelling, and C-162 measured what it actually asserts. PagerDuty
+/// is an incident-response vendor whose own domain noun is *service*: `GET /services` answers
+/// `{"services": [...]}`, and every incident carries a `service` reference. Those spellings are
+/// vendor data sitting inside `response_schema`, and describing them accurately is the connector's
+/// whole job — renaming them to satisfy a scan would make the declared response shape wrong about
+/// what PagerDuty sends.
+///
+/// So the scan was reporting a **collision of words**, not the property it exists to protect. That
+/// property is about the *IR's own* fields — `Connector::services`, and the `service` on an
+/// operation, a config field, an event, a channel and a graph — every one of which encodes as a key
+/// on an IR object, never inside a schema. This walk asserts exactly that, at every depth, so it
+/// stays as strong as the scan everywhere the scan was load-bearing and stops being wrong where it
+/// was only ever counting characters.
+///
+/// It deliberately does **not** take a list of known IR positions: a new IR struct carrying a
+/// `service` would then be unchecked until somebody remembered to add it here, which is the failure
+/// mode this test was written to avoid in the first place.
+fn service_key_outside_a_schema(value: &serde_json::Value, path: &str) -> Option<String> {
+    match value {
+        serde_json::Value::Object(fields) => {
+            for (key, child) in fields {
+                if key == "service" || key == "services" {
+                    return Some(format!("{path}.{key}"));
+                }
+                if SCHEMA_KEYS.contains(&key.as_str()) {
+                    continue;
+                }
+                if let Some(found) = service_key_outside_a_schema(child, &format!("{path}.{key}")) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        serde_json::Value::Array(items) => items.iter().enumerate().find_map(|(index, item)| {
+            service_key_outside_a_schema(item, &format!("{path}[{index}]"))
+        }),
+        _ => None,
+    }
 }
 
 fn shipped() -> Vec<PathBuf> {

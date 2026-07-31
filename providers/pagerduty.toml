@@ -1,0 +1,409 @@
+# PagerDuty — hand-authored, no vendored OpenAPI spec.
+#
+# Transcribed by hand from PagerDuty's published REST API v2 reference
+# (developer.pagerduty.com/api-reference), rather than vendored, consistent with how zendesk.toml,
+# freshdesk.toml, github.toml, notion.toml, launchdarkly.toml and twilio.toml are authored today
+# (§1.2 in `docs/designs/provider-operation-inventory.md`). Drift is therefore undetectable by
+# machine until a `[spec]` pointer replaces this list.
+#
+# ---------------------------------------------------------------------------------------------
+# THE FINDING THIS CONNECTOR WAS FILED FOR, AND HOW IT TURNED OUT
+# ---------------------------------------------------------------------------------------------
+#
+# C-162 was chosen for `Authorization: Token token=<key>`, and its story called the credential a
+# "substructure of the header value, not a suffix" — the vendor that would argue for a richer
+# placement axis than a prefix. **It argued for one and then did not need it.**
+#
+# C-161 measured three blocked vendors side by side (Okta `SSWS <token>`, Statuspage
+# `OAuth <key>`, PagerDuty `Token token=<key>`) and found one shape, not three: in every one, the
+# credential **ends** the header value. `Token token=` reads like structured syntax, but the value is
+# a fixed literal followed directly by the raw key, and `=` is just a character in a prefix. C-184
+# then built exactly that axis — `AuthScheme::Header { name, prefix }` — deliberately with **no
+# `suffix` and no value template**, because a single-substitution template can spell a header with
+# zero substitution points (the credential silently dropped, the request unauthenticated, every
+# artifact claiming otherwise), with two (the secret sent twice), or with text after the credential
+# that no vendor pins. A prefix makes all three unspellable rather than merely refused.
+# `docs/designs/unified-auth.md` §"The prefix axis, as built" records it, and
+# `crates/connector-spec/tests/auth_prefix.rs::a_prefix_may_carry_punctuation_and_still_be_a_prefix`
+# pins this exact spelling.
+#
+# So this connector needed no change to `connector-spec`: it is the first shipped provider to use the
+# prefix axis, and it uses it in one line.
+#
+# ---------------------------------------------------------------------------------------------
+# THE SECOND FINDING: `From` is a required *operation parameter*, because it cannot be anything else
+# ---------------------------------------------------------------------------------------------
+#
+# PagerDuty requires a `From` header on an incident write, carrying the login address of the
+# PagerDuty user the action is taken on behalf of. A general-access REST API key has no user context
+# of its own, so PagerDuty answers 400 without it.
+#
+# It is emphatically **not a credential**: it authenticates nothing, gates nothing, and is not
+# secret. The story asks which of the two remaining readings is right — operator configuration or a
+# caller argument — and the model answers it rather than leaving it to taste:
+#
+#   - `ConfigField::binds` (`crates/connector-spec/src/config.rs:239-267`) admits exactly five
+#     destinations: `endpoint.<variable>`, `credential.<name>`, `username.<name>`,
+#     `oauth.client_id`, `oauth.client_secret`. **There is no `header.*` binding.** A configured
+#     `From` is not merely unwise here, it is unspellable — a collected value has nowhere to go.
+#   - Nor can it be smuggled in as a vendor-fixed `const_headers` entry: a constant reaches the
+#     request as a literal, and this value is neither constant nor authorable. It identifies a
+#     *person*, and this repository authors no personal data (see the note at the foot of this file).
+#
+# What is left is a caller-facing `params.header`, which is exactly what it is: the acting user is a
+# fact about the call, not about the connection. `providers/stripe.toml:411`'s `Idempotency-Key` is
+# the same shape — a required header a caller supplies per request. It is declared on the two writes
+# only; PagerDuty does not require it on a read, and a read demanding somebody's address to fetch a
+# list would be collecting a personal identifier it has no use for.
+#
+# ---------------------------------------------------------------------------------------------
+# THE THIRD FINDING: NO OPERATION DECLARES A PAGINATION QUIRK, AND THAT IS THE ANSWER
+# ---------------------------------------------------------------------------------------------
+#
+# PagerDuty pages every collection with `limit`/`offset`. `Pagination`
+# (`crates/connector-spec/src/ir.rs:355-378`) has exactly two variants and **neither is that shape**:
+#
+#   - `Page { page_param, size_param, page_size, max_pages }` advances a page *number* by one per
+#     iteration. Spelling `page_param = "offset"` compiles, reads correctly to a reviewer, and emits
+#     a loop that walks `offset` 0, 1, 2, 3 — re-reading all but one row of the previous window every
+#     time, forever, silently. It is the most dangerous kind of wrong: it looks right.
+#   - `Cursor { cursor_param, next_cursor_pointer, max_pages }` needs the response to carry the next
+#     cursor. PagerDuty's list responses carry `limit`, `offset`, `more` and `total` — a *flag*, not
+#     a cursor — so there is no pointer to name.
+#
+# The parameters are therefore declared and the quirk is not, following the call
+# `providers/launchdarkly.toml:123` already made for the identical vendor shape: a caller pages by
+# incrementing `offset` by `limit` itself. `crates/connector-flux/tests/pagerduty_connector.rs::no_pagerduty_operation_declares_a_pagination_quirk`
+# pins the absence, so that it cannot later be "completed" into the wrong loop by someone who reads
+# the missing quirk as an oversight. A `limit`/`offset` variant is a real gap in `Pagination`; it is
+# a change to the IR that a connector story does not get to make on its way past.
+#
+# ---------------------------------------------------------------------------------------------
+# EXCLUDED, deliberately, rather than guessed at:
+# ---------------------------------------------------------------------------------------------
+#
+# - **`since` / `until` on `/incidents` and `/oncalls`.** Both take an ISO 8601 instant, whose `:`
+#   and `+` are precisely the characters this emitter's query assembly does not percent-encode
+#   (C-29, `zendesk-ticket-search`). A `+05:00` offset would arrive form-decoded as a space. Left out
+#   rather than declared with a `pattern` narrow enough to dodge the gap, because the useful values
+#   are the ones that trip it.
+# - **Every `[]` array filter** — `statuses[]`, `service_ids[]`, `team_ids[]`, `urgencies[]`,
+#   `user_ids[]`, `include[]`. The brackets live in the parameter *name*, which is the same class of
+#   defect `providers/twilio.toml` records for Twilio's `DateSent<` range operators: `[` and `]` are
+#   reserved in a URL query component and this emitter does not encode a parameter name at all.
+# - **`sort_by` on `/incidents`.** Its value is `field:direction` (`created_at:desc`); the `:` has
+#   the same encoding problem, and without it the parameter is half a feature.
+# - **`query` on `/services`.** A free-text service-name search, which is the exact shape of
+#   `zendesk-ticket-search`'s open defect: an unencoded `&` or `#` in the search text corrupts the
+#   request and can inject a parameter.
+# - **Creating, merging, snoozing or reassigning an incident, and anything under alerts, log entries,
+#   escalation policies, schedules, users or webhook subscriptions.** Not guessed at. A confident six
+#   beats a plausible twenty, and a hallucinated path ships as a 404 no contract test can catch.
+# - **A `[[channels]]` webhook binding.** PagerDuty v3 webhook subscriptions sign deliveries with
+#   `X-PagerDuty-Signature`, and this file declares no `[[events]]` and no signing credential rather
+#   than describing a verification scheme it has not verified against the vendor. That is a separate
+#   story's work, not a line to add here on the way past.
+#
+# ---------------------------------------------------------------------------------------------
+# NO PERSONAL DATA. PagerDuty's on-call and incident payloads are full of it — a user reference
+# carries a person's display name, and the `From` header carries their login address. Nothing below
+# names a person, and no field carries an `example`. The shapes are described; no value is authored.
+# ---------------------------------------------------------------------------------------------
+
+id = "pagerduty"
+vendor = "PagerDuty"
+
+# One host for every account. PagerDuty has no per-tenant API subdomain the way zendesk and freshdesk
+# do (its `*.pagerduty.com` subdomains are the web UI, not the API), so `base_url` is a bound literal
+# with no `{placeholder}` and there is no `[[config]] binds = "endpoint.*"` field.
+base_url = "https://api.pagerduty.com"
+
+description = "PagerDuty incident response: read incidents, services and who is on call, and acknowledge or resolve an incident"
+
+# The "Test connection" operation: a bounded read taking no required argument, which is what lets a
+# settings page call it unattended.
+verify = "pagerduty-service-list"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["pagerduty.api_token"] }]
+
+# The one header PagerDuty fixes and every request needs. It is a *constant*, so it is declared here
+# and emitted as a literal rather than as a `params.header` a caller could override — C-55's finding,
+# the same one `providers/github.toml` and `providers/notion.toml` record for their own vendor
+# version headers. Pinning v2 is what stops a future default on PagerDuty's side from changing every
+# response shape declared below without a diff in this repository.
+#
+# An inline table deliberately: a `[const_headers]` section header would scope every provider scalar
+# written after it.
+const_headers = { "Accept" = "application/vnd.pagerduty+json;version=2" }
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "pagerduty.api_token"
+# THE PREFIX AXIS, USED FOR THE FIRST TIME BY A SHIPPED PROVIDER. See the header comment: the
+# credential ends the header value, so `Token token=` is the whole of what precedes it. There is no
+# trailing space — PagerDuty's key follows the `=` directly — and there is deliberately no `suffix`
+# and no template for anything to follow it with.
+scheme = { header = { name = "Authorization", prefix = "Token token=" } }
+env = ["PAGERDUTY_API_TOKEN"]
+description = "PagerDuty REST API access key, sent as the Authorization header after the literal `Token token=`. A read-only key satisfies the four read operations; the two incident writes need a full-access key"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 6: four reads, and two writes that are one vendor endpoint split in two.
+#
+# `limit` and `offset` appear on every list and **no operation declares a pagination quirk** — see
+# the third finding in the header comment. A caller pages by adding `limit` to `offset` itself.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "pagerduty-incident-list"
+method = "GET"
+path = "/incidents"
+description = "List the incidents this key can see, across every service it has access to. Returns one page; read `more` to learn whether another page exists, and page by adding `limit` to `offset`. No status, service, team or time filter is offered by this connector — see pagerduty-incident-get to inspect one incident in full"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "limit"
+description = "Maximum number of incidents to return in this page. PagerDuty caps this at 100"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100 }
+
+[[operations.params.query]]
+name = "offset"
+description = "Number of incidents to skip before this page begins. To read the next page, add the `limit` just used to the `offset` just used — this is not a page number"
+required = false
+schema = { type = "integer", minimum = 0 }
+
+# developer reference: developer.pagerduty.com/api-reference — List incidents.
+#
+# `service`, `escalation_policy`, `teams` and `priority` are PagerDuty *reference* objects: each is
+# `{id, type, summary, self, html_url}` where `summary` is a human-readable label. They are described
+# rather than enumerated here because `summary` on a user reference is a person's name, and this file
+# does not model personal data in more detail than a caller needs to pass an id back.
+[operations.response_schema]
+type = "object"
+required = ["incidents"]
+properties = { incidents = { type = "array", description = "This page's incidents", items = { type = "object", required = ["id", "type", "status"], properties = { id = { type = "string", description = "The incident's own id — pass this as `id` to pagerduty-incident-get, -acknowledge or -resolve" }, type = { const = "incident" }, summary = { type = "string", description = "A short human-readable label for the incident, usually its title" }, self = { type = "string", description = "The API URL of this incident" }, html_url = { type = "string", description = "The PagerDuty web UI URL a human would open" }, incident_number = { type = "integer", description = "The account-scoped sequence number PagerDuty displays, distinct from `id`" }, title = { type = "string" }, description = { type = "string" }, status = { type = "string", enum = ["triggered", "acknowledged", "resolved"], description = "triggered means nobody has taken it; acknowledged means somebody is working it and escalation has paused; resolved is terminal" }, urgency = { type = "string", enum = ["high", "low"], description = "Whether the service's escalation policy pages immediately (high) or notifies without paging (low)" }, incident_key = { type = "string", description = "The deduplication key the triggering integration supplied, when it supplied one" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, last_status_change_at = { type = "string", format = "date-time" }, resolved_at = { type = "string", format = "date-time", description = "Null until the incident is resolved" }, service = { type = "object", description = "A reference to the service this incident is on: `{id, type, summary, self, html_url}`. Pass its `id` to nothing here — pagerduty-service-list returns the full representation" }, escalation_policy = { type = "object", description = "A reference to the escalation policy governing this incident" }, teams = { type = "array", description = "References to the teams the incident is visible to", items = { type = "object" } }, priority = { type = "object", description = "A reference to the account's configured priority level, when the account uses priorities; null otherwise" }, assignments = { type = "array", description = "Who the incident is currently assigned to, each `{at, assignee}` where `assignee` is a user reference", items = { type = "object" } }, acknowledgements = { type = "array", description = "Who has acknowledged the incident and when, each `{at, acknowledger}`. Empty unless status is acknowledged", items = { type = "object" } }, alert_counts = { type = "object", description = "How many alerts rolled up into this incident, `{all, triggered, resolved}`" } } } }, limit = { type = "integer", description = "The limit this page was read with" }, offset = { type = "integer", description = "The offset this page was read from" }, more = { type = "boolean", description = "True when another page exists past this one. This is the only continuation signal PagerDuty sends — there is no cursor" }, total = { type = "integer", description = "The total matching incidents. Null unless the request asked for it, which this connector does not" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "pagerduty-incident-get"
+method = "GET"
+path = "/incidents/{id}"
+description = "Fetch one incident in full, including its current status, urgency, service, assignments and acknowledgements. Read this before acknowledging or resolving, because PagerDuty refuses a status change that does not follow from the incident's current status"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The incident's own id, from pagerduty-incident-list's `id` field. Not the `incident_number` PagerDuty's web UI displays"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# developer reference: developer.pagerduty.com/api-reference — Get an incident. The incident is
+# wrapped in a single-key envelope, unlike the flat top-level object twilio and launchdarkly return.
+[operations.response_schema]
+type = "object"
+required = ["incident"]
+properties = { incident = { type = "object", required = ["id", "type", "status"], description = "The incident, in the same shape pagerduty-incident-list's array carries", properties = { id = { type = "string" }, type = { const = "incident" }, summary = { type = "string" }, self = { type = "string" }, html_url = { type = "string" }, incident_number = { type = "integer" }, title = { type = "string" }, description = { type = "string" }, status = { type = "string", enum = ["triggered", "acknowledged", "resolved"] }, urgency = { type = "string", enum = ["high", "low"] }, incident_key = { type = "string" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, last_status_change_at = { type = "string", format = "date-time" }, resolved_at = { type = "string", format = "date-time", description = "Null until the incident is resolved" }, resolve_reason = { type = "object", description = "Why the incident was resolved, when it was resolved by being merged into another; null otherwise" }, service = { type = "object", description = "A reference to the service this incident is on" }, escalation_policy = { type = "object" }, teams = { type = "array", items = { type = "object" } }, priority = { type = "object", description = "Null unless the account uses priorities" }, assignments = { type = "array", description = "Each `{at, assignee}`, where `assignee` is a user reference", items = { type = "object" } }, acknowledgements = { type = "array", description = "Each `{at, acknowledger}`. Empty unless status is acknowledged", items = { type = "object" } }, alert_counts = { type = "object", description = "`{all, triggered, resolved}`" }, first_trigger_log_entry = { type = "object", description = "A reference to the log entry that opened the incident" } } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "pagerduty-service-list"
+method = "GET"
+path = "/services"
+description = "List the services this key can see. A service is what incidents are opened against and what an escalation policy is attached to, so this is how to discover the ids and names behind an incident's `service` reference. Also this connector's connection test"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "limit"
+description = "Maximum number of services to return in this page. PagerDuty caps this at 100"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100 }
+
+[[operations.params.query]]
+name = "offset"
+description = "Number of services to skip before this page begins. To read the next page, add the `limit` just used to the `offset` just used"
+required = false
+schema = { type = "integer", minimum = 0 }
+
+# developer reference: developer.pagerduty.com/api-reference — List services.
+[operations.response_schema]
+type = "object"
+required = ["services"]
+properties = { services = { type = "array", description = "This page's services", items = { type = "object", required = ["id", "type", "name"], properties = { id = { type = "string", description = "The service's own id" }, type = { const = "service" }, summary = { type = "string" }, self = { type = "string" }, html_url = { type = "string" }, name = { type = "string" }, description = { type = "string" }, status = { type = "string", enum = ["active", "warning", "critical", "maintenance", "disabled"], description = "The service's current health as PagerDuty sees it: active means no open incidents, warning and critical mean open incidents of increasing urgency, maintenance means a maintenance window is in effect, disabled means the service accepts no new incidents" }, created_at = { type = "string", format = "date-time" }, last_incident_timestamp = { type = "string", format = "date-time", description = "When this service last opened an incident; null if it never has" }, auto_resolve_timeout = { type = "integer", description = "Seconds after which an unacknowledged incident auto-resolves. Null when the service never auto-resolves" }, acknowledgement_timeout = { type = "integer", description = "Seconds after which an acknowledged incident re-triggers. Null when an acknowledgement never expires" }, escalation_policy = { type = "object", description = "A reference to the escalation policy this service pages through" }, teams = { type = "array", items = { type = "object" } }, integrations = { type = "array", description = "References to the integrations that can open incidents on this service", items = { type = "object" } } } } }, limit = { type = "integer" }, offset = { type = "integer" }, more = { type = "boolean", description = "True when another page exists past this one" }, total = { type = "integer", description = "Null unless the request asked for it, which this connector does not" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "pagerduty-oncall-list"
+method = "GET"
+path = "/oncalls"
+description = "List who is currently on call, as one entry per escalation policy, escalation level and user. An entry with no `schedule` is a user attached directly to an escalation level rather than through a rotation. Time filtering is not offered by this connector, so this answers `who is on call now`"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "limit"
+description = "Maximum number of on-call entries to return in this page. PagerDuty caps this at 100"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100 }
+
+[[operations.params.query]]
+name = "offset"
+description = "Number of on-call entries to skip before this page begins. To read the next page, add the `limit` just used to the `offset` just used"
+required = false
+schema = { type = "integer", minimum = 0 }
+
+# developer reference: developer.pagerduty.com/api-reference — List all of the on-calls.
+#
+# `user` is a reference whose `summary` is a person's name. It is described, not exemplified: the
+# field is what makes the answer useful, and no value for it is authored anywhere in this repository.
+[operations.response_schema]
+type = "object"
+required = ["oncalls"]
+properties = { oncalls = { type = "array", description = "This page's on-call entries. One user can appear more than once — once per escalation policy and level they cover", items = { type = "object", properties = { escalation_policy = { type = "object", description = "A reference to the escalation policy this entry covers: `{id, type, summary, self, html_url}`" }, escalation_level = { type = "integer", description = "Which level of that policy this entry sits at. Level 1 is paged first" }, schedule = { type = "object", description = "A reference to the on-call schedule that placed this user here. Null when the user is attached to the escalation level directly rather than through a rotation" }, user = { type = "object", description = "A reference to the person on call: `{id, type, summary, self, html_url}`, where `summary` is their display name" }, start = { type = "string", format = "date-time", description = "When this on-call period began. Null for a permanent, non-rotating assignment" }, end = { type = "string", format = "date-time", description = "When this on-call period ends. Null for a permanent, non-rotating assignment" } } } }, limit = { type = "integer" }, offset = { type = "integer" }, more = { type = "boolean", description = "True when another page exists past this one" }, total = { type = "integer", description = "Null unless the request asked for it, which this connector does not" } }
+
+# ---------------------------------------------------------------------------------------------
+# THE TWO WRITES. PagerDuty exposes **one** endpoint for both — `PUT /incidents/{id}` with
+# `incident.status` — and this connector deliberately declares it twice.
+#
+# A single operation taking a `status` enum would need a single `risk` covering both outcomes, and
+# the only honest value would be the higher of the two. That is coarser than the facts:
+#
+#   - **Acknowledging says a human is on it.** It stops the escalation clock and takes the incident
+#     off the next responder's page. It is reversible in the sense that matters — the incident is
+#     still open, still assigned, still on every dashboard — and its blast radius is one rotation's
+#     paging. `risk = "medium"`.
+#   - **Resolving closes the incident.** It comes off the open-incident view, the notifications stop,
+#     and if the underlying condition is still live the next alert opens a *new* incident with a new
+#     number and no history of this one. An agent resolving an incident nobody actually fixed is the
+#     failure worth putting a reviewer in front of. `risk = "high"`.
+#
+# Neither is `destructive`: nothing is deleted, and a resolved incident can be reopened by
+# re-triggering. Both are `PUT`s carrying a pinned constant status, so neither takes a caller-supplied
+# `status` — the operation *is* the status, which is also what keeps a model from acknowledging when
+# it meant to resolve by passing the wrong enum word.
+#
+# `idempotency = "idempotent"`: `PUT` is idempotent under RFC 9110 §9.2.2, and repeating either call
+# lands the incident in the same state it was already in.
+#
+# Both require `From`. See the second finding in the header comment for why it is a caller-facing
+# header parameter and not configuration.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "pagerduty-incident-acknowledge"
+method = "PUT"
+path = "/incidents/{id}"
+description = "Acknowledge one incident, on behalf of a named PagerDuty user. This stops the escalation clock and tells the rotation that somebody is working the incident; it does not close it. PagerDuty refuses the change if the incident is already resolved, and answers that as data rather than as a failure"
+risk = "medium"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The incident's own id, from pagerduty-incident-list's `id` field"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# The `From` header. Required by PagerDuty, supplied by the caller, and modelled as a header
+# parameter because there is no other honest place for it — see the header comment. No `example`: the
+# value is a person's login address.
+[[operations.params.header]]
+name = "from_email"
+wire = "From"
+description = "The login address of the PagerDuty user this acknowledgement is recorded against. It must belong to a user in this PagerDuty account; PagerDuty answers 400 otherwise. A REST API key carries no user identity of its own, which is why this cannot be inferred"
+required = true
+schema = { type = "string", format = "email", minLength = 3 }
+
+# The body is `{"incident": {"type": "incident_reference", "status": "acknowledged"}}` and every part
+# of it is fixed. Both fields are pinned with a JSON Schema `const`, which already means "this value
+# and no other": codegen sends them and keeps them out of the op signature (C-8,
+# `connector-flux`'s `constant`), so no model is asked to retype the operation's own name.
+[[operations.params.body]]
+name = "incident_type"
+wire = "incident.type"
+description = "Constant `incident_reference` — PagerDuty's discriminator for a partial incident object in a write. Not caller-supplied"
+required = true
+schema = { type = "string", const = "incident_reference" }
+
+[[operations.params.body]]
+name = "status"
+wire = "incident.status"
+description = "Constant `acknowledged` — not caller-supplied. Resolving is pagerduty-incident-resolve, a separate operation with its own risk classification"
+required = true
+schema = { type = "string", const = "acknowledged" }
+
+# developer reference: developer.pagerduty.com/api-reference — Update an incident. The updated
+# incident comes back in the same single-key envelope pagerduty-incident-get returns.
+[operations.response_schema]
+type = "object"
+required = ["incident"]
+properties = { incident = { type = "object", required = ["id", "status"], description = "The incident after the update, in the shape pagerduty-incident-get returns. Read `status` back to confirm the acknowledgement took effect", properties = { id = { type = "string" }, type = { const = "incident" }, incident_number = { type = "integer" }, title = { type = "string" }, status = { type = "string", enum = ["triggered", "acknowledged", "resolved"], description = "`acknowledged` after a successful call" }, urgency = { type = "string", enum = ["high", "low"] }, html_url = { type = "string" }, updated_at = { type = "string", format = "date-time" }, last_status_change_at = { type = "string", format = "date-time" }, service = { type = "object" }, acknowledgements = { type = "array", description = "Each `{at, acknowledger}`; the acknowledger is the user named by the From header", items = { type = "object" } } } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "pagerduty-incident-resolve"
+method = "PUT"
+path = "/incidents/{id}"
+description = "Resolve one incident, on behalf of a named PagerDuty user. This closes it: it leaves the open-incident view and notifications stop. If the underlying condition is still live, the next alert opens a brand-new incident rather than reopening this one, so resolve only what is actually fixed"
+risk = "high"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The incident's own id, from pagerduty-incident-list's `id` field"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.header]]
+name = "from_email"
+wire = "From"
+description = "The login address of the PagerDuty user this resolution is recorded against. It must belong to a user in this PagerDuty account; PagerDuty answers 400 otherwise. A REST API key carries no user identity of its own, which is why this cannot be inferred"
+required = true
+schema = { type = "string", format = "email", minLength = 3 }
+
+[[operations.params.body]]
+name = "incident_type"
+wire = "incident.type"
+description = "Constant `incident_reference` — PagerDuty's discriminator for a partial incident object in a write. Not caller-supplied"
+required = true
+schema = { type = "string", const = "incident_reference" }
+
+[[operations.params.body]]
+name = "status"
+wire = "incident.status"
+description = "Constant `resolved` — not caller-supplied. Acknowledging is pagerduty-incident-acknowledge, a separate operation with a lower risk classification"
+required = true
+schema = { type = "string", const = "resolved" }
+
+# developer reference: developer.pagerduty.com/api-reference — Update an incident.
+[operations.response_schema]
+type = "object"
+required = ["incident"]
+properties = { incident = { type = "object", required = ["id", "status"], description = "The incident after the update. Read `status` back to confirm the resolution took effect", properties = { id = { type = "string" }, type = { const = "incident" }, incident_number = { type = "integer" }, title = { type = "string" }, status = { type = "string", enum = ["triggered", "acknowledged", "resolved"], description = "`resolved` after a successful call" }, urgency = { type = "string", enum = ["high", "low"] }, html_url = { type = "string" }, updated_at = { type = "string", format = "date-time" }, last_status_change_at = { type = "string", format = "date-time" }, resolved_at = { type = "string", format = "date-time" }, service = { type = "object" } } } }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any of the above can run.
+#
+# Exactly one field. There is no per-tenant host to configure, and `From` is not here: it has no
+# binding to reach (`parse_binding` has no `header.*` destination) and it is a per-call fact rather
+# than a per-connection one.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "api_token"
+label = "PagerDuty API access key"
+help = "Create a REST API key in PagerDuty under Integrations, then API Access Keys. A read-only key is enough to list incidents, services and on-calls; acknowledging or resolving an incident needs a full-access key. PagerDuty shows the key once, when it is created"
+format = "token"
+secret = true
+docs_url = "https://developer.pagerduty.com/docs/authentication"
+binds = "credential.pagerduty.api_token"
