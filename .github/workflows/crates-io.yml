@@ -1,0 +1,80 @@
+# Publishes the flux-connectors crates.io closure when a version tag `vX.Y.Z` is pushed.
+#
+# The closure is four crates, not three: `connector-catalog`, `connector-spec`, `connector-secrets`
+# and `connector-pack`. `connector-secrets` re-exports `CredentialRef` from `connector-spec`, so
+# `connector-spec` travels with it or nothing outside this workspace resolves. The order is derived
+# from the manifests by scripts/publish-crates-io.sh, not listed here.
+#
+# REQUIRED SECRET: `CARGO_REGISTRY_TOKEN` — a crates.io API token (https://crates.io/settings/tokens)
+# from an account that can publish these names. Set it at
+# Settings → Secrets and variables → Actions on the `codewandler/flux-connectors` repo. Without it
+# this job fails fast with a clear message and nothing is published.
+#
+# Idempotent: a crate@version already on crates.io is skipped, so a failed run can be re-run (or the
+# tag re-pushed) to resume. That property is what makes a four-crate first release survivable — the
+# crates.io new-crate rate limit is a burst then roughly one per ten minutes, and a crate that is
+# already up cannot be withdrawn.
+#
+# Publishing is CI-only by contract (AGENTS.md § Publishing contract). Do not run
+# `cargo publish` by hand.
+name: crates.io
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  # Manual trigger to resume a publish (e.g. after a crates.io new-crate rate-limit) from the current
+  # branch, so an updated scripts/publish-crates-io.sh is used. Idempotent, so it skips what's live.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crates-io-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      # First, before a toolchain is installed or anything is packaged: a missing secret must stop
+      # the run, not surface as an upload failure after the first crate is already live.
+      - name: Check the publish token is configured
+        run: |
+          if [ -z "${CARGO_REGISTRY_TOKEN}" ]; then
+            echo "::error::CARGO_REGISTRY_TOKEN is not set. Add it under Settings → Secrets and variables → Actions (a crates.io token that can publish the connector-* crates)."
+            exit 1
+          fi
+
+      - name: Install Rust toolchain
+        # The same pinned toolchain as ci.yml, deliberately: the `package` job there proves this
+        # closure packages and verifies, and that proof is only about this release if the two runs
+        # use the same cargo.
+        uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        with:
+          toolchain: "1.97.0"
+
+      - name: Verify the tag matches the workspace version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          wsver=$(grep -m1 '^version = ' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "tag=$tag workspace=$wsver"
+          if [ "$tag" != "$wsver" ]; then
+            echo "::error::tag v$tag does not match [workspace.package].version $wsver"
+            exit 1
+          fi
+
+      # Printed before the publish so the log records the order that was actually used, which is the
+      # thing to read first when a resumed run has to be reasoned about.
+      - name: Show the derived publish order
+        run: bash scripts/publish-crates-io.sh --print-order
+
+      - name: Publish the closure to crates.io
+        run: bash scripts/publish-crates-io.sh

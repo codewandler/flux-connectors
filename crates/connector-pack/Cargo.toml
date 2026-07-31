@@ -7,6 +7,10 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/connector-pack"
+keywords = ["flux", "connector", "tools", "agent", "api"]
+categories = ["api-bindings", "web-programming"]
 
 [dependencies]
 # The input is the catalogue, not the loader: this crate never sees `providers/*.toml`.
