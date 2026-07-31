@@ -2,7 +2,7 @@
 id: C-212
 title: "The host's `connected` repeats C-206's conflation in the surface an operator actually looks at"
 pillar: Bridge
-status: ready
+status: done
 priority: 2
 design: docs/designs/connectors-api.md
 epic: connectors-api
@@ -86,21 +86,77 @@ knows.
 
 ## Acceptance
 
-- [ ] **Failing-first test:** over the host's HTTP surface, a connector whose vendor requires no
+- [x] **Failing-first test:** over the host's HTTP surface, a connector whose vendor requires no
       credential and a connector whose credential is simply unset are served **differently**. The
       test must fail before the change with both rendering identically. Name it.
-- [ ] The distinction is one the UI can render as three states, not two. Whether that is an enum
+      → `tests/wiring.rs::a_connector_needing_no_credential_is_not_served_as_one_left_unset`.
+- [x] The distinction is one the UI can render as three states, not two. Whether that is an enum
       replacing `connected`, or `connected` kept for compatibility beside a new field, is the
       implementor's call — but a consumer must not have to infer the third state by correlating
       `connected` with the length of `credentials`.
-- [ ] Read C-206's shape first and follow it rather than inventing a second vocabulary for the same
+      → `connected` is **replaced** by `Wiring` (`api.rs`), a four-token enum on a field of its own.
+- [x] Read C-206's shape first and follow it rather than inventing a second vocabulary for the same
       distinction. The published catalogue now carries a `no-credential-required` note; the host
       restating that with different words is how two surfaces drift.
-- [ ] `crates/connectors-api/src/index.html` renders the third state — the operator sees "nothing to
+      → the token is `no-credential-required`, character for character.
+- [x] `crates/connectors-api/src/index.html` renders the third state — the operator sees "nothing to
       supply", not a connector that looks unconfigured forever.
-- [ ] The existing guarantee in `crates/connectors-api/tests/host.rs` is unchanged and re-proved: no
+- [x] The existing guarantee in `crates/connectors-api/tests/host.rs` is unchanged and re-proved: no
       credential value reaches any served surface, including on error.
-- [ ] The gate is green.
+      → `host.rs` is untouched and green; `wiring.rs::the_wiring_surface_never_carries_a_credential_value`
+      re-proves it over the fields this story added, error paths included.
+- [x] The gate is green. Zero red across the workspace.
+
+## Progress
+
+**2026-07-31 — implemented on `impl/C-212`.** `connected: bool` is gone. `ConnectorView` now carries
+`wiring` (one of `no-credential-required`, `wired`, `partly-wired`, `not-wired`),
+`callable_operations`, and an `operations` list that replaces `operation_ids` — each entry carrying
+`requires` (the catalogue's OR-of-AND mechanism shape, verbatim) and `callable`.
+
+- **Both halves were fixed, and the second one subsumed the first.** Making the operation the unit
+  removes `all_stored` entirely, and with it the `Placement::Inbound` special case: no operation may
+  authenticate with a signing secret, so one never appears in a mechanism list and never counts
+  against anything. The principle the old comment stated is now applied by construction rather than
+  to one case. Verified on the running host: slack is `wired` on `bot_token` alone, with
+  `signing_secret` unstored.
+- **Measured against the running host, which is where the story's second half came from.** Storing
+  only `anthropic.api_key` now gives `partly-wired`, `2 of 5`, with `anthropic-models-list` and
+  `anthropic-model-get` callable and the three admin operations naming `anthropic.admin_key` as what
+  they need. Before, it was `connected: false`.
+- **The vocabulary is C-206's, not a second one.** `no-credential-required` is the exact token
+  `connector_cli::status::NO_CREDENTIAL_REQUIRED` publishes.
+- **The residual conflation is inherited, named, and not closed here.** C-206's distinction is a
+  *positive* declaration (`Operation::auth == Some([])`), and the embedded catalogue does not carry
+  it: `catalog::Operation::credentials` is `[]` for both a positively-public operation and a
+  withheld one. That is the `credential_mechanisms` gap this story's own Notes record as
+  catalogue-side. So freshdesk — which declares no credential because its API key occupies the Basic
+  *username* position — reads as `no-credential-required`. It is the better of the two answers
+  available (there genuinely is nothing for an operator to supply, and `not-wired` sent them looking
+  for a token this repository refuses to hold), but it is not the right *reason*, and `Wiring`'s doc
+  comment says so at the point a reader meets it. See the new story note below.
+- **The genuinely-public case is proved against fixtures**, in `api.rs`'s own unit tests, because it
+  is latent — nothing ships `auth = []` yet. One shape *is* distinguishable in the catalogue today
+  and is pinned: an operation with `credentials: []` under a connector that declares credentials can
+  only have come from `auth = []`, since inheriting the default would have carried the connector's
+  own.
+- **Every new test was verified by mutation.** Collapsing `no-credential-required` back into
+  `not-wired` reddens the failing-first HTTP test and three fixture tests and nothing else; reading
+  the mechanism list as an AND, or a mechanism as an OR, reddens exactly the semantics test;
+  restoring `all_stored` reddens exactly
+  `supplying_one_credential_makes_the_operations_that_use_it_callable`.
+- **`tests/host.rs` is untouched.**
+
+### For a new story — the catalogue still conflates what `status` no longer does
+
+`crates/connector-cli/src/catalog.rs::credential_mechanisms` emits `[]` into
+`catalog::Operation::credentials` for both a withheld credential and a positively-public operation,
+so the embedded catalogue cannot carry C-206's distinction and neither can any host reading it. This
+is recorded in C-206's own notes and in this story's Notes as catalogue-side; it is now *load
+bearing* for a user-facing surface rather than only for `catalog.json`, which is a reason to raise
+its priority. Closing it would let `Wiring::NoCredentialRequired` mean what C-206 means, and would
+give freshdesk a fourth, honest state (*a credential exists and this repository cannot hold it yet*)
+instead of borrowing the third.
 
 ## Notes
 

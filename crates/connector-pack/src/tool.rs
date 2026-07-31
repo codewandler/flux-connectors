@@ -173,6 +173,11 @@ impl Operation {
 
         let declaration = spec::declaration_of(entry.id, entry.flux)?;
         let spec = spec::project_declaration(entry.id, &declaration)?;
+        // **Refused at install, not at the first call** (C-232). A body binding a brace-carrying
+        // literal this pack cannot classify is a connector whose configuration surface is a guess;
+        // registering it would advertise a tool that either refuses every call or sends the vendor a
+        // document a tenant's settings were pasted into.
+        request::refuse_unconfigurable(entry.id, &declaration)?;
         let endpoint_variables = request::endpoint_variables(&declaration);
         let endpoint_slots = request::endpoint_slots(&declaration);
 

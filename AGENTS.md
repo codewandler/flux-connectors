@@ -175,6 +175,45 @@ are `catalog.json` and index staleness. Report them and stop; do **not** run a f
 them. The coordinator's full build at integration resolves all eight, and it is the only build that
 can, because it is the only one with every provider.
 
+### The scoped gate does answer "can my connector make a call at all" (C-233)
+
+It did not, and that cost a connector. C-110 shipped eight Linear operations, ran this gate green,
+and was found in review to have **zero callable operations**: `connector-pack` read each pinned
+GraphQL document's braces as configuration placeholders, so unconfigured every call refused and
+configured the substitution rewrote the document. The implementor could not have caught it — every
+`connector-pack` entry point wanted a `&'static catalog::Operation`, `catalog::Operation` is
+`#[non_exhaustive]` so no synthetic one can be built outside the `catalog` crate, and the index that
+carries a real one is a whole-catalogue artifact that does not name a new provider until integration.
+
+**`cargo test --workspace --no-fail-fast` now answers it, with nothing extra to run and nothing to
+write.** `crates/connector-pack/tests/request.rs::every_declared_operation_composes_a_request_from_its_declared_configuration`
+enumerates `connectors/*.connector.toml` and reads each operation's Flux from
+`crates/catalog/ops/<provider>/`. Both are **per-provider** artifacts that
+`build --provider <id>` writes, so a connector that is not in the index yet is covered anyway. For
+each operation it composes the request against the configuration the provider file **declares** —
+the `[[config]]` fields' `binds` targets and `example` values, and an *empty* configuration for a
+connector that declares none — and asserts the URL is absolute, brace-free and reaches the declared
+host, and that the **body and headers do not move when the configuration does**.
+
+A failure names the operation and quotes what it could not build. Two shapes to expect:
+
+- *"its body binds the string literal `…`, whose `{…}` is neither a templated URL nor a
+  configuration pin"* — the C-110 shape. A brace in a bound string literal is read as configuration
+  (C-193), and only two kinds of literal qualify: a templated URL, and C-187's pin binds. Anything
+  else is refused rather than filled in. Publishing the configuration surface so the pack reads
+  variables instead of inferring them is [C-87](docs/stories/C-87-configuration-codegen.md).
+- *"`<op>` needs `[…]`, which `providers/<id>.toml` declares no `[[config]]` field for"* — the
+  connector asks a tenant for something no form will ever collect.
+
+`connector_pack::Rehearsal` is the same capability asked one operation at a time, for a boundary
+test of your own: `Rehearsal::of(id, provider, service, flux)` takes the emitted Flux and needs no
+catalogue entry. `crates/connector-pack/tests/rehearsal.rs` is worked examples, including C-110's
+withdrawn documents as a known positive.
+
+**This is not one of the eight, and it must be green.** The eight are red because a whole-catalogue
+artifact is deliberately stale; this one reads only per-provider artifacts, so a red here is a real
+finding about the connector in front of you.
+
 ### A per-provider test asserts about its provider, never about the catalogue
 
 The disjoint-write-set guarantee above is what lets provider stories run in parallel, and **a

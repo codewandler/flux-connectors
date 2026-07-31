@@ -75,6 +75,24 @@ fn unconfigured() -> Configuration {
 
 /// A configuration port covering every endpoint variable the catalogue declares, discovered from
 /// the catalogue itself so a connector shipped later is compared rather than skipped.
+///
+/// # This is the same discovered-input shape C-232 removed from `request.rs`, and it is sound here
+///
+/// C-232's note asks whether this test shares the hole, and it did: a value manufactured for every
+/// *discovered* variable is a value that can never be missing. Two things make it harmless in this
+/// file rather than merely smaller.
+///
+/// **The scan can no longer discover a third kind.** `endpoint_variables` now reports placeholders
+/// only from the two declared literal shapes, and an operation binding anything else is refused by
+/// `Operation::project` above — so this loop panics on a C-110-shaped connector instead of
+/// fabricating names out of its query document.
+///
+/// **And what this file asserts is not "does it compose".** It compares the pack's request against
+/// the *shipped module's* request for the same operation. Both sides read the same configuration, so
+/// the values are a fixed point of the comparison rather than an input to it: any value at all,
+/// including a wrong one, still detects a divergence. Deriving them from `providers/*.toml` here
+/// would add a reader without adding an assertion. `request.rs` is where "does an operator's own
+/// configuration compose a request" is answered.
 fn configuration() -> Configuration {
     let mut values = MemoryConfig::new();
     for entry in catalog::operations() {

@@ -34,6 +34,63 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A whole-catalogue test that could not fail, and the blind spot behind it (C-232, C-233).**
+  `every_shipped_operation_builds_an_absolute_request` manufactured a value for every variable the
+  pack's own scan discovered, so its input came from the thing it was meant to check — it could never
+  fail for a missing value. That is how eight GraphQL operations shipped in review with **zero**
+  callable requests while `cargo test --workspace` was fully green.
+
+  The root fix is upstream of the test: a brace in a bound string literal is now read as configuration
+  only for the two kinds the module always *claimed* — a templated URL and a C-187 pin bind — and
+  anything else is refused at **both** entry points. The scan can no longer invent a variable out of a
+  vendor's syntax. The test then binds what a provider **declares**, and the empty-configuration case
+  — the production shape, and the one that had never run once — now runs **43 times**.
+
+  `connector-pack` also gains a rehearsal so a provider implementor can ask "can this connector
+  compose a request at all?" before integration, which was structurally unanswerable. It constructs no
+  `catalog::Operation`, so `#[non_exhaustive]` keeps its full guarantee.
+
+  Two claims were corrected rather than defended. The pin-name grammar was reconciled toward the
+  loader after review measured that `binds = "query.page.size"` loads, emits, and was then reported as
+  "neither a URL nor a pin" — a wrong diagnosis for a literal that is exactly a pin. It now stops one
+  clause short of the loader, because a JSON object literal necessarily quotes its keys and that
+  clause is what separates `{page.size}` from `{"already": "json"}`. And C-233's own premise — that no
+  synthetic `catalog::Operation` can be built outside the `catalog` crate — is true of *construction*
+  and false of *copying*: the fields are `pub`, so a shipped entry can be cloned and doctored, which
+  is how the second call site ended up pinned rather than merely documented.
+
+- **The host serves three wiring states where a boolean carried two (C-212).** `connected` was
+  `false` both for "supply a credential" and for "this vendor needs none" — two opposite situations,
+  one value, in the view a person uses to choose among 53 connectors.
+
+  It also fixes the second half: `all_stored` required **every** declared credential, so supplying
+  Anthropic's `api_key` — which nearly every operation uses — left the connector reading as unwired
+  because `admin_key`, a management-surface value no ordinary request carries, was unset. The code
+  already contained the argument against itself, excluding inbound signing secrets for exactly that
+  reason; the principle now holds by construction rather than as a special case, so Slack reads as
+  wired on its bot token alone.
+
+  Verified against a running host, not only by test: freshdesk `no-credential-required`; anthropic
+  `not-wired` 0/5 → `partly-wired` 2/5 → `wired` 5/5. Uses C-206's own `no-credential-required`
+  token rather than a second vocabulary for the same distinction.
+
+- **The route-level login guard had no coverage anywhere, and now does (C-228).** C-204's fix is
+  sound — a security review reproduced the cross-account capture at the base and proved it dead on
+  the fix. This is the residue: when a new guard runs *before* an old one, tests aimed at the old one
+  stop reaching it and keep passing.
+
+  **The measurement came out worse than the story predicted.** The story said the route-level
+  `take_login` refusal was "covered only by store-level unit tests". Deleting the entire guard at the
+  merge base left **all 60 tests in the crate green, across all six binaries** — nothing anywhere
+  observed that the issued-here/single-use check had been removed from the route.
+
+  Split into two tests, each named for the branch it exercises: no cookie, and a cookie matching an
+  unissued state. Every refusal in the callback answers `400` and clears the binding, so the *message*
+  is the only observable that distinguishes the three branches — the three are now `pub const`s and
+  the tests name the constant, because a test holding its own copy of the string would drift exactly
+  as the original did. Also adds the missing negative test for `/v1/operations/{operation}`, and makes
+  the no-secrets sweep in `tests/host.rs` fail on a `401` rather than pass on it.
+
 - **An `example` on a secret configuration field is refused at load (C-231).** It was enforced by
   per-connector goodwill, and the gap was three times wider than it looked: 38 providers declare a
   secret field, **24 had a local test guarding it and 14 had nothing** — two dozen duplicated

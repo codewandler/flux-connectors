@@ -211,6 +211,29 @@ documented refusal an acceptable answer.
 **Done looks like:** a wave of provider branches that merge without touching each other, and a
 catalogue that grew by five without anyone editing a shared list by hand.
 
+### The host's explorer — an operator console
+
+There are two explorers. The public one at `web/` is fifteen Vue components and 2,434 lines; the one
+the operator actually works in is a single 355-line HTML file compiled into the host binary. The
+owner ran the app on 2026-07-31 and reported the difference, and the cause is worth recording because
+it is not neglect: [C-203](stories/C-203-connectors-api-skeleton.md) scoped that page as *"no UI
+beyond what proves it"*, every change since has been a rider on a backend story, and
+[designs/explorer-ux.md](designs/explorer-ux.md) — the only document here that reasons about explorer
+layout, density and filters — is scoped exclusively to `web/` and never mentions it. No story ever
+asked for more. Design: [designs/host-explorer.md](designs/host-explorer.md).
+
+The constraint that shapes every option: these are not two attempts at one thing.
+[C-147](stories/C-147-explorer-runs-an-operation.md) forbids the public site collecting a credential
+or implying a live call, and this surface exists to do both. So credential capture and execution can
+never move into a shared component — convergence means sharing the browsing half and keeping the
+operating half in the host. [C-142](stories/C-142-detach-the-explorer-components.md) already detached
+the components from VitePress for exactly this, and their README marks the page tier as the one a
+host may reasonably decline.
+
+**Done looks like:** an operator can find one connector among fifty-three, see at a glance which need
+setup, run an operation against a readable response, and the page they do it on shares its components
+and its visual language with the page they read.
+
 ### The explorer at fleet scale
 
 The public explorer was designed against six providers and twenty-five operations. When this epic was
