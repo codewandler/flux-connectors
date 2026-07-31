@@ -2,8 +2,7 @@
 id: C-201
 title: "Amend the charter: a deployed multi-tenant host is in scope"
 pillar: Bridge
-status: in-progress
-priority: 1
+status: done
 design: docs/designs/connectors-api.md
 epic: connectors-api
 areas: [bridge, docs]
