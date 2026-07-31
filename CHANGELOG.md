@@ -9,6 +9,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Salesforce connector (C-163) — the first provider whose host comes from configuration.**
+  `https://{instance}.my.salesforce.com`, bound by a `[[config]]` field and asserted by a load-bearing
+  test. Five operations over an OAuth2 bearer token, with `GET /services/oauth2/userinfo` as `verify`.
+
+  **A configured host is verified rather than inferred:** `Binding::Endpoint { variable }`
+  (`config.rs:180-184,240-245`) reaches exactly a `{variable}` in `base_url`. C-169 and C-170 had
+  measured the negative half of this — no path segment, no query parameter (C-187) — and this is the
+  positive half. It also settles C-92 for tenant-templated providers: `authority` is independent of
+  `base_url`, so there is no conflict.
+
+  SOQL is excluded. It needs a `q` query parameter and no query value is percent-encoded, which is the
+  `zendesk-ticket-search` defect precisely.
+
+### Fixed
+
+- **Three negative sentinels used `"salesforce"` as a provider that could not exist, and one did.**
+  `crates/catalog/src/lib.rs`, `crates/connector-pack/src/lib.rs` and
+  `crates/connector-pack/tests/projection.rs` each asserted that an unknown provider is refused, using
+  that literal — so shipping the Salesforce connector broke all three at once. `AGENTS.md` had named
+  Salesforce as belonging here from the start, so this was scheduled rather than unlucky.
+
+  The sentinel is now a name that is not a company, and each use is **self-checking**: the assertion is
+  that the catalogue does not carry it, so it cannot decay into a vacuous pass the way another
+  freshly-plausible vendor name would merely defer.
+
 - **The Postmark connector (C-180) — the first provider whose two credentials are partitioned by
   service.** `X-Postmark-Server-Token` for the `server` service, `X-Postmark-Account-Token` for
   `account`; they are never sent together, which is what a service is for. Six operations. Two *named*

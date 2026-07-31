@@ -2,8 +2,7 @@
 id: C-163
 title: Ship the Salesforce connector
 pillar: Spec
-status: in-progress
-priority: 2
+status: done
 design:
 epic: provider-fleet-2
 areas: [providers]
@@ -130,3 +129,34 @@ Two things to check before writing operations: whether a `{variable}` in a base 
 - Whole-catalogue artifacts are coordinator-owned: `crates/catalog/src/generated.rs`,
   `web/public/catalog.json`, `web/public/v1/**`, `assets/readme-snippet-*.svg`. The per-provider
   `crates/catalog/src/generated/salesforce.rs` is **not** in that set and is yours to commit.
+
+### Coordinator note at integration
+
+**Merging this turned three green tests red, and the connector was not at fault.**
+`crates/catalog/src/lib.rs`, `crates/connector-pack/src/lib.rs` and
+`crates/connector-pack/tests/projection.rs` each used the literal `"salesforce"` as their
+*definitely-not-a-real-provider* sentinel. Shipping Salesforce turned the unknown into a known.
+
+Reverting a good connector because three tests had borrowed its name would have been the wrong repair,
+so the sentinels were fixed at integration instead — they span two crates and no provider story could
+own them, the same reasoning that makes `COVERED_FLOOR` coordinator-owned.
+
+**The lesson is narrow and worth keeping: a negative sentinel must not be a plausible vendor name.**
+`AGENTS.md` had named Salesforce as a provider that belongs here from the beginning, so this break was
+scheduled from the moment the sentinel was chosen. Each use is now self-checking — the assertion *is*
+that the catalogue does not carry the name — so it cannot rot into a vacuous pass, which is the failure
+mode a freshly-picked hardcoded name would only defer.
+
+Two questions this story settled for others:
+
+- **A configured host works, and now it is verified rather than inferred.** `Binding::Endpoint {
+  variable }` (`crates/connector-spec/src/config.rs:180-184,240-245`) reaches exactly a `{variable}` in
+  `base_url`, so `{instance}` is bound by a config field. C-169 and C-170 had established the *negative*
+  half of this (no path segment, no query parameter — [C-187](C-187-config-cannot-pin-a-request-component.md));
+  this is the positive half.
+- **[C-92](C-92-declare-an-authority.md) has no conflict here.** `authority` (`ir.rs:764-771`) is
+  independent of `base_url`, which the same struct documents as possibly tenant-templated. No authority
+  is declared, following `providers/google.toml`'s restraint pending C-92's own decision.
+
+SOQL is excluded, correctly: a `q` query parameter is unencoded, which is the `zendesk-ticket-search`
+defect exactly.

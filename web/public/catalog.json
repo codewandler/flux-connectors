@@ -18899,6 +18899,598 @@
       "channels": []
     },
     {
+      "id": "salesforce",
+      "authority": null,
+      "vendor": "Salesforce",
+      "description": "Salesforce REST API: read the authenticated identity, read/create/update an SObject record, and describe an SObject's schema",
+      "base_url": "https://{instance}.my.salesforce.com",
+      "api_version": null,
+      "hosts": [
+        "{instance}.my.salesforce.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://{instance}.my.salesforce.com",
+          "hosts": [
+            "{instance}.my.salesforce.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 5
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "salesforce.access_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "Salesforce OAuth2 access token sent as a bearer; already minted, supplied through the environment",
+            "env": [
+              "SALESFORCE_ACCESS_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "salesforce.access_token"
+          ]
+        ]
+      },
+      "operation_count": 5,
+      "operations": [
+        {
+          "id": "salesforce-whoami",
+          "provider": "salesforce",
+          "service": "default",
+          "description": "Get the authenticated user and org for the current access token — the identity check for a settings page's Test Connection button. Takes no parameters",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/services/oauth2/userinfo",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "email": {
+                "type": "string"
+              },
+              "email_verified": {
+                "type": "boolean"
+              },
+              "locale": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "organization_id": {
+                "description": "The 18-character id of the org the token authenticates against",
+                "type": "string"
+              },
+              "preferred_username": {
+                "description": "Usually the Salesforce username, which is email-shaped but is not necessarily a deliverable address",
+                "type": "string"
+              },
+              "sub": {
+                "description": "The OIDC identity URL, e.g. https://login.salesforce.com/id/00Dxx0000000001/005xx000001Sv6QAAS",
+                "format": "uri",
+                "type": "string"
+              },
+              "user_id": {
+                "description": "The 18-character id of the authenticated user",
+                "type": "string"
+              },
+              "user_type": {
+                "description": "e.g. STANDARD for a full internal user; a Community/Experience Cloud or partner user carries a different value here",
+                "type": "string"
+              },
+              "zoneinfo": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sub",
+              "user_id",
+              "organization_id"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "salesforce.access_token"
+            ]
+          ],
+          "hosts": [
+            "{instance}.my.salesforce.com"
+          ],
+          "flux": "op salesforce-whoami -> Any\n  description \"Get the authenticated user and org for the current access token — the identity check for a settings page's Test Connection button. Takes no parameters\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{instance}.my.salesforce.com\"\n  url = fmt(\"{base}/services/oauth2/userinfo\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {instance} value before it has a valid destination URL.",
+                "params": [
+                  "instance"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "salesforce-record-get",
+          "provider": "salesforce",
+          "service": "default",
+          "description": "Read one SObject record by id. Returns every field of the record; narrowing to a subset needs the fields query parameter, which this connector cannot encode safely (see the provider file's header) so it is not offered",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/services/data/v59.0/sobjects/{sobject_type}/{id}",
+          "parameters": [
+            {
+              "name": "sobject_type",
+              "in": "path",
+              "wire": null,
+              "description": "The SObject's API name, e.g. Account, Contact, Opportunity, or a custom object ending in __c",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "The record's Salesforce id, 15 characters (case-sensitive) or 18 (case-insensitive)",
+              "required": true,
+              "schema": {
+                "pattern": "^[a-zA-Z0-9]{15,18}$",
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "id": {
+                "pattern": "^[a-zA-Z0-9]{15,18}$",
+                "type": "string"
+              },
+              "sobject_type": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "sobject_type",
+              "id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "description": "Every member besides `attributes` is one of the SObject's own fields — standard and custom — and the set is per-object and per-org. Read it with `salesforce-sobject-describe` rather than assuming a fixed shape",
+            "properties": {
+              "Id": {
+                "description": "The record's 18-character Salesforce id",
+                "type": "string"
+              },
+              "attributes": {
+                "properties": {
+                  "type": {
+                    "description": "The SObject API name this record is",
+                    "type": "string"
+                  },
+                  "url": {
+                    "description": "This record's own resource path",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "url"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "attributes",
+              "Id"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "salesforce.access_token"
+            ]
+          ],
+          "hosts": [
+            "{instance}.my.salesforce.com"
+          ],
+          "flux": "op salesforce-record-get(sobject_type: String, id: String) -> Any\n  description \"Read one SObject record by id. Returns every field of the record; narrowing to a subset needs the fields query parameter, which this connector cannot encode safely (see the provider file's header) so it is not offered\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{instance}.my.salesforce.com\"\n  url = fmt(\"{base}/services/data/v59.0/sobjects/{sobject_type}/{id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {instance} value before it has a valid destination URL.",
+                "params": [
+                  "instance"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "salesforce-record-create",
+          "provider": "salesforce",
+          "service": "default",
+          "description": "Create one SObject record. Which fields are required depends on the SObject type and the org's own validation rules and page layouts — check with salesforce-sobject-describe first",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/services/data/v59.0/sobjects/{sobject_type}",
+          "parameters": [
+            {
+              "name": "sobject_type",
+              "in": "path",
+              "wire": null,
+              "description": "The SObject's API name, e.g. Account, Contact, Opportunity, or a custom object ending in __c",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "body": {
+                "description": "The new record's field values as a JSON object, e.g. {\"Name\": \"Acme\", \"Industry\": \"Technology\"}. Which fields exist and which are required depends on the SObject type and the org's schema",
+                "type": "object"
+              },
+              "sobject_type": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "sobject_type",
+              "body"
+            ],
+            "type": "object"
+          },
+          "body_schema": {
+            "description": "The new record's field values as a JSON object, e.g. {\"Name\": \"Acme\", \"Industry\": \"Technology\"}. Which fields exist and which are required depends on the SObject type and the org's schema",
+            "type": "object"
+          },
+          "response_schema": {
+            "properties": {
+              "errors": {
+                "description": "Empty on success. Populated on a partial failure such as a validation rule, each entry carrying statusCode, message and the fields it names",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "id": {
+                "description": "The new record's 18-character Salesforce id",
+                "type": "string"
+              },
+              "success": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "success",
+              "errors"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "salesforce.access_token"
+            ]
+          ],
+          "hosts": [
+            "{instance}.my.salesforce.com"
+          ],
+          "flux": "op salesforce-record-create(sobject_type: String, body: Any) -> Any\n  description \"Create one SObject record. Which fields are required depends on the SObject type and the org's own validation rules and page layouts — check with salesforce-sobject-describe first\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{instance}.my.salesforce.com\"\n  url = fmt(\"{base}/services/data/v59.0/sobjects/{sobject_type}\")\n  content_type = \"application/json\"\n  payload = parse(body, as: \"json\")\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {instance} value before it has a valid destination URL.",
+                "params": [
+                  "instance"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "salesforce-record-update",
+          "provider": "salesforce",
+          "service": "default",
+          "description": "Update one or more fields on an existing SObject record. Only the supplied fields change; fields left out are untouched. Answers 204 with no body on success",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "PATCH",
+          "path": "/services/data/v59.0/sobjects/{sobject_type}/{id}",
+          "parameters": [
+            {
+              "name": "sobject_type",
+              "in": "path",
+              "wire": null,
+              "description": "The SObject's API name, e.g. Account, Contact, Opportunity, or a custom object ending in __c",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "The record's Salesforce id, 15 characters (case-sensitive) or 18 (case-insensitive)",
+              "required": true,
+              "schema": {
+                "pattern": "^[a-zA-Z0-9]{15,18}$",
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "body": {
+                "description": "The fields to change, as a JSON object, e.g. {\"Industry\": \"Technology\"}. Fields not present are left untouched; which fields exist depends on the SObject type and the org's schema",
+                "type": "object"
+              },
+              "id": {
+                "pattern": "^[a-zA-Z0-9]{15,18}$",
+                "type": "string"
+              },
+              "sobject_type": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "sobject_type",
+              "id",
+              "body"
+            ],
+            "type": "object"
+          },
+          "body_schema": {
+            "description": "The fields to change, as a JSON object, e.g. {\"Industry\": \"Technology\"}. Fields not present are left untouched; which fields exist depends on the SObject type and the org's schema",
+            "type": "object"
+          },
+          "response_schema": null,
+          "credentials": [
+            [
+              "salesforce.access_token"
+            ]
+          ],
+          "hosts": [
+            "{instance}.my.salesforce.com"
+          ],
+          "flux": "op salesforce-record-update(sobject_type: String, id: String, body: Any) -> Any\n  description \"Update one or more fields on an existing SObject record. Only the supplied fields change; fields left out are untouched. Answers 204 with no body on success\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{instance}.my.salesforce.com\"\n  url = fmt(\"{base}/services/data/v59.0/sobjects/{sobject_type}/{id}\")\n  content_type = \"application/json\"\n  payload = parse(body, as: \"json\")\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PATCH\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {instance} value before it has a valid destination URL.",
+                "params": [
+                  "instance"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "salesforce-sobject-describe",
+          "provider": "salesforce",
+          "service": "default",
+          "description": "Describe an SObject's schema: its label, whether it is custom, its create/update/delete/query permissions, and every field's name, type and constraints. The reference for what salesforce-record-create and salesforce-record-update may send",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/services/data/v59.0/sobjects/{sobject_type}/describe",
+          "parameters": [
+            {
+              "name": "sobject_type",
+              "in": "path",
+              "wire": null,
+              "description": "The SObject's API name, e.g. Account, Contact, Opportunity, or a custom object ending in __c",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "sobject_type": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "sobject_type"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "createable": {
+                "type": "boolean"
+              },
+              "custom": {
+                "type": "boolean"
+              },
+              "deletable": {
+                "type": "boolean"
+              },
+              "fields": {
+                "description": "Every field's own metadata, standard and custom",
+                "items": {
+                  "properties": {
+                    "createable": {
+                      "type": "boolean"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "length": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "nillable": {
+                      "type": "boolean"
+                    },
+                    "picklistValues": {
+                      "description": "Present only on a picklist field: each entry carries value, label, active and defaultValue",
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "type": {
+                      "description": "Salesforce's field type, e.g. string, boolean, reference, picklist, currency — not a JSON Schema type",
+                      "type": "string"
+                    },
+                    "unique": {
+                      "type": "boolean"
+                    },
+                    "updateable": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "keyPrefix": {
+                "description": "The 3-character prefix embedded in every record id of this type; null for objects with none",
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "labelPlural": {
+                "type": "string"
+              },
+              "name": {
+                "description": "The SObject's API name",
+                "type": "string"
+              },
+              "queryable": {
+                "type": "boolean"
+              },
+              "updateable": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "fields"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "salesforce.access_token"
+            ]
+          ],
+          "hosts": [
+            "{instance}.my.salesforce.com"
+          ],
+          "flux": "op salesforce-sobject-describe(sobject_type: String) -> Any\n  description \"Describe an SObject's schema: its label, whether it is custom, its create/update/delete/query permissions, and every field's name, type and constraints. The reference for what salesforce-record-create and salesforce-record-update may send\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{instance}.my.salesforce.com\"\n  url = fmt(\"{base}/services/data/v59.0/sobjects/{sobject_type}/describe\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {instance} value before it has a valid destination URL.",
+                "params": [
+                  "instance"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "sendgrid",
       "authority": null,
       "vendor": "SendGrid",

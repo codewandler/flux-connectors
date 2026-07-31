@@ -195,10 +195,13 @@ fn a_collision_surfaces_fluxs_duplicate_diagnostic_rather_than_panicking() {
 #[test]
 fn an_unknown_provider_is_refused_rather_than_installed_as_nothing() {
     let mut registry = ToolRegistry::new();
-    let error = connector_pack::pack(&["salesforce"], http(), credentials())(&mut registry)
+    // `salesforce` used to be the sentinel and stopped being unknown when C-163 shipped it.
+    const NO_SUCH_PROVIDER: &str = "no-such-vendor";
+
+    let error = connector_pack::pack(&[NO_SUCH_PROVIDER], http(), credentials())(&mut registry)
         .expect_err("an unknown provider must be refused");
 
-    assert!(error.to_string().contains("salesforce"), "{error}");
+    assert!(error.to_string().contains(NO_SUCH_PROVIDER), "{error}");
     assert!(registry.names().is_empty());
 }
 

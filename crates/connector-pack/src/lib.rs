@@ -651,10 +651,14 @@ pub(crate) mod tests {
     #[test]
     fn an_unknown_provider_names_itself() {
         let mut registry = ToolRegistry::new();
-        let error = pack(&["salesforce"], recording_http(), empty_credentials())(&mut registry)
+        // See `connector-catalog`'s note on negative sentinels: `salesforce` used to sit here and
+        // stopped being unknown the moment C-163 shipped it.
+        const NO_SUCH_PROVIDER: &str = "no-such-vendor";
+
+        let error = pack(&[NO_SUCH_PROVIDER], recording_http(), empty_credentials())(&mut registry)
             .expect_err("no such connector");
 
-        assert!(error.to_string().contains("salesforce"), "{error}");
+        assert!(error.to_string().contains(NO_SUCH_PROVIDER), "{error}");
         assert!(registry.names().is_empty());
     }
 

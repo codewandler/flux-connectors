@@ -408,9 +408,17 @@ mod tests {
 
     #[test]
     fn an_unknown_key_is_none_rather_than_a_panic() {
+        // A negative sentinel must not be a plausible vendor name. `salesforce` was used here, and
+        // shipping the Salesforce connector (C-163) turned "definitely unknown" into "shipped" and broke
+        // three tests across two crates at once — `AGENTS.md` had named Salesforce as a provider that
+        // belongs here all along, so this was scheduled to happen. The sentinel below is not a company,
+        // and each use is self-checking: the assertion *is* that the catalogue does not carry it, so this
+        // cannot rot into a vacuous pass the way a stale hardcoded name can.
+        const NO_SUCH_PROVIDER: &str = "no-such-vendor";
+
         assert!(operation(OperationKey::id("zendesk-ticket-obliterate")).is_none());
-        assert!(provider(ProviderKey::id("salesforce")).is_none());
-        assert!(operations_of(ProviderKey::id("salesforce")).is_empty());
+        assert!(provider(ProviderKey::id(NO_SUCH_PROVIDER)).is_none());
+        assert!(operations_of(ProviderKey::id(NO_SUCH_PROVIDER)).is_empty());
     }
 
     /// Listing by provider is the whole point of the middle level, so it must agree with the flat
