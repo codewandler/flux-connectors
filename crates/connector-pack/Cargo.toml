@@ -21,7 +21,16 @@ name = "connector_pack"
 path = "src/lib.rs"
 
 [dependencies]
-# The input is the catalogue, not the loader: this crate never sees `providers/*.toml`.
+# The input is the catalogue, not the loader: no code in this crate reads a provider file, and there
+# is no edge to `connector-spec` for one to arrive through.
+#
+# **Its tests do read `providers/*.toml`, and the sentence here used to deny it** (C-232).
+# `tests/request.rs` builds each operation's configuration from the `[[config]]` blocks a provider
+# declares, because deriving it from the pack's own scan instead is the defect that let eight
+# uncallable operations ship. Those declarations reach no artifact until C-87 publishes the
+# configuration surface, so the provider file is the only place they exist — and the test reads it
+# with a small fail-closed line reader rather than a `toml` dependency, precisely so the dependency
+# claim above stays a true statement about this manifest. `dependency_fence.rs` is what holds it.
 catalog.workspace = true
 
 # The credential port (C-116). `SecretStore` is consumed, never redefined, and C-90's

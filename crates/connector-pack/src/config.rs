@@ -272,8 +272,8 @@ impl Configuration {
     /// to two different hosts.
     pub(crate) fn snapshot<'a>(
         &self,
-        provider: &'static str,
-        service: &'static str,
+        provider: &str,
+        service: &str,
         fields: impl IntoIterator<Item = Field<'a>>,
     ) -> Snapshot {
         let values = fields
@@ -287,8 +287,8 @@ impl Configuration {
             .collect();
         Snapshot {
             tenant: self.tenant.clone(),
-            provider,
-            service,
+            provider: provider.to_owned(),
+            service: service.to_owned(),
             values,
         }
     }
@@ -308,11 +308,15 @@ impl Configuration {
 #[derive(Debug, Clone)]
 pub(crate) struct Snapshot {
     tenant: String,
-    provider: &'static str,
+    provider: String,
     /// The service these settings were read for. Part of the address every value here was fetched
     /// under, and quoted in the refusal, so an operator told that `endpoint.space_id` is missing is
     /// also told *which* of a connector's two `space_id`s to go and supply (C-197).
-    service: &'static str,
+    ///
+    /// Owned rather than `&'static str` so that a [`Rehearsal`](crate::Rehearsal) — whose connector
+    /// is not in the index and whose names are therefore not `'static` — reads the port through
+    /// exactly this type rather than through a second one that could answer differently (C-233).
+    service: String,
     /// Keyed by `(kind, name)` — the same partition [`Field::kind`] draws, so an endpoint variable
     /// and a credential of one spelling stay two values. The service is **not** in this key and does
     /// not need to be: a snapshot is taken for exactly one service, so every value in it is already
@@ -337,8 +341,8 @@ impl Snapshot {
     pub(crate) fn require(&self, operation: &str, field: Field<'_>) -> Result<String, Error> {
         self.lookup(field).ok_or_else(|| Error::MissingConfig {
             operation: operation.to_owned(),
-            provider: self.provider.to_owned(),
-            service: self.service.to_owned(),
+            provider: self.provider.clone(),
+            service: self.service.clone(),
             tenant: self.tenant.clone(),
             field: field.binding(),
         })
