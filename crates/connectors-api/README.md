@@ -178,23 +178,39 @@ The `request-id`, the `cf-ray` and the Cloudflare `server` header are Anthropic'
 Both halves matter: without a credential the pack **refuses by address** and sends nothing, and with
 one the request goes out through flux's own `http.request`.
 
-## Why the automated tests stop before the socket
+## The automated leg: one request, to a vendor under test control
 
-To assert *"the request that reached the vendor carried tenant A's credential"* a test needs a vendor
-it controls, which means a loopback address — and **no shipped connector can be pointed at one**.
-Nine carry a `{placeholder}`, but every one templates a label inside a fixed vendor suffix
-(`{subdomain}.zendesk.com`), never the whole host.
+`tests/live_egress.rs` (C-202) sends. A loopback HTTP server records what arrives, a shipped
+operation is projected onto the host's real `Egress`, and the assertion is **equality on all four
+fields** — the `{ method, url, headers, body }` the vendor received against the ones
+`Operation::build_authenticated_request` built. Nothing is stubbed: the same `HttpRequestTool`, the
+same `Egress`, the same pack, the same bytes.
 
-The alternative was a substitute `Egress` that records instead of sending, which is exactly what
-`connector-pack`'s tests already do for want of a transport — and `Egress`'s own documentation says
-what is wrong with calling that proof: *"a stand-in that ignores `body`, or that resolves `url`
-against some base of its own, is not a substitute — it is a different connector."* A second stubbed
-suite here would grow the count of green tests without growing what is known.
+Two things had to be reconciled to get there, and both are recorded in that file rather than worked
+around:
 
-So `tests/host.rs` asserts everything that happens **before** the socket, which is where this crate's
-own defects would live: the address a credential resolves at, the tenant it belongs to, whether a
-value can reach a surface, and that the transport really is `http.request`. The live leg is manual,
-and this file is where it is recorded.
+- **The host's own SSRF guard refuses loopback**, which is where a controlled vendor has to live.
+  The test passes `PrivateNetAllow::Hosts(["127.0.0.1"])` through `App::with_web_options` — a grant
+  for one host on one `App`, not `PrivateNetAllow::Any`, and the shipped default is untouched. The
+  same file then runs the *same* operation under `App::new` and requires it to be refused with
+  nothing on the wire, so the widening is proved to be the only reason the live test can send.
+- **No shipped connector can be pointed at a loopback address**, deliberately: nine carry a
+  `{placeholder}`, every one templates a label inside a fixed vendor suffix
+  (`{subdomain}.zendesk.com`), and C-214's `Slot` guard exists to stop a configuration value from
+  moving a request to another host. So the test rewrites **one string literal** — the origin — in
+  the operation's own emitted Flux, and nothing else. The method, path, module-set header, body
+  encoding, credential placement and `Bearer ` prefix are all the shipped operation's.
+
+The bound is worth stating: this proves the pack's request survives the wire intact, not that
+`api.openai.com` answers it. The leg against a **real vendor** stays manual, and the section above is
+where it is recorded.
+
+What the automated tests still stop before is a **route** reaching a controlled vendor — asserting
+*"the request that reached the vendor carried tenant A's credential"* end to end through
+`POST /v1/operations/…/execute` needs a catalogue entry that names a loopback host, which no shipped
+connector does. `tests/host.rs` covers that half up to the socket: the address a credential resolves
+at, the tenant it belongs to, whether a value can reach a surface, and that the transport really is
+`http.request`.
 
 ## Where it is going
 
