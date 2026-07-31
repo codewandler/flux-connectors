@@ -1,0 +1,382 @@
+# DocuSign eSignature REST API (v2.1) — hand-authored, no vendor spec.
+#
+# DocuSign publishes no single machine-readable description of this surface convenient to vendor
+# here; the operations below are transcribed from DocuSign's own eSignature REST API reference, one
+# operation at a time. As with zendesk, freshdesk, github, notion and salesforce, provenance is
+# hand-authored and drift is undetectable by machine (`docs/designs/provider-operation-inventory.md`
+# §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# THE QUESTION THIS CONNECTOR WAS CHOSEN TO ANSWER: a TWO-level configured host.
+# ---------------------------------------------------------------------------------------------
+#
+# Every DocuSign operation sits under a per-account API host *and* an account id:
+# `https://{host}/restapi/v2.1/accounts/{accountId}/...`. Both are discovered together, once, from
+# DocuSign's own OAuth UserInfo response (`accounts[].base_uri`, `accounts[].account_id|`) rather
+# than being constant or guessable — which reads, at first, like exactly the shape C-169/C-170 (filed
+# as C-187) measured is out of reach: `ConfigField::binds` reaches `base_url` and nothing else, so it
+# cannot pin a path segment the way Cloudflare's `zone_id` or Vercel's `teamId` would need.
+#
+# **It is not that shape, because `account_id` never has to be a path segment here.**
+# `crates/connector-spec/src/config.rs::template_variables` (`config.rs:348-362`) extracts *every*
+# `{...}` placeholder a `base_url` carries, not just one, and
+# `crates/connector-spec/src/provider.rs`'s `validate_binding` (`provider.rs:557-573`) and
+# `validate_every_template_variable_is_asked_for` (`provider.rs:638-660`) check — and require a bound
+# `[[config]]` field for — each variable individually, with no cap on how many a `base_url` declares.
+# So both the host and the account id fold into `base_url` as two independently-named placeholders,
+# each with its own `[[config]]` field below (`binds = "endpoint.account_host"` and
+# `binds = "endpoint.account_id"`) — the identical mechanism Salesforce's `providers/salesforce.toml`
+# uses once, used here twice. Nothing about this connector needed a path-segment or query-parameter
+# binding, and nothing here needed C-187 to land. `crates/connector-flux/tests/docusign_connector.rs`
+# asserts both bindings exist rather than trusting this comment.
+#
+# **Why fold both into `base_url` rather than take `account_id` as a per-call argument.** DocuSign's
+# account id is a per-connection constant — one authenticated tenant is one DocuSign account — not a
+# per-call choice the way Salesforce's `sobject_type` or `id` genuinely are. A model asked to supply
+# it on every single call has nothing to vary it by and every opportunity to pass the wrong one,
+# silently misdirecting a real request; a `[[config]]` field asked once, the same way `instance` is
+# for Salesforce, is the honest shape of what this value actually is
+# (`docs/designs/connector-configuration.md`'s `Level::Connection`).
+#
+# ---------------------------------------------------------------------------------------------
+# ARRAYS: `templateRoles` is one caller-supplied value, not a decomposed `wire` path.
+# ---------------------------------------------------------------------------------------------
+#
+# Creating an envelope from a template sends `templateRoles`, an array of recipient-identity objects
+# (`{email, name, roleName}`), at the body root. C-185 (narrowed by C-179, which read `body_tree`
+# directly rather than trusting the original summary) draws the line at an array a `wire` path must
+# **decompose across nested segments** — SendGrid's `personalizations[].to[]`. `templateRoles` is not
+# that: it is a single named body parameter carrying its whole array value as one Flux argument,
+# exactly the shape Front's flat `tag_ids: List<String>` already ships. `BodyNode`
+# (`crates/connector-flux/src/op.rs`) places one leaf per declared parameter and never looks inside an
+# array's own value, so an array of *objects* at the body root is mechanically identical to an array
+# of strings from the emitter's point of view — `flux_type` (`crates/connector-flux/src/types.rs`)
+# names it `List<Any>` rather than a typed record, because a JSON Schema array-of-objects has no Flux
+# spelling more precise than that, but it emits and loads cleanly. The test file asserts this directly
+# rather than trusting the schema alone.
+#
+# ---------------------------------------------------------------------------------------------
+# PERSONAL DATA: signer names and email addresses. Author none.
+# ---------------------------------------------------------------------------------------------
+#
+# An envelope recipient's `name` and `email` are personal data about a real, named person — not a
+# generic customer-data field like a Zendesk ticket body, but an identity DocuSign will actually
+# contact. Every field carrying one is described as personal data at its own declaration
+# (`templateRoles`' items below, and `docusign-envelope-recipients-get`'s `response_schema`), and
+# **no literal example value is given anywhere in this file** for either field — not a realistic one,
+# not an obviously-fake one. Where DocuSign's own documentation would ordinarily earn a `e.g. {...}`
+# illustration the way `providers/salesforce.toml`'s free-form bodies get one, this file omits it
+# rather than inventing a recipient. `crates/connector-flux/tests/docusign_connector.rs` greps for the
+# common shapes of one, in both this file's own text and every emitted module.
+#
+# `docusign-embedded-signing` (DocuSign's "Create Recipient View" call, which mints a URL that starts
+# an embedded signing session as a *specific* recipient with no further authentication) is
+# deliberately not declared. It is exactly the "signing URL that acts as a bearer token" hazard this
+# story calls out, and unlike Zoom's `start_url` (declared, with its hazard stated, because
+# `zoom-meeting-get`/`zoom-meeting-create` return it whether this connector likes it or not) this
+# connector never has to return one at all: nothing in the curated set below calls that endpoint, so
+# there is no field to declare or omit. Left out rather than shipped with a fabricated recipient to
+# call it with.
+#
+# ---------------------------------------------------------------------------------------------
+# THE QUERY-ENCODING GAP (C-30): the one query parameter this connector offers is pattern-constrained.
+# ---------------------------------------------------------------------------------------------
+#
+# `docusign-envelope-list` is DocuSign's "list status changes" resource, and the vendor's own
+# documentation is explicit that it 400s with no date filter at all — `from_date` (or an explicit
+# `envelope_ids`/`transaction_ids` list, which this connector does not offer) is required on every
+# call. A free-text query value is the `zendesk-ticket-search` defect (`crates/connector-flux/src/
+# op.rs`; C-28, C-30): the emitter interpolates a query value into the URL with `fmt` and
+# percent-encodes nothing at all. `from_date` sidesteps this the same way Salesforce's path segments
+# do — not by encoding, which this pipeline still cannot do, but by a schema `pattern` narrow enough
+# that no admissible value can contain `&`, `#`, `=`, a space, or anything else that would change the
+# shape of the request: `^\d{4}-\d{2}-\d{2}$`, an ISO 8601 date and nothing else. No other operation
+# here declares a query parameter at all.
+#
+# ---------------------------------------------------------------------------------------------
+# STRINGLY-TYPED COUNTS. DocuSign's own convention, not this connector's.
+# ---------------------------------------------------------------------------------------------
+#
+# `resultSetSize`, `totalSetSize`, `recipientCount` and `routingOrder` all arrive as JSON strings
+# despite being numbers — the same quirk `providers/hubspot.toml` and `providers/shopify.toml` already
+# flag on their own vendors' responses. Declared `type = "string"` below, with a description saying
+# so, rather than `integer` with a schema that would not match what actually arrives.
+#
+# ---------------------------------------------------------------------------------------------
+# STILL CANNOT MAKE A LIVE CALL, for the same reason as every shipped connector: `http.request` takes
+# `{"$secret": …}` as a whole-value replacement and cannot assemble a `Bearer` header itself
+# (`docs/designs/auth-seam.md`, AGENTS.md's *Intentional gaps*). This connector is the catalogue's
+# proof, not a working client.
+# ---------------------------------------------------------------------------------------------
+
+id = "docusign"
+vendor = "DocuSign"
+
+# `{account_host}` and `{account_id}` are each bound by their own `[[config]]` field below — see the
+# header comment above for why both live here rather than one being a per-call path argument.
+base_url = "https://{account_host}/restapi/v2.1/accounts/{account_id}"
+
+description = "DocuSign eSignature REST API: list and read envelopes and their recipients, create an envelope from a template, and void one"
+
+# The connection check for a settings page's Test Connection button. DocuSign's own account-info
+# resource (`GET /restapi/v2.1/accounts/{accountId}`) would be the more obvious choice, but it sits at
+# exactly the tail this connector's `base_url` already ends at — the resource path would have to be
+# empty, which every operation's own `path` must not be. `/folders` is the next-simplest read: it
+# takes no parameters, and it succeeds for any account with API access, empty of envelopes or not.
+verify = "docusign-verify"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["docusign.access_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "docusign.access_token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; never read here.
+#
+# No `[auth.oauth2]` block, deliberately — the same reasoning `providers/salesforce.toml` and
+# `providers/notion.toml` give for the same omission: an access token minted by DocuSign's own
+# authorization-code, JWT-bearer or implicit grant reaches the wire identically as
+# `Authorization: Bearer <token>`, so which grant minted it is operator configuration rather than
+# connector shape. flux is handed an already-minted token through the environment and runs no grant.
+#
+# A DocuSign access token is short-lived (its exact lifetime is a matter of which grant minted it, not
+# a fixed constant this file could state honestly). Refresh is effectful acquisition — it belongs to
+# the host (C-21, `docs/designs/unified-auth.md` §7) — and its absence here means a long-running flow
+# re-reads the environment and a stale token fails closed with a 401, the better of the two available
+# failures.
+env = ["DOCUSIGN_ACCESS_TOKEN"]
+description = "DocuSign OAuth2 access token sent as a bearer; already minted, supplied through the environment"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — six: the connection check, three reads, one create and one void.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only (C-8, C-23).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "docusign-verify"
+method = "GET"
+path = "/folders"
+description = "List the account's own top-level folders — Draft, Sent Items, Inbox, and any custom ones. Takes no parameters and succeeds for any account with API access, which is what makes it the connection check for a settings page's Test Connection button"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["folders"]
+description = "DocuSign's own folder structure, not envelope data"
+properties = { folders = { type = "array", description = "Each folder's id and name, standard (Draft, Sent Items, Inbox, ...) and custom", items = { type = "object", required = ["folderId", "name"], properties = { folderId = { type = "string" }, name = { type = "string" }, uri = { type = "string", description = "This folder's own resource path" } } } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/errorCode"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "docusign-envelope-list"
+method = "GET"
+path = "/envelopes"
+description = "List envelopes whose status changed on or after a given date. DocuSign requires a from_date (or an explicit envelope_ids/transaction_ids list, which this operation does not offer) on every call to this resource — omitting it is a 400 from the vendor, not a limitation of this connector"
+risk = "low"
+idempotency = "idempotent"
+
+# See the header comment's query-encoding note: the anchored date pattern is what keeps this value
+# safe with no percent-encoder protecting it.
+[[operations.params.query]]
+name = "from_date"
+description = "Only envelopes with a status change on or after this date, as YYYY-MM-DD. Required — DocuSign's own resource has no unfiltered form"
+required = true
+schema = { type = "string", pattern = "^\\d{4}-\\d{2}-\\d{2}$" }
+
+[operations.response_schema]
+type = "object"
+required = ["envelopes"]
+properties = { envelopes = { type = "array", description = "Each envelope's own status summary — no recipient or document detail; see docusign-envelope-recipients-get for who is on it", items = { type = "object", required = ["envelopeId", "status"], properties = { envelopeId = { type = "string" }, status = { type = "string", description = "e.g. sent, delivered, completed, declined, voided, created" }, emailSubject = { type = "string" }, sentDateTime = { type = "string", format = "date-time" }, completedDateTime = { type = "string", format = "date-time" }, statusChangedDateTime = { type = "string", format = "date-time" } } } }, resultSetSize = { type = "string", description = "A COUNT, RETURNED AS A STRING — DocuSign's own convention, not this connector's" }, totalSetSize = { type = "string", description = "Same convention as resultSetSize" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/errorCode"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "docusign-envelope-get"
+method = "GET"
+path = "/envelopes/{envelope_id}"
+description = "Get one envelope's own status and metadata. No recipient or document detail — see docusign-envelope-recipients-get for who is on it"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "envelope_id"
+description = "The envelope's DocuSign id (a GUID), as returned by docusign-envelope-list or docusign-envelope-create-from-template"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["envelopeId", "status"]
+properties = { envelopeId = { type = "string" }, status = { type = "string", description = "e.g. sent, delivered, completed, declined, voided, created" }, emailSubject = { type = "string" }, sentDateTime = { type = "string", format = "date-time" }, completedDateTime = { type = "string", format = "date-time" }, statusChangedDateTime = { type = "string", format = "date-time" }, voidedReason = { type = "string", description = "Present only once the envelope has been voided" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/errorCode"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "docusign-envelope-recipients-get"
+method = "GET"
+path = "/envelopes/{envelope_id}/recipients"
+description = "Get every recipient on an envelope and their signing status. Recipient name and email are personal data — see this operation's own response_schema before logging, displaying or forwarding it"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "envelope_id"
+description = "The envelope's DocuSign id (a GUID)"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+description = "Every recipient list here carries personal data: name and email identify a real person DocuSign is asking to sign, view or receive a copy. No example value is given anywhere in this connector for either field"
+properties = { signers = { type = "array", description = "Recipients asked to sign", items = { type = "object", required = ["recipientId", "email", "name", "status"], properties = { recipientId = { type = "string" }, name = { type = "string", description = "Personal data — the signer's own name" }, email = { type = "string", description = "Personal data — the signer's own email address" }, status = { type = "string", description = "e.g. created, sent, delivered, completed, declined, autoresponded" }, routingOrder = { type = "string", description = "A COUNT, RETURNED AS A STRING — DocuSign's own convention" }, signedDateTime = { type = "string", format = "date-time" }, deliveredDateTime = { type = "string", format = "date-time" }, declinedReason = { type = "string" } } } }, agents = { type = "array", description = "Recipients who may view and forward the envelope without signing. Same personal-data shape as signers", items = { type = "object" } }, carbonCopies = { type = "array", description = "Recipients who receive a copy once the envelope completes. Same personal-data shape as signers", items = { type = "object" } }, recipientCount = { type = "string", description = "A COUNT, RETURNED AS A STRING — DocuSign's own convention" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/errorCode"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "docusign-envelope-create-from-template"
+method = "POST"
+path = "/envelopes"
+description = "Create an envelope from an existing template. When status is sent, DocuSign dispatches it immediately to every named recipient — a real, legally binding signature request to a real person. Use status created to save it as an editable draft that notifies nobody instead"
+risk = "high"
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "templateId"
+description = "The template's id (a GUID) to generate the envelope from"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# See the header comment: this is a single caller-supplied array value at the body root, not a `wire`
+# path an array would have to be decomposed across (C-185, narrowed by C-179).
+[[operations.params.body]]
+name = "templateRoles"
+description = "One entry per role the template defines, supplying the recipient DocuSign routes that role to. email, name and roleName are all required by DocuSign. No example is given here — a signer's name and email are personal data — and roleName must match a role the template itself declares"
+required = true
+schema = { type = "array", minItems = 1, items = { type = "object", required = ["email", "name", "roleName"], properties = { email = { type = "string", description = "Personal data. DocuSign routes and addresses the envelope using this address — a wrong value sends a real, legally binding signature request to the wrong person" }, name = { type = "string", description = "Personal data. The recipient's name as it will appear on the signed document" }, roleName = { type = "string", description = "Must match one of the roles the template itself defines" } } } }
+
+[[operations.params.body]]
+name = "status"
+description = "sent dispatches the envelope to every named recipient immediately; created saves it as an editable draft and notifies nobody"
+required = true
+schema = { type = "string", enum = ["sent", "created"] }
+
+[operations.response_schema]
+type = "object"
+required = ["envelopeId", "status"]
+properties = { envelopeId = { type = "string", description = "The new envelope's id — what docusign-envelope-get, docusign-envelope-recipients-get and docusign-envelope-void address it by" }, status = { type = "string", description = "Echoes the status just set: sent or created" }, statusDateTime = { type = "string", format = "date-time" }, uri = { type = "string", description = "This envelope's own resource path" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/errorCode"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "docusign-envelope-void"
+method = "PUT"
+path = "/envelopes/{envelope_id}"
+description = "Void an envelope: cancel it permanently. Every recipient who has not yet finished signing is immediately locked out, and no further signing action is possible on this envelope id. Irreversible"
+risk = "destructive"
+# `PUT` is idempotent in effect under RFC 9110 §9.2.2 — the envelope stays voided either way — but,
+# like `providers/miro.toml`'s sticky-note delete and `providers/cloudflare.toml`'s own DNS record
+# delete, this file has no confirmed evidence that DocuSign answers a *repeated* void with the same
+# 200 rather than an error naming the envelope as already voided or already completed. No write here
+# is marked idempotent on a claim it cannot back, so this stays the conservative, safe-to-under-claim
+# answer rather than the aggressive one.
+#
+# This operation is a `PUT`, not a `POST` or `PATCH`, so C-186's method-based idempotent-refusal
+# (`check_write_metadata`, `crates/connector-flux/src/op.rs:594-604`) is never in tension with this
+# declaration either way — confirmed by reading the check directly rather than assuming it applies.
+# Nothing in this connector needs C-186 to land: there is no `PATCH` operation here, and the one
+# `POST` (docusign-envelope-create-from-template) is genuinely non-idempotent with no honest claim to
+# make that the emitter refuses.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "envelope_id"
+description = "The envelope's DocuSign id (a GUID) to void"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# A *constant* this operation always sends, not a caller-supplied parameter — the same
+# `ticket.safe_update`-style pattern `providers/intercom.toml` and `providers/cloudflare.toml` use for
+# a body value with only one correct answer. This is what makes the operation "void" and only that.
+[[operations.params.body]]
+name = "status"
+description = "Constant voided — this operation always voids the envelope; there is no other status this operation sets"
+required = true
+schema = { type = "string", const = "voided" }
+
+[[operations.params.body]]
+name = "voidedReason"
+description = "Why this envelope is being voided. DocuSign shows this to any recipient who already opened the envelope, so avoid putting anything sensitive in it"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["envelopeId", "status"]
+properties = { envelopeId = { type = "string" }, status = { type = "string", description = "voided on success" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/errorCode"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any of the above can run
+#
+# Three fields: the account's own API host, its account id, and the token. All three are connection
+# level, derived from what they bind — every DocuSign account is its own tenant, and there is no
+# operator-level registration this connector needs beyond what an integration key's own console
+# registration already covers (not modelled here; see the `[auth.oauth2]` note above).
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "account_host"
+label = "DocuSign account API host"
+help = "The host portion of this account's own API server, without the https:// prefix — read it from the base_uri field of the accounts[] entry in DocuSign's OAuth UserInfo response (https://account-d.docusign.com/oauth/userinfo in the developer sandbox, https://account.docusign.com/oauth/userinfo in production) for the account you are connecting. If that field reads https://demo.docusign.net, enter demo.docusign.net"
+example = "demo.docusign.net"
+format = "hostname"
+binds = "endpoint.account_host"
+
+[[config]]
+name = "account_id"
+label = "DocuSign account id"
+help = "This account's id (a GUID), from the same accounts[] entry of DocuSign's OAuth UserInfo response that account_host came from"
+example = "00000000-0000-0000-0000-000000000000"
+binds = "endpoint.account_id"
+
+[[config]]
+name = "access_token"
+label = "Access token"
+help = "An OAuth2 access token for this account — minted by DocuSign's own login flow or an integration key's JWT/authorization-code grant, and pasted here already-minted. It is short-lived; a call that starts failing with 401 usually means this needs refreshing"
+# No `example`, deliberately: a DocuSign access token is a long opaque string, and a
+# realistic-looking placeholder for a secret field has already tripped GitHub's push protection and
+# blocked a release (`providers/notion.toml` and `providers/salesforce.toml` record the same
+# caution).
+format = "token"
+secret = true
+binds = "credential.docusign.access_token"
