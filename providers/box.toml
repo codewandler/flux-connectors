@@ -1,0 +1,322 @@
+# Box Content API — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Box publishes an OpenAPI 3 description of its whole Platform
+# API (`https://developer.box.com/openapi.json` mirrors what developer.box.com/reference renders),
+# describing several hundred operations across files, folders, collaborations, comments, metadata
+# templates, retention policies, legal holds, webhooks, shared links, groups, tasks and sign
+# requests. Nothing is vendored under `specs/` for it because ingest (C-4) and the overlay (C-6) do
+# not exist yet, and pointing at the whole document without a selection mechanism would be pointing
+# several hundred LLM tools at a paying Box account. When C-14's fetch and C-4's ingest land, this
+# file becomes `[spec]` plus a `[[patch.operations]]` selection, and **the six operations below are
+# the selection to reproduce**, by path and method:
+#
+#   GET   /2.0/folders/{folder_id}
+#   GET   /2.0/folders/{folder_id}/items
+#   GET   /2.0/files/{file_id}
+#   POST  /2.0/folders
+#   POST  /2.0/files/{file_id}/copy
+#   GET   /2.0/users/me
+#
+# Until then drift is undetectable by machine, exactly as for zendesk, freshdesk, github, notion and
+# every other hand-authored provider here (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# THE ROOT FOLDER'S ID IS THE LITERAL STRING `0`. THIS IS THE WHOLE REASON THIS CONNECTOR IS HERE.
+# ---------------------------------------------------------------------------------------------
+#
+# Every Box folder and file is addressed by an opaque numeric-string id, *except* the root of a Box
+# account, whose id is not opaque at all — it is the fixed sentinel `"0"`, documented as such at
+# developer.box.com and true for every Box account that has ever existed. A model given a `folder_id`
+# parameter with no further information has no way to guess this: `"root"`, `""` and `"/"` are all
+# more likely completions than `"0"`, and every one of them is a `404`. So every path or body
+# parameter below that names a folder id says so in its own `description` — not only in this header
+# comment, which a model never reads — and carries `default = "0"` on its JSON Schema, which is the
+# one form of "the answer, right here" that reaches the composed `input_schema` a model actually
+# sees (C-125). `crates/connector-flux/tests/box_connector.rs` pins both halves: the schema default
+# and the prose. Neither is enough alone — a model that never reads a schema still has the sentence,
+# and a model that skips the description still has the default.
+#
+# ---------------------------------------------------------------------------------------------
+# THE DOWNLOAD ENDPOINT IS DELIBERATELY EXCLUDED. IT IS A 302, NOT A FILE.
+# ---------------------------------------------------------------------------------------------
+#
+# `GET /2.0/files/{file_id}/content` is the obvious candidate for "read a file" and it is left out on
+# purpose. Box does not stream bytes from that URL: it answers `302 Found` with a `Location` header
+# pointing at a signed, time-limited URL on a separate download host, and the actual bytes live at
+# *that* address. This pipeline's only request primitive is `http.request`
+# (`crates/connector-flux/src/op.rs`), and nothing in this repository declares, negotiates, or
+# depends on redirect-following — it is not a declared behaviour of flux's HTTP client, not a
+# capability any connector here asserts, and not something an emitted `op` can express, since the
+# second hop's URL is a runtime response value, not a template this compiler can see at build time.
+# Shipping this endpoint would mean shipping an operation whose success depends entirely on a client
+# setting nobody declared: it would build, format, round-trip and pass every shipped-provider gate,
+# and then hand a model a `302` body it has no way to follow. That is exactly the "plausible but
+# incorrect" output AGENTS.md says to refuse, so the connector reads file and folder *metadata* only,
+# never file *content*.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: no query parameter, so folder listing returns its first page only (C-30).
+# ---------------------------------------------------------------------------------------------
+#
+# Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim into a
+# `fmt` template and flux registers no encoding op. `zendesk-ticket-search` is the standing
+# demonstration and AGENTS.md lists it under *Intentional gaps*. `box-folder-items-list` therefore
+# excludes Box's `offset`, `limit` and `fields` query parameters and returns the folder's first page
+# (Box's own default page size), the same choice `providers/notion.toml` made for the same reason.
+#
+# ---------------------------------------------------------------------------------------------
+# EXCLUDED, each for a stated reason
+# ---------------------------------------------------------------------------------------------
+#
+# - `GET /2.0/files/{file_id}/content` — the 302-redirect section above. The largest exclusion and
+#   the one a reader is most likely to want.
+# - `offset` / `limit` / `fields` on the items listing — C-30, above.
+# - Collaborations, comments, metadata templates, retention policies, legal holds, shared links,
+#   uploads (`POST /2.0/files/content`, itself a multipart body this pipeline cannot express), file
+#   version history, trash, search (`GET /2.0/search`, whose `query` parameter is exactly the
+#   injectable free-text shape C-30 excludes elsewhere), users and groups administration, webhooks,
+#   and the OAuth token exchange (`POST /oauth2/token`). Out of scope for a first curated set, not
+#   blocked by anything.
+
+id = "box"
+vendor = "Box"
+
+# One host for every account — Box has no tenant subdomain, so `base_url` carries no `{placeholder}`
+# for an operator to bind and `status.rs` reports no `unbound-base-url-template` issue. Box's signed
+# download URLs are served from a separate host entirely, and that host is never reached because the
+# download endpoint is excluded above — widening `http_hosts` to include it would be declaring egress
+# this connector never uses.
+base_url = "https://api.box.com"
+
+description = "Box: browse folder contents, read file and folder metadata, create folders, and copy files"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["box.access_token"] }]
+
+# The "Test connection" button. `GET /2.0/users/me` takes no parameters at all, so pressing it cannot
+# do anything except prove the token resolves — and it returns the authenticated user's own name and
+# login, which is the clearest confirmation available that the token is a Box token rather than
+# something else pasted into the field. A `verify` operation runs unattended whenever someone opens a
+# settings page, so it must be a read; the loader refuses a `high` or `destructive` one.
+verify = "box-user-me"
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "box.access_token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; its value is never read
+# here and never reaches a generated artifact.
+#
+# Box's own OAuth2 access token and a short-lived "Developer Token" minted from the Box Developer
+# Console are the same thing on the wire — `Authorization: Bearer <token>` — so which one an
+# operator supplies is configuration rather than connector shape. That is why no `[auth.oauth2]`
+# block appears: flux is handed an already-minted token through the environment and runs no grant,
+# the same provenance asana's and notion's bearers have.
+env = ["BOX_ACCESS_TOKEN"]
+description = "Box access token sent as a bearer — an OAuth2 access token or a Developer Console token"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a human supplies before any of this runs
+#
+# One field. Box is single-host with no tenant subdomain, so unlike zendesk's `{subdomain}` and
+# freshdesk's `{domain}` there is no address to bind and the token is the only thing an operator can
+# supply. `binds` makes this connection-level (per tenant) rather than operator-level; `Level` is
+# derived from that and is never authored.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "access_token"
+label = "Access token"
+help = "Create an app at box.com/developers/console. For a quick connection, generate a Developer Token from the app's Configuration tab — it lasts 60 minutes and is meant for testing. For a token that keeps working, complete the app's OAuth2 authorization flow and supply the resulting access token"
+# No `example`, deliberately. A placeholder for a secret field has to be recognisable as fake, and a
+# Box token is an opaque string with no fixed prefix a placeholder could safely imitate without
+# risking a shape secret scanners match — `providers/notion.toml` and `providers/shopify.toml` record
+# the release this repository actually lost that way. The shape belongs in `help`, where it cannot be
+# mistaken for a value or copied into a form.
+format = "token"
+secret = true
+docs_url = "https://developer.box.com/guides/authentication/"
+binds = "credential.box.access_token"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 6 of some several hundred endpoints
+#
+# Curated to what a file-browsing flow executes at runtime: list what is in a folder, read one
+# file's or one folder's metadata, create a folder, copy a file — plus the connection check.
+# Everything administrative, everything requiring the block-model-shaped exclusions above, and the
+# download endpoint are excluded; see the header comment for the list and the reasons.
+#
+# `/2.0` is Box's one path version prefix and has been since the Content API was published.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only, so `op box.folders.get` is undeclarable (C-8, C-23).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "box-user-me"
+method = "GET"
+path = "/2.0/users/me"
+description = "Get the user this access token authenticates as, confirming the token resolves and naming the account it belongs to. Takes no parameters"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+properties = { type = { const = "user" }, id = { type = "string", description = "The user's id" }, name = { type = "string" }, login = { type = "string", description = "The user's email address" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "box-folder-get"
+method = "GET"
+path = "/2.0/folders/{folder_id}"
+description = "Get one folder's metadata: name, size, timestamps and parent. Does not return its contents — use box-folder-items-list for that"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "folder_id"
+description = "The folder's id, an opaque numeric string — except the account's root folder, whose id is always the literal string \"0\". There is no other name or alias for the root; passing \"root\" or an empty string is a 404"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$", default = "0" }
+
+[operations.response_schema]
+type = "object"
+properties = { type = { const = "folder" }, id = { type = "string" }, name = { type = "string" }, description = { type = "string" }, size = { type = "integer", description = "Total size in bytes of the folder's contents" }, created_at = { type = "string", format = "date-time" }, modified_at = { type = "string", format = "date-time" }, parent = { type = "object", description = "The parent folder's mini representation, `{type: \"folder\", id, name}` — absent (`null`) for the root folder, which has no parent" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "box-folder-items-list"
+method = "GET"
+path = "/2.0/folders/{folder_id}/items"
+description = "List the files and folders directly inside a folder, first page only (Box's own default page size). Each entry is a mini item representation — its type, id and name — not the full metadata box-file-get or box-folder-get returns"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "folder_id"
+description = "The folder's id, an opaque numeric string — except the account's root folder, whose id is always the literal string \"0\". Listing the root folder is how a first call discovers what is in the account at all"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$", default = "0" }
+
+[operations.response_schema]
+type = "object"
+properties = { total_count = { type = "integer", description = "How many items the folder holds in total. This connector cannot fetch beyond the first page (C-30), so a value larger than entries.length means more exist" }, entries = { type = "array", description = "This page's items, each `{type: \"file\"|\"folder\", id, name}`", items = { type = "object" } }, offset = { type = "integer" }, limit = { type = "integer" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "box-file-get"
+method = "GET"
+path = "/2.0/files/{file_id}"
+description = "Get one file's metadata: name, size, timestamps and parent folder. This does NOT return the file's content — Box serves file content from a signed, time-limited URL reached only through a 302 redirect this connector does not follow, so file content is out of scope entirely"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "file_id"
+description = "The file's id, an opaque numeric string assigned by Box on upload. Found in a folder listing's entries or in the file's Box URL"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$" }
+
+[operations.response_schema]
+type = "object"
+properties = { type = { const = "file" }, id = { type = "string" }, name = { type = "string" }, size = { type = "integer", description = "Size in bytes" }, created_at = { type = "string", format = "date-time" }, modified_at = { type = "string", format = "date-time" }, sha1 = { type = "string", description = "SHA-1 hash of the file's content, for verifying a download performed some other way" }, parent = { type = "object", description = "The parent folder's mini representation, `{type: \"folder\", id, name}`" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/code"
+
+# ---------------------------------------------------------------------------------------------
+# The two writes.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "box-folder-create"
+method = "POST"
+path = "/2.0/folders"
+description = "Create a new, empty folder as a child of an existing folder. Naming a folder that already exists under the same parent answers 409 conflict rather than creating a duplicate"
+# `medium`, not `high`. A new folder is visible to everyone with access to its parent and is
+# attributed to the token's user, but creating it notifies nobody and it is trivial to remove. It
+# creates one object and destroys nothing.
+risk = "medium"
+# Posting twice with the same name conflicts (409) rather than duplicating, but that is a vendor
+# behaviour this file cannot assert as a property of the request, and `check_write_metadata`
+# (`crates/connector-flux/src/op.rs`) refuses `idempotent` on any POST regardless. `non_idempotent`
+# is the honest declaration either way.
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "name"
+description = "The new folder's name, unique among its parent's immediate children"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# `parent.id` — a two-segment `wire` path, so the emitter nests it under `parent` rather than sending
+# it at the root, which Box would reject as a missing `parent`.
+[[operations.params.body]]
+name = "parent_id"
+wire = "parent.id"
+description = "The id of the existing folder to create this folder inside, an opaque numeric string — or the literal string \"0\" to create it directly under the account's root"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$", default = "0" }
+
+[operations.response_schema]
+type = "object"
+properties = { type = { const = "folder" }, id = { type = "string", description = "The created folder's id — what a later call addresses it by" }, name = { type = "string" }, created_at = { type = "string", format = "date-time" }, parent = { type = "object" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/code"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "box-file-copy"
+method = "POST"
+path = "/2.0/files/{file_id}/copy"
+description = "Copy an existing file into a different folder, keeping its original name. Each call creates a new, independent file — copying the same file twice produces two copies, not one"
+# `medium`, not `high`, for the same reason as box-folder-create: limited blast radius, attributed,
+# and trivial to remove. It creates one new object and changes nothing about the source file.
+risk = "medium"
+# Every call creates a new copy; there is no idempotency key on this endpoint. `check_write_metadata`
+# also refuses `idempotent` on a POST regardless.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "file_id"
+description = "The id of the file to copy, an opaque numeric string"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$" }
+
+# `parent.id` — a two-segment `wire` path, the same shape as box-folder-create's.
+[[operations.params.body]]
+name = "parent_id"
+wire = "parent.id"
+description = "The id of the destination folder, an opaque numeric string — or the literal string \"0\" to copy directly into the account's root"
+required = true
+schema = { type = "string", pattern = "^[0-9]+$", default = "0" }
+
+[operations.response_schema]
+type = "object"
+properties = { type = { const = "file" }, id = { type = "string", description = "The new copy's id, distinct from the source file's id" }, name = { type = "string" }, size = { type = "integer" }, parent = { type = "object" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+code_pointer = "/code"
