@@ -7,6 +7,38 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Two services of one connector no longer collapse into one configuration value (C-197).** The
+  runtime port keyed on `(tenant, provider, kind, name)` with no service, while the IR distinguishes
+  them: `providers/contentful.toml` declares `delivery_space_id` and `management_space_id`, each
+  binding `endpoint.space_id` under a different service. So contentful had exactly one `space_id`
+  slot.
+
+  **Reproduced before it was fixed**, not argued: at the merge base, with the one slot bound to
+  `space-for-delivery`, `contentful-entry-create` built
+  `https://api.contentful.com/spaces/space-for-delivery/environments/master/entries` — a management
+  write into the delivery space. Not a refusal; a `200` from a space nobody named.
+
+  The port now keys on `(tenant, provider, service, kind, name)`, and `Error::MissingConfig` names
+  the service — without it, an operator told `contentful` is missing `endpoint.space_id` has two
+  fields answering to that description.
+
+  **`catalog::Operation` gained `service`, and it is additive rather than breaking.** The struct is
+  already `#[non_exhaustive]`, so an external consumer can neither build it with a struct literal nor
+  destructure exhaustively — no downstream code can break on a field arriving. It moved 44 generated
+  tables and 248 rows; `catalog.json` and the index came back **byte-identical**, because
+  `catalog.json` had carried the service all along. That is the story's own diagnosis confirmed: the
+  embedded Rust catalogue was the surface lagging, not the model.
+
+  `connector-pack` *is* genuinely breaking — `ConfigStore::get` gained a parameter and
+  `Error::MissingConfig` a field — which is precisely why this landed before the first publish.
+
+  **One hazard has no type-level protection and is recorded rather than solved:** a host that
+  implements `ConfigStore` itself and updates mechanically by ignoring the new `service` parameter
+  compiles, passes its own tests, and silently restores the defect. The trait's doc says so; that is
+  all there is.
+
 ### Added
 
 - **Every shipped provider declares an authority (C-92) — and an entire authentication mechanism

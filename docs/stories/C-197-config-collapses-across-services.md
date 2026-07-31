@@ -2,7 +2,7 @@
 id: C-197
 title: "The configuration port has no service, so two services' variables of the same name collapse into one"
 pillar: Bridge
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/connector-configuration.md
 areas: [bridge, connector-pack, connector-catalog]
