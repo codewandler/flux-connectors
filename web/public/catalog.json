@@ -21381,6 +21381,816 @@
       "channels": []
     },
     {
+      "id": "typeform",
+      "authority": null,
+      "vendor": "Typeform",
+      "description": "Typeform: read the authenticated account, forms and their responses, and delete responses",
+      "base_url": "https://api.typeform.com",
+      "api_version": null,
+      "hosts": [
+        "api.typeform.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.typeform.com",
+          "hosts": [
+            "api.typeform.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 5
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "typeform.access_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "Typeform access token sent as a bearer — a personal access token or an OAuth2 access token",
+            "env": [
+              "TYPEFORM_ACCESS_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "typeform.access_token"
+          ]
+        ]
+      },
+      "operation_count": 5,
+      "operations": [
+        {
+          "id": "typeform-user-me",
+          "provider": "typeform",
+          "service": "default",
+          "description": "Get the Typeform account this access token authenticates as: its account id, display alias, own account email and interface language. Confirms the token resolves. Takes no parameters",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/me",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "account_id": {
+                "description": "The account's own opaque id",
+                "type": "string"
+              },
+              "alias": {
+                "description": "The account's display alias, shown in Typeform's own UI",
+                "type": "string"
+              },
+              "email": {
+                "description": "The account owner's own email — never a form respondent's",
+                "type": "string"
+              },
+              "language": {
+                "description": "The account's interface language, as an IETF language tag, e.g. \"en\"",
+                "type": "string"
+              }
+            },
+            "required": [
+              "account_id"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "typeform.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.typeform.com"
+          ],
+          "flux": "op typeform-user-me -> Any\n  description \"Get the Typeform account this access token authenticates as: its account id, display alias, own account email and interface language. Confirms the token resolves. Takes no parameters. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/description`, its error code at `/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.typeform.com\"\n  url = fmt(\"{base}/me\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "typeform-form-list",
+          "provider": "typeform",
+          "service": "default",
+          "description": "List the forms in the authenticated account, most recently updated forms sorting available. Returns each form's id, title and public/private status but not its questions — use typeform-form-get for a form's fields",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/forms",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "wire": null,
+              "description": "Page number, 1-based",
+              "required": false,
+              "schema": {
+                "default": 1,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "page_size",
+              "in": "query",
+              "wire": null,
+              "description": "Forms per page; Typeform defaults this to 10 and caps it at 200",
+              "required": false,
+              "schema": {
+                "default": 10,
+                "maximum": 200,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "sort_by",
+              "in": "query",
+              "wire": null,
+              "description": "Field to sort by",
+              "required": false,
+              "schema": {
+                "enum": [
+                  "created_at",
+                  "last_updated_at"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "order_by",
+              "in": "query",
+              "wire": null,
+              "description": "Sort direction",
+              "required": false,
+              "schema": {
+                "enum": [
+                  "asc",
+                  "desc"
+                ],
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "order_by": {
+                "enum": [
+                  "asc",
+                  "desc"
+                ],
+                "type": "string"
+              },
+              "page": {
+                "default": 1,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "page_size": {
+                "default": 10,
+                "maximum": 200,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "sort_by": {
+                "enum": [
+                  "created_at",
+                  "last_updated_at"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "items": {
+                "description": "This page's forms",
+                "items": {
+                  "properties": {
+                    "id": {
+                      "description": "The form's own id — pass this as `form_id` to every other operation below",
+                      "type": "string"
+                    },
+                    "last_updated_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "self": {
+                      "properties": {
+                        "href": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "settings": {
+                      "description": "At least `{is_public}`; the vendor's own resource carries more form-level settings this curated connector does not enumerate further",
+                      "properties": {
+                        "is_public": {
+                          "type": "boolean"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "title": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "page_count": {
+                "type": "integer"
+              },
+              "total_items": {
+                "description": "Total forms in the account, which may exceed `items.length` on one page",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "items",
+              "total_items",
+              "page_count"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "typeform.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.typeform.com"
+          ],
+          "flux": "op typeform-form-list(page: Number, page_size: Number, sort_by: String, order_by: String) -> Any\n  description \"List the forms in the authenticated account, most recently updated forms sorting available. Returns each form's id, title and public/private status but not its questions — use typeform-form-get for a form's fields. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/description`, its error code at `/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.typeform.com\"\n  url = fmt(\"{base}/forms\")\n  sep = \"?\"\n  when page\n    url = fmt(\"{url}{sep}page={page}\")\n    sep = \"&\"\n  when page_size\n    url = fmt(\"{url}{sep}page_size={page_size}\")\n    sep = \"&\"\n  when sort_by\n    url = fmt(\"{url}{sep}sort_by={sort_by}\")\n    sep = \"&\"\n  when order_by\n    url = fmt(\"{url}{sep}order_by={order_by}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
+                "params": [
+                  "sort_by",
+                  "order_by"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "typeform-form-get",
+          "provider": "typeform",
+          "service": "default",
+          "description": "Get one form's own definition: its title, language, rendering type and questions (fields), plus its welcome and thank-you screens. Does not return any response data — use typeform-response-list for that",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/forms/{form_id}",
+          "parameters": [
+            {
+              "name": "form_id",
+              "in": "path",
+              "wire": null,
+              "description": "The form's own id, from typeform-form-list's `id` field, or the trailing path segment of the form's own URL (the part after `/to/`)",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "form_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "form_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "fields": {
+                "description": "One entry per question. Each carries at least an id, a ref, a title and a type; some carry nested `properties` and `validations` this curated connector does not enumerate further — read them through rather than assuming a shape",
+                "items": {
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "ref": {
+                      "description": "The field's own stable reference, distinct from its id — what an answer in a response names this question by",
+                      "type": "string"
+                    },
+                    "title": {
+                      "description": "The question text the form's own author wrote",
+                      "type": "string"
+                    },
+                    "type": {
+                      "description": "e.g. \"short_text\", \"multiple_choice\", \"email\", \"number\", \"date\", \"file_upload\"",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "hidden": {
+                "description": "The variable names of hidden fields this form accepts via URL parameter — the field names only, declared by the form's own author; never a respondent's value",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "language": {
+                "description": "IETF language tag, e.g. \"en\"",
+                "type": "string"
+              },
+              "settings": {
+                "description": "Form-level settings (visibility, language, progress bar, meta tags among others); read through rather than assumed — this curated connector does not enumerate every key",
+                "type": "object"
+              },
+              "thankyou_screens": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "theme": {
+                "properties": {
+                  "href": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "title": {
+                "type": "string"
+              },
+              "type": {
+                "description": "The form's rendering type, e.g. \"quiz\" or \"form\"",
+                "type": "string"
+              },
+              "welcome_screens": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "workspace": {
+                "properties": {
+                  "href": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "typeform.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.typeform.com"
+          ],
+          "flux": "op typeform-form-get(form_id: String) -> Any\n  description \"Get one form's own definition: its title, language, rendering type and questions (fields), plus its welcome and thank-you screens. Does not return any response data — use typeform-response-list for that. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/description`, its error code at `/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.typeform.com\"\n  url = fmt(\"{base}/forms/{form_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "typeform-response-list",
+          "provider": "typeform",
+          "service": "default",
+          "description": "List one form's responses, newest first by default. Paginate with `before`/`after`, each naming the `token` of a response already retrieved, to page toward older or newer responses respectively; `page_size` alone returns only the first page. Each response's `answers` holds whatever that respondent typed or selected — this connector never inspects or filters on answer content",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/forms/{form_id}/responses",
+          "parameters": [
+            {
+              "name": "form_id",
+              "in": "path",
+              "wire": null,
+              "description": "The form's own id, from typeform-form-list's `id` field, or the trailing path segment of the form's own URL (the part after `/to/`)",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "page_size",
+              "in": "query",
+              "wire": null,
+              "description": "Responses per page; Typeform defaults this to 25 and caps it at 1000",
+              "required": false,
+              "schema": {
+                "default": 25,
+                "maximum": 1000,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "before",
+              "in": "query",
+              "wire": null,
+              "description": "Return only responses submitted before this response's own `token` (exclusive) — the cursor for paging toward older responses. Pass the `token` field of the oldest response already retrieved. Omit on the first page",
+              "required": false,
+              "schema": {
+                "maxLength": 32,
+                "minLength": 32,
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "after",
+              "in": "query",
+              "wire": null,
+              "description": "Return only responses submitted after this response's own `token` (exclusive) — the cursor for paging toward newer responses. Pass the `token` field of the newest response already retrieved. Omit on the first page",
+              "required": false,
+              "schema": {
+                "maxLength": 32,
+                "minLength": 32,
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "since",
+              "in": "query",
+              "wire": null,
+              "description": "Only include responses at or after this UTC instant, written with no timezone suffix at all, e.g. \"2017-07-09T00:00:00\" — never a trailing \"Z\" or a \"+HH:MM\" offset. Which timestamp this filters (submitted_at, staged_at or landed_at) depends on which response_type is requested",
+              "required": false,
+              "schema": {
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "until",
+              "in": "query",
+              "wire": null,
+              "description": "Only include responses at or before this UTC instant, written with no timezone suffix at all, e.g. \"2017-07-09T00:00:00\" — never a trailing \"Z\" or a \"+HH:MM\" offset. Which timestamp this filters (submitted_at, staged_at or landed_at) depends on which response_type is requested",
+              "required": false,
+              "schema": {
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "response_type",
+              "in": "query",
+              "wire": null,
+              "description": "Restrict to one or more submission states, comma-separated: started, partial, completed. Omit to receive every state",
+              "required": false,
+              "schema": {
+                "pattern": "^(started|partial|completed)(,(started|partial|completed)){0,2}$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "sort",
+              "in": "query",
+              "wire": null,
+              "description": "How to order the returned responses: a fixed field name and a direction, comma-separated",
+              "required": false,
+              "schema": {
+                "enum": [
+                  "submitted_at,asc",
+                  "submitted_at,desc",
+                  "staged_at,asc",
+                  "staged_at,desc",
+                  "landed_at,asc",
+                  "landed_at,desc"
+                ],
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "after": {
+                "maxLength": 32,
+                "minLength": 32,
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "before": {
+                "maxLength": 32,
+                "minLength": 32,
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "form_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "page_size": {
+                "default": 25,
+                "maximum": 1000,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "response_type": {
+                "pattern": "^(started|partial|completed)(,(started|partial|completed)){0,2}$",
+                "type": "string"
+              },
+              "since": {
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$",
+                "type": "string"
+              },
+              "sort": {
+                "enum": [
+                  "submitted_at,asc",
+                  "submitted_at,desc",
+                  "staged_at,asc",
+                  "staged_at,desc",
+                  "landed_at,asc",
+                  "landed_at,desc"
+                ],
+                "type": "string"
+              },
+              "until": {
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "form_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "items": {
+                "description": "This page's responses, in the order `sort` (or the default) puts them",
+                "items": {
+                  "properties": {
+                    "answers": {
+                      "description": "One entry per answered question: at minimum `{field: {id, ref, type}, type}` plus exactly one value key named after `type` (text, choice, choices, email, number, boolean, date, url, file_url or payment). The value itself is whatever the respondent typed or selected and is never enumerated or exemplified here",
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "calculated": {
+                      "description": "Computed values Typeform's scoring feature attaches",
+                      "properties": {
+                        "score": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "hidden": {
+                      "description": "Hidden-field values this response's session was launched with, keyed by the form's own hidden-field variable names (see typeform-form-get's `hidden`). Shape and content depend entirely on the form's own configuration — commonly an email address, a customer id or similar, so this connector never enumerates or exemplifies a value here",
+                      "type": "object"
+                    },
+                    "landed_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "landing_id": {
+                      "description": "Identifies the browsing session that landed on the form — distinct from the response itself",
+                      "type": "string"
+                    },
+                    "metadata": {
+                      "description": "The submission's own browsing context — browser, platform, referer and network id. Not respondent-authored content",
+                      "type": "object"
+                    },
+                    "response_id": {
+                      "description": "The same value as `token`, under Typeform's other name for it",
+                      "type": "string"
+                    },
+                    "response_type": {
+                      "enum": [
+                        "started",
+                        "partial",
+                        "completed"
+                      ],
+                      "type": "string"
+                    },
+                    "submitted_at": {
+                      "description": "Present once submitted; absent on a still-open partial response",
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "token": {
+                      "description": "This response's own opaque id: 32 lowercase hex characters. Pass it as `before` or `after` to page around it",
+                      "pattern": "^[0-9a-f]{32}$",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "response_id",
+                    "token"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "page_count": {
+                "type": "integer"
+              },
+              "total_items": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "items",
+              "total_items",
+              "page_count"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "typeform.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.typeform.com"
+          ],
+          "flux": "op typeform-response-list(form_id: String, page_size: Number, before: String, after: String, since: String, until: String, response_type: String, sort: String) -> Any\n  description \"List one form's responses, newest first by default. Paginate with `before`/`after`, each naming the `token` of a response already retrieved, to page toward older or newer responses respectively; `page_size` alone returns only the first page. Each response's `answers` holds whatever that respondent typed or selected — this connector never inspects or filters on answer content. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/description`, its error code at `/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.typeform.com\"\n  url = fmt(\"{base}/forms/{form_id}/responses\")\n  sep = \"?\"\n  when page_size\n    url = fmt(\"{url}{sep}page_size={page_size}\")\n    sep = \"&\"\n  when before\n    url = fmt(\"{url}{sep}before={before}\")\n    sep = \"&\"\n  when after\n    url = fmt(\"{url}{sep}after={after}\")\n    sep = \"&\"\n  when since\n    url = fmt(\"{url}{sep}since={since}\")\n    sep = \"&\"\n  when $until\n    url = fmt(\"{url}{sep}until={until}\")\n    sep = \"&\"\n  when response_type\n    url = fmt(\"{url}{sep}response_type={response_type}\")\n    sep = \"&\"\n  when sort\n    url = fmt(\"{url}{sep}sort={sort}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
+                "params": [
+                  "before",
+                  "after",
+                  "since",
+                  "until",
+                  "response_type",
+                  "sort"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "typeform-response-delete",
+          "provider": "typeform",
+          "service": "default",
+          "description": "Permanently delete one or more of a form's responses by their own token. There is no undelete: once deleted, a response's answers are gone. Deletion is asynchronous — a successful call confirms the request was registered, not that the responses are already gone",
+          "risk": "destructive",
+          "idempotency": "non_idempotent",
+          "method": "DELETE",
+          "path": "/forms/{form_id}/responses",
+          "parameters": [
+            {
+              "name": "form_id",
+              "in": "path",
+              "wire": null,
+              "description": "The form's own id, from typeform-form-list's `id` field, or the trailing path segment of the form's own URL (the part after `/to/`)",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "included_response_ids",
+              "in": "query",
+              "wire": null,
+              "description": "Comma-separated list of up to 1000 response tokens (the same value as a response's own `token`/`response_id`, from typeform-response-list) to delete permanently",
+              "required": true,
+              "schema": {
+                "pattern": "^[0-9a-f]{32}(,[0-9a-f]{32})*$",
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "form_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "included_response_ids": {
+                "pattern": "^[0-9a-f]{32}(,[0-9a-f]{32})*$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "form_id",
+              "included_response_ids"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "typeform.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.typeform.com"
+          ],
+          "flux": "op typeform-response-delete(form_id: String, included_response_ids: String) -> Any\n  description \"Permanently delete one or more of a form's responses by their own token. There is no undelete: once deleted, a response's answers are gone. Deletion is asynchronous — a successful call confirms the request was registered, not that the responses are already gone. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/description`, its error code at `/code` in the response body.\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.typeform.com\"\n  url = fmt(\"{base}/forms/{form_id}/responses?included_response_ids={included_response_ids}\")\n  response = http.request(method: \"DELETE\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
+                "params": [
+                  "included_response_ids"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "vercel",
       "authority": "com.vercel.api",
       "vendor": "Vercel",

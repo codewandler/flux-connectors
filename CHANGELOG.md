@@ -9,6 +9,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Typeform connector (C-173).** Five operations over a bearer token, cursor-paginated responses,
+  and `GET /me` as `verify`.
+
+  It reached the same technique Calendly did, independently: **a JSON Schema `pattern` used as a guard**
+  against the unencoded-query gap. `since`/`until` are constrained to Typeform's no-offset UTC shape
+  rather than a loose `date-time`, specifically so a `+` timezone offset cannot reach the query string —
+  the hazard Calendly excluded two parameters over.
+
+  Its provenance caveat is unusually explicit and worth keeping: the 32-character lowercase-hex cursor
+  charset rests on one vendor example and one community statement, not a versioned spec. The consequence
+  is named too — a value outside the pattern is rejected client-side by its own schema, so the failure is
+  loud rather than a corrupted request. Single-service deliberately: the manifest round-trip tests read
+  the default-service manifest, so a multi-service provider with an inbound surface would panic in two
+  of them, and this story was not the place to discover that.
+
 - **The Miro connector (C-183), and it narrows a gap Notion recorded.** Six operations: board discovery
   as `verify`, generic item list and get, and sticky-note create/update/delete.
 
