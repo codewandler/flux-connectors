@@ -2,8 +2,7 @@
 id: C-122
 title: "Ship the Anthropic connector — management surface and model catalogue"
 pillar: Spec
-status: in-progress
-priority: 4
+status: done
 design: docs/designs/provider-roles.md
 epic: provider-roles
 areas: [providers]
@@ -117,3 +116,24 @@ because either gap forced the exclusion.
 `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all --check`) is green except
 for the eight whole-catalogue staleness tests AGENTS.md's table predicts for any new-provider story;
 the ninth, ratchet-owned `the_recorded_floor_is_the_measured_figure`, stayed green in this worktree.
+
+### Coordinator note at integration
+
+The one unchecked box — *the connector appears in the model pool alongside openai and openrouter* — is
+[C-121](C-121-provider-roles.md)'s work, not a shortfall here. Neither the pool projection nor
+`roles` on `providers/openai.toml`/`providers/openrouter.toml` exists yet, and both files are outside
+this story's fence. This connector's `models` service claims the role correctly, so it is
+forward-compatible. Leaving the box unchecked and saying why is the right call.
+
+**Held before merging, and released by evidence.** This is the second two-credential provider, and
+C-180's review was open on whether a per-service credential partition is *enforced* or merely declared —
+the failure would not have been a `401` but an organization-admin key reaching an endpoint that needs
+only a read key. The answer: `credential_ref_for` (`ir.rs:1166-1178`) always renders `DEFAULT_SERVICE`,
+but `Operation::auth` (`ir.rs:652-669`) overrides `default_auth`, and the emitted catalogue proves the
+split holds per operation. The partition is real.
+
+**It also got the in-band credential question right unprompted**, which C-180 did not:
+`anthropic-api-keys-list` returns `partial_key_hint`, and both the operation `description` and the
+response schema say it is a redacted display value and never the key. That is `providers/zoom.toml`'s
+convention applied without being told — and a reminder that the convention is authorial discipline, not
+a checked property, which is what [C-79](C-79-sensitive-response-fields.md) exists to change.

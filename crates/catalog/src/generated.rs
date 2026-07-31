@@ -14,6 +14,7 @@
 //! point of a build, so a stale index is loud rather than silent.
 
 pub(crate) mod airtable;
+pub(crate) mod anthropic;
 pub(crate) mod asana;
 pub(crate) mod babelforce;
 pub(crate) mod r#box;
@@ -52,6 +53,7 @@ use crate::Provider;
 #[rustfmt::skip]
 pub(crate) static PROVIDERS: &[&Provider] = &[
     &airtable::PROVIDER,
+    &anthropic::PROVIDER,
     &asana::PROVIDER,
     &babelforce::PROVIDER,
     &r#box::PROVIDER,

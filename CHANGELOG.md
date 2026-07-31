@@ -9,6 +9,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Anthropic connector (C-122).** Two services — `models` (catalogue, claiming the
+  `llm_catalogue` role) and `admin` (organization, workspaces, API keys) — five read operations, every
+  endpoint verified against Anthropic's published reference.
+
+  **It ships the management surface and the model catalogue, and deliberately not inference.**
+  `vision.md`'s non-goals exclude replacing flux's native model providers, so `messages.create` is out of
+  scope however natural it looks. `anthropic-version` is pinned through `const_headers` in the inline-table
+  form (the section-header hazard `providers/github.toml` records) and a test asserts it reaches every
+  emitted operation as a literal while appearing in no signature.
+
+  Two credentials, because the Admin API genuinely requires a distinct admin key: folding them into one
+  field would ask every operator for organization-admin access merely to list models.
+
+  **Its `api-keys-list` gets the in-band credential question right unprompted** — the response carries
+  `partial_key_hint`, and both the operation description and the schema state it is a redacted display
+  value and never the key, which is `providers/zoom.toml`'s convention followed without being asked.
+
+### Changed
+
+- **A per-service credential partition is enforced, and now it is written down.** Investigating C-180
+  established that `Connector::credential_ref_for` (`ir.rs:1166-1178`) always renders `DEFAULT_SERVICE`
+  regardless of a credential's declared service — but `Operation::auth` (`ir.rs:652-669`) overrides
+  `default_auth`, so the emitted catalogue carries the correct token per operation. Two providers now
+  depend on this; before this run, nothing recorded which of the two mechanisms was load-bearing.
+
 - **The Typeform connector (C-173).** Five operations over a bearer token, cursor-paginated responses,
   and `GET /me` as `verify`.
 

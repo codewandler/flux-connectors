@@ -516,6 +516,482 @@
       "channels": []
     },
     {
+      "id": "anthropic",
+      "authority": "com.anthropic",
+      "vendor": "Anthropic",
+      "description": "Anthropic platform: the live model catalogue, and organization info, workspaces and API keys from the Admin API",
+      "base_url": "https://api.anthropic.com",
+      "api_version": null,
+      "hosts": [
+        "api.anthropic.com"
+      ],
+      "services": [
+        {
+          "name": "models",
+          "description": "The live model catalogue: list available models, and retrieve one by id",
+          "base_url": "https://api.anthropic.com",
+          "hosts": [
+            "api.anthropic.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 2
+        },
+        {
+          "name": "admin",
+          "description": "Admin API: organization info, workspaces, and API keys — read-only",
+          "base_url": "https://api.anthropic.com",
+          "hosts": [
+            "api.anthropic.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 3
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "header"
+        ],
+        "credentials": [
+          {
+            "name": "anthropic.api_key",
+            "scheme": {
+              "kind": "header",
+              "name": "x-api-key"
+            },
+            "description": "Anthropic API key, sent as x-api-key",
+            "env": [
+              "ANTHROPIC_API_KEY"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          },
+          {
+            "name": "anthropic.admin_key",
+            "scheme": {
+              "kind": "header",
+              "name": "x-api-key"
+            },
+            "description": "Anthropic Admin API key (starts sk-ant-admin), sent as x-api-key. Required only for the organization, workspace and API-key operations below — the model catalogue uses the regular API key",
+            "env": [
+              "ANTHROPIC_ADMIN_KEY"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "anthropic.api_key"
+          ]
+        ]
+      },
+      "operation_count": 5,
+      "operations": [
+        {
+          "id": "anthropic-models-list",
+          "provider": "anthropic",
+          "service": "models",
+          "description": "List the models available to this API key, most recently released first. Unpaginated — this connector cannot request a further page",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/models",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "data": {
+                "description": "One entry per model this key can reach. Each carries at least `id` (the string to pass as `model_id` to anthropic-model-get, e.g. `claude-opus-4-6`), `type: \"model\"`, `display_name`, `created_at`, `max_input_tokens`, `max_tokens`, and a `capabilities` object describing which features (batch, citations, code execution, image/PDF input, structured outputs, extended thinking) this model supports",
+                "items": {
+                  "properties": {
+                    "created_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "display_name": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "model"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "first_id": {
+                "description": "First id in `data`. This connector cannot use it as `before_id` — no query parameter is encodable (C-30)",
+                "type": "string"
+              },
+              "has_more": {
+                "description": "True when the account has more models than this unpaginated call returned",
+                "type": "boolean"
+              },
+              "last_id": {
+                "description": "Last id in `data`, likewise unusable as `after_id` here",
+                "type": "string"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "anthropic.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.anthropic.com"
+          ],
+          "flux": "op anthropic-models-list -> Any\n  description \"List the models available to this API key, most recently released first. Unpaginated — this connector cannot request a further page. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.anthropic.com\"\n  url = fmt(\"{base}/v1/models\")\n  anthropic_version = \"2023-06-01\"\n  response = http.request(headers: { \"anthropic-version\": anthropic_version }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "anthropic-model-get",
+          "provider": "anthropic",
+          "service": "models",
+          "description": "Retrieve one model by id, or resolve an alias to the model id it currently points at",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/models/{model_id}",
+          "parameters": [
+            {
+              "name": "model_id",
+              "in": "path",
+              "wire": null,
+              "description": "The model id or alias, e.g. `claude-opus-4-6` or `claude-3-5-sonnet-20241022`",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "model_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "model_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "capabilities": {
+                "description": "Which features this model supports — batch, citations, code execution, image/PDF input, structured outputs, extended thinking. See anthropic-models-list for why this is described rather than enumerated",
+                "type": "object"
+              },
+              "created_at": {
+                "description": "When the model was released. May be an epoch value if the vendor does not know the release date",
+                "format": "date-time",
+                "type": "string"
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "id": {
+                "description": "The model id, echoed back — or the id the alias resolved to",
+                "type": "string"
+              },
+              "max_input_tokens": {
+                "type": "integer"
+              },
+              "max_tokens": {
+                "description": "The maximum value this model accepts for a completion's own max_tokens parameter",
+                "type": "integer"
+              },
+              "type": {
+                "const": "model"
+              }
+            },
+            "required": [
+              "id",
+              "type"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "anthropic.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.anthropic.com"
+          ],
+          "flux": "op anthropic-model-get(model_id: String) -> Any\n  description \"Retrieve one model by id, or resolve an alias to the model id it currently points at. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.anthropic.com\"\n  url = fmt(\"{base}/v1/models/{model_id}\")\n  anthropic_version = \"2023-06-01\"\n  response = http.request(headers: { \"anthropic-version\": anthropic_version }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "anthropic-organization-get",
+          "provider": "anthropic",
+          "service": "admin",
+          "description": "Get the organization this Admin API key belongs to. Takes no parameters; useful for confirming which organization a key resolves to",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/organizations/me",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "const": "organization"
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "name"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "anthropic.admin_key"
+            ]
+          ],
+          "hosts": [
+            "api.anthropic.com"
+          ],
+          "flux": "op anthropic-organization-get -> Any\n  description \"Get the organization this Admin API key belongs to. Takes no parameters; useful for confirming which organization a key resolves to. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.anthropic.com\"\n  url = fmt(\"{base}/v1/organizations/me\")\n  anthropic_version = \"2023-06-01\"\n  response = http.request(headers: { \"anthropic-version\": anthropic_version }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "anthropic-workspaces-list",
+          "provider": "anthropic",
+          "service": "admin",
+          "description": "List the organization's workspaces. Unpaginated and excludes archived workspaces by default — this connector cannot request a further page or ask for archived ones",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/organizations/workspaces",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "data": {
+                "description": "One entry per workspace: `id`, `name`, `type: \"workspace\"`, `created_at`, `archived_at` (absent unless the workspace is archived), plus `data_residency` and user-defined `tags` objects",
+                "items": {
+                  "properties": {
+                    "created_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "workspace"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "first_id": {
+                "type": "string"
+              },
+              "has_more": {
+                "description": "True when the organization has more workspaces than this unpaginated call returned",
+                "type": "boolean"
+              },
+              "last_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "anthropic.admin_key"
+            ]
+          ],
+          "hosts": [
+            "api.anthropic.com"
+          ],
+          "flux": "op anthropic-workspaces-list -> Any\n  description \"List the organization's workspaces. Unpaginated and excludes archived workspaces by default — this connector cannot request a further page or ask for archived ones. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.anthropic.com\"\n  url = fmt(\"{base}/v1/organizations/workspaces\")\n  anthropic_version = \"2023-06-01\"\n  response = http.request(headers: { \"anthropic-version\": anthropic_version }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "anthropic-api-keys-list",
+          "provider": "anthropic",
+          "service": "admin",
+          "description": "List the organization's API keys, with each key's name, status and a redacted hint — never the key itself. Unpaginated and unfiltered",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v1/organizations/api_keys",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "data": {
+                "description": "One entry per API key: `id`, `name`, `status` (`active`, `inactive`, `archived` or `expired`), `type: \"api_key\"`, `created_at`, `expires_at` (absent for a key that never expires), `partial_key_hint` (a partially redacted display string, safe to show in a UI — never the key), `workspace_id` (absent for a key on the default workspace), and `created_by`/`principal` objects each `{id, type}`",
+                "items": {
+                  "properties": {
+                    "created_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "One of active, inactive, archived, expired",
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "api_key"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type",
+                    "status"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "first_id": {
+                "type": "string"
+              },
+              "has_more": {
+                "type": "boolean"
+              },
+              "last_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "anthropic.admin_key"
+            ]
+          ],
+          "hosts": [
+            "api.anthropic.com"
+          ],
+          "flux": "op anthropic-api-keys-list -> Any\n  description \"List the organization's API keys, with each key's name, status and a redacted hint — never the key itself. Unpaginated and unfiltered. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.anthropic.com\"\n  url = fmt(\"{base}/v1/organizations/api_keys\")\n  anthropic_version = \"2023-06-01\"\n  response = http.request(headers: { \"anthropic-version\": anthropic_version }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "asana",
       "authority": null,
       "vendor": "Asana",
