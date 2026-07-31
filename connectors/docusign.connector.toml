@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "docusign"
+gid = "com.docusign.api:v2.1"
 vendor = "DocuSign"
 description = "DocuSign eSignature REST API: list and read envelopes and their recipients, create an envelope from a template, and void one"
 base_url = "https://{account_host}/restapi/v2.1/accounts/{account_id}"
+api_version = "v2.1"
 module = "docusign.flux"
 operations = ["docusign-verify", "docusign-envelope-list", "docusign-envelope-get", "docusign-envelope-recipients-get", "docusign-envelope-create-from-template", "docusign-envelope-void"]

@@ -111,6 +111,22 @@
 id = "dropbox"
 vendor = "Dropbox"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.dropbox.api/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
+#
+# Two domains are in play and the vendor's own wins. The API is served from `api.dropboxapi.com`,
+# but `dropboxapi.com` is an API-only convenience domain; `dropbox.com` is what the vendor publishes
+# itself as. `base_url` above already records the host — the authority records the vendor, and the
+# two are deliberately different facts, the same distinction `providers/salesforce.toml` draws for a
+# templated host.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.dropbox.api"
+
 # One host for every account — Dropbox has no tenant subdomain, so `base_url` carries no
 # `{placeholder}` for an operator to bind and `status.rs` reports no `unbound-base-url-template`
 # issue. This is Dropbox's RPC host; the content host (`content.dropboxapi.com`) is never reached

@@ -341,51 +341,152 @@ async fn a_credential_too_short_to_redact_is_refused_rather_than_sent() {
     );
 }
 
-/// **Why the Basic half is not driven end to end from this file, pinned as behaviour (C-198).**
-///
-/// `zendesk`, `jira` and `twilio` are the three connectors declaring a `BasicJoin` credential, and
-/// all three declare `authority: None` — so `Credentials::reference` refuses before the
-/// configuration port is ever consulted, and no shipped connector can reach the Basic assembly
-/// through `Operation::build_authenticated_request`. That is C-92's gap, and `AGENTS.md` records the
-/// refusal as the correct answer: a request sent without the credential it declares is the failure
-/// worth preventing, and the diagnostic must name *which* fact is missing.
-///
-/// So this asserts the wall rather than pretending it is not there. Everything else is supplied —
-/// the subdomain is configured and the store holds a token — so the only missing fact is the
-/// authority, and the refusal has to say so. The full Basic assertion meanwhile lives in
-/// `src/credentials.rs::a_basic_user_half_reaches_the_header_from_the_configuration_port`, which
-/// doctors a provider to get past this point; the day C-92 gives zendesk an authority, that test
-/// belongs here instead.
-#[tokio::test]
-async fn a_basic_connector_refuses_because_it_has_no_credential_address() {
-    let configuration = Configuration::new(
-        Arc::new(MemoryConfig::new().with_endpoint(TENANT, "zendesk", "subdomain", "acme")),
-        TENANT,
-    )
-    .expect("a valid tenant id");
-    let entry = catalog::operation(catalog::OperationKey::id("zendesk-ticket-show"))
-        .expect("the shipped catalogue carries zendesk-ticket-show");
-    let tool = Operation::project(
-        entry,
-        reflecting_egress(),
-        Credentials::new(store_with_the_sentinel().await, TENANT).expect("a tenant"),
-        configuration,
-    )
-    .expect("zendesk-ticket-show projects");
+// ---------------------------------------------------------------------------------------------
+// The Basic user half, driven through the public entry point (C-198, unblocked by C-92)
+//
+// **These two tests moved here from `src/credentials.rs`, and the move is the point.** C-198 wrote
+// them inside the crate over a `Box::leak`ed zendesk doctored with an authority, because at that
+// time zendesk, jira and twilio — the only three connectors declaring a `BasicJoin` credential —
+// all declared `authority: None`. `Credentials::reference` therefore refused with
+// `NoCredentialAddress` before the configuration port was ever consulted, so the entire Basic
+// branch of `auth::acquire` had no shipped consumer and could only be reached by faking one.
+//
+// C-92 gave zendesk `com.zendesk.api`. Nothing is doctored now: the provider, the operation, the
+// credential, its `user_suffix: "/token"` and its `Placement::Header { Authorization, "Basic " }`
+// are all read from the shipped catalogue, and the request is built through the public
+// `Operation::build_authenticated_request` rather than by re-assembling its body in a test. That is
+// what makes this an assertion about a connector a host could actually install, and it is why the
+// old `a_basic_connector_refuses_because_it_has_no_credential_address` — which pinned the wall —
+// is gone rather than merely relaxed. A wall that no longer exists is not behaviour to pin.
+// ---------------------------------------------------------------------------------------------
 
-    let error = tool
-        .build_authenticated_request(
-            &context(Arc::new(Progress::default())),
-            &json!({ "ticket_id": 1 }),
+/// The tenant both ports below answer for.
+const BASIC_TENANT: &str = "t-c198";
+
+/// An obvious non-credential, long enough that the host's redactor actually holds it.
+const BASIC_SECRET: &str = "SENTINEL-NOT-A-REAL-SECRET-C198";
+
+/// The account identifier a tenant binds — the non-secret half, without zendesk's `/token`.
+const BASIC_USER: &str = "ops@acme.test";
+
+/// `base64("ops@acme.test/token:SENTINEL-NOT-A-REAL-SECRET-C198")`, computed independently of the
+/// crate under test:
+///
+/// ```text
+/// printf 'ops@acme.test/token:SENTINEL-NOT-A-REAL-SECRET-C198' | base64 -w0
+/// ```
+///
+/// A literal rather than a call to the pack's own encoder, because an assertion computed the same
+/// way as the code it checks would pass on any encoder, correct or not — and the `/token` suffix is
+/// visible in the plaintext above, which is the part that has no other test.
+const BASIC_EXPECTED: &str = "b3BzQGFjbWUudGVzdC90b2tlbjpTRU5USU5FTC1OT1QtQS1SRUFMLVNFQ1JFVC1DMTk4";
+
+/// A configuration port holding zendesk's subdomain, and its user half only when `user` is set.
+fn basic_configuration(user: Option<&str>) -> Configuration {
+    let mut values =
+        MemoryConfig::new().with_endpoint(BASIC_TENANT, "zendesk", "subdomain", "acme");
+    if let Some(user) = user {
+        values = values.with_username(BASIC_TENANT, "zendesk", "zendesk.api_token", user);
+    }
+    Configuration::new(Arc::new(values), BASIC_TENANT).expect("a valid tenant id")
+}
+
+/// A credential port holding [`BASIC_SECRET`] at zendesk's api-token address.
+///
+/// The address is spelled out rather than derived, and it is the authority C-92 declared:
+/// `tenants/t-c198/com.zendesk.api/api_token`. If `providers/zendesk.toml` were ever repointed the
+/// store would answer nothing here and both tests would fail — which is the intended coupling, since
+/// repointing a published authority is exactly the change `AGENTS.md` forbids.
+async fn basic_credentials() -> Credentials {
+    let store = MemoryStore::new();
+    store
+        .put(
+            &CredentialRef::new(
+                BASIC_TENANT,
+                "com.zendesk.api",
+                DEFAULT_SERVICE,
+                "api_token",
+            )
+            .expect("a valid address"),
+            &Secret::new(BASIC_SECRET),
         )
         .await
-        .expect_err("a connector with no authority has no credential address");
+        .expect("an in-memory put cannot fail");
+    Credentials::new(Arc::new(store), BASIC_TENANT).expect("a valid tenant id")
+}
+
+/// zendesk's ticket read, projected over a reflecting egress and the two ports above.
+async fn basic_tool(user: Option<&str>) -> Operation {
+    let entry = catalog::operation(catalog::OperationKey::id("zendesk-ticket-show"))
+        .expect("the shipped catalogue carries zendesk-ticket-show");
+    Operation::project(
+        entry,
+        reflecting_egress(),
+        basic_credentials().await,
+        basic_configuration(user),
+    )
+    .expect("zendesk-ticket-show projects")
+}
+
+/// **The Basic user half reaches the header, and it comes from the configuration port.**
+///
+/// Driven through `build_authenticated_request`, so what is asserted is the composed request as it
+/// would go out: the tenant's subdomain substituted into the URL, and
+/// `Authorization: Basic base64("<user>/token:<secret>")` with the suffix the connector declares
+/// rather than one a host was asked to know.
+#[tokio::test]
+async fn a_basic_user_half_reaches_the_header_from_the_configuration_port() {
+    let ctx = context(Arc::new(Progress::default()));
+    let tool = basic_tool(Some(BASIC_USER)).await;
+
+    let request = tool
+        .build_authenticated_request(&ctx, &json!({ "ticket_id": 1 }))
+        .await
+        .expect("the store holds the token and the port holds the user half");
+
+    assert_eq!(
+        request.url,
+        "https://acme.zendesk.com/api/v2/tickets/1.json"
+    );
+    assert_eq!(
+        request.headers.get("Authorization").map(String::as_str),
+        Some(format!("Basic {BASIC_EXPECTED}").as_str()),
+        "the Basic pair must join the configured user, the declared suffix and the stored secret"
+    );
+    // The assembled pair is what actually travels, and it contains neither the secret nor the user
+    // half in the clear — so scrubbing the header for `BASIC_SECRET` would assert nothing. What has
+    // to hold is that the redactor knows the **base64**, which is as good as the secret to anyone
+    // holding it.
+    assert_ne!(
+        ctx.redactor.redact(BASIC_EXPECTED),
+        BASIC_EXPECTED,
+        "the base64 pair travels, so the redactor must already hold it"
+    );
+}
+
+/// **And it refuses by name when the port has nothing bound.** Composing `base64("/token:…")`
+/// instead would produce a header the vendor answers with a 401 that says nothing about what is
+/// missing — and the refusal quotes `ZENDESK_USER`, which is what a zendesk operator has actually
+/// seen this value called.
+#[tokio::test]
+async fn a_basic_credential_with_no_configured_user_is_refused_by_name() {
+    let ctx = context(Arc::new(Progress::default()));
+    let tool = basic_tool(None).await;
+
+    let error = tool
+        .build_authenticated_request(&ctx, &json!({ "ticket_id": 1 }))
+        .await
+        .expect_err("a Basic credential with no user half is not a credential");
 
     assert!(
-        matches!(&error, Error::NoCredentialAddress { credential, .. }
+        matches!(&error, Error::MissingCredentialConfig { credential, .. }
             if credential == "zendesk.api_token"),
         "{error}"
     );
+    let rendered = error.to_string();
+    assert!(rendered.contains("ZENDESK_USER"), "{rendered}");
+    assert!(rendered.contains(BASIC_TENANT), "{rendered}");
+    assert!(!rendered.contains(BASIC_SECRET), "{rendered}");
 }
 
 /// A missing credential names the address that was not found, and **no request is sent**.

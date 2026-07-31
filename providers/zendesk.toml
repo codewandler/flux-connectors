@@ -11,6 +11,30 @@
 id = "zendesk"
 vendor = "Zendesk"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.zendesk.api/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
+#
+# Derived from `zendesk.com`, the vendor's own primary domain, in reverse-DNS form, with the
+# trailing `api` label the already-shipped authorities carry (`com.slack.api`, `com.vercel.api`,
+# `io.fly.api`).
+#
+# Pinned in three places before this story landed: `global-addressing.md` uses `com.zendesk.api` as
+# its running example, `crates/connector-spec/tests/credential_paths.rs` renders it, and
+# `crates/connector-pack` addresses this connector's api token under it. Declaring anything else
+# here would have contradicted all three.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.zendesk.api"
+
+# The vendor's own spelling, taken from the operations below — every one of their paths begins
+# `/api/v2/`. Recorded here so a `gid` renders (`com.zendesk.api:v2`); a credential path needs only
+# the authority and deliberately carries no version, so a token survives Zendesk's next one.
+api_version = "v2"
+
 # Every Zendesk account lives on its own subdomain, so there is no tenant-independent base URL.
 # The inventory records the endpoint as operator config in `ZENDESK_URL` (§3.1), e.g.
 # `https://company.zendesk.com`.

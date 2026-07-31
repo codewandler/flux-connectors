@@ -9,7 +9,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "jira",
     vendor: "Jira",
     description: "Jira Cloud issue tracking: read and create issues, comment on them, and drive workflow transitions",
-    authority: None,
+    authority: Some("com.atlassian.jira"),
     base_url: "https://{site}.atlassian.net",
     auth: AUTH,
     operations: OPERATIONS,

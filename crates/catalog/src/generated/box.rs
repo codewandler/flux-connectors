@@ -9,7 +9,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "box",
     vendor: "Box",
     description: "Box: browse folder contents, read file and folder metadata, create folders, and copy files",
-    authority: None,
+    authority: Some("com.box.api"),
     base_url: "https://api.box.com",
     auth: AUTH,
     operations: OPERATIONS,

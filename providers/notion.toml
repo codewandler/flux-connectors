@@ -125,6 +125,24 @@
 id = "notion"
 vendor = "Notion"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.notion.api/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
+#
+# **Decided, not derived.** Notion's original and long-canonical domain is `notion.so`, which would
+# reverse to `so.notion`; the API is served from `api.notion.com` and the vendor now publishes on
+# `notion.com` as well. `com.notion.api` is chosen because it reverses the host that actually serves
+# the operations below and the domain the vendor has moved to.
+#
+# This is a case where the design's risk register applies with force: if Notion publishes its own
+# identifier scheme it may well spell it `so.notion`, and ours will not match.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.notion.api"
+
 # One host for every workspace. Notion has no tenant subdomain — a workspace is identified by the
 # integration token, not by the address — so `base_url` carries no `{placeholder}` for an operator to
 # bind, `status.rs` reports no `unbound-base-url-template` issue, and the connector already has a

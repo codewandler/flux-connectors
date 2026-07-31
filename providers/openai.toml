@@ -22,6 +22,20 @@
 id = "openai"
 vendor = "OpenAI"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.openai.api/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
+#
+# Derived from `openai.com`, the vendor's own primary domain, in reverse-DNS form, with the trailing
+# `api` label the already-shipped authorities carry (`com.slack.api`, `com.vercel.api`,
+# `io.fly.api`).
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.openai.api"
+
 # One tenant-independent host, so unlike zendesk's `{subdomain}` and freshdesk's `{domain}` there is
 # **no template variable here and nothing to bind**. This is the first connector whose `base_url` is
 # a finished URL, which is why it is also the first that `status.rs` does not flag with

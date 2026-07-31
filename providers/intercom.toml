@@ -134,6 +134,24 @@
 id = "intercom"
 vendor = "Intercom"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.intercom.api/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
+#
+# Derived from `intercom.com`, the vendor's own primary domain, in reverse-DNS form, with the
+# trailing `api` label the already-shipped authorities carry (`com.slack.api`, `com.vercel.api`,
+# `io.fly.api`).
+#
+# Intercom serves the same API from `api.intercom.io`, `api.eu.intercom.io` and
+# `api.au.intercom.io`, and the comment below already treats the choice between them as an
+# operator's binding. Those are three *hosts* for one API, and one API is one authority.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.intercom.api"
+
 # One host, no tenant templating: every workspace in the US region is served from `api.intercom.io`,
 # so unlike zendesk there is no `{subdomain}` for an operator to bind and this connector already has a
 # valid destination URL. `http_hosts` derives from this single value and is therefore exactly

@@ -3,6 +3,7 @@
 generator = "flux-connectors 0.5.0"
 connector = "google"
 service = "calendar"
+gid = "com.google.api/calendar:v3"
 vendor = "Google Workspace"
 description = "Google Workspace: read and send Gmail messages, read and create Calendar events, read and rename Drive files"
 base_url = "https://www.googleapis.com"

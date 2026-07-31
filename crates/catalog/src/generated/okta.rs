@@ -9,7 +9,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "okta",
     vendor: "Okta",
     description: "Okta identity management: read users and groups in an org, read a user's group memberships, and deactivate a user",
-    authority: None,
+    authority: Some("com.okta.api"),
     base_url: "https://{domain}/api/v1",
     auth: AUTH,
     operations: OPERATIONS,

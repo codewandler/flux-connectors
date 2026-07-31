@@ -226,6 +226,27 @@
 id = "microsoft_graph"
 vendor = "Microsoft Graph"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.microsoft.graph/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
+#
+# Microsoft is a multi-product vendor, so the trailing label is the *product* rather than `api` —
+# the rule `providers/jira.toml` sets out for Atlassian. Here that spelling is also the literal
+# reverse of the API host, since `graph.microsoft.com` reversed is `com.microsoft.graph`, so the
+# vendor-then-product rule and the host agree. That is as much confirmation as an authority ever
+# gets.
+#
+# Note the connector `id` above is `microsoft_graph` with an underscore and this is not: an
+# authority label admits only lowercase ASCII letters, digits and `-`
+# (`connector_spec::address::validate_authority`). No connector-level `api_version` either, because
+# each service below already declares `v1.0`.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.microsoft.graph"
+
 # The one host every service resolves to. No tenant subdomain — unlike zendesk's `{subdomain}` and
 # shopify's `{shop}`, Graph is multi-tenant through the bearer token alone, so `base_url` is a bound
 # literal and `status.rs` reports no `unbound-base-url-template` issue.

@@ -93,6 +93,28 @@
 id = "sendgrid"
 vendor = "SendGrid"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.sendgrid.api/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
+#
+# **Twilio owns SendGrid, and SendGrid still gets its own authority** — the opposite call from the
+# one `providers/jira.toml` makes for Atlassian, and the difference is what the vendor still
+# publishes. Jira has no live `jira.com` API surface, so it can only be addressed under Atlassian.
+# SendGrid keeps `sendgrid.com`, keeps `api.sendgrid.com` as the host above, and keeps its own API
+# key — a Twilio account SID and auth token cannot substitute for it. `com.twilio.sendgrid` is the
+# defensible alternative and was rejected because it would file a SendGrid API key under Twilio's
+# credential directory when the two are provisioned separately by different people.
+#
+# **This is the least certain authority in this catalogue.** If Twilio folds SendGrid into the
+# Twilio API surface, ours will not match — precisely the cost the design's risk register names,
+# accepted here with the reasoning visible rather than absorbed silently.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.sendgrid.api"
+
 # One host for every account; SendGrid has no per-tenant subdomain the way zendesk or freshdesk do.
 base_url = "https://api.sendgrid.com"
 

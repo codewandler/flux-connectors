@@ -4,7 +4,7 @@
   "providers": [
     {
       "id": "airtable",
-      "authority": null,
+      "authority": "com.airtable.api",
       "vendor": "Airtable",
       "description": "Airtable records: read, create, update and delete a record in a base's table",
       "base_url": "https://api.airtable.com",
@@ -996,7 +996,7 @@
     },
     {
       "id": "asana",
-      "authority": null,
+      "authority": "com.asana.api",
       "vendor": "Asana",
       "description": "Asana work management: read tasks and projects, create and update tasks, comment on a task",
       "base_url": "https://app.asana.com",
@@ -1448,7 +1448,7 @@
     },
     {
       "id": "babelforce",
-      "authority": null,
+      "authority": "com.babelforce.api",
       "vendor": "Babelforce",
       "description": "Babelforce voice platform: agent availability, live and reported calls, and the session variables a flow reads and writes",
       "base_url": "https://services.babelforce.com",
@@ -2580,7 +2580,7 @@
     },
     {
       "id": "box",
-      "authority": null,
+      "authority": "com.box.api",
       "vendor": "Box",
       "description": "Box: browse folder contents, read file and folder metadata, create folders, and copy files",
       "base_url": "https://api.box.com",
@@ -3144,7 +3144,7 @@
     },
     {
       "id": "calendly",
-      "authority": null,
+      "authority": "com.calendly.api",
       "vendor": "Calendly",
       "description": "Calendly scheduling: read the authenticated user, event types, scheduled events and their invitees",
       "base_url": "https://api.calendly.com",
@@ -3902,11 +3902,11 @@
     },
     {
       "id": "clickup",
-      "authority": null,
+      "authority": "com.clickup.api",
       "vendor": "ClickUp",
       "description": "ClickUp: list workspaces and a space's folders, and read, list, create and update tasks in a list",
       "base_url": "https://api.clickup.com/api/v2",
-      "api_version": null,
+      "api_version": "v2",
       "hosts": [
         "api.clickup.com"
       ],
@@ -3918,8 +3918,8 @@
           "hosts": [
             "api.clickup.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v2",
+          "gid": "com.clickup.api:v2",
           "operation_count": 6
         }
       ],
@@ -4851,11 +4851,11 @@
     },
     {
       "id": "cloudflare",
-      "authority": null,
+      "authority": "com.cloudflare.api",
       "vendor": "Cloudflare",
       "description": "Cloudflare zones and DNS: list zones, list and manage DNS records for a zone, and purge a zone's cache",
       "base_url": "https://api.cloudflare.com/client/v4",
-      "api_version": null,
+      "api_version": "v4",
       "hosts": [
         "api.cloudflare.com"
       ],
@@ -4867,8 +4867,8 @@
           "hosts": [
             "api.cloudflare.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v4",
+          "gid": "com.cloudflare.api:v4",
           "operation_count": 5
         }
       ],
@@ -6585,11 +6585,11 @@
     },
     {
       "id": "docusign",
-      "authority": null,
+      "authority": "com.docusign.api",
       "vendor": "DocuSign",
       "description": "DocuSign eSignature REST API: list and read envelopes and their recipients, create an envelope from a template, and void one",
       "base_url": "https://{account_host}/restapi/v2.1/accounts/{account_id}",
-      "api_version": null,
+      "api_version": "v2.1",
       "hosts": [
         "{account_host}"
       ],
@@ -6601,8 +6601,8 @@
           "hosts": [
             "{account_host}"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v2.1",
+          "gid": "com.docusign.api:v2.1",
           "operation_count": 6
         }
       ],
@@ -7362,7 +7362,7 @@
     },
     {
       "id": "dropbox",
-      "authority": null,
+      "authority": "com.dropbox.api",
       "vendor": "Dropbox",
       "description": "Dropbox: browse folder contents, read file and folder metadata, search files, create folders, and get temporary download links",
       "base_url": "https://api.dropboxapi.com",
@@ -7886,7 +7886,7 @@
     },
     {
       "id": "figma",
-      "authority": null,
+      "authority": "com.figma.api",
       "vendor": "Figma",
       "description": "Figma REST API: read a file, specific nodes, rendered images, a project's files and a file's comments — a read-only design surface",
       "base_url": "https://api.figma.com",
@@ -9287,11 +9287,11 @@
     },
     {
       "id": "freshdesk",
-      "authority": null,
+      "authority": "com.freshdesk.api",
       "vendor": "Freshdesk",
       "description": "Freshdesk ticketing: list, read, create and update tickets and the contacts they belong to",
       "base_url": "https://{domain}/api/v2",
-      "api_version": null,
+      "api_version": "v2",
       "hosts": [
         "{domain}"
       ],
@@ -9303,8 +9303,8 @@
           "hosts": [
             "{domain}"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v2",
+          "gid": "com.freshdesk.api:v2",
           "operation_count": 9
         }
       ],
@@ -11376,7 +11376,7 @@
     },
     {
       "id": "front",
-      "authority": null,
+      "authority": "com.frontapp.api",
       "vendor": "Front",
       "description": "Front shared inbox: read and reply to conversations, and tag them",
       "base_url": "https://api2.frontapp.com",
@@ -12041,7 +12041,7 @@
     },
     {
       "id": "github",
-      "authority": null,
+      "authority": "com.github.api",
       "vendor": "GitHub",
       "description": "GitHub REST API: read repositories, issues and pull requests, and write issues and issue comments",
       "base_url": "https://api.github.com",
@@ -12971,11 +12971,11 @@
     },
     {
       "id": "gitlab",
-      "authority": null,
+      "authority": "com.gitlab.api",
       "vendor": "GitLab",
       "description": "GitLab: read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only",
       "base_url": "https://gitlab.com/api/v4",
-      "api_version": null,
+      "api_version": "v4",
       "hosts": [
         "gitlab.com"
       ],
@@ -12987,8 +12987,8 @@
           "hosts": [
             "gitlab.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v4",
+          "gid": "com.gitlab.api:v4",
           "operation_count": 7
         }
       ],
@@ -14093,7 +14093,7 @@
     },
     {
       "id": "google",
-      "authority": null,
+      "authority": "com.google.api",
       "vendor": "Google Workspace",
       "description": "Google Workspace: read and send Gmail messages, read and create Calendar events, read and rename Drive files",
       "base_url": "https://www.googleapis.com",
@@ -14111,7 +14111,7 @@
             "gmail.googleapis.com"
           ],
           "api_version": "v1",
-          "gid": null,
+          "gid": "com.google.api/gmail:v1",
           "operation_count": 3
         },
         {
@@ -14122,7 +14122,7 @@
             "www.googleapis.com"
           ],
           "api_version": "v3",
-          "gid": null,
+          "gid": "com.google.api/calendar:v3",
           "operation_count": 3
         },
         {
@@ -14133,7 +14133,7 @@
             "www.googleapis.com"
           ],
           "api_version": "v3",
-          "gid": null,
+          "gid": "com.google.api/drive:v3",
           "operation_count": 2
         }
       ],
@@ -15078,7 +15078,7 @@
     },
     {
       "id": "hubspot",
-      "authority": null,
+      "authority": "com.hubspot.api",
       "vendor": "HubSpot",
       "description": "HubSpot CRM: read contacts, companies and deals, and create and update contact records",
       "base_url": "https://api.hubapi.com",
@@ -15648,7 +15648,7 @@
     },
     {
       "id": "intercom",
-      "authority": null,
+      "authority": "com.intercom.api",
       "vendor": "Intercom",
       "description": "Intercom contacts and conversations: read and create contacts, read a conversation, reply to it, and note it",
       "base_url": "https://api.intercom.io",
@@ -16502,7 +16502,7 @@
     },
     {
       "id": "jira",
-      "authority": null,
+      "authority": "com.atlassian.jira",
       "vendor": "Jira",
       "description": "Jira Cloud issue tracking: read and create issues, comment on them, and drive workflow transitions",
       "base_url": "https://{site}.atlassian.net",
@@ -17246,11 +17246,11 @@
     },
     {
       "id": "launchdarkly",
-      "authority": null,
+      "authority": "com.launchdarkly.api",
       "vendor": "LaunchDarkly",
       "description": "LaunchDarkly feature management: read projects, environments and feature flags, and toggle a flag on or off in one environment",
       "base_url": "https://app.launchdarkly.com/api/v2",
-      "api_version": null,
+      "api_version": "v2",
       "hosts": [
         "app.launchdarkly.com"
       ],
@@ -17262,8 +17262,8 @@
           "hosts": [
             "app.launchdarkly.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v2",
+          "gid": "com.launchdarkly.api:v2",
           "operation_count": 5
         }
       ],
@@ -18028,7 +18028,7 @@
     },
     {
       "id": "microsoft_graph",
-      "authority": null,
+      "authority": "com.microsoft.graph",
       "vendor": "Microsoft Graph",
       "description": "Microsoft Graph: read and reply to Outlook mail, read and create Calendar events, read and rename OneDrive files",
       "base_url": "https://graph.microsoft.com",
@@ -18045,7 +18045,7 @@
             "graph.microsoft.com"
           ],
           "api_version": "v1.0",
-          "gid": null,
+          "gid": "com.microsoft.graph/mail:v1.0",
           "operation_count": 3
         },
         {
@@ -18056,7 +18056,7 @@
             "graph.microsoft.com"
           ],
           "api_version": "v1.0",
-          "gid": null,
+          "gid": "com.microsoft.graph/calendar:v1.0",
           "operation_count": 3
         },
         {
@@ -18067,7 +18067,7 @@
             "graph.microsoft.com"
           ],
           "api_version": "v1.0",
-          "gid": null,
+          "gid": "com.microsoft.graph/files:v1.0",
           "operation_count": 2
         }
       ],
@@ -19221,11 +19221,11 @@
     },
     {
       "id": "miro",
-      "authority": null,
+      "authority": "com.miro.api",
       "vendor": "Miro",
       "description": "Miro boards and board items: discover boards, read items of any type, and create, update and delete sticky notes",
       "base_url": "https://api.miro.com/v2",
-      "api_version": null,
+      "api_version": "v2",
       "hosts": [
         "api.miro.com"
       ],
@@ -19237,8 +19237,8 @@
           "hosts": [
             "api.miro.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v2",
+          "gid": "com.miro.api:v2",
           "operation_count": 6
         }
       ],
@@ -20282,7 +20282,7 @@
     },
     {
       "id": "notion",
-      "authority": null,
+      "authority": "com.notion.api",
       "vendor": "Notion",
       "description": "Notion workspace: read a page's properties, query a database, search shared content, and create a page",
       "base_url": "https://api.notion.com",
@@ -20790,11 +20790,11 @@
     },
     {
       "id": "okta",
-      "authority": null,
+      "authority": "com.okta.api",
       "vendor": "Okta",
       "description": "Okta identity management: read users and groups in an org, read a user's group memberships, and deactivate a user",
       "base_url": "https://{domain}/api/v1",
-      "api_version": null,
+      "api_version": "v1",
       "hosts": [
         "{domain}"
       ],
@@ -20806,8 +20806,8 @@
           "hosts": [
             "{domain}"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v1",
+          "gid": "com.okta.api:v1",
           "operation_count": 5
         }
       ],
@@ -21437,7 +21437,7 @@
     },
     {
       "id": "openai",
-      "authority": null,
+      "authority": "com.openai.api",
       "vendor": "OpenAI",
       "description": "OpenAI platform: list models, and create chat completions and embeddings",
       "base_url": "https://api.openai.com",
@@ -21944,7 +21944,7 @@
     },
     {
       "id": "openrouter",
-      "authority": null,
+      "authority": "ai.openrouter.api",
       "vendor": "OpenRouter",
       "description": "OpenRouter model router: list models and their endpoints, create chat completions, and read credit balance",
       "base_url": "https://openrouter.ai",
@@ -22350,7 +22350,7 @@
     },
     {
       "id": "pagerduty",
-      "authority": null,
+      "authority": "com.pagerduty.api",
       "vendor": "PagerDuty",
       "description": "PagerDuty incident response: read incidents, services and who is on call, and acknowledge or resolve an incident",
       "base_url": "https://api.pagerduty.com",
@@ -24295,7 +24295,7 @@
     },
     {
       "id": "salesforce",
-      "authority": null,
+      "authority": "com.salesforce.api",
       "vendor": "Salesforce",
       "description": "Salesforce REST API: read the authenticated identity, read/create/update an SObject record, and describe an SObject's schema",
       "base_url": "https://{instance}.my.salesforce.com",
@@ -24888,7 +24888,7 @@
     },
     {
       "id": "sendgrid",
-      "authority": null,
+      "authority": "com.sendgrid.api",
       "vendor": "SendGrid",
       "description": "SendGrid transactional email: read templates and bounce suppressions, validate an email address. Cannot send mail — see the header comment for why the send envelope is not expressible here",
       "base_url": "https://api.sendgrid.com",
@@ -25377,7 +25377,7 @@
     },
     {
       "id": "sentry",
-      "authority": null,
+      "authority": "io.sentry.api",
       "vendor": "Sentry",
       "description": "Sentry error tracking: read an issue and its latest event, triage an issue, read a project",
       "base_url": "https://sentry.io",
@@ -26172,7 +26172,7 @@
     },
     {
       "id": "shopify",
-      "authority": null,
+      "authority": "com.shopify.api",
       "vendor": "Shopify",
       "description": "Shopify Admin REST API: read orders, products, customers and inventory levels, and update a product",
       "base_url": "https://{shop}.myshopify.com",
@@ -27654,11 +27654,11 @@
     },
     {
       "id": "statuspage",
-      "authority": null,
+      "authority": "com.atlassian.statuspage",
       "vendor": "Atlassian Statuspage",
       "description": "Atlassian Statuspage: read a status page's components and incidents, and open or update a publicly visible incident on it",
       "base_url": "https://api.statuspage.io/v1/pages/{page_id}",
-      "api_version": null,
+      "api_version": "v1",
       "hosts": [
         "api.statuspage.io"
       ],
@@ -27670,8 +27670,8 @@
           "hosts": [
             "api.statuspage.io"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v1",
+          "gid": "com.atlassian.statuspage:v1",
           "operation_count": 5
         }
       ],
@@ -28442,7 +28442,7 @@
     },
     {
       "id": "stripe",
-      "authority": null,
+      "authority": "com.stripe.api",
       "vendor": "Stripe",
       "description": "Stripe payments: read a balance, customer, charge, payment intent or refund; capture, cancel and refund a payment",
       "base_url": "https://api.stripe.com",
@@ -29493,11 +29493,11 @@
     },
     {
       "id": "twilio",
-      "authority": null,
+      "authority": "com.twilio.api",
       "vendor": "Twilio",
       "description": "Twilio programmable messaging and voice: read messages, calls and the authenticated account",
       "base_url": "https://api.twilio.com/2010-04-01",
-      "api_version": null,
+      "api_version": "2010-04-01",
       "hosts": [
         "api.twilio.com"
       ],
@@ -29509,8 +29509,8 @@
           "hosts": [
             "api.twilio.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "2010-04-01",
+          "gid": "com.twilio.api:2010-04-01",
           "operation_count": 5
         }
       ],
@@ -30479,7 +30479,7 @@
         {
           "name": "message.status_callback",
           "service": "default",
-          "oip": null,
+          "oip": "com.twilio.api:2010-04-01#message.status_callback",
           "description": "A message's delivery status changed. Twilio POSTs this, form-encoded, to the StatusCallback URL supplied when the message was created",
           "default": true,
           "group": "Messaging",
@@ -30530,7 +30530,7 @@
         {
           "name": "call.status_callback",
           "service": "default",
-          "oip": null,
+          "oip": "com.twilio.api:2010-04-01#call.status_callback",
           "description": "A call's status changed. Twilio POSTs this, form-encoded, to the StatusCallback URL configured for the call or the answering number",
           "default": true,
           "group": "Voice",
@@ -30593,7 +30593,7 @@
     },
     {
       "id": "typeform",
-      "authority": null,
+      "authority": "com.typeform.api",
       "vendor": "Typeform",
       "description": "Typeform: read the authenticated account, forms and their responses, and delete responses",
       "base_url": "https://api.typeform.com",
@@ -32037,11 +32037,11 @@
     },
     {
       "id": "webflow",
-      "authority": null,
+      "authority": "com.webflow.api",
       "vendor": "Webflow",
       "description": "Webflow sites and CMS: discover sites, read a collection's own field schema, read collection items of any tenant-defined shape, and publish a site live",
       "base_url": "https://api.webflow.com/v2",
-      "api_version": null,
+      "api_version": "v2",
       "hosts": [
         "api.webflow.com"
       ],
@@ -32053,8 +32053,8 @@
           "hosts": [
             "api.webflow.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v2",
+          "gid": "com.webflow.api:v2",
           "operation_count": 6
         }
       ],
@@ -32674,11 +32674,11 @@
     },
     {
       "id": "zendesk",
-      "authority": null,
+      "authority": "com.zendesk.api",
       "vendor": "Zendesk",
       "description": "Zendesk Support ticketing: search, read, update tickets and their comments",
       "base_url": "https://{subdomain}.zendesk.com",
-      "api_version": null,
+      "api_version": "v2",
       "hosts": [
         "{subdomain}.zendesk.com"
       ],
@@ -32690,8 +32690,8 @@
           "hosts": [
             "{subdomain}.zendesk.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v2",
+          "gid": "com.zendesk.api:v2",
           "operation_count": 7
         }
       ],
@@ -33754,7 +33754,7 @@
     },
     {
       "id": "zoom",
-      "authority": null,
+      "authority": "us.zoom.api",
       "vendor": "Zoom",
       "description": "Zoom meeting scheduling: read, create and delete a meeting, and read a user",
       "base_url": "https://api.zoom.us",

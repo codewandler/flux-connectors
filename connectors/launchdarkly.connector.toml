@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "launchdarkly"
+gid = "com.launchdarkly.api:v2"
 vendor = "LaunchDarkly"
 description = "LaunchDarkly feature management: read projects, environments and feature flags, and toggle a flag on or off in one environment"
 base_url = "https://app.launchdarkly.com/api/v2"
+api_version = "v2"
 module = "launchdarkly.flux"
 operations = ["launchdarkly-project-list", "launchdarkly-environment-list", "launchdarkly-flag-list", "launchdarkly-flag-get", "launchdarkly-flag-toggle"]

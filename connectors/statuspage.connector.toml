@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "statuspage"
+gid = "com.atlassian.statuspage:v1"
 vendor = "Atlassian Statuspage"
 description = "Atlassian Statuspage: read a status page's components and incidents, and open or update a publicly visible incident on it"
 base_url = "https://api.statuspage.io/v1/pages/{page_id}"
+api_version = "v1"
 module = "statuspage.flux"
 operations = ["statuspage-incident-list", "statuspage-incident-get", "statuspage-incident-create", "statuspage-incident-update", "statuspage-component-list"]

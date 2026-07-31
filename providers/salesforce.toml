@@ -74,6 +74,24 @@
 id = "salesforce"
 vendor = "Salesforce"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.salesforce.api/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
+#
+# Derived from `salesforce.com`, the vendor's own primary domain, in reverse-DNS form, with the
+# trailing `api` label the already-shipped authorities carry (`com.slack.api`, `com.vercel.api`,
+# `io.fly.api`).
+#
+# The comment above already worked this out — a per-tenant `{instance}` host and a published
+# authority are different facts, so a templated base URL was never a reason not to declare one — and
+# this only writes down the value that reasoning named.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.salesforce.api"
+
 # `{instance}` is bound by the `[[config]]` field at the end of this file — see the header comment
 # above. Every Salesforce org's My Domain host is its own, so there is no tenant-independent base URL,
 # and the loader refuses a template variable nothing binds: the gap this comment used to have to

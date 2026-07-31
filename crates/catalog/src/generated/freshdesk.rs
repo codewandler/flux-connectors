@@ -9,7 +9,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "freshdesk",
     vendor: "Freshdesk",
     description: "Freshdesk ticketing: list, read, create and update tickets and the contacts they belong to",
-    authority: None,
+    authority: Some("com.freshdesk.api"),
     base_url: "https://{domain}/api/v2",
     auth: AUTH,
     operations: OPERATIONS,

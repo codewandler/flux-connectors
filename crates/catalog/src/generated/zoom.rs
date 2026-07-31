@@ -9,7 +9,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "zoom",
     vendor: "Zoom",
     description: "Zoom meeting scheduling: read, create and delete a meeting, and read a user",
-    authority: None,
+    authority: Some("us.zoom.api"),
     base_url: "https://api.zoom.us",
     auth: AUTH,
     operations: OPERATIONS,

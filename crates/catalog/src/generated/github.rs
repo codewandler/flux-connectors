@@ -9,7 +9,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "github",
     vendor: "GitHub",
     description: "GitHub REST API: read repositories, issues and pull requests, and write issues and issue comments",
-    authority: None,
+    authority: Some("com.github.api"),
     base_url: "https://api.github.com",
     auth: AUTH,
     operations: OPERATIONS,

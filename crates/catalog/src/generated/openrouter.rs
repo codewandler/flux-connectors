@@ -9,7 +9,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "openrouter",
     vendor: "OpenRouter",
     description: "OpenRouter model router: list models and their endpoints, create chat completions, and read credit balance",
-    authority: None,
+    authority: Some("ai.openrouter.api"),
     base_url: "https://openrouter.ai",
     auth: AUTH,
     operations: OPERATIONS,

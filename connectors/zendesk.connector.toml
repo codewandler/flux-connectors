@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "zendesk"
+gid = "com.zendesk.api:v2"
 vendor = "Zendesk"
 description = "Zendesk Support ticketing: search, read, update tickets and their comments"
 base_url = "https://{subdomain}.zendesk.com"
+api_version = "v2"
 module = "zendesk.flux"
 operations = ["zendesk-test", "zendesk-ticket-search", "zendesk-ticket-show", "zendesk-ticket-comment-list", "zendesk-ticket-update", "zendesk-ticket-comment-add", "zendesk-ticket-tag-add"]

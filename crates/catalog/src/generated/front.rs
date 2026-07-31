@@ -9,7 +9,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "front",
     vendor: "Front",
     description: "Front shared inbox: read and reply to conversations, and tag them",
-    authority: None,
+    authority: Some("com.frontapp.api"),
     base_url: "https://api2.frontapp.com",
     auth: AUTH,
     operations: OPERATIONS,

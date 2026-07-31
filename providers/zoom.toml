@@ -157,6 +157,21 @@
 id = "zoom"
 vendor = "Zoom"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/us.zoom.api/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
+#
+# `zoom.us` reverses to `us.zoom`, which reads like a mistake and is not: `us` is the TLD, the same
+# way `io` is in `io.fly.api` and `ai` is in `ai.openrouter.api`. Zoom publishes this identifier
+# itself — their Android SDK packages are `us.zoom.*`. C-92 filed zoom as having "no obvious
+# reverse-DNS form"; the vendor's own namespace supplies it.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "us.zoom.api"
+
 # One host for every Zoom account. Unlike zendesk's `{subdomain}` and freshdesk's `{domain}` there is
 # no tenant templating, so `base_url` is a bound literal, `status.rs` reports no
 # `unbound-base-url-template` issue, and the connector already has a valid destination URL.

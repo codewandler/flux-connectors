@@ -9,7 +9,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "stripe",
     vendor: "Stripe",
     description: "Stripe payments: read a balance, customer, charge, payment intent or refund; capture, cancel and refund a payment",
-    authority: None,
+    authority: Some("com.stripe.api"),
     base_url: "https://api.stripe.com",
     auth: AUTH,
     operations: OPERATIONS,

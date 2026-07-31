@@ -175,6 +175,20 @@
 id = "airtable"
 vendor = "Airtable"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.airtable.api/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
+#
+# Derived from `airtable.com`, the vendor's own primary domain, in reverse-DNS form, with the
+# trailing `api` label the already-shipped authorities carry (`com.slack.api`, `com.vercel.api`,
+# `io.fly.api`).
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.airtable.api"
+
 # One tenant-independent host for every base and every plan. Unlike zendesk's `{subdomain}` and
 # freshdesk's `{domain}` there is no tenant templating — a base is addressed by an id *in the path*,
 # not by a host — so `base_url` is a bound literal, `status.rs` reports no `unbound-base-url-template`
