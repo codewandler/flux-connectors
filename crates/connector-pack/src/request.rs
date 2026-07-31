@@ -65,6 +65,14 @@
 //!   but a placeholder — `zone_id = "{zone_id}"`, `teamId = "{teamId}"`. The emitter binds a `lit`
 //!   rather than a value precisely so that this module sees the pin at all.
 //!
+//! **"Exactly two kinds" is a statement about what ships, not a guarantee about what could.** C-110
+//! wrote a third — a GraphQL query document, a literal whose braces are the vendor's own selection
+//! syntax and not configuration at all — and the connector was withdrawn rather than the rule bent.
+//! Unconfigured it refused every call; configured, substitution rewrote the document. Both are
+//! measured in this module's tests, and `docs/designs/graphql-vendors.md` is the finding. The fix is
+//! C-87 — publish the configuration surface so this reads variables instead of inferring them — not
+//! a cleverer scan.
+//!
 //! So [`endpoint_variables`] reads an operation's configuration variables off its own emitted Flux
 //! rather than waiting for C-87 to publish them, in the same spirit as everything else here: the
 //! pack's request is the module's request by construction. [`Build::endpoints`] then substitutes the
@@ -1290,7 +1298,9 @@ fn kind(node: &Node) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Configuration, Field};
     use serde_json::json;
+    use std::sync::Arc;
 
     /// **Every configuration variable in the shipped catalogue is placed** (C-214).
     ///
@@ -1607,6 +1617,163 @@ mod tests {
         assert_eq!(
             request.to_params(),
             json!({"url": "https://x/y", "method": "GET"})
+        );
+    }
+
+    /// The emitted shape of a GraphQL operation: one endpoint, and the query document bound as a
+    /// **string literal** because it is a vendor constant the caller may not choose (C-55's `const`
+    /// body field). It is `linear-viewer` as C-110 actually emitted it, trimmed to its body.
+    const GRAPHQL_OP: &str = r#"op probe-viewer -> Any
+  description "Read the user this key belongs to"
+  risk "medium"
+  idempotency "non_idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.linear.app"
+  url = fmt("{base}/graphql")
+  content_type = "application/json"
+  query = """query Viewer {
+  viewer {
+    id
+    name
+    displayName
+    email
+    admin
+  }
+}
+"""
+  payload = { query }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response
+"#;
+
+    /// **A GraphQL selection set is read as a set of configuration variables** — the finding that
+    /// withdrew the Linear connector (C-110), and the reason this module's "exactly two kinds"
+    /// paragraph is a statement about *what ships* rather than a guarantee.
+    ///
+    /// [`endpoint_variables`] scans every string literal for `{…}`. That is sound for the two kinds
+    /// the shipped catalogue has — templated base URLs and C-187's pin binds — because in both a
+    /// brace really does name a value a host supplies. A GraphQL query document is a third kind: it
+    /// is a literal, it is full of braces, and **not one of them is configuration**. They are the
+    /// vendor's own syntax.
+    ///
+    /// The variable names this produces are selection-set fragments, which is what makes the
+    /// resulting refusal unreadable as well as wrong.
+    #[test]
+    fn a_graphql_document_in_a_literal_is_read_as_configuration_variables() {
+        let declaration = crate::spec::declaration_of("probe-viewer", GRAPHQL_OP).expect("parses");
+        let variables = endpoint_variables(&declaration);
+
+        assert_eq!(
+            variables.len(),
+            2,
+            "the document's two nested selection sets were not both read as variables: {variables:#?}"
+        );
+        assert!(
+            variables
+                .iter()
+                .any(|variable| variable.contains("displayName")),
+            "a configuration variable should not be able to contain a GraphQL field name: \
+             {variables:#?}"
+        );
+        assert!(
+            variables.iter().any(|variable| variable.contains('\n')),
+            "a configuration variable should not be able to contain a newline: {variables:#?}"
+        );
+    }
+
+    /// **The production shape: an empty configuration, and the operation cannot be called at all.**
+    ///
+    /// This is the check whose absence let a fully green gate coexist with eight dead operations.
+    /// `tests/request.rs::every_shipped_operation_builds_an_absolute_request` asserts only on the
+    /// **URL**, and its `configuration()` helper manufactures a value for every *discovered*
+    /// variable — so it fabricates exactly the values that hide this, and it would not have caught
+    /// it for a connector whose documents live in the body.
+    ///
+    /// The two halves are asserted together because the second is worse than the first:
+    ///
+    /// 1. **Unconfigured, the operation refuses.** `Operation::build_request` resolves every
+    ///    endpoint variable through the bound port first, and a tenant supplies none of these,
+    ///    because they are not configuration and no `[[config]]` field could sensibly declare them.
+    /// 2. **Configured, the document is rewritten.** [`Build::substitute`] replaces the brace run
+    ///    with the host's value, so `{ viewer { … } }` becomes the value — and the "constant query a
+    ///    caller must not choose" is chosen, after all, by whoever supplies the tenant's settings.
+    ///
+    /// Withdrawing the connector is what makes this a fixture rather than a shipped regression. The
+    /// mechanism that would let a literal be opaque to this scan belongs to **C-87**, which
+    /// publishes the configuration surface into the catalogue so the pack can *read* an operation's
+    /// variables instead of inferring them from syntax. See `docs/designs/graphql-vendors.md`.
+    #[test]
+    fn a_graphql_operation_cannot_be_called_and_is_corrupted_when_it_is() {
+        let declaration = crate::spec::declaration_of("probe-viewer", GRAPHQL_OP).expect("parses");
+        let variables = endpoint_variables(&declaration);
+        let slots = endpoint_slots(&declaration);
+
+        // 1. The production shape. This mirrors `Operation::build_request`, which resolves every
+        //    endpoint variable through the port before assembling anything.
+        let empty = Configuration::new(
+            Arc::new(crate::config::MemoryConfig::new()),
+            crate::tests::TEST_TENANT,
+        )
+        .expect("a valid tenant id");
+        let settings = empty.snapshot(
+            "linear",
+            "default",
+            variables.iter().map(|variable| Field::Endpoint(variable)),
+        );
+        for variable in &variables {
+            let refusal = settings
+                .require("probe-viewer", Field::Endpoint(variable))
+                .expect_err("a value nobody can supply must not resolve");
+            assert!(
+                matches!(refusal, Error::MissingConfig { .. }),
+                "unconfigured, the operation refused for an unrelated reason: {refusal}"
+            );
+        }
+        assert!(
+            !variables.is_empty(),
+            "with no variables there would be nothing to refuse, and the connector would work"
+        );
+
+        // **C-214 is what would have caught this at integration**, and it is worth pinning that it
+        // does. `endpoint_slots` derives a request position for each variable, and a GraphQL
+        // fragment has none — it appears in no URL — so every one of these comes back unplaced.
+        // `every_shipped_configuration_variable_is_placed`, above, is therefore red for any
+        // catalogue carrying a connector like this. It postdates C-110's first attempt, which is
+        // exactly why that attempt's gate was green.
+        for variable in &variables {
+            assert!(
+                !matches!(
+                    slots.get(variable),
+                    Some(Slot::Host | Slot::Path | Slot::Query)
+                ),
+                "`{variable}` was given a request position, so the C-214 guard would not fire"
+            );
+        }
+
+        // 2. Configured — the half that is worse. Bind the fabricated values the existing
+        //    catalogue-wide test would have bound, and read what reaches the wire.
+        let endpoints: BTreeMap<String, String> = variables
+            .iter()
+            .map(|variable| (variable.clone(), "a-value".to_string()))
+            .collect();
+        let request = build("probe-viewer", &declaration, &json!({}), &endpoints, &slots)
+            .expect("with every variable bound, the request assembles");
+        let body = request.body.expect("a GraphQL call has a body");
+
+        assert!(
+            !body.contains("displayName"),
+            "the document survived, so this test no longer measures the corruption it exists for"
+        );
+        assert!(
+            body.contains("a-value"),
+            "a configuration value did not reach the query document: {body}"
+        );
+        assert!(
+            !body.contains("viewer {"),
+            "the `viewer` selection set should have been replaced by the configuration value, \
+             which is the whole finding: {body}"
         );
     }
 }

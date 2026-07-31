@@ -4,7 +4,7 @@ title: Ship the Linear connector — or record why a GraphQL vendor cannot be on
 pillar: Spec
 status: in-progress
 priority: 6
-design:
+design: docs/designs/graphql-vendors.md
 epic: provider-fleet-2
 areas: [providers, connector-spec]
 note: "GraphQL-only. The pipeline is REST-shaped; this either proves it stretches or produces a documented refusal. Either outcome is worth more than another REST connector"
@@ -20,91 +20,105 @@ endpoint and a query language**?
 - [x] Either a working Linear connector, **or** a written finding that the operation model cannot
       describe a GraphQL vendor honestly, with the specific reason. Both are acceptable outcomes and
       the story is not a failure if it ends in the second.
-      → **It ships.** `providers/linear.toml`, 8 operations. The finding is written *as well as* the
-      connector: the header of that file and of `crates/connector-flux/tests/linear_connector.rs`
-      record the two places the model does not stretch, and both are asserted rather than described.
-- [x] If it ships: operations are `POST /graphql` with a **constant** query in the body and the
+      → **The finding.** No `providers/linear.toml`. `docs/designs/graphql-vendors.md` records the
+      specific reason and the two test files pin it.
+- [ ] If it ships: operations are `POST /graphql` with a **constant** query in the body and the
       variables as parameters — so each operation still has a real typed signature and a real
       response schema, rather than one `query: String` parameter a model has to author.
-      → `crates/catalog/ops/linear/linear-issue-get.flux` emits `op linear-issue-get(id: String)`
-      with `query = """…"""` bound beside it and `payload = { query, variables: { id } }`.
-      Asserted by `the_query_document_is_pinned_and_no_caller_can_choose_it`,
-      `the_variables_are_typed_parameters_under_the_variables_key` and
-      `every_response_schema_is_nested_under_data`.
+      → **Not applicable — it does not ship.** Established as *expressible* though, and pinned in
+      `crates/connector-flux/tests/linear_connector.rs` so a later attempt does not re-derive it:
+      `the_query_document_is_pinned_and_absent_from_the_signature`,
+      `a_multiline_query_document_round_trips_through_the_emitter`,
+      `a_response_schema_can_describe_the_data_envelope`.
 - [x] **Refuse the tempting wrong shape.** A single `linear-graphql(query)` operation that takes an
       arbitrary query string is exactly the remote-expression-evaluator the vision rejects: it hands
       a model a language instead of an operation, and nothing about it is typed, curated or
       analyzable.
-      → No operation exposes `query`. `the_query_document_is_pinned_and_no_caller_can_choose_it`
-      asserts the emitter's parameter list omits it on every operation, so the shape is refused by a
-      test rather than by intent.
-- [x] If it ships: auth is a bearer API key; a `[[config]]` surface; a `verify` operation; a
+      → Refused, and never proposed. The finding is the opposite failure and is worth stating
+      plainly: the pinned-constant shape *is* the right one at the compiler, and it is
+      `connector-pack` that turns the constant back into something an operator can edit.
+- [ ] If it ships: auth is a bearer API key; a `[[config]]` surface; a `verify` operation; a
       per-provider contract test.
-      → `linear.api_key` (`scheme = "bearer"`), one `[[config]]` field binding it,
-      `verify = "linear-viewer"`, and `crates/connector-flux/tests/linear_connector.rs` (11 tests).
-      Asserted by `the_connector_authenticates_with_one_bearer_key_and_verifies_with_a_read`.
-- [ ] If it does not ship: the finding lands in `docs/designs/` and this story closes `done` with the
+      → **Not applicable — it does not ship.** All four were written and worked; the fixture in
+      `linear_connector.rs` keeps the auth/config/verify shape loadable.
+- [x] If it does not ship: the finding lands in `docs/designs/` and this story closes `done` with the
       finding as its deliverable, not `blocked`.
-      → **Not applicable — it shipped.** No `docs/designs/` record was written: the findings are
-      per-connector rather than cross-cutting, so they live in the two files that carry them and in
-      the two follow-up stories named under Progress.
+      → `docs/designs/graphql-vendors.md`. **This story should close `done`**, per this item — the
+      finding is the deliverable. Status is left `in-progress` only because closing it runs
+      `/track:done`, which writes the CHANGELOG and the board, both coordinator-owned.
 
 ## Progress
-- **Shipped, 2026-07-31.** `providers/linear.toml` — 8 operations, all `POST /graphql`, each with a
-  build-time-constant query document and typed GraphQL variables as its parameters.
+- **Refused, with the connector withdrawn. 2026-07-31, round 2.**
 
-### What the probe measured
+Round 1 shipped an eight-operation `providers/linear.toml` that emitted cleanly and passed the whole
+scoped gate. Review found it could not make a single call, and the defect is upstream of everything
+that gate covered. The connector is withdrawn; the measurement is the deliverable.
 
-Four things worked, three of them with no new mechanism at all:
+### The blocking finding
 
-1. **Nothing keys an operation by its path.** Identity is `id` only; `catalog::Operation` has no
-   `path` field. Eight operations on one endpoint is a difference of degree from `zendesk`'s three on
-   one `PUT` path, not of kind. This was the finding most likely to sink the story and it was a
-   non-event.
-2. **C-55's constant body field genuinely covers a query document**, rather than merely resembling
-   the case — which is what this story's note asked to be checked. `op.rs`'s `constant` is a bare
-   `schema.get("const")`: no type, length or newline restriction, and the emitter filters constants
-   out of the operation's signature. Sent on every call, declarable by nobody.
-3. **A multi-line document survives the emitter** as a verbatim `"""…"""` block. No provider had
-   exercised that path before; `a_multiline_query_document_round_trips_through_the_emitter` is the
-   first test in the repository that does.
-4. **The `data.<field>` envelope is declarable**, and the response schema is *stronger* than a REST
-   one exactly as this story's Notes hoped: the shape under `data` is a consequence of the pinned
-   document, and the test asserts the two agree.
+`connector-pack` derives an operation's configuration variables by scanning **every string literal in
+the emitted body for `{…}`** (`crates/connector-pack/src/request.rs`, `endpoint_variables`). A
+GraphQL query document is a string literal full of braces, none of which is configuration. That
+module documents the invariant this breaks — brace-bearing literals "are of exactly two kinds, and
+both are configuration" — and a query document is a third.
 
-### Two things did not work, and are recorded rather than papered over
+Both outcomes are wrong, and the second is worse:
 
-5. **Every operation is forced to `risk >= medium` and `idempotency = non_idempotent`, reads
-   included.** `check_write_metadata` derives write-ness from the HTTP verb, and under GraphQL the
-   verb is `POST` for everything. The risk floor rises from `low` to `medium` for the whole
-   connector, and `idempotency` carries no authored information anywhere in the file — no operation
-   could have said anything else. It ships anyway because the forced value is *conservative* (a read
-   over-stated, never a write under-stated) and gradation above the floor survives
-   (`linear-issue-archive` is `destructive`). The axis is **compressed, not erased**.
-   `a_graphql_read_cannot_declare_itself_low_risk` and `a_graphql_read_cannot_declare_itself_idempotent`
-   pin it by constructing the declaration a REST author would have written and asserting the refusal.
-6. **A failed Linear call arrives as HTTP 200 and nothing here can say so** — C-57's exact case, and
-   the safety-relevant result of this story. Linear signals every failure with `200`, a `null` `data`
-   and an `errors` array; this repository's success signal is the transport's. So the connector
-   declares **no** `error_envelope` anywhere, because declaring one makes `description()` append *"A
-   non-2xx response is returned as data…"* — false for Linear, and it points a model at a branch that
-   never occurs. The only mitigation available is prose, so every operation's `description` ends with
-   the same sentence about checking `errors` first.
-   `no_operation_declares_an_error_envelope_because_the_prose_it_emits_would_be_false` pins the
-   decision *with* its reason, so closing C-57 breaks the test and forces a revisit.
+- **Unconfigured** (the production shape — no `[[config]]` field could declare a selection set):
+  every operation refuses before assembling anything, naming a "variable" that is a fragment of
+  GraphQL.
+- **Configured**: `Build::substitute` rewrites the document. `{ viewer { … } }` is replaced by the
+  host's value, so the constant query a caller must not choose is chosen after all — by whoever
+  supplies the tenant's settings. That falsifies the one property the connector existed to
+  demonstrate.
 
-A third, smaller finding: `linear-issue-list` pages properly but declares no `quirks.pagination`,
-because `Pagination::Cursor.cursor_param` names a *query parameter* and a GraphQL cursor is a body
-variable. That is C-57's fourth acceptance item; Linear is the second provider to hit it after Slack.
+Measured, not argued, in `crates/connector-pack/src/request.rs`:
+`a_graphql_document_in_a_literal_is_read_as_configuration_variables` and
+`a_graphql_operation_cannot_be_called_and_is_corrupted_when_it_is` — the second executes the real
+`build` against an **empty** configuration, which is the check whose absence let a fully green gate
+coexist with eight dead operations.
+
+### Where the fix belongs — not here
+
+The scan is a **stand-in**, and the module says so: it infers configuration from Flux "rather than
+waiting for C-87 to publish them". So the fix is [C-87](C-87-configuration-codegen.md) — publish the
+configuration surface so the pack *reads* an operation's variables instead of inferring them from
+syntax. Not a cleverer scan, and explicitly not `endpoint.*` fields declared to absorb the selection
+sets, which would be a connector shaped around a defect. That is a `connector-pack`/catalogue
+mechanism spanning three crates and a documented safety invariant (C-193's "literals only is the
+safety half"); it is not a provider story.
+
+### What the probe established, so it is not re-derived
+
+Four of six boundaries are already expressible — path-per-operation is a non-event, C-55's constant
+body field genuinely covers a query document, a multi-line document round-trips as `"""…"""`, and the
+`data.<field>` envelope is declarable and *stronger* than a REST schema. Two are not: `risk`/
+`idempotency` are forced for every operation because `check_write_metadata` reads the verb
+(conservative, and not on its own disqualifying), and a failed call arrives as HTTP 200 with nothing
+able to say so ([C-57](C-57-quirks-beyond-http-shape.md)). All six are pinned in
+`crates/connector-flux/tests/linear_connector.rs` against a fixture, in the shape
+[C-164](C-164-provider-algolia.md) used for Algolia.
+
+### Why round 1's gate was green, which is the part worth keeping
+
+`every_shipped_operation_builds_an_absolute_request` asserts only on the **URL**, and its
+`configuration()` helper manufactures a value for every *discovered* variable — so it fabricates
+exactly the values that hide the refusal. `every_shipped_configuration_variable_is_placed` (C-214)
+**would** have caught it at integration, because a GraphQL fragment gets no request position; that
+check landed after round 1's base, which is why round 1 saw nothing. It is pinned here so the
+coincidence does not have to hold next time.
+
+There is also a structural blind spot worth its own story: **a new provider's operations are not in
+the catalogue index until the coordinator regenerates it**, and the index is coordinator-owned — so
+no test a provider story can run reaches `connector-pack` with its own connector in it.
 
 ### Follow-up worth filing
-- **A `POST` that is semantically a read cannot say so.** Not a request to weaken
-  `check_write_metadata` — it should stay exactly this strict for REST — but the IR has no way for an
-  operation to declare that its verb is a transport detail. GraphQL makes this total rather than
-  occasional.
-- **C-57 now has a second, sharper consumer.** Slack's `{"ok": false}` is the filed case; Linear is
-  the case where *no* call is status-signalled, and the follow-on effects (the false envelope prose,
-  the unexpressible body cursor) are both visible in one connector.
+- **A provider story cannot test its own connector through the host library.** The blind spot above.
+  Any future provider with a genuinely novel shape has it.
+- **A `POST` that is semantically a read cannot say so.** Not a loosening of `check_write_metadata`;
+  the IR has no way to state that a verb is a transport detail.
+- **C-57 has a second, sharper consumer.** Slack's `{"ok": false}` is the filed case; a GraphQL
+  vendor is the case where *no* call is status-signalled.
 
 ## Notes
 - The constant-query shape leans on the same mechanism as a constant body field, which the emitter
