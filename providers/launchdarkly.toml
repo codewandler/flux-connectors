@@ -1,0 +1,290 @@
+# LaunchDarkly — hand-authored, no vendor spec.
+#
+# Curated to the five operations `docs/stories/C-175-provider-launchdarkly.md` selected: list
+# projects, list a project's environments, list a project's feature flags, get one feature flag, and
+# toggle a flag on or off in one environment. As with zendesk, freshdesk, github, notion, calendly
+# and shopify, nothing is vendored under `specs/` for this connector, so drift against LaunchDarkly's
+# own documentation (`https://apidocs.launchdarkly.com/`) is undetectable by machine until C-14's
+# fetch and C-4's ingest land (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# THE FINDING THIS CONNECTOR EXISTS TO ESTABLISH: is "no scheme word at all" expressible, distinctly
+# from `bearer`?
+# ---------------------------------------------------------------------------------------------
+#
+# LaunchDarkly authenticates with `Authorization: <token>` — the API key, raw, with no `Bearer `, no
+# `Basic ` and no custom scheme word of any kind in front of it. `bearer` would send
+# `Authorization: Bearer <token>`, which LaunchDarkly's API rejects, so a connector using
+# `scheme = "bearer"` here would compile clean and fail closed with `401` on every call — the exact
+# trap C-107 recorded for Notion and C-161 recorded for Okta.
+#
+# This is a genuinely different question from Okta's (`Authorization: SSWS <token>`), PagerDuty's
+# (`Authorization: Token token=<key>`) and Statuspage's (`Authorization: OAuth <key>`), even though
+# all four share one header. Those three need a **prefix axis** — a literal word plus the secret —
+# that `AuthScheme` does not have and that C-161 recorded as blocked pending C-184
+# (`crates/connector-spec/src/auth.rs:70-102`, closed five-variant enum, `Header { name: String }`
+# with no second field, `#[serde(deny_unknown_fields)]`). LaunchDarkly needs no prefix at all: the
+# *entire* header value is the secret, which is precisely what `AuthScheme::Header { name:
+# "Authorization" }` already expresses — the same shape Shopify's `X-Shopify-Access-Token` uses
+# honestly, just aimed at a different header name. C-161's own test proves this exact spelling loads
+# and round-trips (`crates/connector-flux/tests/okta_connector.rs::the_header_scheme_would_load_but_cannot_honestly_spell_okta_s_prefix`),
+# and `crates/connector-flux/tests/launchdarkly_connector.rs` in this story exercises it end to end
+# against a connector that actually ships, rather than against a fixture that does not.
+#
+# So this connector needs **no change to `connector-spec`** — the auth model is already closed over
+# this case, and C-184 owns the (separate) prefix axis the other three stories are waiting on.
+#
+# ---------------------------------------------------------------------------------------------
+# THE SECOND FINDING: a flag toggle is a live production change, and its `risk` must say so.
+# ---------------------------------------------------------------------------------------------
+#
+# `launchdarkly-flag-toggle` is a `PATCH` that flips one environment's `on` bit for a flag. LaunchDarkly
+# is a feature-flagging service — the entire point of the product is that this bit gates code paths
+# already serving real, live traffic — so this is not "an ordinary update" in the way editing a CRM
+# contact or a support ticket is. The moment the call returns, every SDK instance evaluating that flag
+# in that environment (web clients, mobile apps, backend services, however many are wired up) begins
+# serving the other branch, immediately and for everyone. `risk = "high"` — "writes a reviewer would
+# want to see first" — is the honest classification, the same one this repository already gives
+# Shopify's storefront-visible product rename and GitHub's publicly-visible issue/comment writes;
+# `medium` would let an agent flip production behaviour for real users without a human seeing it
+# first, which is exactly what flux's approval gate exists to stop. It is not `destructive`: the
+# effect is immediate and consequential, but it is a `replace` onto a boolean and trivially reversible
+# by toggling back, unlike a delete. `idempotency = "non_idempotent"`, not because repeating the same
+# patch would actually change the outcome, but because this repository's emitter refuses
+# `idempotent` on any `PATCH` under RFC 9110 §9.2.2 — only `PUT` and `DELETE` are left alone — and a
+# safe retry here would need a condition this endpoint does not offer.
+#
+# ---------------------------------------------------------------------------------------------
+# EXCLUDED, deliberately, rather than guessed at:
+# ---------------------------------------------------------------------------------------------
+#
+# - **Creating or deleting a flag, or editing targeting rules, prerequisites or percentage
+#   rollouts.** LaunchDarkly's semantic-patch and JSON-Patch instruction sets for these are large and
+#   this story's curated set is one narrow, verifiable slice of `PATCH` — the on/off bit for one
+#   environment — not a general flag editor. Widening the JSON Patch surface to arbitrary paths would
+#   let an agent construct edits this connector was never authored against and never verified.
+# - **`tag`-filtered flag listing.** Confident of the `env` filter (LaunchDarkly's own docs describe
+#   restricting a flag's representation to one environment); not confident enough of the exact tag
+#   query-value character set to declare a `pattern` for it honestly, so it is left out rather than
+#   declared with a guessed constraint.
+# - **Pagination cursors.** LaunchDarkly's list endpoints page with `limit`/`offset`, which are plain
+#   integers with no encoding hazard; a caller pages by incrementing `offset`.
+#
+# ---------------------------------------------------------------------------------------------
+
+id = "launchdarkly"
+vendor = "LaunchDarkly"
+
+# One host for every account; LaunchDarkly has no per-tenant subdomain the way zendesk or freshdesk
+# do, so `base_url` is a bound literal exactly as asana's and calendly's are.
+base_url = "https://app.launchdarkly.com/api/v2"
+
+description = "LaunchDarkly feature management: read projects, environments and feature flags, and toggle a flag on or off in one environment"
+
+# The "Test connection" operation: a bounded read of the project list, taking no required argument —
+# the natural `verify` a settings page can call unattended.
+verify = "launchdarkly-project-list"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["launchdarkly.api_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "launchdarkly.api_token"
+# See the header comment: the whole header value is the secret, with no scheme word in front of it.
+# `AuthScheme::Header` expresses this completely — there is nowhere for a prefix to go, and this
+# connector needs nowhere for one to go.
+scheme = { header = { name = "Authorization" } }
+env = ["LAUNCHDARKLY_API_TOKEN"]
+description = "LaunchDarkly API access token, sent as the entire value of the Authorization header with no scheme word in front of it — LaunchDarkly rejects a `Bearer `-prefixed value"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 5: four reads, one high-risk write
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "launchdarkly-project-list"
+method = "GET"
+path = "/projects"
+description = "List every project in the LaunchDarkly account. A project is the top-level grouping that owns environments and feature flags"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "limit"
+description = "Maximum number of projects to return per page"
+required = false
+schema = { type = "integer", minimum = 1 }
+
+[[operations.params.query]]
+name = "offset"
+description = "Number of projects to skip, for paging past the first page"
+required = false
+schema = { type = "integer", minimum = 0 }
+
+[operations.response_schema]
+type = "object"
+required = ["items"]
+properties = { items = { type = "array", description = "The account's projects", items = { type = "object", required = ["key", "name"], properties = { key = { type = "string", description = "The project's own key — pass this as `project_key` to the other operations below" }, name = { type = "string" }, tags = { type = "array", items = { type = "string" } }, environments = { type = "array", description = "A summary of this project's environments; use launchdarkly-environment-list for the full per-environment representation", items = { type = "object" } } } } }, totalCount = { type = "integer", description = "Total projects in the account, which may exceed `items.length` on one page" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "launchdarkly-environment-list"
+method = "GET"
+path = "/projects/{project_key}/environments"
+description = "List the environments (e.g. production, staging) that belong to one project"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "project_key"
+description = "The project's own key, from launchdarkly-project-list's `key` field"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.query]]
+name = "limit"
+description = "Maximum number of environments to return per page"
+required = false
+schema = { type = "integer", minimum = 1 }
+
+[[operations.params.query]]
+name = "offset"
+description = "Number of environments to skip, for paging past the first page"
+required = false
+schema = { type = "integer", minimum = 0 }
+
+[operations.response_schema]
+type = "object"
+required = ["items"]
+properties = { items = { type = "array", description = "The project's environments", items = { type = "object", required = ["key", "name"], properties = { key = { type = "string", description = "This environment's own key, e.g. `production` — pass this as the `<environment_key>` inside launchdarkly-flag-toggle's JSON Patch path" }, name = { type = "string" }, color = { type = "string", description = "Hex color LaunchDarkly's UI displays this environment in" }, defaultTtl = { type = "integer" }, secureMode = { type = "boolean" }, defaultTrackEvents = { type = "boolean" }, requireComments = { type = "boolean" }, confirmChanges = { type = "boolean" }, tags = { type = "array", items = { type = "string" } } } } }, totalCount = { type = "integer" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "launchdarkly-flag-list"
+method = "GET"
+path = "/flags/{project_key}"
+description = "List the feature flags defined in one project"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "project_key"
+description = "The project's own key, from launchdarkly-project-list's `key` field"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# Restricted to the same character set LaunchDarkly's own environment keys are drawn from — see the
+# header comment on why an open-ended free-text filter is excluded instead of guessed at.
+[[operations.params.query]]
+name = "env"
+description = "Restrict each returned flag's environment-specific fields (targeting, on/off state) to this one environment's key, e.g. `production`. Omit to receive every environment's representation"
+required = false
+schema = { type = "string", pattern = "^[A-Za-z0-9._-]+$", minLength = 1 }
+
+[[operations.params.query]]
+name = "limit"
+description = "Maximum number of flags to return per page"
+required = false
+schema = { type = "integer", minimum = 1 }
+
+[[operations.params.query]]
+name = "offset"
+description = "Number of flags to skip, for paging past the first page"
+required = false
+schema = { type = "integer", minimum = 0 }
+
+[operations.response_schema]
+type = "object"
+required = ["items"]
+properties = { items = { type = "array", description = "The project's feature flags", items = { type = "object", required = ["key", "name", "kind"], properties = { key = { type = "string", description = "This flag's own key — pass this as `feature_flag_key` to launchdarkly-flag-get and launchdarkly-flag-toggle" }, name = { type = "string" }, kind = { type = "string", description = "`boolean` or `multivariate`" }, description = { type = "string" }, tags = { type = "array", items = { type = "string" } }, temporary = { type = "boolean", description = "Whether this flag is meant to be short-lived, e.g. a rollout flag rather than a permanent switch" }, variations = { type = "array", description = "Every value this flag can serve, each `{value, name, description}`", items = { type = "object" } }, environments = { type = "object", description = "Keyed by environment key (e.g. \"production\"); each value carries at least an `on` boolean plus targeting rules, prerequisites and a fallthrough variation this curated connector does not enumerate further — read `on` and pass the object through rather than assuming any deeper shape" } } } }, totalCount = { type = "integer" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "launchdarkly-flag-get"
+method = "GET"
+path = "/flags/{project_key}/{feature_flag_key}"
+description = "Get one feature flag's full definition, including its current on/off state and targeting per environment"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "project_key"
+description = "The project's own key, from launchdarkly-project-list's `key` field"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "feature_flag_key"
+description = "The flag's own key, from launchdarkly-flag-list's `key` field"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.query]]
+name = "env"
+description = "Restrict the returned environment-specific fields (targeting, on/off state) to this one environment's key, e.g. `production`. Omit to receive every environment's representation"
+required = false
+schema = { type = "string", pattern = "^[A-Za-z0-9._-]+$", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["key", "name", "kind"]
+properties = { key = { type = "string" }, name = { type = "string" }, kind = { type = "string", description = "`boolean` or `multivariate`" }, description = { type = "string" }, tags = { type = "array", items = { type = "string" } }, temporary = { type = "boolean" }, variations = { type = "array", description = "Every value this flag can serve, each `{value, name, description}`", items = { type = "object" } }, environments = { type = "object", description = "Keyed by environment key (e.g. \"production\"); each value carries at least an `on` boolean plus targeting rules, prerequisites and a fallthrough variation this curated connector does not enumerate further — read `on` and pass the object through rather than assuming any deeper shape" } }
+
+# ---------------------------------------------------------------------------------------------
+# THE HIGH-RISK WRITE. See the header comment: this flips a bit that gates live traffic, for
+# everyone, the moment the call returns. `risk = "high"`, not `medium`, and definitely not the
+# default a caller might reach for by treating this as an ordinary field update.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "launchdarkly-flag-toggle"
+method = "PATCH"
+path = "/flags/{project_key}/{feature_flag_key}"
+description = "Turn a feature flag on or off in one environment. This is a live production change: every SDK instance currently evaluating this flag in this environment — web, mobile and backend alike — switches to the other branch as soon as this call returns, for every real user it serves. It is reversible by toggling back, but it is not a private or staged edit"
+risk = "high"
+# `PATCH` is not an idempotent method under RFC 9110 §9.2.2, and this repository's emitter refuses
+# `idempotency = "idempotent"` on one (`crates/connector-flux/src/lib.rs::WriteDeclaredIdempotent`) —
+# only `PUT` and `DELETE` are left alone. A caller wanting a safe retry needs a condition to attach it
+# to, and this endpoint offers none, so `non_idempotent` is the honest declaration even though a
+# `replace` onto the same boolean would, in isolation, land in the same state twice.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "project_key"
+description = "The project's own key, from launchdarkly-project-list's `key` field"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "feature_flag_key"
+description = "The flag's own key, from launchdarkly-flag-list's `key` field"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.params]
+body_schema = { type = "array", minItems = 1, maxItems = 1, description = "A JSON Patch (RFC 6902) document with exactly one operation, setting a single environment's on/off state: `[{\"op\": \"replace\", \"path\": \"/environments/<environment_key>/on\", \"value\": true}]` turns the flag on in that environment, `\"value\": false` turns it off. `<environment_key>` is that environment's own key (from launchdarkly-environment-list's `key` field), written literally into the JSON Pointer string — it is not a request parameter LaunchDarkly could confuse with a URL segment", items = { type = "object", required = ["op", "path", "value"], properties = { op = { type = "string", enum = ["replace"], description = "This connector's curated toggle uses only `replace`; LaunchDarkly's PATCH also accepts `add`, `remove` and `test`, none of which this connector exposes" }, path = { type = "string", pattern = "^/environments/[A-Za-z0-9._-]+/on$", description = "A JSON Pointer to one environment's `on` bit: `/environments/{environment_key}/on`" }, value = { type = "boolean", description = "`true` turns the flag on in that environment, `false` turns it off" } } } }
+
+[operations.response_schema]
+type = "object"
+required = ["key", "name", "kind"]
+properties = { key = { type = "string" }, name = { type = "string" }, kind = { type = "string" }, environments = { type = "object", description = "The flag's environments after the patch was applied, in the same shape launchdarkly-flag-get returns — read the affected environment's `on` field back to confirm the toggle took effect" } }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any of the above can run
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "api_token"
+label = "LaunchDarkly API access token"
+help = "Create one under Account settings → Authorization → Access tokens in LaunchDarkly. Give it at least reader access to the projects this connection should reach, and writer access if launchdarkly-flag-toggle will be used. LaunchDarkly shows the token once"
+format = "token"
+secret = true
+docs_url = "https://docs.launchdarkly.com/home/account/api"
+binds = "credential.launchdarkly.api_token"
