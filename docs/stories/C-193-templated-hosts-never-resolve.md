@@ -2,7 +2,7 @@
 id: C-193
 title: "A templated base URL reaches the wire verbatim, so six connectors cannot resolve a host"
 pillar: Bridge
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/connector-configuration.md
 epic: tool-pack

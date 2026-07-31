@@ -7,6 +7,43 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A tenant's configuration is substituted into a templated base URL (C-193).** Nine providers'
+  hosts carried a `{subdomain}`, `{shop}`, `{domain}`, `{site}`, `{instance}`, `{account_host}`,
+  `{space_id}` or `{page_id}` to the wire verbatim. A bound `ConfigStore` port — handed in at
+  construction the way `Credentials` already is, never a global and never an environment read —
+  now fills them, and substitution is **total or refused**: `Error::MissingConfig` fires before the
+  body is evaluated and `Error::UnresolvedEndpoint` is a second lock, so no request leaves with a
+  brace in it.
+
+  **The half that is easy to miss is the permission subject.** The pack calls `http.request`'s
+  `execute` directly, bypassing `Executor::dispatch`, so `permission_subjects` is the *only* place
+  flux's egress allow-list is consulted for the inner call. It previously declared the
+  un-substituted template — a subject no allow-list can match. It now declares the substituted host
+  on **both** paths, the built one and the malformed-call fallback, pinned by a whole-catalogue
+  assertion that no shipped operation's subject contains `{`, with a control that fails if the
+  catalogue ever stops carrying a templated connector.
+
+  **Substitution runs over the emitter's string literals, never the finished URL**, and that is the
+  security-relevant choice rather than a stylistic one: flux interpolates `fmt` and never `lit`, so
+  a brace surviving in a literal is by construction a name nothing fills. Substituting the finished
+  URL is one line shorter and would let a *caller's parameter value* be filled with a tenant's
+  configuration on its way to the vendor. A test pins that a parameter spelling `{subdomain}` is
+  left alone.
+
+  **A refusal nobody asked for:** both ports carry a tenant, and nothing stopped a host pairing
+  tenant A's credentials with tenant B's settings — outcome, one tenant's token sent to another
+  tenant's host. Now `Error::TenantMismatch`, refused at `project`.
+
+  The story's own measurement was low in both directions: **9 providers / 53 operations**, not 6/38.
+  Seven have a templated *host*; two (`contentful`, `statuspage`) have a templated *path* on a host
+  that resolves, which is the quieter failure — the request reaches a real server and returns a
+  `404` that reads as a missing record rather than as an unconfigured connector.
+
+  Also moved: the Basic user-half no longer reads the process environment. It is a tenant value and
+  now comes from the same port.
+
 ### Fixed
 
 - **A `--service` scoped build carried another service's `config`, `graphs` and `verify` (C-194).**
