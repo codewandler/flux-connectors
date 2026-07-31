@@ -113,6 +113,25 @@
 id = "front"
 vendor = "Front"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.frontapp.api/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
+#
+# **Decided, not derived.** Front's corporate site is `front.com`, but every developer-facing
+# surface the vendor publishes is on `frontapp.com`: the API host in `base_url` above, and the
+# developer documentation. That is the domain a Front integrator has actually seen, so it is the one
+# chosen. `com.front.api` is the real alternative and was rejected because it names the marketing
+# site rather than the API.
+#
+# This is one of the two least certain authorities in this catalogue; `providers/sendgrid.toml`
+# carries the other.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.frontapp.api"
+
 # One host for every company — Front has no tenant subdomain, so `base_url` carries no `{placeholder}`
 # for an operator to bind and `status.rs` reports no `unbound-base-url-template` issue.
 base_url = "https://api2.frontapp.com"

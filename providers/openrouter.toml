@@ -84,6 +84,21 @@
 id = "openrouter"
 vendor = "OpenRouter"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/ai.openrouter.api/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
+#
+# `openrouter.ai` has no `com`, and reverse-DNS makes the TLD the first label like any other:
+# `ai.openrouter`. A non-`com` TLD is not a special case — `providers/fly.toml` already ships
+# `io.fly.api` for `fly.io`, and that precedent is what settles this one. C-92 filed openrouter as
+# having "no obvious reverse-DNS form"; it has one, and this is it.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "ai.openrouter.api"
+
 # One tenant-independent host, so like OpenAI's and unlike zendesk's `{subdomain}` there is **no
 # template variable here and nothing to bind**. C-10's `http_hosts` allowlist derives from this one
 # value and is therefore exactly `openrouter.ai`, never widened to a pattern;

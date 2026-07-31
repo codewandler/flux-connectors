@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "cloudflare"
+gid = "com.cloudflare.api:v4"
 vendor = "Cloudflare"
 description = "Cloudflare zones and DNS: list zones, list and manage DNS records for a zone, and purge a zone's cache"
 base_url = "https://api.cloudflare.com/client/v4"
+api_version = "v4"
 module = "cloudflare.flux"
 operations = ["cloudflare-zone-list", "cloudflare-dns-record-list", "cloudflare-dns-record-create", "cloudflare-dns-record-delete", "cloudflare-cache-purge"]

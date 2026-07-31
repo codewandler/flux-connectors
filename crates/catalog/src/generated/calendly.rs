@@ -9,7 +9,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "calendly",
     vendor: "Calendly",
     description: "Calendly scheduling: read the authenticated user, event types, scheduled events and their invitees",
-    authority: None,
+    authority: Some("com.calendly.api"),
     base_url: "https://api.calendly.com",
     auth: AUTH,
     operations: OPERATIONS,

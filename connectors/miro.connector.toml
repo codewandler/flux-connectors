@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "miro"
+gid = "com.miro.api:v2"
 vendor = "Miro"
 description = "Miro boards and board items: discover boards, read items of any type, and create, update and delete sticky notes"
 base_url = "https://api.miro.com/v2"
+api_version = "v2"
 module = "miro.flux"
 operations = ["miro-board-list", "miro-board-item-list", "miro-board-item-get", "miro-sticky-note-create", "miro-sticky-note-update", "miro-sticky-note-delete"]

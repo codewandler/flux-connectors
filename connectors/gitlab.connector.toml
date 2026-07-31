@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "gitlab"
+gid = "com.gitlab.api:v4"
 vendor = "GitLab"
 description = "GitLab: read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only"
 base_url = "https://gitlab.com/api/v4"
+api_version = "v4"
 module = "gitlab.flux"
 operations = ["gitlab-user-get", "gitlab-issue-list", "gitlab-issue-get", "gitlab-issue-create", "gitlab-merge-request-list", "gitlab-pipeline-get", "gitlab-branch-list"]

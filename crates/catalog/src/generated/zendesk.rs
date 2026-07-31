@@ -9,7 +9,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "zendesk",
     vendor: "Zendesk",
     description: "Zendesk Support ticketing: search, read, update tickets and their comments",
-    authority: None,
+    authority: Some("com.zendesk.api"),
     base_url: "https://{subdomain}.zendesk.com",
     auth: AUTH,
     operations: OPERATIONS,

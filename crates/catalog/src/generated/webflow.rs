@@ -9,7 +9,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "webflow",
     vendor: "Webflow",
     description: "Webflow sites and CMS: discover sites, read a collection's own field schema, read collection items of any tenant-defined shape, and publish a site live",
-    authority: None,
+    authority: Some("com.webflow.api"),
     base_url: "https://api.webflow.com/v2",
     auth: AUTH,
     operations: OPERATIONS,

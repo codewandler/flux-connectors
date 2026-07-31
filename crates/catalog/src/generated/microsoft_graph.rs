@@ -9,7 +9,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "microsoft_graph",
     vendor: "Microsoft Graph",
     description: "Microsoft Graph: read and reply to Outlook mail, read and create Calendar events, read and rename OneDrive files",
-    authority: None,
+    authority: Some("com.microsoft.graph"),
     base_url: "https://graph.microsoft.com",
     auth: AUTH,
     operations: OPERATIONS,

@@ -179,6 +179,29 @@
 id = "google"
 vendor = "Google Workspace"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.google.api/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
+#
+# **One authority for three services, which is the design's whole point.** `gmail`, `calendar` and
+# `drive` are `[[services]]` below, so they are the *middle* segment of an address
+# (`com.google.api/gmail:v1`) and not three authorities. Whatever Google surface this connector
+# grows next lands under this same one.
+#
+# Derived from `google.com` rather than from the `googleapis.com` host that serves the calls:
+# `googleapis.com` is where Google puts APIs, `google.com` is who Google is, and an authority names
+# the vendor.
+#
+# No connector-level `api_version`, because each service below already declares its own — `v1` for
+# gmail, `v3` for calendar and drive — which is exactly the case C-49's amendment to the design
+# added per-service versions for.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.google.api"
+
 # The shared Google API front door, and the host Calendar and Drive are documented on. It is also the
 # default a service inherits when it declares no `base_url` of its own — `gmail` is the one that does.
 #

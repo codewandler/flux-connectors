@@ -3,6 +3,7 @@
 generator = "flux-connectors 0.5.0"
 connector = "microsoft_graph"
 service = "mail"
+gid = "com.microsoft.graph/mail:v1.0"
 vendor = "Microsoft Graph"
 description = "Microsoft Graph: read and reply to Outlook mail, read and create Calendar events, read and rename OneDrive files"
 base_url = "https://graph.microsoft.com"

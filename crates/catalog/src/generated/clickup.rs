@@ -9,7 +9,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "clickup",
     vendor: "ClickUp",
     description: "ClickUp: list workspaces and a space's folders, and read, list, create and update tasks in a list",
-    authority: None,
+    authority: Some("com.clickup.api"),
     base_url: "https://api.clickup.com/api/v2",
     auth: AUTH,
     operations: OPERATIONS,

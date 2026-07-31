@@ -135,6 +135,20 @@
 id = "shopify"
 vendor = "Shopify"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.shopify.api/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
+#
+# Derived from `shopify.com`, the vendor's own primary domain, in reverse-DNS form, with the
+# trailing `api` label the already-shipped authorities carry (`com.slack.api`, `com.vercel.api`,
+# `io.fly.api`).
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.shopify.api"
+
 # Every Shopify store lives on its own `*.myshopify.com` host, so there is no tenant-independent base
 # URL. `{shop}` is the store's permanent subdomain — the `admin.shopify.com/store/<handle>` handle,
 # never the customer-facing custom domain, which does not serve the Admin API.

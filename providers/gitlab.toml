@@ -62,6 +62,25 @@
 id = "gitlab"
 vendor = "GitLab"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.gitlab.api/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
+#
+# Derived from `gitlab.com`, the vendor's own primary domain, in reverse-DNS form, with the trailing
+# `api` label the already-shipped authorities carry (`com.slack.api`, `com.vercel.api`,
+# `io.fly.api`).
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.gitlab.api"
+
+# The vendor's own spelling, and it is already in `base_url` above: `/api/v4`. Recorded here so a
+# `gid` renders (`com.gitlab.api:v4`) — a credential path needs only the authority and deliberately
+# carries no version, so a token survives the vendor's next one.
+api_version = "v4"
+
 # One host, gitlab.com's own SaaS. `http_hosts` derives from this single value
 # (`crates/connector-cli/src/catalog.rs`, `host_of`) and is therefore exactly `gitlab.com`, never
 # widened.

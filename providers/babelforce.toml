@@ -21,6 +21,22 @@
 id = "babelforce"
 vendor = "Babelforce"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.babelforce.api/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
+#
+# **The first-party vendor in this catalogue, so this choice sets the precedent for the rest.** It
+# is derived exactly as everybody else's is — `babelforce.com` reversed — and gets no special
+# spelling for being ours. An authority like `com.babelforce.connectors` would make our own
+# connector the one exception to the rule every other file here follows, and the rule is worth more
+# than the distinction.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.babelforce.api"
+
 # Production, stated explicitly. The document's `servers[0]` is **staging**
 # (`https://latest.dev.babelforce.com`), so a positional "take servers[0]" ingest would silently
 # point the connector at the dev environment (§1.1, §6.5). Staging remains reachable through the

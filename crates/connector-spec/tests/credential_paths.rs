@@ -216,7 +216,11 @@ fn shipped(name: &str) -> Connector {
         .connector
 }
 
-/// Slack is the only shipped provider with an authority, so it is the only one that has a path.
+/// One provider's paths, spelled out — the worked example behind the whole-catalogue assertion below.
+///
+/// Slack was chosen when it was the *only* provider with an authority; it stays because it is the one
+/// whose rendered paths are quoted in `crates/connector-pack`'s own tests, so a change here shows up
+/// as a mismatch there rather than as a silent divergence.
 #[test]
 fn slack_derives_a_path_for_each_of_its_credentials() {
     let connector = shipped("slack");
@@ -251,6 +255,15 @@ fn slack_derives_a_path_for_each_of_its_credentials() {
 
 /// The three outcomes are distinct because they have different owners: a bad tenant is the caller's,
 /// a missing authority is the provider's, and a path is neither.
+///
+/// **The `Ok(None)` arm is built here rather than taken from `providers/`, and that is C-92's doing.**
+/// It used to be `shipped("zendesk")`, which worked only while zendesk declared no authority; every
+/// shipped provider declares one now
+/// ([`every_shipped_provider_declares_an_authority_and_renders_a_credential_path`]), so no file in
+/// that directory can stand for this case any more. The outcome itself has not gone away — `authority`
+/// is still `Option`, a provider TOML may still omit it, and a host still has to tell "this connector
+/// has no address" apart from "you asked for a credential it does not declare". So the case is spelled
+/// out as the smallest connector that produces it.
 #[test]
 fn the_three_outcomes_are_distinguishable() {
     let connector = shipped("slack");
@@ -267,20 +280,60 @@ fn the_three_outcomes_are_distinguishable() {
             .is_err(),
         "an undeclared credential is an error"
     );
+
+    const NO_AUTHORITY: &str = r#"
+id = "acme"
+vendor = "Acme"
+base_url = "https://api.acme.test"
+description = "A connector that declares no authority"
+default_auth = [{ credentials = ["acme.token"] }]
+
+[[auth]]
+name = "acme.token"
+scheme = "bearer"
+env = ["ACME_TOKEN"]
+description = "The token"
+
+[[operations]]
+id = "acme-ping"
+method = "GET"
+path = "/ping"
+description = "Ping"
+risk = "low"
+idempotency = "idempotent"
+"#;
+    let no_authority = provider::load("providers/acme.toml", NO_AUTHORITY)
+        .expect("the fixture loads")
+        .connector;
+    assert!(
+        no_authority.authority.is_none(),
+        "the fixture exists to have no authority"
+    );
     assert!(matches!(
-        shipped("zendesk").credential_ref_for("9f3a", "zendesk.api_token"),
+        no_authority.credential_ref_for("9f3a", "acme.token"),
         Ok(None)
     ));
 }
 
-/// Fifteen of sixteen providers declare no authority, so no path renders for them. Asserted rather
-/// than left implicit, because the number is the whole argument for filing that as its own story:
-/// an authority is published under a never-reused contract, so minting fifteen of them is a decision,
-/// not a chore.
+/// **Every shipped provider declares an authority, so every one of them has a credential path
+/// (C-92).**
+///
+/// This replaces `only_providers_with_an_authority_have_credential_paths`, which existed to fail
+/// here and said so: it asserted the two sets were *whatever the catalogue happened to make them*
+/// and left `without` non-empty. The set that matters is now the empty one, and the reason is not
+/// tidiness. Without an authority `Credentials::reference` refuses with `Error::NoCredentialAddress`
+/// before any port is consulted, so a provider missing this one field cannot authenticate at all —
+/// the credential path is the thing that makes the connector usable, not a label on it.
+///
+/// **The assertion is deliberately over the whole directory rather than a list.** A new provider
+/// added without an authority has to fail here, on the day it is added, while its author is still
+/// looking at the file — because an authority is published under the never-reused contract
+/// `AGENTS.md` states, and the cheapest moment to choose one is before anything has been published
+/// under it.
 #[test]
-fn only_providers_with_an_authority_have_credential_paths() {
+fn every_shipped_provider_declares_an_authority_and_renders_a_credential_path() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers");
-    let (mut with, mut without, mut checked) = (Vec::new(), Vec::new(), 0);
+    let (mut without_authority, mut without_path, mut checked) = (Vec::new(), Vec::new(), 0);
 
     for entry in std::fs::read_dir(&dir).expect("providers/ is readable") {
         let path = entry.expect("entry").path();
@@ -295,43 +348,40 @@ fn only_providers_with_an_authority_have_credential_paths() {
         let connector = shipped(&name);
         checked += 1;
 
+        if connector.authority.is_none() {
+            without_authority.push(name);
+            continue;
+        }
+
+        // An authority is necessary *and sufficient*: a provider that declares one and still renders
+        // no path means the derivation dropped it, which is a different defect from a missing field
+        // and is reported as one. freshdesk declares no credential at all, deliberately, so it has
+        // nothing to derive a path for and is skipped here rather than counted as a failure.
         let Some(method) = connector.auth.first() else {
-            continue; // freshdesk declares no credential at all, deliberately.
+            continue;
         };
-        match connector
+        if connector
             .credential_ref_for("9f3a", &method.name)
             .expect("the tenant is valid")
+            .is_none()
         {
-            Some(_) => with.push(name),
-            None => without.push(name),
+            without_path.push(name);
         }
     }
 
     // Derived-set discipline (C-54): an empty providers/ must fail loudly, not pass vacuously.
     assert!(checked > 0, "no providers were checked");
 
-    // The invariant, not a census. This asserted `with == ["slack"]` when slack was the only
-    // provider declaring an authority, and it broke the day a second one did — which is a fact about
-    // the catalogue, not about the code under test. What actually matters is that the two sets are
-    // exactly the ones the address model predicts: an authority is necessary and sufficient for a
-    // credential path to render.
-    for name in &with {
-        assert!(
-            shipped(name).authority.is_some(),
-            "providers/{name}.toml renders a credential path without declaring an authority"
-        );
-    }
-    for name in &without {
-        assert!(
-            shipped(name).authority.is_none(),
-            "providers/{name}.toml declares an authority but renders no credential path — an \
-             authority is the only thing a path needs, so this means the derivation dropped it"
-        );
-    }
     assert!(
-        !with.is_empty(),
-        "no provider renders a credential path, so this test proves nothing — C-92 gives every \
-         provider an authority, and when it lands `without` is what goes empty"
+        without_authority.is_empty(),
+        "{} of {checked} providers declare no `authority`, so `Credentials::reference` refuses with \
+         `NoCredentialAddress` and they cannot authenticate at all: {without_authority:?}",
+        without_authority.len()
+    );
+    assert!(
+        without_path.is_empty(),
+        "these providers declare an authority but render no credential path — an authority is the \
+         only thing a path needs, so the derivation dropped it: {without_path:?}"
     );
 }
 

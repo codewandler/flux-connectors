@@ -112,6 +112,25 @@
 id = "docusign"
 vendor = "DocuSign"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.docusign.api/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
+#
+# Derived from `docusign.com`, the vendor's own primary domain, in reverse-DNS form, with the
+# trailing `api` label the already-shipped authorities carry (`com.slack.api`, `com.vercel.api`,
+# `io.fly.api`).
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.docusign.api"
+
+# The vendor's own spelling, and it is already in `base_url` above: `/restapi/v2.1`. Recorded here
+# so a `gid` renders (`com.docusign.api:v2.1`) — a credential path needs only the authority and
+# deliberately carries no version, so a token survives the vendor's next one.
+api_version = "v2.1"
+
 # `{account_host}` and `{account_id}` are each bound by their own `[[config]]` field below — see the
 # header comment above for why both live here rather than one being a per-call path argument.
 base_url = "https://{account_host}/restapi/v2.1/accounts/{account_id}"

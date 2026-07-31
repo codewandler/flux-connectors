@@ -2,18 +2,22 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "twilio"
+gid = "com.twilio.api:2010-04-01"
 vendor = "Twilio"
 description = "Twilio programmable messaging and voice: read messages, calls and the authenticated account"
 base_url = "https://api.twilio.com/2010-04-01"
+api_version = "2010-04-01"
 module = "twilio.flux"
 operations = ["twilio-account-get", "twilio-message-list", "twilio-message-get", "twilio-call-list", "twilio-call-get"]
 
 [[events]]
 name = "message.status_callback"
+oip = "com.twilio.api:2010-04-01#message.status_callback"
 description = "A message's delivery status changed. Twilio POSTs this, form-encoded, to the StatusCallback URL supplied when the message was created"
 group = "Messaging"
 
 [[events]]
 name = "call.status_callback"
+oip = "com.twilio.api:2010-04-01#call.status_callback"
 description = "A call's status changed. Twilio POSTs this, form-encoded, to the StatusCallback URL configured for the call or the answering number"
 group = "Voice"

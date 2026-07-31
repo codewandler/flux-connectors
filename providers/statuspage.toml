@@ -145,6 +145,29 @@
 id = "statuspage"
 vendor = "Atlassian Statuspage"
 
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.atlassian.statuspage/<credential>` — and until
+# it was declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector
+# could not authenticate at all.
+#
+# Atlassian's, and the `vendor` field above already says so. The trailing label is the product for
+# the reason `providers/jira.toml` sets out at length: two Atlassian APIs ship in this catalogue and
+# `com.atlassian.api` could only have named one of them.
+#
+# `io.statuspage.api` — from the live `statuspage.io` and the `api.statuspage.io` host above — is
+# the real alternative, and was rejected so that the two Atlassian products sit under one vendor
+# rather than being related by nothing an address can see.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.atlassian.statuspage"
+
+# The vendor's own spelling, and it is already in `base_url` above: `/v1/pages/{page_id}`. Recorded
+# here so a `gid` renders (`com.atlassian.statuspage:v1`) — a credential path needs only the
+# authority and deliberately carries no version, so a token survives the vendor's next one.
+api_version = "v1"
+
 # `{page_id}` is bound by the `[[config]]` field at the foot of this file — see the header comment
 # for why it lives here, and for the two endpoints that fold costs us.
 base_url = "https://api.statuspage.io/v1/pages/{page_id}"
