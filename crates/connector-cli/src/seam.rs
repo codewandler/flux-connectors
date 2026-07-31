@@ -256,10 +256,21 @@ pub fn select_service(connector: &Connector, selector: &str) -> Result<Connector
         // **Every member kind of the service, not just the callable one** (C-83). A selection that
         // stayed operations-only would be the worst kind of partial success: `--service s3` would
         // emit an s3 manifest carrying another service's events, and it would do so successfully.
-        // The three kinds partition the same way for the same reason — each member names exactly one
-        // service — so one filter per kind is the whole rule.
+        // The kinds partition the same way for the same reason — each member names exactly one
+        // service — so one filter per kind is the whole rule. `config` and `graphs` arrived after
+        // C-83 wrote that and were carried through by the tail below until C-190; each has had its
+        // accessor since it landed.
         events: connector.events_of(service).cloned().collect(),
         channels: connector.channels_of(service).cloned().collect(),
+        config: connector.config_of(service).cloned().collect(),
+        graphs: connector.graphs_of(service).cloned().collect(),
+        // `verify` is connector-level but *denotes* an operation, and an operation has exactly one
+        // service — so it is service-derived, and the tail carried it through unnarrowed (C-190).
+        // Neither "keep" nor "drop" is right on its own: kept across a boundary it names an operation
+        // this connector no longer declares, which `connector_spec`'s own `validate_verify` refuses
+        // on load; dropped unconditionally it would strip a legitimate Test-connection button from
+        // the service that owns it. So it survives exactly when its operation does.
+        verify: connector.verify.clone(),
         ..connector.clone()
     })
 }
@@ -692,6 +703,114 @@ required = true
 schema = { type = "string" }
 "#;
 
+    /// The same two-service shape, now declaring **every** service-partitioned surface: one
+    /// `[[config]]` field and one `[[graphs]]` flow per service, plus a connector-level `verify`
+    /// naming an s3 operation.
+    ///
+    /// Constructed rather than shipped, because no single shipped provider carries all three.
+    /// `anthropic`, `contentful` and `postmark` are multi-service *and* declare per-service
+    /// `[[config]]`, and `anthropic`, `contentful` and `microsoft_graph` declare a `verify` — those
+    /// are covered against what ships, by
+    /// `tests/service_units.rs::narrowing_a_shipped_provider_carries_no_other_services_config_graphs_or_verify`.
+    /// **No provider in `providers/` declares `[[graphs]]` at all**, so a graph has no shipped case
+    /// and only a fixture can assert it.
+    ///
+    /// It goes through the real loader, so the value a narrowing starts from is one `connector_spec`
+    /// accepts — which is what makes "the narrowed value would not load" a statement about the
+    /// narrowing rather than about the fixture.
+    ///
+    /// Each service's `base_url` carries **its own** template variable, bound by its own field. That
+    /// is the detail that makes the leak observable rather than merely untidy: carry `region` into an
+    /// s3-only connector and it binds `{region}`, which no remaining base URL has anywhere.
+    const TWO_SERVICE_CONFIGURED: &str = r#"
+id = "aws"
+vendor = "Amazon Web Services"
+authority = "com.amazonaws"
+base_url = "https://amazonaws.com"
+description = "Object storage and model inference."
+verify = "aws-object-get"
+default_auth = [{ credentials = ["aws.token"] }]
+
+[[auth]]
+name = "aws.token"
+scheme = "bearer"
+env = ["AWS_TOKEN"]
+
+[[services]]
+name = "s3"
+description = "Object storage."
+base_url = "https://{bucket}.s3.amazonaws.com"
+api_version = "2006-03-01"
+
+[[services]]
+name = "bedrock-runtime"
+description = "Model inference."
+base_url = "https://bedrock-runtime.{region}.amazonaws.com"
+api_version = "2023-09-30"
+
+[[config]]
+name = "bucket"
+service = "s3"
+label = "Bucket name"
+help = "The bucket this connector reads objects from."
+binds = "endpoint.bucket"
+
+[[config]]
+name = "region"
+service = "bedrock-runtime"
+label = "Model region"
+help = "The AWS region hosting the models you invoke."
+binds = "endpoint.region"
+
+[[operations]]
+id = "aws-object-get"
+service = "s3"
+method = "GET"
+path = "/objects/{key}"
+description = "Fetch one object."
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "key"
+required = true
+schema = { type = "string" }
+
+[[operations]]
+id = "aws-model-invoke"
+service = "bedrock-runtime"
+method = "POST"
+path = "/model/{model_id}/invoke"
+description = "Invoke a model."
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "model_id"
+required = true
+schema = { type = "string" }
+
+[[graphs]]
+name = "object-fetch"
+service = "s3"
+description = "Read one object."
+
+[[graphs.nodes]]
+id = "get"
+kind = { operation = { operation = "aws-object-get" } }
+outputs = [{ name = "out" }]
+
+[[graphs]]
+name = "model-call"
+service = "bedrock-runtime"
+description = "Invoke one model."
+
+[[graphs.nodes]]
+id = "invoke"
+kind = { operation = { operation = "aws-model-invoke" } }
+outputs = [{ name = "out" }]
+"#;
+
     fn inputs(definition: &str) -> ProviderInputs {
         ProviderInputs {
             name: "acme".to_string(),
@@ -850,6 +969,107 @@ path = \"specs/acme/v1.json\"
             assert_eq!(artifacts.services.len(), 1);
             assert!(!artifacts.services[0].module.contains("aws-model-invoke"));
         }
+    }
+
+    /// **C-190.** The narrowing carries the selected service's surfaces and *nothing else* — the
+    /// three the C-83 comment above [`select_service`] did not cover.
+    ///
+    /// The assertions are stated as the loader's own invariants rather than as field values, because
+    /// that is what the leak actually broke: an endpoint-bound field for a `{variable}` the remaining
+    /// base URL does not carry is refused by `validate_config`, and a `verify` naming an operation
+    /// the connector does not declare is refused by `validate_verify`. Before the fix,
+    /// `select_service` returned a `Connector` failing both.
+    #[test]
+    fn selecting_a_service_carries_no_other_services_config_graphs_or_verify() {
+        let connector = load(&inputs(TWO_SERVICE_CONFIGURED)).unwrap();
+
+        for (service, config, graph) in [
+            ("s3", "bucket", "object-fetch"),
+            ("bedrock-runtime", "region", "model-call"),
+        ] {
+            let selected = select_service(&connector, service).expect("a declared service");
+
+            let names: Vec<&str> = selected
+                .config
+                .iter()
+                .map(|field| field.name.as_str())
+                .collect();
+            assert_eq!(
+                names,
+                vec![config],
+                "`--service {service}` carries another service's configuration fields"
+            );
+
+            let flows: Vec<&str> = selected
+                .graphs
+                .iter()
+                .map(|flow| flow.name.as_str())
+                .collect();
+            assert_eq!(
+                flows,
+                vec![graph],
+                "`--service {service}` carries another service's flow graphs"
+            );
+
+            assert!(
+                selected.config.iter().all(|field| field.service == service),
+                "`--service {service}` kept a configuration field naming another service"
+            );
+            assert!(
+                selected.graphs.iter().all(|flow| flow.service == service),
+                "`--service {service}` kept a graph naming another service"
+            );
+            if let Some(verify) = &selected.verify {
+                assert!(
+                    selected.operation(verify).is_some(),
+                    "`--service {service}` kept `verify = {verify:?}`, an operation it no longer \
+                     declares — a Test-connection pointer into a service this build is not producing"
+                );
+            }
+        }
+
+        // `verify` is connector-level but *denotes* an operation, and an operation has exactly one
+        // service — so it is service-derived, and narrowing it is neither "keep" nor "drop". Both
+        // directions are asserted, because dropping it unconditionally would strip a legitimate
+        // Test-connection button from the very service that owns it.
+        assert_eq!(
+            select_service(&connector, "s3").unwrap().verify.as_deref(),
+            Some("aws-object-get"),
+            "the service owning the verify operation keeps it"
+        );
+        assert_eq!(
+            select_service(&connector, "bedrock-runtime")
+                .unwrap()
+                .verify,
+            None,
+            "a service that does not declare the verify operation must not point at it"
+        );
+    }
+
+    /// The other half of the same rule: what is **not** service-partitioned still comes through the
+    /// `..connector.clone()` tail untouched.
+    ///
+    /// `AuthMethod` carries no `service` and an `AuthRequirement` names a credential connector-wide,
+    /// so narrowing auth would need a reachability computation rather than a filter. That is a
+    /// different story; this test is what says C-190 did not quietly take it.
+    #[test]
+    fn selecting_a_service_keeps_the_connector_level_surfaces() {
+        let connector = load(&inputs(TWO_SERVICE_CONFIGURED)).unwrap();
+        let selected = select_service(&connector, "s3").expect("`s3` is a declared service");
+
+        assert_eq!(selected.auth, connector.auth);
+        assert_eq!(selected.default_auth, connector.default_auth);
+        assert_eq!(selected.id, connector.id);
+        assert_eq!(selected.vendor, connector.vendor);
+        assert_eq!(selected.description, connector.description);
+        assert_eq!(selected.authority, connector.authority);
+        // The connector-level default, not the service's own — a service resolves its base URL
+        // through `base_url_of`, which the narrowed connector still answers correctly.
+        assert_eq!(selected.base_url, connector.base_url);
+        assert_eq!(
+            selected.base_url_of("s3"),
+            "https://{bucket}.s3.amazonaws.com"
+        );
     }
 
     #[test]
