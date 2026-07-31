@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "launchdarkly-project-list",
         provider: "launchdarkly",
+        service: "default",
         description: "List every project in the LaunchDarkly account. A project is the top-level grouping that owns environments and feature flags",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "launchdarkly-environment-list",
         provider: "launchdarkly",
+        service: "default",
         description: "List the environments (e.g. production, staging) that belong to one project",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "launchdarkly-flag-list",
         provider: "launchdarkly",
+        service: "default",
         description: "List the feature flags defined in one project",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "launchdarkly-flag-get",
         provider: "launchdarkly",
+        service: "default",
         description: "Get one feature flag's full definition, including its current on/off state and targeting per environment",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "launchdarkly-flag-toggle",
         provider: "launchdarkly",
+        service: "default",
         description: "Turn a feature flag on or off in one environment. This is a live production change: every SDK instance currently evaluating this flag in this environment — web, mobile and backend alike — switches to the other branch as soon as this call returns, for every real user it serves. It is reversible by toggling back, but it is not a private or staged edit",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,

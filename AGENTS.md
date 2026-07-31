@@ -252,6 +252,14 @@ callback address.
   once per tenant by each end user (the subdomain, the token). Conflating them is a real defect both
   ways: asking an end user for a client secret hands them the product's own credential. The level is a
   consequence of what a field `binds`, so an author cannot state it wrongly.
+- **A configuration value is addressed by `(tenant, provider, service, kind, name)`.** The service is
+  load-bearing, not decoration: a *service* owns its `base_url`, so a `{variable}` in one belongs to
+  that service, and a field's `name` is unique across the whole connector while the placeholder it
+  fills is not. `contentful` declares `delivery_space_id` and `management_space_id`, both binding
+  `endpoint.space_id`. Keyed without the service they were one slot, and a management write went to
+  whichever space the delivery reads had been configured with — a `200` from a real server, not a
+  refusal. `catalog::Operation::service` is what carries it to the runtime port (C-197); do not add a
+  consumer that keys a tenant value by connector alone.
 - **`secret` must agree with `binds`.** flux partitions secret from non-secret **by type** —
   `AuthMethod` versus `ConfigSpec` — and enforces it host-side. A field claiming otherwise would put a
   contradicting source of truth in front of that enforcement. The loader refuses it.

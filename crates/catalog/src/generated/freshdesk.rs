@@ -24,6 +24,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "freshdesk-test",
         provider: "freshdesk",
+        service: "default",
         description: "Verify credentials with a bounded contact read",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -34,6 +35,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "freshdesk-ticket-list",
         provider: "freshdesk",
+        service: "default",
         description: "List and filter tickets",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -44,6 +46,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "freshdesk-ticket-get",
         provider: "freshdesk",
+        service: "default",
         description: "View one ticket",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -54,6 +57,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "freshdesk-ticket-create",
         provider: "freshdesk",
+        service: "default",
         description: "Create a ticket. The requester must be identified either by requester_id, or by phone together with name — Freshdesk states this only in prose and its required flags do not capture it",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -64,6 +68,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "freshdesk-ticket-update",
         provider: "freshdesk",
+        service: "default",
         description: "Update a ticket's fields",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::Idempotent,
@@ -74,6 +79,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "freshdesk-ticket-note-add",
         provider: "freshdesk",
+        service: "default",
         description: "Add a note to a ticket; the note is private unless explicitly made public",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -84,6 +90,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "freshdesk-contact-list",
         provider: "freshdesk",
+        service: "default",
         description: "List and filter contacts, e.g. to resolve a caller before filing a ticket",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -94,6 +101,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "freshdesk-contact-get",
         provider: "freshdesk",
+        service: "default",
         description: "Get one contact",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -104,6 +112,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "freshdesk-contact-create",
         provider: "freshdesk",
+        service: "default",
         description: "Create a contact",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,

@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "fly-regions-list",
         provider: "fly",
+        service: "machines",
         description: "List Fly's available regions and identify the nearest one; also verifies the configured access token",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "fly-machines-list",
         provider: "fly",
+        service: "machines",
         description: "List every Machine in one Fly app, without optional state filters or lease details",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "fly-machine-get",
         provider: "fly",
+        service: "machines",
         description: "Get one Fly Machine's current configuration, state, region, addresses and recent events",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "fly-machine-events-list",
         provider: "fly",
+        service: "machines",
         description: "List the recorded lifecycle events for one Fly Machine; this is history, not a durable event subscription",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "fly-machine-create",
         provider: "fly",
+        service: "machines",
         description: "Create and launch a Fly Machine from one image using Fly's generated name and region placement; this begins billable compute",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -80,6 +85,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "fly-machine-start",
         provider: "fly",
+        service: "machines",
         description: "Start a stopped Fly Machine, restoring service and beginning billable compute",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -90,6 +96,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "fly-machine-stop",
         provider: "fly",
+        service: "machines",
         description: "Stop a running Fly Machine using the API's default signal and timeout, interrupting its service",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -100,6 +107,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "fly-machine-restart",
         provider: "fly",
+        service: "machines",
         description: "Restart a Fly Machine using the API's default signal and timeout, causing a service interruption",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -110,6 +118,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "fly-machine-delete",
         provider: "fly",
+        service: "machines",
         description: "Permanently delete a stopped Fly Machine. Forced deletion is intentionally unavailable, so a running Machine is refused instead of killed implicitly",
         risk: crate::Risk::Destructive,
         idempotency: crate::Idempotency::NonIdempotent,

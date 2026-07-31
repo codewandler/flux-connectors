@@ -180,7 +180,11 @@ impl Operation {
             .map(|variable| Field::Endpoint(variable.as_str()))
             .collect();
         push_user_half_fields(provider, &mut fields);
-        let settings = configuration.snapshot(provider.id, fields);
+        // **Keyed by the operation's own service** (C-197). `entry.service` is what makes this one
+        // service's settings rather than the connector's: `contentful-entry-get` reads `delivery`'s
+        // `space_id` and `contentful-entry-create` reads `management`'s, because they are calls to
+        // two different hosts against two different spaces.
+        let settings = configuration.snapshot(provider.id, entry.service, fields);
 
         Ok(Self {
             spec,

@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "webflow-site-list",
         provider: "webflow",
+        service: "default",
         description: "List the sites this token can see, with each site's id, display name, hosted subdomain and last-published time. The `id` returned here is what every other operation in this connector needs as `site_id`",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "webflow-collection-list",
         provider: "webflow",
+        service: "default",
         description: "List the CMS collections defined on a site, with each collection's id, display name and slug. Does not include a collection's fields — call webflow-collection-get for that. Returns Webflow's first page only; this connector declares no offset or limit parameter",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "webflow-collection-get",
         provider: "webflow",
+        service: "default",
         description: "Get a collection's own schema: its display name, slug, and the full list of fields the site owner defined for it — each field's id, slug, display name, type, and whether it is required. This is the honest way to learn what an item's fieldData will contain, since that shape is tenant-defined and unknowable at compile time; this connector cannot type fieldData any more precisely than this lets a caller discover it",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "webflow-collection-item-list",
         provider: "webflow",
+        service: "default",
         description: "List the items in a collection, in Webflow's default order. Each item's fieldData is a flat object keyed by that collection's own field slugs — call webflow-collection-get to discover them; this connector cannot type fieldData beyond that, because it is defined per-tenant, per-collection. Returns Webflow's first page only; this connector declares no offset or limit parameter",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "webflow-collection-item-get",
         provider: "webflow",
+        service: "default",
         description: "Get one item from a collection. Its fieldData is a flat object keyed by that collection's own field slugs — call webflow-collection-get to discover them; this connector cannot type fieldData beyond that, because it is defined per-tenant, per-collection",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -80,6 +85,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "webflow-site-publish",
         provider: "webflow",
+        service: "default",
         description: "Publish a site's currently staged changes to its live, public domains — every connected custom domain and the Webflow-hosted subdomain. This has immediate public effect: whatever is staged goes live for every visitor as soon as this call returns, with no separate confirmation step. Takes no body — Webflow's optional custom-domain selector is itself an array this connector cannot express (C-185), so this always publishes to every connected domain rather than a caller-chosen subset",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,

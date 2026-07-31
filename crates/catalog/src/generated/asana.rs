@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "asana-task-get",
         provider: "asana",
+        service: "default",
         description: "Get one task — its name, notes, assignee, due date, completion state and the projects it belongs to. The task is under `data` in the response",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "asana-task-create",
         provider: "asana",
+        service: "default",
         description: "Create a task in a workspace. It is created unassigned and in no project, so nobody is notified; move it or assign it in Asana afterwards. The created task is under `data` in the response",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "asana-task-update",
         provider: "asana",
+        service: "default",
         description: "Mark a task complete or incomplete. Asana's update is sparse: only completion changes, and every other field of the task is left as it was. The updated task is under `data` in the response",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "asana-task-story-add",
         provider: "asana",
+        service: "default",
         description: "Add a comment to a task. Asana calls a comment a story. It is attributed to the token's owner, notifies every follower of the task by email and in-app, and cannot be un-sent. The created story is under `data` in the response",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "asana-project-get",
         provider: "asana",
+        service: "default",
         description: "Get one project — its name, notes, owner, team, current status and whether it is archived. The project is under `data` in the response",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,

@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "babelforce-agent-list",
         provider: "babelforce",
+        service: "default",
         description: "List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "babelforce-agent-get",
         provider: "babelforce",
+        service: "default",
         description: "Get one agent",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "babelforce-agent-status-update",
         provider: "babelforce",
+        service: "default",
         description: "Update an agent's status. Supply at least one of enabled or presence.name — the request body's properties are all optional, so an empty PUT is schema-valid and does nothing",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::Idempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "babelforce-call-list",
         provider: "babelforce",
+        service: "default",
         description: "List and filter calls from the reporting view",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "babelforce-call-get",
         provider: "babelforce",
+        service: "default",
         description: "Get one call",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -80,6 +85,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "babelforce-call-hangup",
         provider: "babelforce",
+        service: "default",
         description: "Hang up a live call",
         risk: crate::Risk::Destructive,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -90,6 +96,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "babelforce-call-session-set",
         provider: "babelforce",
+        service: "default",
         description: "Set session variables on a live call. Variable keys must start with `app` — babelforce rejects other keys, and states the rule only in prose",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::Idempotent,
@@ -100,6 +107,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "babelforce-session-get",
         provider: "babelforce",
+        service: "default",
         description: "Get the IVR variables for a session",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -110,6 +118,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "babelforce-session-update",
         provider: "babelforce",
+        service: "default",
         description: "Update the user-scoped variables of a session",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::Idempotent,

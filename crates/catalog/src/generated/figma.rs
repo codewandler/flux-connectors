@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "figma-user-me",
         provider: "figma",
+        service: "default",
         description: "Get the authenticated user's id, email, display handle and avatar URL. Used to verify a token works before running anything else",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "figma-file-get",
         provider: "figma",
+        service: "default",
         description: "Get a Figma file's document tree, components and styles by file key. Does not include comments or rendered images",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "figma-file-nodes-get",
         provider: "figma",
+        service: "default",
         description: "Get one or more specific nodes from a file by id, without walking the whole document tree. Use this to read a particular frame or layer instead of downloading the entire file",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "figma-image-render-get",
         provider: "figma",
+        service: "default",
         description: "Render one or more nodes to images and return download URLs for them. The URLs point at short-lived storage and expire — Figma does not guarantee they stay valid, so fetch or store the image promptly rather than caching the URL itself",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "figma-project-files-list",
         provider: "figma",
+        service: "default",
         description: "List the files in a project: each file's key, name, thumbnail and last-modified time",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -80,6 +85,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "figma-file-comments-list",
         provider: "figma",
+        service: "default",
         description: "List a file's comments: who wrote each one, when, its text, what it is attached to, and whether it has been resolved",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,

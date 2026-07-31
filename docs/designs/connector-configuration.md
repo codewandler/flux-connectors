@@ -144,6 +144,39 @@ deployment detail, and a connector carrying one would be describing someone else
 `message` is the case: it fires for every human message in every channel the app is in, and until now
 that warning existed only in the prose a *model* reads.
 
+## The runtime port keys by service, because the declaration does (C-197)
+
+The half above describes what a connector *declares*. `connector-pack`'s `ConfigStore` is what a host
+*answers* with, and for one release the two disagreed about what identifies a field.
+
+`ConfigField::service` is **exactly one, always concrete** — every declared field belongs to a
+service, whatever it binds. But a field's `name` is unique across the *whole connector* rather than
+per service, so a connector whose two services need the same `{variable}` declares it twice under two
+names. `contentful` is the shipped case: `delivery_space_id` and `management_space_id`, both
+`binds = "endpoint.space_id"`, in `delivery` and `management`.
+
+The runtime port keyed on `(tenant, provider, kind, name)`, and the `binds` target is what it keys
+`name` from — so those two fields collapsed into **one slot**. The failure is the bad kind:
+`contentful-entry-create` on `api.contentful.com` resolved whatever `contentful-entry-get` on
+`cdn.contentful.com` had, so a tenant whose two environments differ got a **`200` with a real
+management token** — a write into a space nobody named. Nothing refused, because nothing was
+missing.
+
+The key is now **`(tenant, provider, service, kind, name)`**, and the service comes from
+`catalog::Operation::service`, which C-197 added for it — the embedded catalogue catching up with
+`catalog.json`, which had carried the service all along. Three consequences worth stating:
+
+- **The reserved `default` is written out** in the catalogue and in the key. Elision is an *address*
+  rule (`com.freshdesk.api:v2`); a consumer grouping by service needs a name in every row.
+- **Every kind is keyed this way, `username.<name>` included**, because the IR declares every field
+  under a service. A credential's *address* elides the service — it is declared at connector level —
+  but the configuration field supplying its user half is not, and this port follows the declaration.
+  A two-service connector with one `basic` credential binds the user half under each service that
+  asks for it.
+- **A service with nothing bound refuses by name** rather than borrowing its sibling's value, and the
+  refusal quotes the service. Without that, an operator told `contentful` is missing
+  `endpoint.space_id` has two fields answering to that description.
+
 ## What this does not settle
 
 - **OAuth is unexercised.** `OAuth2Spec` is a landed type **no shipped provider uses**, so the

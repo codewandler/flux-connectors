@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "github-repo-get",
         provider: "github",
+        service: "default",
         description: "Get one repository's metadata, including its default branch, visibility and permissions",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "github-issue-get",
         provider: "github",
+        service: "default",
         description: "Get one issue by number. GitHub treats a pull request as an issue, so a PR number returns that PR's issue view; use github-pull-get for its merge and review state",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "github-pull-get",
         provider: "github",
+        service: "default",
         description: "Get one pull request by number, with its merge state, head and base refs and review counts",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "github-issue-create",
         provider: "github",
+        service: "default",
         description: "Open a new issue on a repository. The issue is immediately visible to everyone who can see the repository and notifies its subscribers",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "github-issue-comment-add",
         provider: "github",
+        service: "default",
         description: "Add a comment to an issue or pull request. The comment is public to everyone who can see the repository and notifies its participants; GitHub has no private or internal comment here",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,

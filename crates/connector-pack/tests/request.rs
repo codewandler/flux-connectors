@@ -71,7 +71,15 @@ fn configuration() -> Configuration {
     let mut values = MemoryConfig::new();
     for entry in catalog::operations() {
         for variable in project_with(entry, unconfigured()).endpoint_variables() {
-            values = values.with_endpoint(TENANT, entry.provider, variable, &value_for(variable));
+            // Under the entry's own service (C-197) — see `network_gate.rs` for why binding it once
+            // per connector is not the same thing.
+            values = values.with_endpoint(
+                TENANT,
+                entry.provider,
+                entry.service,
+                variable,
+                &value_for(variable),
+            );
         }
     }
     Configuration::new(Arc::new(values), TENANT).expect("a valid tenant id")

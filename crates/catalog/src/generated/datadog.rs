@@ -36,6 +36,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "datadog-monitor-list",
         provider: "datadog",
+        service: "default",
         description: "List every monitor visible to this API key. Also this connector's `verify` — a bounded read that runs unattended, needing no argument",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -46,6 +47,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "datadog-monitor-get",
         provider: "datadog",
+        service: "default",
         description: "Get one monitor by id",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -56,6 +58,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "datadog-incident-list",
         provider: "datadog",
+        service: "default",
         description: "List the organization's incidents",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -66,6 +69,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "datadog-incident-get",
         provider: "datadog",
+        service: "default",
         description: "Get one incident by id",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,

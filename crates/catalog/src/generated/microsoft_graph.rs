@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "microsoft_graph-mail-message-get",
         provider: "microsoft_graph",
+        service: "mail",
         description: "Get one Outlook message by id: subject, sender, recipients, timestamps and the body — HTML by default. This is personal correspondence; treat the sender, recipients and body as personal data",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "microsoft_graph-mail-message-reply",
         provider: "microsoft_graph",
+        service: "mail",
         description: "Reply to a message. Graph resolves the recipients automatically — the original message's `replyTo` if it specifies one, otherwise its `from` — and this operation cannot override, widen or add to that audience (C-56 excludes the `message` override Graph's own reply action accepts). Delivered within seconds and cannot be recalled",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "microsoft_graph-mail-folder-list",
         provider: "microsoft_graph",
+        service: "mail",
         description: "List the top-level mail folders in the signed-in user's mailbox — Inbox, Drafts, Sent Items, and any custom top-level folders. Does not descend into subfolders. Graph's default page size here is 10; this connector cannot follow `@odata.nextLink` (an absolute URL, not a constructible cursor), so a mailbox with more than ten top-level folders is reported incompletely",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "microsoft_graph-calendar-event-get",
         provider: "microsoft_graph",
+        service: "calendar",
         description: "Get one calendar event: its subject, start and end, organizer, attendee list and cancellation state. Returned in UTC unless a `Prefer: outlook.timezone` header is sent, which this connector does not do",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "microsoft_graph-calendar-event-create",
         provider: "microsoft_graph",
+        service: "calendar",
         description: "Create a single-instance event on the signed-in user's default calendar. No attendees can be declared yet (C-56), so nobody is invited and nobody is notified — the event appears only on the calendar it was created on",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -80,6 +85,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "microsoft_graph-calendar-calendar-get",
         provider: "microsoft_graph",
+        service: "calendar",
         description: "Get the signed-in user's own default calendar: its name, colour and sharing/editing permissions. This is the calendar, not its events — use microsoft_graph-calendar-event-get for one of those. Takes no argument: `/me/calendar` always resolves to the token's own default calendar",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -90,6 +96,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "microsoft_graph-files-item-get",
         provider: "microsoft_graph",
+        service: "files",
         description: "Get one OneDrive item's metadata by id: its name, size and where it lives. This never returns file content — downloading needs the separate /content endpoint, which returns a binary body and is not shipped by this connector",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -100,6 +107,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "microsoft_graph-files-item-update",
         provider: "microsoft_graph",
+        service: "files",
         description: "Rename a OneDrive item: sets its name and changes nothing else. Does not move it — moving is a PATCH to the separate parentReference field, which this operation deliberately does not declare (C-56)",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,

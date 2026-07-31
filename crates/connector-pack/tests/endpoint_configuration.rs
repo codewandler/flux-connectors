@@ -46,11 +46,16 @@ fn credentials() -> Credentials {
     Credentials::new(Arc::new(MemoryStore::new()), TENANT).expect("a valid tenant id")
 }
 
-/// A configuration port holding exactly the pairs given, for this file's tenant.
-fn configured(pairs: &[(&str, &str, &str)]) -> Configuration {
+/// A configuration port holding exactly the `(provider, service, variable, value)` rows given, for
+/// this file's tenant.
+///
+/// The service joined the tuple with C-197: it is part of a value's address, and every connector
+/// this file names has exactly one, the reserved `default`. `tests/service_scoped_configuration.rs`
+/// is where a connector with two of them is exercised.
+fn configured(rows: &[(&str, &str, &str, &str)]) -> Configuration {
     let mut values = MemoryConfig::new();
-    for (provider, variable, value) in pairs {
-        values = values.with_endpoint(TENANT, provider, variable, value);
+    for (provider, service, variable, value) in rows {
+        values = values.with_endpoint(TENANT, provider, service, variable, value);
     }
     Configuration::new(Arc::new(values), TENANT).expect("a valid tenant id")
 }
@@ -63,7 +68,10 @@ fn projected(id: &str, configuration: Configuration) -> Operation {
 
 /// A `zendesk` operation with `{subdomain}` bound to `acme`.
 fn zendesk(id: &str) -> Operation {
-    projected(id, configured(&[("zendesk", "subdomain", "acme")]))
+    projected(
+        id,
+        configured(&[("zendesk", "default", "subdomain", "acme")]),
+    )
 }
 
 /// **The first half.** A tenant's value reaches the URL, through the bound port and nowhere else.
@@ -135,7 +143,7 @@ fn an_unconfigured_endpoint_is_refused_by_name_rather_than_sent() {
 fn a_half_configured_host_is_refused_rather_than_half_substituted() {
     let operation = projected(
         "docusign-envelope-get",
-        configured(&[("docusign", "account_host", "na4.docusign.net")]),
+        configured(&[("docusign", "default", "account_host", "na4.docusign.net")]),
     );
 
     assert_eq!(
@@ -160,8 +168,8 @@ fn every_placeholder_of_a_two_variable_host_is_filled() {
     let request = projected(
         "docusign-envelope-get",
         configured(&[
-            ("docusign", "account_host", "na4.docusign.net"),
-            ("docusign", "account_id", "acme-account"),
+            ("docusign", "default", "account_host", "na4.docusign.net"),
+            ("docusign", "default", "account_id", "acme-account"),
         ]),
     )
     .build_request(&json!({ "envelope_id": "e-1" }))
@@ -239,7 +247,13 @@ struct Drifting {
 }
 
 impl ConfigStore for Drifting {
-    fn get(&self, _tenant: &str, _provider: &str, field: Field<'_>) -> Option<String> {
+    fn get(
+        &self,
+        _tenant: &str,
+        _provider: &str,
+        _service: &str,
+        field: Field<'_>,
+    ) -> Option<String> {
         match field {
             Field::Endpoint("subdomain") => Some(format!(
                 "host-{}",
@@ -296,7 +310,8 @@ fn no_templated_connector_reaches_the_wire_with_a_placeholder() {
         let probe = Operation::project(entry, http(), credentials(), empty.clone())
             .unwrap_or_else(|error| panic!("`{}`: {error}", entry.id));
         for variable in probe.endpoint_variables() {
-            values = values.with_endpoint(TENANT, entry.provider, variable, "a-value");
+            values =
+                values.with_endpoint(TENANT, entry.provider, entry.service, variable, "a-value");
         }
     }
     let configuration = Configuration::new(Arc::new(values), TENANT).expect("a tenant");

@@ -44,6 +44,29 @@
 //! requirement on [`ConfigStore::get`] is stated anyway, because a host may resolve the same field
 //! for two operations, and those are still two reads.
 //!
+//! # The key names the service, because the connector does (C-197)
+//!
+//! A value is addressed by **`(tenant, provider, service, kind, name)`**. The service is not
+//! decoration: a *service* owns its own `base_url`, so a `{var}` is a variable of one service's URL
+//! and two services of one connector can spell the same one. `contentful` does —
+//! `delivery_space_id` and `management_space_id` both bind `endpoint.space_id`, under `delivery`
+//! and `management` respectively, because a configuration field's `name` is unique across the whole
+//! connector while the placeholder it fills belongs to one service's template.
+//!
+//! Keying without the service collapsed those two into one slot, and the failure was silent in the
+//! worst way available: `contentful-entry-create` on `api.contentful.com` resolved whatever
+//! `contentful-entry-get` on `cdn.contentful.com` had been given, so a tenant whose two
+//! environments differ got a **write into a space nobody named** — a `200` from a real server with
+//! a real management token, not a refusal. The service reached this port through
+//! [`catalog::Operation::service`], which is the field C-197 added for it.
+//!
+//! Every kind is keyed this way, including [`Field::Username`], and that follows the IR rather than
+//! being a simplification: `connector_spec::ConfigField::service` is exactly one concrete service
+//! for *every* field, whatever it binds. The consequence is worth stating — a connector with two
+//! services and a `basic` credential must have its user half bound under each service that asks for
+//! it — and it fails closed, as [`Error::MissingConfig`](crate::Error::MissingConfig), rather than
+//! by quietly reading the other service's value.
+//!
 //! # What is *not* here
 //!
 //! No file format, no environment convention, no discovery. The port takes values from the host;
@@ -76,25 +99,24 @@ use crate::Error;
 /// rather than a `None` that reads as "not configured".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Field<'a> {
-    /// A `{var}` in a **connector's** `base_url` — `subdomain`, `shop`, `site`, `account_host`.
+    /// A `{var}` in a **service's** `base_url` — `subdomain`, `shop`, `site`, `account_host`.
     ///
     /// The name is the placeholder as the connector's own Flux spells it, with no braces.
     ///
-    /// # It is keyed by connector, not by service — and that is a defect, not a simplification
+    /// # It is keyed by service, and that is what makes two of them two values (C-197)
     ///
-    /// The key is `(tenant, provider, kind, name)`, with **no service in it**, because
-    /// `catalog::Operation` carries no service for this port to key on. So two services of one
-    /// connector that spell the same variable in their own `base_url` collapse to **one value**.
+    /// The key is **`(tenant, provider, service, kind, name)`**, and the service is load-bearing
+    /// rather than ornamental: a `base_url` belongs to a *service*, so the placeholder in it does
+    /// too, and two services of one connector may spell the same one.
     ///
-    /// `contentful` is the shipped case: `delivery_space_id` and `management_space_id` are two
-    /// declared configuration fields, both binding `endpoint.space_id` under different services
-    /// (`providers/contentful.toml`), and this port can hold only one of them. A tenant whose
-    /// delivery and management environments differ reads the wrong one and gets a `200` — a real
-    /// answer from a real space, which is why nothing here refuses.
-    ///
-    /// [C-197](../../../docs/stories/C-197-config-collapses-across-services.md) is the fix. It needs
-    /// `service` on `catalog::Operation`, which moves every generated artifact and is a breaking
-    /// change to a published type, so it is a story of its own rather than a caveat on this one.
+    /// `contentful` is the shipped case and the reason this sentence is no longer a lie. Its
+    /// `delivery_space_id` and `management_space_id` are two declared configuration fields, both
+    /// binding `endpoint.space_id`, under `delivery` and `management` respectively
+    /// (`providers/contentful.toml`). Keyed without the service they were one slot, so
+    /// `contentful-entry-create` on `api.contentful.com` wrote into whatever space
+    /// `contentful-entry-get` on `cdn.contentful.com` had been given — a `200` from a real server,
+    /// which is why nothing refused. They are now two values, and a service whose value is unbound
+    /// refuses by name instead of borrowing its sibling's.
     Endpoint(&'a str),
     /// The **non-secret** user half of a `basic` credential, named by the credential it joins —
     /// `zendesk.api_token`, `jira.api_token`.
@@ -142,7 +164,19 @@ impl Field<'_> {
 /// and the pack turns that into a refusal naming the field rather than a request to a host with a
 /// brace in it.
 pub trait ConfigStore: Send + Sync {
-    /// The value bound to `field` of `provider`, for `tenant`.
+    /// The value bound to `field` of `provider`'s `service`, for `tenant`.
+    ///
+    /// # The service is part of the address, not a hint (C-197)
+    ///
+    /// `service` is the operation's own — `delivery`, `s3`, or the reserved `default` for a
+    /// connector with one surface — and it is what keeps two services' same-named variables apart.
+    /// An implementation that ignores it re-creates the defect this parameter exists to remove: see
+    /// the module documentation for `contentful`, where the collapsed key sent a management write
+    /// to a space the operator never named.
+    ///
+    /// This is the whole address, so an implementation answering `None` for a service it was never
+    /// given a value for is correct. The pack turns that into [`Error::MissingConfig`], which names
+    /// the service.
     ///
     /// # It must be stable, and that is a requirement rather than an expectation
     ///
@@ -164,7 +198,7 @@ pub trait ConfigStore: Send + Sync {
     /// drifting store has no second call to drift on. The requirement remains because a host binds
     /// one store across many operations, and each projection is a fresh read — a store that drifts
     /// between them gives two connectors two different views of one tenant.
-    fn get(&self, tenant: &str, provider: &str, field: Field<'_>) -> Option<String>;
+    fn get(&self, tenant: &str, provider: &str, service: &str, field: Field<'_>) -> Option<String>;
 }
 
 /// **The configuration adapter a host binds when it constructs the pack.**
@@ -225,16 +259,22 @@ impl Configuration {
     /// An empty value is dropped rather than stored, so [`Snapshot`] holds only values that are
     /// actually bound — left alone, an empty subdomain would substitute into `https://.zendesk.com`,
     /// a host that does not resolve, arrived at without an error.
+    ///
+    /// `service` is the operation's own, and it is what makes this a snapshot of **one service's**
+    /// settings rather than of a connector's (C-197). Two operations of one connector in two
+    /// services take two snapshots and read two sets of values, which is the point: they are calls
+    /// to two different hosts.
     pub(crate) fn snapshot<'a>(
         &self,
         provider: &'static str,
+        service: &'static str,
         fields: impl IntoIterator<Item = Field<'a>>,
     ) -> Snapshot {
         let values = fields
             .into_iter()
             .filter_map(|field| {
                 self.values
-                    .get(&self.tenant, provider, field)
+                    .get(&self.tenant, provider, service, field)
                     .filter(|value| !value.is_empty())
                     .map(|value| (field.key(), value))
             })
@@ -242,6 +282,7 @@ impl Configuration {
         Snapshot {
             tenant: self.tenant.clone(),
             provider,
+            service,
             values,
         }
     }
@@ -255,14 +296,21 @@ impl Configuration {
 /// `Snapshot` cannot read it at all. The gate and the request are then two reads of the same map
 /// rather than two calls to a store that may have changed its mind.
 ///
-/// It carries the tenant and the connector alongside the values because both appear in every refusal
-/// this port produces, and neither is reachable once the port itself has been dropped.
+/// It carries the tenant, the connector and the service alongside the values because all three
+/// appear in every refusal this port produces, and none is reachable once the port itself has been
+/// dropped.
 #[derive(Debug, Clone)]
 pub(crate) struct Snapshot {
     tenant: String,
     provider: &'static str,
+    /// The service these settings were read for. Part of the address every value here was fetched
+    /// under, and quoted in the refusal, so an operator told that `endpoint.space_id` is missing is
+    /// also told *which* of a connector's two `space_id`s to go and supply (C-197).
+    service: &'static str,
     /// Keyed by `(kind, name)` — the same partition [`Field::kind`] draws, so an endpoint variable
-    /// and a credential of one spelling stay two values.
+    /// and a credential of one spelling stay two values. The service is **not** in this key and does
+    /// not need to be: a snapshot is taken for exactly one service, so every value in it is already
+    /// that service's.
     values: BTreeMap<(&'static str, String), String>,
 }
 
@@ -276,12 +324,15 @@ impl Snapshot {
     ///
     /// # Errors
     ///
-    /// [`Error::MissingConfig`], naming the tenant, the connector and the `binds` target — the three
-    /// facts an operator needs in order to go and supply the value.
+    /// [`Error::MissingConfig`], naming the tenant, the connector, the service and the `binds`
+    /// target — the four facts an operator needs in order to go and supply the value. The service
+    /// is one of them because two services of one connector may want the same `binds` target and
+    /// different values (C-197); without it the refusal names a field an operator has two of.
     pub(crate) fn require(&self, operation: &str, field: Field<'_>) -> Result<String, Error> {
         self.lookup(field).ok_or_else(|| Error::MissingConfig {
             operation: operation.to_owned(),
             provider: self.provider.to_owned(),
+            service: self.service.to_owned(),
             tenant: self.tenant.clone(),
             field: field.binding(),
         })
@@ -305,9 +356,10 @@ impl Snapshot {
 /// the shape a host binding a snapshot wants: build it once, hand it over, never touch it again.
 #[derive(Debug, Default, Clone)]
 pub struct MemoryConfig {
-    /// Keyed by `(tenant, provider, kind, name)` — the whole address, so one instance can serve
-    /// every tenant a host knows about rather than one per tenant.
-    values: BTreeMap<(String, String, &'static str, String), String>,
+    /// Keyed by `(tenant, provider, service, kind, name)` — the whole address, so one instance can
+    /// serve every tenant a host knows about rather than one per tenant, and every service of a
+    /// connector rather than one per connector (C-197).
+    values: BTreeMap<(String, String, String, &'static str, String), String>,
 }
 
 impl MemoryConfig {
@@ -317,29 +369,65 @@ impl MemoryConfig {
         Self::default()
     }
 
-    /// Bind a `{var}` of `provider`'s base URL for `tenant`.
+    /// Bind a `{var}` of `provider`'s `service` base URL for `tenant`.
+    ///
+    /// `service` is the operation's own — `default` for a connector with a single surface, and one
+    /// of the declared names otherwise. It is a required argument rather than an optional one with
+    /// a `default` fallback precisely because the fallback would be silent: a host binding
+    /// `contentful`'s `space_id` without saying which of its two services meant it would find every
+    /// contentful operation refusing, which is the better failure but only if it is the one that
+    /// happens.
     #[must_use]
-    pub fn with_endpoint(self, tenant: &str, provider: &str, variable: &str, value: &str) -> Self {
-        self.with(tenant, provider, Field::Endpoint(variable), value)
+    pub fn with_endpoint(
+        self,
+        tenant: &str,
+        provider: &str,
+        service: &str,
+        variable: &str,
+        value: &str,
+    ) -> Self {
+        self.with(tenant, provider, service, Field::Endpoint(variable), value)
     }
 
-    /// Bind the non-secret user half of `provider`'s `credential` for `tenant`.
+    /// Bind the non-secret user half of `provider`'s `credential`, for `tenant`, under `service`.
+    ///
+    /// A credential is declared at *connector* level, so its address elides the service — but the
+    /// **configuration field that supplies its user half** is declared under exactly one service
+    /// like every other (`connector_spec::ConfigField::service`), and this port follows the IR
+    /// rather than the address. A connector with two services that both authenticate with one
+    /// `basic` credential therefore binds the user half under each; the alternative is one service
+    /// silently reading the other's, which is the whole of C-197.
     #[must_use]
     pub fn with_username(
         self,
         tenant: &str,
         provider: &str,
+        service: &str,
         credential: &str,
         value: &str,
     ) -> Self {
-        self.with(tenant, provider, Field::Username(credential), value)
+        self.with(
+            tenant,
+            provider,
+            service,
+            Field::Username(credential),
+            value,
+        )
     }
 
-    fn with(mut self, tenant: &str, provider: &str, field: Field<'_>, value: &str) -> Self {
+    fn with(
+        mut self,
+        tenant: &str,
+        provider: &str,
+        service: &str,
+        field: Field<'_>,
+        value: &str,
+    ) -> Self {
         self.values.insert(
             (
                 tenant.to_owned(),
                 provider.to_owned(),
+                service.to_owned(),
                 field.kind(),
                 field.name().to_owned(),
             ),
@@ -350,11 +438,12 @@ impl MemoryConfig {
 }
 
 impl ConfigStore for MemoryConfig {
-    fn get(&self, tenant: &str, provider: &str, field: Field<'_>) -> Option<String> {
+    fn get(&self, tenant: &str, provider: &str, service: &str, field: Field<'_>) -> Option<String> {
         self.values
             .get(&(
                 tenant.to_owned(),
                 provider.to_owned(),
+                service.to_owned(),
                 field.kind(),
                 field.name().to_owned(),
             ))
@@ -382,16 +471,47 @@ mod tests {
     #[test]
     fn an_endpoint_and_a_username_of_the_same_name_are_different_values() {
         let store = MemoryConfig::new()
-            .with_endpoint("t", "acme", "account", "acme-endpoint")
-            .with_username("t", "acme", "account", "acme-username");
+            .with_endpoint("t", "acme", "default", "account", "acme-endpoint")
+            .with_username("t", "acme", "default", "account", "acme-username");
 
         assert_eq!(
-            store.get("t", "acme", Field::Endpoint("account")),
+            store.get("t", "acme", "default", Field::Endpoint("account")),
             Some("acme-endpoint".to_string())
         );
         assert_eq!(
-            store.get("t", "acme", Field::Username("account")),
+            store.get("t", "acme", "default", Field::Username("account")),
             Some("acme-username".to_string())
+        );
+    }
+
+    /// **The unit-level statement of C-197**, on the store itself: one connector, one variable name,
+    /// two services, two values. `contentful`'s `endpoint.space_id` is the shipped case, and
+    /// `tests/service_scoped_configuration.rs` asserts it against the shipped catalogue rather than
+    /// against this fixture.
+    #[test]
+    fn one_variable_name_in_two_services_is_two_values() {
+        let store = MemoryConfig::new()
+            .with_endpoint("t", "contentful", "delivery", "space_id", "delivery-space")
+            .with_endpoint(
+                "t",
+                "contentful",
+                "management",
+                "space_id",
+                "management-space",
+            );
+
+        assert_eq!(
+            store.get("t", "contentful", "delivery", Field::Endpoint("space_id")),
+            Some("delivery-space".to_string())
+        );
+        assert_eq!(
+            store.get("t", "contentful", "management", Field::Endpoint("space_id")),
+            Some("management-space".to_string())
+        );
+        assert_eq!(
+            store.get("t", "contentful", "preview", Field::Endpoint("space_id")),
+            None,
+            "a service nobody bound a value for borrows no sibling's"
         );
     }
 
@@ -399,14 +519,15 @@ mod tests {
     /// that makes a cross-tenant mix-up visible rather than structural.
     #[test]
     fn a_value_belongs_to_one_tenant() {
-        let store = MemoryConfig::new().with_endpoint("t-one", "zendesk", "subdomain", "one");
+        let store =
+            MemoryConfig::new().with_endpoint("t-one", "zendesk", "default", "subdomain", "one");
 
         assert_eq!(
-            store.get("t-one", "zendesk", Field::Endpoint("subdomain")),
+            store.get("t-one", "zendesk", "default", Field::Endpoint("subdomain")),
             Some("one".to_string())
         );
         assert_eq!(
-            store.get("t-two", "zendesk", Field::Endpoint("subdomain")),
+            store.get("t-two", "zendesk", "default", Field::Endpoint("subdomain")),
             None
         );
     }
@@ -416,17 +537,38 @@ mod tests {
     #[test]
     fn an_empty_value_is_missing_rather_than_bound() {
         let configuration = Configuration::new(
-            Arc::new(MemoryConfig::new().with_endpoint("t", "zendesk", "subdomain", "")),
+            Arc::new(MemoryConfig::new().with_endpoint("t", "zendesk", "default", "subdomain", "")),
             "t",
         )
         .expect("a valid tenant id");
-        let settings = configuration.snapshot("zendesk", [Field::Endpoint("subdomain")]);
+        let settings = configuration.snapshot("zendesk", "default", [Field::Endpoint("subdomain")]);
 
         assert!(settings.lookup(Field::Endpoint("subdomain")).is_none());
         let error = settings
             .require("zendesk-ticket-show", Field::Endpoint("subdomain"))
             .expect_err("an empty subdomain is not a subdomain");
         assert!(error.to_string().contains("endpoint.subdomain"), "{error}");
+    }
+
+    /// The refusal names the **service** as well as the connector (C-197). Without it an operator
+    /// told that `contentful` is missing `endpoint.space_id` has two fields that answer to that
+    /// description and no way to tell which one to supply.
+    #[test]
+    fn a_refusal_names_the_service_it_was_looked_up_under() {
+        let configuration =
+            Configuration::new(Arc::new(MemoryConfig::new()), "t").expect("a valid tenant id");
+        let settings =
+            configuration.snapshot("contentful", "management", [Field::Endpoint("space_id")]);
+
+        let error = settings
+            .require("contentful-entry-create", Field::Endpoint("space_id"))
+            .expect_err("nothing is bound");
+        assert!(
+            matches!(&error, Error::MissingConfig { service, field, .. }
+                if service == "management" && field == "endpoint.space_id"),
+            "{error}"
+        );
+        assert!(error.to_string().contains("management"), "{error}");
     }
 
     /// **The stability requirement, enforced rather than advised (C-198).** A snapshot answers from
@@ -440,7 +582,13 @@ mod tests {
         struct Counting(std::sync::atomic::AtomicUsize);
 
         impl ConfigStore for Counting {
-            fn get(&self, _tenant: &str, _provider: &str, _field: Field<'_>) -> Option<String> {
+            fn get(
+                &self,
+                _tenant: &str,
+                _provider: &str,
+                _service: &str,
+                _field: Field<'_>,
+            ) -> Option<String> {
                 Some(
                     self.0
                         .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
@@ -451,7 +599,7 @@ mod tests {
 
         let store = Arc::new(Counting::default());
         let configuration = Configuration::new(store.clone(), "t").expect("a valid tenant id");
-        let settings = configuration.snapshot("zendesk", [Field::Endpoint("subdomain")]);
+        let settings = configuration.snapshot("zendesk", "default", [Field::Endpoint("subdomain")]);
 
         assert_eq!(
             settings.lookup(Field::Endpoint("subdomain")).as_deref(),
@@ -476,13 +624,19 @@ mod tests {
         let configuration = Configuration::new(
             Arc::new(
                 MemoryConfig::new()
-                    .with_endpoint("t", "zendesk", "subdomain", "acme")
-                    .with_username("t", "zendesk", "zendesk.api_token", "ops@acme.test"),
+                    .with_endpoint("t", "zendesk", "default", "subdomain", "acme")
+                    .with_username(
+                        "t",
+                        "zendesk",
+                        "default",
+                        "zendesk.api_token",
+                        "ops@acme.test",
+                    ),
             ),
             "t",
         )
         .expect("a valid tenant id");
-        let settings = configuration.snapshot("zendesk", [Field::Endpoint("subdomain")]);
+        let settings = configuration.snapshot("zendesk", "default", [Field::Endpoint("subdomain")]);
 
         assert_eq!(
             settings.lookup(Field::Endpoint("subdomain")).as_deref(),

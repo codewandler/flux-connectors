@@ -506,10 +506,21 @@ mod tests {
 
     /// A configuration port holding zendesk's subdomain, and its user half only when `user` is set.
     fn basic_configuration(user: Option<&str>) -> Configuration {
-        let mut values =
-            MemoryConfig::new().with_endpoint(BASIC_TENANT, "zendesk", "subdomain", "acme");
+        let mut values = MemoryConfig::new().with_endpoint(
+            BASIC_TENANT,
+            "zendesk",
+            DEFAULT_SERVICE,
+            "subdomain",
+            "acme",
+        );
         if let Some(user) = user {
-            values = values.with_username(BASIC_TENANT, "zendesk", "zendesk.api_token", user);
+            values = values.with_username(
+                BASIC_TENANT,
+                "zendesk",
+                DEFAULT_SERVICE,
+                "zendesk.api_token",
+                user,
+            );
         }
         Configuration::new(Arc::new(values), BASIC_TENANT).expect("a valid tenant id")
     }
@@ -557,7 +568,11 @@ mod tests {
             .build_request(&json!({ "ticket_id": 1 }))
             .expect("the request builds");
 
-        let settings = configuration.snapshot("zendesk", [Field::Username("zendesk.api_token")]);
+        let settings = configuration.snapshot(
+            "zendesk",
+            DEFAULT_SERVICE,
+            [Field::Username("zendesk.api_token")],
+        );
         let assembled = credentials
             .resolve(&ctx, entry, zendesk_with_an_authority(), &settings)
             .await
@@ -593,8 +608,11 @@ mod tests {
     #[tokio::test]
     async fn a_basic_credential_with_no_configured_user_is_refused_by_name() {
         let ctx = context();
-        let settings =
-            basic_configuration(None).snapshot("zendesk", [Field::Username("zendesk.api_token")]);
+        let settings = basic_configuration(None).snapshot(
+            "zendesk",
+            DEFAULT_SERVICE,
+            [Field::Username("zendesk.api_token")],
+        );
 
         let error = basic_credentials()
             .await

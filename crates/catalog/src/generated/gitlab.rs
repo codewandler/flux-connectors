@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "gitlab-user-get",
         provider: "gitlab",
+        service: "default",
         description: "Get the currently authenticated user. Takes no parameters; used as the verify read to prove a token resolves",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "gitlab-issue-list",
         provider: "gitlab",
+        service: "default",
         description: "List issues in a project, optionally filtered by state, newest activity first",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "gitlab-issue-get",
         provider: "gitlab",
+        service: "default",
         description: "Get one issue by its project-scoped number (iid), not its global id",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "gitlab-issue-create",
         provider: "gitlab",
+        service: "default",
         description: "Open a new issue on a project. Visible immediately to everyone with access to the project (the whole world, if the project is public) and notifies its watchers",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "gitlab-merge-request-list",
         provider: "gitlab",
+        service: "default",
         description: "List merge requests in a project, optionally filtered by state, newest activity first",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -80,6 +85,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "gitlab-pipeline-get",
         provider: "gitlab",
+        service: "default",
         description: "Get one CI/CD pipeline's status and timing by its id",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -90,6 +96,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "gitlab-branch-list",
         provider: "gitlab",
+        service: "default",
         description: "List a project's repository branches",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,

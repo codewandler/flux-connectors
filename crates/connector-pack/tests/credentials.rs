@@ -359,7 +359,13 @@ async fn a_credential_too_short_to_redact_is_refused_rather_than_sent() {
 #[tokio::test]
 async fn a_basic_connector_refuses_because_it_has_no_credential_address() {
     let configuration = Configuration::new(
-        Arc::new(MemoryConfig::new().with_endpoint(TENANT, "zendesk", "subdomain", "acme")),
+        Arc::new(MemoryConfig::new().with_endpoint(
+            TENANT,
+            "zendesk",
+            DEFAULT_SERVICE,
+            "subdomain",
+            "acme",
+        )),
         TENANT,
     )
     .expect("a valid tenant id");

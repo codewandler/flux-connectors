@@ -30,6 +30,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "intercom-contact-get",
         provider: "intercom",
+        service: "default",
         description: "Get one Intercom contact by id — its role, email, name, custom attributes, tags and the companies it belongs to",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -40,6 +41,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "intercom-contact-create",
         provider: "intercom",
+        service: "default",
         description: "Create an email-identified Intercom contact. A contact created here is visible to every teammate in the workspace and is counted against its contact quota; creating one twice creates two contacts unless the workspace deduplicates on email",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -50,6 +52,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "intercom-conversation-get",
         provider: "intercom",
+        service: "default",
         description: "Get one conversation by id, with its state, the contacts on it and its message parts in Intercom's default rendering",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
@@ -60,6 +63,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "intercom-conversation-reply",
         provider: "intercom",
+        service: "default",
         description: "Reply to a conversation as an admin. With message_type `comment` the reply is delivered to the end user by email or in-app message and cannot be un-sent; with `note` it is an internal comment only teammates see",
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,
@@ -70,6 +74,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "intercom-contact-note-create",
         provider: "intercom",
+        service: "default",
         description: "Add an internal note to a contact, visible to teammates in the workspace and never to the contact. Adding the same note twice adds two notes",
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
