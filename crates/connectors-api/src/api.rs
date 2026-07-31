@@ -59,6 +59,51 @@ impl From<anyhow::Error> for Failure {
 // The catalogue
 // ---------------------------------------------------------------------------------------------
 
+/// **What an operator still has to do with a connector** (C-212).
+///
+/// The question the page exists to answer is *"is there anything for me to do here?"*, and there
+/// are three answers, not two. `connected: bool` carried two of them and served the third — a
+/// vendor that requires no credential — as the same `false` it served *supply something*. Two
+/// opposite situations, one byte, in the surface a person uses to decide which of 53 connectors
+/// they can use.
+///
+/// # The vocabulary is C-206's, deliberately
+///
+/// [`NoCredentialRequired`](Self::NoCredentialRequired) serializes as `no-credential-required` —
+/// the exact token `connector_cli::status::NO_CREDENTIAL_REQUIRED` publishes in the catalogue for
+/// the same distinction. Restating it here in different words is how two surfaces describing one
+/// fact come to disagree, so this surface restates nothing.
+///
+/// # What the host can prove, and what it inherits
+///
+/// C-206's token is a **positive declaration**: `Operation::auth` is `Some([])`, the author saying
+/// the vendor needs none, as against `None` inheriting the connector default. The embedded
+/// catalogue this host reads does not carry that distinction — `catalog::Operation::credentials` is
+/// `[]` for both a positively-public operation and a credential deliberately withheld, which is the
+/// catalogue-side gap the C-206 implementor filed and which C-212 explicitly leaves open. So one
+/// shipped connector lands here for the wrong reason: freshdesk, whose API key occupies the Basic
+/// *username* position (`AGENTS.md`, Intentional gaps).
+///
+/// It is still the better of the two available answers for freshdesk. There genuinely is nothing
+/// for an operator to supply, and `not-wired` sent them looking for a token this repository would
+/// refuse to hold. The variant says *no operation declares a credential*, which is true of it.
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum Wiring {
+    /// No operation declares a credential: there is nothing for an operator to supply.
+    ///
+    /// Scoped to the *outbound* direction, like everything else here. A connector may still declare
+    /// an inbound signing secret and be `no-credential-required`: the secret verifies bytes that
+    /// arrived, no operation authenticates with one, and the credentials list shows it either way.
+    NoCredentialRequired,
+    /// Every operation is callable with what this tenant has stored.
+    Wired,
+    /// Some operations are callable and some are not — `callable_operations` of `operation_count`.
+    PartlyWired,
+    /// Nothing is callable yet. The operator has to supply something.
+    NotWired,
+}
+
 /// One connector, as the connect page needs it.
 #[derive(Serialize)]
 pub struct ConnectorView {
@@ -68,13 +113,38 @@ pub struct ConnectorView {
     authority: Option<&'static str>,
     base_url: &'static str,
     operation_count: usize,
-    /// Every operation id, so the page can fetch their detail without a second index.
-    operation_ids: Vec<&'static str>,
-    /// Whether every credential this connector declares is stored for this tenant.
-    connected: bool,
+    /// Every operation, with what it requires and whether this tenant can call it.
+    ///
+    /// Replaces the bare `operation_ids` list: the page still gets every id without a second index,
+    /// and it no longer has to fetch 254 operation details to find out which of them it could run.
+    operations: Vec<OperationWiring>,
+    /// Which of the three states this connector is in for this tenant. See [`Wiring`].
+    wiring: Wiring,
+    /// How many of `operation_count` operations this tenant can call.
+    callable_operations: usize,
     credentials: Vec<CredentialView>,
     /// Configuration fields with a value, as `("default/endpoint.subdomain", "acme")`.
     settings: Vec<(String, String)>,
+}
+
+/// One operation, and whether this tenant can call it — **the honest unit** (C-212).
+///
+/// A connector is not the unit an operator asks about, because a connector's credentials do not all
+/// belong to the same surface. Anthropic declares `api_key`, which nearly every operation carries,
+/// and `admin_key`, which belongs to the management API; requiring both made a connector with the
+/// first one stored read as entirely unwired.
+#[derive(Serialize)]
+pub struct OperationWiring {
+    /// The Flux symbol, as [`ConnectorView::operations`]'s predecessor carried it.
+    id: &'static str,
+    /// What the operation needs, in the catalogue's own shape: the outer list is an **OR** over
+    /// ways to authenticate, each inner list an **AND** of credentials that must travel together.
+    /// Empty means the operation needs no credential.
+    ///
+    /// Names, never values — these are [`CredentialView::name`]s, and the page joins on them.
+    requires: &'static [&'static [&'static str]],
+    /// Whether one whole mechanism is stored for this tenant.
+    callable: bool,
 }
 
 /// One credential a connector declares — **its address and its shape, never its value**.
@@ -122,13 +192,53 @@ pub async fn connector(
     Ok(Json(view_of(&app, principal.tenant(), entry).await?))
 }
 
+/// **Whether an operation can be called with the credentials named in `stored`.**
+///
+/// `mechanisms` is [`catalog::Operation::credentials`] verbatim: an OR over ways to authenticate,
+/// each an AND of credentials that must be on the same request. An empty outer slice is an
+/// operation that needs no credential at all, and is callable by anyone.
+///
+/// Pure and taking only names, so the three states can be proved against **fixtures**. That matters
+/// more than usual here: the case this story is really about — a vendor that requires no credential
+/// — has not shipped, so a test over the catalogue could only assert the two states that already
+/// existed.
+fn is_callable(mechanisms: &[&[&str]], stored: &[&str]) -> bool {
+    mechanisms.is_empty()
+        || mechanisms
+            .iter()
+            .any(|mechanism| mechanism.iter().all(|name| stored.contains(name)))
+}
+
+/// **Which of the three states a connector is in**, from its operations' own answers.
+///
+/// Note what is *not* here: a special case for [`Placement::Inbound`]. The loop this replaced
+/// carried one, with the right reasoning — *"an inbound signing secret never leaves, so it is not
+/// part of 'can this connector call out'. Counting it would show a connector as unconnectable for
+/// want of a value no outgoing request would ever carry."* That reasoning was never specific to
+/// inbound; `admin_key` is also a value no ordinary outgoing request carries. Asking each operation
+/// what *it* declares applies the principle everywhere at once, and the inbound case falls out of
+/// it: no operation may authenticate with a signing secret (`AGENTS.md`, authentication contract),
+/// so one never appears in a mechanism list and never counts against anything.
+fn wiring_of(operations: &[OperationWiring]) -> Wiring {
+    if operations
+        .iter()
+        .all(|operation| operation.requires.is_empty())
+    {
+        return Wiring::NoCredentialRequired;
+    }
+    match operations.iter().filter(|op| op.callable).count() {
+        callable if callable == operations.len() => Wiring::Wired,
+        0 => Wiring::NotWired,
+        _ => Wiring::PartlyWired,
+    }
+}
+
 async fn view_of(
     app: &App,
     tenant: &str,
     provider: &'static catalog::Provider,
 ) -> Result<ConnectorView, Failure> {
     let mut credentials = Vec::new();
-    let mut all_stored = true;
     for credential in provider.auth {
         let address = provider.authority.and_then(|authority| {
             CredentialRef::new(tenant, authority, DEFAULT_SERVICE, credential.leaf).ok()
@@ -139,12 +249,6 @@ async fn view_of(
             })?,
             None => false,
         };
-        // An inbound signing secret never leaves, so it is not part of "can this connector call
-        // out". Counting it would show a connector as unconnectable for want of a value no outgoing
-        // request would ever carry.
-        if !stored && !matches!(credential.place, Placement::Inbound) {
-            all_stored = false;
-        }
         credentials.push(CredentialView {
             name: credential.name,
             leaf: credential.leaf,
@@ -161,6 +265,23 @@ async fn view_of(
         });
     }
 
+    // The names that have a value, which is the only thing callability depends on. Never a value.
+    let stored: Vec<&str> = credentials
+        .iter()
+        .filter(|credential| credential.stored)
+        .map(|credential| credential.name)
+        .collect();
+
+    let operations: Vec<OperationWiring> = provider
+        .operations
+        .iter()
+        .map(|operation| OperationWiring {
+            id: operation.id,
+            requires: operation.credentials,
+            callable: is_callable(operation.credentials, &stored),
+        })
+        .collect();
+
     Ok(ConnectorView {
         id: provider.id,
         vendor: provider.vendor,
@@ -168,8 +289,9 @@ async fn view_of(
         authority: provider.authority,
         base_url: provider.base_url,
         operation_count: provider.operations.len(),
-        operation_ids: provider.operations.iter().map(|op| op.id).collect(),
-        connected: all_stored && !provider.auth.is_empty(),
+        wiring: wiring_of(&operations),
+        callable_operations: operations.iter().filter(|op| op.callable).count(),
+        operations,
         credentials,
         settings: app.settings().bound_for(tenant, provider.id),
     })
@@ -358,4 +480,146 @@ pub async fn execute(
 ) -> Result<Json<exec::Outcome>, Failure> {
     let outcome = exec::execute(&app, principal.tenant(), &operation, params).await?;
     Ok(Json(outcome))
+}
+
+// ---------------------------------------------------------------------------------------------
+// The three states, against fixtures
+// ---------------------------------------------------------------------------------------------
+
+/// **Why these are fixtures and not the catalogue** (C-212).
+///
+/// The state this story is about — a vendor that requires no credential — is *latent*: nothing in
+/// the shipped catalogue positively declares `auth = []` yet, so a test written over
+/// `catalog::providers()` could only exercise the two states that already worked, and would go
+/// green on a classifier that still collapsed the third. A mechanism list is four characters to
+/// write down, so it is written down.
+///
+/// `tests/wiring.rs` carries the other half — the same three states over the real HTTP surface, on
+/// the two shipped connectors that reach them.
+#[cfg(test)]
+mod tests {
+    use super::{is_callable, wiring_of, OperationWiring, Wiring};
+
+    /// One fixture operation.
+    fn operation(
+        id: &'static str,
+        requires: &'static [&'static [&'static str]],
+    ) -> OperationWiring {
+        OperationWiring {
+            id,
+            requires,
+            callable: is_callable(requires, &[]),
+        }
+    }
+
+    /// The same, with a set of stored credential names.
+    fn operation_with(
+        id: &'static str,
+        requires: &'static [&'static [&'static str]],
+        stored: &[&str],
+    ) -> OperationWiring {
+        OperationWiring {
+            id,
+            requires,
+            callable: is_callable(requires, stored),
+        }
+    }
+
+    /// **The third state, which no shipped connector reaches yet.**
+    ///
+    /// A vendor requiring no credential is `no-credential-required` with nothing stored — not
+    /// `not-wired`, which is what an operator is shown when they must go and find a token.
+    #[test]
+    fn a_connector_whose_vendor_needs_no_credential_has_nothing_to_supply() {
+        let public = [operation("ping", &[]), operation("version", &[])];
+        assert_eq!(wiring_of(&public), Wiring::NoCredentialRequired);
+        assert!(public.iter().all(|operation| operation.callable));
+    }
+
+    /// **And it is not the same state as a credential simply left unset.**
+    ///
+    /// The whole story in one assertion: two opposite situations, and before C-212 both were
+    /// `connected: false`.
+    #[test]
+    fn nothing_to_supply_is_not_the_same_state_as_supply_something() {
+        let public = [operation("ping", &[])];
+        let unset = [operation("list", &[&["vendor.api_key"]])];
+        assert_ne!(wiring_of(&public), wiring_of(&unset));
+        assert_eq!(wiring_of(&unset), Wiring::NotWired);
+    }
+
+    /// **An operation that positively declares no credential under a connector that has some.**
+    ///
+    /// This is the one shape where C-206's distinction survives into the embedded catalogue today:
+    /// `credentials: []` on an operation whose connector declares credentials can only have come
+    /// from the operation declaring `auth = []`, because inheriting the default would have carried
+    /// the connector's own. So a partly-public connector is callable in part with nothing stored.
+    #[test]
+    fn a_public_operation_is_callable_under_a_connector_that_declares_credentials() {
+        let mixed = [
+            operation("ping", &[]),
+            operation("list", &[&["vendor.api_key"]]),
+        ];
+        assert_eq!(wiring_of(&mixed), Wiring::PartlyWired);
+        assert!(mixed[0].callable, "a public operation needs nothing stored");
+        assert!(!mixed[1].callable);
+    }
+
+    /// **Anthropic's shape: one credential stored, two surfaces.**
+    ///
+    /// The second half of the defect. `all_stored` required every declared credential, so this
+    /// connector read as entirely unwired for want of `admin_key` — a value no ordinary outgoing
+    /// request carries, which is the reason the loop already excluded inbound secrets.
+    #[test]
+    fn storing_the_credential_an_operation_uses_makes_that_operation_callable() {
+        let stored = ["vendor.api_key"];
+        let connector = [
+            operation_with("models-list", &[&["vendor.api_key"]], &stored),
+            operation_with("model-get", &[&["vendor.api_key"]], &stored),
+            operation_with("organization-get", &[&["vendor.admin_key"]], &stored),
+        ];
+        assert_eq!(wiring_of(&connector), Wiring::PartlyWired);
+        assert_eq!(connector.iter().filter(|op| op.callable).count(), 2);
+    }
+
+    /// **Every operation callable is `wired`.**
+    #[test]
+    fn a_connector_whose_every_operation_is_callable_is_wired() {
+        let stored = ["vendor.api_key", "vendor.admin_key"];
+        let connector = [
+            operation_with("list", &[&["vendor.api_key"]], &stored),
+            operation_with("admin", &[&["vendor.admin_key"]], &stored),
+        ];
+        assert_eq!(wiring_of(&connector), Wiring::Wired);
+    }
+
+    /// **A mechanism is an AND; the mechanism list is an OR.**
+    ///
+    /// babelforce is why: `&[&["babelforce.access_id", "babelforce.access_token"]]` is one way to
+    /// authenticate needing two headers together, not two ways. Half of it stored is no way at all.
+    #[test]
+    fn one_mechanism_needs_all_of_its_credentials_and_any_mechanism_will_do() {
+        let pair: &[&[&str]] = &[&["vendor.access_id", "vendor.access_token"]];
+        assert!(!is_callable(pair, &["vendor.access_id"]));
+        assert!(is_callable(
+            pair,
+            &["vendor.access_id", "vendor.access_token"]
+        ));
+
+        let alternatives: &[&[&str]] = &[&["vendor.oauth_token"], &["vendor.api_key"]];
+        assert!(is_callable(alternatives, &["vendor.api_key"]));
+        assert!(!is_callable(alternatives, &["vendor.unrelated"]));
+    }
+
+    /// **An inbound signing secret is excluded by construction, not by a special case.**
+    ///
+    /// No operation may authenticate with a signing secret, so one never appears in a mechanism
+    /// list — and a connector that declares one alongside operations needing nothing outbound is
+    /// still `no-credential-required`, unstored secret and all. That is the same answer the old
+    /// `all_stored` loop reached through an explicit `Placement::Inbound` arm.
+    #[test]
+    fn an_unstored_inbound_secret_holds_no_operation_back() {
+        let connector = [operation("event-reply", &[])];
+        assert_eq!(wiring_of(&connector), Wiring::NoCredentialRequired);
+    }
 }

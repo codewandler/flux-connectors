@@ -38,8 +38,16 @@
   .conn.on { background: var(--panel); box-shadow: inset 3px 0 0 var(--accent); }
   .conn .name { font-weight: 550; }
   .conn .count { color: var(--muted); font-size: .8rem; margin-left: auto; }
+  /* The three states an operator can be in, and a fourth for "some of it". A connector with
+     nothing to supply must not look like one that has been left unconfigured forever, so
+     `no-credential-required` gets a filled mark of its own rather than the empty one. */
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); flex: none; }
-  .dot.live { background: var(--accent); }
+  .dot.wired { background: var(--accent); }
+  .dot.partly-wired { background: var(--accent); opacity: .45; }
+  .dot.no-credential-required { background: var(--muted); }
+  .state { font-size: .78rem; }
+  .op.uncallable .id { opacity: .55; }
+  .op .needs { font-size: .7rem; color: var(--warn); margin-left: .4rem; }
   h2 { font-size: 1.1rem; margin: 0 0 .2rem; }
   .muted { color: var(--muted); }
   .sub { color: var(--muted); font-size: .85rem; margin-bottom: 1rem; }
@@ -105,6 +113,22 @@ const api = async (method, path, body) => {
 
 let connectors = [], current = null;
 
+// The three answers to "is there anything for me to do here?", plus the partial one. Keyed by the
+// server's own `wiring` token — the same vocabulary the published catalogue uses for the third
+// state (`no-credential-required`, C-206), so the two surfaces cannot drift into two spellings.
+//
+// The one this page exists for is the third: before C-212 a connector whose vendor needs no
+// credential was drawn exactly like one nobody had configured, so an operator went looking for a
+// token that does not exist.
+const WIRING = {
+  'no-credential-required': c => ['ok', 'Nothing to supply — this connector needs no credential.'],
+  'wired':       c => ['ok',    `Ready — all ${c.operation_count} operations are callable.`],
+  'partly-wired':c => ['muted', `${c.callable_operations} of ${c.operation_count} operations are callable. `
+                              + `The rest need a credential you have not supplied.`],
+  'not-wired':   c => ['muted', `Nothing is callable yet — supply a credential below.`],
+};
+const wiringOf = c => (WIRING[c.wiring] ?? (() => ['muted', c.wiring]))(c);
+
 async function load() {
   connectors = await api('GET', '/v1/connectors');
   const ops = connectors.reduce((n, c) => n + c.operation_count, 0);
@@ -115,10 +139,13 @@ async function load() {
 function renderList() {
   const list = $('#list');
   list.replaceChildren(...connectors.map(c => {
-    const node = el('div', { className: 'conn' + (current === c.id ? ' on' : '') },
-      el('span', { className: 'dot' + (c.connected ? ' live' : '') }),
+    const node = el('div', { className: 'conn' + (current === c.id ? ' on' : ''), title: wiringOf(c)[1] },
+      el('span', { className: 'dot ' + c.wiring }),
       el('span', { className: 'name' }, c.vendor),
-      el('span', { className: 'count' }, String(c.operation_count)));
+      el('span', { className: 'count' },
+        c.wiring === 'no-credential-required' || c.wiring === 'wired'
+          ? String(c.operation_count)
+          : `${c.callable_operations}/${c.operation_count}`));
     node.onclick = () => show(c.id);
     return node;
   }));
@@ -130,12 +157,19 @@ async function show(id) {
   const c = await api('GET', `/v1/connectors/${id}`);
   const d = $('#detail');
   d.replaceChildren();
-  d.append(el('h2', {}, c.vendor), el('div', { className: 'sub' }, c.description));
+  const [tone, sentence] = wiringOf(c);
+  d.append(el('h2', {}, c.vendor), el('div', { className: 'sub' }, c.description),
+    el('p', { className: 'state ' + tone, style: 'margin:-.7rem 0 1rem' }, sentence));
 
   // --- credentials -------------------------------------------------------
   const creds = el('section', {}, el('h3', {}, 'Credentials'));
   if (!c.credentials.length) {
-    creds.append(el('p', { className: 'muted' }, 'This connector declares none.'));
+    // Which is the whole point of the third state: "declares none" is a fact about the connector,
+    // and on its own it does not tell an operator whether that is good news.
+    creds.append(el('p', { className: c.wiring === 'no-credential-required' ? 'ok' : 'muted' },
+      c.wiring === 'no-credential-required'
+        ? 'This connector declares none, and needs none. There is nothing for you to supply.'
+        : 'This connector declares none.'));
   }
   for (const cr of c.credentials) {
     const input = el('input', { type: 'password', placeholder: cr.stored ? '•••••••• stored' : 'paste value' });
@@ -187,14 +221,20 @@ async function show(id) {
   }
 
   // --- operations --------------------------------------------------------
-  const opsSection = el('section', {}, el('h3', {}, `Operations · ${c.operation_count}`));
+  // The honest unit is the operation, so each one says for itself whether it can be called and,
+  // when it cannot, which credential is missing. `requires` is an OR over mechanisms, each an AND
+  // of names that must travel together, so it is rendered as such rather than flattened.
+  const opsSection = el('section', {}, el('h3', {}, `Operations · ${c.callable_operations} of ${c.operation_count} callable`));
   const holder = el('div', {}, el('span', { className: 'muted' }, 'loading…'));
   opsSection.append(holder);
   d.append(opsSection);
-  const ids = await Promise.all(c.operation_ids.map(id => api('GET', `/v1/operations/${id}`)));
-  holder.replaceChildren(...ids.map(o => {
-    const node = el('div', { className: 'op' },
+  const details = await Promise.all(c.operations.map(o => api('GET', `/v1/operations/${o.id}`)));
+  holder.replaceChildren(...details.map((o, i) => {
+    const w = c.operations[i];
+    const node = el('div', { className: 'op' + (w.callable ? '' : ' uncallable') },
       el('span', { className: 'id' }, o.tool),
+      w.callable ? '' : el('span', { className: 'needs' },
+        'needs ' + w.requires.map(m => m.join(' + ')).join(' or ')),
       el('span', { className: 'muted', style: 'font-size:.8rem' }, o.description),
       el('span', { className: 'risk' }, o.risk));
     node.onclick = () => playground(o, opsSection);
