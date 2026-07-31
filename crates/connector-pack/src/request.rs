@@ -89,7 +89,7 @@ const HTTP_REQUEST: &str = "http.request";
 /// A typed value rather than a bare `serde_json::Value` so a test can assert on the pieces that go
 /// wrong silently — a flattened body, a missing `?`/`&` separator — instead of on a blob.
 /// [`Request::to_params`] is the one place it becomes the JSON `http.request` reads.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Request {
     /// The HTTP method, as `http.request` spells it (`GET`, `PUT`, …).
     pub method: String,
@@ -105,6 +105,88 @@ pub struct Request {
     /// precisely so flux stores it as canonical JSON *text* rather than handing over an object that
     /// would be dropped without a word.
     pub body: Option<String>,
+}
+
+/// **Hand-written, and no value prints** (C-159, finding 1).
+///
+/// A `Request` carries the assembled credential *after* `auth::place` has run — in a header value,
+/// and for a query placement in the URL itself — and this type is `pub`, so a host can hold one and
+/// format it. C-152 hand-wrote a redacting `Debug` for `auth::Assembled` for
+/// exactly this reason, and the review that closed it observed that this is the **larger** of the
+/// two exposures: `Assembled` is constructed at one internal site and never escapes, while this is
+/// public API.
+///
+/// The rule is **shape without values**, which is what a `Debug` of a request is read for: the
+/// method, the host, the path, the header *names* and the query-parameter *names* stay, and every
+/// value is `<redacted>`. Nothing here tries to work out which header holds the credential — a
+/// request cannot know, and an allow-list of "safe" header names is a list that rots into a leak the
+/// first time a vendor puts a token somewhere new.
+///
+/// A body prints as present or absent and never as content, and never as a length: a length is a
+/// fingerprint, which is the care [`connector_secrets::Secret`]'s own `Debug` already takes. No
+/// placement puts a credential in a body today, so this is the same foot-gun argument the derive
+/// itself lost — the value is caller data, and the only thing a reader needs from it here is whether
+/// one was built at all.
+impl std::fmt::Debug for Request {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Request")
+            .field("method", &self.method)
+            .field("url", &redacted_url(&self.url))
+            .field("headers", &HeaderNames(&self.headers))
+            .field("body", &self.body.as_ref().map(|_| Redacted))
+            .finish()
+    }
+}
+
+/// A value that does not print. A type rather than a `format_args!` at each site, because the header
+/// map needs it as a `Debug` *value* inside an entry and `Option::map` needs it as one too.
+struct Redacted;
+
+impl std::fmt::Debug for Redacted {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("<redacted>")
+    }
+}
+
+/// The headers as their names, every value [`Redacted`].
+struct HeaderNames<'a>(&'a BTreeMap<String, String>);
+
+impl std::fmt::Debug for HeaderNames<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_map()
+            .entries(self.0.keys().map(|name| (name, Redacted)))
+            .finish()
+    }
+}
+
+/// A URL with every query-parameter *value* redacted and every parameter *name* kept.
+///
+/// The cut is at the `?` because that is where the two kinds of data separate: everything before it
+/// is the emitter's own — a host and a path, the facts a reader is chasing — and everything after it
+/// is values, one of which may be a [`Placement::Query`](catalog::Placement::Query) credential.
+///
+/// Anything in the query that is not a `name=value` pair is redacted whole rather than reasoned
+/// about. Fail-closed costs one word of debugging output in a case the emitter does not produce.
+fn redacted_url(url: &str) -> String {
+    let Some((base, query)) = url.split_once('?') else {
+        return url.to_owned();
+    };
+    let mut out = String::with_capacity(url.len());
+    out.push_str(base);
+    out.push('?');
+    for (index, pair) in query.split('&').enumerate() {
+        if index > 0 {
+            out.push('&');
+        }
+        match pair.split_once('=') {
+            Some((name, _)) => {
+                out.push_str(name);
+                out.push_str("=<redacted>");
+            }
+            None => out.push_str("<redacted>"),
+        }
+    }
+    out
 }
 
 impl Request {
@@ -583,6 +665,67 @@ mod tests {
         assert!(!truthy(&json!(false)));
         assert!(truthy(&json!("a")));
         assert!(truthy(&json!(1)));
+    }
+
+    /// **The plaintext does not print** (C-159, finding 1).
+    ///
+    /// A `Request` carries the assembled credential *after* [`crate::auth::place`] has run — in a
+    /// header value, and for a query placement in the URL itself — and it is `pub`, so a host can
+    /// hold one and format it. C-152 hand-wrote a redacting `Debug` for `auth::Assembled` for
+    /// exactly this reason; the reviewer's observation was that this is the larger of the two
+    /// exposures, because `Assembled` never escapes the crate and this does.
+    ///
+    /// What must still print is the shape of the call: the method, the host, the path, the header
+    /// names and the query-parameter names. A `Debug` that printed nothing would be its own kind of
+    /// defect.
+    #[test]
+    fn a_request_prints_its_shape_and_none_of_its_values() {
+        const SENTINEL: &str = "SENTINEL-NOT-A-REAL-SECRET-C159";
+
+        let request = Request {
+            method: "POST".to_string(),
+            url: format!("https://vendor.example/api/v2/things?page=2&api_key={SENTINEL}"),
+            headers: BTreeMap::from([
+                ("Authorization".to_string(), format!("Bearer {SENTINEL}")),
+                ("Content-Type".to_string(), "application/json".to_string()),
+            ]),
+            body: Some(format!(r#"{{"note":"{SENTINEL}"}}"#)),
+        };
+
+        let rendered = format!("{request:?}");
+        assert!(
+            !rendered.contains(SENTINEL),
+            "the credential plaintext printed: {rendered}"
+        );
+
+        // And it is still worth reading: the method, the host, the path, the header names and the
+        // query-parameter names all survive.
+        assert!(rendered.contains("POST"), "{rendered}");
+        assert!(rendered.contains("https://vendor.example"), "{rendered}");
+        assert!(rendered.contains("/api/v2/things"), "{rendered}");
+        assert!(rendered.contains("Authorization"), "{rendered}");
+        assert!(rendered.contains("Content-Type"), "{rendered}");
+        assert!(rendered.contains("api_key"), "{rendered}");
+        assert!(rendered.contains("page"), "{rendered}");
+    }
+
+    /// A request with nothing to hide still says so, and an absent body reads as absent rather than
+    /// as a redacted one — the distinction a reader of a `Debug` is actually chasing.
+    #[test]
+    fn a_request_with_no_query_and_no_body_prints_both_plainly() {
+        let request = Request {
+            method: "GET".to_string(),
+            url: "https://vendor.example/api/v2/things".to_string(),
+            headers: BTreeMap::new(),
+            body: None,
+        };
+
+        let rendered = format!("{request:?}");
+        assert!(
+            rendered.contains("https://vendor.example/api/v2/things"),
+            "{rendered}"
+        );
+        assert!(rendered.contains("body: None"), "{rendered}");
     }
 
     /// An empty header map and an absent body are omitted rather than sent as `{}` and `""`.

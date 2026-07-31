@@ -158,10 +158,13 @@ impl Credentials {
     /// `flux-web`'s `http.rs:248` set the precedent for. A failure between construction and dispatch
     /// then cannot surface a value the redactor has not already been told about.
     ///
-    /// Both the stored secret **and** the assembled value are registered. For `Bearer` they are the
-    /// same string; for Basic the assembled value is `base64(user:secret)`, which is as good as the
-    /// secret to anyone holding it and is the one that actually travels. Both go through
-    /// [`register`], so both are values the redactor demonstrably holds.
+    /// **Every form that travels is registered, not only the one that was stored.** For `Bearer`
+    /// they are the same string. For Basic the assembled value is `base64(user:secret)`, which is as
+    /// good as the secret to anyone holding it. For a query placement the *placed* form is
+    /// percent-encoded, and for a base64 credential that shares no substring with either of the
+    /// other two (C-159). Each goes through [`register`], so each is a value the redactor
+    /// demonstrably holds; a header prefix asks for nothing extra, because it surrounds the value
+    /// rather than transforming it.
     ///
     /// # Errors
     ///
@@ -285,6 +288,16 @@ impl Credentials {
                 register(ctx, operation.id, credential, &reference, &value)?;
             }
 
+            // **And the third, when the placement transforms the value too** (C-159, finding 2).
+            // A query placement percent-encodes on its way onto the URL, and `+`, `/` and `=` — a
+            // base64 credential's whole alphabet — do not survive that, so the string on the wire
+            // shared no substring with either string above. [`auth::placed_form`] is the single
+            // answer to "does this placement transform"; a header prefix answers `None`, because it
+            // surrounds the value and a redactor holding the bare form already covers it.
+            if let Some(travelling) = auth::placed_form(credential.place, &value) {
+                register(ctx, operation.id, credential, &reference, &travelling)?;
+            }
+
             assembled.push(Assembled {
                 credential: credential.name,
                 value,
@@ -351,9 +364,33 @@ fn user_half(
 
 /// **Register `value` with the host's redactor, or refuse the call.**
 ///
-/// Every value this pack puts on a request goes through here, and that is what makes the guarantee
-/// in the module documentation above a structural one rather than a promise: a value the redactor
-/// does not hold is never assembled into a request, because this returns an error instead.
+/// Every string this pack puts on a request either goes through here or **contains** one that did,
+/// and that is what makes the guarantee in the module documentation above a structural one rather
+/// than a promise: a value the redactor does not hold is never assembled into a request, because
+/// this returns an error instead.
+///
+/// The distinction in that first sentence is C-159's correction, and it is not pedantry. What
+/// travels is not always what was resolved: acquisition can transform the value (`base64(user:pass)`
+/// contains neither half), and so can *placement* (a query parameter is percent-encoded, and a
+/// header prefix is not). The rule that covers all three is the one
+/// [`crate::auth`] states — **the redactor holds every form that is not recoverable from a form it
+/// already holds** — and [`Credentials::resolve_mechanism`] registers each such form. The older
+/// claim, "every value this pack puts on a request goes through here", was true of the door and
+/// false of the bytes: it read as though a placement could only surround.
+///
+/// # Registering twice is a no-op, and it is verified rather than remembered
+///
+/// `Redactor::add_secret` pushes onto a `Vec` and dedupes nothing, while `redact` walks that set for
+/// every scrub — so a process resolving the same credential on every call grew the set by an entry
+/// per call, forever. This asks [`holds`] first and tells the redactor only what it does not already
+/// have (C-159, finding 3).
+///
+/// **Asking is what makes it safe as well as idempotent.** A memo of `(address, value)` pairs kept
+/// on this side would be a memory of some *earlier* redactor: `ExecutionEnvironment::new` constructs
+/// one per environment, and whether that is per turn or per process is decided by a binding in flux
+/// rather than here. A remembered registration against a redactor that never received the value is
+/// precisely a credential travelling unheld — the failure this whole module exists to prevent — so
+/// the question is put to the redactor in hand, every time.
 ///
 /// # Why it asks the redactor instead of checking a length
 ///
@@ -374,8 +411,10 @@ fn register(
     reference: &CredentialRef,
     value: &str,
 ) -> Result<(), Error> {
-    ctx.redactor.add_secret(value.to_owned());
-    if ctx.redactor.redact(value) == value {
+    if !holds(ctx, value) {
+        ctx.redactor.add_secret(value.to_owned());
+    }
+    if !holds(ctx, value) {
         return Err(Error::UnredactableCredential {
             operation: operation.to_owned(),
             credential: credential.name.to_owned(),
@@ -385,6 +424,49 @@ fn register(
     }
     Ok(())
 }
+
+/// **Whether the host's redactor already scrubs `value` by *registration*.**
+///
+/// Not `redact(value) != value`, and the difference is the whole point of the function existing.
+/// `Redactor::redact` runs two passes: an exact-substring replacement over the registered set, and
+/// then a scrub of credential-*shaped* tokens it was never told about — `sk-ant-…`, `xoxb-…`,
+/// `ghp_…`. So the plain comparison answers "yes" for a value nobody registered, and a caller using
+/// it to decide whether to register would skip precisely the tokens that look most like credentials.
+///
+/// [`PROBE`] is what separates the passes. Glued to the front of the value it leaves the shape rule
+/// inapplicable — the run no longer begins with a known prefix, and a prefix is the only thing that
+/// pass matches on — while the exact-substring pass is unaffected, because a registered value is
+/// still a substring of the probed string. What changes the probe is therefore registration and
+/// nothing else.
+///
+/// `tests/credentials.rs` keeps a sentinel carrying none of flux's known prefixes for the same
+/// reason: a pass that came from shape rather than from registration would prove nothing.
+///
+/// # The condition this answer has, stated rather than assumed
+///
+/// `flux-secret` 1.0.1 exposes no membership test and no count, so what is observable is *coverage*,
+/// not *identity*: this returns `true` when a registered value is a substring of `value`, which
+/// includes but is wider than "`value` itself is registered". The two differ in exactly one case —
+/// a **proper** substring of `value` is registered and the rest of `value` is not — and there the
+/// skip would leave the surrounding fragment rendering in the clear where an unconditional
+/// `add_secret` would not.
+///
+/// That case cannot arise from the three forms this port registers, which is why the trade is taken
+/// rather than argued about. They are the stored value `S`, the acquired value `A` (either `S` or
+/// `base64(user:S)`, which does not contain `S`), and the placed form `P` (either `A` or a
+/// percent-encoding of it, which either equals `A` or escapes a character and so does not contain
+/// it). Whitespace is the one real containment, and it is the case where skipping is *correct*:
+/// `add_secret` stores values **trimmed**, so a stored value and its newline-terminated twin are one
+/// entry either way. What remains is two distinct vendor secrets in one mechanism where one embeds
+/// the other, which is a store holding a truncated copy of its own credential.
+fn holds(ctx: &ToolContext, value: &str) -> bool {
+    let probe = format!("{PROBE}{value}");
+    ctx.redactor.redact(&probe) != probe
+}
+
+/// A byte that is neither a token boundary nor a line marker in `flux_secret`'s tokenizer, so
+/// prefixing it defeats shape-based redaction without splitting the value. See [`holds`].
+const PROBE: char = '\u{1}';
 
 /// The path a [`StoreError::NotFound`] names.
 ///
@@ -401,7 +483,154 @@ fn not_found_path(error: &StoreError) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use connector_secrets::{Layout, MemoryStore, TenantLayout};
+    use connector_secrets::{Layout, MemoryStore, Secret, TenantLayout};
+    use flux_system::{System, Workspace};
+
+    use crate::config::{Configuration, MemoryConfig};
+    use crate::request::Request;
+
+    /// The tenant the query-placement fixture below is addressed under.
+    const QUERY_TENANT: &str = "t-c159";
+
+    /// **A base64-shaped non-credential**, and the shape is the whole point: `+`, `/` and `=` are
+    /// the three characters `query_encode` escapes, and they are exactly the alphabet a base64
+    /// credential is made of.
+    const QUERY_SENTINEL: &str = "SENTINEL+NOT/A+REAL+SECRET=C159";
+
+    /// [`QUERY_SENTINEL`] as it appears on the URL, written out rather than computed by the
+    /// encoder under test — an expectation derived the same way as the code it checks would pass
+    /// against any encoder, correct or not.
+    const QUERY_SENTINEL_ENCODED: &str = "SENTINEL%2BNOT%2FA%2BREAL%2BSECRET%3DC159";
+
+    /// A `ToolContext` with its own redactor. Nothing here reaches the filesystem through it; the
+    /// workspace root is this crate's own directory because `System` requires one that exists.
+    fn context() -> ToolContext {
+        let workspace = Workspace::new(env!("CARGO_MANIFEST_DIR")).expect("the crate root exists");
+        ToolContext::new(Arc::new(System::new(workspace)))
+    }
+
+    /// **The shipped slack provider with its bot token moved to a query placement.**
+    ///
+    /// Doctored deliberately, and this is the one branch where doctoring is the only option: the
+    /// committed catalogue is 18 `Placement::Header` and 2 `Placement::Inbound` and **zero**
+    /// `Placement::Query`, so nothing shipped reaches this code. That makes the path *more* worth a
+    /// test rather than less — it is a fail-closed guarantee with no accidental coverage. Everything
+    /// except the placement is real catalogue data, including the `com.slack.api` authority the
+    /// address below is composed from.
+    fn slack_with_a_query_placed_token() -> &'static catalog::Provider {
+        let mut provider = *catalog::provider(catalog::ProviderKey::id("slack"))
+            .expect("the shipped catalogue carries slack");
+        provider.auth = Box::leak(Box::new([catalog::Credential {
+            name: "slack.bot_token",
+            leaf: "bot_token",
+            acquire: catalog::Acquisition::Static,
+            place: catalog::Placement::Query { name: "token" },
+        }]));
+        Box::leak(Box::new(provider))
+    }
+
+    /// **The string that travels is a string the redactor holds** (C-159, finding 2).
+    ///
+    /// `auth::place` percent-encodes a query-placed credential onto the URL, and for a base64
+    /// credential the encoded form shares no substring with the registered one — `+`, `/` and `=`
+    /// all change. So the value that reached the wire was one the redactor had never been told
+    /// about, while `register`'s own documentation claimed *"every value this pack puts on a request
+    /// goes through here"*. The claim was true of the door and false of the bytes.
+    ///
+    /// The control is the first assertion: the encoded form really is what lands on the URL, so the
+    /// scrub below is being asked about the string that actually travels.
+    #[tokio::test]
+    async fn a_query_placed_credential_registers_the_form_that_travels() {
+        let provider = slack_with_a_query_placed_token();
+        let operation = catalog::operation(catalog::OperationKey::id("slack-chat-post-message"))
+            .expect("the shipped catalogue carries slack-chat-post-message");
+
+        let store = MemoryStore::new();
+        store
+            .put(
+                &CredentialRef::new(QUERY_TENANT, "com.slack.api", DEFAULT_SERVICE, "bot_token")
+                    .expect("a valid address"),
+                &Secret::new(QUERY_SENTINEL),
+            )
+            .await
+            .expect("an in-memory put cannot fail");
+
+        let ctx = context();
+        let credentials = Credentials::new(Arc::new(store), QUERY_TENANT).expect("a valid tenant");
+        let settings = Configuration::new(Arc::new(MemoryConfig::new()), QUERY_TENANT)
+            .expect("a valid tenant")
+            .snapshot(provider.id, operation.service, Vec::<Field>::new());
+
+        let assembled = credentials
+            .resolve(&ctx, operation, provider, &settings)
+            .await
+            .expect("the store holds the token");
+
+        let mut request = Request {
+            method: "POST".to_string(),
+            url: "https://slack.com/api/chat.postMessage".to_string(),
+            headers: std::collections::BTreeMap::new(),
+            body: None,
+        };
+        for credential in &assembled {
+            auth::place(operation.id, credential, &mut request).expect("a query placement");
+        }
+
+        assert!(
+            request.url.contains(QUERY_SENTINEL_ENCODED),
+            "the encoded form is what travels, or the scrub below asserts nothing: {}",
+            request.url
+        );
+        assert!(
+            !ctx.redactor
+                .redact(&request.url)
+                .contains(QUERY_SENTINEL_ENCODED),
+            "the credential travelled in a form the redactor was never told about: {}",
+            ctx.redactor.redact(&request.url)
+        );
+        // And the raw form stays registered. It is the form a vendor's 401 echoes and the one an
+        // operator pastes into a shell, so the encoded registration is an addition rather than a
+        // replacement.
+        assert_ne!(
+            ctx.redactor.redact(QUERY_SENTINEL),
+            QUERY_SENTINEL,
+            "the stored value must stay registered on its own terms"
+        );
+    }
+
+    /// **Shape is not registration** (C-159, finding 3).
+    ///
+    /// The idempotence check has to key on the redactor's *registered set*, and the obvious spelling
+    /// — `redact(value) != value` — does not: `redact` also scrubs credential-shaped tokens it was
+    /// never told about, so that spelling reports a `sk-ant-…` value as already held and skips the
+    /// one registration this port is responsible for. The value below is such a token, and the first
+    /// assertion is the control that makes the second mean something.
+    ///
+    /// Skipping would not be harmless. flux's shape pass replaces a whole token, and a token ends at
+    /// a boundary character it does not agree with this pack about — so a value the pack registers
+    /// is scrubbed wherever it appears, and a value left to its shape is scrubbed wherever flux's
+    /// tokenizer happens to agree.
+    #[test]
+    fn a_token_shape_the_redactor_scrubs_is_not_a_registration() {
+        const SHAPED: &str = "sk-ant-SENTINEL-NOT-A-REAL-SECRET-C159";
+
+        let ctx = context();
+        assert_ne!(
+            ctx.redactor.redact(SHAPED),
+            SHAPED,
+            "flux no longer scrubs this shape, so the assertion below proves nothing"
+        );
+        assert!(
+            !holds(&ctx, SHAPED),
+            "a value nobody registered was reported as held"
+        );
+
+        ctx.redactor.add_secret(SHAPED.to_owned());
+        assert!(
+            holds(&ctx, SHAPED),
+            "a registered value must be reported as held, or nothing is ever idempotent"
+        );
+    }
 
     /// **The guard on [`DEFAULT_SERVICE`]'s mirror.**
     ///

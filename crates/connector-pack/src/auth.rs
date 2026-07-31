@@ -65,6 +65,11 @@
 //!
 //! `a_prefixed_header_travels_prefixed_and_still_contains_the_registered_secret` below pins the
 //! substring property the argument rests on.
+//!
+//! The divergence itself is closed rather than merely described: [`placed_form`] is the one place
+//! that answers "does this placement transform the value", [`place`] and [`crate::credentials`] both
+//! read it, and its match over [`Placement`] is exhaustive — so a placement variant added later has
+//! to say whether the redactor needs a second registration instead of inheriting `no` by omission.
 
 use catalog::{Acquisition, Credential, Placement};
 
@@ -159,6 +164,8 @@ pub(crate) fn place(
             request.url.push(separator);
             request.url.push_str(name);
             request.url.push('=');
+            // The same encoder [`placed_form`] hands to the redactor, so the string on the wire is
+            // the string that was registered rather than a second derivation of it.
             request.url.push_str(&query_encode(&assembled.value));
             Ok(())
         }
@@ -166,6 +173,30 @@ pub(crate) fn place(
             operation: operation.to_owned(),
             credential: assembled.credential.to_owned(),
         }),
+    }
+}
+
+/// **The form of `value` a placement puts on the wire, when that is not `value` itself.**
+///
+/// `None` when the placement only *surrounds* the value. A header prefix leaves the credential
+/// verbatim inside the header, so a redactor holding the bare value already scrubs every surface the
+/// prefixed value reaches — the C-184 rule stated in this module's documentation, and the reason
+/// registering `SSWS ` would be worse than not. [`Placement::Inbound`] never reaches a request at
+/// all.
+///
+/// `Some` when the placement **transforms** it. Query placement percent-encodes, and `+`, `/` and
+/// `=` do not survive that unchanged — which is the alphabet a base64 credential is made of, so the
+/// case that diverges is exactly the case that matters. The registered string was then not the
+/// string that travelled (C-159 §2), and the answer is the one the basic join already gets: a form
+/// not recoverable from a form the redactor holds is registered on its own terms.
+///
+/// It exists so [`crate::credentials`] does not derive the travelling string a second time, and the
+/// match is exhaustive so a placement added later has to state its answer here rather than inherit
+/// one silently.
+pub(crate) fn placed_form(place: Placement, value: &str) -> Option<String> {
+    match place {
+        Placement::Query { .. } => Some(query_encode(value)),
+        Placement::Header { .. } | Placement::Inbound => None,
     }
 }
 
@@ -448,6 +479,46 @@ mod tests {
         assert_eq!(
             existing.url,
             "https://vendor.example/api/v2/things?page=2&api_key=a%2Bb%2Fc%3Dd"
+        );
+    }
+
+    /// **The travelling form is the registered form** (C-159 §2).
+    ///
+    /// The test above pins the encoding as a literal; this one pins the thing that made the
+    /// literal's correctness insufficient — that the string [`place`] writes onto the URL is the
+    /// string [`placed_form`] hands to the redactor. Two derivations of "the value, encoded" is how
+    /// the two came to disagree in the first place, and an encoder changed in one of them would pass
+    /// every other assertion in this file.
+    #[test]
+    fn a_query_placement_travels_as_the_form_that_is_registered() {
+        let mut request = request();
+        let credential = credential(Acquisition::Static, Placement::Query { name: "api_key" });
+        let value = acquire(credential, "a+b/c=d", None);
+        let assembled = Assembled {
+            credential: credential.name,
+            value: value.clone(),
+            place: credential.place,
+        };
+        place("acme-thing-show", &assembled, &mut request).expect("a query placement");
+
+        let registered =
+            placed_form(credential.place, &value).expect("a query placement transforms the value");
+        assert!(
+            request.url.ends_with(&format!("api_key={registered}")),
+            "the URL carries a form the redactor was not handed: {}",
+            request.url
+        );
+        // And a header placement asks for no second registration, because a prefix surrounds the
+        // value rather than transforming it — the C-184 rule, held here as an assertion.
+        assert_eq!(
+            placed_form(
+                Placement::Header {
+                    name: "Authorization",
+                    prefix: "Bearer ",
+                },
+                SENTINEL,
+            ),
+            None
         );
     }
 
