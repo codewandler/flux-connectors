@@ -1,0 +1,247 @@
+# SendGrid API — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Twilio SendGrid publishes an OpenAPI 3.0 description
+# (`twilio/sendgrid-oai`) covering several hundred operations across mail, templates, suppressions,
+# contacts, stats, subusers and more. Nothing is vendored under `specs/` for it here because ingest
+# (C-4) and the overlay (C-6) do not exist yet, and pointing at the whole document would be pointing
+# a model at every administrative surface SendGrid has. Drift against the vendor's own docs is
+# therefore undetectable by machine, exactly as for zendesk, freshdesk, github, asana, notion and
+# calendly (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# C-168's QUESTION: CAN THIS PIPELINE SEND MAIL? MEASURED, AND THE ANSWER IS NO.
+# ---------------------------------------------------------------------------------------------
+#
+# `POST /v3/mail/send` takes a body shaped
+#
+#   { "personalizations": [ { "to": [ { "email": "…" } ] } ], "from": {...}, "subject": "…",
+#     "content": [ { "type": "text/plain", "value": "…" } ] }
+#
+# — an array of objects (`personalizations`), each containing a further array of objects (`to`), and
+# `content` is a second, sibling array of objects at the body's root. SendGrid requires the array
+# wrapper on both: a bare `{"to": {"email": "…"}}` in place of `[{"email": "…"}]` is not a shorthand
+# it accepts, it is a 400.
+#
+# **What this pipeline's body mechanism can build, and what it cannot.** [`Param::wire`]
+# (`crates/connector-spec/src/ir.rs`) names a dot-separated JSON path a body field occupies, and
+# `body_tree`'s `BodyNode` (`crates/connector-flux/src/op.rs:861` on) assembles those paths into one
+# nested record — but `BodyNode` has exactly two variants, `Leaf` and `Branch(BTreeMap<String,
+# BodyNode>)`. Every segment of a `wire` path becomes an **object** key. There is no third variant for
+# a JSON array, no numeric-index segment, and no way for a segment to mean "the next element of a
+# list" rather than "a further object key". So no named, per-field body parameter — a `to_email`
+# scalar, say — can be placed *inside* an array through `wire`, at any depth, full stop. This is
+# Asana's `data.*` mechanism exactly (`providers/asana.toml`), and Asana's envelope is objects all the
+# way down; SendGrid's is not, which is the reason this connector was chosen (C-105, C-168's own
+# `note`).
+#
+# **The one route left is a single body-root parameter whose own declared value nests** — a
+# `personalizations` field with `schema = { type = "array", items = {...} }`, placed at the body root
+# with no dots in its `wire` path at all. That is mechanically legal: `check_body_encoding` only
+# refuses an object/array-*valued* field under `form` encoding (`crates/connector-flux/src/op.rs:485`),
+# and this connector's default encoding is `json`. But legal is not the same as honest. Declared this
+# way, the connector contributes no decomposition whatsoever — the caller (a model) must construct the
+# entire nested envelope itself, correctly nesting `personalizations` inside an array, `to` inside a
+# further array, one level down, and get every bracket right with nothing here to check it against.
+# That is exactly the shape `providers/notion.toml` already refused for the page-content block model:
+# "ships an untyped blob and hands the model a guess at the one shape [the vendor] is strictest about
+# — precisely the 'plausible but incorrect' output AGENTS.md says to refuse." SendGrid's envelope is
+# not recursive the way Notion's block union is, so it *can* be fully described in JSON Schema — but
+# describability was never the test; decomposability is, and a single opaque array parameter
+# decomposes nothing. It is the same failure mode zendesk's flat body already demonstrates in the
+# other direction: a request that is accepted and looks right is not the same as a request this
+# pipeline actually assembled correctly.
+#
+# So `sendgrid-mail-send` is excluded, deliberately, following C-106's selection rule: a recorded
+# refusal that names the constraint at `path:line` is worth more than a send operation this pipeline
+# cannot back. `crates/connector-flux/tests/sendgrid_connector.rs` makes the finding mechanical rather
+# than merely asserted here — it proves `BodyNode` accepts a dotted path that *looks* like it reaches
+# into an array (e.g. `personalizations.0.to.0.email`) and silently produces nested **objects** keyed
+# `"0"`, not a JSON array, which is a second, independent way the vendor would answer 400: even a wire
+# path shaped like an array index is not one.
+#
+# ---------------------------------------------------------------------------------------------
+# WHAT SHIPS INSTEAD: the reads. Four operations, each one this connector can back with a schema it
+# is confident in rather than a guessed path.
+# ---------------------------------------------------------------------------------------------
+#
+# - `sendgrid-template-list` / `sendgrid-template-get` — the Transactional (dynamic) Template API.
+# - `sendgrid-suppression-bounce-list` — the Bounces suppression list, the oldest and most stable of
+#   SendGrid's several suppression endpoints (blocks, spam reports, invalid emails, global
+#   unsubscribes exist too; only bounces is selected here rather than guessing at the others' exact
+#   shapes).
+# - `sendgrid-email-validate` — the Email Address Validation API. It is a `POST` — the caller supplies
+#   the address to check in the request body — but it mutates no SendGrid resource, so it is declared
+#   `risk = "medium"` / `idempotency = "non_idempotent"` rather than `low`/`idempotent`, the same
+#   over-prompting Notion's own POST reads accept (`providers/notion.toml`): `check_write_metadata`
+#   sees the HTTP method, not the vendor's semantics, and the safe direction is to over-prompt, never
+#   to under-prompt on a claim this file cannot back.
+#
+# **No recipient address, no validated address, and no example value shaped like a real one appears
+# anywhere in this file** — not in an example, not in a description, not in a response_schema literal.
+# Every field that carries an email address in a response (a bounced recipient's address, a validated
+# address) is documented as personal data with no example, the same convention
+# `providers/calendly.toml`'s invitee list already carries.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: no query parameter carries free text, so C-30's percent-encoding gap is not reachable
+# here. `start_time` / `end_time` on the bounce list and `page_size` / `generations` on the template
+# list are all closed-enum or plain-integer values with no character this pipeline's unencoded `fmt`
+# interpolation can corrupt — the same reasoning that admits Asana's decimal `gid` and Calendly's
+# integer `count` while excluding anything free-text.
+# ---------------------------------------------------------------------------------------------
+
+id = "sendgrid"
+vendor = "SendGrid"
+
+# One host for every account; SendGrid has no per-tenant subdomain the way zendesk or freshdesk do.
+base_url = "https://api.sendgrid.com"
+
+description = "SendGrid transactional email: read templates and bounce suppressions, validate an email address. Cannot send mail — see the header comment for why the send envelope is not expressible here"
+
+# The "Test connection" operation: a bounded, argument-free read, the same shape
+# `calendly-user-me` and `freshdesk-test` are.
+verify = "sendgrid-template-list"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["sendgrid.api_key"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "sendgrid.api_key"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; its value is never read
+# here and never reaches a generated artifact.
+env = ["SENDGRID_API_KEY"]
+description = "SendGrid API key sent as a bearer"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 4, all reads (in effect on any SendGrid resource, whatever the HTTP method)
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "sendgrid-template-list"
+method = "GET"
+path = "/v3/templates"
+description = "List transactional templates (name, id, generation, and each template's versions). Also this connector's `verify` — a bounded read that runs unattended"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "generations"
+description = "Restrict the list to `legacy`, `dynamic`, or `both` templates. SendGrid defaults to `dynamic` when this is omitted"
+required = false
+schema = { type = "string", enum = ["legacy", "dynamic", "both"] }
+
+[[operations.params.query]]
+name = "page_size"
+description = "Results per page; SendGrid caps this at 200"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 200 }
+
+[operations.response_schema]
+type = "object"
+required = ["result"]
+properties = { result = { type = "array", description = "The matching templates", items = { type = "object", required = ["id", "name", "generation"], properties = { id = { type = "string", description = "The template's id, e.g. `d-…` for a dynamic template" }, name = { type = "string" }, generation = { type = "string", enum = ["legacy", "dynamic"] }, updated_at = { type = "string" }, versions = { type = "array", description = "The template's versions (subject, content, active flag) — not enumerated further here; see sendgrid-template-get" } } } }, _metadata = { type = "object", description = "Cursor pagination. `next`, when present, is the full URL of the following page — an opaque server-issued value this connector does not attempt to re-encode, the same reasoning that excludes Asana's `offset` and Notion's `start_cursor`" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "sendgrid-template-get"
+method = "GET"
+path = "/v3/templates/{template_id}"
+description = "Get one transactional template by id, including every version's subject and content"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "template_id"
+description = "The template's id, e.g. `d-…` for a dynamic template — the `id` field from sendgrid-template-list"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "name", "generation"]
+properties = { id = { type = "string" }, name = { type = "string" }, generation = { type = "string", enum = ["legacy", "dynamic"] }, updated_at = { type = "string" }, versions = { type = "array", description = "Every version of this template — its subject, its plain-text and HTML content, and which one is active. Not enumerated further here" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "sendgrid-suppression-bounce-list"
+method = "GET"
+path = "/v3/suppression/bounces"
+description = "List addresses that have bounced and are suppressed from receiving further mail. Each entry is personal data about a third party — read it only for what the calling flow needs"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "start_time"
+description = "Only bounces created at or after this Unix timestamp"
+required = false
+schema = { type = "integer", minimum = 0 }
+
+[[operations.params.query]]
+name = "end_time"
+description = "Only bounces created at or before this Unix timestamp"
+required = false
+schema = { type = "integer", minimum = 0 }
+
+# No `example` anywhere below: every entry here is a real third party's suppressed address, and this
+# repository must never carry a captured or plausible instance of one.
+[operations.response_schema]
+type = "array"
+description = "The matching bounces"
+items = { type = "object", required = ["email", "created", "reason", "status"], properties = { email = { type = "string", description = "The suppressed recipient's own address — personal data, never an example value" }, created = { type = "integer", description = "Unix timestamp the bounce was recorded" }, reason = { type = "string", description = "The bounce reason SendGrid recorded, e.g. an SMTP response" }, status = { type = "string", description = "The SMTP status code reported with the bounce" } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "sendgrid-email-validate"
+method = "POST"
+path = "/v3/validations/email"
+description = "Check whether an email address is well-formed and likely deliverable, without sending it any mail. Requires SendGrid's Email Address Validation add-on to be enabled on the account"
+# A POST, but it mutates no SendGrid resource — it consumes a validation credit and returns a
+# verdict, and nothing about the account or any list changes. `risk = "medium"` /
+# `idempotency = "non_idempotent"` rather than the `low`/`idempotent` a genuine read would carry,
+# because `check_write_metadata` refuses `low` on any state-changing method regardless of what it
+# actually changes (`crates/connector-flux/src/op.rs`). The direction is the safe one — an operator
+# is over-prompted for a call that cannot hurt anything, never under-prompted for one that can — and
+# `providers/notion.toml` already accepts the identical trade for its own POST reads.
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "email"
+description = "The address to check. This is the address a caller supplies for validation — not a recipient this connector addresses mail to, and never an example value here"
+required = true
+schema = { type = "string", format = "email" }
+
+[[operations.params.body]]
+name = "source"
+description = "A free-text label for where the check originated, e.g. `signup`. Purely descriptive; SendGrid does not validate its contents"
+required = false
+schema = { type = "string" }
+
+[operations.response_schema]
+type = "object"
+required = ["result"]
+properties = { result = { type = "object", required = ["email", "verdict"], properties = { email = { type = "string", description = "Echoes the checked address — the caller's own input, never an example value" }, verdict = { type = "string", enum = ["Valid", "Risky", "Invalid"] }, score = { type = "number", description = "A confidence score between 0 and 1" }, local = { type = "string", description = "The local part of the address (before the `@`)" }, host = { type = "string", description = "The domain part of the address (after the `@`)" }, suggestion = { description = "A suggested correction, when SendGrid has one, otherwise null" } } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/errors/0/message"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any of the above can run
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "api_key"
+label = "SendGrid API key"
+help = "Create one under Settings → API Keys in the SendGrid dashboard. Restrict it to only the scopes this connector needs — Mail Send is unnecessary, since this connector never sends mail"
+format = "token"
+secret = true
+docs_url = "https://www.twilio.com/docs/sendgrid/ui/account-and-settings/api-keys"
+binds = "credential.sendgrid.api_key"
