@@ -1,0 +1,279 @@
+# Figma REST API v1 — hand-authored, no vendor spec.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Figma's developer reference (figma.com/developers/api) is
+# hand-written prose with no OpenAPI document published alongside it, the same situation
+# `providers/notion.toml` is in. So there is nothing to vendor under `specs/` even once ingest
+# (C-4) and the overlay (C-6) land, and this file stays hand-authored. Drift is undetectable by
+# machine and will remain so — the caveat zendesk, freshdesk, github and notion already carry
+# (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# WHAT THIS CONNECTOR IS FOR: A FLEET WHERE ONE MEMBER IS HONESTLY, UNIFORMLY READ-ONLY.
+#
+# C-105's rule is that a connector earns its slot by exercising something the fleet has not met
+# yet. Every operation curated below is a `GET`; Figma's REST API has no write endpoint in the
+# surface this file selects (there is no "create a file" or "update a node" — Figma's own editor
+# is the only writer of file content). So `risk = "low"` and `idempotency = "idempotent"` are not
+# one author's habit repeated six times — they are the only honest answer, six times, and
+# `crates/connector-flux/tests/figma_connector.rs` asserts that the repetition is real rather than
+# a coincidence of what got curated first.
+#
+# ---------------------------------------------------------------------------------------------
+# THE CREDENTIAL: `X-Figma-Token`, THE SAME `header` SCHEME `providers/shopify.toml` SHIPS FIRST.
+#
+# A Figma personal access token travels as the entire value of `X-Figma-Token` — no `Bearer `, no
+# scheme word — exactly the shape Shopify's `X-Shopify-Access-Token` already proves end to end
+# through the loader, the emitter, the manifest and the public catalogue. This file reuses that
+# scheme rather than inventing a second spelling of "a custom header whose whole value is the
+# secret"; see `providers/shopify.toml`'s header comment for why `AuthScheme::Header` needs
+# nothing from C-19's prefix axis here either. (Figma also supports OAuth2 for third-party apps,
+# which would be `AuthScheme::Bearer` on a different credential; it is out of scope for this
+# curated set, which targets a personal access token used directly.)
+#
+# ---------------------------------------------------------------------------------------------
+# `get image renders` RETURNS URLS THAT EXPIRE. THIS IS THE HAZARD THE STORY NAMES BY NAME.
+#
+# `GET /v1/images/:file_key` does not return image bytes — it asks Figma to render the requested
+# nodes and hands back a URL to short-lived storage. The URL is not a stable asset address: it is
+# valid only for a limited window and re-requesting the same node can yield a different URL on a
+# later render. A caller that stores the URL rather than fetching or persisting the image promptly
+# ends up with a link that silently stops working, so both this operation's `description` and its
+# `response_schema` say so — a model reading only one of the two must still see it.
+#
+# ---------------------------------------------------------------------------------------------
+# WHY TWO OPERATIONS DECLARE A QUERY PARAMETER, AND WHY THAT IS SAFE HERE SPECIFICALLY.
+#
+# Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim
+# into a `fmt` template and flux registers no URL-encoding op (C-30 is unimplemented,
+# `crates/connector-flux/src/op.rs`). `zendesk-ticket-search` is AGENTS.md's standing
+# demonstration of the failure mode — a value carrying `&` does not filter, it injects a
+# parameter — and that is why `providers/shopify.toml` declares zero query parameters at all.
+#
+# `figma-file-nodes-get` and `figma-image-render-get` cannot be expressed without one, though:
+# Figma addresses "an arbitrary set of nodes" only through `?ids=1:2,1:3`, and there is no
+# path-shaped alternative the way Shopify's inventory levels had one. The reason this is still
+# safe rather than merely untested is the same reason Shopify's integer path parameters are safe:
+# a Figma node id is always `<page-id>:<node-id>` — ASCII digits and one colon — and a comma-joined
+# list of them cannot carry `&`, `#`, `+` or whitespace, the four ways an unencoded value corrupts
+# a query string here. The `pattern` on `ids` below is that claim, checked rather than assumed, and
+# `the_declared_query_parameter_is_restricted_to_a_safe_charset` in the test file holds it.
+#
+# No other query parameter is declared. `format` and `scale` on the image-render endpoint, and
+# `depth`/`geometry`/`version` on the file endpoints, are real Figma parameters this file does not
+# use — leaving them out is the curation the story asks for, not an oversight to fill in later.
+#
+# ---------------------------------------------------------------------------------------------
+# WHY `document` (AND EVERY NODE TREE) IS DECLARED AS AN OPAQUE OBJECT.
+#
+# A Figma file's content is a recursive tree of nodes — a frame contains nodes that contain nodes
+# — and `JsonSchema` here has no `$ref` and no recursion, the same wall `providers/notion.toml`
+# hits on Notion's block model. So `document`, `nodes` and any node-shaped value below are declared
+# as an untyped `object` with a description naming what is inside and why it goes no deeper, rather
+# than a schema that would have to lie about the depth it actually describes.
+#
+# ---------------------------------------------------------------------------------------------
+# ERROR ENVELOPE: `{"status": <int>, "err": "<message>"}`.
+#
+# Figma's documented error shape is a flat object with an HTTP-status echo and a single message
+# string under `err` — no per-field structure the way Zendesk's or Shopify's `errors` sometimes
+# carries one. `message_pointer = "/err"` is declared on every operation below.
+
+id = "figma"
+vendor = "Figma"
+base_url = "https://api.figma.com"
+description = "Figma REST API: read a file, specific nodes, rendered images, a project's files and a file's comments — a read-only design surface"
+
+# Every operation authenticates the same way: one personal access token, sent as a custom header.
+default_auth = [{ credentials = ["figma.token"] }]
+
+# `figma-user-me` is the Test-connection button. It is a genuine read — Figma's own "get current
+# user" endpoint — and it runs unattended whenever someone opens a settings page.
+verify = "figma-user-me"
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "figma.token"
+scheme = { header = { name = "X-Figma-Token" } }
+env = ["FIGMA_TOKEN"]
+description = "Figma personal access token, sent as the whole value of X-Figma-Token. Grants read access to whatever files, projects and comments the token's account can see"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 6: the verify read, plus the five the story names as a curated starting point
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "figma-user-me"
+method = "GET"
+path = "/v1/me"
+description = "Get the authenticated user's id, email, display handle and avatar URL. Used to verify a token works before running anything else"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["id", "email"]
+properties = { id = { type = "string", description = "The user's Figma id, an opaque string — not necessarily numeric" }, email = { type = "string", description = "Personal data" }, handle = { type = "string", description = "The display name shown on comments and file activity" }, img_url = { type = "string", description = "URL of the user's avatar image" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/err"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "figma-file-get"
+method = "GET"
+path = "/v1/files/{file_key}"
+description = "Get a Figma file's document tree, components and styles by file key. Does not include comments or rendered images"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "file_key"
+description = "The file key from a Figma file URL — the segment after `/file/` or `/design/` and before the file's slug, e.g. `3xZfChRmL9Ykq4Qp2NHwR8` in `figma.com/design/3xZfChRmL9Ykq4Qp2NHwR8/My-File`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# `document` is the root of a recursive node tree — see the header comment on why it is declared
+# opaque. `figma-file-nodes-get` is how a caller reaches a specific node's own subtree instead.
+[operations.response_schema]
+type = "object"
+required = ["document", "name", "lastModified", "version"]
+properties = { name = { type = "string", description = "The file's name as shown in Figma" }, lastModified = { type = "string", format = "date-time", description = "When the file was last modified, ISO 8601" }, version = { type = "string", description = "An opaque version identifier Figma bumps on every save — not a semantic version" }, role = { type = "string", description = "The calling user's own permission on this file, e.g. `owner`, `editor`, `viewer` — not a property of the file itself" }, editorType = { type = "string", description = "`figma` or `figjam`. A FigJam board's document tree uses different node types than a design file's" }, thumbnailUrl = { type = "string", description = "A preview image URL. Like the image-render endpoint's URLs, treat this as not guaranteed stable long-term rather than a permanent asset address" }, document = { type = "object", description = "The root node of the file's recursive node tree: a node with `id`, `name`, `type` and (for container types) a `children` array of more nodes. Not modeled further here — JSON Schema without recursion cannot describe it faithfully, and `figma-file-nodes-get` is how a caller reaches one node's own subtree by id instead of walking this one" }, components = { type = "object", description = "Reusable components defined in the file, keyed by node id. Each entry carries at least `key`, `name` and `description`" }, styles = { type = "object", description = "Shared text, color, effect and grid styles defined in the file, keyed by node id" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/err"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "figma-file-nodes-get"
+method = "GET"
+path = "/v1/files/{file_key}/nodes"
+description = "Get one or more specific nodes from a file by id, without walking the whole document tree. Use this to read a particular frame or layer instead of downloading the entire file"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "file_key"
+description = "The file key — see figma-file-get"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# See the header comment: this pipeline does not percent-encode query values, and this pattern is
+# what makes a comma-joined node-id list safe to interpolate unencoded rather than merely untested.
+[[operations.params.query]]
+name = "ids"
+description = "Comma-separated node ids to fetch, each in Figma's own `<page>:<node>` form, e.g. `1:23,1:45`. Copy these from a Figma share link (the `node-id` query parameter) or from a prior figma-file-get response"
+required = true
+schema = { type = "string", pattern = "^[0-9]+:[0-9]+(,[0-9]+:[0-9]+)*$" }
+
+[operations.response_schema]
+type = "object"
+required = ["nodes"]
+properties = { name = { type = "string", description = "The file's name" }, lastModified = { type = "string", format = "date-time" }, err = { type = "string", description = "Set when the whole request failed; absent otherwise. A per-node failure instead surfaces as that id being missing from `nodes`" }, nodes = { type = "object", description = "Keyed by the requested node id. Each present entry carries a `document` object — that node's own subtree, in the same opaque shape figma-file-get's `document` describes — plus that node's own `components` and `styles`. A requested id that does not exist in the file is simply absent from this object rather than an error" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/err"
+
+# ---------------------------------------------------------------------------------------------
+# `get image renders`: a `GET` that triggers a render and returns a URL. Idempotent in the sense
+# that matters here — repeating it changes nothing about the file or the account, only whether a
+# fresh render is produced — but the URL itself is not a stable address. See the header comment.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "figma-image-render-get"
+method = "GET"
+path = "/v1/images/{file_key}"
+description = "Render one or more nodes to images and return download URLs for them. The URLs point at short-lived storage and expire — Figma does not guarantee they stay valid, so fetch or store the image promptly rather than caching the URL itself"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "file_key"
+description = "The file key — see figma-file-get"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.query]]
+name = "ids"
+description = "Comma-separated node ids to render, each in Figma's own `<page>:<node>` form, e.g. `1:23,1:45` — see figma-file-nodes-get"
+required = true
+schema = { type = "string", pattern = "^[0-9]+:[0-9]+(,[0-9]+:[0-9]+)*$" }
+
+[operations.response_schema]
+type = "object"
+required = ["images"]
+properties = { err = { type = "string", description = "Set when the whole request failed; absent otherwise" }, images = { type = "object", description = "Keyed by the requested node id. Each value is either a URL string or null (that particular node failed to render). Every URL here is temporary — it is served from short-lived storage and is not guaranteed to remain valid, so treat it as something to fetch immediately rather than an address to keep" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/err"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "figma-project-files-list"
+method = "GET"
+path = "/v1/projects/{project_id}/files"
+description = "List the files in a project: each file's key, name, thumbnail and last-modified time"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "project_id"
+description = "The project's numeric id, from a Figma project URL or from a team's project listing"
+required = true
+schema = { type = "integer", format = "uint64", minimum = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["files"]
+properties = { name = { type = "string", description = "The project's own name" }, files = { type = "array", description = "One entry per file in the project, each `{key, name, thumbnail_url, last_modified}` and optionally `branches` when the file has any", items = { type = "object", required = ["key", "name"], properties = { key = { type = "string", description = "The file key figma-file-get, figma-file-nodes-get, figma-image-render-get and figma-file-comments-list all take" }, name = { type = "string" }, thumbnail_url = { type = "string", description = "Like other thumbnail URLs here, not guaranteed stable long-term" }, last_modified = { type = "string", format = "date-time" } } } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/err"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "figma-file-comments-list"
+method = "GET"
+path = "/v1/files/{file_key}/comments"
+description = "List a file's comments: who wrote each one, when, its text, what it is attached to, and whether it has been resolved"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "file_key"
+description = "The file key — see figma-file-get"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["comments"]
+properties = { comments = { type = "array", description = "Every comment on the file, oldest first", items = { type = "object", required = ["id", "message"], properties = { id = { type = "string" }, file_key = { type = "string" }, parent_id = { type = "string", description = "The id of the comment this replies to, or an empty string for a top-level comment — Figma uses an empty string here, not null" }, message = { type = "string", description = "The comment text. May quote or discuss design content and the commenter's own name is attached via `user` — treat both as data about a named individual" }, user = { type = "object", description = "Who wrote it: `{id, handle, img_url}` — the same shape figma-user-me returns for the caller" }, created_at = { type = "string", format = "date-time" }, resolved_at = { type = "string", format = "date-time", description = "When the comment was marked resolved, or absent while still open" }, client_meta = { type = "object", description = "Where the comment is pinned: either a canvas position or an offset within a frame, in one of two vendor-specific shapes. Not modeled further here" }, order_id = { type = "string", description = "Orders comments within their thread; not a public id anything else addresses" } } } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/err"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------------------------
+
+# The only human-supplied value. Figma has no per-tenant host — every account reads and writes
+# through `api.figma.com` — so unlike Shopify and Zendesk there is no `endpoint.*` field here.
+[[config]]
+name = "token"
+label = "Personal access token"
+help = "From your Figma account settings, under Personal access tokens. Figma shows it once, at creation time"
+# No `example`, deliberately — see providers/shopify.toml's `access_token` field. A placeholder
+# shaped like a real token is a live-secret false positive waiting to happen, and the token's shape
+# belongs in `help`, where it cannot be mistaken for a value.
+format = "token"
+secret = true
+docs_url = "https://www.figma.com/developers/api"
+binds = "credential.figma.token"
