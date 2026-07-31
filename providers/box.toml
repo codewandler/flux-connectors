@@ -95,6 +95,11 @@ vendor = "Box"
 # under this path.
 authority = "com.box.api"
 
+# The vendor's own spelling, taken from the operations below — every one of their paths begins
+# `/2.0/`. Recorded here so a `gid` renders (`com.box.api:2.0`); a credential path needs only the
+# authority and deliberately carries no version, so a token survives the vendor's next one.
+api_version = "2.0"
+
 # One host for every account — Box has no tenant subdomain, so `base_url` carries no `{placeholder}`
 # for an operator to bind and `status.rs` reports no `unbound-base-url-template` issue. Box's signed
 # download URLs are served from a separate host entirely, and that host is never reached because the

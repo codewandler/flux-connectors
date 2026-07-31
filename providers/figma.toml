@@ -94,6 +94,11 @@ vendor = "Figma"
 # different spelling mints a new address and deprecates this one, because tenants provision secrets
 # under this path.
 authority = "com.figma.api"
+
+# The vendor's own spelling, taken from the operations below — every one of their paths begins
+# `/v1/`. Recorded here so a `gid` renders (`com.figma.api:v1`); a credential path needs only the
+# authority and deliberately carries no version, so a token survives the vendor's next one.
+api_version = "v1"
 base_url = "https://api.figma.com"
 description = "Figma REST API: read a file, specific nodes, rendered images, a project's files and a file's comments — a read-only design surface"
 

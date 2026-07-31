@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "sentry"
+gid = "io.sentry.api:0"
 vendor = "Sentry"
 description = "Sentry error tracking: read an issue and its latest event, triage an issue, read a project"
 base_url = "https://sentry.io"
+api_version = "0"
 module = "sentry.flux"
 operations = ["sentry-issue-get", "sentry-issue-update", "sentry-project-get", "sentry-issue-event-latest"]

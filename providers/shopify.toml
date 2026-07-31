@@ -149,6 +149,16 @@ vendor = "Shopify"
 # under this path.
 authority = "com.shopify.api"
 
+# The vendor's own spelling, taken from the operations below — every one of their paths begins
+# `/admin/api/2024-10/`. Recorded here so a `gid` renders (`com.shopify.api:2024-10`); a credential
+# path needs only the authority and deliberately carries no version, so a token survives the
+# vendor's next one.
+#
+# A date rather than a `vN`, which is what the design means by "the version is the vendor's, not
+# ours" — Shopify dates its API releases and nothing here reshapes that into a form we would have
+# preferred.
+api_version = "2024-10"
+
 # Every Shopify store lives on its own `*.myshopify.com` host, so there is no tenant-independent base
 # URL. `{shop}` is the store's permanent subdomain — the `admin.shopify.com/store/<handle>` handle,
 # never the customer-facing custom domain, which does not serve the Admin API.

@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "openrouter"
+gid = "ai.openrouter.api:v1"
 vendor = "OpenRouter"
 description = "OpenRouter model router: list models and their endpoints, create chat completions, and read credit balance"
 base_url = "https://openrouter.ai"
+api_version = "v1"
 module = "openrouter.flux"
 operations = ["openrouter-models-list", "openrouter-model-endpoints-list", "openrouter-chat-completion", "openrouter-credits-get"]

@@ -9,7 +9,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "anthropic",
     vendor: "Anthropic",
     description: "Anthropic platform: the live model catalogue, and organization info, workspaces and API keys from the Admin API",
-    authority: Some("com.anthropic"),
+    authority: Some("com.anthropic.api"),
     base_url: "https://api.anthropic.com",
     auth: AUTH,
     operations: OPERATIONS,

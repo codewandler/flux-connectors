@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "openai"
+gid = "com.openai.api:v1"
 vendor = "OpenAI"
 description = "OpenAI platform: list models, and create chat completions and embeddings"
 base_url = "https://api.openai.com"
+api_version = "v1"
 module = "openai.flux"
 operations = ["openai-models-list", "openai-model-get", "openai-chat-completion", "openai-embeddings-create"]

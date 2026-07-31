@@ -8,7 +8,7 @@
       "vendor": "Airtable",
       "description": "Airtable records: read, create, update and delete a record in a base's table",
       "base_url": "https://api.airtable.com",
-      "api_version": null,
+      "api_version": "v0",
       "hosts": [
         "api.airtable.com"
       ],
@@ -20,8 +20,8 @@
           "hosts": [
             "api.airtable.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v0",
+          "gid": "com.airtable.api:v0",
           "operation_count": 4
         }
       ],
@@ -518,11 +518,11 @@
     },
     {
       "id": "anthropic",
-      "authority": "com.anthropic",
+      "authority": "com.anthropic.api",
       "vendor": "Anthropic",
       "description": "Anthropic platform: the live model catalogue, and organization info, workspaces and API keys from the Admin API",
       "base_url": "https://api.anthropic.com",
-      "api_version": null,
+      "api_version": "v1",
       "hosts": [
         "api.anthropic.com"
       ],
@@ -534,8 +534,8 @@
           "hosts": [
             "api.anthropic.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v1",
+          "gid": "com.anthropic.api/models:v1",
           "operation_count": 2
         },
         {
@@ -545,8 +545,8 @@
           "hosts": [
             "api.anthropic.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v1",
+          "gid": "com.anthropic.api/admin:v1",
           "operation_count": 3
         }
       ],
@@ -1000,7 +1000,7 @@
       "vendor": "Asana",
       "description": "Asana work management: read tasks and projects, create and update tasks, comment on a task",
       "base_url": "https://app.asana.com",
-      "api_version": null,
+      "api_version": "1.0",
       "hosts": [
         "app.asana.com"
       ],
@@ -1012,8 +1012,8 @@
           "hosts": [
             "app.asana.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "1.0",
+          "gid": "com.asana.api:1.0",
           "operation_count": 5
         }
       ],
@@ -1452,7 +1452,7 @@
       "vendor": "Babelforce",
       "description": "Babelforce voice platform: agent availability, live and reported calls, and the session variables a flow reads and writes",
       "base_url": "https://services.babelforce.com",
-      "api_version": null,
+      "api_version": "v2",
       "hosts": [
         "services.babelforce.com"
       ],
@@ -1464,8 +1464,8 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v2",
+          "gid": "com.babelforce.api:v2",
           "operation_count": 9
         }
       ],
@@ -2584,7 +2584,7 @@
       "vendor": "Box",
       "description": "Box: browse folder contents, read file and folder metadata, create folders, and copy files",
       "base_url": "https://api.box.com",
-      "api_version": null,
+      "api_version": "2.0",
       "hosts": [
         "api.box.com"
       ],
@@ -2596,8 +2596,8 @@
           "hosts": [
             "api.box.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "2.0",
+          "gid": "com.box.api:2.0",
           "operation_count": 6
         }
       ],
@@ -7366,7 +7366,7 @@
       "vendor": "Dropbox",
       "description": "Dropbox: browse folder contents, read file and folder metadata, search files, create folders, and get temporary download links",
       "base_url": "https://api.dropboxapi.com",
-      "api_version": null,
+      "api_version": "2",
       "hosts": [
         "api.dropboxapi.com"
       ],
@@ -7378,8 +7378,8 @@
           "hosts": [
             "api.dropboxapi.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "2",
+          "gid": "com.dropbox.api:2",
           "operation_count": 6
         }
       ],
@@ -7890,7 +7890,7 @@
       "vendor": "Figma",
       "description": "Figma REST API: read a file, specific nodes, rendered images, a project's files and a file's comments — a read-only design surface",
       "base_url": "https://api.figma.com",
-      "api_version": null,
+      "api_version": "v1",
       "hosts": [
         "api.figma.com"
       ],
@@ -7902,8 +7902,8 @@
           "hosts": [
             "api.figma.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v1",
+          "gid": "com.figma.api:v1",
           "operation_count": 6
         }
       ],
@@ -15082,7 +15082,7 @@
       "vendor": "HubSpot",
       "description": "HubSpot CRM: read contacts, companies and deals, and create and update contact records",
       "base_url": "https://api.hubapi.com",
-      "api_version": null,
+      "api_version": "v3",
       "hosts": [
         "api.hubapi.com"
       ],
@@ -15094,8 +15094,8 @@
           "hosts": [
             "api.hubapi.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v3",
+          "gid": "com.hubspot.api:v3",
           "operation_count": 5
         }
       ],
@@ -16506,7 +16506,7 @@
       "vendor": "Jira",
       "description": "Jira Cloud issue tracking: read and create issues, comment on them, and drive workflow transitions",
       "base_url": "https://{site}.atlassian.net",
-      "api_version": null,
+      "api_version": "2",
       "hosts": [
         "{site}.atlassian.net"
       ],
@@ -16518,8 +16518,8 @@
           "hosts": [
             "{site}.atlassian.net"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "2",
+          "gid": "com.atlassian.jira:2",
           "operation_count": 6
         }
       ],
@@ -20286,7 +20286,7 @@
       "vendor": "Notion",
       "description": "Notion workspace: read a page's properties, query a database, search shared content, and create a page",
       "base_url": "https://api.notion.com",
-      "api_version": null,
+      "api_version": "v1",
       "hosts": [
         "api.notion.com"
       ],
@@ -20298,8 +20298,8 @@
           "hosts": [
             "api.notion.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v1",
+          "gid": "com.notion.api:v1",
           "operation_count": 5
         }
       ],
@@ -21441,7 +21441,7 @@
       "vendor": "OpenAI",
       "description": "OpenAI platform: list models, and create chat completions and embeddings",
       "base_url": "https://api.openai.com",
-      "api_version": null,
+      "api_version": "v1",
       "hosts": [
         "api.openai.com"
       ],
@@ -21453,8 +21453,8 @@
           "hosts": [
             "api.openai.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v1",
+          "gid": "com.openai.api:v1",
           "operation_count": 4
         }
       ],
@@ -21948,7 +21948,7 @@
       "vendor": "OpenRouter",
       "description": "OpenRouter model router: list models and their endpoints, create chat completions, and read credit balance",
       "base_url": "https://openrouter.ai",
-      "api_version": null,
+      "api_version": "v1",
       "hosts": [
         "openrouter.ai"
       ],
@@ -21960,8 +21960,8 @@
           "hosts": [
             "openrouter.ai"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v1",
+          "gid": "ai.openrouter.api:v1",
           "operation_count": 4
         }
       ],
@@ -24892,7 +24892,7 @@
       "vendor": "SendGrid",
       "description": "SendGrid transactional email: read templates and bounce suppressions, validate an email address. Cannot send mail — see the header comment for why the send envelope is not expressible here",
       "base_url": "https://api.sendgrid.com",
-      "api_version": null,
+      "api_version": "v3",
       "hosts": [
         "api.sendgrid.com"
       ],
@@ -24904,8 +24904,8 @@
           "hosts": [
             "api.sendgrid.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v3",
+          "gid": "com.sendgrid.api:v3",
           "operation_count": 4
         }
       ],
@@ -25381,7 +25381,7 @@
       "vendor": "Sentry",
       "description": "Sentry error tracking: read an issue and its latest event, triage an issue, read a project",
       "base_url": "https://sentry.io",
-      "api_version": null,
+      "api_version": "0",
       "hosts": [
         "sentry.io"
       ],
@@ -25393,8 +25393,8 @@
           "hosts": [
             "sentry.io"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "0",
+          "gid": "io.sentry.api:0",
           "operation_count": 4
         }
       ],
@@ -26176,7 +26176,7 @@
       "vendor": "Shopify",
       "description": "Shopify Admin REST API: read orders, products, customers and inventory levels, and update a product",
       "base_url": "https://{shop}.myshopify.com",
-      "api_version": null,
+      "api_version": "2024-10",
       "hosts": [
         "{shop}.myshopify.com"
       ],
@@ -26188,8 +26188,8 @@
           "hosts": [
             "{shop}.myshopify.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "2024-10",
+          "gid": "com.shopify.api:2024-10",
           "operation_count": 5
         }
       ],
@@ -27654,7 +27654,7 @@
     },
     {
       "id": "statuspage",
-      "authority": "com.atlassian.statuspage",
+      "authority": "io.statuspage.api",
       "vendor": "Atlassian Statuspage",
       "description": "Atlassian Statuspage: read a status page's components and incidents, and open or update a publicly visible incident on it",
       "base_url": "https://api.statuspage.io/v1/pages/{page_id}",
@@ -27671,7 +27671,7 @@
             "api.statuspage.io"
           ],
           "api_version": "v1",
-          "gid": "com.atlassian.statuspage:v1",
+          "gid": "io.statuspage.api:v1",
           "operation_count": 5
         }
       ],
@@ -28446,7 +28446,7 @@
       "vendor": "Stripe",
       "description": "Stripe payments: read a balance, customer, charge, payment intent or refund; capture, cancel and refund a payment",
       "base_url": "https://api.stripe.com",
-      "api_version": null,
+      "api_version": "v1",
       "hosts": [
         "api.stripe.com"
       ],
@@ -28458,8 +28458,8 @@
           "hosts": [
             "api.stripe.com"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v1",
+          "gid": "com.stripe.api:v1",
           "operation_count": 8
         }
       ],
@@ -29304,7 +29304,7 @@
         {
           "name": "payment_intent.succeeded",
           "service": "default",
-          "oip": null,
+          "oip": "com.stripe.api:v1#payment_intent.succeeded",
           "description": "A payment intent completed and the money was taken. The customer has been charged",
           "default": true,
           "group": "Payments",
@@ -29353,7 +29353,7 @@
         {
           "name": "payment_intent.payment_failed",
           "service": "default",
-          "oip": null,
+          "oip": "com.stripe.api:v1#payment_intent.payment_failed",
           "description": "A payment intent failed — the card was declined, the authentication was abandoned, or the bank refused it. No money was taken",
           "default": true,
           "group": "Payments",
@@ -29399,7 +29399,7 @@
         {
           "name": "charge.refunded",
           "service": "default",
-          "oip": null,
+          "oip": "com.stripe.api:v1#charge.refunded",
           "description": "A charge was refunded, in whole or in part. Fires for a refund made through this connector as well as one made by a human in the Stripe dashboard, so a flow that triggers on it must not assume it caused the refund",
           "default": true,
           "group": "Payments",
@@ -29445,7 +29445,7 @@
         {
           "name": "charge.dispute.created",
           "service": "default",
-          "oip": null,
+          "oip": "com.stripe.api:v1#charge.dispute.created",
           "description": "A customer disputed a charge with their bank. Money and a dispute fee are withheld immediately, and there is a deadline to submit evidence — this is a case for a human, not for an automated reply",
           "default": false,
           "group": "Disputes",
@@ -33758,7 +33758,7 @@
       "vendor": "Zoom",
       "description": "Zoom meeting scheduling: read, create and delete a meeting, and read a user",
       "base_url": "https://api.zoom.us",
-      "api_version": null,
+      "api_version": "v2",
       "hosts": [
         "api.zoom.us"
       ],
@@ -33770,8 +33770,8 @@
           "hosts": [
             "api.zoom.us"
           ],
-          "api_version": null,
-          "gid": null,
+          "api_version": "v2",
+          "gid": "us.zoom.api:v2",
           "operation_count": 4
         }
       ],

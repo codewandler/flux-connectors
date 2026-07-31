@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "asana"
+gid = "com.asana.api:1.0"
 vendor = "Asana"
 description = "Asana work management: read tasks and projects, create and update tasks, comment on a task"
 base_url = "https://app.asana.com"
+api_version = "1.0"
 module = "asana.flux"
 operations = ["asana-task-get", "asana-task-create", "asana-task-update", "asana-task-story-add", "asana-project-get"]

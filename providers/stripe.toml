@@ -130,6 +130,11 @@ vendor = "Stripe"
 # under this path.
 authority = "com.stripe.api"
 
+# The vendor's own spelling, taken from the operations below — every one of their paths begins
+# `/v1/`. Recorded here so a `gid` renders (`com.stripe.api:v1`); a credential path needs only the
+# authority and deliberately carries no version, so a token survives the vendor's next one.
+api_version = "v1"
+
 # One host for every account, both key modes and every API version. There is no tenant subdomain, so
 # `base_url` carries no `{placeholder}` for an operator to bind, `status.rs` reports no
 # `unbound-base-url-template` issue, and the connector already has a valid destination URL.

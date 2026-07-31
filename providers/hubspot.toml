@@ -131,6 +131,14 @@ vendor = "HubSpot"
 # under this path.
 authority = "com.hubspot.api"
 
+# The vendor's own spelling, taken from the operations below — every one of their paths begins
+# `/crm/v3/`. Recorded here so a `gid` renders (`com.hubspot.api:v3`); a credential path needs only
+# the authority and deliberately carries no version, so a token survives the vendor's next one.
+#
+# `crm` is HubSpot's product area rather than part of the version; the version segment is `v3` and
+# it is the same in all four paths.
+api_version = "v3"
+
 # One host for every portal. Unlike zendesk's `{subdomain}` and freshdesk's `{domain}`, `base_url`
 # carries no placeholder for an operator to bind, so `status.rs` reports no
 # `unbound-base-url-template` issue: the connector already has a valid destination URL, and its whole

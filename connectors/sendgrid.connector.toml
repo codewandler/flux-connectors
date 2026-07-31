@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "sendgrid"
+gid = "com.sendgrid.api:v3"
 vendor = "SendGrid"
 description = "SendGrid transactional email: read templates and bounce suppressions, validate an email address. Cannot send mail — see the header comment for why the send envelope is not expressible here"
 base_url = "https://api.sendgrid.com"
+api_version = "v3"
 module = "sendgrid.flux"
 operations = ["sendgrid-template-list", "sendgrid-template-get", "sendgrid-suppression-bounce-list", "sendgrid-email-validate"]

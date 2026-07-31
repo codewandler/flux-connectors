@@ -136,6 +136,11 @@ vendor = "PagerDuty"
 # under this path.
 authority = "com.pagerduty.api"
 
+# **No `api_version`: this vendor puts no version segment in the URL at all.** Every operation path
+# below is unversioned (`/incidents`, `/oncalls`), so there is nothing the file itself spells and
+# nothing to record without asserting a vendor fact from outside it. A `pid` and a credential path
+# render without one; only a `gid` needs both halves.
+
 # One host for every account. PagerDuty has no per-tenant API subdomain the way zendesk and freshdesk
 # do (its `*.pagerduty.com` subdomains are the web UI, not the API), so `base_url` is a bound literal
 # with no `{placeholder}` and there is no `[[config]] binds = "endpoint.*"` field.

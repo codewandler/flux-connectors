@@ -41,8 +41,8 @@ vendor = "Twilio"
 # `io.fly.api`).
 #
 # Twilio owns SendGrid, which ships in this catalogue separately and under its own
-# `com.sendgrid.api` rather than beneath this one — see `providers/sendgrid.toml` for why that call
-# went the other way from Atlassian's.
+# `com.sendgrid.api` rather than beneath this one, because SendGrid still publishes its own API
+# domain — see `providers/sendgrid.toml`, and `providers/jira.toml` for the rule both follow.
 #
 # **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
 # different spelling mints a new address and deprecates this one, because tenants provision secrets

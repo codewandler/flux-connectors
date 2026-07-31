@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "zoom"
+gid = "us.zoom.api:v2"
 vendor = "Zoom"
 description = "Zoom meeting scheduling: read, create and delete a meeting, and read a user"
 base_url = "https://api.zoom.us"
+api_version = "v2"
 module = "zoom.flux"
 operations = ["zoom-meeting-get", "zoom-meeting-create", "zoom-meeting-delete", "zoom-user-get"]

@@ -101,6 +101,12 @@
 id = "datadog"
 vendor = "Datadog"
 authority = "com.datadoghq.api"
+
+# **No `api_version`, and this is measured rather than skipped.** Datadog serves the monitor
+# operations from `/api/v1/` and the incident operations from `/api/v2/`, both live and both
+# addressed below. A connector-level version has to be true of every operation, so there is none to
+# declare here; per-service versions are the mechanism for this shape (C-49), and adopting them for
+# this provider is a separate decision from C-92's.
 base_url = "https://api.datadoghq.com"
 description = "Datadog monitoring: list and inspect monitors, list and inspect incidents. Authenticates every request with an API key and an Application key together"
 verify = "datadog-monitor-list"

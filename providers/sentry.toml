@@ -154,6 +154,13 @@ vendor = "Sentry"
 # under this path.
 authority = "io.sentry.api"
 
+# The vendor's own spelling, taken from the operations below — every one of their paths begins
+# `/api/0/`. Recorded here so a `gid` renders (`io.sentry.api:0`); a credential path needs only the
+# authority and deliberately carries no version, so a token survives the vendor's next one.
+#
+# `0` is genuinely Sentry's version segment, not a missing value.
+api_version = "0"
+
 # One host for Sentry's SaaS, for every organization and every region-routed account: `sentry.io`
 # accepts a request for any organization and routes it. Unlike zendesk's `{subdomain}` and
 # freshdesk's `{domain}` there is no tenant templating, so `base_url` is a bound literal, `status.rs`

@@ -172,6 +172,11 @@ vendor = "Zoom"
 # under this path.
 authority = "us.zoom.api"
 
+# The vendor's own spelling, taken from the operations below — every one of their paths begins
+# `/v2/`. Recorded here so a `gid` renders (`us.zoom.api:v2`); a credential path needs only the
+# authority and deliberately carries no version, so a token survives the vendor's next one.
+api_version = "v2"
+
 # One host for every Zoom account. Unlike zendesk's `{subdomain}` and freshdesk's `{domain}` there is
 # no tenant templating, so `base_url` is a bound literal, `status.rs` reports no
 # `unbound-base-url-template` issue, and the connector already has a valid destination URL.

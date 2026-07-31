@@ -64,6 +64,12 @@
 id = "vercel"
 vendor = "Vercel"
 authority = "com.vercel.api"
+
+# **No `api_version`, and this is measured rather than skipped.** Vercel versions per endpoint, and
+# this connector spans five: `/v7/`, `/v9/`, `/v10/`, `/v12/` and `/v13/`. A connector-level version
+# has to be true of every operation, so there is none to declare here; per-service versions are the
+# mechanism for this shape (C-49), and adopting them for this provider is a separate decision from
+# C-92's.
 base_url = "https://api.vercel.com"
 description = "Vercel: list and inspect projects and deployments, and cancel an in-progress deployment"
 default_auth = [{ credentials = ["vercel.token"] }]

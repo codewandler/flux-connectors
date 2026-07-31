@@ -189,6 +189,14 @@ vendor = "Airtable"
 # under this path.
 authority = "com.airtable.api"
 
+# The vendor's own spelling, taken from the operations below — every one of their paths begins
+# `/v0/`. Recorded here so a `gid` renders (`com.airtable.api:v0`); a credential path needs only the
+# authority and deliberately carries no version, so a token survives the vendor's next one.
+#
+# `v0` is the vendor's own spelling and has been stable for years — it is not a placeholder for a
+# version nobody looked up.
+api_version = "v0"
+
 # One tenant-independent host for every base and every plan. Unlike zendesk's `{subdomain}` and
 # freshdesk's `{domain}` there is no tenant templating — a base is addressed by an id *in the path*,
 # not by a host — so `base_url` is a bound literal, `status.rs` reports no `unbound-base-url-template`

@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "airtable"
+gid = "com.airtable.api:v0"
 vendor = "Airtable"
 description = "Airtable records: read, create, update and delete a record in a base's table"
 base_url = "https://api.airtable.com"
+api_version = "v0"
 module = "airtable.flux"
 operations = ["airtable-record-get", "airtable-record-create", "airtable-record-update", "airtable-record-delete"]

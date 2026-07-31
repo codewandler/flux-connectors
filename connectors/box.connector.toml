@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "box"
+gid = "com.box.api:2.0"
 vendor = "Box"
 description = "Box: browse folder contents, read file and folder metadata, create folders, and copy files"
 base_url = "https://api.box.com"
+api_version = "2.0"
 module = "box.flux"
 operations = ["box-user-me", "box-folder-get", "box-folder-items-list", "box-file-get", "box-folder-create", "box-file-copy"]
