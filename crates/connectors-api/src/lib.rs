@@ -54,8 +54,18 @@ use axum::Router;
 ///
 /// Split out from the binary so an integration test can drive it without binding a port, and so the
 /// route table is one readable list rather than something assembled across three files.
+///
+/// # The one route that is not always here
+///
+/// `POST /auth/dev` (C-234) is added **only** when the process was started with `--dev`. It is
+/// absent otherwise, which is stronger than present-and-refusing: a `403` is a decision a handler
+/// takes at request time and a later edit could invert, while a path the router never received
+/// cannot be reached by a misconfiguration, a proxy rewrite or a stray environment variable. The
+/// flag is consulted here, where the table is built, and in `/auth/status` so the page knows
+/// whether to draw a button — nowhere else, because a handler that behaved differently under
+/// `--dev` would be a second implementation of itself.
 pub fn router(app: App) -> Router {
-    Router::new()
+    let router = Router::new()
         // The UI.
         .route("/", get(ui::index))
         // Sign-in. These five are the only routes reachable without a session, and each is
@@ -90,6 +100,18 @@ pub fn router(app: App) -> Router {
             put(api::put_config),
         )
         // What it is all for.
-        .route("/v1/operations/{operation}/execute", post(api::execute))
-        .with_state(app)
+        .route("/v1/operations/{operation}/execute", post(api::execute));
+
+    // **The dev door, built into the table or not built at all.**
+    //
+    // `App::dev_signin()` is true only when `main.rs` was handed `--dev` — there is no environment
+    // variable and no default that reaches it. See [`auth::routes::dev_signin`] for what it mints
+    // and why that is the same thing a Google sign-in mints.
+    let router = if app.dev_signin() {
+        router.route("/auth/dev", post(auth::routes::dev_signin))
+    } else {
+        router
+    };
+
+    router.with_state(app)
 }

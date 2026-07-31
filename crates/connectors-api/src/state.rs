@@ -42,6 +42,12 @@ pub struct App {
     oidc: Option<Arc<Oidc>>,
     /// What to tell an operator when they have not.
     setup_message: Option<Arc<String>>,
+    /// **Whether the dev sign-in door exists on this process** (C-234).
+    ///
+    /// Read in exactly one place — [`crate::router`], where the route table is built — so that
+    /// "off" means the route was never added rather than a handler that decided to refuse. See
+    /// [`App::with_dev_signin`].
+    dev_signin: bool,
     /// Live sessions, and the sign-ins on their way to becoming one.
     sessions: Arc<Sessions>,
     /// Every account this host has seen, keyed by OIDC subject.
@@ -131,6 +137,9 @@ impl App {
         Ok(Self {
             oidc,
             setup_message,
+            // Off. There is deliberately no environment variable and no default that could turn
+            // this on — see [`App::with_dev_signin`].
+            dev_signin: false,
             sessions: Arc::new(Sessions::new()),
             accounts: Arc::new(Accounts::new()),
             egress: Egress::new(Arc::new(http)),
@@ -138,6 +147,47 @@ impl App {
             settings: Arc::new(Settings::new()),
             system: Arc::new(System::new(workspace)),
         })
+    }
+
+    /// **Open the dev sign-in door on this host** (C-234).
+    ///
+    /// # Why a consuming builder, and why no other way in
+    ///
+    /// This is the *only* way `dev_signin` becomes true. It is not read from the environment, and
+    /// that is the point rather than an oversight: an environment variable is something a
+    /// deployment inherits, a shell profile keeps, and a container image bakes in, whereas a
+    /// command-line flag is something a person types into the process they are starting. `main.rs`
+    /// calls this when — and only when — it was handed `--dev`.
+    ///
+    /// # What it does not do
+    ///
+    /// It does not change how a session is minted, what a session cookie carries, how a tenant is
+    /// resolved, or anything about C-204's login-CSRF binding. It adds one route to the table (see
+    /// [`crate::router`]) whose handler walks the same
+    /// `Accounts::of_subject` → `Sessions::create` → `session_cookie` path the Google callback
+    /// walks. A dev mode that special-cased the session type would make every other route behave
+    /// differently under test than in production, which is the failure mode that makes a dev mode
+    /// cost more than it is worth.
+    ///
+    /// # What makes it safe enough to exist
+    ///
+    /// The host is loopback-only by construction and stays that way — `main.rs` records that the
+    /// first PR adding a `--bind` flag is the one to refuse, and it now refuses unknown arguments
+    /// outright so that `--bind` is a startup error rather than a silently ignored word. Without
+    /// that property this door would not be defensible at any price.
+    #[must_use]
+    pub fn with_dev_signin(mut self) -> Self {
+        self.dev_signin = true;
+        self
+    }
+
+    /// Whether the dev sign-in door exists on this host.
+    ///
+    /// Consulted by [`crate::router`] when the route table is built, and by `/auth/status` so the
+    /// page knows whether to draw a button. Nothing else may branch on it: a handler that behaved
+    /// differently under `--dev` would be the second implementation of itself.
+    pub fn dev_signin(&self) -> bool {
+        self.dev_signin
     }
 
     /// Sign-in, if it is configured.

@@ -159,6 +159,87 @@ Until then the constant stays a constant. **A PR that adds a `--bind` flag while
 returns a constant is the rejected proxy**, exactly and without qualification, and is the one to
 refuse — the original prohibition's real target, restated so it survives the amendment.
 
+## The dev sign-in (C-234)
+
+C-204 made every `/v1` route require a session and made the tenant come from that session. The
+consequence, which nobody costed at the time, is that **the only door into the app was a real Google
+registration**: without a client id a developer could start the host, load the page, and reach not
+one route. [C-234](../stories/C-234-a-dev-sign-in-that-needs-no-google-registration.md) adds a
+second door, `POST /auth/dev`, behind a `--dev` flag on the binary.
+
+It rests entirely on §"The bind" above. **The dev door is defensible only while the listen address is
+loopback and unconfigurable**, so C-234 hardened that rather than leaning on it silently:
+`main.rs::options()` now *refuses* unknown arguments instead of ignoring them, which turns
+`--bind 0.0.0.0` from a word the binary shrugs at into a startup error naming the reason. Gate item 4
+above applies to any future widening with redoubled force: **widening the bind while `--dev` exists
+must revisit this section, not just that one.**
+
+### Two judgement calls the story asked to be recorded
+
+**1. `--dev` is *not* refused when a Google registration is also configured.** Both doors may stand
+open on one process.
+
+The argument for refusing is that one door is simpler to reason about. It does not survive contact
+with what the two doors actually produce. `Account::from_claims` is the only constructor reachable
+from an `id_token` and it prepends the literal `google-` to every tenant it makes;
+`Account::developer` produces the literal `dev-local` and takes no arguments, so no request can steer
+it. `Account`'s fields are private and those are its only two constructors, which makes the
+namespaces disjoint *structurally* — not because Google's `sub` happens to be numeric, and not by a
+collision probability. A credential pasted into a dev session is unreachable from a real one and vice
+versa, and `tests/dev_signin.rs::a_dev_session_and_a_google_session_share_no_credential` drives both
+doors on one process and asserts exactly that.
+
+Against that, refusing costs real usability: it makes trying the real sign-in and the dev sign-in on
+one machine a matter of unsetting environment variables, and an operator with a stale
+`CONNECTORS_GOOGLE_CLIENT_ID` in a shell profile would get a startup failure instead of an app —
+which is the first-run stack trace C-204 refuses by name, arriving through a different door. So both
+are allowed, and the disjointness is what pays for it.
+
+**2. A runtime flag rather than a cargo feature.** A `#[cfg(feature = "dev")]` would be strictly
+stronger on one axis: the handler, the route and `Account::developer` would be physically absent
+from a release build, so no runtime state could reach them. That is a real advantage and it is
+declined for two reasons.
+
+The first is the story's own point: `cargo run -p connectors-api -- --dev` has to work out of the
+box, and a feature makes it `cargo run -p connectors-api --features dev -- --dev` — a longer
+incantation for the exact person who cannot get in at all. The second is that the advantage is
+mostly theoretical *here*: this crate is `publish = false` and ships no release binary, so "absent
+from the release artefact" has no artefact to be absent from. The property the feature would buy is
+already bought more cheaply by the route not existing in the table unless the flag was typed.
+
+**This is worth revisiting the day this crate acquires a shipped artefact.** If a binary is ever
+released or containerised, the flag should become a feature, because at that point an inherited
+argv or an entrypoint wrapper becomes a plausible way to switch it on and "physically absent" starts
+paying for itself. Recorded here so that change is a decision rather than a discovery.
+
+### What it does not do
+
+- **It does not touch C-204's login-CSRF binding.** The `connectors_login` cookie, its constant-time
+  comparison against `state` and the single-use pending entry are unchanged. A security re-review
+  reproduced the original cross-account credential-capture attack end to end and confirmed it dead on
+  the fix; dev mode adds a door beside that one.
+- **It does not add a second kind of session.** `POST /auth/dev` calls `Accounts::of_subject`,
+  `Sessions::create` and `session_cookie` — the same three calls in the same order as the tail of
+  `/auth/callback`. There is no flag on the session record and no branch downstream, so `Principal`,
+  the tenant resolution, the TTL, the opacity and the server-side revocation are the same code under
+  `--dev` as in production. A dev mode that special-cased any of those would make every other route
+  behave differently under test than it does in production, which is what makes most dev modes cost
+  more than they are worth.
+- **It does not become a hole in the one invariant.**
+  `tests/dev_signin.rs::a_credential_stored_in_dev_mode_reaches_no_surface` re-proves
+  `tests/host.rs`'s sweep — no credential value on any served surface, including on error — through
+  the dev door, over the new route as well as the old ones.
+
+### The residual risk
+
+The dev route mints a session from a request carrying no cookie, so `SameSite=Lax` — which is what
+stops a third-party page driving the credential-writing routes — does nothing for it, and a
+cross-site form `POST` would otherwise put a browser into the dev tenant silently. That is C-204's
+shape with a much smaller blast radius, and it is closed with a `Sec-Fetch-Site: cross-site` refusal.
+**That check is defence in depth, not the control.** The controls are that the route is absent
+without `--dev` and that the host is loopback-only; a header absent (a command-line client) is
+allowed, which is what keeps `curl` usable and is therefore also the check's limit.
+
 ## What is still out of scope
 
 - **A second request path.** Unchanged, and the reason `connectors-app` superseded
