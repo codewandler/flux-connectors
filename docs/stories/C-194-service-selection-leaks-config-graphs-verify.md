@@ -49,31 +49,80 @@ the leak states the rule it does not follow: *"The three kinds partition the sam
 reason — each member names exactly one service — so one filter per kind is the whole rule."* C-83
 wrote that when there were three kinds; `config` and `graphs` arrived later and were not added.
 
-## It is not hypothetical — four shipped providers do it today
+## It is not hypothetical — four shipped providers leak, 17 times
 
-The first draft of this story assumed no shipped provider was the wrong shape. That was wrong, and
-checking it is what turned a latent bug into a measured one. Six providers declare `[[services]]`;
-five have more than one; and **every one of those five leaks**:
-
-| provider | services | leaks | what crosses the boundary |
-|---|---|---|---|
-| `anthropic` | `models`, `admin` | config + verify | `admin_key` reaches `--service models`; `verify = "anthropic-models-list"` reaches `--service admin` |
-| `contentful` | `delivery`, `management` | config + verify | `delivery_token` and `management_token` each reach the other; `verify` is a `delivery` operation |
-| `postmark` | 2 | config | per-service config crosses |
-| `microsoft_graph` | 3 | verify | `verify = "microsoft_graph-calendar-calendar-get"` reaches `mail` and the third service |
-| `google` | 3 | — | declares neither, so nothing to leak |
-
-Two of those values are **secrets** — `admin_key` and `contentful`'s per-service tokens — which is
-what moves this from untidy to worth doing before C-87 rather than after. Measured by reverting the
-fix and running the new shipped-provider test:
+The first draft of this story assumed no shipped provider was the wrong shape. **That assumption was
+wrong**, and checking it is what turned a latent bug into a measured one. Of 43 providers, six declare
+`[[services]]` and five have more than one. Measured by reverting the fix and running the new
+shipped-provider test, which collects every violation rather than stopping at the first:
 
 ```
-`anthropic --service models` carries configuration field `admin_key`, which configures service `admin`
-`anthropic --service admin` keeps `verify = "anthropic-models-list"`, an operation it no longer declares
+anthropic --service models: configuration field `admin_key` configures service `admin` (declares secret = true)
+anthropic --service admin: configuration field `api_key` configures service `models` (declares secret = true)
+anthropic --service admin: `verify = "anthropic-models-list"` names an operation it no longer declares
+contentful --service delivery: configuration field `management_space_id` configures service `management`
+contentful --service delivery: configuration field `management_environment_id` configures service `management`
+contentful --service delivery: configuration field `management_token` configures service `management` (declares secret = true)
+contentful --service management: configuration field `delivery_space_id` configures service `delivery`
+contentful --service management: configuration field `delivery_environment_id` configures service `delivery`
+contentful --service management: configuration field `delivery_token` configures service `delivery` (declares secret = true)
+contentful --service management: `verify = "contentful-entries-list"` names an operation it no longer declares
+microsoft_graph --service mail: `verify = "microsoft_graph-calendar-calendar-get"` names an operation it no longer declares
+microsoft_graph --service calendar: configuration field `access_token` configures service `mail` (declares secret = true)
+microsoft_graph --service files: configuration field `access_token` configures service `mail` (declares secret = true)
+microsoft_graph --service files: `verify = "microsoft_graph-calendar-calendar-get"` names an operation it no longer declares
+postmark --service server: configuration field `account_token` configures service `account` (declares secret = true)
+postmark --service account: configuration field `server_token` configures service `server` (declares secret = true)
+postmark --service account: `verify = "postmark-deliverystats-get"` names an operation it no longer declares
 ```
 
-Nothing declares `[[graphs]]` anywhere in `providers/`, so that third surface has no shipped case and
-is asserted against a fixture.
+**12 config crossings and 5 `verify` crossings, across `anthropic`, `contentful`, `microsoft_graph`
+and `postmark`.** `google` is multi-service and declares neither, so it has nothing to leak, and
+`statuspage` and `okta` are single-service. Nothing in `providers/` declares `[[graphs]]` at all, so
+that third surface has no shipped case and is asserted against a fixture instead.
+
+## What "8 declare `secret = true`" does and does not mean
+
+Eight of the twelve config crossings involve a field with `secret = true`. **That is a leak of a
+declaration, not of a credential value, and the distinction is the whole severity question.**
+
+A `ConfigField` is *a question a settings page asks*: `name`, `label`, `help`, `format`, `example`,
+`docs_url` and `binds`. It has no value field, and it cannot acquire one — AGENTS.md's rule is that
+**no credential value enters provider TOML, generated Flux, a manifest, the public catalogue or the
+lockfile**, and `providers/*.toml` is compiler input written by hand. `secret = true` is a *claim
+about the value a host will later collect* — "mask this on input, keep it out of logs" — and the
+loader forces it to agree with `binds` precisely so it stays a claim rather than a second source of
+truth.
+
+So the worst thing the leak could have published, had it reached an artifact, is a **form field**:
+the string `admin_key`, the label "Admin API key", its help text and the credential name it binds to.
+Credential *names* are already public by design — `web/public/catalog.json` publishes
+`anthropic.admin_key` today under `/providers/1/auth/credentials/1/name`, and that is intended.
+
+That is a real defect worth fixing — a `models`-scoped install asking an operator for an admin key is
+wrong, and wrong in a way that erodes the operator/connection level split the configuration contract
+exists to enforce. **It is not a credential disclosure**, and this story should not be read as one.
+
+## Nothing is on disk today, and that is checkable rather than assumed
+
+**No committed artifact contains any of it.** The three surfaces reach no emitter:
+
+- The manifest serializes a fixed struct with no `config`, `graphs` or `verify` field
+  (`seam.rs::manifest`), and `grep -c '^verify\|^config\|^graphs' connectors/anthropic-*.connector.toml`
+  is `0`.
+- `web/public/catalog.json` has **no `verify` and no `graphs` key anywhere**, and its only `config`
+  key is a *vendor response schema property* at `/providers/13/operations/{2,4}/response_schema/properties/config`
+  — unrelated to this surface.
+- The decisive check: a distinctive config `help` string —
+  `"Create an Admin API key in the Anthropic Console…"` — appears nowhere in `connectors/`,
+  `web/public/` or `crates/catalog/`. It exists only in `providers/anthropic.toml`, which is input.
+- `connectors.lock` would carry all three in its hash domain (`ir.rs::HashDomain`), but it is never
+  written — that is C-189's whole subject.
+
+There is also a structural reason the leak could not have reached the whole-catalogue artifacts even
+if they did publish config: `catalog.json` and the provider index are written **only on a full run**,
+and a full run never calls `select_service` at all. The leak is reachable only through
+`--service`-scoped runs, which by design write per-service files only.
 
 ## The narrowed value is one the loader would refuse
 
@@ -99,15 +148,22 @@ has one service"* (`seam.rs:218-221`), and for three surfaces that sentence is f
 **It emits nothing today.** `config`, `graphs` and `verify` reach no artifact: the manifest carries
 operations, events and channels only (`seam.rs:354-426`), `catalog.rs`, `site.rs` and
 `connector-flux/src/op.rs` name the three fields only inside their own test fixtures, and
-`connectors.lock` — whose hash domain *does* include all three (`ir.rs:1290-1317`) — is still
-unwired (C-7). So `flux-connectors diff` is a fixed point before and after this fix, and that is the
-regression proof rather than a caveat.
+`connectors.lock` — whose hash domain *does* include all three (`ir.rs:1290-1317`) — is never written,
+which is [C-189](C-189-the-lockfile-is-never-written.md)'s subject. So `flux-connectors diff` is a
+fixed point before and after this fix, and that is the regression proof rather than a caveat.
 
 [C-87](C-87-configuration-codegen.md) is `ready` and its whole subject is publishing the
 configuration surface. The day it lands, `flux-connectors build --service <s>` writes another
 service's configuration fields — labels, help text, `binds` destinations, secrecy flags — into a
 shipped artifact, and the resulting diff will point at C-87, which will not have caused it. Fixing it
 here costs one filter each and two tests; fixing it after C-87 costs an investigation first.
+
+**Two other ready stories widen the blast radius the same way**, and both are in `main` now:
+[C-189](C-189-the-lockfile-is-never-written.md) would start writing `connectors.lock`, whose hash
+domain already includes all three surfaces — so a scoped run would record a hash computed over
+another service's config; and [C-190](C-190-publish-catalog-pack-secrets.md) publishes secrets
+metadata into the pack. Whichever of the three lands first is the one that turns this from latent into
+emitted, which is the argument for it not being any of their problem.
 
 ## Acceptance
 
@@ -137,18 +193,26 @@ here costs one filter each and two tests; fixing it after C-87 costs an investig
       a service resolves its own `base_url` through `base_url_of`. Widening the fix to them would be
       a different story with a reachability computation in it.
       → `seam.rs::selecting_a_service_keeps_the_connector_level_surfaces`
-- [x] **No artifact moves.** `cargo run -p connector-cli -- diff` reports a fixed point, and the
-      committed tree is unchanged. This fix alters no emitted output today, which is the whole
-      argument for landing it early. → `454 artifacts up to date (41 providers checked)`, and
-      `git status --short` names only `seam.rs` and this story.
+- [x] **No artifact moves *because of this diff*.** This fix alters no emitted output, which is the
+      whole argument for landing it early. → Pre-merge, on a clean base, `diff` reported
+      `454 artifacts up to date (41 providers checked)`. Post-merge it reports
+      `2 artifacts would change (43 providers checked)` — `crates/catalog/src/generated.rs` and
+      `web/public/catalog.json`, **both fenced and both stale at the merge base**: reverting this
+      fix leaves the same two files stale, and `select_service` is unreachable from a full build
+      (`pipeline.rs:205`), which is what `diff` checks. `git status --short` names only `seam.rs`,
+      `tests/service_units.rs` and this story.
 
 ## Notes
 
-- The bug is invisible to every shipped provider, which is why no existing test caught it: no
-  multi-service provider in `providers/` declares `[[config]]` or `[[graphs]]` today
-  (`google.toml` and `microsoft_graph.toml` are the three-service cases and neither does). The test
-  therefore needs a constructed fixture, loaded through the real `connector_spec::provider::load` so
-  that the *starting* value is a connector the loader accepts.
+- **The reason no existing test caught it is worth recording, because it is not "no provider is that
+  shape".** Four providers *are* that shape and leak 17 times. Nothing caught it because no test ever
+  looked at `select_service`'s output beyond `operations` — `selecting_a_service_drops_every_other_operation`
+  checks the operation ids and the emitted module, and the emitted module cannot show a config leak
+  because the emitters do not read config. **The surfaces that reach no artifact are exactly the
+  surfaces no artifact test can cover**, which is a gap that will recur for any future IR-only field.
+- The fixture is still constructed as well as measured against shipped providers, because
+  `[[graphs]]` has no shipped case at all and only a fixture can exercise it. It is loaded through the
+  real `connector_spec::provider::load`, so the *starting* value is a connector the loader accepts.
 - Do not fix this by teaching each backend to filter. The design note at `seam.rs:217-221` is
   explicit that narrowing the IR once is what keeps "the other service's members are absent" true for
   the module, the manifest, the catalog and the site document at once, "with no per-backend filter to
@@ -185,14 +249,19 @@ loadable in both directions.
   computing which credentials the surviving operations can reach. That is a different story, and
   `selecting_a_service_keeps_the_connector_level_surfaces` is the test that stops a later edit from
   taking it by accident.
-- **Why the fixture is constructed rather than a shipped provider.** `providers/google.toml` and
-  `providers/microsoft_graph.toml` are the three-service cases and neither declares `[[config]]` or
-  `[[graphs]]` — and **no shipped provider declares `[[graphs]]` at all**: the single occurrence of
-  the word anywhere in `providers/` is a comment at `stripe.toml:44` listing the keys a provider file
-  may carry. So there is no shipped shape in which this bug is visible, which is also the reason it
-  survived C-83, C-87's design and two service-narrowing test suites.
+- **Why there is a fixture *and* a shipped-provider test.** The shipped test is the one that matters
+  — it found the 17 — but it cannot cover `graphs`, because **no provider declares `[[graphs]]` at
+  all**: the single occurrence of the word anywhere in `providers/` is a comment at `stripe.toml:44`
+  listing the keys a provider file may carry. The fixture covers that third surface and pins both
+  narrowing directions of `verify` deterministically.
+- **Correcting this story's own first draft.** It asserted that no shipped provider was the wrong
+  shape and that the bug was therefore invisible. The first claim was false and I did not verify it
+  before writing it down; the shipped-provider test exists because checking it was the obvious next
+  step and it immediately produced 17 violations. The *conclusion* — nothing reaches an artifact —
+  survived the correction, but it now rests on four direct checks rather than on the assumption.
 
-**Base proof.** At `f282e0a` (`git merge-base main HEAD`), with the test present and the fix absent:
+**Base proof.** At `21ddf05` (`git merge-base main HEAD`, after merging main), with both tests present
+and the fix absent:
 
 ```
 $ cargo test -p connector-cli --lib seam::tests::selecting_a_service
@@ -200,14 +269,44 @@ test seam::tests::selecting_a_service_carries_no_other_services_config_graphs_or
 assertion `left == right` failed: `--service s3` carries another service's configuration fields
   left: ["bucket", "region"]
  right: ["bucket"]
+
+$ cargo test -p connector-cli --test service_units narrowing_a_shipped_provider
+test narrowing_a_shipped_provider_carries_no_other_services_config_graphs_or_verify ... FAILED
+a service-scoped narrowing carried 17 surface(s) belonging to another service:
+  [the 17 enumerated above]
 ```
 
-It fails on `config` first, as the acceptance requires. `selecting_a_service_keeps_the_connector_level_surfaces`
-passes at the base — correctly, since it asserts what the tail already did right.
+The unit test fails on `config` first, as the acceptance requires.
+`selecting_a_service_keeps_the_connector_level_surfaces` passes at the base — correctly, since it
+asserts what the tail already did right, and a failing-first test that also fails for the untouched
+half would not be isolating anything.
 
-**No artifact moved**, which was the falsifiable half of the "harmless today" claim rather than an
-assumption: `cargo run -p connector-cli -- diff` reports `454 artifacts up to date (41 providers
-checked)` and `git status --short` lists only `crates/connector-cli/src/seam.rs` and this story.
+**No artifact moved.** This was the falsifiable half of the "harmless today" claim, not an assumption:
+`cargo run -p connector-cli -- diff` reports a fixed point over the full merged catalogue, and
+`git status --short` names only `crates/connector-cli/src/seam.rs`,
+`crates/connector-cli/tests/service_units.rs` and this story. Combined with the four direct checks
+above — no `verify`/`graphs` key in `catalog.json`, no such keys in any manifest, no config `help`
+string anywhere outside `providers/`, and no lockfile — the "IR-only" claim is measured rather than
+argued.
+
+**The gate is red at the merge base, in the two coordinator-owned files, and I did not touch them.**
+After `git merge --no-ff main` (merge base `21ddf05`), `cargo test --workspace --no-fail-fast` leaves
+exactly the eight whole-catalogue staleness tests red that `AGENTS.md` tabulates —
+`the_provider_list_matches_the_repository`, `the_catalog_is_not_empty`,
+`the_committed_tree_is_a_fixed_point_of_a_build`, `a_build_plans_both_readme_images_and_they_are_current`,
+`the_shipped_artifacts_are_byte_identical`, `the_published_catalogue_carries_the_service`,
+`every_shipped_operation_carries_its_metadata_and_its_flux`, `the_build_writes_and_checks_site_catalog_json`.
+
+`diff` names the cause: **2 artifacts would change (43 providers checked)** —
+`crates/catalog/src/generated.rs` and `web/public/catalog.json`, both fenced. Traced to the base
+rather than reasoned about: with this story's fix reverted in place, `diff` reports **the same two
+files**, so the staleness is inherited. The structural reason it cannot be this diff is independent
+and stronger — `select_service` is called only under `if let Some(selector) = service`
+(`pipeline.rs:205`), so a full build never invokes it at all, and every artifact `diff` checks comes
+from a full build.
+
+Left for the coordinator to regenerate at integration, per the whole-catalogue rule. **Do not read
+these eight as this story's regression.**
 
 Two things a resuming agent — most likely C-87's — should know:
 
