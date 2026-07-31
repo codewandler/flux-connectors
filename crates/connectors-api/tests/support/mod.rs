@@ -136,6 +136,32 @@ impl Idp {
         Arc::new(RsaKeyPair::generate(aws_lc_rs::rsa::KeySize::Rsa2048).expect("an RSA-2048 key"))
     }
 
+    /// **A genuine key-confusion forgery.**
+    ///
+    /// The real attack is not "RSA bytes under an `HS256` header" — that is merely a broken
+    /// signature, and a verifier could refuse it for the wrong reason while still being
+    /// exploitable. The attack is: take the RSA **public** key, which the provider publishes to the
+    /// world, and use its modulus as an **HMAC secret**. A verifier that reads `alg` out of the
+    /// token then computes `HMAC-SHA256(public_modulus, signing_input)` — a value the attacker can
+    /// compute just as easily — and the signature verifies. That is a complete authentication
+    /// bypass requiring no secret at all.
+    ///
+    /// This produces exactly that token, so the test asserting it is refused asserts the defence
+    /// rather than an accident.
+    pub fn forge_by_key_confusion(&self, claims: &Value) -> String {
+        let components: aws_lc_rs::rsa::PublicKeyComponents<Vec<u8>> = self.key.public_key().into();
+        let header = json!({ "alg": "HS256", "typ": "JWT", "kid": KID });
+        let signing_input = format!(
+            "{}.{}",
+            URL_SAFE_NO_PAD.encode(header.to_string()),
+            URL_SAFE_NO_PAD.encode(claims.to_string())
+        );
+        // The published modulus, used as the shared secret — which is the whole trick.
+        let key = aws_lc_rs::hmac::Key::new(aws_lc_rs::hmac::HMAC_SHA256, &components.n);
+        let tag = aws_lc_rs::hmac::sign(&key, signing_input.as_bytes());
+        format!("{signing_input}.{}", URL_SAFE_NO_PAD.encode(tag.as_ref()))
+    }
+
     /// Sign with a key whose public half is absent from this provider's JWKS.
     pub fn sign_with_foreign_key(key: &RsaKeyPair, claims: &Value) -> String {
         sign(
@@ -291,9 +317,47 @@ pub fn client() -> reqwest::Client {
 /// invented. There is deliberately no shortcut: a Rust back door that manufactured a session would
 /// be the very thing whose absence these tests assert.
 pub async fn sign_in(base: &str, subject: &str) -> String {
-    let client = client();
+    let browser = client();
+    let begun = begin_sign_in(base, &browser).await;
 
-    let start = client
+    let callback = browser
+        .get(format!("{base}/auth/callback"))
+        // A browser sends back the cookie `/auth/signin` set. Carried explicitly rather than
+        // through a `cookie_store`, because *which* cookie travels on *which* request is the
+        // property under test: `tests/tenancy.rs` completes this same call without it and must be
+        // refused.
+        .header("cookie", &begun.login_cookie)
+        .query(&[
+            ("code", format!("{subject}|{}", begun.nonce)),
+            ("state", begun.state),
+        ])
+        .send()
+        .await
+        .expect("the callback completes");
+    assert_eq!(
+        callback.status(),
+        303,
+        "a good callback must establish a session and send the browser on"
+    );
+
+    session_cookie(&callback).expect("the callback set a session cookie")
+}
+
+/// What one browser holds after `GET /auth/signin`.
+pub struct BegunSignIn {
+    pub state: String,
+    pub nonce: String,
+    pub challenge: String,
+    /// The `name=value` of the short-lived cookie that binds this flow to this browser.
+    pub login_cookie: String,
+}
+
+/// Start a sign-in in `browser` and read back everything it now holds.
+///
+/// Split out from [`sign_in`] so a test can begin a flow in one browser and try to finish it in
+/// another — which is the login-CSRF attack, and the thing that must not work.
+pub async fn begin_sign_in(base: &str, browser: &reqwest::Client) -> BegunSignIn {
+    let start = browser
         .get(format!("{base}/auth/signin"))
         .send()
         .await
@@ -310,28 +374,54 @@ pub async fn sign_in(base: &str, subject: &str) -> String {
         .expect("a Location header")
         .to_owned();
 
-    let state = query_param(&authorize, "state").expect("the authorize URL carries a state");
-    let nonce = query_param(&authorize, "nonce").expect("the authorize URL carries a nonce");
-
-    let callback = client
-        .get(format!("{base}/auth/callback"))
-        .query(&[("code", format!("{subject}|{nonce}")), ("state", state)])
-        .send()
-        .await
-        .expect("the callback completes");
-    assert_eq!(
-        callback.status(),
-        303,
-        "a good callback must establish a session and send the browser on"
-    );
-
-    session_cookie(&callback).expect("the callback set a session cookie")
+    BegunSignIn {
+        state: query_param(&authorize, "state").expect("the authorize URL carries a state"),
+        nonce: query_param(&authorize, "nonce").expect("the authorize URL carries a nonce"),
+        challenge: query_param(&authorize, "code_challenge").expect("a challenge"),
+        login_cookie: cookie_named(&start, connectors_api::auth::LOGIN_COOKIE).unwrap_or_else(
+            || {
+                panic!(
+                    "GET /auth/signin set no `{}` cookie, so nothing binds this flow to this \
+                     browser — see tests/tenancy.rs's login-CSRF case",
+                    connectors_api::auth::LOGIN_COOKIE
+                )
+            },
+        ),
+    }
 }
 
-/// The `name=value` of the `Set-Cookie` this response carries.
+/// The `name=value` of the session cookie this response sets, if it sets one.
 pub fn session_cookie(response: &reqwest::Response) -> Option<String> {
-    let header = response.headers().get("set-cookie")?.to_str().ok()?;
-    Some(header.split(';').next()?.trim().to_owned())
+    cookie_named(response, connectors_api::auth::SESSION_COOKIE)
+}
+
+/// The `name=value` of one named `Set-Cookie` on this response, ignoring cleared ones.
+///
+/// A response may carry several `Set-Cookie` headers — the successful callback sets the session and
+/// clears the login cookie in one go — so this looks at all of them rather than the first. A
+/// deletion (`Max-Age=0`) is not a cookie a browser would hold, so it is skipped.
+pub fn cookie_named(response: &reqwest::Response, name: &str) -> Option<String> {
+    response
+        .headers()
+        .get_all("set-cookie")
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .filter(|header| !header.to_lowercase().contains("max-age=0"))
+        .filter_map(|header| header.split(';').next())
+        .map(str::trim)
+        .find(|pair| pair.split_once('=').is_some_and(|(key, _)| key == name))
+        .map(str::to_owned)
+}
+
+/// Every `Set-Cookie` header on a response, whole, for asserting attributes.
+pub fn set_cookie_headers(response: &reqwest::Response) -> Vec<String> {
+    response
+        .headers()
+        .get_all("set-cookie")
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .map(str::to_owned)
+        .collect()
 }
 
 /// One query parameter of a URL, decoded.

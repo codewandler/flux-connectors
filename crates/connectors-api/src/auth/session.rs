@@ -37,7 +37,7 @@ pub const SESSION_TTL: Duration = Duration::from_secs(12 * 3600);
 ///
 /// Short on purpose. This entry holds the PKCE verifier and the nonce, and it is consumed on first
 /// use, so the window in which a leaked `state` is worth anything is this long and no longer.
-const LOGIN_TTL: Duration = Duration::from_secs(10 * 60);
+pub const LOGIN_TTL: Duration = Duration::from_secs(10 * 60);
 
 /// An upper bound on unfinished sign-ins held at once, so an unauthenticated caller hammering
 /// `/auth/signin` cannot grow this map without limit. Reached only by pruning first.
@@ -303,6 +303,7 @@ mod tests {
     fn claims(sub: &str) -> IdClaims {
         IdClaims {
             sub: sub.to_owned(),
+            iat: 0,
             nonce: None,
             email: Some(format!("{sub}@example.test")),
             email_verified: Some(true),
