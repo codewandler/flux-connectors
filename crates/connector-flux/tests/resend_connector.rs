@@ -25,10 +25,12 @@
 //!    with `re_`, which is exactly the shape a secret scanner matches, and a placeholder shaped like
 //!    a real token has blocked a release in this repository before.
 //! 5. **The one thing the floor did force: a `User-Agent`.** Resend rejects a request without one
-//!    with `403`, valid key and all, and nothing in this repository binds an HTTP implementation
-//!    that could be checked for supplying it. So it is declared as a constant header and asserted
-//!    onto every emitted request here — this is the single fact about this connector that its
-//!    endpoints do not carry, and therefore the one a spec ingest would not have found either.
+//!    with `403`, valid key and all. The host this repository ships supplies none — its transport is
+//!    `flux_web::http::HttpRequestTool`, whose `reqwest::Client` is built without
+//!    `ClientBuilder::user_agent` and which reqwest therefore sends bare. So it is declared as a
+//!    constant header and asserted onto every emitted request here — this is the single fact about
+//!    this connector that its endpoints do not carry, and therefore the one a spec ingest would not
+//!    have found either.
 
 use std::path::{Path, PathBuf};
 
@@ -181,9 +183,12 @@ fn the_whole_credential_surface_is_one_bearer_token() {
 /// The floor probe's one surprise. Resend's introduction states it plainly — *"All API requests must
 /// include a `User-Agent` header … Requests without this header will be rejected with a `403` status
 /// code"* — and adds that SDKs supply one but direct HTTP callers must set it themselves. This
-/// pipeline emits direct `http.request` calls, and nothing here binds an implementation whose
-/// defaults could be inspected (`AGENTS.md`, Intentional gaps: `flux-web` is not in `Cargo.lock`),
-/// so the header is declared rather than assumed.
+/// pipeline emits direct `http.request` calls, and the host that runs them supplies nothing:
+/// `connectors-api` builds its `Egress` from `flux_web::http::HttpRequestTool`
+/// (`crates/connectors-api/src/state.rs:108`), whose `reqwest::Client` is constructed without
+/// `ClientBuilder::user_agent` in either `codewandler-flux-web` builder, and reqwest adds no default
+/// of its own. The header is therefore declared because it was checked and found missing, not
+/// because it could not be checked.
 ///
 /// Asserted on the emitted Flux, not only on the declaration, because that is where the omission
 /// would actually bite: a connector that declared the header and dropped it during emission would
@@ -396,8 +401,8 @@ fn every_operation_declares_its_risk_its_idempotency_and_its_response_shape() {
             assert_eq!(
                 operation.idempotency,
                 Idempotency::NonIdempotent,
-                "{}: both writes here are `POST`, and Resend documents no idempotency key for \
-                 either",
+                "{}: the one write here is a `POST`, and the emitter refuses a `POST` that declares \
+                 itself idempotent regardless of the vendor's own key",
                 operation.id
             );
         } else {

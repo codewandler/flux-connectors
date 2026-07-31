@@ -25,12 +25,18 @@
 # API requests must include a `User-Agent` header."* … *"Requests without this header will be
 # rejected with a `403` status code."* … *"Most HTTP clients, all Resend SDKs, and the Resend CLI
 # include this header automatically, but if you're making direct HTTP requests, make sure to set
-# it"* — and this pipeline emits direct `http.request` calls. Nothing in this repository binds an
-# HTTP implementation (`AGENTS.md`, Intentional gaps: `flux-web` is not in `Cargo.lock` at all), so
-# whether the eventual host would supply one **cannot be checked here**, and a connector that
-# assumed it would is a connector that 403s on its first real call with a valid key. So it is
-# declared, in the one field that exists for a vendor-fixed request header — `const_headers`, whose
-# own doc comment names `User-Agent` as a case it was built for (C-55,
+# it"* — and this pipeline emits direct `http.request` calls.
+#
+# **Whether the host supplies one is checkable, and it was checked: it does not.** This repository
+# now ships a host — `crates/connectors-api` (C-200) — and the transport under its `Egress` is
+# flux's own `flux_web::http::HttpRequestTool` (`crates/connectors-api/src/state.rs:108`). That tool
+# holds a `reqwest::Client` built by `codewandler-flux-web`'s `redirect_disabled_client`
+# (`egress.rs:19-29`) and its pinned sibling (`egress.rs:153-158`); neither calls
+# `ClientBuilder::user_agent`, `WebOptions` has no field that would carry one, and reqwest sends no
+# default `User-Agent` of its own. So a Resend call made through the host this repository actually
+# ships would go out bare and come back `403`, with a perfectly valid key. Hence the declaration, in
+# the one field that exists for a vendor-fixed request header — `const_headers`, whose own doc
+# comment names `User-Agent` as a case it was built for (C-55,
 # `crates/connector-spec/src/provider.rs`).
 #
 # That is the finding the floor probe actually produced: **the simplest vendor in the fleet still
