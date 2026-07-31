@@ -1,0 +1,404 @@
+# Trello REST API — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Trello's reference is published as an Atlassian developer
+# portal page, not as a document vendored here (no C-4 ingest run has selected it), so this file is
+# written directly in the IR's shape — the same route babelforce, postmark, zendesk, freshdesk,
+# github, notion and datadog already take. **Drift against the vendor's own docs is therefore
+# undetectable by machine**, the caveat those files carry
+# (`docs/designs/provider-operation-inventory.md` §6.7). Every path, parameter and response field
+# below was read from developer.atlassian.com/cloud/trello on 2026-07-31 and is cited where it is
+# not obvious.
+#
+# ---------------------------------------------------------------------------------------------
+# C-165'S QUESTION: TRELLO PUTS ITS CREDENTIAL IN THE QUERY STRING — `?key=…&token=…`. THE
+# CATALOGUE HAD NEVER SHIPPED A QUERY PLACEMENT, AND C-159 §2 FOUND A REDACTION DEFECT IT CALLED
+# "UNREACHABLE TODAY" FOR EXACTLY THAT REASON. IS SHIPPING THIS CONNECTOR MAKING AN UNREACHABLE BUG
+# REACHABLE? MEASURED, AND THE ANSWER IS: YES, AND IT SHIPS ANYWAY — BUT NOT BEFORE NARROWING THE
+# EXPOSURE TO SOMETHING A REVIEWER CAN SEE WHOLE.
+# ---------------------------------------------------------------------------------------------
+#
+# **The placement itself needed nothing new.** `AuthScheme::Query`
+# (`crates/connector-spec/src/auth.rs:119-123`) has been in the IR since the three-axis model landed,
+# the catalogue emitter lowers it (`crates/connector-cli/src/catalog.rs:474-476`), the public
+# catalogue renders it (`crates/connector-cli/src/site.rs:785`, `:798`, `:817`) and
+# `connector-pack` places it (`crates/connector-pack/src/auth.rs:157-164`). C-159 measured the
+# *committed catalogue* as 18 header placements, 2 inbound and **zero** query — the axis was
+# modelled end to end and simply unused. Nothing in this repository had to change for this file.
+#
+# **What that unused axis was hiding, and what shipping this exposes.** `place` percent-encodes a
+# query-placed credential on its way onto the URL (`auth.rs:162`, `query_encode` at `:204-215`,
+# which escapes everything outside RFC 3986's unreserved set — `+`, `/` and `=` among them), while
+# the value registered with flux's redactor is the *unencoded* one. For a credential containing any
+# of those characters the string that travels is **not** the string that was registered, so a
+# redactor holding it would not scrub it off the surface it actually reaches. That is C-159 §2, and
+# with this file it stops being hypothetical: these are the first two credentials in the repository
+# that go anywhere near `query_encode`.
+#
+# **Why it still ships, stated as a judgement rather than as a discovery.** Three things weigh in:
+#
+# 1. **The defect is in the pack, not in this connector, and refusing here would not fix it.** The
+#    divergence is between two lines of `connector-pack`; a connector that declined to use a shipped
+#    placement would leave the same two lines in the same state, minus the evidence that anyone
+#    reaches them. C-164's refusal was a different case — there the *declaration* could not be made
+#    honestly at all. Here it can: `?key=…&token=…` is exactly what the vendor documents.
+# 2. **The blast radius is one connector and is asserted to stay that way.**
+#    `crates/connector-flux/tests/trello_connector.rs::trello_is_the_only_query_placement_in_the_shipped_catalogue`
+#    scans every `providers/*.toml` and fails the moment a second query-placed credential lands. So
+#    C-159's reviewer has a complete, machine-checked list of the exposure rather than a survey to
+#    repeat.
+# 3. **Nothing in this repository executes any of it.** No host is bound here (`AGENTS.md`,
+#    Intentional gaps): `connector-pack` hands declarations to a host that supplies its own egress,
+#    and no `http.request` implementation is even in `Cargo.lock`. The exposure is real for the first
+#    host that binds this connector, which is why it is written down here in full, at the file a
+#    reviewer of that host will read.
+#
+# **What C-159 has to close before a host binds this connector**, in its own terms: register the
+# *encoded* form alongside the raw one for a query placement, or move the encoding to the
+# registration side so one string is both. Item 1 of C-159 (`Request`'s derived `Debug` over `url`)
+# is the surface that makes it matter here specifically — for a header-placed credential a leaked
+# `Debug` prints a header value, and for this connector it prints the whole URL with both
+# credentials in it.
+#
+# **A note on the credential's own alphabet, deliberately not relied on.** Trello's key and token are
+# rendered as hex in every example the vendor publishes, and a hex string is entirely inside the
+# unreserved set, so `query_encode` would be the identity function on it and the divergence above
+# would never fire. That argument is *not* the reason this ships and is recorded only so a later
+# reader does not rediscover it and mistake it for a guarantee: the vendor documents no token format
+# (its authorization guide shows `{yourAPIToken}` and nothing else), Atlassian has changed token
+# shapes across its products before, and a redaction guarantee that holds only while a vendor keeps
+# an undocumented habit is not a guarantee.
+#
+# ---------------------------------------------------------------------------------------------
+# THE SECOND FINDING: TRELLO'S OWN DOCUMENTATION CALLS THE KEY PUBLIC, AND DECLARING IT HERE FORCES
+# `secret = true`. THAT IS ACCEPTED, IN THE SAFE DIRECTION, AND IT IS NOT THE ALGOLIA CASE.
+# ---------------------------------------------------------------------------------------------
+#
+# Trello's authorization guide says: *"It is ok for your API key to be publicly available, but a
+# token should never be publicly available."* The only route from a `[[config]]` field to a request
+# query parameter is an `[[auth]]`-declared credential, and `Binding::Credential::is_secret()` is
+# unconditionally `true` (`crates/connector-spec/src/config.rs:223-231`), enforced at the loader. So
+# the key below is classified as **more** protected than the vendor requires.
+#
+# That is the safe direction — a value gated and redacted that need not have been — and it costs this
+# connector nothing, because nothing here ever needs to read the key back: it has exactly one
+# destination, `?key=`. C-164 (Algolia) hit the same wall and refused, and the difference is the
+# whole point: Algolia's application id also had to reach a **hostname**, which needs a non-secret
+# `endpoint.` binding, so over-classifying would have made the connector unbuildable rather than
+# merely over-careful. Filed against C-187, which already tracks the config surface's reach into a
+# request component, as the third instance of one gap.
+#
+# **The related level question, recorded because it is a real constraint on how this connector is
+# installed.** Trello's key belongs to a Power-Up registration and its token belongs to the user who
+# authorized that registration; a token is only valid against the key it was minted for. Both are
+# declared here at *connection* level (`Binding::Credential` derives it —
+# `crates/connector-spec/src/config.rs:206-213`), which describes the installation Trello's own admin
+# page produces: one person visits trello.com/power-ups/admin, generates a key, clicks through to
+# mint a token, and pastes both. The other installation — one product-wide key, a token per tenant —
+# would need the key at *operator* level, and no binding reaches both operator level and a query
+# parameter. That is the same gap as above, met at the level axis instead of the secrecy axis, and
+# the `help` text on both fields says "from the same page, in that order" so the pair cannot be
+# assembled from two different registrations.
+#
+# ---------------------------------------------------------------------------------------------
+# WHAT SHIPS: 6 operations — 4 reads, 2 writes. Boards: list mine, get one, list its lists. Cards:
+# list a list's cards, create one, archive one.
+# ---------------------------------------------------------------------------------------------
+#
+# **Not one operation declares a query parameter, and that is the curation decision this connector
+# turns on.** This emitter interpolates query values verbatim and percent-encodes nothing,
+# deliberately (`crates/connector-flux/src/op.rs:138-143`; `zendesk-ticket-search` is the standing
+# demonstration under `AGENTS.md`'s Intentional gaps, and sentry, fly, clickup and datadog each
+# excluded filters for it). On a connector whose *credential* lives in the query string that gap is
+# sharper than usual: a caller value carrying `&` would not merely corrupt a filter, it would be
+# interpolated ahead of the credential the host appends and could inject a parameter of its own.
+#
+# Trello makes the fix available in its own reference: for `POST /1/cards` and `PUT /1/cards/{id}`
+# it states that the documented query parameters *"may also be replaced with a JSON request body
+# instead"*. So the free text these writes carry — a card's name and description — travels in a JSON
+# body, and the query string of every request this connector emits is empty until the host appends
+# `key` and `token`. `trello_connector.rs::no_operation_puts_anything_in_the_query_string` asserts
+# both halves, on the declaration and on the emitted Flux.
+#
+# **The filters left out for the same reason**, and they are the ones a reader will look for:
+# `fields` (a comma-separated projection, on every read), `filter`, `cards`/`lists` (nested
+# expansions), and `before`/`since` on card lists. Every one is a real, documented, useful query
+# parameter, and every one would be interpolated raw next to a credential. They belong to whichever
+# story closes the query-encoding gap (`docs/designs/query-encoding-flux-stories.md`), not to this
+# one.
+#
+# **Endpoints deliberately not shipped, and named rather than silently absent:**
+#
+# - **`GET /1/members/{id}`** — the obvious `verify`, and `members/me` is the shape everyone uses.
+#   The members reference documents the path parameter as `id` and does not state that the literal
+#   `me` is accepted, so the argument-free read this connector verifies with is
+#   `GET /1/members/me/boards` instead — the exact request Trello's own API introduction gives as its
+#   worked `curl` example, `me` included. Same evidence, one fewer inference.
+# - **`GET /1/lists/{id}`** — documented, and it publishes no example response body, so it would
+#   ship without a response shape while adding nothing `trello-board-lists` does not already return.
+# - **`POST /1/lists`, `POST /1/lists/{id}/archiveAllCards`, `DELETE /1/cards/{id}`** — all
+#   documented, all deliberately out of a first curated set: creating structure and destroying cards
+#   are not what the story asks for, and `archiveAllCards` is a bulk write whose blast radius is a
+#   whole list.
+# - **Comments, checklists, labels, attachments, webhooks.** Trello's surface is large; a connector
+#   earns operations by need, and none of these is needed to express "read a board, read its cards,
+#   add a card, archive a card". `[[events]]`/`[[channels]]` are likewise absent: Trello does publish
+#   a webhook API, and declaring an inbound half would mean also declaring how it is registered and
+#   verified, which is its own story.
+#
+# ---------------------------------------------------------------------------------------------
+
+id = "trello"
+vendor = "Trello"
+
+# The reverse-DNS authority this connector publishes under (C-92). Trello is an Atlassian product,
+# and the rule keys on the **product**, not the parent: does this product still publish its own API
+# domain? Trello does — `api.trello.com` is the host every request below goes to — so it keeps its
+# own authority, exactly as `providers/slack.toml` is `com.slack.api` under Salesforce and
+# `providers/statuspage.toml` is `io.statuspage.api`. (`providers/jira.toml` is
+# `com.atlassian.jira` because Jira publishes no domain of its own; that is the other branch of the
+# same rule, not a precedent for putting Trello under Atlassian.)
+authority = "com.trello.api"
+
+base_url = "https://api.trello.com/1"
+
+# `1` is the vendor's own spelling — the version is the leading path segment, and Trello has never
+# published a second one. Rendered addresses read `com.trello.api:1#trello-board-get`.
+api_version = "1"
+
+description = "Trello boards and cards: list the boards a token can see, read a board and its lists, read a list's cards, create a card, and archive one. Authenticates every request with an API key and a token together, both in the query string"
+verify = "trello-board-list"
+
+# One alternative, naming both credentials together. Trello offers no other mechanism for a REST
+# call, and neither half authenticates anything alone — a token is minted against a specific key.
+default_auth = [{ credentials = ["trello.key", "trello.token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials — the repository's first query placement. See the header comment for the whole of what
+# that implies, including what C-159 §2 must close before a host binds this connector.
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "trello.key"
+scheme = { query = { name = "key" } }
+env = ["TRELLO_API_KEY"]
+description = "Trello API key, identifying the Power-Up registration a call is made through. Travels as the `key` query parameter on every request, always together with the token; neither authenticates a call alone"
+
+[[auth]]
+name = "trello.token"
+scheme = { query = { name = "token" } }
+env = ["TRELLO_API_TOKEN"]
+description = "Trello API token, granting access to one member's account. Travels as the `token` query parameter on every request, always together with the key; a token is only valid against the key it was minted for"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — Boards. All reads, all `low`: a board read exposes whatever the token's member can
+# already see in Trello's own UI.
+#
+# The response shapes below are Trello's documented Board example, field for field. `prefs`,
+# `labelNames` and `limits` are left as untyped objects rather than enumerated: this file states
+# what it can name with confidence, and an untyped object inside an otherwise-informative schema is
+# honest rather than permissive (`crates/connector-spec/tests/response_schema_coverage.rs` refuses a
+# *top-level* schema with no informative key, which is the placeholder it exists to catch).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "trello-board-list"
+method = "GET"
+path = "/members/me/boards"
+description = "List every board the token's own member can see, newest activity first. Takes no argument — `me` resolves to whoever the token belongs to. Also this connector's `verify`: a bounded read that runs unattended and needs nothing configured beyond the credential pair"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "array"
+items = { type = "object", required = [
+  "id",
+  "name",
+  "closed",
+  "url",
+], properties = { id = { type = "string", description = "The board's id — what trello-board-get and trello-board-lists address it by" }, name = { type = "string" }, desc = { type = "string", description = "The board's description, as Markdown" }, closed = { type = "boolean", description = "Whether the board is archived. An archived board still reads" }, idOrganization = { type = "string", description = "The Workspace this board belongs to, or null for a personal board" }, idMemberCreator = { type = "string", description = "The member who created the board" }, url = { type = "string", format = "uri", description = "The board's page — the link to give a human" }, shortUrl = { type = "string", format = "uri" }, shortLink = { type = "string", description = "The short id appearing in a board URL" }, dateLastActivity = { type = "string", description = "When anything on the board last changed" }, starred = { type = "boolean" }, subscribed = { type = "boolean", description = "Whether the token's member follows this board" }, prefs = { type = "object", description = "Board settings — visibility, voting, card covers, background and more. Left untyped rather than enumerated in full; see Trello's own Board object reference" }, labelNames = { type = "object", description = "The board's six label colours mapped to the names it gives them" } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "trello-board-get"
+method = "GET"
+path = "/boards/{id}"
+description = "Get one board by id, with its settings and current state"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The board's id, from trello-board-list's `id` — or the short id in a board's own URL, which Trello accepts here too"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "name", "closed", "url"]
+properties = { id = { type = "string", description = "The board's id" }, name = { type = "string" }, desc = { type = "string", description = "The board's description, as Markdown" }, closed = { type = "boolean", description = "Whether the board is archived" }, idOrganization = { type = "string", description = "The Workspace this board belongs to, or null for a personal board" }, idMemberCreator = { type = "string", description = "The member who created the board" }, url = { type = "string", format = "uri", description = "The board's page — the link to give a human" }, shortUrl = { type = "string", format = "uri" }, shortLink = { type = "string", description = "The short id appearing in a board URL" }, dateLastActivity = { type = "string", description = "When anything on the board last changed" }, starred = { type = "boolean" }, subscribed = { type = "boolean", description = "Whether the token's member follows this board" }, prefs = { type = "object", description = "Board settings — visibility, voting, card covers, background and more. Left untyped rather than enumerated in full; see Trello's own Board object reference" }, labelNames = { type = "object", description = "The board's six label colours mapped to the names it gives them" } }
+
+# ---------------------------------------------------------------------------------------------
+
+# **No `response_schema`, deliberately.** Trello's Lists reference documents this endpoint and its
+# parameters but publishes no example response body for a List object, and this file declares the
+# shape the vendor documents or declares nothing (`providers/datadog.toml` gives the same answer for
+# Incidents, `providers/babelforce.toml` for all nine of its operations). The one field a caller
+# needs — a list's `id`, to pass to trello-list-cards — is named in the description instead, where it
+# is a claim about a call rather than a schema nobody can rely on.
+[[operations]]
+id = "trello-board-lists"
+method = "GET"
+path = "/boards/{id}/lists"
+description = "List the open lists (columns) on a board, left to right. Each carries the `id` trello-list-cards and trello-card-create take"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The board's id, from trello-board-list's `id`"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# ---------------------------------------------------------------------------------------------
+# Operations — Cards. One read and two writes.
+#
+# The Card shape below is Trello's documented example response for `GET /1/lists/{id}/cards`, and it
+# is reused unchanged on both writes, which answer with the card they touched. `badges`, `labels` and
+# `limits` are left untyped for the reason the Board's `prefs` is.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "trello-list-cards"
+method = "GET"
+path = "/lists/{id}/cards"
+description = "List the open cards in one list, in board order. Archived cards are not returned"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The list's id, from trello-board-lists"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "array"
+items = { type = "object", required = [
+  "id",
+  "name",
+  "closed",
+  "idList",
+  "idBoard",
+  "url",
+], properties = { id = { type = "string", description = "The card's id — what trello-card-archive addresses it by" }, name = { type = "string", description = "The card's title, as it reads on the board" }, desc = { type = "string", description = "The card's description, as Markdown" }, closed = { type = "boolean", description = "Whether the card is archived" }, idList = { type = "string", description = "The list the card currently sits in" }, idBoard = { type = "string", description = "The board the card belongs to" }, idShort = { type = "integer", description = "The card's per-board number, as shown in its UI" }, shortLink = { type = "string" }, shortUrl = { type = "string", format = "uri" }, url = { type = "string", format = "uri", description = "The card's page — the link to give a human" }, pos = { type = "number", description = "The card's sort position within its list" }, due = { type = "string", description = "The due date, or null" }, dueComplete = { type = "boolean", description = "Whether the due date has been ticked off" }, dateLastActivity = { type = "string" }, idMembers = { type = "array", items = { type = "string" }, description = "The members assigned to the card, as ids. Identifies named people — read it for what the calling flow needs and do not persist it beyond that" }, idLabels = { type = "array", items = { type = "string" } }, labels = { type = "array", items = { type = "object" }, description = "The card's labels, expanded. Left untyped rather than enumerated" }, subscribed = { type = "boolean" }, badges = { type = "object", description = "Counts Trello renders on the card front — comments, attachments, checklist progress, due state. Left untyped rather than enumerated in full" } } }
+
+# ---------------------------------------------------------------------------------------------
+
+# **The two writes.** Both `medium`: a Trello board is not the public internet, but every member of
+# the board sees a new or archived card, and Trello notifies anyone watching the list. Neither is
+# `destructive` — archiving is reversible in Trello's own UI, and nothing here deletes.
+#
+# `trello-card-create` is `non_idempotent`: Trello documents no idempotency key on `POST /1/cards`,
+# and this repository's convention (first written for `providers/asana.toml`) is that a write earns
+# `idempotent` only from a vendor-documented guarantee, never from an accident of implementation.
+# Calling it twice makes two cards.
+#
+# Both send a JSON body rather than the query parameters Trello's reference lists first. The vendor
+# states the two are equivalent — its card reference says the query parameters "may also be replaced
+# with a JSON request body instead" — and the header comment says why this connector takes the
+# body form every time.
+[[operations]]
+id = "trello-card-create"
+method = "POST"
+path = "/cards"
+description = "Create a card at the bottom of a list. The card is created unassigned, with no due date and no labels; Trello notifies whoever watches the list"
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "list_id"
+wire = "idList"
+description = "The list to create the card in, from trello-board-lists. The only field Trello requires"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "name"
+description = "The card's title, as it will read on the board. Trello permits a card with no name and renders it blank, so pass one"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "description"
+wire = "desc"
+description = "The card's description, as Markdown. Trello renders it on the card's back"
+required = false
+schema = { type = "string" }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "name", "closed", "idList", "idBoard", "url"]
+properties = { id = { type = "string", description = "The created card's id — what trello-card-archive addresses it by afterwards" }, name = { type = "string" }, desc = { type = "string" }, closed = { type = "boolean", description = "Whether the card is archived; false on a card just created" }, idList = { type = "string", description = "The list the card was created in" }, idBoard = { type = "string" }, idShort = { type = "integer", description = "The card's per-board number, as shown in its UI" }, shortLink = { type = "string" }, shortUrl = { type = "string", format = "uri" }, url = { type = "string", format = "uri", description = "The card's page — the link to give a human" }, pos = { type = "number", description = "The card's sort position within its list" }, due = { type = "string", description = "The due date, or null" }, dueComplete = { type = "boolean" }, dateLastActivity = { type = "string" }, idMembers = { type = "array", items = { type = "string" } }, idLabels = { type = "array", items = { type = "string" } }, badges = { type = "object", description = "Counts Trello renders on the card front. Left untyped rather than enumerated in full" } }
+
+# ---------------------------------------------------------------------------------------------
+
+# `idempotency = "idempotent"`: `PUT` is idempotent under RFC 9110 §9.2.2, and this call is a field
+# replacement — sending the same `closed` twice leaves the card in the state it was already in. The
+# same reasoning `providers/pagerduty.toml` records for its two incident writes.
+#
+# Trello has no single-card archive endpoint; archiving *is* `closed = true` on the card, which is
+# why this operation carries the field rather than hiding it. `false` restores the card to its list,
+# and the description says so — an operation whose one argument is a boolean must state what the
+# other value does, or a model will discover it by trying.
+[[operations]]
+id = "trello-card-archive"
+method = "PUT"
+path = "/cards/{id}"
+description = "Archive a card, or restore an archived one. Archiving is reversible and destroys nothing: the card leaves its list and stays readable in the board's archive"
+risk = "medium"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The card's id, from trello-list-cards or from trello-card-create's response"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "closed"
+description = "true archives the card; false restores it to the list it was archived from"
+required = true
+schema = { type = "boolean" }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "name", "closed", "idList", "idBoard", "url"]
+properties = { id = { type = "string", description = "The card's id" }, name = { type = "string" }, desc = { type = "string" }, closed = { type = "boolean", description = "The card's archived state after this call — echo it back to confirm the change landed" }, idList = { type = "string", description = "The list the card belongs to. An archived card keeps it, which is how a restore knows where to put it back" }, idBoard = { type = "string" }, idShort = { type = "integer" }, shortLink = { type = "string" }, shortUrl = { type = "string", format = "uri" }, url = { type = "string", format = "uri", description = "The card's page — the link to give a human" }, pos = { type = "number" }, due = { type = "string" }, dueComplete = { type = "boolean" }, dateLastActivity = { type = "string" }, idMembers = { type = "array", items = { type = "string" } }, idLabels = { type = "array", items = { type = "string" } }, badges = { type = "object", description = "Counts Trello renders on the card front. Left untyped rather than enumerated in full" } }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any of the above can run.
+#
+# Both fields are `secret = true` and both are connection level; the header comment records why the
+# key is classified that way despite Trello publishing it as safe to expose, and why no other level
+# is reachable. Neither carries an `example`: a placeholder shaped like a real key or token is worse
+# than none, and one has already tripped GitHub's push protection in this repository's history.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "api_key"
+label = "Trello API key"
+help = "Generate one at trello.com/power-ups/admin: open (or create) a Power-Up, then the API Key tab. Do this first — the token below is minted against this key and only works with it"
+format = "token"
+secret = true
+docs_url = "https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/"
+binds = "credential.trello.key"
+
+[[config]]
+name = "api_token"
+label = "Trello API token"
+help = "From the same API Key page, follow the manual token link and click Allow. The token grants access to everything your Trello account can see, so treat it as a password"
+format = "token"
+secret = true
+docs_url = "https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/"
+binds = "credential.trello.token"
