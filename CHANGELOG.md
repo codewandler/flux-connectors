@@ -60,6 +60,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`no-credential` told a consumer that a public endpoint was disabled for their protection
+  (C-206).** `effective_auth` answered `no-credential` for two opposite situations — a vendor that
+  requires no credential, and a credential this repository will not yet hold safely. `status.rs`'s
+  own comment described the conflation ("would report freshdesk and a genuine ping endpoint the same
+  way for opposite reasons") and the code then performed it anyway.
+
+  A provider author can now declare `auth = []` on an operation as a positive statement that the
+  vendor needs nothing, distinct from an inherited absence. It publishes as a new `notes` entry,
+  `no-credential-required`, rather than a fifth issue code: `works == issues.length === 0` is a
+  documented and tested contract, so a new *issue* could not coexist with the `works: true` a
+  genuinely-public operation must report. `NO_CREDENTIAL` keeps its exact previous meaning.
+
+  The guard that should have caught the related drift is now derived rather than enumerated.
+  `optional_fields_are_null_rather_than_absent` named three fields by hand; it now renders the
+  document twice from the same emitter and requires the same key set at the same position, knowing no
+  field by name. "Every key is always present" is a checked claim.
+
 - **A `Request`'s derived `Debug` printed every credential in plaintext, and a query-placed
   credential travelled in a form the redactor was never told about (C-159).** `Request` is `pub` and
   derived `Debug` over `url`, `headers` and `body`, and it carries the plaintext *after*

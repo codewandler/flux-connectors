@@ -2,8 +2,7 @@
 id: C-206
 title: "`no-credential` tells consumers a public endpoint is disabled for their protection"
 pillar: Surfaces
-status: in-progress
-priority: 2
+status: done
 design:
 epic:
 areas: [connector-cli, web]
@@ -160,3 +159,52 @@ fields it already has (`stored`, `address`), it just needs the third state.
   catalog-scoped `credential-not-injected` issue, which describes the `.flux` module path and is
   misleading for the `connector-pack` path that does inject credentials. Worth deciding alongside
   this, though it is a different code.
+
+## Coordinator note at integration (2026-07-31)
+
+Merged at `91ad4f7`, bounced once, rework merged. Both gates green on the integration branch after
+the coordinator's full build: zero Rust failures, clippy `-D warnings` clean, `diff` reporting no
+drift, web build green and **32/32**.
+
+**The bounce was over `skip_serializing_if`, and the implementor was right to concede it.** Round 1
+made `notes` a conditionally-present key, justified as respecting the whole-catalogue artifact fence.
+That reading was wrong: `AGENTS.md:129-131` fences an implementor from *regenerating* those
+artifacts, not from making them stale, and `:155-171` names the reporting procedure for exactly that
+situation. The saving was never required, and what it bought was a permanent hole in the one document
+`catalog-json.md` promises a consumer can type once and never test for existence.
+
+**The rework went past the fix, and that is the more valuable half.** The guard that should have
+caught this — `site.rs::optional_fields_are_null_rather_than_absent` — enumerated three field names
+by hand, so it passed while the guarantee it is named for no longer held. It now renders the document
+twice from the same emitter, once with every optional absent and once with each present, and requires
+the same key set at the same position. It knows no field by name. The implementor then proved it by
+reintroducing the bug and showing the failure (`["issues","works"]` against
+`["issues","notes","works"]`) before reverting.
+
+That is the same defect class as [C-151](C-151-hmac-fields-reach-the-manifest.md) and
+[C-158](C-158-typescript-catalogue-types-drift.md) — a hand-enumerated list with nothing holding it —
+closed by derivation rather than by extending the list.
+
+**Acceptance item 2 was reconciled rather than ticked against words the diff does not implement.** It
+asked for a new *`Issue`* code; a `Note` code was built. The review confirmed the contradiction is
+real and not the implementor's inference: `works == issues.is_empty()` is documented in
+`catalog-json.md`, in `status.rs`'s own doc, and asserted by a pre-existing test, so a fifth issue
+code with `works: true` was not expressible. The item's actual intent — no existing token changing
+meaning — is met exactly, and `NO_CREDENTIAL` keeps its freshdesk sense.
+
+**One judgement call, decided by the coordinator: the `?? []` fallback in `web/data/catalog.mts`
+stays.** The type says `notes: Note[]` required, mirroring the now-unqualified contract, while the
+selector tolerates absence. That split is right. The site reads a *committed* catalogue that lags the
+emitter for as long as the process mandates — an implementor changes the emitter and must not
+regenerate; the coordinator regenerates at integration — and without the fallback `npm run build`
+dies during SSR on every operation in that window rather than failing a test. The tolerance is
+build-order, not shape, and the comment says so.
+
+**Latent until the first `auth = []` connector ships.** Nothing in the catalogue declares it yet, so
+the first provider that does will flip a card from "Not live yet" to "N operations live" and make an
+operation pass a `works` filter that has matched nothing since the catalogue existed.
+[C-133](C-133-provider-brave-talk-tokens.md) and C-157 are the candidates.
+
+**The adjacent defect is filed, not fixed:** the host repeats this conflation in
+`crates/connectors-api/src/api.rs` — see [C-212](C-212-the-host-repeats-the-connected-conflation.md),
+which also records a second way the same boolean is wrong, measured against the running service.
