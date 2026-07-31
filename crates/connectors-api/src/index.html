@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>connectors-api</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --panel: #fff; --ink: #1a1a19; --muted: #6b6b66;
+    --line: #e4e4e0; --accent: #2f6f4f; --warn: #8a4b2a; --code: #f4f4f1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161614; --panel: #1e1e1b; --ink: #ececea; --muted: #9a9a93;
+      --line: #33332e; --accent: #7fb894; --warn: #d09a72; --code: #24241f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
+  }
+  header {
+    padding: 1rem 1.25rem; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap;
+  }
+  header h1 { font-size: 1rem; margin: 0; font-weight: 650; }
+  header .note { color: var(--warn); font-size: .8rem; }
+  main { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 0; min-height: calc(100vh - 57px); }
+  @media (max-width: 720px) { main { grid-template-columns: 1fr; } }
+  #list { border-right: 1px solid var(--line); overflow-y: auto; max-height: calc(100vh - 57px); }
+  #detail { padding: 1.25rem; overflow-y: auto; max-height: calc(100vh - 57px); }
+  .conn {
+    padding: .6rem .9rem; border-bottom: 1px solid var(--line); cursor: pointer;
+    display: flex; align-items: center; gap: .5rem;
+  }
+  .conn:hover { background: var(--panel); }
+  .conn.on { background: var(--panel); box-shadow: inset 3px 0 0 var(--accent); }
+  .conn .name { font-weight: 550; }
+  .conn .count { color: var(--muted); font-size: .8rem; margin-left: auto; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); flex: none; }
+  .dot.live { background: var(--accent); }
+  h2 { font-size: 1.1rem; margin: 0 0 .2rem; }
+  .muted { color: var(--muted); }
+  .sub { color: var(--muted); font-size: .85rem; margin-bottom: 1rem; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .9rem; margin-bottom: 1rem; }
+  section h3 { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 .6rem; }
+  code, pre, input, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem; }
+  pre { background: var(--code); padding: .7rem; border-radius: 6px; overflow-x: auto; margin: 0; }
+  input, select {
+    font: inherit; padding: .35rem .5rem; border: 1px solid var(--line);
+    border-radius: 5px; background: var(--bg); color: var(--ink); width: 100%;
+  }
+  button {
+    font: inherit; font-size: .85rem; padding: .35rem .8rem; border-radius: 5px;
+    border: 1px solid var(--accent); background: var(--accent); color: var(--bg);
+    cursor: pointer; font-weight: 550;
+  }
+  button.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: .5rem; align-items: center; margin-bottom: .5rem; }
+  .row label { flex: 0 0 12rem; font-size: .82rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  td, th { text-align: left; padding: .3rem .4rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 550; font-size: .78rem; }
+  .op { padding: .45rem .5rem; border-bottom: 1px solid var(--line); cursor: pointer; display: flex; gap: .5rem; align-items: baseline; }
+  .op:hover { background: var(--code); }
+  .op .id { font-family: ui-monospace, monospace; font-size: .82rem; }
+  .op .risk { font-size: .7rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); margin-left: auto; }
+  .err { color: var(--warn); white-space: pre-wrap; }
+  .ok { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>connectors-api</h1>
+  <span class="muted" id="counts"></span>
+  <span class="note">Real calls, real credentials. Held in memory only.</span>
+</header>
+<main>
+  <div id="list"></div>
+  <div id="detail"><p class="muted">Pick a connector.</p></div>
+</main>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const el = (t, props = {}, ...kids) => {
+  const n = Object.assign(document.createElement(t), props);
+  for (const k of kids.flat()) n.append(k?.nodeType ? k : document.createTextNode(k));
+  return n;
+};
+const api = async (method, path, body) => {
+  const r = await fetch(path, {
+    method,
+    headers: body === undefined ? {} : { 'content-type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (r.status === 204) return null;
+  const text = await r.text();
+  let data; try { data = JSON.parse(text); } catch { data = { error: text }; }
+  if (!r.ok) throw new Error(data.error ?? text);
+  return data;
+};
+
+let connectors = [], current = null;
+
+async function load() {
+  connectors = await api('GET', '/v1/connectors');
+  const ops = connectors.reduce((n, c) => n + c.operation_count, 0);
+  $('#counts').textContent = `${connectors.length} connectors · ${ops} operations`;
+  renderList();
+}
+
+function renderList() {
+  const list = $('#list');
+  list.replaceChildren(...connectors.map(c => {
+    const node = el('div', { className: 'conn' + (current === c.id ? ' on' : '') },
+      el('span', { className: 'dot' + (c.connected ? ' live' : '') }),
+      el('span', { className: 'name' }, c.vendor),
+      el('span', { className: 'count' }, String(c.operation_count)));
+    node.onclick = () => show(c.id);
+    return node;
+  }));
+}
+
+async function show(id) {
+  current = id;
+  renderList();
+  const c = await api('GET', `/v1/connectors/${id}`);
+  const d = $('#detail');
+  d.replaceChildren();
+  d.append(el('h2', {}, c.vendor), el('div', { className: 'sub' }, c.description));
+
+  // --- credentials -------------------------------------------------------
+  const creds = el('section', {}, el('h3', {}, 'Credentials'));
+  if (!c.credentials.length) {
+    creds.append(el('p', { className: 'muted' }, 'This connector declares none.'));
+  }
+  for (const cr of c.credentials) {
+    const input = el('input', { type: 'password', placeholder: cr.stored ? '•••••••• stored' : 'paste value' });
+    const status = el('span', { className: cr.stored ? 'ok' : 'muted' }, cr.stored ? 'stored' : 'not set');
+    const save = el('button', {}, 'Save');
+    save.onclick = async () => {
+      if (!input.value) return;
+      save.disabled = true;
+      try {
+        await api('PUT', `/v1/credentials/${c.id}/${cr.name}`, { value: input.value });
+        input.value = ''; status.textContent = 'stored'; status.className = 'ok';
+        await load();
+      } catch (e) { status.textContent = e.message; status.className = 'err'; }
+      save.disabled = false;
+    };
+    creds.append(
+      el('div', { className: 'row' }, el('label', {}, cr.name), input, save, status),
+      el('div', { className: 'muted mono', style: 'margin:-.25rem 0 .6rem 12.5rem;font-size:.75rem' },
+        (cr.address ?? 'no address — connector declares no authority') + ' · ' + cr.placement
+        + (cr.needs_username ? ' · needs a username via config' : '')));
+  }
+  d.append(creds);
+
+  // --- configuration -----------------------------------------------------
+  const tpl = [...c.base_url.matchAll(/\{(\w+)\}/g)].map(m => m[1]);
+  if (tpl.length || c.credentials.some(cr => cr.needs_username) || c.settings.length) {
+    const cfg = el('section', {}, el('h3', {}, 'Configuration'),
+      el('p', { className: 'muted', style: 'margin-top:-.3rem;font-size:.82rem' },
+        `Base URL: ${c.base_url}`));
+    const kind = el('select', {}, el('option', { value: 'endpoint' }, 'endpoint'),
+                                   el('option', { value: 'username' }, 'username'));
+    const service = el('input', { value: 'default', placeholder: 'service' });
+    const field = el('input', { value: tpl[0] ?? '', placeholder: 'field name' });
+    const value = el('input', { placeholder: 'value' });
+    const out = el('span', { className: 'muted' });
+    const set = el('button', {}, 'Bind');
+    set.onclick = async () => {
+      try {
+        await api('PUT', `/v1/config/${c.id}/${service.value}/${kind.value}/${field.value}`, { value: value.value });
+        out.textContent = 'bound'; out.className = 'ok'; show(c.id);
+      } catch (e) { out.textContent = e.message; out.className = 'err'; }
+    };
+    cfg.append(el('div', { className: 'row' }, kind, service, field, value, set, out));
+    if (c.settings.length) {
+      cfg.append(el('table', {}, el('tbody', {}, ...c.settings.map(([k, v]) =>
+        el('tr', {}, el('td', { className: 'mono' }, k), el('td', { className: 'mono' }, v))))));
+    }
+    d.append(cfg);
+  }
+
+  // --- operations --------------------------------------------------------
+  const opsSection = el('section', {}, el('h3', {}, `Operations · ${c.operation_count}`));
+  const holder = el('div', {}, el('span', { className: 'muted' }, 'loading…'));
+  opsSection.append(holder);
+  d.append(opsSection);
+  const ids = await Promise.all(c.operation_ids.map(id => api('GET', `/v1/operations/${id}`)));
+  holder.replaceChildren(...ids.map(o => {
+    const node = el('div', { className: 'op' },
+      el('span', { className: 'id' }, o.tool),
+      el('span', { className: 'muted', style: 'font-size:.8rem' }, o.description),
+      el('span', { className: 'risk' }, o.risk));
+    node.onclick = () => playground(o, opsSection);
+    return node;
+  }));
+}
+
+async function playground(op, after) {
+  let panel = $('#play');
+  if (panel) panel.remove();
+  panel = el('section', { id: 'play' }, el('h3', {}, 'Run ' + op.tool));
+  const params = el('input', { value: '{}', className: 'mono' });
+  const run = el('button', {}, 'Send');
+  const out = el('pre', {}, '');
+  run.onclick = async () => {
+    run.disabled = true; out.textContent = 'sending…'; out.className = '';
+    try {
+      const body = JSON.parse(params.value || '{}');
+      const r = await api('POST', `/v1/operations/${op.id}/execute`, body);
+      out.textContent = r.content;
+      out.className = r.is_error ? 'err' : '';
+    } catch (e) { out.textContent = e.message; out.className = 'err'; }
+    run.disabled = false;
+  };
+  panel.append(
+    el('p', { className: 'muted', style: 'margin-top:-.3rem;font-size:.82rem' }, op.description),
+    el('div', { className: 'row' }, el('label', {}, 'parameters (JSON)'), params, run),
+    out,
+    el('details', {}, el('summary', { className: 'muted', style: 'font-size:.8rem;cursor:pointer' },
+      'the Flux this was compiled from'), el('pre', {}, op.flux)));
+  after.after(panel);
+}
+
+load().catch(e => { $('#detail').innerHTML = `<p class="err">${e.message}</p>`; });
+</script>
+</body>
+</html>

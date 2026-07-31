@@ -220,6 +220,7 @@ More detail:
 | If you want… | Read… |
 |---|---|
 | Why the project exists | [docs/vision.md](docs/vision.md) |
+| How to integrate this into a flux host | [docs/integrating-with-flux.md](docs/integrating-with-flux.md) |
 | What ships next | [docs/roadmap.md](docs/roadmap.md) |
 | How a provider becomes Flux | [docs/designs/connector-pipeline.md](docs/designs/connector-pipeline.md) |
 | The credential model | [docs/designs/unified-auth.md](docs/designs/unified-auth.md) |

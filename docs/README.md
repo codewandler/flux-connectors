@@ -13,6 +13,7 @@ roadmap, story status, design records, and notes. Work is tracked with the **tra
 | **What to work on right now** | [stories/README.md](stories/README.md) — the backlog/status board |
 | The detail of a specific story | `stories/<ID>-<slug>.md` |
 | How a provider becomes a `.flux` module | [designs/connector-pipeline.md](designs/connector-pipeline.md) |
+| **How a flux host integrates this**, step by step, and what still blocks one | [integrating-with-flux.md](integrating-with-flux.md) |
 | The blocking change needed in `../flux` | [designs/auth-seam.md](designs/auth-seam.md) |
 | Design records for non-trivial work | [designs/](designs/) |
 | Finished / superseded material | [archive/](archive/) |

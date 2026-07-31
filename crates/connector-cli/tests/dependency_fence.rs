@@ -26,6 +26,21 @@ const COMPILER_CRATES: &[&str] = &[
     "codewandler-connector-catalog",
 ];
 
+/// **Crates allowed to open sockets, named so the allowance is a decision rather than a silence.**
+///
+/// Before C-202 this fence's guarantee was *"the compiler is offline"* — true, valuable, and scoped
+/// narrowly enough that a network-capable crate elsewhere in the workspace would have passed it
+/// without being looked at. `docs/designs/connectors-app.md` §"The extension: allow the exception,
+/// visibly" makes the argument: adding such a crate does not weaken the guarantee, it makes the
+/// fence's *silence* ambiguous, because a reader who finds `reqwest` in `Cargo.lock` and a passing
+/// test cannot tell whether the edge was considered or merely unexamined.
+///
+/// `connectors-api` is the host (C-200). It binds ports, holds an HTTP client through `flux-web`,
+/// and runs a loop — everything the compiler crates must not do. It is bounded by being a **leaf**:
+/// nothing may depend on it, which [`a_compiler_crate_cannot_reach_a_network_crate`] enforces in the
+/// direction that matters.
+const NETWORK_CRATES: &[&str] = &["connectors-api"];
+
 /// Acceptance: "`connector-cli` does not depend on it — asserted by a test over the dependency
 /// graph, not by convention."
 #[test]
@@ -51,6 +66,93 @@ fn connector_cli_does_not_depend_on_connector_secrets() {
                 .unwrap_or_else(|| "<no path found>".to_owned()),
         );
     }
+}
+
+/// The host libraries: built and tested here, excluded from the compile path, and opening no socket
+/// of their own. They are neither compiler nor network crates, and they are listed so that
+/// [`every_workspace_member_is_classified`] has three buckets to sort into rather than an
+/// unexplained remainder.
+const HOST_LIBRARIES: &[&str] = &["codewandler-connector-pack", HOST_LIBRARY];
+
+/// **The edge that actually earns the allow-list its keep.**
+///
+/// `NETWORK_CRATES` on its own is a comment. This is what makes it structural: a compiler crate
+/// reaching the host — `connector-cli -> connectors-api`, say, to "just reuse the server's types" —
+/// puts an HTTP client, a DNS resolver and a listener back in the compile path by a different route
+/// than the one [`connector_cli_does_not_depend_on_connector_secrets`] guards.
+#[test]
+fn a_compiler_crate_cannot_reach_a_network_crate() {
+    let lock = Lock::read();
+
+    for network_crate in NETWORK_CRATES {
+        assert!(
+            lock.contains(network_crate),
+            "`{network_crate}` is not a package in {}; this fence has nothing to fence",
+            lock.path.display()
+        );
+        for crate_name in COMPILER_CRATES {
+            let closure = lock.closure(crate_name);
+            assert!(
+                !closure.contains(*network_crate),
+                "`{crate_name}` depends on `{network_crate}`, directly or transitively: {}\n\
+                 `{network_crate}` is allowed to open sockets precisely because it is a leaf. An \
+                 edge into it from the compiler ends the offline guarantee `no_network.rs` states.",
+                lock.path_to(crate_name, network_crate)
+                    .unwrap_or_else(|| "<no path found>".to_owned()),
+            );
+        }
+    }
+}
+
+/// **Every workspace member is deliberately one of three things.**
+///
+/// Without this, a new crate is simply not asked about: it is not a compiler crate so nothing fences
+/// it, and it is not on the allow-list so nothing records that it may open a socket. That is the
+/// "merely unexamined" state the allow-list exists to end, and it is why this asserts over the
+/// workspace's own membership rather than over a second hand-kept list.
+#[test]
+fn every_workspace_member_is_classified() {
+    let root = workspace_root();
+    let manifest =
+        std::fs::read_to_string(root.join("Cargo.toml")).expect("the workspace manifest");
+    let document: toml::Value = manifest.parse().expect("the workspace manifest parses");
+    let members = document
+        .get("workspace")
+        .and_then(|workspace| workspace.get("members"))
+        .and_then(toml::Value::as_array)
+        .expect("`[workspace] members`");
+
+    let mut checked = 0usize;
+    for member in members.iter().filter_map(toml::Value::as_str) {
+        let path = root.join(member).join("Cargo.toml");
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+        let member_document: toml::Value = text
+            .parse()
+            .unwrap_or_else(|error| panic!("parse {}: {error}", path.display()));
+        let name = member_document
+            .get("package")
+            .and_then(|package| package.get("name"))
+            .and_then(toml::Value::as_str)
+            .unwrap_or_else(|| panic!("{} has no `[package] name`", path.display()))
+            .to_owned();
+
+        assert!(
+            COMPILER_CRATES.contains(&name.as_str())
+                || NETWORK_CRATES.contains(&name.as_str())
+                || HOST_LIBRARIES.contains(&name.as_str()),
+            "`{name}` ({member}) is a workspace member classified as neither a compiler crate, a \
+             host library, nor a network crate.\n\
+             Add it to exactly one list in this file, with a comment saying why. A crate nobody \
+             classified is a crate whose right to open a socket nobody decided."
+        );
+        checked += 1;
+    }
+
+    assert!(
+        checked > 0,
+        "no workspace members were read, so this asserted nothing"
+    );
 }
 
 /// The resolved dependency graph, as `Cargo.lock` records it.

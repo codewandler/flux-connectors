@@ -1,0 +1,48 @@
+[package]
+name = "connectors-api"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+description = "The reference host: binds the connector pack's three ports and runs its operations"
+
+# **Never published** (C-201). The publish closure is four crates — `connector-catalog`,
+# `connector-spec`, `connector-secrets`, `connector-pack` — and a host is not one of them. A manifest
+# key is how "never published" is enforced rather than remembered;
+# `crates/connector-cli/tests/publish_closure.rs` derives the closure from the manifests, so this
+# keeps the derivation honest too.
+publish = false
+
+[dependencies]
+# The pack and everything it re-exports. This crate calls `pack()`; it constructs no request.
+connector-pack.workspace = true
+catalog.workspace = true
+
+# The transport (C-202) and the context a dispatch happens under.
+flux-web.workspace = true
+flux-runtime.workspace = true
+flux-system.workspace = true
+flux-core.workspace = true
+flux-spec.workspace = true
+
+# The server.
+axum.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal"] }
+
+# Sign-in and OAuth2: the back-channel token exchanges and the userinfo read.
+reqwest = { workspace = true, features = ["json"] }
+
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+base64.workspace = true
+rand.workspace = true
+urlencoding.workspace = true
+
+[dev-dependencies]
+# A loopback vendor to assert the request against. The point of the whole crate is that a real
+# request leaves it, and a test that asserts against a stub would be asserting the stub.
+axum = { workspace = true, features = ["http1", "json", "tokio"] }

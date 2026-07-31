@@ -7,6 +7,11 @@ members = [
     "crates/catalog",
     "crates/connector-pack",
     "crates/connector-secrets",
+    # The reference host (C-200). `publish = false`, and a **leaf**: nothing in this workspace may
+    # depend on it. It is the one crate here that opens sockets, binds ports and runs a loop, which
+    # is why `crates/connector-cli/tests/dependency_fence.rs` names it in `NETWORK_CRATES` rather
+    # than leaving the exception merely unexamined.
+    "crates/connectors-api",
 ]
 
 [workspace.package]
@@ -71,12 +76,35 @@ flux-lang = { package = "codewandler-flux-lang", version = "0.41" }
 flux-core = { package = "codewandler-flux-core", version = "0.41" }
 flux-runtime = { package = "codewandler-flux-runtime", version = "0.41" }
 flux-spec = { package = "codewandler-flux-spec", version = "1.2" }
-# A **dev-dependency of `connector-pack` only** (C-116). `ToolContext::new` takes an `Arc<System>`,
-# and a `ToolContext` is the only way to reach the redactor — so without this, the one property this
+# **The transport, and the only concrete `Egress` there is** (C-202). `flux-web` owns
+# `http.request` — the tool `connector-pack`'s own doc-comments name and that nothing in this
+# workspace could construct, because this crate was absent from `Cargo.lock` entirely.
+#
+# Reachable from `connectors-api` alone. It brings an HTTP client, a DNS resolver and an SSRF guard,
+# which is exactly what `Egress`'s `dyn Tool` typing exists to keep out of `connector-pack` — the
+# pack takes a transport, it does not link one. `dependency_fence.rs` holds the compiler crates away
+# from it.
+#
+# 0.41 deliberately, matching `flux-runtime`: flux-web 0.41.1 requires `flux-core`, `flux-runtime`
+# and `flux-system` at `0.41.1`, so it resolves inside the line this workspace already pins and
+# drags no 0.42 crate into the lock. Verified before the edit, because the 0.42.x releases of
+# `flux-core`/`flux-system` sitting on crates.io are exactly the skew that would have made this
+# unpinnable.
+flux-web = { package = "codewandler-flux-web", version = "0.41" }
+
+# `ToolContext::new` takes an `Arc<System>` (C-116). It was a **dev-dependency of `connector-pack`
+# only**; `connectors-api` now needs it in shipped code, because a host that dispatches a tool must
+# build the context it dispatches under.
+#
+# A `ToolContext` is also the only way to reach the redactor, so without this the one property this
 # repository must prove about credentials (they never reach a surface) could not be driven through
-# `Tool::execute` at all, and C-115 had to record `execute` as untested for exactly that reason. It
-# is already in the lock as a transitive dependency of `flux-runtime`, so naming it here resolves
-# nothing new; no non-test code links it.
+# `Tool::execute` at all — C-115 had to record `execute` as untested for exactly that reason. It is
+# already in the lock as a transitive dependency of `flux-runtime`, so naming it here resolves
+# nothing new.
+#
+# **The "no non-test code links it" clause is gone, and its disappearance is the point.** It was
+# true while this workspace had no host; C-202 gave it one, and leaving the claim standing would
+# have made the manifest assert a fence the code no longer keeps.
 flux-system = { package = "codewandler-flux-system", version = "0.41" }
 
 # Shared third-party.
@@ -97,3 +125,20 @@ jsonschema = { version = "0.49.2", default-features = false }
 # runtime, so this pin adds no resolution of its own.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 tokio = { version = "1", default-features = false }
+
+# **The host's own server stack** (C-200), reached from `connectors-api` alone. `hyper`, `tower` and
+# `tokio` are already in the lock as transitive dependencies of flux's runtime, so only `axum` is a
+# genuinely new tree.
+#
+# `rand` is here for one job — session tokens, PKCE verifiers and OAuth `state`. Those are
+# **security-relevant randomness**, so they come from the OS CSPRNG (`rand`'s `ThreadRng` is seeded
+# from it) and never from a timestamp or a counter. `base64` encodes the PKCE challenge and the
+# Basic-auth join the token endpoints want; `urlencoding` builds authorize URLs.
+#
+# Note what is deliberately absent: no JWT library. Google's `id_token` is never parsed here — the
+# authorization code is exchanged back-channel over TLS and identity is read from the userinfo
+# endpoint, so there is no signature for this repository to verify and no JWKS cache to get wrong.
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "query", "tokio"] }
+rand = "0.9"
+base64 = "0.22"
+urlencoding = "2"
