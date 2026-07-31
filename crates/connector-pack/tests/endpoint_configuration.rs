@@ -11,11 +11,13 @@
 //! nothing an operator can fix, or admitted against a subject nobody can audit — and every other
 //! test in this crate passes in both of those states.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use catalog::OperationKey;
 use connector_pack::{
-    Configuration, Credentials, Egress, Error, MemoryConfig, MemoryStore, Operation,
+    ConfigStore, Configuration, Credentials, Egress, Error, Field, MemoryConfig, MemoryStore,
+    Operation,
 };
 use flux_runtime::Tool;
 use serde_json::json;
@@ -226,6 +228,62 @@ fn credentials_and_configuration_must_name_the_same_tenant() {
     let error = Operation::project(entry, http(), credentials(), other)
         .expect_err("two tenants are not one connector");
     assert!(matches!(error, Error::TenantMismatch { .. }), "{error}");
+}
+
+/// **A store whose answer drifts** — a database-backed one, a cache with a TTL, anything with
+/// interior mutability. Every `get` for `endpoint.subdomain` answers with a different host, and the
+/// reads are counted so the enforcement can be asserted rather than inferred.
+#[derive(Default)]
+struct Drifting {
+    subdomain_reads: AtomicUsize,
+}
+
+impl ConfigStore for Drifting {
+    fn get(&self, _tenant: &str, _provider: &str, field: Field<'_>) -> Option<String> {
+        match field {
+            Field::Endpoint("subdomain") => Some(format!(
+                "host-{}",
+                self.subdomain_reads.fetch_add(1, Ordering::SeqCst)
+            )),
+            _ => None,
+        }
+    }
+}
+
+/// **The time-of-check/time-of-use hole in the port itself (C-198).**
+///
+/// `permission_subjects` and `execute` used to perform two *independent* `get`s, and the pack calls
+/// `http.request`'s `execute` directly — bypassing `Executor::dispatch` — so this crate's own
+/// `permission_subjects` is the only place flux's egress allow-list is consulted for the inner call.
+/// A store that answers differently on two calls therefore had the gate approve one host and the
+/// request reach another, with the audit record naming the host that was never called.
+///
+/// The fix is enforcement rather than documentation: every value an operation can ask for is
+/// resolved once, at `Operation::project`, and the operation holds no handle to the store
+/// afterwards. So the second assertion is the stronger of the two — one read is not "the two reads
+/// happened to agree", it is "there is no second read to disagree".
+#[test]
+fn a_store_that_answers_differently_cannot_gate_one_host_and_call_another() {
+    let store = Arc::new(Drifting::default());
+    let tool = projected(
+        "zendesk-ticket-show",
+        Configuration::new(store.clone(), TENANT).expect("a valid tenant id"),
+    );
+    let params = json!({ "ticket_id": 1 });
+
+    let gated = tool.permission_subjects(&params);
+    let sent = tool.build_request(&params).expect("the request builds").url;
+
+    assert_eq!(
+        gated,
+        vec![sent.clone()],
+        "the gate was shown a host the request did not reach: `{sent}` went out"
+    );
+    assert_eq!(
+        store.subdomain_reads.load(Ordering::SeqCst),
+        1,
+        "a mutable store was consulted more than once, so the two answers can still diverge"
+    );
 }
 
 /// The whole point, stated once over every configured operation in the shipped catalogue: none can

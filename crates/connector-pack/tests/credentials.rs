@@ -341,6 +341,53 @@ async fn a_credential_too_short_to_redact_is_refused_rather_than_sent() {
     );
 }
 
+/// **Why the Basic half is not driven end to end from this file, pinned as behaviour (C-198).**
+///
+/// `zendesk`, `jira` and `twilio` are the three connectors declaring a `BasicJoin` credential, and
+/// all three declare `authority: None` — so `Credentials::reference` refuses before the
+/// configuration port is ever consulted, and no shipped connector can reach the Basic assembly
+/// through `Operation::build_authenticated_request`. That is C-92's gap, and `AGENTS.md` records the
+/// refusal as the correct answer: a request sent without the credential it declares is the failure
+/// worth preventing, and the diagnostic must name *which* fact is missing.
+///
+/// So this asserts the wall rather than pretending it is not there. Everything else is supplied —
+/// the subdomain is configured and the store holds a token — so the only missing fact is the
+/// authority, and the refusal has to say so. The full Basic assertion meanwhile lives in
+/// `src/credentials.rs::a_basic_user_half_reaches_the_header_from_the_configuration_port`, which
+/// doctors a provider to get past this point; the day C-92 gives zendesk an authority, that test
+/// belongs here instead.
+#[tokio::test]
+async fn a_basic_connector_refuses_because_it_has_no_credential_address() {
+    let configuration = Configuration::new(
+        Arc::new(MemoryConfig::new().with_endpoint(TENANT, "zendesk", "subdomain", "acme")),
+        TENANT,
+    )
+    .expect("a valid tenant id");
+    let entry = catalog::operation(catalog::OperationKey::id("zendesk-ticket-show"))
+        .expect("the shipped catalogue carries zendesk-ticket-show");
+    let tool = Operation::project(
+        entry,
+        reflecting_egress(),
+        Credentials::new(store_with_the_sentinel().await, TENANT).expect("a tenant"),
+        configuration,
+    )
+    .expect("zendesk-ticket-show projects");
+
+    let error = tool
+        .build_authenticated_request(
+            &context(Arc::new(Progress::default())),
+            &json!({ "ticket_id": 1 }),
+        )
+        .await
+        .expect_err("a connector with no authority has no credential address");
+
+    assert!(
+        matches!(&error, Error::NoCredentialAddress { credential, .. }
+            if credential == "zendesk.api_token"),
+        "{error}"
+    );
+}
+
 /// A missing credential names the address that was not found, and **no request is sent**.
 #[tokio::test]
 async fn a_missing_credential_names_its_address_and_sends_nothing() {

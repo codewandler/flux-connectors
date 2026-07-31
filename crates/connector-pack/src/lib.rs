@@ -141,6 +141,12 @@
 //!   directly, so [`Operation`]'s own `permission_subjects` is the only place a host's egress
 //!   allow-list is consulted for the inner call. Declaring `{subdomain}.zendesk.com` there asks that
 //!   allow-list to match a string no host resolves to. See [`tool::Operation::subjects`].
+//! - **And the port is read once, not once per call** (C-198). The two bullets above are two
+//!   *separate* calls into the host's [`ConfigStore`], so a store with interior mutability could
+//!   answer the gate with one host and the request with another — through the one gate there is.
+//!   Every value an operation can ask for is therefore resolved when the operation is projected, and
+//!   the projected operation holds no handle to the store. See [`ConfigStore::get`] for the
+//!   requirement that still binds a host across *several* operations.
 //!
 //! What this does *not* do is publish a connector's configuration surface — the labels, help text
 //! and `binds` targets that let a product render "connect your Zendesk". That is C-87, it is a
@@ -713,7 +719,18 @@ pub(crate) mod tests {
     /// a pair that disagrees — which is the point of that refusal.
     pub(crate) const TEST_TENANT: &str = "t-connector-pack";
 
-    /// A bound configuration port carrying **every templated connector's** endpoint variables.
+    /// The value every endpoint variable is bound to. One spelling for all of them, so that
+    /// `zendesk-ticket-show`'s expected URL is the readable `https://acme.zendesk.com/…` that
+    /// `tool.rs` asserts, and every other templated connector composes without a per-connector
+    /// table nobody would maintain.
+    const TEST_ENDPOINT_VALUE: &str = "acme";
+
+    /// The value every Basic user half is bound to — an account identifier, which is what this half
+    /// of the join actually is.
+    const TEST_USERNAME_VALUE: &str = "ops@acme.test";
+
+    /// A bound configuration port carrying **every** endpoint variable and Basic user half the
+    /// shipped catalogue declares, **derived from the catalogue** rather than listed.
     ///
     /// Tests in this crate assert request shapes, and a request shape is only assertable once the
     /// URL composes. Supplying the values here rather than per test is what keeps
@@ -721,21 +738,102 @@ pub(crate) mod tests {
     ///
     /// The Basic user halves are here for the same reason: they are configuration now (C-193), not
     /// an environment variable a test could set.
+    ///
+    /// **It used to be a hand-written list whose doc said "every templated connector's", and it had
+    /// already gone stale** — okta's `domain` and statuspage's `page_id` shipped after it was
+    /// written and were never added, so the claim was false for two of the nine templated
+    /// connectors. Deriving it makes the claim true by construction, and it is the same discovery
+    /// `tests/endpoint_configuration.rs` and `tests/network_gate.rs` already do: the variables come
+    /// off each operation's own emitted Flux, and the user halves off each connector's declared
+    /// credentials.
+    ///
+    /// Built once. Parsing every shipped operation's Flux is cheap but not free, and this is called
+    /// by every test in the crate that needs a port bound at all.
     pub(crate) fn test_configuration() -> Configuration {
-        let values = MemoryConfig::new()
-            .with_endpoint(TEST_TENANT, "zendesk", "subdomain", "acme")
-            .with_endpoint(TEST_TENANT, "shopify", "shop", "acme-store")
-            .with_endpoint(TEST_TENANT, "jira", "site", "acme")
-            .with_endpoint(TEST_TENANT, "freshdesk", "domain", "acme.freshdesk.com")
-            .with_endpoint(TEST_TENANT, "salesforce", "instance", "acme")
-            .with_endpoint(TEST_TENANT, "docusign", "account_host", "na4.docusign.net")
-            .with_endpoint(TEST_TENANT, "docusign", "account_id", "acme-account")
-            .with_endpoint(TEST_TENANT, "contentful", "space_id", "acme-space")
-            .with_endpoint(TEST_TENANT, "contentful", "environment_id", "master")
-            .with_username(TEST_TENANT, "zendesk", "zendesk.api_token", "ops@acme.test")
-            .with_username(TEST_TENANT, "jira", "jira.api_token", "ops@acme.test")
-            .with_username(TEST_TENANT, "twilio", "twilio.auth_token", "AC-acme");
-        Configuration::new(Arc::new(values), TEST_TENANT).expect("a valid tenant id")
+        static VALUES: std::sync::OnceLock<MemoryConfig> = std::sync::OnceLock::new();
+
+        let values = VALUES.get_or_init(|| {
+            let mut values = MemoryConfig::new();
+            for provider in catalog::providers() {
+                for credential in provider.auth {
+                    if matches!(credential.acquire, catalog::Acquisition::BasicJoin { .. }) {
+                        values = values.with_username(
+                            TEST_TENANT,
+                            provider.id,
+                            credential.name,
+                            TEST_USERNAME_VALUE,
+                        );
+                    }
+                }
+                for operation in provider.operations {
+                    let declaration = spec::declaration_of(operation.id, operation.flux)
+                        .unwrap_or_else(|error| panic!("`{}`: {error}", operation.id));
+                    for variable in request::endpoint_variables(&declaration) {
+                        values = values.with_endpoint(
+                            TEST_TENANT,
+                            provider.id,
+                            &variable,
+                            TEST_ENDPOINT_VALUE,
+                        );
+                    }
+                }
+            }
+            values
+        });
+
+        Configuration::new(Arc::new(values.clone()), TEST_TENANT).expect("a valid tenant id")
+    }
+
+    /// **The guard on the derivation.** A helper claiming completeness has to be checked against the
+    /// thing it claims to cover, or it is the same hand-written list with extra steps. The two
+    /// connectors named are the ones the previous list had missed.
+    #[test]
+    fn the_test_configuration_covers_every_templated_connector() {
+        let configuration = test_configuration();
+
+        let mut templated = 0usize;
+        for entry in catalog::operations() {
+            let operation = Operation::project(
+                entry,
+                recording_http(),
+                empty_credentials(),
+                configuration.clone(),
+            )
+            .unwrap_or_else(|error| panic!("`{}`: {error}", entry.id));
+            if operation.endpoint_variables().is_empty() {
+                continue;
+            }
+            templated += 1;
+            // `endpoints()` is resolved before any parameter is read, so an uncovered variable
+            // surfaces here as `MissingConfig` rather than hiding behind the `MissingParameter`
+            // this deliberately empty argument object also earns.
+            if let Err(error) = operation.build_request(&serde_json::json!({})) {
+                assert!(
+                    !matches!(error, Error::MissingConfig { .. }),
+                    "the derived configuration does not cover `{}`: {error}",
+                    entry.id
+                );
+            }
+        }
+
+        assert!(
+            templated > 0,
+            "no shipped operation declares a configuration variable, so this asserted nothing"
+        );
+        for (provider, variable) in [("okta", "domain"), ("statuspage", "page_id")] {
+            assert!(
+                catalog::operations_of(ProviderKey::id(provider))
+                    .iter()
+                    .any(|entry| {
+                        let declaration = spec::declaration_of(entry.id, entry.flux)
+                            .expect("a shipped rendering parses");
+                        request::endpoint_variables(&declaration)
+                            .iter()
+                            .any(|found| found == variable)
+                    }),
+                "`{provider}` no longer declares `{variable}`, so this guard names the wrong case"
+            );
+        }
     }
 
     /// A stand-in for flux's `http.request`, for tests that need a transport but not a socket.
