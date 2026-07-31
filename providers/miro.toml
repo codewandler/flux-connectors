@@ -1,0 +1,340 @@
+# Miro REST API v2 — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Miro publishes an OpenAPI description at
+# developers.miro.com/openapi, but nothing is vendored under `specs/` for it: ingest (C-4) and fetch
+# (C-14) do not exist yet, and the document covers the whole product surface (boards, items, mind
+# maps, embeds, webhooks, enterprise admin) — pointing at it without a selection mechanism would be
+# pointing every one of those tools at one account. When C-14's fetch and C-4's ingest land this file
+# becomes `[spec]` plus a `[[patch.operations]]` selection reproducing the six operations below, by
+# method and path:
+#
+#   GET     /v2/boards
+#   GET     /v2/boards/{board_id}/items
+#   GET     /v2/boards/{board_id}/items/{item_id}
+#   POST    /v2/boards/{board_id}/sticky_notes
+#   PATCH   /v2/boards/{board_id}/sticky_notes/{item_id}
+#   DELETE  /v2/boards/{board_id}/sticky_notes/{item_id}
+#
+# Until then drift is undetectable by machine, exactly as for zendesk, freshdesk, github, notion and
+# cloudflare (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# THE QUESTION THIS CONNECTOR EXISTS TO ANSWER: IS A SHALLOW, NON-RECURSIVE UNION EXPRESSIBLE?
+# ---------------------------------------------------------------------------------------------
+#
+# A board item is a discriminated union by `type` — `sticky_note`, `shape`, `text`, `frame` — the
+# same shape problem `providers/notion.toml`'s header records refusing for blocks. But unlike a
+# block, an item's containment is a *reference*, not embedding: a frame's members carry that frame's
+# id in their own `parent.id`; a frame does not carry an array of nested item bodies. There is no
+# recursion here at all.
+#
+# Notion's refusal was two separate reasons, and each gets checked against Miro on its own:
+#
+#  1. "`JsonSchema` here has no `$ref` and no recursion, so that union is not expressible." This is
+#     about *recursion specifically*, and it does not apply to Miro — nothing below is recursive, so
+#     no `$ref` is ever needed to express it.
+#  2. "`body_schema` could take it as a free-form object, but that ships an untyped blob... precisely
+#     the 'plausible but incorrect' output AGENTS.md says to refuse." This is about a *request body*
+#     having to carry the union, and it would apply here too — except Miro's own API never asks a
+#     caller to do that. Every item type is created and updated through its own type-specific
+#     collection (`POST /v2/boards/{board_id}/sticky_notes`, not a generic `POST .../items` with a
+#     `type` field in the body). The discriminator is resolved by the **URL**, not by a body field
+#     this schema would have to describe as a union. So on the write side, this connector never
+#     needs to express the union at all — not because it found a way to express one, but because the
+#     vendor never hands it one to express. `miro-sticky-note-create` and `-update` are plain, flat,
+#     fully-typed request bodies, exactly like every other connector's writes.
+#
+# The union survives only on the **read** side: `GET .../items` and `GET .../items/{item_id}` answer
+# with an item tagged by `type`, and the caller does not get to pick which type comes back. And there
+# it *is* expressible, honestly, as a JSON Schema `oneOf` over the four variants — because
+# `response_schema` (`connector_spec::ir::Operation::response_schema`, `crates/connector-spec/src/
+# ir.rs:675`) is a raw `serde_json::Value` with no flat-parameter-list constraint. `oneOf` is not a
+# guess dressed as a type: `crates/connector-spec/tests/response_schema_coverage.rs`'s own
+# `is_permissive` lists it as one of the keys that makes a schema *informative*, alongside
+# `properties`, `items`, `$ref` and `const`. That is the mechanism Notion's blocks could never reach,
+# because a block's recursion needs `$ref` and this repository's `JsonSchema` has none — a bounded,
+# non-recursive `oneOf` has no such requirement.
+#
+# **So the finding this connector was chosen to produce:** a shallow, non-recursive union is
+# expressible here — directly, as `oneOf`, on the read side, and vacuously on the write side, because
+# the vendor's own per-type routing dissolves it before this pipeline's schema ever has to describe
+# one. What Notion's blocks actually ran into was recursion, not "a union" as such — narrowing that
+# recorded gap. `crates/connector-flux/tests/miro_connector.rs` asserts both halves directly rather
+# than leaving them as prose: `the_read_side_union_is_expressed_as_a_oneof_over_the_four_item_types`
+# and `the_write_side_never_declares_a_type_discriminator_body_field`.
+#
+# ---------------------------------------------------------------------------------------------
+# `board_id` IS A PER-CALL ARGUMENT, NOT `[[config]]` — THE SAME SCHEMA-DRIVEN REASONING
+# `providers/cloudflare.toml` GIVES `zone_id`.
+# ---------------------------------------------------------------------------------------------
+#
+# Every board-scoped endpoint lives under `/v2/boards/{board_id}/…`. `[[config]]`'s only path to a
+# URL is `endpoint.<var>` reaching a `{placeholder}` in `base_url` (`crates/connector-spec/src/
+# config.rs`), and `base_url` below is one host shared by every board with no such placeholder. So
+# `board_id` is `params.path` on every operation except `miro-board-list` — the one call that exists
+# to *discover* board ids, and therefore the one with nothing yet to scope. That call is also this
+# connector's `verify`: a "Test connection" button has to run with no argument a human has not
+# supplied yet, and listing boards is the only read here that takes none.
+#
+# ---------------------------------------------------------------------------------------------
+# WHAT IS DELIBERATELY EXCLUDED, AND WHY
+# ---------------------------------------------------------------------------------------------
+#
+#  - Pagination (`cursor`/`limit` on the two list-shaped reads). Not the query-encoding gap AGENTS.md
+#    tracks for zendesk — an opaque cursor token and an integer limit carry no character that changes
+#    the shape of a request — but this file is not confident of Miro's exact default page size or
+#    limit bounds and would rather return a first page than assert one that is wrong, the same choice
+#    `providers/cloudflare.toml`'s header records for its own list endpoints.
+#  - Shapes, text items, frames, cards, images, documents, embeds and connectors (Miro's line-drawing
+#    kind, unrelated to this repository's `[[channels]]`) as **write** surfaces — sticky notes are the
+#    one type-specific write exercised here; the others are a small, confident follow-on, not a gap
+#    this file works around. The read side (`miro-board-item-list`/`-get`) already covers all four
+#    curated types because it is generic across them.
+#  - `style` fields (fill colour, text alignment) on sticky-note create/update. Miro documents a named
+#    colour palette for `style.fillColor`, but this file is not confident of the exact, complete
+#    enumeration and would rather omit the field than assert a `enum` that rejects a real value the
+#    day it is wrong — unverified, and named here rather than guessed.
+#  - Board create/update/delete, mind maps, tags, groups, webhooks, and every admin/enterprise
+#    surface. Out of scope for a first curated set built around one workflow: find a board, read its
+#    items regardless of type, and create/update/remove a sticky note.
+#
+# `crates/connector-flux/tests/miro_connector.rs` is the contract test for C-183.
+
+id = "miro"
+vendor = "Miro"
+
+# One host for every board on the platform, identical for every account — see the header comment for
+# why this is exactly what makes `board_id` an argument rather than `[[config]]`. No `{placeholder}`,
+# so `status.rs` reports no `unbound-base-url-template` issue.
+#
+# `http_hosts` derives from this single value (`crates/connector-cli/src/catalog.rs`, `host_of`) and
+# is therefore exactly `api.miro.com`, never widened.
+base_url = "https://api.miro.com/v2"
+
+description = "Miro boards and board items: discover boards, read items of any type, and create, update and delete sticky notes"
+
+# The "Test connection" button: list the boards this token can see. It takes no required parameters —
+# `miro-board-list` is also the one operation with no `board_id` to supply — so pressing it can only
+# prove the token resolves and report what it can reach. A `verify` operation must be a read; the
+# loader refuses a `high` or `destructive` one, and this is a plain `GET`.
+verify = "miro-board-list"
+
+# Every operation authenticates the same way: a bearer access token. Miro issues one either as a
+# long-lived token for a single-workspace app or as an OAuth2 access token; both are sent identically
+# on the wire (`Authorization: Bearer <token>`), and acquiring either is the host's job, not this
+# file's — see AGENTS.md's authentication contract.
+default_auth = [{ credentials = ["miro.access_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "miro.access_token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; its value is never read
+# here and never reaches a generated artifact.
+env = ["MIRO_ACCESS_TOKEN"]
+description = "Miro access token (a personal access token or an OAuth2 access token), sent as a bearer token, scoped to read and write boards, board items and sticky notes"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a human supplies before any of this runs
+#
+# One field. There is no board to bind here — see the header comment for why that is a property of
+# the schema rather than an omission.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "access_token"
+label = "Miro access token"
+help = "Create one at your Miro app's settings (developers.miro.com) or from a personal access token under a board's Settings -> Apps, scoped to boards:read and boards:write. Miro shows the token once"
+# No `example`, deliberately. A Miro access token is a long opaque bearer string that reads as
+# plausible as a real one, and a placeholder shaped like a real token has already tripped GitHub's
+# push protection and blocked a release (`providers/notion.toml`, `providers/shopify.toml`,
+# `providers/cloudflare.toml` all record the same call).
+format = "token"
+secret = true
+docs_url = "https://developers.miro.com/docs/getting-started-with-oauth"
+binds = "credential.miro.access_token"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 6: discover boards, read items of any type (the union, expressed as `oneOf`), and
+# create/update/delete a sticky note (the union dissolved by the vendor's own per-type routing).
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only (C-8, C-23).
+#
+# Every response below is wrapped in nothing extra: Miro answers each of these with the resource (or
+# an array of them) directly, with no envelope layer to strip, unlike cloudflare's
+# `{success, errors, result}` or airtable's own wrapper.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "miro-board-list"
+method = "GET"
+path = "/boards"
+description = "List the boards this access token can see, with each board's id, name and description. Returns Miro's first page only; this connector declares no cursor or limit parameter (see the connector's header note). The board `id` returned here is what every other operation in this connector needs as `board_id`"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "array", items = { type = "object", required = ["id", "name"], properties = { id = { type = "string", description = "The board's id — pass this as `board_id` to every other operation" }, name = { type = "string", description = "The board's display name" }, description = { type = "string", description = "The board's description, empty string when none" }, createdAt = { type = "string", format = "date-time" }, modifiedAt = { type = "string", format = "date-time" } } } }, cursor = { type = "string", description = "Opaque pagination token for the next page; not usable by this connector (see the header note)" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "miro-board-item-list"
+method = "GET"
+path = "/boards/{board_id}/items"
+description = "List the items on a board, of any type (sticky note, shape, text or frame). Each item's shape depends on its `type`: sticky notes and text carry `data.content`, shapes carry `data.content` and `data.shape`, frames carry `data.title`. Returns Miro's first page only; this connector declares no cursor or limit parameter (see the connector's header note)"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "board_id"
+description = "The board's id, as returned by miro-board-list"
+required = true
+schema = { type = "string" }
+
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "array", items = { oneOf = [
+  { type = "object", required = ["id", "type"], description = "A sticky note", properties = { id = { type = "string" }, type = { type = "string", const = "sticky_note" }, data = { type = "object", properties = { content = { type = "string", description = "HTML content of the note" }, shape = { type = "string", description = "square or rectangle" } } }, position = { type = "object", properties = { x = { type = "number" }, y = { type = "number" } } }, geometry = { type = "object", properties = { width = { type = "number" }, height = { type = "number" } } }, parent = { type = "object", nullable = true, properties = { id = { type = "string", description = "The containing frame's id, when this item sits inside one" } } } } },
+  { type = "object", required = ["id", "type"], description = "A shape", properties = { id = { type = "string" }, type = { type = "string", const = "shape" }, data = { type = "object", properties = { content = { type = "string" }, shape = { type = "string", description = "e.g. rectangle, circle, triangle" } } }, position = { type = "object", properties = { x = { type = "number" }, y = { type = "number" } } }, geometry = { type = "object", properties = { width = { type = "number" }, height = { type = "number" } } }, parent = { type = "object", nullable = true, properties = { id = { type = "string" } } } } },
+  { type = "object", required = ["id", "type"], description = "A text item", properties = { id = { type = "string" }, type = { type = "string", const = "text" }, data = { type = "object", properties = { content = { type = "string" } } }, position = { type = "object", properties = { x = { type = "number" }, y = { type = "number" } } }, geometry = { type = "object", properties = { width = { type = "number" }, height = { type = "number" } } }, parent = { type = "object", nullable = true, properties = { id = { type = "string" } } } } },
+  { type = "object", required = ["id", "type"], description = "A frame — a container other items reference by `parent.id`; a frame never embeds its members' bodies", properties = { id = { type = "string" }, type = { type = "string", const = "frame" }, data = { type = "object", properties = { title = { type = "string" } } }, position = { type = "object", properties = { x = { type = "number" }, y = { type = "number" } } }, geometry = { type = "object", properties = { width = { type = "number" }, height = { type = "number" } } } } },
+] } }, cursor = { type = "string", description = "Opaque pagination token for the next page; not usable by this connector (see the header note)" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "miro-board-item-get"
+method = "GET"
+path = "/boards/{board_id}/items/{item_id}"
+description = "Get one item from a board, of any type (sticky note, shape, text or frame). Its shape depends on its `type` — see miro-board-item-list's description for what each carries"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "board_id"
+description = "The board's id, as returned by miro-board-list"
+required = true
+schema = { type = "string" }
+
+[[operations.params.path]]
+name = "item_id"
+description = "The item's id, as returned by miro-board-item-list"
+required = true
+schema = { type = "string" }
+
+[operations.response_schema]
+oneOf = [
+  { type = "object", required = ["id", "type"], description = "A sticky note", properties = { id = { type = "string" }, type = { type = "string", const = "sticky_note" }, data = { type = "object", properties = { content = { type = "string" }, shape = { type = "string" } } }, position = { type = "object", properties = { x = { type = "number" }, y = { type = "number" } } }, geometry = { type = "object", properties = { width = { type = "number" }, height = { type = "number" } } }, parent = { type = "object", nullable = true, properties = { id = { type = "string" } } } } },
+  { type = "object", required = ["id", "type"], description = "A shape", properties = { id = { type = "string" }, type = { type = "string", const = "shape" }, data = { type = "object", properties = { content = { type = "string" }, shape = { type = "string" } } }, position = { type = "object", properties = { x = { type = "number" }, y = { type = "number" } } }, geometry = { type = "object", properties = { width = { type = "number" }, height = { type = "number" } } }, parent = { type = "object", nullable = true, properties = { id = { type = "string" } } } } },
+  { type = "object", required = ["id", "type"], description = "A text item", properties = { id = { type = "string" }, type = { type = "string", const = "text" }, data = { type = "object", properties = { content = { type = "string" } } }, position = { type = "object", properties = { x = { type = "number" }, y = { type = "number" } } }, geometry = { type = "object", properties = { width = { type = "number" }, height = { type = "number" } } }, parent = { type = "object", nullable = true, properties = { id = { type = "string" } } } } },
+  { type = "object", required = ["id", "type"], description = "A frame", properties = { id = { type = "string" }, type = { type = "string", const = "frame" }, data = { type = "object", properties = { title = { type = "string" } } }, position = { type = "object", properties = { x = { type = "number" }, y = { type = "number" } } }, geometry = { type = "object", properties = { width = { type = "number" }, height = { type = "number" } } } } },
+]
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "miro-sticky-note-create"
+method = "POST"
+path = "/boards/{board_id}/sticky_notes"
+description = "Create a sticky note on a board. Miro does not deduplicate: creating the same content twice makes two sticky notes, so this is not idempotent. The created note, with its assigned id, is in the response"
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "board_id"
+description = "The board's id, as returned by miro-board-list"
+required = true
+schema = { type = "string" }
+
+# Required field only. An optional body field the emitter would bind unconditionally (C-56) reaches a
+# caller who did not set it as an explicit `null`, and this file has no evidence Miro accepts `null`
+# for shape, position or geometry on create — `providers/cloudflare.toml` and `providers/shopify.toml`
+# make the identical call for the same reason. `shape`, `position` and `geometry` are the obvious
+# additions once C-56 lands; `style` stays excluded regardless (see the header note).
+[[operations.params.body]]
+name = "content"
+description = "The sticky note's text content, as HTML"
+required = true
+wire = "data.content"
+schema = { type = "string" }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "type"]
+properties = { id = { type = "string" }, type = { type = "string", const = "sticky_note" }, data = { type = "object", properties = { content = { type = "string" }, shape = { type = "string" } } }, position = { type = "object", properties = { x = { type = "number" }, y = { type = "number" } } }, geometry = { type = "object", properties = { width = { type = "number" }, height = { type = "number" } } }, createdAt = { type = "string", format = "date-time" }, modifiedAt = { type = "string", format = "date-time" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "miro-sticky-note-update"
+method = "PATCH"
+path = "/boards/{board_id}/sticky_notes/{item_id}"
+description = "Update a sticky note's text content. Setting the same content twice ends in the same state, but this is declared non_idempotent because check_write_metadata refuses idempotency = idempotent on any PATCH by method alone, regardless of vendor behaviour (see the header note, C-186). The updated note is in the response"
+risk = "medium"
+# Genuinely idempotent by Miro's behaviour (an absolute value, not a delta) but the compiler refuses
+# the honest answer on a PATCH — the same trade `providers/cloudflare.toml` records for its own
+# genuinely-idempotent POST. Do not "fix" this by editing the compiler rule to fit one connector; the
+# honest fix is C-186's escape hatch, not yet landed.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "board_id"
+description = "The board's id, as returned by miro-board-list"
+required = true
+schema = { type = "string" }
+
+[[operations.params.path]]
+name = "item_id"
+description = "The sticky note's id, as returned by miro-board-item-list or miro-sticky-note-create"
+required = true
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "content"
+description = "The sticky note's new text content, as HTML, replacing the existing content entirely"
+required = true
+wire = "data.content"
+schema = { type = "string" }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "type"]
+properties = { id = { type = "string" }, type = { type = "string", const = "sticky_note" }, data = { type = "object", properties = { content = { type = "string" }, shape = { type = "string" } } }, position = { type = "object", properties = { x = { type = "number" }, y = { type = "number" } } }, geometry = { type = "object", properties = { width = { type = "number" }, height = { type = "number" } } }, createdAt = { type = "string", format = "date-time" }, modifiedAt = { type = "string", format = "date-time" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "miro-sticky-note-delete"
+method = "DELETE"
+path = "/boards/{board_id}/sticky_notes/{item_id}"
+description = "Delete one sticky note. There is no undo route in the API. Responds with no content"
+# See the header comment. The only tier that makes flux's approval gate stop for this.
+risk = "destructive"
+# `DELETE` is idempotent in effect under RFC 9110 §9.2.2 — the note is gone either way — but this file
+# has no evidence Miro repeats the first response rather than answering a second delete with 404, and
+# documents no idempotency guarantee. No write here is marked idempotent on a claim it cannot back —
+# the same call `providers/cloudflare.toml` makes for its own DNS record delete.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "board_id"
+description = "The board's id, as returned by miro-board-list"
+required = true
+schema = { type = "string" }
+
+[[operations.params.path]]
+name = "item_id"
+description = "The sticky note's id, as returned by miro-board-item-list or miro-sticky-note-create"
+required = true
+schema = { type = "string" }
+
+# No response_schema: Miro answers a delete with an empty 204 body, and this file declares nothing
+# rather than a permissive placeholder for a response that does not exist.
