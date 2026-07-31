@@ -127,7 +127,6 @@ _A connector's operations are currently legible only by reading `providers/<name
 - [C-168 — Ship the SendGrid connector](C-168-provider-sendgrid.md) · Spec · the send body is a nested array-of-objects envelope (`personalizations[].to[]`) — deeper than Asana's envelope, and the first place body nesting depth is really tested
 - [C-169 — Ship the Cloudflare connector](C-169-provider-cloudflare.md) · Spec · zone-scoped paths where the zone id is a required first segment on every operation — a natural test of whether `[[config]]` can pin a path variable rather than a caller supplying it each call
 - [C-170 — Ship the Vercel connector](C-170-provider-vercel.md) · Spec · team scope is an OPTIONAL query parameter (`?teamId=`) that changes which account the write lands on — an optional argument with a blast radius
-- [C-171 — Ship the Box connector](C-171-provider-box.md) · Spec · folder and file ids are opaque strings where `0` is the magic root — a sentinel value a model will guess wrong without being told
 - [C-172 — Ship the Calendly connector](C-172-provider-calendly.md) · Spec · every resource is addressed by a full URI, not an id — so a parameter's value is itself a URL, and the template must not double-compose it
 - [C-173 — Ship the Typeform connector](C-173-provider-typeform.md) · Spec · responses are cursor-paginated with a `before`/`after` token pair, and the response payload is answer-shaped rather than record-shaped
 - [C-174 — Ship the DocuSign connector](C-174-provider-docusign.md) · Spec · the base URI is returned by a userinfo call and is per-account (`{base_uri}/restapi/v2.1/accounts/{account_id}`) — TWO configured path levels above every operation
@@ -277,6 +276,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-151 — A verification field that stops at the IR is silently dropped from the manifest and the catalogue](C-151-hmac-fields-reach-the-manifest.md) · Codegen · ManifestHmac and HmacEntry enumerate HmacSpec's fields BY HAND, so C-141's timestamp_format never reaches a host. Nothing declares one yet — this must land before the first RFC 3339 vendor binding, or that host reads the wrong spelling
 - [C-152 — The redaction guarantee has two holes and one vacuous assertion](C-152-redaction-guarantee-has-holes.md) · Bridge · found by C-116's review. flux's Redactor SILENTLY DROPS values under 6 trimmed characters, so a short credential travels unredacted through all four surfaces — and our docs state the guarantee unconditionally. Plus auth::Assembled derives Debug over the plaintext
 - [C-166 — Ship the GitLab connector](C-166-provider-gitlab.md) · Spec · a project is addressed as a URL-ENCODED path (`group%2Fsub%2Fproject`), so a path segment must survive percent-encoding — the same gap as zendesk-ticket-search, in the path position
+- [C-171 — Ship the Box connector](C-171-provider-box.md) · Spec · folder and file ids are opaque strings where `0` is the magic root — a sentinel value a model will guess wrong without being told
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

@@ -9,6 +9,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Box connector (C-171).** Six operations over a bearer token, with `GET /users/me` as
+  `verify`. Box's root folder id is the literal `"0"` — a sentinel a model guesses wrong unless told,
+  so it is declared as a JSON Schema `default` and in prose on every folder-id parameter.
+
+  The download endpoint is **excluded**: it answers `302` to a signed URL, and redirect-following is
+  not a declared behaviour of this pipeline, so shipping it would make success depend on a client
+  setting nobody declared.
+
+  `box` is a Rust keyword. Traced rather than worked around: `catalog.rs`'s `module_ident` and its
+  `RUST_KEYWORDS` table already escape it to `r#box` in the generated index, and the Flux side never
+  derives an identifier from a provider id — so nothing needed changing.
+
+### Changed
+
+- **`COVERED_FLOOR` is coordinator-owned, and `AGENTS.md` now says so.** The response-schema ratchet
+  is a **ninth** staleness check the eight-red table did not name, and it is red per *wave* rather
+  than per *story*: C-166 and C-171 each declared complete response shapes and each saw exactly eight
+  red alone, but together they crossed the ratchet's one-tenth slack (105 of 123 against a floor of
+  92). Raised to 105. Two implementors raising one constant would collide on one line, which is the
+  failure C-104 exists to prevent.
+
+
+### Added
+
 - **The GitLab connector (C-166).** Seven operations — issues (list, get, create), merge requests,
   a pipeline, branches, and `GET /user` as `verify` — under a bearer personal access token.
 

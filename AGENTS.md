@@ -145,6 +145,27 @@ are `catalog.json` and index staleness. Report them and stop; do **not** run a f
 them. The coordinator's full build at integration resolves all eight, and it is the only build that
 can, because it is the only one with every provider.
 
+### A ninth staleness check exists, and it is coordinator-owned
+
+`the_recorded_floor_is_the_measured_figure` (`crates/connector-spec/tests/response_schema_coverage.rs`)
+is a **two-way** ratchet: coverage may run ahead of `COVERED_FLOOR` by up to a tenth of the catalogue,
+and beyond that the floor must be raised in the same commit that earned it.
+
+**It is red per *wave*, not per *story*, which is why it is not in the table above.** Measured during
+the 2026-07-31 fan-out: C-166 (7 operations, all with response shapes) and C-171 (6, likewise) each
+saw exactly eight red in their own worktree, because each fits inside the slack alone. Their
+*accumulation* crossed it — coverage 105 of 123 against a floor of 92, slack 12.
+
+So `COVERED_FLOOR` joins the fence: **an implementor never raises it, the coordinator raises it at
+integration.** Two concurrent provider stories that each raised it would collide on one line, which
+is exactly the failure C-104 exists to prevent. A provider implementor seeing this test red should
+report it as a ninth and stop, not edit the constant.
+
+`RATIO_FLOOR_PERCENT` is deliberately *not* raised in lockstep. It governs the different regression —
+operations added *without* shapes — and pinning it to the current 85% would fire on the next connector
+whose vendor genuinely does not specify a response, which babelforce (0 of 9) already demonstrates is
+a real category.
+
 **A story that only changes an existing provider leaves three red**, not one — the index is still
 correct, but `catalog.json` and the README images are not. Measured by editing a `description` in
 `providers/zendesk.toml` and running `build --provider zendesk`:

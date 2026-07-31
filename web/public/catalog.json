@@ -2098,6 +2098,569 @@
       "channels": []
     },
     {
+      "id": "box",
+      "authority": null,
+      "vendor": "Box",
+      "description": "Box: browse folder contents, read file and folder metadata, create folders, and copy files",
+      "base_url": "https://api.box.com",
+      "api_version": null,
+      "hosts": [
+        "api.box.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.box.com",
+          "hosts": [
+            "api.box.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 6
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "box.access_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "Box access token sent as a bearer — an OAuth2 access token or a Developer Console token",
+            "env": [
+              "BOX_ACCESS_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "box.access_token"
+          ]
+        ]
+      },
+      "operation_count": 6,
+      "operations": [
+        {
+          "id": "box-user-me",
+          "provider": "box",
+          "service": "default",
+          "description": "Get the user this access token authenticates as, confirming the token resolves and naming the account it belongs to. Takes no parameters",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/2.0/users/me",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "id": {
+                "description": "The user's id",
+                "type": "string"
+              },
+              "login": {
+                "description": "The user's email address",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "const": "user"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "box.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.box.com"
+          ],
+          "flux": "op box-user-me -> Any\n  description \"Get the user this access token authenticates as, confirming the token resolves and naming the account it belongs to. Takes no parameters. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.box.com\"\n  url = fmt(\"{base}/2.0/users/me\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "box-folder-get",
+          "provider": "box",
+          "service": "default",
+          "description": "Get one folder's metadata: name, size, timestamps and parent. Does not return its contents — use box-folder-items-list for that",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/2.0/folders/{folder_id}",
+          "parameters": [
+            {
+              "name": "folder_id",
+              "in": "path",
+              "wire": null,
+              "description": "The folder's id, an opaque numeric string — except the account's root folder, whose id is always the literal string \"0\". There is no other name or alias for the root; passing \"root\" or an empty string is a 404",
+              "required": true,
+              "schema": {
+                "default": "0",
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "folder_id": {
+                "default": "0",
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "folder_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "modified_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parent": {
+                "description": "The parent folder's mini representation, `{type: \"folder\", id, name}` — absent (`null`) for the root folder, which has no parent",
+                "type": "object"
+              },
+              "size": {
+                "description": "Total size in bytes of the folder's contents",
+                "type": "integer"
+              },
+              "type": {
+                "const": "folder"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "box.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.box.com"
+          ],
+          "flux": "op box-folder-get(folder_id: String) -> Any\n  description \"Get one folder's metadata: name, size, timestamps and parent. Does not return its contents — use box-folder-items-list for that. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.box.com\"\n  url = fmt(\"{base}/2.0/folders/{folder_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "box-folder-items-list",
+          "provider": "box",
+          "service": "default",
+          "description": "List the files and folders directly inside a folder, first page only (Box's own default page size). Each entry is a mini item representation — its type, id and name — not the full metadata box-file-get or box-folder-get returns",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/2.0/folders/{folder_id}/items",
+          "parameters": [
+            {
+              "name": "folder_id",
+              "in": "path",
+              "wire": null,
+              "description": "The folder's id, an opaque numeric string — except the account's root folder, whose id is always the literal string \"0\". Listing the root folder is how a first call discovers what is in the account at all",
+              "required": true,
+              "schema": {
+                "default": "0",
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "folder_id": {
+                "default": "0",
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "folder_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "entries": {
+                "description": "This page's items, each `{type: \"file\"|\"folder\", id, name}`",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "offset": {
+                "type": "integer"
+              },
+              "total_count": {
+                "description": "How many items the folder holds in total. This connector cannot fetch beyond the first page (C-30), so a value larger than entries.length means more exist",
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "box.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.box.com"
+          ],
+          "flux": "op box-folder-items-list(folder_id: String) -> Any\n  description \"List the files and folders directly inside a folder, first page only (Box's own default page size). Each entry is a mini item representation — its type, id and name — not the full metadata box-file-get or box-folder-get returns. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.box.com\"\n  url = fmt(\"{base}/2.0/folders/{folder_id}/items\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "box-file-get",
+          "provider": "box",
+          "service": "default",
+          "description": "Get one file's metadata: name, size, timestamps and parent folder. This does NOT return the file's content — Box serves file content from a signed, time-limited URL reached only through a 302 redirect this connector does not follow, so file content is out of scope entirely",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/2.0/files/{file_id}",
+          "parameters": [
+            {
+              "name": "file_id",
+              "in": "path",
+              "wire": null,
+              "description": "The file's id, an opaque numeric string assigned by Box on upload. Found in a folder listing's entries or in the file's Box URL",
+              "required": true,
+              "schema": {
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "file_id": {
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "file_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "modified_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parent": {
+                "description": "The parent folder's mini representation, `{type: \"folder\", id, name}`",
+                "type": "object"
+              },
+              "sha1": {
+                "description": "SHA-1 hash of the file's content, for verifying a download performed some other way",
+                "type": "string"
+              },
+              "size": {
+                "description": "Size in bytes",
+                "type": "integer"
+              },
+              "type": {
+                "const": "file"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "box.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.box.com"
+          ],
+          "flux": "op box-file-get(file_id: String) -> Any\n  description \"Get one file's metadata: name, size, timestamps and parent folder. This does NOT return the file's content — Box serves file content from a signed, time-limited URL reached only through a 302 redirect this connector does not follow, so file content is out of scope entirely. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.box.com\"\n  url = fmt(\"{base}/2.0/files/{file_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "box-folder-create",
+          "provider": "box",
+          "service": "default",
+          "description": "Create a new, empty folder as a child of an existing folder. Naming a folder that already exists under the same parent answers 409 conflict rather than creating a duplicate",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/2.0/folders",
+          "parameters": [
+            {
+              "name": "name",
+              "in": "body",
+              "wire": null,
+              "description": "The new folder's name, unique among its parent's immediate children",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "parent_id",
+              "in": "body",
+              "wire": "parent.id",
+              "description": "The id of the existing folder to create this folder inside, an opaque numeric string — or the literal string \"0\" to create it directly under the account's root",
+              "required": true,
+              "schema": {
+                "default": "0",
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "parent_id": {
+                "default": "0",
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "parent_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "description": "The created folder's id — what a later call addresses it by",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parent": {
+                "type": "object"
+              },
+              "type": {
+                "const": "folder"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "box.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.box.com"
+          ],
+          "flux": "op box-folder-create(name: String, parent_id: String) -> Any\n  description \"Create a new, empty folder as a child of an existing folder. Naming a folder that already exists under the same parent answers 409 conflict rather than creating a duplicate. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.box.com\"\n  url = fmt(\"{base}/2.0/folders\")\n  content_type = \"application/json\"\n  payload = { name, parent: { id: parent_id } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "box-file-copy",
+          "provider": "box",
+          "service": "default",
+          "description": "Copy an existing file into a different folder, keeping its original name. Each call creates a new, independent file — copying the same file twice produces two copies, not one",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/2.0/files/{file_id}/copy",
+          "parameters": [
+            {
+              "name": "file_id",
+              "in": "path",
+              "wire": null,
+              "description": "The id of the file to copy, an opaque numeric string",
+              "required": true,
+              "schema": {
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            },
+            {
+              "name": "parent_id",
+              "in": "body",
+              "wire": "parent.id",
+              "description": "The id of the destination folder, an opaque numeric string — or the literal string \"0\" to copy directly into the account's root",
+              "required": true,
+              "schema": {
+                "default": "0",
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "file_id": {
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              },
+              "parent_id": {
+                "default": "0",
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "file_id",
+              "parent_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "id": {
+                "description": "The new copy's id, distinct from the source file's id",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parent": {
+                "type": "object"
+              },
+              "size": {
+                "type": "integer"
+              },
+              "type": {
+                "const": "file"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "box.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.box.com"
+          ],
+          "flux": "op box-file-copy(file_id: String, parent_id: String) -> Any\n  description \"Copy an existing file into a different folder, keeping its original name. Each call creates a new, independent file — copying the same file twice produces two copies, not one. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.box.com\"\n  url = fmt(\"{base}/2.0/files/{file_id}/copy\")\n  content_type = \"application/json\"\n  payload = { parent: { id: parent_id } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "fly",
       "authority": "io.fly.api",
       "vendor": "Fly.io",
