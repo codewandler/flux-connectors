@@ -92,7 +92,7 @@ pub mod provider;
 
 pub use address::{Gid, Oip, Pid};
 pub use auth::{AuthMethod, AuthRequirement, AuthScheme, OAuth2Spec, OAuthGrant, OAuthRedirect};
-pub use config::{Binding, ConfigField, Format, Level};
+pub use config::{Binding, ConfigField, Format, Level, Position};
 pub use credential::{CredentialRef, Layout, TenantLayout};
 pub use graph::{
     Backoff, Compare, Condition, Edge, Graph, GraphNode, NodeKind, Port, PortRef, TextRole,

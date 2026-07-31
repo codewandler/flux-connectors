@@ -144,7 +144,9 @@
 
 use std::collections::BTreeMap;
 
-use connector_spec::{Connector, HttpMethod, Idempotency, Operation, Param, Risk, FREE_FORM_BODY};
+use connector_spec::{
+    Connector, HttpMethod, Idempotency, Operation, Param, Position, Risk, FREE_FORM_BODY,
+};
 use flux_lang::ast::{DraftAst, Node, Param as FluxParam, SymbolName, TypeRef};
 use flux_lang::program::{CompositeOpDecl, CompositeOpMeta};
 
@@ -222,6 +224,27 @@ struct ConstantHeader<'a> {
     symbol: String,
 }
 
+/// **A value an operator pinned at install time**, and the symbol carrying it — C-187.
+///
+/// Emitted exactly the way a templated `base_url` already is: the symbol is bound to a **string
+/// literal holding the `{placeholder}`**, and a host substitutes the tenant's value into that
+/// literal before the module runs. That is not a stylistic echo of `$base` but the mechanism
+/// itself — `connector-pack` reads a connector's configuration variables off the braces surviving
+/// in its emitted literals, and substitutes into literals *only*, precisely so that nothing a
+/// caller passes can be substituted into. A pin written any other way would be invisible to that
+/// resolution, and a pin written as a Flux literal *value* would put a tenant's zone id in this
+/// repository, which is the category error the story rules out.
+///
+/// It is never a [`FluxParam`]: a pinned value that also reached the declared parameter list would
+/// be a value a model could pass, and the operator's choice of tenant would become a suggestion.
+struct Pinned<'a> {
+    /// Where on the request it lands.
+    position: Position,
+    /// The placeholder the literal carries, and the name the vendor sees for a query or header pin.
+    name: &'a str,
+    symbol: String,
+}
+
 /// Every parameter of one operation, paired with the Flux symbol the emitted `op` declares for it.
 struct Bindings<'a> {
     path: Vec<Bound<'a>>,
@@ -238,7 +261,7 @@ struct Bindings<'a> {
 /// Extracted from [`lower`] because a **call site** needs the same answer: a graph node feeding an
 /// operation (`graph.rs`) has to spell each argument with the symbol the operation's own declaration
 /// uses, and a second copy of this order would drift the first time a request position moved.
-fn bind_parameters<'a>(operation: &'a Operation) -> Result<Bindings<'a>> {
+fn bind_parameters<'a>(operation: &'a Operation) -> Result<(Bindings<'a>, Symbols)> {
     // Path, query, header, body — the IR's own request-position order, so the declared parameter
     // list is stable across regeneration.
     let mut symbols = Symbols::new();
@@ -304,14 +327,62 @@ fn bind_parameters<'a>(operation: &'a Operation) -> Result<Bindings<'a>> {
         })
         .collect::<Result<_>>()?;
 
-    Ok(Bindings {
-        path,
-        query,
-        header,
-        body,
-        free_form,
-        const_headers,
-    })
+    Ok((
+        Bindings {
+            path,
+            query,
+            header,
+            body,
+            free_form,
+            const_headers,
+        },
+        symbols,
+    ))
+}
+
+/// The values an operator pinned for this operation's service, paired with their Flux symbols.
+///
+/// **Allocated from the allocator [`bind_parameters`] left behind**, after every parameter and every
+/// constant header, for the reason that list already documents: adding a pin to a provider must not
+/// rename a symbol that already travelled.
+///
+/// A [`Position::Path`] pin applies only to an operation whose path actually carries its
+/// placeholder — Cloudflare's `cloudflare-zone-list` is the case, and it is the operation that
+/// *discovers* zone ids, so requiring every operation to reference the pin would make it
+/// unexpressible. A query or header pin applies to **every** operation of the service, and that is
+/// the point rather than a simplification: a tenant scope honoured on some of a service's calls and
+/// not others leaves the rest addressing a different tenant, which is the exact failure Vercel's
+/// optional `teamId` demonstrates.
+fn bind_pins<'a>(
+    connector: &'a Connector,
+    operation: &'a Operation,
+    symbols: &mut Symbols,
+) -> Result<Vec<Pinned<'a>>> {
+    connector
+        .config_of(&operation.service)
+        .filter_map(|field| field.pin())
+        .filter(|(position, name)| match position {
+            Position::Path => {
+                connector_spec::config::template_variables(&operation.path).contains(&{ *name })
+            }
+            Position::Query | Position::Header => true,
+        })
+        .map(|(position, name)| {
+            Ok(Pinned {
+                position,
+                name,
+                symbol: symbols.allocate(&operation.id, name)?,
+            })
+        })
+        .collect()
+}
+
+/// The pins landing on one request position, in declaration order.
+fn pins_at<'a, 'b>(pinned: &'b [Pinned<'a>], position: Position) -> Vec<&'b Pinned<'a>> {
+    pinned
+        .iter()
+        .filter(|pin| pin.position == position)
+        .collect()
 }
 
 /// The **caller-facing** name of every parameter a caller supplies, mapped to the Flux symbol the
@@ -328,7 +399,9 @@ fn bind_parameters<'a>(operation: &'a Operation) -> Result<Bindings<'a>> {
 /// the relationship between the two is mechanical rather than a coincidence two crates maintain
 /// separately. `tests/input_schema_agreement.rs` holds them together over every shipped operation.
 pub fn parameter_symbols(operation: &Operation) -> Result<BTreeMap<String, String>> {
-    let bound = bind_parameters(operation)?;
+    // Pins are deliberately absent and the signature is why they can be: an operator-pinned value is
+    // not a parameter, so no call site has an argument to spell for it. See `Pinned`.
+    let (bound, _) = bind_parameters(operation)?;
     Ok(bound
         .path
         .iter()
@@ -358,7 +431,8 @@ fn lower(connector: &Connector, operation: &Operation) -> Result<CompositeOpDecl
 
     // Kept whole rather than destructured: `request_body` needs every group, and passing them one
     // slice at a time is how a lowering grows an argument list nobody can read.
-    let bound = bind_parameters(operation)?;
+    let (bound, mut symbols) = bind_parameters(operation)?;
+    let pinned = bind_pins(connector, operation, &mut symbols)?;
     let Bindings {
         path,
         query,
@@ -367,6 +441,8 @@ fn lower(connector: &Connector, operation: &Operation) -> Result<CompositeOpDecl
         free_form,
         const_headers,
     } = &bound;
+
+    check_pins(operation, &bound, &pinned)?;
 
     for bound in header {
         // `const` on a header parameter used to be a silent no-op: the pin was dropped and the
@@ -403,6 +479,7 @@ fn lower(connector: &Connector, operation: &Operation) -> Result<CompositeOpDecl
         operation,
         header,
         const_headers,
+        &pinned,
         !body.is_empty() || free_form.is_some(),
     )?;
 
@@ -431,10 +508,43 @@ fn lower(connector: &Connector, operation: &Operation) -> Result<CompositeOpDecl
         returns: Some(TypeRef::Any),
         meta: metadata(operation)?,
         body: DraftAst {
-            body: request_body(connector, operation, &bound)?,
+            body: request_body(connector, operation, &bound, &pinned)?,
             ..DraftAst::default()
         },
     })
+}
+
+/// **A pin and a parameter may not claim one request slot** — C-187.
+///
+/// The repository's standing shape for a declaration it cannot honour: a refusal that names what
+/// went wrong, rather than a silent precedence rule. `Error::ConstantHeaderParam` is the same
+/// judgement one story earlier — `const` on a header parameter used to be dropped quietly, which
+/// shipped connectors whose mandatory header was whatever the caller passed.
+///
+/// Honouring one side instead is not available. If the parameter wins, the pin is decoration and a
+/// model chooses the tenant; if the pin wins, the operation declares an argument that goes nowhere
+/// and a caller's value vanishes without a word. Both are requests a vendor answers `200` to, which
+/// is the failure mode this emitter refuses everywhere else.
+///
+/// Header pins are absent here because [`check_header_names`] already claims every header name from
+/// all three sources at once; a pin colliding there is an [`Error::HeaderConflict`] naming both.
+fn check_pins(operation: &Operation, bound: &Bindings<'_>, pinned: &[Pinned<'_>]) -> Result<()> {
+    for pin in pinned {
+        let claimed = match pin.position {
+            Position::Path => bound.path.iter().any(|b| wire_name(b.param) == pin.name),
+            Position::Query => bound.query.iter().any(|b| wire_name(b.param) == pin.name),
+            // Claimed by `check_header_names`, against every source at once.
+            Position::Header => false,
+        };
+        if claimed {
+            return Err(Error::PinnedValueConflict {
+                operation: operation.id.clone(),
+                position: pin.position.word(),
+                name: pin.name.to_string(),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// Everything a declared [`BodyEncoding`] must be true of before the body is assembled — C-144.
@@ -508,14 +618,16 @@ fn check_body_encoding(
 /// the first — silently, in an order nothing in the provider file makes visible. That is why this is
 /// a refusal rather than a merge, and it is the header-side twin of [`Error::BodyPathConflict`].
 ///
-/// Three sources can claim a name: the media type the emitter derives from the request body, a
-/// caller-supplied `params.header`, and a `const_headers` entry. The comparison is case-insensitive
-/// because HTTP field names are (RFC 9110 §5.1) — a map keyed by spelling would hold `Notion-Version`
-/// and `notion-version` happily, and send the header twice.
+/// Four sources can claim a name: the media type the emitter derives from the request body, a
+/// caller-supplied `params.header`, a `const_headers` entry, and an operator-pinned configuration
+/// value (C-187). The comparison is case-insensitive because HTTP field names are (RFC 9110 §5.1) —
+/// a map keyed by spelling would hold `Notion-Version` and `notion-version` happily, and send the
+/// header twice.
 fn check_header_names(
     operation: &Operation,
     header: &[Bound<'_>],
     const_headers: &[ConstantHeader<'_>],
+    pinned: &[Pinned<'_>],
     has_body: bool,
 ) -> Result<()> {
     let mut claimed: Vec<(String, &'static str)> = Vec::new();
@@ -547,6 +659,18 @@ fn check_header_names(
             });
         }
         claim(constant_header.name, "a constant header")?;
+    }
+    // Last, so a collision is reported against the declaration that was already there. A pinned
+    // header carries an operator's value, so the same spelling rule applies: `http.request` builds a
+    // `HeaderName` from it and errors on anything that is not an HTTP token.
+    for pin in pins_at(pinned, Position::Header) {
+        if !is_http_token(pin.name) {
+            return Err(Error::BadHeaderName {
+                operation: operation.id.clone(),
+                name: pin.name.to_string(),
+            });
+        }
+        claim(pin.name, "an operator-pinned configuration value")?;
     }
     Ok(())
 }
@@ -665,6 +789,7 @@ fn request_body(
     connector: &Connector,
     operation: &Operation,
     bound: &Bindings<'_>,
+    pinned: &[Pinned<'_>],
 ) -> Result<Vec<Node>> {
     let Bindings {
         path,
@@ -677,12 +802,24 @@ fn request_body(
     let free_form = free_form.as_ref();
 
     let (required, optional): (Vec<_>, Vec<_>) = query.iter().partition(|b| b.param.required);
+    let pinned_query = pins_at(pinned, Position::Query);
 
     let mut template = String::from("{base}");
-    template.push_str(&path_template(operation, path)?);
-    for (i, bound) in required.iter().enumerate() {
-        template.push(if i == 0 { '?' } else { '&' });
+    template.push_str(&path_template(operation, path, pinned)?);
+    let mut opened = false;
+    for bound in &required {
+        template.push(if opened { '&' } else { '?' });
+        opened = true;
         template.push_str(&format!("{}={{{}}}", wire_name(bound.param), bound.symbol));
+    }
+    // After the caller's required arguments and before the guarded optional ones. A pinned parameter
+    // is unconditional — that is what distinguishes it from an optional filter, and it is why it
+    // needs no `when` guard: the symbol holds a placeholder a host always substitutes, so there is
+    // no "not supplied" state for a guard to describe.
+    for pin in &pinned_query {
+        template.push(if opened { '&' } else { '?' });
+        opened = true;
+        template.push_str(&format!("{}={{{}}}", pin.name, pin.symbol));
     }
 
     let mut body = vec![
@@ -703,16 +840,20 @@ fn request_body(
                 .base_url_of(&operation.service)
                 .trim_end_matches('/'),
         ),
-        bind_fmt(URL, template),
     ];
 
+    // Bound between the base URL and the URL that reads them, and bound to a **literal holding the
+    // placeholder** rather than to a value: a host substitutes into literals only, which is what
+    // keeps a caller's parameter from ever being substituted into. See `Pinned`.
+    for pin in pinned {
+        body.push(bind_string(&pin.symbol, &format!("{{{}}}", pin.name)));
+    }
+    body.push(bind_fmt(URL, template));
+
     if !optional.is_empty() {
-        // The first *surviving* optional parameter opens the query string — unless a required one
-        // already did.
-        body.push(bind_string(
-            SEP,
-            if required.is_empty() { "?" } else { "&" },
-        ));
+        // The first *surviving* optional parameter opens the query string — unless a required or a
+        // pinned one already did.
+        body.push(bind_string(SEP, if opened { "&" } else { "?" }));
         for (i, bound) in optional.iter().enumerate() {
             let mut guarded = vec![bind_fmt(
                 URL,
@@ -781,6 +922,11 @@ fn request_body(
             constant_header.name.to_string(),
             Box::new(symbol(&constant_header.symbol)),
         );
+    }
+    // An operator-pinned header. Its symbol is already bound, above the URL, because the same
+    // literal is what a host substitutes into whichever position the pin lands on.
+    for pin in pins_at(pinned, Position::Header) {
+        headers.insert(pin.name.to_string(), Box::new(symbol(&pin.symbol)));
     }
     if !headers.is_empty() {
         request.insert(
@@ -1039,7 +1185,11 @@ fn form_payload(body_params: &[Bound<'_>]) -> Vec<Node> {
 /// Both directions of mismatch are refused: a placeholder with no declared parameter would
 /// interpolate to a literal `{name}` in the URL, and a declared path parameter that never appears
 /// in the template could never travel.
-fn path_template(operation: &Operation, path: &[Bound<'_>]) -> Result<String> {
+fn path_template(
+    operation: &Operation,
+    path: &[Bound<'_>],
+    pinned: &[Pinned<'_>],
+) -> Result<String> {
     let mut out = String::new();
     let mut used = vec![false; path.len()];
     let mut rest = operation.path.as_str();
@@ -1055,16 +1205,25 @@ fn path_template(operation: &Operation, path: &[Bound<'_>]) -> Result<String> {
             });
         };
         let wire = &after[..close];
-        let index = path
-            .iter()
-            .position(|b| wire_name(b.param) == wire)
-            .ok_or_else(|| Error::UndeclaredPathParam {
-                operation: operation.id.clone(),
-                path: operation.path.clone(),
-                name: wire.to_string(),
-            })?;
-        used[index] = true;
-        out.push_str(&format!("{{{}}}", path[index].symbol));
+        // A caller's argument first, then an operator's pin. The two can never both answer: a
+        // segment claimed by both is refused by `check_pins` before this runs, so the order here
+        // decides nothing and is only the order the two were introduced in.
+        let symbol_name = match path.iter().position(|b| wire_name(b.param) == wire) {
+            Some(index) => {
+                used[index] = true;
+                path[index].symbol.clone()
+            }
+            None => pins_at(pinned, Position::Path)
+                .into_iter()
+                .find(|pin| pin.name == wire)
+                .map(|pin| pin.symbol.clone())
+                .ok_or_else(|| Error::UndeclaredPathParam {
+                    operation: operation.id.clone(),
+                    path: operation.path.clone(),
+                    name: wire.to_string(),
+                })?,
+        };
+        out.push_str(&format!("{{{symbol_name}}}"));
         rest = &after[close + 1..];
     }
     out.push_str(rest);
@@ -1277,13 +1436,16 @@ mod tests {
             param: &op.params.path[0],
             symbol: "call_id".to_string(),
         }];
-        assert_eq!(path_template(&op, &bound).unwrap(), "/v2/calls/{call_id}");
+        assert_eq!(
+            path_template(&op, &bound, &[]).unwrap(),
+            "/v2/calls/{call_id}"
+        );
     }
 
     #[test]
     fn a_missing_leading_slash_is_supplied() {
         let op = operation("v2/agents", Vec::new());
-        assert_eq!(path_template(&op, &[]).unwrap(), "/v2/agents");
+        assert_eq!(path_template(&op, &[], &[]).unwrap(), "/v2/agents");
     }
 
     /// A placeholder nothing declares would interpolate to a literal `{id}` in the request URL.
@@ -1291,7 +1453,7 @@ mod tests {
     fn an_undeclared_path_placeholder_is_refused() {
         let op = operation("/v2/calls/{id}", Vec::new());
         assert!(matches!(
-            path_template(&op, &[]),
+            path_template(&op, &[], &[]),
             Err(Error::UndeclaredPathParam { .. })
         ));
     }
@@ -1305,7 +1467,7 @@ mod tests {
             symbol: "id".to_string(),
         }];
         assert!(matches!(
-            path_template(&op, &bound),
+            path_template(&op, &bound, &[]),
             Err(Error::UnusedPathParam { .. })
         ));
     }

@@ -12,7 +12,7 @@
 //! The third property — that `secret` agrees with what a field binds — is the one with a security
 //! edge, and it has its own section.
 
-use connector_spec::{provider, Connector, Format, Level};
+use connector_spec::{provider, Binding, Connector, Format, Level, Position};
 
 /// A connector with a templated base URL, a basic credential, and one config field per binding form
 /// that applies to it. Each test perturbs exactly one thing.
@@ -475,4 +475,312 @@ fn zendesk_declares_a_complete_connect_form() {
     );
 
     assert_eq!(connector.verify.as_deref(), Some("zendesk-test"));
+}
+
+// ---------------------------------------------------------------------------------------------
+// An operator pins a tenant-scoping value at install time (C-187)
+//
+// `endpoint.<variable>` reaches a `{placeholder}` in a service's `base_url` and nothing else, so a
+// tenant value living anywhere else on the request — Cloudflare's `{zone_id}` path segment,
+// Vercel's `?teamId=` — had to ship as a per-call argument a model chooses on every invocation.
+// These tests are about the three request positions a pin may reach instead.
+// ---------------------------------------------------------------------------------------------
+
+/// A connector whose host is literal and whose every real operation is scoped under one `{zone_id}`
+/// path segment — the Cloudflare shape, reduced to what a binding needs.
+///
+/// One operation (`acme-zone-list`) deliberately carries no `{zone_id}`: it is the call that
+/// *discovers* the value, and a pin that required every operation to reference it would make that
+/// call unexpressible.
+fn scoped_fixture(config: &str) -> String {
+    format!(
+        r#"
+id = "acme"
+vendor = "Acme"
+base_url = "https://api.acme.example"
+
+[[auth]]
+name = "acme.api_token"
+scheme = "bearer"
+env = ["ACME_API_TOKEN"]
+
+[[operations]]
+id = "acme-zone-list"
+method = "GET"
+path = "/zones"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations]]
+id = "acme-record-list"
+method = "GET"
+path = "/zones/{{zone_id}}/records"
+risk = "low"
+idempotency = "idempotent"
+
+[[config]]
+name = "api_token"
+label = "API token"
+help = "From your Acme account settings"
+format = "token"
+secret = true
+binds = "credential.acme.api_token"
+
+{config}
+"#
+    )
+}
+
+/// The pin itself: an operator-supplied zone, bound to the path segment every scoped operation
+/// carries.
+const ZONE_PIN: &str = r#"
+[[config]]
+name = "zone_id"
+label = "Acme zone"
+help = "The zone this connector is installed for"
+example = "023e105f4ecef8ad9ca31a8372d0c353"
+binds = "path.zone_id"
+"#;
+
+/// **The failing-first test.** A `[[config]]` field binding a path segment does not load today:
+/// `parse_binding` reaches `endpoint.`, `credential.`, `username.` and the two `oauth.` literals,
+/// and a path segment is none of them — so an operator cannot say "install this connector for this
+/// zone", and the value stays an argument a model chooses on every call.
+#[test]
+fn a_config_field_can_pin_a_path_segment() {
+    let connector = load(&scoped_fixture(ZONE_PIN));
+
+    let zone = connector
+        .config_field("zone_id")
+        .expect("the fixture declares it");
+    assert_eq!(zone.binds, "path.zone_id");
+
+    // Derived, never authored. A zone is per-tenant, so it is connection level for the same reason
+    // `{subdomain}` is — the level is a consequence of where the value goes.
+    assert_eq!(
+        zone.level(),
+        Some(Level::Connection),
+        "a pinned tenant value is set once per connection, not once per vendor"
+    );
+    assert!(
+        !zone.secret,
+        "a pinned value is operator-supplied configuration, not a credential"
+    );
+
+    // **The pin is not advisory.** Nothing declares `zone_id` as a caller argument, so a model
+    // cannot override the operator's choice of zone.
+    assert!(
+        connector
+            .operations
+            .iter()
+            .all(|op| op.params.path.iter().all(|p| p.name != "zone_id")),
+        "a pinned value must not also be a caller argument"
+    );
+}
+
+/// The typed form, and the two facts derivation is responsible for. Kept separate from the test
+/// above so that the failing-first assertion stays about the *file*, not about the enum's shape.
+#[test]
+fn a_pin_parses_to_its_position_and_derives_its_level_and_secrecy() {
+    let connector = load(&scoped_fixture(ZONE_PIN));
+    let zone = connector.config_field("zone_id").expect("declared");
+
+    assert_eq!(
+        zone.binding(),
+        Some(Binding::Request {
+            position: Position::Path,
+            name: "zone_id"
+        })
+    );
+    assert_eq!(zone.pin(), Some((Position::Path, "zone_id")));
+    assert!(
+        zone.required,
+        "`required` defaults to true, and a pin may not turn it off"
+    );
+}
+
+/// A query pin and a header pin, on a connector shaped like the two that measured the gap.
+#[test]
+fn a_query_parameter_and_a_header_can_be_pinned_too() {
+    let config = r#"
+[[config]]
+name = "account_id"
+label = "Account"
+help = "The account every call acts on behalf of"
+binds = "query.accountId"
+
+[[config]]
+name = "application_id"
+label = "Application"
+help = "The application id this connection uses"
+binds = "header.X-Vendor-Application-Id"
+"#;
+    let connector = load(&scoped_fixture(config));
+
+    assert_eq!(
+        connector.config_field("account_id").and_then(|f| f.pin()),
+        Some((Position::Query, "accountId"))
+    );
+    assert_eq!(
+        connector
+            .config_field("application_id")
+            .and_then(|f| f.pin()),
+        Some((Position::Header, "X-Vendor-Application-Id"))
+    );
+    // A non-secret value reaching a header without routing through `[[auth]]` is the whole of
+    // C-164's blocker — the fix is not "let a credential be non-secret".
+    for name in ["account_id", "application_id"] {
+        assert!(!connector.config_field(name).expect("declared").secret);
+        assert_eq!(
+            connector.config_field(name).and_then(|f| f.level()),
+            Some(Level::Connection)
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// A pin that does not pin is refused
+// ---------------------------------------------------------------------------------------------
+
+/// **The acceptance rule with teeth.** If the operator pins it *and* the caller may pass it, the
+/// caller's value wins and the operator's choice of tenant becomes a suggestion.
+#[test]
+fn a_value_that_is_both_pinned_and_declared_as_a_parameter_is_refused() {
+    // The trailing table re-opens the last `[[operations]]` — `acme-record-list`, the scoped one.
+    let error = refuse(&scoped_fixture(&format!(
+        r#"{ZONE_PIN}
+[[operations.params.path]]
+name = "zone_id"
+description = "The zone, as a caller argument"
+required = true
+schema = {{ type = "string" }}
+"#
+    )));
+    assert!(
+        error.contains("already declares it") && error.contains("is not pinned"),
+        "a pin a caller can override is advisory, which is the opposite of a pin:\n{error}"
+    );
+}
+
+/// The query half of the same rule, which is the one with the sharper failure: Vercel's `teamId`
+/// redirects a write to the personal account when it goes unset.
+#[test]
+fn a_pinned_query_parameter_that_is_also_an_argument_is_refused() {
+    let config = r#"
+[[config]]
+name = "account_id"
+label = "Account"
+help = "The account every call acts on behalf of"
+binds = "query.accountId"
+"#;
+    let source = scoped_fixture(config).replace(
+        r#"[[operations]]
+id = "acme-record-list""#,
+        r#"[[operations.params.query]]
+name = "accountId"
+description = "The account"
+required = false
+schema = { type = "string" }
+
+[[operations]]
+id = "acme-record-list""#,
+    );
+    let error = refuse(&source);
+    assert!(
+        error.contains("already declares it"),
+        "an optional argument beside a pin is exactly the silent-redirect shape:\n{error}"
+    );
+}
+
+/// A pin is mandatory. A host substitutes a pinned placeholder into an emitted literal and refuses
+/// the whole request when it has no value, so `required = false` describes a connector that
+/// composes no URL — and, for a query pin, reintroduces the absent-parameter hazard entirely.
+#[test]
+fn an_optional_pin_is_refused() {
+    let error = refuse(&scoped_fixture(&format!("{ZONE_PIN}required = false\n")));
+    assert!(
+        error.contains("composes no URL"),
+        "an optional pin is not a smaller pin, it is a broken connector:\n{error}"
+    );
+}
+
+/// A pin nothing interpolates is a question whose answer is discarded — the request-position twin of
+/// the endpoint rule.
+#[test]
+fn a_path_pin_no_operation_carries_is_refused() {
+    let error = refuse(&scoped_fixture(
+        &ZONE_PIN.replace("path.zone_id", "path.region"),
+    ));
+    assert!(
+        error.contains("which no operation of service") && error.contains("{region}"),
+        "the error must say the placeholder reaches nothing:\n{error}"
+    );
+}
+
+/// **The C-197 collapse, made unreachable.** A host keys a configuration value by
+/// `(tenant, provider, service, kind, name)` and the module carries one placeholder per pinned
+/// value, so two declarations sharing a placeholder are one slot — which is how a management write
+/// once landed in whichever space the delivery reads had been configured with.
+#[test]
+fn two_fields_that_would_share_one_placeholder_are_refused() {
+    let source = scoped_fixture(&format!(
+        r#"{ZONE_PIN}
+[[config]]
+name = "zone_id_again"
+label = "Zone, again"
+help = "The same placeholder under a second name"
+binds = "path.zone_id"
+"#
+    ));
+    let error = refuse(&source);
+    assert!(
+        error.contains("one value under one slot"),
+        "two questions that share an answer are one question:\n{error}"
+    );
+}
+
+/// **A pinned value must not be able to reshape the request it lands in.** The example is what a
+/// user copies, so it is held to the rule the position imposes on the real value.
+#[test]
+fn a_path_pin_whose_example_escapes_its_segment_is_refused() {
+    for escape in ["../admin", "a/b", "%2Fadmin"] {
+        let error = refuse(&scoped_fixture(
+            &ZONE_PIN.replace("023e105f4ecef8ad9ca31a8372d0c353", escape),
+        ));
+        assert!(
+            error.contains("could not be one"),
+            "{escape:?} would not stay inside one path segment:\n{error}"
+        );
+    }
+}
+
+/// A pinned value is configuration: never masked, never redacted, readable back by anyone who can
+/// open a settings page. So it may not land where a credential goes — the pin must not become a
+/// second, ungated route into `Authorization`.
+#[test]
+fn a_header_pin_on_an_auth_owned_header_is_refused() {
+    let config = r#"
+[[config]]
+name = "auth_header"
+label = "Authorization"
+help = "For the refusal test only"
+binds = "header.Authorization"
+"#;
+    let error = refuse(&scoped_fixture(config));
+    assert!(
+        error.contains("carries a credential"),
+        "a pinned value in `Authorization` would be an unredacted credential:\n{error}"
+    );
+}
+
+/// The `secret`/`binds` agreement covers the new forms too, in the direction that matters here: a
+/// pinned value claiming to be a secret would hide it from the operator who has to read it back, and
+/// would claim gating this repository does not provide.
+#[test]
+fn a_pin_that_claims_to_be_secret_is_refused() {
+    let error = refuse(&scoped_fixture(&format!("{ZONE_PIN}secret = true\n")));
+    assert!(
+        error.contains("That value is configuration, not a credential"),
+        "a pin is not a credential and must not be declared one:\n{error}"
+    );
 }
