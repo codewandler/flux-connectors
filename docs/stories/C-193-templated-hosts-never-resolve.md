@@ -1,5 +1,5 @@
 ---
-id: C-191
+id: C-193
 title: "A templated base URL reaches the wire verbatim, so six connectors cannot resolve a host"
 pillar: Bridge
 status: ready
