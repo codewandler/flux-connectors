@@ -2,7 +2,7 @@
 id: C-241
 title: "Four Resend operations still send a bare versionless `User-Agent`, overriding the versioned identity C-223 gave every other connector"
 pillar: Spec
-status: in-progress
+status: done
 priority: 3
 design: docs/designs/host-identity.md
 epic:

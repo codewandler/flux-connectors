@@ -30421,7 +30421,7 @@
           "hosts": [
             "api.resend.com"
           ],
-          "flux": "op resend-email-send(from: String, to: Any, subject: String, html: String) -> Any\n  description \"Send one email immediately. Delivered within seconds and cannot be recalled once accepted. The sending domain must already be verified on this account — resend-domain-list names the ones that are\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.resend.com\"\n  url = fmt(\"{base}/emails\")\n  content_type = \"application/json\"\n  User_Agent = \"flux-connectors\"\n  payload = { from, html, subject, to }\n  response = http.request(body: payload, headers: { \"User-Agent\": User_Agent, \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "flux": "op resend-email-send(from: String, to: Any, subject: String, html: String) -> Any\n  description \"Send one email immediately. Delivered within seconds and cannot be recalled once accepted. The sending domain must already be verified on this account — resend-domain-list names the ones that are\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.resend.com\"\n  url = fmt(\"{base}/emails\")\n  content_type = \"application/json\"\n  payload = { from, html, subject, to }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -30578,7 +30578,7 @@
           "hosts": [
             "api.resend.com"
           ],
-          "flux": "op resend-email-get(email_id: String) -> Any\n  description \"Read one sent message and its current delivery state. This is how a flow learns whether a send bounced, was delivered, or is still queued\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.resend.com\"\n  url = fmt(\"{base}/emails/{email_id}\")\n  User_Agent = \"flux-connectors\"\n  response = http.request(headers: { \"User-Agent\": User_Agent }, method: \"GET\", url)\n  return response\n",
+          "flux": "op resend-email-get(email_id: String) -> Any\n  description \"Read one sent message and its current delivery state. This is how a flow learns whether a send bounced, was delivered, or is still queued\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.resend.com\"\n  url = fmt(\"{base}/emails/{email_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -30672,7 +30672,7 @@
           "hosts": [
             "api.resend.com"
           ],
-          "flux": "op resend-domain-list -> Any\n  description \"List every sending domain on this account with its verification status. Also this connector's `verify` — a bounded read that runs unattended and needs nothing configured beyond the credential\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.resend.com\"\n  url = fmt(\"{base}/domains\")\n  User_Agent = \"flux-connectors\"\n  response = http.request(headers: { \"User-Agent\": User_Agent }, method: \"GET\", url)\n  return response\n",
+          "flux": "op resend-domain-list -> Any\n  description \"List every sending domain on this account with its verification status. Also this connector's `verify` — a bounded read that runs unattended and needs nothing configured beyond the credential\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.resend.com\"\n  url = fmt(\"{base}/domains\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -30825,7 +30825,7 @@
           "hosts": [
             "api.resend.com"
           ],
-          "flux": "op resend-domain-get(domain_id: String) -> Any\n  description \"Read one sending domain, including the DNS records it needs and the status of each. This is the diagnostic for a domain that will not verify, and therefore for a send refused with an invalid-from error\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.resend.com\"\n  url = fmt(\"{base}/domains/{domain_id}\")\n  User_Agent = \"flux-connectors\"\n  response = http.request(headers: { \"User-Agent\": User_Agent }, method: \"GET\", url)\n  return response\n",
+          "flux": "op resend-domain-get(domain_id: String) -> Any\n  description \"Read one sending domain, including the DNS records it needs and the status of each. This is the diagnostic for a domain that will not verify, and therefore for a send refused with an invalid-from error\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.resend.com\"\n  url = fmt(\"{base}/domains/{domain_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [

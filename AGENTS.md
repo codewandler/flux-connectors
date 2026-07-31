@@ -296,11 +296,19 @@ provider story the catalogue has seen except babelforce (0 of 9) and fly (4). Bo
 vendor-wide gaps, and a connector arriving with *nothing* is the arrival this check exists to make
 loud rather than silent.
 
-**A story that only changes an existing provider leaves three red**, not one — the index is still
-correct, but `catalog.json` and the README images are not. Measured by editing a `description` in
-`providers/zendesk.toml` and running `build --provider zendesk`:
-`the_committed_tree_is_a_fixed_point_of_a_build`, `a_build_plans_both_readme_images_and_they_are_current`
-and `the_build_writes_and_checks_site_catalog_json`.
+**A story that only changes an existing provider leaves four red**, not one — the index is still
+correct, but `catalog.json` and the README images are not:
+`the_committed_tree_is_a_fixed_point_of_a_build`, `a_build_plans_both_readme_images_and_they_are_current`,
+`the_build_writes_and_checks_site_catalog_json` and
+`every_shipped_operation_carries_its_metadata_and_its_flux`.
+
+**This said three until 2026-08-01, and it was under-counted.** The original figure was measured by
+editing a `description` in `providers/zendesk.toml` — which also alters the emitted Flux, so the
+fourth check was firing then too and went unrecorded. `every_shipped_operation_carries_its_metadata_and_its_flux`
+compares the Flux text `catalog.json` carries against what the emitter produces, so it goes red for
+**any** change that alters an emitted module. Two implementors measured four independently (C-186,
+C-241) before anyone corrected the table, which is the cost of a hand-counted figure in a document
+implementors are told to trust.
 
 The public VitePress site is a consumer surface, not a publication of repository internals. Public
 pages may explain connectors, operation contracts, safety metadata, credentials, hosts, and current

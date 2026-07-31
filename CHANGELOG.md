@@ -70,6 +70,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Resend inherits the versioned host identity (C-241).** It was the catalogue's sole `User-Agent`
+  declaration and the worse of the two available values — no version, and the bare product word
+  C-223's acceptance rules out. The vendor fact that made the workaround necessary is kept beside the
+  connector: Resend answers `403` to a request carrying no `User-Agent`, which is why this connector
+  surfaced the gap at all. The catalogue now declares none.
+
 - **`connector-pack` is fenced against linking an HTTP client (C-199).** The guard reads the
   **feature-resolved** graph from `cargo metadata`, not `Cargo.lock`, because the two answer
   different questions: the existing lock fence exists precisely to catch optional dependencies, and
