@@ -91,13 +91,20 @@ names are a contested namespace, and `connector-cli` is already taken on crates.
 project. Package names are decoupled from crate names by `[lib] name`, so `use catalog::` and
 `use connector_spec::` are unaffected.
 
-**Nothing is published yet, and the order is deliberate.** [C-197](stories/C-197-config-collapses-across-services.md)
-adds `service` to `catalog::Operation` — a breaking change to the very type
-[C-190](stories/C-190-publish-catalog-pack-secrets.md) wants consumed — so it lands *before* the
-first tag rather than burning a major version days after it. Then
-[C-192](stories/C-192-flux-0-41-bump.md) (a consumer must link exactly one flux-runtime) and
-[C-92](stories/C-92-authorities-for-every-provider.md), plus one proven live call. One release, one
-stable public surface.
+**Nothing is published yet, and the order is deliberate.**
+[C-197](stories/C-197-config-collapses-across-services.md) and
+[C-92](stories/C-92-authorities-for-every-provider.md) have **landed**. What remains before a tag is
+[C-192](stories/C-192-flux-0-41-bump.md) — a consumer must link exactly one flux-runtime, because
+`connector-pack` hands out `Arc<dyn Tool>` and two engine versions are two incompatible types — plus
+one proven live call.
+
+*A correction worth keeping, because it was the stated reason for this ordering:* C-197 was expected
+to be a **breaking** change to `catalog::Operation`, and therefore to have to precede any publish of
+`connector-catalog`. It measured otherwise — the struct is already `#[non_exhaustive]`, so an
+external consumer can neither construct it with a struct literal nor destructure it exhaustively, and
+a new field cannot break them. The genuinely breaking surface was **`connector-pack`**
+(`ConfigStore::get` gained a parameter, `Error::MissingConfig` a field). So the sequencing was right
+and the reason was wrong: it was never `connector-catalog` that was at risk.
 
 ## Next
 
