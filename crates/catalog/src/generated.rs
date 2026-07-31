@@ -19,6 +19,7 @@ pub(crate) mod babelforce;
 pub(crate) mod fly;
 pub(crate) mod freshdesk;
 pub(crate) mod github;
+pub(crate) mod gitlab;
 pub(crate) mod google;
 pub(crate) mod hubspot;
 pub(crate) mod intercom;
@@ -45,6 +46,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &fly::PROVIDER,
     &freshdesk::PROVIDER,
     &github::PROVIDER,
+    &gitlab::PROVIDER,
     &google::PROVIDER,
     &hubspot::PROVIDER,
     &intercom::PROVIDER,

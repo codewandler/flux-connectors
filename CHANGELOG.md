@@ -9,6 +9,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The GitLab connector (C-166).** Seven operations — issues (list, get, create), merge requests,
+  a pipeline, branches, and `GET /user` as `verify` — under a bearer personal access token.
+
+  **A project is addressable only by numeric id.** GitLab's other form is a URL-encoded namespace
+  path (`group%2Fproject`), and this pipeline does not percent-encode values — the same gap that
+  makes `zendesk-ticket-search` non-functional, in the path position rather than the query. Rather
+  than ship a parameter a caller must pre-encode by hand, every project-scoped parameter is a JSON
+  Schema `integer` and each one's `description` says the path form is unsupported. That is C-106's
+  selection rule applied again: an operation ships only if it can address everything it needs.
+
+  Self-managed GitLab (a `{host}` binding) is out of scope, matching Sentry's status.
+
+
+### Added
+
 - **An operation can declare its request-body encoding (C-144).** A closed `BodyEncoding { Json, Form }`
   on `ParamSet`; `json` remains the default and its serialization is skipped, so the lockfile hash
   domain, every manifest, the catalogue and all 256 artifacts are unchanged — now asserted against the
