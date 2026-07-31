@@ -27,12 +27,22 @@ flux-system.workspace = true
 flux-core.workspace = true
 flux-spec.workspace = true
 
-# The server.
+# The server. `sync` carries the async `RwLock` the JWKS cache holds across its fetch — a
+# `std::sync::RwLock` guard is not `Send`, so holding one over an `await` would not compile, and
+# dropping the guard before the await is how two requests race into two fetches.
 axum.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "sync"] }
 
-# Sign-in and OAuth2: the back-channel token exchanges and the userinfo read.
+# Sign-in and OAuth2: the back-channel token exchanges and the JWKS read.
 reqwest = { workspace = true, features = ["json"] }
+
+# **Sign-in** (C-204). `flux-credentials` supplies PKCE, the `state` generator and the RFC-6749
+# authorize-URL builder, because the story's first instruction is not to write a fourth PKCE
+# implementation in this ecosystem; `jsonwebtoken` verifies the `id_token`. The workspace manifest
+# records why this is 0.41 rather than the 0.42.1 the story names — 0.42 splits the flux line, and
+# 0.41.0 has the same three functions and is already in the lock.
+flux-credentials.workspace = true
+jsonwebtoken.workspace = true
 
 anyhow.workspace = true
 serde.workspace = true
@@ -46,3 +56,15 @@ urlencoding.workspace = true
 # A loopback vendor to assert the request against. The point of the whole crate is that a real
 # request leaves it, and a test that asserts against a stub would be asserting the stub.
 axum = { workspace = true, features = ["http1", "json", "tokio"] }
+
+# A loopback **identity provider**, for the same reason. Sign-in is the one flow whose failure modes
+# are all on the verification side, so the tests mint their own RSA key, serve their own JWKS and
+# sign their own `id_token`s — which is what makes "this token fails exactly one check" a thing a
+# test can construct rather than describe.
+#
+# The tests sign with `aws-lc-rs` directly and the crate verifies with `jsonwebtoken`, deliberately:
+# two independent implementations either side of the assertion. A test that signed with the same
+# library the verifier uses would pass on a shared misunderstanding of the format. Note also that
+# `jsonwebtoken` is **not** a dev-dependency — nothing in the tests names it — because the crate's
+# own `Jwks` type takes the JSON a JWKS endpoint actually serves, which is the shape a test has.
+aws-lc-rs.workspace = true

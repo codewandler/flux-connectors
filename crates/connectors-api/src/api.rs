@@ -2,10 +2,16 @@
 //!
 //! # The tenant
 //!
-//! Every handler below takes its tenant from [`tenant_of`], which is a single constant until
-//! sign-in lands. It is threaded as a parameter from the first commit rather than added later,
-//! because "the tenant comes from the session" is a property that has to hold at every call site,
-//! and retrofitting it is how one of them gets missed.
+//! Every handler below takes its tenant from a [`Principal`], and a `Principal` can only be built
+//! from a live session cookie. Slice 1 threaded the tenant through as a parameter from the first
+//! commit — with a `tenant_of()` returning the constant `"local"` — precisely so that this change
+//! would be a substitution at every call site rather than a retrofit that missed one. C-204 makes
+//! the substitution, and the constant is gone.
+//!
+//! The property is now structural: a handler that wants a tenant must name `Principal` in its
+//! signature, and there is no other constructor for one. A path segment, a body field or a header
+//! naming a tenant is simply ignored — asserted in `tests/tenancy.rs`, which names tenant B four
+//! ways while holding tenant A's session.
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -15,26 +21,9 @@ use connector_pack::{CredentialRef, Secret, DEFAULT_SERVICE};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::auth::Principal;
 use crate::exec;
 use crate::state::App;
-
-/// The single tenant this host serves until sign-in lands (slice 3).
-///
-/// Named rather than inlined so that the moment a session exists, the compiler points at every
-/// place that has to change.
-const SOLE_TENANT: &str = "local";
-
-/// Whose data a request is about.
-///
-/// # This is the confused-deputy seam
-///
-/// A host that resolves the tenant from anything a caller controls — a path segment, a body field,
-/// a header — is a service that adds authority to whoever asks. `docs/designs/connectors-proxy.md`
-/// rejected exactly that shape. When sign-in lands this function reads the session and nothing else,
-/// and it is a function rather than an inline constant so there is one place for that to be true.
-fn tenant_of() -> &'static str {
-    SOLE_TENANT
-}
 
 /// An error, as JSON, with a status.
 ///
@@ -42,6 +31,16 @@ fn tenant_of() -> &'static str {
 /// name the missing fact — the credential address, the unbound configuration field and its service —
 /// rather than reducing to "500". None of them carries a credential value.
 pub struct Failure(StatusCode, String);
+
+impl Failure {
+    /// A refusal with a status and a message.
+    ///
+    /// Public so that [`crate::auth`] can refuse in the same shape the rest of this surface does —
+    /// one JSON envelope, so a caller has one thing to parse and a leak has one place to be caught.
+    pub fn new(status: StatusCode, message: String) -> Self {
+        Self(status, message)
+    }
+}
 
 impl axum::response::IntoResponse for Failure {
     fn into_response(self) -> axum::response::Response {
@@ -95,9 +94,12 @@ pub struct CredentialView {
     stored: bool,
 }
 
-/// Every connector in the catalogue.
-pub async fn connectors(State(app): State<App>) -> Result<Json<Vec<ConnectorView>>, Failure> {
-    let tenant = tenant_of();
+/// Every connector in the catalogue, as **this session's tenant** has it configured.
+pub async fn connectors(
+    State(app): State<App>,
+    principal: Principal,
+) -> Result<Json<Vec<ConnectorView>>, Failure> {
+    let tenant = principal.tenant();
     let mut views = Vec::new();
     for provider in catalog::providers() {
         views.push(view_of(&app, tenant, provider).await?);
@@ -108,6 +110,7 @@ pub async fn connectors(State(app): State<App>) -> Result<Json<Vec<ConnectorView
 /// One connector.
 pub async fn connector(
     State(app): State<App>,
+    principal: Principal,
     Path(provider): Path<String>,
 ) -> Result<Json<ConnectorView>, Failure> {
     let entry = catalog::provider(ProviderKey::id(&provider)).ok_or_else(|| {
@@ -116,7 +119,7 @@ pub async fn connector(
             format!("no connector `{provider}` in this catalogue"),
         )
     })?;
-    Ok(Json(view_of(&app, tenant_of(), entry).await?))
+    Ok(Json(view_of(&app, principal.tenant(), entry).await?))
 }
 
 async fn view_of(
@@ -231,10 +234,11 @@ pub struct CredentialInput {
 /// error message — "could not store `<value>`" — is exactly the mistake.
 pub async fn put_credential(
     State(app): State<App>,
+    principal: Principal,
     Path((provider, credential)): Path<(String, String)>,
     Json(input): Json<CredentialInput>,
 ) -> Result<StatusCode, Failure> {
-    let tenant = tenant_of();
+    let tenant = principal.tenant();
     let entry = catalog::provider(ProviderKey::id(&provider)).ok_or_else(|| {
         Failure(
             StatusCode::NOT_FOUND,
@@ -266,9 +270,10 @@ pub async fn put_credential(
 /// Forget one credential.
 pub async fn delete_credential(
     State(app): State<App>,
+    principal: Principal,
     Path((provider, credential)): Path<(String, String)>,
 ) -> Result<StatusCode, Failure> {
-    let tenant = tenant_of();
+    let tenant = principal.tenant();
     let entry = catalog::provider(ProviderKey::id(&provider)).ok_or_else(|| {
         Failure(
             StatusCode::NOT_FOUND,
@@ -303,6 +308,7 @@ pub struct ConfigInput {
 /// Bind one configuration field — an endpoint variable, or a Basic user half.
 pub async fn put_config(
     State(app): State<App>,
+    principal: Principal,
     Path((provider, service, kind, field)): Path<(String, String, String, String)>,
     Json(input): Json<ConfigInput>,
 ) -> Result<StatusCode, Failure> {
@@ -321,7 +327,7 @@ pub async fn put_config(
     };
 
     app.settings()
-        .set(tenant_of(), &provider, &service, target, input.value);
+        .set(principal.tenant(), &provider, &service, target, input.value);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -330,11 +336,16 @@ pub async fn put_config(
 // ---------------------------------------------------------------------------------------------
 
 /// Run an operation and return what the vendor said.
+///
+/// The tenant handed to `exec::execute` — and from there to `Credentials::new` and
+/// `Configuration::new` — is the session's. **This is the line that makes the whole crate not a
+/// confused deputy:** the credential this request sends belongs to the person who made it.
 pub async fn execute(
     State(app): State<App>,
+    principal: Principal,
     Path(operation): Path<String>,
     Json(params): Json<Value>,
 ) -> Result<Json<exec::Outcome>, Failure> {
-    let outcome = exec::execute(&app, tenant_of(), &operation, params).await?;
+    let outcome = exec::execute(&app, principal.tenant(), &operation, params).await?;
     Ok(Json(outcome))
 }

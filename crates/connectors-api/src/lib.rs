@@ -26,11 +26,20 @@
 //! the case where a host pairs two ports wrongly; here the pair is built from one value at one call
 //! site, so it is unreachable by construction.
 //!
+//! **That is now enforced rather than intended** (C-204). The tenant is reached only through
+//! [`auth::Principal`], an extractor whose sole constructor is a live session cookie: there is no
+//! `Principal::from(&str)`, no tenant path segment, and no header a caller could set. A handler
+//! that needs a tenant names it in its signature and one that does not cannot reach it.
+//! `crates/connectors-api/tests/tenancy.rs` drives the whole flow against a loopback identity
+//! provider and asserts that a request naming tenant B while carrying tenant A's session resolves
+//! to **A**.
+//!
 //! [`C-117`]: https://github.com/codewandler/flux-connectors/blob/main/docs/stories/C-117-pack-codegen.md
 
 #![forbid(unsafe_code)]
 
 pub mod api;
+pub mod auth;
 pub mod config;
 pub mod exec;
 pub mod state;
@@ -49,6 +58,15 @@ pub fn router(app: App) -> Router {
     Router::new()
         // The UI.
         .route("/", get(ui::index))
+        // Sign-in. These five are the only routes reachable without a session, and each is
+        // reachable without one for a reason: two are the flow that establishes a session, one
+        // ends it, one reports whether sign-in is even configured, and `/` has to render something
+        // to sign in *from*. Every other route below takes a `Principal`.
+        .route("/auth/signin", get(auth::routes::signin))
+        .route("/auth/callback", get(auth::routes::callback))
+        .route("/auth/signout", post(auth::routes::signout))
+        .route("/auth/status", get(auth::routes::status))
+        .route("/auth/me", get(auth::routes::me))
         // The catalogue — read straight from `connector-catalog`, never a hand-kept list.
         .route("/v1/connectors", get(api::connectors))
         .route("/v1/connectors/{provider}", get(api::connector))

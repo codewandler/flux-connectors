@@ -26,27 +26,22 @@
 //! own defects would live: the address a credential resolves at, the tenant that address belongs to,
 //! and whether a value can reach a surface.
 
-use std::net::{Ipv4Addr, SocketAddr};
+mod support;
 
 use connectors_api::App;
+use support::{client, serve, sign_in, Idp};
 
 /// An obviously-fake credential. Nothing here may commit a value shaped like a real token — the same
 /// care `connector-pack`'s own `SENTINEL` takes, and long enough that flux's redactor will hold it
 /// (`Redactor::add_secret` silently ignores anything under six trimmed characters).
 const SENTINEL: &str = "SENTINEL-NOT-A-REAL-SECRET-connectors-api";
 
-/// Start the host on an ephemeral loopback port and return its base URL.
-async fn serve() -> String {
-    let app = App::new(env!("CARGO_MANIFEST_DIR")).expect("the crate root exists");
-    let listener = tokio::net::TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-        .await
-        .expect("an ephemeral loopback port");
-    let address = listener.local_addr().expect("a bound address");
-    tokio::spawn(async move {
-        let _ = axum::serve(listener, connectors_api::router(app)).await;
-    });
-    format!("http://{address}")
-}
+/// The subject every test here signs in as.
+const OPERATOR: &str = "110169484474386276334";
+
+/// The tenant that subject resolves to. Written out rather than computed, so that a change to the
+/// derivation is a failing test rather than a test that agrees with whatever the code now does.
+const OPERATOR_TENANT: &str = "google-110169484474386276334";
 
 /// **A credential value must not appear on any surface this host serves.**
 ///
@@ -54,13 +49,25 @@ async fn serve() -> String {
 /// that returns what it just stored so the page can show it, or an error that quotes the value it
 /// could not accept. Asserted over *every* response body rather than over the one that looked
 /// risky, because the point is that no route grows the habit.
+///
+/// C-204 widened it in three directions and the widening is the interesting part. **The sign-in
+/// routes are swept too**, because they are new surfaces on the same origin and the natural shape
+/// of a convenience there is the same one. **The Google client secret is swept alongside the
+/// connector credential**, because it is a credential this host now holds and a token endpoint
+/// that echoed the request back — several do — would put it in an error body. And **the session
+/// token is swept**, because a response that reflected it would turn any response-reflection bug
+/// into session theft.
 #[tokio::test]
 async fn a_stored_credential_reaches_no_surface() {
-    let base = serve().await;
-    let client = reqwest::Client::new();
+    let idp = Idp::start().await;
+    let base = serve(&idp).await;
+    let client = client();
+    let cookie = sign_in(&base, OPERATOR).await;
+    let session_token = cookie.split_once('=').expect("name=value").1.to_owned();
 
     let stored = client
         .put(format!("{base}/v1/credentials/anthropic/anthropic.api_key"))
+        .header("cookie", &cookie)
         .json(&serde_json::json!({ "value": SENTINEL }))
         .send()
         .await
@@ -71,29 +78,66 @@ async fn a_stored_credential_reaches_no_surface() {
         "the store response echoed the credential back"
     );
 
+    // Every secret this host now holds, and every surface it serves.
+    let secrets = [
+        (SENTINEL, "the connector credential"),
+        (support::CLIENT_SECRET, "the Google client secret"),
+        (session_token.as_str(), "the session token"),
+    ];
+
     for path in [
         "/v1/connectors",
         "/v1/connectors/anthropic",
         "/v1/operations/anthropic-models-list",
+        "/auth/me",
+        "/auth/status",
         "/",
     ] {
         let body = client
             .get(format!("{base}{path}"))
+            .header("cookie", &cookie)
             .send()
             .await
             .unwrap_or_else(|error| panic!("GET {path}: {error}"))
             .text()
             .await
             .expect("a body");
-        assert!(
-            !body.contains(SENTINEL),
-            "`{path}` served the credential value"
-        );
+        for (secret, what) in secrets {
+            assert!(!body.contains(secret), "`{path}` served {what}");
+        }
+    }
+
+    // The error paths too. A refusal is where a value is most likely to be quoted back, and the
+    // routes below are reached without a session, with a bad session, and with a bad payload.
+    for (path, cookie_header) in [
+        ("/v1/connectors", None),
+        ("/v1/connectors", Some("connectors_session=not-a-session")),
+        ("/auth/me", None),
+        (
+            "/auth/callback?code=x&state=never-issued",
+            Some(cookie.as_str()),
+        ),
+    ] {
+        let mut request = client.get(format!("{base}{path}"));
+        if let Some(header) = cookie_header {
+            request = request.header("cookie", header);
+        }
+        let body = request
+            .send()
+            .await
+            .unwrap_or_else(|error| panic!("GET {path}: {error}"))
+            .text()
+            .await
+            .expect("a body");
+        for (secret, what) in secrets {
+            assert!(!body.contains(secret), "`{path}` served {what} on an error");
+        }
     }
 
     // And the connector reports itself connected without ever saying with what.
     let view: serde_json::Value = client
         .get(format!("{base}/v1/connectors/anthropic"))
+        .header("cookie", &cookie)
         .send()
         .await
         .expect("the view")
@@ -108,8 +152,9 @@ async fn a_stored_credential_reaches_no_surface() {
         .expect("the declared credential");
     assert_eq!(api_key["stored"], true, "the value was stored");
     assert_eq!(
-        api_key["address"], "tenants/local/com.anthropic.api/api_key",
-        "the address is what an operator needs, and is not a secret"
+        api_key["address"],
+        format!("tenants/{OPERATOR_TENANT}/com.anthropic.api/api_key"),
+        "the address is the signed-in account's, and is not a secret"
     );
 }
 
@@ -120,13 +165,16 @@ async fn a_stored_credential_reaches_no_surface() {
 /// retryable loops against the vendor forever without ever being told what is missing.
 #[tokio::test]
 async fn an_operation_without_its_credential_refuses_by_address() {
-    let base = serve().await;
-    let client = reqwest::Client::new();
+    let idp = Idp::start().await;
+    let base = serve(&idp).await;
+    let client = client();
+    let cookie = sign_in(&base, OPERATOR).await;
 
     let response = client
         .post(format!(
             "{base}/v1/operations/anthropic-models-list/execute"
         ))
+        .header("cookie", &cookie)
         .json(&serde_json::json!({}))
         .send()
         .await
@@ -137,13 +185,104 @@ async fn an_operation_without_its_credential_refuses_by_address() {
     let error = body["error"].as_str().expect("an error message");
 
     assert!(
-        error.contains("tenants/local/com.anthropic.api/api_key"),
+        error.contains(&format!(
+            "tenants/{OPERATOR_TENANT}/com.anthropic.api/api_key"
+        )),
         "the refusal must name the address an operator has to fill: {error}"
     );
     assert!(
         error.contains("the request was not sent"),
         "the refusal must say the request was not sent: {error}"
     );
+}
+
+/// **A host with no Google registration starts, and says what is missing.**
+///
+/// This is the first-run path, and it is the one most likely to be got wrong in the direction that
+/// wastes an afternoon. Panicking at startup turns `cargo run -p connectors-api` into a stack
+/// trace; starting silently turns it into a sign-in button that leads nowhere. Neither tells an
+/// operator that two environment variables are unset, so both are refused here: the host binds,
+/// serves its page, and every sign-in surface answers `503` with the variable names and the
+/// console URL to register them at.
+#[tokio::test]
+async fn without_a_google_registration_the_host_still_starts_and_explains_itself() {
+    use std::net::{Ipv4Addr, SocketAddr};
+
+    let app = {
+        // Held across "clear the environment, build the `App`" for the same reason `support::serve`
+        // holds it across "set the environment, build the `App`".
+        let _guard = support::env_lock();
+        std::env::remove_var(connectors_api::auth::oidc::CLIENT_ID_ENV);
+        std::env::remove_var(connectors_api::auth::oidc::CLIENT_SECRET_ENV);
+        App::new(env!("CARGO_MANIFEST_DIR")).expect("an unconfigured host still starts")
+    };
+
+    let message = app
+        .setup_message()
+        .expect("an unconfigured host says what is missing");
+    assert!(message.contains(connectors_api::auth::oidc::CLIENT_ID_ENV));
+    assert!(message.contains(connectors_api::auth::oidc::CLIENT_SECRET_ENV));
+    assert!(
+        message.contains("console.cloud.google.com"),
+        "the message must say where to register: {message}"
+    );
+    assert!(
+        message.contains("/auth/callback"),
+        "the message must name the redirect URI to register: {message}"
+    );
+
+    let listener = tokio::net::TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
+        .await
+        .expect("an ephemeral loopback port");
+    let base = format!("http://{}", listener.local_addr().expect("a bound address"));
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, connectors_api::router(app)).await;
+    });
+    let client = client();
+
+    // The page still renders, which is what an operator is looking at.
+    assert_eq!(
+        client
+            .get(&base)
+            .send()
+            .await
+            .expect("the page loads")
+            .status(),
+        200,
+        "an unconfigured host served no page"
+    );
+
+    // And sign-in refuses in a way that names the fix.
+    let response = client
+        .get(format!("{base}/auth/signin"))
+        .send()
+        .await
+        .expect("the call completes");
+    assert_eq!(
+        response.status(),
+        503,
+        "an unconfigured sign-in must refuse"
+    );
+    let body = response.text().await.expect("a body");
+    assert!(
+        body.contains(connectors_api::auth::oidc::CLIENT_ID_ENV),
+        "the refusal does not name what is missing: {body}"
+    );
+
+    // `/auth/status` is the machine-readable half, so the page can render the same thing.
+    let status: serde_json::Value = client
+        .get(format!("{base}/auth/status"))
+        .send()
+        .await
+        .expect("the call completes")
+        .json()
+        .await
+        .expect("json");
+    assert_eq!(status["configured"], false);
+    assert_eq!(status["signed_in"], false);
+    assert!(status["setup"]
+        .as_str()
+        .is_some_and(|setup| setup.contains(connectors_api::auth::oidc::CLIENT_ID_ENV)));
 }
 
 /// **The transport is flux's own `http.request`, not something this crate wrote.**

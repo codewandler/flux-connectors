@@ -76,6 +76,7 @@
   <h1>connectors-api</h1>
   <span class="muted" id="counts"></span>
   <span class="note">Real calls, real credentials. Held in memory only.</span>
+  <span class="muted" id="who"></span>
 </header>
 <main>
   <div id="list"></div>
@@ -227,7 +228,51 @@ async function playground(op, after) {
   after.after(panel);
 }
 
-load().catch(e => { $('#detail').innerHTML = `<p class="err">${e.message}</p>`; });
+// Sign-in gates everything below, so the page asks who is asking before it asks for anything else.
+// Three states, and each is a real one an operator lands in:
+//   - not configured  → say which environment variables to set, and where to register
+//   - configured, not signed in → a button
+//   - signed in       → the catalogue, scoped to that account's tenant
+async function start() {
+  const status = await api('GET', '/auth/status');
+
+  if (!status.configured) {
+    $('#who').textContent = 'sign-in not configured';
+    // `textContent` on a <pre>, never innerHTML: the message is server-composed, but a page that
+    // renders server strings as markup is one server change away from being an XSS sink.
+    $('#detail').replaceChildren(
+      el('p', { className: 'err' }, 'Google sign-in is not set up yet.'),
+      el('pre', { textContent: status.setup ?? '' }));
+    return;
+  }
+
+  if (!status.signed_in) {
+    $('#who').textContent = 'not signed in';
+    const button = el('button', {}, 'Sign in with Google');
+    button.onclick = () => { window.location.href = '/auth/signin'; };
+    $('#detail').replaceChildren(
+      el('p', { className: 'muted' },
+        'Connectors and credentials belong to the signed-in account.'),
+      button);
+    return;
+  }
+
+  const account = status.account ?? {};
+  const out = el('button', {}, 'Sign out');
+  out.onclick = async () => {
+    // A form POST rather than a link: sign-out changes state, and `SameSite=Lax` lets a
+    // cross-site *GET* carry the cookie while a cross-site POST does not.
+    await fetch('/auth/signout', { method: 'POST', redirect: 'manual' });
+    window.location.reload();
+  };
+  $('#who').replaceChildren(
+    document.createTextNode(`${account.email ?? account.name ?? account.subject} · tenant ${account.tenant} `),
+    out);
+
+  await load();
+}
+
+start().catch(e => { $('#detail').replaceChildren(el('p', { className: 'err' }, e.message)); });
 </script>
 </body>
 </html>

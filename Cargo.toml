@@ -134,11 +134,67 @@ tokio = { version = "1", default-features = false }
 # **security-relevant randomness**, so they come from the OS CSPRNG (`rand`'s `ThreadRng` is seeded
 # from it) and never from a timestamp or a counter. `base64` encodes the PKCE challenge and the
 # Basic-auth join the token endpoints want; `urlencoding` builds authorize URLs.
-#
-# Note what is deliberately absent: no JWT library. Google's `id_token` is never parsed here — the
-# authorization code is exchanged back-channel over TLS and identity is read from the userinfo
-# endpoint, so there is no signature for this repository to verify and no JWKS cache to get wrong.
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "query", "tokio"] }
 rand = "0.9"
 base64 = "0.22"
 urlencoding = "2"
+
+# **Sign-in** (C-204), reached from `connectors-api` alone.
+#
+# `flux-credentials` is here because the story's first instruction is *not* to write a fourth PKCE
+# implementation in this ecosystem. It already ships `generate_pkce()` (base64url of 32 bytes from
+# the OS CSPRNG, S256 challenge), `generate_state()`, and `oauth_authorize_url()` — the generic
+# RFC-6749 `authorization_code` + PKCE S256 builder — and flux's own CLI drives them three times
+# over.
+#
+# **0.41, not the 0.42.1 the story names, and that is a measured correction rather than a
+# downgrade.** Two facts settle it:
+#
+#   1. `codewandler-flux-credentials` 0.42.1 requires `flux-core ^0.42.1` and `flux-provider
+#      ^0.42.1`. Those are semver-incompatible with this workspace's 0.41 pin, so cargo resolves
+#      *both* lines. Measured, not predicted — a scratch resolve carrying this workspace's four flux
+#      pins plus flux-credentials 0.42.1 puts `codewandler-flux-core` 0.41.1 **and** 0.42.1 in one
+#      `cargo tree -d`, along with two `flux-provider`s and two `flux-credentials`. A split flux line
+#      is exactly what the `flux-web` note above records having checked for and avoided.
+#   2. 0.41.0 carries all three functions, and it is **already in `Cargo.lock`** — `flux-web` pulls
+#      `flux-plugin`, which depends on it. Naming it here resolves nothing new and adds no crate.
+#
+# So the reuse the story asks for costs zero new dependencies, and the version skew it flags as the
+# open question turns out not to apply to the code being reused.
+flux-credentials = { package = "codewandler-flux-credentials", version = "0.41" }
+
+# **The `id_token` verifier.** The C-203 manifest recorded "no JWT library" as deliberate, on the
+# reasoning that identity would be read from the userinfo endpoint over TLS. C-204 reverses that on
+# purpose: its acceptance requires the `id_token`'s *signature* checked against Google's JWKS
+# alongside `iss`, `aud`, `exp` and `nonce`, and a TLS-authenticated userinfo read proves none of
+# those. Hand-rolling JWT parsing to avoid a dependency is the worse trade — `flux-credentials`'
+# own `jwt_payload` is an unverified base64 decode, correct for reading a non-security-critical
+# label off a token just received over TLS and useless as an authentication decision.
+#
+# **`~10.3.0`, and the tilde is doing real work.** Three versions were considered and the MSRV
+# picked between them: 11.0.0 declares `rust-version = 1.88.0`, and so — measured after the fact,
+# which is the whole reason for the tilde — does **10.4.0**. This workspace declares 1.87. A plain
+# `"10.3"` is a caret requirement, so cargo resolved it straight to 10.4.0 and quietly made the
+# workspace unbuildable on the toolchain it advertises; `resolver = "2"` does no MSRV-aware
+# resolution, so nothing said so. `~10.3.0` is `>=10.3.0, <10.4.0`: patch releases of the 10.3 line
+# — where a fix to a JWT verifier would land — still float in, and the MSRV bump does not.
+#
+# **This is a pin against a version, not a decision that 1.87 is right.** Raising the workspace
+# MSRV to 1.88 may well be correct, but it is a repository-wide change affecting four *published*
+# crates, and taking it as a side effect of a sign-in story is how an MSRV moves without anyone
+# deciding it should. Left for the coordinator.
+#
+# `default-features = false` drops `use_pem` (`pem` + `simple_asn1`): Google's JWKS gives RSA
+# modulus/exponent components, never PEM, so `DecodingKey::from_jwk` is the only constructor used.
+# The `aws_lc_rs` backend is chosen over `rust_crypto` because `aws-lc-rs` 1.17.3 is **already in
+# the lock** under rustls, whereas `rust_crypto` would add `rsa`, `p256`, `p384`, `ed25519-dalek`
+# and a second `hmac`.
+jsonwebtoken = { version = "~10.3.0", default-features = false, features = ["aws_lc_rs"] }
+
+# **Test-only.** Generating an RSA keypair per test run is what lets the `id_token` checks be
+# asserted one at a time against a signature this repository actually produced, rather than against
+# a committed key — a PEM private key in the tree is what GitHub push protection blocks, and a
+# committed test key is a key that outlives the test. `aws-lc-rs` is already in the lock, so this is
+# a name for something present rather than a new tree, and its C implementation makes 2048-bit
+# keygen fast enough to sit in a unit test.
+aws-lc-rs = "1.17"
