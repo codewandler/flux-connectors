@@ -51,13 +51,27 @@ amendment rather than a contradiction, and it must land with the epic.
 | [C-202](C-202-flux-web-egress.md) | A | `flux-web` in the graph; `Egress` over a real `http.request` |
 | [C-203](C-203-connectors-api-skeleton.md) | A | The service, the tenancy model, one live call with a pasted token |
 | [C-204](C-204-google-signin-accounts.md) | A | Google OIDC sign-in, accounts, sessions |
-| [C-205](C-205-per-tenant-credential-isolation.md) | A | Per-tenant credential isolation behind `SecretStore` |
-| [C-206](C-206-declare-oauth2-surface.md) | B | `[auth.oauth2]` for google, anthropic, slack |
-| [C-207](C-207-oauth2-connect-flow.md) | B | PKCE, callback, token into the store |
-| [C-208](C-208-operator-web-app.md) | A | Explorer, connect, and the operation playground |
+| [C-207](C-207-the-host-forgets-every-credential.md) | A | A credential store that survives the process |
+| C-208 — *unfiled* | A | Per-tenant credential isolation behind `SecretStore` |
+| C-209 — *unfiled* | B | `[auth.oauth2]` for google, anthropic, slack |
+| C-210 — *unfiled* | B | PKCE, callback, token into the store |
+| C-211 — *unfiled* | A | Explorer, connect, and the operation playground |
 
-Tracks A and B run in parallel and converge at C-207, where the "Connect" button replaces
+Tracks A and B run in parallel and converge at C-210, where the "Connect" button replaces
 paste-a-token.
+
+**Numbering reconciled 2026-07-31 (coordinator).** This table was written naming C-205–C-208 for its
+own children, but `C-205` and `C-206` had already been filed as unrelated stories (the service-name
+guard and the `no-credential` conflation), and `C-207` is now the credential-persistence story above,
+filed when the host's `MemoryStore` turned out to block the owner's goal directly. The four remaining
+children are renumbered to the next free ids and are written as plain text rather than links until
+they are filed — a link to a story that does not exist is how this table came to name four that never
+resolved. Only C-201–C-204 and C-207 exist today.
+
+Two existing stories cover part of track B from the *spec* side rather than the host side and should
+be read before C-209/C-210 are filed: [C-88](C-88-prove-oauth2.md) (OAuth2 is a landed type no
+shipped provider uses) and [C-89](C-89-hosted-oauth-redirect.md) (`OAuthRedirect` is loopback-only
+and a hosted callback has no home).
 
 ## Acceptance
 

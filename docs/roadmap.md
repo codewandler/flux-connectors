@@ -26,11 +26,20 @@ gates the milestone. [designs/auth-seam.md](designs/auth-seam.md) is kept as the
 design. What still waits on flux is narrower: the form and query **encoder** (upstream `L-101`), which
 is what keeps `zendesk-ticket-search` and every `form` body non-functional.
 
-What gates a live call now is local and named: this workspace links no `http.request` implementation
-(`Egress` takes one as a constructor argument and nothing here supplies it) and runs no host process.
-That is the loopback-only reference host the vision's narrowed non-goal now permits —
-`crates/connectors-app`, C-34 resolved as **yes-narrowed**; see
-[designs/connectors-app.md](designs/connectors-app.md).
+A live call is no longer gated. `codewandler-flux-web` 0.41.1 supplies the `http.request`
+implementation `Egress` takes as a constructor argument, and `crates/connectors-api` is the host that
+binds it and runs the loop — the first thing here that calls anyone (C-202, C-203). See
+[designs/connectors-api.md](designs/connectors-api.md). The loopback-only narrowing in
+[designs/connectors-app.md](designs/connectors-app.md), which was how C-34 resolved as
+**yes-narrowed**, is superseded by the owner-directed charter amendment in C-201 — superseded, not
+deleted: the `Egress` analysis and the slice-1 sequence it rested on are still current and still
+cited.
+
+What the host is *today* is narrower than what the charter now permits, and the gap is stated in
+[designs/connectors-api.md](designs/connectors-api.md)'s measured table rather than left to
+inference: the bind is still `127.0.0.1` with no flag, the tenant is still the constant `"local"`
+with no authenticated principal behind it, and the credential store is still in memory. C-204 and
+C-207 close the last two.
 
 The largest gap is not a blocker but a hole: **six declarable surfaces reach no artifact** —
 `config`, `verify`, a service's `roles`, `quirks.pagination`, `graphs` and `quirks.rate_limit`. The IR

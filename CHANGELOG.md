@@ -30,6 +30,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `Placement::Query` credential**. `trello_is_the_only_query_placement_in_the_shipped_catalogue`
   bounds that to one connector and fails the moment a second lands.
 
+### Changed
+
+- **The charter permits a deployed multi-tenant host, and the confused-deputy objection is re-argued
+  rather than skipped (C-201).** `docs/vision.md`'s non-goal narrowed this repository's host to one
+  that was *"loopback-bound, never published, and never a production request path"* — the
+  **yes-narrowed** resolution of C-34 — and `crates/connectors-api` shipped in contradiction with it.
+  The owner directed the wider shape on 2026-07-31: a deployed service an operator signs into,
+  connects providers to, and calls operations from.
+
+  The narrowing is **superseded, not deleted**. `designs/connectors-app.md` keeps the reasoning it
+  rested on — the `Egress` analysis, the slice-1 sequence, why a host that builds its own requests is
+  the failure mode — and the new `designs/connectors-api.md` records what replaces it. C-34's "no" to
+  the credential-injecting proxy still stands: what was rejected is a service that adds authority to
+  whoever asks, and no amount of deployment makes that acceptable. The deputy answer turns on the
+  interface, not on "it is authenticated" — a caller names an operation id and cannot name a host, a
+  credential, or a tenant, so the service returns authority its caller deposited rather than adding
+  authority its caller lacks.
+
+  Four things the amendment explicitly does not license: a second request path, publication, a
+  reachable bind before an authenticated principal exists, and holding credentials the operator did
+  not choose to give it. The old "no `--bind` flag, ever" prohibition becomes a four-item gate whose
+  first item is that the tenant must come from a verified session — a PR adding `--bind` while the
+  tenant is a constant is still the rejected proxy.
+
+  The design leads with a measured table of what the charter permits against what the code does,
+  because the host is still loopback-only and single-valued today and the gap is the thing most
+  likely to be misread in the optimistic direction.
+
 ### Fixed
 
 - **A `Request`'s derived `Debug` printed every credential in plaintext, and a query-placed

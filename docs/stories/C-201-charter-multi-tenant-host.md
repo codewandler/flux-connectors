@@ -110,3 +110,41 @@ implementation and `crates/connectors-api` is the host that binds it. See
 Also outstanding and deliberately not touched: `crates/connectors-api/README.md:97-103` says the
 crate "contradicts `docs/vision.md`'s current non-goal" and that "this README is the only place
 saying so". Both stop being true when this lands.
+
+## Coordinator note at integration (2026-07-31)
+
+Returned `PARTIAL` on one item and the item was correct: Acceptance 5 ("no document still asserts the
+service may not exist") was blocked by `docs/roadmap.md`, which is a fenced ledger. **Applied at
+integration, so the item is now met** — the roadmap's "links no `http.request` implementation … runs
+no host process" paragraph is replaced, and it now also carries the charter-vs-code gap rather than
+letting a reader infer a deployment that does not exist. Every remaining grep hit for the old
+narrowing is the amendment *quoting* the text it supersedes.
+
+**The implementor corrected the dispatch, and was right to.** I described the shipped crate as "a
+deployed multi-tenant host"; it is not one. `src/main.rs` binds `Ipv4Addr::LOCALHOST:8787` with no
+flag and no env var, and `src/api.rs:24` is `const SOLE_TENANT: &str = "local"`. Writing the charter
+as though the deployment had been reached would have replaced one false document with another. The
+amendment instead permits the destination and records which three rows of the six are already the
+deployed shape.
+
+Two write-set deviations accepted rather than bounced: `docs/designs/connectors-api.md` (Acceptance
+item 3 names it, five stories' `design:` frontmatter pointed at it, and it did not exist) and
+`AGENTS.md` (Acceptance item 4 names it explicitly). Both were required by the story's own
+Acceptance, so the narrower write set in my dispatch was the error.
+
+**C-200's child table reconciled here**, since it is a fenced story file: it named C-205–C-208 for
+its own children, but C-205 and C-206 were already filed as unrelated stories and C-207 is now the
+credential-persistence story. The four unfiled children are renumbered C-208–C-211 and written as
+plain text rather than links, because a link to a story that does not exist is exactly how the table
+came to name four that never resolved.
+
+**Carried forward, not fixed:** `crates/connectors-api/README.md:97-103` still says the crate
+"contradicts `docs/vision.md`'s current non-goal" and that "this README is the only place saying so".
+Both stopped being true when this merged. It is left alone deliberately — `crates/connectors-api/**`
+is owned exclusively by the running C-204 implementor this wave, and editing it here would race that
+agent. It will be corrected at C-204's integration.
+
+**Risk recorded rather than closed:** the four-item bind gate is prose enforced by review only. The
+mechanical control — a test that fails when the bind is non-loopback while `tenant_of()` returns a
+constant — does not exist and is not filed. It is named in the design's Risks section and is the
+first thing to look at if a deployed host ever leaks a credential.
