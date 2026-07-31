@@ -92,6 +92,26 @@ This is the clean version of what [C-177](C-177-provider-contentful.md) probes: 
   or `CredentialRef` — recommend against adding a per-credential `service` field to `credential_ref_for`
   unless a future connector actually needs two *same-named* credentials disambiguated only by service,
   which nothing shipped today does.
+  This is confirmed directly in the generated artifact, not merely by the source declaration:
+  `crates/catalog/src/generated/postmark.rs` shows the two `account`-service operations carrying
+  `credentials: &[&["postmark.account_token"]]` and all four `server` operations carrying
+  `postmark.server_token`, with none carrying both — the partition is enforced at the only level any
+  shipped connector's auth exists at today.
+- **REWORK (independent review): the in-band credential hazard was disclosed nowhere a reader
+  reaches.** The first pass documented `GET /servers`'/`GET /servers/{id}`'s real `ApiTokens` field (a
+  server's own live Server Token, returned in plaintext by the Account API) only in the TOML's header
+  comment, then explicitly omitted the property from `response_schema` with "Not declared here." That
+  is the wrong convention: `response_schema` is cloned into the published site catalogue
+  (`crates/connector-cli/src/site.rs`) and is the tool contract a model reads before calling — a source
+  comment reaches neither. Fixed by following `providers/zoom.toml`'s `start_url` /
+  `providers/zendesk.toml`'s `authenticity_token` convention instead: both operations now declare
+  `ApiTokens`' shape (`array` of `string`, no example) with a description stating it is
+  "ACCOUNT-PRIVILEGED" live credential material and must not be logged, echoed, or passed to another
+  tool, and both operations' own top-level `description` says so too, since that is the text a model
+  reads before deciding to call. Re-ran the full scoped gate afterward: `build --provider postmark` and
+  `diff --provider postmark` are clean, and the red count is unchanged — exactly the same documented
+  eight plus the ninth (`the_recorded_floor_is_the_measured_figure`; postmark still 6/6 in the coverage
+  breakdown).
 - **A second, unanticipated finding surfaced while authoring**: declaring the `account` service at all
   removes the implicit `default` service for *every* operation in the provider (`AGENTS.md`'s service
   contract, enforced by the loader's `validate_member_service`/`validate_operation_service`). The four

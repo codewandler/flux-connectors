@@ -4,7 +4,7 @@
 # Regenerate with `flux-connectors build`.
 
 op postmark-server-list -> Any
-  description "List every server on this account. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/Message`, its error code at `/ErrorCode` in the response body."
+  description "List every server on this account. Each entry also carries `ApiTokens`, that server's own live Server Token(s) in plaintext — see that field's own description before handling this response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/Message`, its error code at `/ErrorCode` in the response body."
   risk "low"
   idempotency "idempotent"
   effects ["network"]
@@ -16,7 +16,7 @@ op postmark-server-list -> Any
   return response
 
 op postmark-server-get(server_id: Number) -> Any
-  description "Get one server's configuration by id. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/Message`, its error code at `/ErrorCode` in the response body."
+  description "Get one server's configuration by id. The response also carries `ApiTokens`, that server's own live Server Token(s) in plaintext — see that field's own description before handling this response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/Message`, its error code at `/ErrorCode` in the response body."
   risk "low"
   idempotency "idempotent"
   effects ["network"]

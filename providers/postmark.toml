@@ -81,11 +81,17 @@
 # personal data with no example, the convention `providers/sendgrid.toml`'s bounce list already
 # carries.
 #
-# **`GET /servers` also returns `ApiTokens` in the real payload** — the account API's own mechanism
-# for retrieving a server's Server Token. This connector's response_schema does not declare that
-# property. Omitting it does not hide it at runtime (the vendor still returns it; a flow reading this
-# response by hand still sees it), but this file does not model a field whose value is itself a
-# credential, and no example anywhere here could responsibly show its shape.
+# **`GET /servers` and `GET /servers/{id}` also return `ApiTokens` in the real payload** — the Account
+# API's own mechanism for retrieving a server's Server Token in plaintext. Omitting the property from
+# `response_schema` would not hide it at runtime (the vendor still returns it; a caller reading the raw
+# response still sees it) and would hide the *warning* from every reader who only ever sees this
+# connector's declared contract — `response_schema` is not inert prose, it is cloned straight into the
+# published site catalogue (`crates/connector-cli/src/site.rs`) and is what a model reads as the tool
+# contract for `postmark-server-list`/`postmark-server-get`. So this connector does the opposite of
+# omitting it: both operations declare `ApiTokens`' shape with a `description` that states the danger,
+# the same convention `providers/zoom.toml`'s `start_url` (a URL embedding a live ZAK token) and
+# `providers/zendesk.toml`'s `authenticity_token` already carry — declared, described, never given an
+# example or a value.
 #
 # Only `count`/`offset` (both plain integers) are curated onto `postmark-bounce-list`; Postmark's own
 # `emailFilter`, `tag` and `messageID` filters are free text this pipeline's `fmt`-based query
@@ -309,18 +315,17 @@ id = "postmark-server-list"
 service = "account"
 method = "GET"
 path = "/servers"
-description = "List every server on this account"
+description = "List every server on this account. Each entry also carries `ApiTokens`, that server's own live Server Token(s) in plaintext — see that field's own description before handling this response"
 risk = "low"
 idempotency = "idempotent"
 # The connector default is the Server Token; this operation needs the Account Token instead and
 # names it explicitly rather than inheriting `default_auth`.
 auth = [{ credentials = ["postmark.account_token"] }]
 
-# The real payload also carries `ApiTokens` per server — see the header comment. Not declared here.
 [operations.response_schema]
 type = "object"
 required = ["TotalCount", "Servers"]
-properties = { TotalCount = { type = "integer" }, Servers = { type = "array", items = { type = "object", required = ["ID", "Name", "Color", "SMTPApiActivated", "DeliveryType"], properties = { ID = { type = "integer" }, Name = { type = "string" }, Color = { type = "string" }, SMTPApiActivated = { type = "boolean" }, RawEmailEnabled = { type = "boolean" }, DeliveryType = { type = "string", enum = ["Live", "Test"] }, ServerLink = { type = "string" }, InboundAddress = { type = "string", description = "This server's own inbound-processing address, not a third party's" }, InboundDomain = { type = "string" }, TrackOpens = { type = "boolean" }, TrackLinks = { type = "string", enum = ["None", "HtmlAndText", "HtmlOnly", "TextOnly"] } } } } }
+properties = { TotalCount = { type = "integer" }, Servers = { type = "array", items = { type = "object", required = ["ID", "Name", "Color", "SMTPApiActivated", "DeliveryType"], properties = { ID = { type = "integer" }, Name = { type = "string" }, Color = { type = "string" }, SMTPApiActivated = { type = "boolean" }, RawEmailEnabled = { type = "boolean" }, DeliveryType = { type = "string", enum = ["Live", "Test"] }, ServerLink = { type = "string" }, InboundAddress = { type = "string", description = "This server's own inbound-processing address, not a third party's" }, InboundDomain = { type = "string" }, TrackOpens = { type = "boolean" }, TrackLinks = { type = "string", enum = ["None", "HtmlAndText", "HtmlOnly", "TextOnly"] }, ApiTokens = { type = "array", items = { type = "string" }, description = "ACCOUNT-PRIVILEGED. This server's own live Server Token(s), in plaintext — the Account API's own mechanism for retrieving one. Treat it as a credential: do not log it, echo it, or pass it to another tool" } } } } }
 
 [operations.quirks.error_envelope]
 message_pointer = "/Message"
@@ -333,7 +338,7 @@ id = "postmark-server-get"
 service = "account"
 method = "GET"
 path = "/servers/{server_id}"
-description = "Get one server's configuration by id"
+description = "Get one server's configuration by id. The response also carries `ApiTokens`, that server's own live Server Token(s) in plaintext — see that field's own description before handling this response"
 risk = "low"
 idempotency = "idempotent"
 auth = [{ credentials = ["postmark.account_token"] }]
@@ -344,12 +349,10 @@ description = "The server's id, from postmark-server-list"
 required = true
 schema = { type = "integer" }
 
-# The real payload also carries `ApiTokens` for this server — see the header comment. Not declared
-# here.
 [operations.response_schema]
 type = "object"
 required = ["ID", "Name", "Color", "SMTPApiActivated", "DeliveryType"]
-properties = { ID = { type = "integer" }, Name = { type = "string" }, Color = { type = "string" }, SMTPApiActivated = { type = "boolean" }, RawEmailEnabled = { type = "boolean" }, DeliveryType = { type = "string", enum = ["Live", "Test"] }, ServerLink = { type = "string" }, InboundAddress = { type = "string", description = "This server's own inbound-processing address, not a third party's" }, InboundDomain = { type = "string" }, TrackOpens = { type = "boolean" }, TrackLinks = { type = "string", enum = ["None", "HtmlAndText", "HtmlOnly", "TextOnly"] } }
+properties = { ID = { type = "integer" }, Name = { type = "string" }, Color = { type = "string" }, SMTPApiActivated = { type = "boolean" }, RawEmailEnabled = { type = "boolean" }, DeliveryType = { type = "string", enum = ["Live", "Test"] }, ServerLink = { type = "string" }, InboundAddress = { type = "string", description = "This server's own inbound-processing address, not a third party's" }, InboundDomain = { type = "string" }, TrackOpens = { type = "boolean" }, TrackLinks = { type = "string", enum = ["None", "HtmlAndText", "HtmlOnly", "TextOnly"] }, ApiTokens = { type = "array", items = { type = "string" }, description = "ACCOUNT-PRIVILEGED. This server's own live Server Token(s), in plaintext — the Account API's own mechanism for retrieving one. Treat it as a credential: do not log it, echo it, or pass it to another tool" } }
 
 [operations.quirks.error_envelope]
 message_pointer = "/Message"

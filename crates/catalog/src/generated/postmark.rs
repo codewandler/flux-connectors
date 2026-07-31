@@ -76,7 +76,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "postmark-server-list",
         provider: "postmark",
-        description: "List every server on this account",
+        description: "List every server on this account. Each entry also carries `ApiTokens`, that server's own live Server Token(s) in plaintext — see that field's own description before handling this response",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
         credentials: &[&["postmark.account_token"]],
@@ -86,7 +86,7 @@ static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "postmark-server-get",
         provider: "postmark",
-        description: "Get one server's configuration by id",
+        description: "Get one server's configuration by id. The response also carries `ApiTokens`, that server's own live Server Token(s) in plaintext — see that field's own description before handling this response",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
         credentials: &[&["postmark.account_token"]],
