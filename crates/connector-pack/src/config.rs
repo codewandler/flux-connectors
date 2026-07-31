@@ -260,6 +260,12 @@ impl Configuration {
     /// actually bound — left alone, an empty subdomain would substitute into `https://.zendesk.com`,
     /// a host that does not resolve, arrived at without an error.
     ///
+    /// **An all-whitespace value is empty too** (C-214). The filter tested `is_empty` alone, so a
+    /// `" "` survived it and travelled: `?teamId=%20` on every request of the service, or a host of
+    /// `https://%20.zendesk.com`. A value made of whitespace is not a value an operator meant to
+    /// supply, and treating it as absent produces [`Error::MissingConfig`] naming the field — which
+    /// is the diagnostic they need — rather than a request nobody can explain.
+    ///
     /// `service` is the operation's own, and it is what makes this a snapshot of **one service's**
     /// settings rather than of a connector's (C-197). Two operations of one connector in two
     /// services take two snapshots and read two sets of values, which is the point: they are calls
@@ -275,7 +281,7 @@ impl Configuration {
             .filter_map(|field| {
                 self.values
                     .get(&self.tenant, provider, service, field)
-                    .filter(|value| !value.is_empty())
+                    .filter(|value| !value.trim().is_empty())
                     .map(|value| (field.key(), value))
             })
             .collect();

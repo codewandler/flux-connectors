@@ -106,6 +106,10 @@ pub struct Operation {
     /// install for the same reason the spec is: so a connector that cannot be configured is a
     /// diagnosable refusal at the first call rather than a brace discovered in a URL.
     endpoint_variables: Vec<String>,
+    /// **Where each of those variables lands on the request** (C-214), read off the same body at the
+    /// same moment. A value is checked against its position where it is substituted, so the rule
+    /// binds every host and every `ConfigStore` rather than the loader's view of an `example`.
+    endpoint_slots: BTreeMap<String, request::Slot>,
 }
 
 /// Hand-written because [`CompositeOpDecl`]'s `Debug` is the whole parsed body, which buries the
@@ -170,6 +174,7 @@ impl Operation {
         let declaration = spec::declaration_of(entry.id, entry.flux)?;
         let spec = spec::project_declaration(entry.id, &declaration)?;
         let endpoint_variables = request::endpoint_variables(&declaration);
+        let endpoint_slots = request::endpoint_slots(&declaration);
 
         // **The one read of the configuration port** (C-198). Everything this operation can ever ask
         // for is knowable here — the endpoint variables off its own emitted Flux, the Basic user
@@ -190,6 +195,7 @@ impl Operation {
         Ok(Self {
             spec,
             endpoint_variables,
+            endpoint_slots,
             declaration,
             entry,
             provider,
@@ -285,7 +291,13 @@ impl Operation {
     /// `{placeholder}` in the connector's base URL. All refuse rather than sending a
     /// partly-assembled call.
     pub fn build_request(&self, params: &Value) -> Result<Request, Error> {
-        request::build(self.entry.id, &self.declaration, params, &self.endpoints()?)
+        request::build(
+            self.entry.id,
+            &self.declaration,
+            params,
+            &self.endpoints()?,
+            &self.endpoint_slots,
+        )
     }
 
     /// **The request as it goes out**: built, then authenticated with the bound credential port.
@@ -368,10 +380,26 @@ impl Operation {
     /// Best-effort by necessity — see [`Operation::subjects`] — and it reads through
     /// [`Snapshot::lookup`] rather than [`Operation::endpoints`] precisely because it must not be
     /// able to fail.
+    ///
+    /// **A value the guard refuses is not substituted here either** (C-214), and that is the half
+    /// that keeps the gate and the wire from diverging. This path runs exactly when
+    /// [`Operation::build_request`] failed, so the refused value is *why* it is running; filling it
+    /// in anyway would hand the host's allow-list `acme.zendesk.com@evil.example.zendesk.com` as a
+    /// subject to match on. The placeholder is left verbatim instead, which no allow-list matches —
+    /// the same fail-closed direction an unconfigured variable already takes.
     fn substituted_host(&self, host: &str) -> String {
         let mut out = host.to_owned();
         for variable in &self.endpoint_variables {
-            if let Some(value) = self.settings.lookup(Field::Endpoint(variable)) {
+            let slot = self
+                .endpoint_slots
+                .get(variable)
+                .copied()
+                .unwrap_or(request::Slot::Unplaced);
+            if let Some(value) = self
+                .settings
+                .lookup(Field::Endpoint(variable))
+                .filter(|value| slot.substitutable(value))
+            {
                 out = out.replace(&format!("{{{variable}}}"), &value);
             }
         }

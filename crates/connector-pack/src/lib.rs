@@ -533,6 +533,47 @@ pub enum Error {
         field: String,
     },
 
+    /// **A configuration value that would reshape the request it is substituted into** (C-214).
+    ///
+    /// The guard `connector-spec` has had since C-187 — `Position::validate_value` — has two call
+    /// sites, both in the loader, and both run against a `ConfigField::example` or a pinned
+    /// parameter *name*. Nothing ran against the value a tenant actually supplies, because this
+    /// repository never sees one: it arrives through [`ConfigStore`], at the host, at request time.
+    /// So the guard existed and did not guard, and this is the refusal that closes it, raised at the
+    /// one point where a value and the request it shapes are both in hand.
+    ///
+    /// The severe case is `position: "host"`, and it predates the pin surface. A path or query value
+    /// cannot move the origin — substitution lands after the authority is fixed in the `base`
+    /// literal — but nine shipped connectors template the host itself, and there a `subdomain` of
+    /// `acme.zendesk.com@evil.example` resolves to `evil.example.zendesk.com`, because the `@` makes
+    /// everything before it userinfo. That is a request to a host the operator never named, carrying
+    /// that operator's own token, past an egress gate that was shown a `zendesk.com` subject.
+    ///
+    /// The value is operator-supplied rather than attacker-supplied, so this is a
+    /// paste-the-wrong-thing hazard rather than a classic injection — and it is refused rather than
+    /// repaired for the reason every refusal here is: the alternative is a *different, valid*
+    /// request, which the vendor at the other end answers.
+    ///
+    /// The refusal quotes the value, as [`UnresolvedEndpoint`](Self::UnresolvedEndpoint) already
+    /// quotes a URL composed from one. A connection setting is not a secret, and the value is
+    /// precisely what an operator has to see in order to fix what they pasted.
+    #[error(
+        "`{operation}` cannot substitute the configured `{variable}` into the {position} of its \
+         request: {reason}; the request was not sent"
+    )]
+    UnsafeConfig {
+        /// The operation id.
+        operation: String,
+        /// The configuration variable whose value was refused, as the connector's own Flux spells
+        /// the placeholder — `subdomain`, `zone_id`, `teamId`.
+        variable: String,
+        /// Where the value would have landed: `host`, `path segment`, `query parameter` or
+        /// `header`.
+        position: &'static str,
+        /// What is wrong with the value.
+        reason: String,
+    },
+
     /// A finished URL still naming a configuration variable.
     ///
     /// Every variable had a value, so no *literal* can have carried a placeholder through — this is
