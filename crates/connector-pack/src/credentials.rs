@@ -58,7 +58,8 @@ use connector_secrets::{validate_tenant, CredentialRef, SecretStore, StoreError}
 use flux_runtime::ToolContext;
 
 use crate::auth::{self, Assembled};
-use crate::Error;
+use crate::config::Field;
+use crate::{Configuration, Error};
 
 /// The reserved service name [`CredentialRef::new`] elides, spelled here because a credential is
 /// declared at **provider** level and therefore always addresses it.
@@ -173,6 +174,7 @@ impl Credentials {
         ctx: &ToolContext,
         operation: &'static catalog::Operation,
         provider: &'static catalog::Provider,
+        configuration: &Configuration,
     ) -> Result<Vec<Assembled>, Error> {
         // An explicitly unauthenticated operation — a health check, a ping. Distinct from "nothing
         // resolved", and the IR keeps the two apart precisely so this branch can exist.
@@ -183,7 +185,7 @@ impl Credentials {
         let mut unmet: Vec<String> = Vec::new();
         for mechanism in operation.credentials {
             match self
-                .resolve_mechanism(ctx, operation, provider, mechanism)
+                .resolve_mechanism(ctx, operation, provider, mechanism, configuration)
                 .await
             {
                 Ok(assembled) => return Ok(assembled),
@@ -212,6 +214,7 @@ impl Credentials {
         operation: &'static catalog::Operation,
         provider: &'static catalog::Provider,
         mechanism: &'static [&'static str],
+        configuration: &Configuration,
     ) -> Result<Vec<Assembled>, Error> {
         // A mechanism naming nothing would authenticate nothing while looking satisfied. The loader
         // refuses a degenerate empty mechanism; this is the second lock, because "the request went
@@ -261,9 +264,10 @@ impl Credentials {
 
             // **Before any request exists, and before the fallible step below.** C-116 stated the
             // ordering as "registered before the request is constructed"; registering here rather
-            // than after `user_half` — which reads the environment and can fail — closes the window
-            // in which the value was in memory and the redactor had not been told (C-152, finding 4).
-            // Nothing in that window could surface it, and the point is that the code now says so.
+            // than after `user_half` — which consults the configuration port and can fail — closes
+            // the window in which the value was in memory and the redactor had not been told
+            // (C-152, finding 4). Nothing in that window could surface it, and the point is that the
+            // code now says so.
             register(
                 ctx,
                 operation.id,
@@ -272,7 +276,7 @@ impl Credentials {
                 secret.expose_secret(),
             )?;
 
-            let user = self.user_half(operation.id, credential)?;
+            let user = user_half(operation.id, provider, credential, configuration)?;
             let value = auth::acquire(credential, secret.expose_secret(), user.as_deref());
 
             // The second string: `base64(user:secret)` is as good as the secret to anyone holding it
@@ -289,44 +293,61 @@ impl Credentials {
         }
         Ok(assembled)
     }
+}
 
-    /// The user half of a Basic join, with its literal suffix, or `None` for every other
-    /// acquisition.
-    ///
-    /// **Read from the process environment, and that is deliberate rather than convenient.** The
-    /// user half is config, not a gated secret — an email address or an account name — and flux
-    /// resolves its own `AuthMethod::user_env` the same way. Routing it through the secret store
-    /// instead would put a non-secret in a secret's place and imply a redaction guarantee it does
-    /// not need; C-10's configuration seam is where a host will eventually supply it explicitly.
-    ///
-    /// # Errors
-    ///
-    /// [`Error::MissingCredentialConfig`] when none of the declared variables is set. Composing
-    /// `base64(":<secret>")` instead would produce a header the vendor answers with a 401 that says
-    /// nothing about the missing variable.
-    fn user_half(
-        &self,
-        operation: &str,
-        credential: &'static catalog::Credential,
-    ) -> Result<Option<String>, Error> {
-        let catalog::Acquisition::BasicJoin {
-            user_env,
-            user_suffix,
-        } = credential.acquire
-        else {
-            return Ok(None);
-        };
+/// The user half of a Basic join, with its literal suffix, or `None` for every other acquisition.
+///
+/// # It comes from the configuration port, not the process environment (C-193)
+///
+/// This used to read `Acquisition::BasicJoin::user_env` out of `std::env`, on the reasoning that the
+/// user half is config rather than a gated secret and that flux resolves its own `AuthMethod` the
+/// same way. The first half of that is still right — it is a non-secret, which is exactly why it is
+/// not in the store — and the second half is what made it wrong here: **a server's environment holds
+/// one value, and this is a per-tenant one.** `ZENDESK_USER` can name one customer's account; a pack
+/// serving a second tenant would have signed its requests as the first. Fixing a templated host
+/// while leaving this would have been half a migration, so it moves to the same port
+/// ([`Field::Username`]), and this crate now reads no environment variable at all.
+///
+/// `user_env` stays in the catalogue and is quoted in the refusal below, because it is the name the
+/// vendor's own documentation and flux's `AuthMethod` use for the same value — the fastest way for
+/// an operator to recognise what they are being asked for.
+///
+/// # Errors
+///
+/// [`Error::MissingConfig`] when the tenant has not supplied it. Composing `base64(":<secret>")`
+/// instead would produce a header the vendor answers with a 401 that says nothing about what is
+/// missing.
+fn user_half(
+    operation: &str,
+    provider: &'static catalog::Provider,
+    credential: &'static catalog::Credential,
+    configuration: &Configuration,
+) -> Result<Option<String>, Error> {
+    let catalog::Acquisition::BasicJoin {
+        user_env,
+        user_suffix,
+    } = credential.acquire
+    else {
+        return Ok(None);
+    };
 
-        let user = user_env
-            .iter()
-            .find_map(|key| std::env::var(key).ok().filter(|value| !value.is_empty()))
-            .ok_or_else(|| Error::MissingCredentialConfig {
+    let user = configuration
+        .require(operation, provider.id, Field::Username(credential.name))
+        .map_err(|error| match error {
+            // Re-stated with the vendor's own name for the value. `MissingConfig` alone would say
+            // `username.zendesk.api_token`, which is right and is not what a Zendesk operator has
+            // ever seen this called.
+            Error::MissingConfig { .. } => Error::MissingCredentialConfig {
                 operation: operation.to_owned(),
                 credential: credential.name.to_owned(),
+                tenant: configuration.tenant().to_owned(),
                 env: user_env.join(", "),
-            })?;
-        Ok(Some(format!("{user}{user_suffix}")))
-    }
+            },
+            other => other,
+        })?;
+    // The suffix is the connector's declared data — zendesk's `/token` — so it is appended here
+    // rather than asked of a host, which cannot get it wrong and cannot be asked to know it.
+    Ok(Some(format!("{user}{user_suffix}")))
 }
 
 /// **Register `value` with the host's redactor, or refuse the call.**

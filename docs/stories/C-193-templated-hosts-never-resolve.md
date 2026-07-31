@@ -2,7 +2,7 @@
 id: C-193
 title: "A templated base URL reaches the wire verbatim, so six connectors cannot resolve a host"
 pillar: Bridge
-status: ready
+status: in-progress
 priority: 2
 design: docs/designs/connector-configuration.md
 epic: tool-pack
@@ -62,29 +62,63 @@ gate or — worse — admitted against a subject nobody can audit.
 
 ## Acceptance
 
-- [ ] **Failing-first test:** an operation under a templated provider builds a request whose URL
-      still contains `{`, and/or declares a permission subject that does. Name it.
-- [ ] A tenant's endpoint values reach the pack through a **bound port**, in the shape
+- [x] **Failing-first test:** an operation under a templated provider builds a request whose URL
+      still contains `{`, and/or declares a permission subject that does. Named
+      `a_templated_host_is_substituted_into_the_request_url` and
+      `the_permission_subject_is_the_host_the_request_reaches`, in
+      `crates/connector-pack/tests/endpoint_configuration.rs`.
+- [x] A tenant's endpoint values reach the pack through a **bound port**, in the shape
       `Credentials` already uses — `Arc<dyn …>` handed in at construction, never a global, never an
-      ambient environment read. `crates/connector-pack/src/credentials.rs:6-14` states that posture
-      and is the model to follow.
-- [ ] Substitution is **total or refused**, never partial. A `base_url` with an unfilled placeholder
-      must produce a named error, not a request to a host containing a brace. This is the same rule
-      `request.rs` already holds for its evaluator: *"a partly-evaluated request is a different call,
-      and the vendor answers it"*.
-- [ ] `permission_subjects` declares the **substituted** host, and a test asserts the subject the
-      gate sees is the host the request reaches.
-- [ ] The env-read for Basic auth's user half (`credentials.rs:307-329`) is reconsidered in the same
-      pass — it is the same category of mistake (process environment standing in for tenant config),
-      and fixing hosts while leaving it is a half-migration. Either move it to the same port or
-      record why it stays.
-- [ ] No credential value or tenant value enters a committed artifact. The substituted URL exists
-      only at request-build time.
-- [ ] The scoped gate is green and the build stays a fixed point.
+      ambient environment read. `crates/connector-pack/src/config.rs`: `ConfigStore` behind
+      `Configuration`, a required argument to `pack` and `Operation::project`. The crate now reads
+      no environment variable at all.
+- [x] Substitution is **total or refused**, never partial. `Error::MissingConfig`, raised before the
+      body is evaluated, naming tenant/connector/field. `Error::UnresolvedEndpoint` is the second
+      lock for the one residual path (a caller parameter whose text spells a variable).
+- [x] `permission_subjects` declares the **substituted** host, on both the built path and the
+      malformed-call fallback. `tool.rs`'s `subjects`/`substituted_host`; asserted by
+      `the_permission_subject_is_the_host_the_request_reaches`,
+      `the_fallback_subject_is_substituted_too`, and catalogue-wide by
+      `a_templated_host_is_never_declared_as_a_permission_subject`.
+- [x] The env-read for Basic auth's user half is **moved to the same port** (`Field::Username`),
+      not merely reconsidered. A server environment holds one value and this is a per-tenant one, so
+      a pack serving a second tenant would have signed its requests as the first.
+- [x] No credential value or tenant value enters a committed artifact. `diff` reports
+      `470 artifacts up to date (43 providers checked)` and no artifact moved.
+- [x] The scoped gate is green and the build stays a fixed point.
 
 ## Progress
 
-- (not started)
+- **Landed.** The port is `Configuration` + `ConfigStore` + `MemoryConfig` in
+  `crates/connector-pack/src/config.rs`, bound at construction beside `Credentials`.
+- **The port is synchronous, and that is forced rather than chosen.**
+  `Tool::permission_subjects` cannot fail and cannot await, and it is the only place flux's egress
+  allow-list is consulted for the pack's inner call. An `async` port would be unusable there, so the
+  subject would have fallen back to the template — the exact failure this story exists to remove. A
+  host that keeps settings in a database resolves eagerly and binds a snapshot.
+- **The variables are read off each operation's own emitted Flux**, not from the IR, so this lands
+  against the catalogue as it stands and does not widen into C-87. The derivation is exact rather
+  than heuristic: flux interpolates `fmt` and never `lit`, so a brace surviving in a string literal
+  is by construction a name no evaluation fills — and across all 242 emitted operations the only
+  such literals are the nine templated base URLs.
+- **Substitution is over literals, never over the finished URL.** The one-line-shorter alternative
+  would let a caller's parameter value be filled with a tenant's configuration on its way to the
+  vendor. `a_parameter_that_spells_a_variable_is_not_substituted` pins it.
+- **Re-measured, and the story's figures were low.** Not six providers/38 operations but **nine
+  providers / 53 operations**: seven with a templated *host* (`zendesk`, `shopify`, `jira`,
+  `freshdesk`, `salesforce`, `docusign`, `okta` — 43 ops) and two with a templated *path* on a host
+  that does resolve (`contentful`, `statuspage` — 10 ops). The story missed `contentful`; `okta` and
+  `statuspage` landed on `main` mid-story. The path-templated pair is the quieter half:
+  `https://api.statuspage.io/v1/pages/{page_id}` reaches a real server and gets a `404` that reads
+  as a missing record rather than as a connector nobody configured.
+- **`freshdesk` and `okta` both name their variable `domain`.** The port is keyed by connector as
+  well as by variable, so these are two values rather than a collision.
+- **New refusal not in the story:** `Error::TenantMismatch`. Both ports carry a tenant, and nothing
+  in the types stopped a host from pairing tenant A's credentials with tenant B's settings — whose
+  outcome is one tenant's token sent to another tenant's host. Refused at `project`.
+- Left for C-87: publishing the configuration *surface* (labels, help text, `binds`) into the
+  manifest and catalogue, so a product can render "connect your Zendesk" rather than a host having
+  to know the variable names. `Operation::endpoint_variables()` is the interim answer.
 
 ## Notes
 
