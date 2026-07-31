@@ -2,8 +2,7 @@
 id: C-174
 title: Ship the DocuSign connector
 pillar: Spec
-status: in-progress
-priority: 3
+status: done
 design:
 epic: provider-fleet-2
 areas: [providers]
@@ -128,3 +127,21 @@ Shares the configured-host question with [C-163](C-163-provider-salesforce.md) a
 - Whole-catalogue artifacts are coordinator-owned: `crates/catalog/src/generated.rs`,
   `web/public/catalog.json`, `web/public/v1/**`, `assets/readme-snippet-*.svg`. The per-provider
   `crates/catalog/src/generated/docusign.rs` is **not** in that set and is yours to commit.
+
+### Coordinator note at integration
+
+**The twentieth new provider of this run, and it answered its own open question better than either option
+the story offered.** I framed the two-level prefix as a choice: pin the base URI from config and take
+`account_id` as a per-call argument, or fold both into `base_url` if expressible. The implementor read
+`crates/connector-spec/src/config.rs:348-362` and `provider.rs:557-573,638-660` and established that
+`template_variables` extracts **every** `{...}` placeholder with the validator requiring a bound
+`[[config]]` field per variable and **no cap on count** — so both fold in, each independently bound, and a
+test loads the connector and asserts it.
+
+That is the cleaner answer and it also narrows [C-187](C-187-config-cannot-pin-a-request-component.md):
+what cannot be pinned is a path segment *outside* the `base_url` template. A multi-level per-tenant
+**prefix** was already expressible; nobody had tried more than one variable.
+
+DocuSign's *Create Recipient View* is excluded outright. It returns an embedded signing URL that acts as a
+bearer token, and excluding the operation means there is no hazardous field to declare — which is the
+right order of operations, rather than shipping it and relying on a warning.

@@ -6571,6 +6571,782 @@
       "channels": []
     },
     {
+      "id": "docusign",
+      "authority": null,
+      "vendor": "DocuSign",
+      "description": "DocuSign eSignature REST API: list and read envelopes and their recipients, create an envelope from a template, and void one",
+      "base_url": "https://{account_host}/restapi/v2.1/accounts/{account_id}",
+      "api_version": null,
+      "hosts": [
+        "{account_host}"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://{account_host}/restapi/v2.1/accounts/{account_id}",
+          "hosts": [
+            "{account_host}"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 6
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "docusign.access_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "DocuSign OAuth2 access token sent as a bearer; already minted, supplied through the environment",
+            "env": [
+              "DOCUSIGN_ACCESS_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "docusign.access_token"
+          ]
+        ]
+      },
+      "operation_count": 6,
+      "operations": [
+        {
+          "id": "docusign-verify",
+          "provider": "docusign",
+          "service": "default",
+          "description": "List the account's own top-level folders — Draft, Sent Items, Inbox, and any custom ones. Takes no parameters and succeeds for any account with API access, which is what makes it the connection check for a settings page's Test Connection button",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/folders",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "description": "DocuSign's own folder structure, not envelope data",
+            "properties": {
+              "folders": {
+                "description": "Each folder's id and name, standard (Draft, Sent Items, Inbox, ...) and custom",
+                "items": {
+                  "properties": {
+                    "folderId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "uri": {
+                      "description": "This folder's own resource path",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "folderId",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "folders"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "docusign.access_token"
+            ]
+          ],
+          "hosts": [
+            "{account_host}"
+          ],
+          "flux": "op docusign-verify -> Any\n  description \"List the account's own top-level folders — Draft, Sent Items, Inbox, and any custom ones. Takes no parameters and succeeds for any account with API access, which is what makes it the connection check for a settings page's Test Connection button. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/errorCode` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{account_host}/restapi/v2.1/accounts/{account_id}\"\n  url = fmt(\"{base}/folders\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {account_host}, {account_id} value before it has a valid destination URL.",
+                "params": [
+                  "account_host",
+                  "account_id"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "docusign-envelope-list",
+          "provider": "docusign",
+          "service": "default",
+          "description": "List envelopes whose status changed on or after a given date. DocuSign requires a from_date (or an explicit envelope_ids/transaction_ids list, which this operation does not offer) on every call to this resource — omitting it is a 400 from the vendor, not a limitation of this connector",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/envelopes",
+          "parameters": [
+            {
+              "name": "from_date",
+              "in": "query",
+              "wire": null,
+              "description": "Only envelopes with a status change on or after this date, as YYYY-MM-DD. Required — DocuSign's own resource has no unfiltered form",
+              "required": true,
+              "schema": {
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "from_date": {
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "from_date"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "envelopes": {
+                "description": "Each envelope's own status summary — no recipient or document detail; see docusign-envelope-recipients-get for who is on it",
+                "items": {
+                  "properties": {
+                    "completedDateTime": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "emailSubject": {
+                      "type": "string"
+                    },
+                    "envelopeId": {
+                      "type": "string"
+                    },
+                    "sentDateTime": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "e.g. sent, delivered, completed, declined, voided, created",
+                      "type": "string"
+                    },
+                    "statusChangedDateTime": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "envelopeId",
+                    "status"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "resultSetSize": {
+                "description": "A COUNT, RETURNED AS A STRING — DocuSign's own convention, not this connector's",
+                "type": "string"
+              },
+              "totalSetSize": {
+                "description": "Same convention as resultSetSize",
+                "type": "string"
+              }
+            },
+            "required": [
+              "envelopes"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "docusign.access_token"
+            ]
+          ],
+          "hosts": [
+            "{account_host}"
+          ],
+          "flux": "op docusign-envelope-list(from_date: String) -> Any\n  description \"List envelopes whose status changed on or after a given date. DocuSign requires a from_date (or an explicit envelope_ids/transaction_ids list, which this operation does not offer) on every call to this resource — omitting it is a 400 from the vendor, not a limitation of this connector. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/errorCode` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{account_host}/restapi/v2.1/accounts/{account_id}\"\n  url = fmt(\"{base}/envelopes?from_date={from_date}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
+                "params": [
+                  "from_date"
+                ]
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {account_host}, {account_id} value before it has a valid destination URL.",
+                "params": [
+                  "account_host",
+                  "account_id"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "docusign-envelope-get",
+          "provider": "docusign",
+          "service": "default",
+          "description": "Get one envelope's own status and metadata. No recipient or document detail — see docusign-envelope-recipients-get for who is on it",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/envelopes/{envelope_id}",
+          "parameters": [
+            {
+              "name": "envelope_id",
+              "in": "path",
+              "wire": null,
+              "description": "The envelope's DocuSign id (a GUID), as returned by docusign-envelope-list or docusign-envelope-create-from-template",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "envelope_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "envelope_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "completedDateTime": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "emailSubject": {
+                "type": "string"
+              },
+              "envelopeId": {
+                "type": "string"
+              },
+              "sentDateTime": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "description": "e.g. sent, delivered, completed, declined, voided, created",
+                "type": "string"
+              },
+              "statusChangedDateTime": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "voidedReason": {
+                "description": "Present only once the envelope has been voided",
+                "type": "string"
+              }
+            },
+            "required": [
+              "envelopeId",
+              "status"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "docusign.access_token"
+            ]
+          ],
+          "hosts": [
+            "{account_host}"
+          ],
+          "flux": "op docusign-envelope-get(envelope_id: String) -> Any\n  description \"Get one envelope's own status and metadata. No recipient or document detail — see docusign-envelope-recipients-get for who is on it. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/errorCode` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{account_host}/restapi/v2.1/accounts/{account_id}\"\n  url = fmt(\"{base}/envelopes/{envelope_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {account_host}, {account_id} value before it has a valid destination URL.",
+                "params": [
+                  "account_host",
+                  "account_id"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "docusign-envelope-recipients-get",
+          "provider": "docusign",
+          "service": "default",
+          "description": "Get every recipient on an envelope and their signing status. Recipient name and email are personal data — see this operation's own response_schema before logging, displaying or forwarding it",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/envelopes/{envelope_id}/recipients",
+          "parameters": [
+            {
+              "name": "envelope_id",
+              "in": "path",
+              "wire": null,
+              "description": "The envelope's DocuSign id (a GUID)",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "envelope_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "envelope_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "description": "Every recipient list here carries personal data: name and email identify a real person DocuSign is asking to sign, view or receive a copy. No example value is given anywhere in this connector for either field",
+            "properties": {
+              "agents": {
+                "description": "Recipients who may view and forward the envelope without signing. Same personal-data shape as signers",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "carbonCopies": {
+                "description": "Recipients who receive a copy once the envelope completes. Same personal-data shape as signers",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "recipientCount": {
+                "description": "A COUNT, RETURNED AS A STRING — DocuSign's own convention",
+                "type": "string"
+              },
+              "signers": {
+                "description": "Recipients asked to sign",
+                "items": {
+                  "properties": {
+                    "declinedReason": {
+                      "type": "string"
+                    },
+                    "deliveredDateTime": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "email": {
+                      "description": "Personal data — the signer's own email address",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Personal data — the signer's own name",
+                      "type": "string"
+                    },
+                    "recipientId": {
+                      "type": "string"
+                    },
+                    "routingOrder": {
+                      "description": "A COUNT, RETURNED AS A STRING — DocuSign's own convention",
+                      "type": "string"
+                    },
+                    "signedDateTime": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "e.g. created, sent, delivered, completed, declined, autoresponded",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "recipientId",
+                    "email",
+                    "name",
+                    "status"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "docusign.access_token"
+            ]
+          ],
+          "hosts": [
+            "{account_host}"
+          ],
+          "flux": "op docusign-envelope-recipients-get(envelope_id: String) -> Any\n  description \"Get every recipient on an envelope and their signing status. Recipient name and email are personal data — see this operation's own response_schema before logging, displaying or forwarding it. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/errorCode` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{account_host}/restapi/v2.1/accounts/{account_id}\"\n  url = fmt(\"{base}/envelopes/{envelope_id}/recipients\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {account_host}, {account_id} value before it has a valid destination URL.",
+                "params": [
+                  "account_host",
+                  "account_id"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "docusign-envelope-create-from-template",
+          "provider": "docusign",
+          "service": "default",
+          "description": "Create an envelope from an existing template. When status is sent, DocuSign dispatches it immediately to every named recipient — a real, legally binding signature request to a real person. Use status created to save it as an editable draft that notifies nobody instead",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/envelopes",
+          "parameters": [
+            {
+              "name": "templateId",
+              "in": "body",
+              "wire": null,
+              "description": "The template's id (a GUID) to generate the envelope from",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "templateRoles",
+              "in": "body",
+              "wire": null,
+              "description": "One entry per role the template defines, supplying the recipient DocuSign routes that role to. email, name and roleName are all required by DocuSign. No example is given here — a signer's name and email are personal data — and roleName must match a role the template itself declares",
+              "required": true,
+              "schema": {
+                "items": {
+                  "properties": {
+                    "email": {
+                      "description": "Personal data. DocuSign routes and addresses the envelope using this address — a wrong value sends a real, legally binding signature request to the wrong person",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Personal data. The recipient's name as it will appear on the signed document",
+                      "type": "string"
+                    },
+                    "roleName": {
+                      "description": "Must match one of the roles the template itself defines",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "email",
+                    "name",
+                    "roleName"
+                  ],
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            {
+              "name": "status",
+              "in": "body",
+              "wire": null,
+              "description": "sent dispatches the envelope to every named recipient immediately; created saves it as an editable draft and notifies nobody",
+              "required": true,
+              "schema": {
+                "enum": [
+                  "sent",
+                  "created"
+                ],
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "sent",
+                  "created"
+                ],
+                "type": "string"
+              },
+              "templateId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "templateRoles": {
+                "items": {
+                  "properties": {
+                    "email": {
+                      "description": "Personal data. DocuSign routes and addresses the envelope using this address — a wrong value sends a real, legally binding signature request to the wrong person",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Personal data. The recipient's name as it will appear on the signed document",
+                      "type": "string"
+                    },
+                    "roleName": {
+                      "description": "Must match one of the roles the template itself defines",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "email",
+                    "name",
+                    "roleName"
+                  ],
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "templateId",
+              "templateRoles",
+              "status"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "envelopeId": {
+                "description": "The new envelope's id — what docusign-envelope-get, docusign-envelope-recipients-get and docusign-envelope-void address it by",
+                "type": "string"
+              },
+              "status": {
+                "description": "Echoes the status just set: sent or created",
+                "type": "string"
+              },
+              "statusDateTime": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "uri": {
+                "description": "This envelope's own resource path",
+                "type": "string"
+              }
+            },
+            "required": [
+              "envelopeId",
+              "status"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "docusign.access_token"
+            ]
+          ],
+          "hosts": [
+            "{account_host}"
+          ],
+          "flux": "op docusign-envelope-create-from-template(templateId: String, templateRoles: List<Any>, status: String) -> Any\n  description \"Create an envelope from an existing template. When status is sent, DocuSign dispatches it immediately to every named recipient — a real, legally binding signature request to a real person. Use status created to save it as an editable draft that notifies nobody instead. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/errorCode` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{account_host}/restapi/v2.1/accounts/{account_id}\"\n  url = fmt(\"{base}/envelopes\")\n  content_type = \"application/json\"\n  payload = { status, templateId, templateRoles }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {account_host}, {account_id} value before it has a valid destination URL.",
+                "params": [
+                  "account_host",
+                  "account_id"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "docusign-envelope-void",
+          "provider": "docusign",
+          "service": "default",
+          "description": "Void an envelope: cancel it permanently. Every recipient who has not yet finished signing is immediately locked out, and no further signing action is possible on this envelope id. Irreversible",
+          "risk": "destructive",
+          "idempotency": "non_idempotent",
+          "method": "PUT",
+          "path": "/envelopes/{envelope_id}",
+          "parameters": [
+            {
+              "name": "envelope_id",
+              "in": "path",
+              "wire": null,
+              "description": "The envelope's DocuSign id (a GUID) to void",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "status",
+              "in": "body",
+              "wire": null,
+              "description": "Constant voided — this operation always voids the envelope; there is no other status this operation sets",
+              "required": true,
+              "schema": {
+                "const": "voided",
+                "type": "string"
+              }
+            },
+            {
+              "name": "voidedReason",
+              "in": "body",
+              "wire": null,
+              "description": "Why this envelope is being voided. DocuSign shows this to any recipient who already opened the envelope, so avoid putting anything sensitive in it",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "envelope_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "status": {
+                "const": "voided",
+                "type": "string"
+              },
+              "voidedReason": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "envelope_id",
+              "status",
+              "voidedReason"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "envelopeId": {
+                "type": "string"
+              },
+              "status": {
+                "description": "voided on success",
+                "type": "string"
+              }
+            },
+            "required": [
+              "envelopeId",
+              "status"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "docusign.access_token"
+            ]
+          ],
+          "hosts": [
+            "{account_host}"
+          ],
+          "flux": "op docusign-envelope-void(envelope_id: String, voidedReason: String) -> Any\n  description \"Void an envelope: cancel it permanently. Every recipient who has not yet finished signing is immediately locked out, and no further signing action is possible on this envelope id. Irreversible. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/errorCode` in the response body.\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{account_host}/restapi/v2.1/accounts/{account_id}\"\n  url = fmt(\"{base}/envelopes/{envelope_id}\")\n  content_type = \"application/json\"\n  status = \"voided\"\n  payload = { status, voidedReason }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {account_host}, {account_id} value before it has a valid destination URL.",
+                "params": [
+                  "account_host",
+                  "account_id"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "dropbox",
       "authority": null,
       "vendor": "Dropbox",

@@ -7,6 +7,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The DocuSign connector (C-174).** Six operations over an OAuth2 bearer token, envelopes and
+  recipients, with `GET /folders` as `verify`.
+
+  **Its two-level per-tenant prefix folds entirely into `base_url`, and that is a better answer than the
+  story proposed.** `template_variables` (`config.rs:348-362`) extracts every `{...}` placeholder and the
+  validator requires a bound `[[config]]` field per variable with no cap on count
+  (`provider.rs:557-573,638-660`) — so the account host and the account id are two independently bound
+  variables rather than one pinned value plus a per-call argument. This narrows C-187: a multi-level
+  per-tenant *prefix* was always expressible; what cannot be pinned is a path segment **outside** the
+  `base_url` template.
+
+  An envelope is a legal signature request, so the declarations were the point: `void` is destructive, and
+  it is declared `non_idempotent` deliberately rather than claiming RFC-9110 idempotence on a destructive
+  action without vendor evidence that a repeat is safe. **DocuSign's *Create Recipient View* is excluded
+  outright** — it returns an embedded signing URL that acts as a bearer token, and excluding the operation
+  means there is no hazardous field to warn about, which beats shipping it behind a warning.
+
 ### Changed
 
 - **Algolia cannot ship, and C-187 is now load-bearing rather than ergonomic (C-164).** Algolia's
