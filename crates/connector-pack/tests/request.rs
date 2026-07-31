@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use catalog::OperationKey;
-use connector_pack::{Credentials, Egress, MemoryStore, Operation, Request};
+use connector_pack::{Configuration, Credentials, Egress, MemoryConfig, MemoryStore, Operation, Request};
 use flux_runtime::Tool;
 use serde_json::{json, Value};
 

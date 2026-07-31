@@ -3,7 +3,7 @@
 //! ```no_run
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! # use std::sync::Arc;
-//! # use connector_pack::{Credentials, Egress, SecretStore};
+//! # use connector_pack::{Configuration, Credentials, Egress, MemoryConfig, SecretStore};
 //! # use flux_runtime::{Tool, ToolRegistry};
 //! # let configured_http_request_tool: Arc<dyn Tool> = flux_runtime::tool_fn(
 //! #     flux_spec::ToolSpec { name: "http.request".into(), description: String::new(),
@@ -18,9 +18,15 @@
 //! let http = Egress::new(configured_http_request_tool);
 //! // Where this tenant's credentials live. Bound here, never looked up globally.
 //! let credentials = Credentials::new(host_secret_store, "9f3a4b2c")?;
+//! // And this tenant's non-secret connection settings — the `{subdomain}` in Zendesk's base URL.
+//! // Without it `zendesk.ticket.show` refuses rather than calling a host that does not resolve.
+//! let configuration = Configuration::new(
+//!     Arc::new(MemoryConfig::new().with_endpoint("9f3a4b2c", "zendesk", "subdomain", "acme")),
+//!     "9f3a4b2c",
+//! )?;
 //!
 //! let mut registry = ToolRegistry::new();
-//! connector_pack::pack(&["zendesk"], http, credentials)(&mut registry)?;
+//! connector_pack::pack(&["zendesk"], http, credentials, configuration)(&mut registry)?;
 //!
 //! assert!(registry.get("zendesk.ticket.show").is_some());
 //! # Ok(())
@@ -32,8 +38,11 @@
 //! ```ignore
 //! let http = Egress::new(Arc::new(flux_web::http::HttpRequestTool::new(&web_options)));
 //! let credentials = Credentials::new(Arc::new(VaultStore::new(&vault)?), &tenant)?;
+//! let configuration = Configuration::new(Arc::new(settings_for(&tenant)), &tenant)?;
 //! let client = flux_sdk::Client::builder()
-//!     .try_register_pack(connector_pack::pack(&["zendesk", "slack"], http, credentials))
+//!     .try_register_pack(
+//!         connector_pack::pack(&["zendesk", "slack"], http, credentials, configuration),
+//!     )
 //!     .build()?;
 //! ```
 //!
@@ -103,20 +112,40 @@
 //! **No response shaping.** `http.request` returns one flat string
 //! (`HTTP {status}\n{headers}\n{body}`), which is returned whole.
 //!
-//! **No config resolution**, so a templated base URL still carries `{subdomain}` verbatim. Five of
-//! the nineteen connectors declare a templated host (`{subdomain}.zendesk.com`, `{domain}`,
-//! `{site}.atlassian.net`, `{shop}.myshopify.com`), which is **27 of 105 operations that cannot
-//! reach a vendor** until C-10's base-URL configuration lands. A credential does not change that,
-//! and nothing here should be read as saying it does: an authenticated request to
-//! `https://{subdomain}.zendesk.com/...` is still a request to a host that does not resolve.
+//! # Configuration resolves through a bound port (C-193)
+//!
+//! What used to stand here was the note that a templated base URL reached the wire verbatim. It
+//! does not any more. Seven of the shipped connectors declare a `base_url` carrying a
+//! `{placeholder}` — `{subdomain}.zendesk.com`, `{shop}.myshopify.com`, `{site}.atlassian.net`,
+//! freshdesk's whole-host `{domain}`, `{instance}.my.salesforce.com`, docusign's
+//! `{account_host}`/`{account_id}` pair and contentful's `{space_id}`/`{environment_id}` path
+//! segments — which is **43 operations, six of them with a templated *host***. A tenant's values
+//! reach them through [`Configuration`], the second bound port, on the same terms as
+//! [`Credentials`]: handed in at construction, never a global, and never the process environment.
+//!
+//! Two consequences worth stating, because both are the kind that look like they work:
+//!
+//! - **Substitution is total or refused.** One unbound variable is [`Error::MissingConfig`], naming
+//!   the tenant, the connector and the field — never a request to a host with a brace in it.
+//! - **The permission subject is the substituted host.** The pack calls `http.request`'s `execute`
+//!   directly, so [`Operation`]'s own `permission_subjects` is the only place a host's egress
+//!   allow-list is consulted for the inner call. Declaring `{subdomain}.zendesk.com` there asks that
+//!   allow-list to match a string no host resolves to. See [`tool::Operation::subjects`].
+//!
+//! What this does *not* do is publish a connector's configuration surface — the labels, help text
+//! and `binds` targets that let a product render "connect your Zendesk". That is C-87, it is a
+//! breaking change to the manifest and the catalogue, and it is not needed to make a URL resolve:
+//! the variables are read off each operation's own emitted Flux.
 
 mod auth;
+mod config;
 mod credentials;
 mod name;
 mod request;
 mod spec;
 mod tool;
 
+pub use config::{ConfigStore, Configuration, Field, MemoryConfig};
 pub use credentials::{Credentials, DEFAULT_SERVICE};
 pub use name::{dotted_name, NameError};
 pub use request::Request;
@@ -406,20 +435,95 @@ pub enum Error {
 
     /// A Basic credential whose **non-secret** user half is not configured.
     ///
-    /// The user half is config — an email address, an account name — so it resolves from the
-    /// declared environment variables rather than from the store. Refused rather than composed as
+    /// The user half is config — an email address, an account name — so it resolves through
+    /// [`Configuration`] rather than from the secret store. Refused rather than composed as
     /// `base64(":<secret>")`, which is a header the vendor answers with a `401` that says nothing
-    /// about the missing variable.
+    /// about what is missing.
+    ///
+    /// It is a distinct variant from [`MissingConfig`](Self::MissingConfig), which it wraps, purely
+    /// so the refusal can also quote the connector's `user_env` — the name the vendor's own
+    /// documentation gives this value, and the fastest way for an operator to recognise it.
     #[error(
-        "`{operation}` needs the non-secret user half of `{credential}`, and none of `{env}` is set"
+        "`{operation}` needs the non-secret user half of `{credential}` for tenant `{tenant}`, and \
+         the bound configuration supplies none (elsewhere this value is called `{env}`); the \
+         request was not sent"
     )]
     MissingCredentialConfig {
         /// The operation id.
         operation: String,
         /// The credential whose user half is missing.
         credential: String,
-        /// The environment-variable keys that were tried, in order.
+        /// The tenant it was looked up for.
+        tenant: String,
+        /// What the same value is called in the vendor's documentation and in flux's `AuthMethod`.
         env: String,
+    },
+
+    /// **A connection setting the tenant has not supplied**, so the request cannot be composed.
+    ///
+    /// The refusal that closes C-193. A `base_url` such as `https://{subdomain}.zendesk.com` is not
+    /// a URL until a tenant's value fills it, and there is no safe partial answer: substituting what
+    /// is available and sending the rest would produce a request to a *different* host, which the
+    /// vendor at that host answers. This is the same rule [`Unbuildable`](Self::Unbuildable) states
+    /// for a partly-evaluated body, applied to the part of the URL a tenant owns.
+    ///
+    /// `field` is spelled in the design's `binds` vocabulary — `endpoint.subdomain`,
+    /// `username.zendesk.api_token` — so the diagnostic names the same thing a connector's
+    /// configuration surface will when C-87 publishes it.
+    ///
+    /// No value is quoted, only the address of the missing one. A connection setting is not a
+    /// secret, but it is a customer's, and the same care [`UnredactableCredential`] takes applies.
+    #[error(
+        "`{operation}` needs `{field}` of connector `{provider}` for tenant `{tenant}`, and the \
+         bound configuration supplies none, so no URL composes; the request was not sent"
+    )]
+    MissingConfig {
+        /// The operation id.
+        operation: String,
+        /// The connector whose configuration is incomplete.
+        provider: String,
+        /// The tenant the value was looked up for.
+        tenant: String,
+        /// The missing field, as `binds` spells it.
+        field: String,
+    },
+
+    /// A finished URL still naming a configuration variable.
+    ///
+    /// Every variable had a value, so no *literal* can have carried a placeholder through — this is
+    /// reachable only when a caller passes a parameter whose own text spells one, and interpolating
+    /// it puts the brace back. Refused rather than sent: a request whose URL names a variable
+    /// nobody resolved is not a request to the host the gate was shown.
+    #[error(
+        "`{operation}` built the URL `{url}`, which still names the configuration variable \
+         `{variable}`; a parameter value put it there, and the request was not sent"
+    )]
+    UnresolvedEndpoint {
+        /// The operation id.
+        operation: String,
+        /// The variable still named in the URL.
+        variable: String,
+        /// The URL as it was built. Unauthenticated — no credential has been placed on it yet.
+        url: String,
+    },
+
+    /// Two ports bound to two different tenants.
+    ///
+    /// [`Credentials`] and [`Configuration`] each carry the tenant they answer for, and nothing in
+    /// the types stops a host from pairing them wrongly. The result of that mistake is specific:
+    /// one tenant's credential sent to another tenant's host, an authenticated request to the wrong
+    /// customer's server. Refused at install, where every other misconfiguration of a port is.
+    #[error(
+        "`{operation}` was given credentials for tenant `{credentials}` and configuration for \
+         tenant `{configuration}`; one connector serves one tenant"
+    )]
+    TenantMismatch {
+        /// The operation id.
+        operation: String,
+        /// The tenant the credential port answers for.
+        credentials: String,
+        /// The tenant the configuration port answers for.
+        configuration: String,
     },
 
     /// **A credential the host's redactor will not hold, and therefore will not travel.**
@@ -508,6 +612,18 @@ impl From<Error> for flux_core::Error {
 /// `401` as retryable will loop on forever. Requiring it makes "I forgot to bind a store" a
 /// compile error instead of a production symptom.
 ///
+/// # And so is the configuration port, for the same reason
+///
+/// [`Configuration`] is required on identical terms. A pack built without one could install
+/// `zendesk` and send every request to `https://{subdomain}.zendesk.com` — which is not a
+/// fail-closed anything, it is a DNS failure several layers away from the fact that nobody was ever
+/// asked for a subdomain. It is separately required rather than folded into [`Credentials`] because
+/// the two hold different kinds of value: one is a secret with a redaction guarantee, the other is
+/// not, and a single port would have to pretend one of those is true of both.
+///
+/// Both ports name the tenant they answer for, and [`Operation::project`] refuses a pack whose two
+/// tenants disagree ([`Error::TenantMismatch`]).
+///
 /// # Errors
 ///
 /// The closure returns an error when a named provider is not in the catalogue, when an operation
@@ -518,12 +634,13 @@ pub fn pack(
     providers: &[&str],
     http: Egress,
     credentials: Credentials,
+    configuration: Configuration,
 ) -> impl FnOnce(&mut ToolRegistry) -> flux_core::Result<()> {
     let requested: Vec<String> = providers.iter().map(|name| (*name).to_string()).collect();
 
     move |registry: &mut ToolRegistry| {
         for provider in &requested {
-            install(registry, provider, &http, &credentials)?;
+            install(registry, provider, &http, &credentials, &configuration)?;
         }
         Ok(())
     }
@@ -535,6 +652,7 @@ fn install(
     provider: &str,
     http: &Egress,
     credentials: &Credentials,
+    configuration: &Configuration,
 ) -> flux_core::Result<()> {
     let entry =
         catalog::provider(ProviderKey::id(provider)).ok_or_else(|| Error::UnknownProvider {
@@ -550,6 +668,7 @@ fn install(
                 operation,
                 http.clone(),
                 credentials.clone(),
+                configuration.clone(),
             )?) as Arc<dyn Tool>)
         })
         .collect::<Result<Vec<_>, Error>>()?;
@@ -576,11 +695,37 @@ pub(crate) mod tests {
     /// a *request shape* must not depend on a value being present. The tests that do care live in
     /// `tests/credentials.rs` and put a sentinel in a store of their own.
     pub(crate) fn empty_credentials() -> Credentials {
-        Credentials::new(
-            Arc::new(connector_secrets::MemoryStore::new()),
-            "t-connector-pack",
-        )
-        .expect("a valid tenant id")
+        Credentials::new(Arc::new(connector_secrets::MemoryStore::new()), TEST_TENANT)
+            .expect("a valid tenant id")
+    }
+
+    /// The tenant both ports below answer for. One constant, because [`Operation::project`] refuses
+    /// a pair that disagrees — which is the point of that refusal.
+    pub(crate) const TEST_TENANT: &str = "t-connector-pack";
+
+    /// A bound configuration port carrying **every templated connector's** endpoint variables.
+    ///
+    /// Tests in this crate assert request shapes, and a request shape is only assertable once the
+    /// URL composes. Supplying the values here rather than per test is what keeps
+    /// `zendesk-ticket-show`'s expected URL a readable string instead of a template.
+    ///
+    /// The Basic user halves are here for the same reason: they are configuration now (C-193), not
+    /// an environment variable a test could set.
+    pub(crate) fn test_configuration() -> Configuration {
+        let values = MemoryConfig::new()
+            .with_endpoint(TEST_TENANT, "zendesk", "subdomain", "acme")
+            .with_endpoint(TEST_TENANT, "shopify", "shop", "acme-store")
+            .with_endpoint(TEST_TENANT, "jira", "site", "acme")
+            .with_endpoint(TEST_TENANT, "freshdesk", "domain", "acme.freshdesk.com")
+            .with_endpoint(TEST_TENANT, "salesforce", "instance", "acme")
+            .with_endpoint(TEST_TENANT, "docusign", "account_host", "na4.docusign.net")
+            .with_endpoint(TEST_TENANT, "docusign", "account_id", "acme-account")
+            .with_endpoint(TEST_TENANT, "contentful", "space_id", "acme-space")
+            .with_endpoint(TEST_TENANT, "contentful", "environment_id", "master")
+            .with_username(TEST_TENANT, "zendesk", "zendesk.api_token", "ops@acme.test")
+            .with_username(TEST_TENANT, "jira", "jira.api_token", "ops@acme.test")
+            .with_username(TEST_TENANT, "twilio", "twilio.auth_token", "AC-acme");
+        Configuration::new(Arc::new(values), TEST_TENANT).expect("a valid tenant id")
     }
 
     /// A stand-in for flux's `http.request`, for tests that need a transport but not a socket.
@@ -610,7 +755,7 @@ pub(crate) mod tests {
     #[test]
     fn a_providers_operations_are_labelled_with_the_provider() {
         let mut registry = ToolRegistry::new();
-        pack(&["zendesk"], recording_http(), empty_credentials())(&mut registry)
+        pack(&["zendesk"], recording_http(), empty_credentials(), test_configuration())(&mut registry)
             .expect("zendesk installs");
 
         assert_eq!(
@@ -625,7 +770,7 @@ pub(crate) mod tests {
     fn the_pack_outlives_the_names_it_was_built_from() {
         let install = {
             let names = vec!["zendesk"];
-            pack(&names, recording_http(), empty_credentials())
+            pack(&names, recording_http(), empty_credentials(), test_configuration())
         };
 
         let mut registry = ToolRegistry::new();
@@ -637,7 +782,7 @@ pub(crate) mod tests {
     #[test]
     fn several_providers_install_together() {
         let mut registry = ToolRegistry::new();
-        pack(&["zendesk", "slack"], recording_http(), empty_credentials())(&mut registry)
+        pack(&["zendesk", "slack"], recording_http(), empty_credentials(), test_configuration())(&mut registry)
             .expect("both install");
 
         assert!(registry.get("zendesk.ticket.show").is_some());
@@ -655,7 +800,7 @@ pub(crate) mod tests {
         // stopped being unknown the moment C-163 shipped it.
         const NO_SUCH_PROVIDER: &str = "no-such-vendor";
 
-        let error = pack(&[NO_SUCH_PROVIDER], recording_http(), empty_credentials())(&mut registry)
+        let error = pack(&[NO_SUCH_PROVIDER], recording_http(), empty_credentials(), test_configuration())(&mut registry)
             .expect_err("no such connector");
 
         assert!(error.to_string().contains(NO_SUCH_PROVIDER), "{error}");
@@ -672,7 +817,7 @@ pub(crate) mod tests {
         assert!(!entries.is_empty(), "zendesk carries operations");
 
         for entry in entries {
-            let operation = Operation::project(entry, http.clone(), empty_credentials())
+            let operation = Operation::project(entry, http.clone(), empty_credentials(), test_configuration())
                 .expect("the entry projects");
             assert!(
                 Arc::ptr_eq(http.tool(), operation.egress().tool()),

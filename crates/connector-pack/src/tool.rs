@@ -1,5 +1,6 @@
 //! One catalogue operation, as a thing a host's [`ToolRegistry`](flux_runtime::ToolRegistry) holds.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -10,8 +11,9 @@ use flux_spec::{
 };
 use serde_json::Value;
 
+use crate::config::Field;
 use crate::request::{self, Request};
-use crate::{auth, spec, Credentials, Error};
+use crate::{auth, spec, Configuration, Credentials, Error};
 
 /// **The connector's egress**: the tool every projected operation hands its request to.
 ///
@@ -90,6 +92,13 @@ pub struct Operation {
     http: Egress,
     /// **The credential port the host bound**, not a global. See [`Credentials`].
     credentials: Credentials,
+    /// **The connection-configuration port the host bound**, not a global and not the process
+    /// environment. See [`Configuration`].
+    configuration: Configuration,
+    /// The configuration variables this operation's own emitted Flux carries, derived once at
+    /// install for the same reason the spec is: so a connector that cannot be configured is a
+    /// diagnosable refusal at the first call rather than a brace discovered in a URL.
+    endpoint_variables: Vec<String>,
 }
 
 /// Hand-written because [`CompositeOpDecl`]'s `Debug` is the whole parsed body, which buries the
@@ -113,12 +122,26 @@ impl Operation {
     /// Whatever [`spec::project`] refuses — an id with no dotted tool name, or an entry whose
     /// embedded Flux is not the single declaration a catalogue rendering is — plus
     /// [`Error::NoDeclaredHost`] for an entry that names no host, which is refused here so that
-    /// [`Tool::permission_subjects`] can never return an empty answer.
+    /// [`Tool::permission_subjects`] can never return an empty answer, and
+    /// [`Error::TenantMismatch`] for two ports bound to different tenants.
     pub fn project(
         entry: &'static catalog::Operation,
         http: Egress,
         credentials: Credentials,
+        configuration: Configuration,
     ) -> Result<Self, Error> {
+        // **Two ports, one tenant.** Nothing in the types stops a host from binding tenant A's
+        // credentials beside tenant B's connection settings, and the result of that mistake is
+        // specific and bad: one tenant's token sent to another tenant's host. Refused where it is
+        // cheapest to notice, and where every other misconfiguration in this constructor is.
+        if credentials.tenant() != configuration.tenant() {
+            return Err(Error::TenantMismatch {
+                operation: entry.id.to_owned(),
+                credentials: credentials.tenant().to_owned(),
+                configuration: configuration.tenant().to_owned(),
+            });
+        }
+
         // Refused at install rather than tolerated at dispatch. The gate below falls back to the
         // declared hosts when a request cannot be built, so an entry with no host would be a tool
         // whose subjects are empty exactly when they matter most — and "empty" is indistinguishable
@@ -140,12 +163,44 @@ impl Operation {
         let declaration = spec::declaration_of(entry.id, entry.flux)?;
         Ok(Self {
             spec: spec::project_declaration(entry.id, &declaration)?,
+            endpoint_variables: request::endpoint_variables(&declaration),
             declaration,
             entry,
             provider,
             http,
             credentials,
+            configuration,
         })
+    }
+
+    /// The configuration variables this operation's URL carries, in stable order.
+    ///
+    /// Public because it is what a host needs in order to know *what to ask a tenant for* before
+    /// C-87 publishes the configuration surface into the manifest. `zendesk-ticket-show` reports
+    /// `["subdomain"]`; a `docusign` operation reports `["account_host", "account_id"]`; an
+    /// operation on a connector with a literal base URL reports nothing.
+    pub fn endpoint_variables(&self) -> &[String] {
+        &self.endpoint_variables
+    }
+
+    /// Resolve every configuration variable this operation needs, or refuse.
+    ///
+    /// **Total or refused.** A partly-substituted base URL is not a degraded request, it is a
+    /// request to a different host — the same rule [`crate::request`] already holds for its
+    /// evaluator — so a single unbound variable stops the call here rather than putting a brace on
+    /// the wire.
+    fn endpoints(&self) -> Result<BTreeMap<String, String>, Error> {
+        self.endpoint_variables
+            .iter()
+            .map(|variable| {
+                let value = self.configuration.require(
+                    self.entry.id,
+                    self.provider.id,
+                    Field::Endpoint(variable),
+                )?;
+                Ok((variable.clone(), value))
+            })
+            .collect()
     }
 
     /// The catalogue entry behind this tool.
@@ -172,11 +227,18 @@ impl Operation {
     ///
     /// # Errors
     ///
-    /// [`Error::MissingParameter`] when a declared parameter was not supplied, and
+    /// [`Error::MissingParameter`] when a declared parameter was not supplied,
     /// [`Error::Unbuildable`] when the operation's body contains something the pack does not
-    /// evaluate. Both refuse rather than sending a partly-assembled call.
+    /// evaluate, and [`Error::MissingConfig`] when the tenant has not supplied a value for a
+    /// `{placeholder}` in the connector's base URL. All refuse rather than sending a
+    /// partly-assembled call.
     pub fn build_request(&self, params: &Value) -> Result<Request, Error> {
-        request::build(self.entry.id, &self.declaration, params)
+        request::build(
+            self.entry.id,
+            &self.declaration,
+            params,
+            &self.endpoints()?,
+        )
     }
 
     /// **The request as it goes out**: built, then authenticated with the bound credential port.
@@ -205,7 +267,7 @@ impl Operation {
     ) -> Result<Request, Error> {
         let credentials = self
             .credentials
-            .resolve(ctx, self.entry, self.provider)
+            .resolve(ctx, self.entry, self.provider, &self.configuration)
             .await?;
 
         let mut request = self.build_request(params)?;
@@ -229,6 +291,19 @@ impl Operation {
     /// therefore cannot consult a redactor either. The named consequence is that a host writing an
     /// allow-list against a *full* URL sees the request without its `?api_key=…`; matching on host
     /// and path, which is what an egress policy is written against, is unaffected.
+    ///
+    /// # And it is the **substituted** host, on both paths (C-193)
+    ///
+    /// `entry.hosts` is the manifest's `http_hosts`, and for six connectors it is a template:
+    /// `{subdomain}.zendesk.com`. Declaring that as the subject asks an allow-list to match a string
+    /// no host resolves to, which is not a gate — it is a gate that always says no, or a rule an
+    /// operator writes as a wildcard to make the connector work at all. So the fallback substitutes
+    /// too, through the same port and the same values the request would have used.
+    ///
+    /// The fallback cannot fail, so it fills what it has and **leaves the rest verbatim**. That
+    /// direction is deliberate: a subject still carrying `{subdomain}` matches nothing, so an
+    /// unconfigured connector is refused by the host's own policy rather than admitted against a
+    /// subject nobody can audit.
     fn subjects(&self, params: &Value) -> Vec<String> {
         match self.build_request(params) {
             Ok(request) => vec![request.url],
@@ -236,9 +311,27 @@ impl Operation {
                 .entry
                 .hosts
                 .iter()
-                .map(|&host| host.to_owned())
+                .map(|&host| self.substituted_host(host))
                 .collect(),
         }
+    }
+
+    /// A declared host with whatever configuration values the port can supply filled in.
+    ///
+    /// Best-effort by necessity — see [`Operation::subjects`] — and it reads through
+    /// [`Configuration::lookup`] rather than [`Operation::endpoints`] precisely because it must not
+    /// be able to fail.
+    fn substituted_host(&self, host: &str) -> String {
+        let mut out = host.to_owned();
+        for variable in &self.endpoint_variables {
+            if let Some(value) = self
+                .configuration
+                .lookup(self.provider.id, Field::Endpoint(variable))
+            {
+                out = out.replace(&format!("{{{variable}}}"), &value);
+            }
+        }
+        out
     }
 }
 
@@ -300,7 +393,7 @@ mod tests {
     fn projected(id: &str) -> Operation {
         let entry = catalog::operation(OperationKey::id(id))
             .unwrap_or_else(|| panic!("the shipped catalogue carries `{id}`"));
-        Operation::project(entry, recording_http(), empty_credentials())
+        Operation::project(entry, recording_http(), empty_credentials(), test_configuration())
             .unwrap_or_else(|error| panic!("`{id}`: {error}"))
     }
 
@@ -382,7 +475,7 @@ mod tests {
         let entry: &'static catalog::Operation = Box::leak(Box::new(entry));
 
         assert!(matches!(
-            Operation::project(entry, recording_http(), empty_credentials()),
+            Operation::project(entry, recording_http(), empty_credentials(), test_configuration()),
             Err(Error::NoDeclaredHost { .. })
         ));
     }
