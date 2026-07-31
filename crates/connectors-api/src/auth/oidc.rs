@@ -76,6 +76,80 @@ const JWKS_MIN_REFETCH: Duration = Duration::from_secs(60);
 /// Clock skew tolerated on `exp`.
 const LEEWAY: u64 = 60;
 
+/// How long either back-channel call may take, end to end.
+const OUTBOUND_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long either may spend establishing a connection.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+/// The most a JWKS document may weigh. Google's is a few kilobytes; this is generous by three
+/// orders of magnitude and still finite.
+pub(crate) const MAX_JWKS_BYTES: usize = 1024 * 1024;
+/// The most a token-endpoint response may weigh. It is a small JSON object with a JWT in it.
+pub(crate) const MAX_TOKEN_BYTES: usize = 256 * 1024;
+
+/// **The client both back-channel calls use.**
+///
+/// These two requests — the token exchange and the JWKS fetch — are the only ones this host makes
+/// that do **not** go through flux's `Egress` and its SSRF guard. That is correct, because their
+/// URLs are operator configuration rather than anything a caller chose, but it means the bounds
+/// `Egress` would have applied have to be applied here instead. Left at `reqwest::Client::new()`
+/// they had none at all: a hanging or hostile token endpoint pins a request handler indefinitely,
+/// and a JWKS endpoint streaming forever exhausts memory through an unbounded `text()`.
+///
+/// - **Timeouts**, so a handler cannot be held open. `connect` separately, because a black-holed
+///   SYN is the slowest way to fail.
+/// - **No redirects.** Neither endpoint has any business redirecting; a redirect is either a
+///   misconfiguration or an attempt to bounce this host — carrying the client secret, in the token
+///   case — somewhere it was not pointed. Refused rather than followed.
+/// - **One client, built once.** `reqwest::Client::new()` per request also meant a fresh
+///   connection pool and a fresh TLS handshake every time.
+///
+/// Response *size* cannot be bounded by the builder, so it is bounded at the read — see
+/// [`read_bounded`].
+pub fn back_channel_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(OUTBOUND_TIMEOUT)
+        .connect_timeout(CONNECT_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        // The only failure here is a TLS backend that will not initialise, which would make every
+        // outbound call fail anyway; a client with the default policy is a strictly better outcome
+        // than refusing to start.
+        .unwrap_or_else(|_| reqwest::Client::new())
+}
+
+/// Read a response body, refusing one that exceeds `limit`.
+///
+/// `reqwest` has no body-size cap, and `text()`/`bytes()` buffer whatever arrives — so a server
+/// that never stops sending is an out-of-memory condition rather than a timeout. The declared
+/// `Content-Length` is checked first as a cheap early refusal, and then the body is accumulated a
+/// chunk at a time so a *lying* or absent length is caught too.
+pub(crate) async fn read_bounded(
+    mut response: reqwest::Response,
+    limit: usize,
+) -> Result<String, String> {
+    if let Some(declared) = response.content_length() {
+        if declared > limit as u64 {
+            return Err(format!(
+                "the response declares {declared} bytes, over the {limit} allowed"
+            ));
+        }
+    }
+
+    let mut body = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| format!("the response could not be read: {error}"))?
+    {
+        if body.len() + chunk.len() > limit {
+            return Err(format!("the response exceeded the {limit} bytes allowed"));
+        }
+        body.extend_from_slice(&chunk);
+    }
+
+    String::from_utf8(body).map_err(|_| "the response was not UTF-8".to_owned())
+}
+
 /// What an operator must supply, and what it defaults to.
 #[derive(Clone)]
 pub struct Settings {
@@ -230,6 +304,8 @@ pub struct Expectations<'a> {
 pub struct IdClaims {
     /// The stable subject identifier. **This is the account key.**
     pub sub: String,
+    /// Issued-at, in seconds since the epoch. Required, and checked for being in the future.
+    pub iat: i64,
     pub nonce: Option<String>,
     pub email: Option<String>,
     pub email_verified: Option<bool>,
@@ -255,6 +331,10 @@ pub enum VerifyError {
     Audience,
     /// `exp` is in the past.
     Expired,
+    /// `nbf` says the token is not usable yet.
+    NotYetValid,
+    /// `iat` is further ahead than clock skew explains.
+    IssuedInTheFuture,
     /// `nonce` is absent, or is not the one this sign-in asked for.
     Nonce,
     /// `sub` is missing, or is not usable as a tenant path segment.
@@ -278,6 +358,10 @@ impl std::fmt::Display for VerifyError {
             Self::Issuer => write!(f, "the id_token was issued by someone else"),
             Self::Audience => write!(f, "the id_token was issued for a different application"),
             Self::Expired => write!(f, "the id_token has expired"),
+            Self::NotYetValid => write!(f, "the id_token is not valid yet"),
+            Self::IssuedInTheFuture => {
+                write!(f, "the id_token claims to have been issued in the future")
+            }
             Self::Nonce => write!(f, "the id_token's nonce does not match this sign-in"),
             Self::Subject(why) => write!(f, "the id_token's subject is unusable: {why}"),
             Self::Jwks(why) => write!(f, "the provider's signing keys could not be read: {why}"),
@@ -330,10 +414,18 @@ pub fn verify_id_token(
     validation.set_audience(&[expect.audience]);
     validation.validate_exp = true;
     validation.leeway = LEEWAY;
+    // **`nbf` is validated, deliberately.** `jsonwebtoken` defaults it off and Google does not
+    // currently put `nbf` in an `id_token`, so this changes nothing today — which is exactly why
+    // it is cheap to turn on. `jsonwebtoken` only checks the claim when it is present, so the cost
+    // is nil and the benefit is that a token which *does* carry a not-before is honoured rather
+    // than silently ignored. Leaving a standard temporal claim unenforced because the current
+    // issuer happens not to send it is a decision that ages badly and invisibly.
+    validation.validate_nbf = true;
     // `set_issuer`/`set_audience` add `iss`/`aud` to the required set, so a token that simply omits
     // one is refused rather than silently passing the check it left out. `sub` is required because
-    // it is the account key and a token without one has nothing to key on.
-    validation.set_required_spec_claims(&["exp", "iss", "aud", "sub"]);
+    // it is the account key and a token without one has nothing to key on. `iat` is required so the
+    // freshness check below has something to check.
+    validation.set_required_spec_claims(&["exp", "iss", "aud", "sub", "iat"]);
 
     let data = decode::<IdClaims>(token, &key, &validation).map_err(|error| {
         use jsonwebtoken::errors::ErrorKind;
@@ -342,9 +434,22 @@ pub fn verify_id_token(
             ErrorKind::InvalidIssuer => VerifyError::Issuer,
             ErrorKind::InvalidAudience => VerifyError::Audience,
             ErrorKind::ExpiredSignature => VerifyError::Expired,
+            ErrorKind::ImmatureSignature => VerifyError::NotYetValid,
             other => VerifyError::Malformed(format!("{other:?}")),
         }
     })?;
+
+    // **`iat` is checked for being in the future, and nothing more.** `jsonwebtoken` has no
+    // `validate_iat`, so this is the host's to do or to decline. Declined would be defensible —
+    // `exp` already bounds the window a token is usable in — but a token issued *ahead* of now by
+    // more than clock skew is a signal `exp` cannot give: either a badly wrong clock somewhere, or
+    // a token minted with a stretched lifetime. There is deliberately no maximum *age* check on
+    // top: that is `exp`'s job, and a second, differently-tuned freshness rule is how a valid token
+    // comes to be refused for reasons nobody can reconstruct.
+    let now = unix_now();
+    if data.claims.iat > now.saturating_add(LEEWAY as i64) {
+        return Err(VerifyError::IssuedInTheFuture);
+    }
 
     // The nonce is checked here rather than by the JWT library, which has no notion of it. Compared
     // without an early exit: a nonce is a per-sign-in secret, and a comparison that stops at the
@@ -357,11 +462,22 @@ pub fn verify_id_token(
     Ok(data.claims)
 }
 
+/// Seconds since the Unix epoch.
+///
+/// A clock before 1970 is not a state this host reasons about; it reports zero, which makes every
+/// `iat` look like the future and refuses rather than accepting on a broken clock.
+fn unix_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.as_secs() as i64)
+        .unwrap_or(0)
+}
+
 /// Byte equality that does not return early.
 ///
 /// The length comparison *is* an early exit, and that is deliberate and safe: the length of a nonce
 /// this host generated is a constant, not a secret.
-fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
+pub(crate) fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
     if left.len() != right.len() {
         return false;
     }
@@ -392,10 +508,10 @@ struct Cached {
 }
 
 impl JwksCache {
-    pub fn new(url: impl Into<String>) -> Self {
+    pub fn new(url: impl Into<String>, http: reqwest::Client) -> Self {
         Self {
             url: url.into(),
-            http: reqwest::Client::new(),
+            http,
             state: RwLock::new(None),
         }
     }
@@ -439,10 +555,9 @@ impl JwksCache {
         if !status.is_success() {
             return Err(VerifyError::Jwks(format!("{} answered {status}", self.url)));
         }
-        let body = response
-            .text()
+        let body = read_bounded(response, MAX_JWKS_BYTES)
             .await
-            .map_err(|error| VerifyError::Jwks(error.to_string()))?;
+            .map_err(VerifyError::Jwks)?;
         let keys = Arc::new(Jwks::from_json(&body)?);
 
         *self.state.write().await = Some(Cached {

@@ -186,33 +186,26 @@ async fn the_session_cookie_is_opaque_and_locked_down() {
     let base = serve(&idp).await;
     let client = client();
 
-    let start = client
-        .get(format!("{base}/auth/signin"))
-        .send()
-        .await
-        .expect("sign-in starts");
-    let authorize = start
-        .headers()
-        .get("location")
-        .and_then(|value| value.to_str().ok())
-        .expect("a Location header")
-        .to_owned();
-    let state = query_param(&authorize, "state").expect("a state");
-    let nonce = query_param(&authorize, "nonce").expect("a nonce");
-
+    let begun = support::begin_sign_in(&base, &client).await;
     let callback = client
         .get(format!("{base}/auth/callback"))
-        .query(&[("code", format!("dave-4|{nonce}")), ("state", state)])
+        .header("cookie", &begun.login_cookie)
+        .query(&[
+            ("code", format!("dave-4|{}", begun.nonce)),
+            ("state", begun.state),
+        ])
         .send()
         .await
         .expect("the callback completes");
+    assert_eq!(callback.status(), 303, "the sign-in did not complete");
 
-    let header = callback
-        .headers()
-        .get("set-cookie")
-        .and_then(|value| value.to_str().ok())
-        .expect("a Set-Cookie header")
-        .to_owned();
+    // The *session* cookie specifically. The callback sets two, and picking "the first
+    // `Set-Cookie`" would have this assert against the cleared login cookie — which carries every
+    // attribute checked below and an empty value, so it would pass while proving nothing.
+    let header = support::set_cookie_headers(&callback)
+        .into_iter()
+        .find(|header| header.starts_with(connectors_api::auth::SESSION_COOKIE))
+        .expect("the callback set a session cookie");
 
     let lowered = header.to_lowercase();
     assert!(lowered.contains("httponly"), "not HttpOnly: {header}");
@@ -294,13 +287,21 @@ async fn the_authorization_code_is_bound_to_a_pkce_verifier() {
     let challenge = query_param(&authorize, "code_challenge").expect("a challenge");
     let state = query_param(&authorize, "state").expect("a state");
     let nonce = query_param(&authorize, "nonce").expect("a nonce");
+    let binding = support::cookie_named(&start, connectors_api::auth::LOGIN_COOKIE)
+        .expect("sign-in binds the flow to this browser");
 
-    client
+    let completed = client
         .get(format!("{base}/auth/callback"))
+        .header("cookie", &binding)
         .query(&[("code", format!("erin-5|{nonce}")), ("state", state)])
         .send()
         .await
         .expect("the callback completes");
+    assert_eq!(
+        completed.status(),
+        303,
+        "the sign-in did not complete, so the exchange below would assert about nothing"
+    );
 
     let requests = idp.token_requests.lock().expect("not poisoned").clone();
     let form = requests.last().expect("the host exchanged the code");
@@ -321,6 +322,250 @@ async fn the_authorization_code_is_bound_to_a_pkce_verifier() {
             .map(|(_, value)| value.as_str()),
         Some("authorization_code"),
         "the exchange was not an authorization_code grant"
+    );
+}
+
+/// **A `state` issued to one browser cannot be redeemed by another.**
+///
+/// # The attack this reproduces
+///
+/// Login CSRF, and it is the severe direction of it: not "the attacker signs in as the victim" but
+/// **"the victim is silently signed in as the attacker"**. The attacker begins a sign-in in their
+/// own browser, keeps the `state`, and gets the victim's browser to fetch the callback URL — a
+/// top-level `GET`, so an `<img>`, a redirect or a link is enough. The victim lands on a working,
+/// signed-in page and has no way to tell it is not theirs. Every credential they then paste is
+/// written to the **attacker's** tenant, where the attacker reads it back and runs operations with
+/// it.
+///
+/// # Why the first version of this crate was vulnerable, and why its tests did not say so
+///
+/// The pending login lived in a process-global map keyed only by the `state`, with nothing tying an
+/// entry to the user-agent that began the flow, and `/auth/signin` set no cookie at all. Any browser
+/// presenting any live `state` could redeem it.
+///
+/// The guard test below this one — `a_callback_with_an_unknown_state_is_refused` — could not see
+/// it, because it only ever presents a state that was **never issued**. Single-use consumption is a
+/// *replay* defence and was mistaken for a CSRF defence; they are different properties and both are
+/// needed. RFC 6749 §10.12 is explicit that the binding value must be kept *"in a location
+/// accessible only to the client and the user-agent"* — which means a cookie.
+///
+/// So the assertion here is on **the identity that results**, not on a status code. The failure
+/// mode being guarded against is a `303` followed by a perfectly healthy `200` belonging to
+/// somebody else.
+#[tokio::test]
+async fn a_state_issued_to_one_browser_cannot_be_redeemed_by_another() {
+    let idp = Idp::start().await;
+    let base = serve(&idp).await;
+
+    // The attacker begins a sign-in in their own browser and keeps what it hands them. Read
+    // straight off the redirect rather than through `support::begin_sign_in`, so that this test
+    // exercises the vulnerability itself and does not depend on the fix's own cookie existing.
+    let attacker = client();
+    let start = attacker
+        .get(format!("{base}/auth/signin"))
+        .send()
+        .await
+        .expect("sign-in starts");
+    let authorize = start
+        .headers()
+        .get("location")
+        .and_then(|value| value.to_str().ok())
+        .expect("a Location header")
+        .to_owned();
+    let attacker_state = query_param(&authorize, "state").expect("a state");
+    let attacker_nonce = query_param(&authorize, "nonce").expect("a nonce");
+
+    // The victim's browser. Fresh: it never called `/auth/signin` and carries no cookie of ours.
+    let victim = client();
+    let callback = victim
+        .get(format!("{base}/auth/callback"))
+        .query(&[
+            ("code", format!("ATTACKER|{attacker_nonce}")),
+            ("state", attacker_state),
+        ])
+        .send()
+        .await
+        .expect("the callback completes");
+
+    assert_ne!(
+        callback.status(),
+        303,
+        "the victim's browser completed a sign-in it never started"
+    );
+    assert!(
+        session_cookie(&callback).is_none(),
+        "the victim's browser was handed a session for a flow it never began"
+    );
+
+    // The decisive assertion: whatever the victim is now holding, it is not an identity. Checked
+    // by asking the host, with every cookie the exchange produced, rather than by trusting the
+    // status code — a 200 with the wrong subject is the whole failure mode.
+    let carried = support::set_cookie_headers(&callback)
+        .iter()
+        .filter_map(|header| header.split(';').next())
+        .map(str::trim)
+        .collect::<Vec<_>>()
+        .join("; ");
+
+    let me = victim
+        .get(format!("{base}/auth/me"))
+        .header("cookie", &carried)
+        .send()
+        .await
+        .expect("the identity call completes");
+    assert_eq!(
+        me.status(),
+        401,
+        "the victim's browser resolves to an identity: {}",
+        me.text().await.unwrap_or_default()
+    );
+
+    // And it cannot write a credential into anybody's tenant.
+    let stored = victim
+        .put(format!("{base}/v1/credentials/anthropic/anthropic.api_key"))
+        .header("cookie", &carried)
+        .json(&serde_json::json!({ "value": "SENTINEL-NOT-A-REAL-SECRET-victim-paste" }))
+        .send()
+        .await
+        .expect("the store call completes");
+    assert_eq!(
+        stored.status(),
+        401,
+        "the victim wrote a credential into a tenant that is not theirs"
+    );
+
+    // The attacker's own browser holds nothing either: beginning a flow is not being signed in.
+    let attacker_cookies = support::set_cookie_headers(&start)
+        .iter()
+        .filter_map(|header| header.split(';').next())
+        .map(str::trim)
+        .collect::<Vec<_>>()
+        .join("; ");
+    let attacker_me = attacker
+        .get(format!("{base}/auth/me"))
+        .header("cookie", &attacker_cookies)
+        .send()
+        .await
+        .expect("the identity call completes");
+    assert_eq!(
+        attacker_me.status(),
+        401,
+        "beginning a sign-in alone resolved to an identity"
+    );
+}
+
+/// **The cookie that binds a sign-in to a browser is as hardened as the session cookie.**
+///
+/// It is short-lived and scoped to the callback, because it has one job and a ten-minute life.
+/// `SameSite=Lax` rather than `Strict` is deliberate and load-bearing: the callback arrives as a
+/// **cross-site top-level GET** from the identity provider, and `Strict` would withhold the cookie
+/// on exactly that request — turning the fix into a sign-in that never completes.
+#[tokio::test]
+async fn the_login_cookie_is_scoped_short_lived_and_locked_down() {
+    let idp = Idp::start().await;
+    let base = serve(&idp).await;
+    let browser = client();
+
+    let start = browser
+        .get(format!("{base}/auth/signin"))
+        .send()
+        .await
+        .expect("sign-in starts");
+
+    let header = support::set_cookie_headers(&start)
+        .into_iter()
+        .find(|header| header.starts_with(connectors_api::auth::LOGIN_COOKIE))
+        .expect("GET /auth/signin sets a login cookie");
+
+    let lowered = header.to_lowercase();
+    assert!(lowered.contains("httponly"), "not HttpOnly: {header}");
+    assert!(lowered.contains("secure"), "not Secure: {header}");
+    assert!(
+        lowered.contains("samesite=lax"),
+        "the callback is a cross-site top-level GET; Strict would drop this cookie: {header}"
+    );
+    assert!(
+        lowered.contains("path=/auth/callback"),
+        "the login cookie is not scoped to the callback: {header}"
+    );
+    assert!(
+        lowered.contains("max-age="),
+        "the login cookie never expires: {header}"
+    );
+}
+
+/// **A completed sign-in clears the login cookie.**
+///
+/// Left behind, it is a spent binding value sitting in the browser for its full ten minutes.
+#[tokio::test]
+async fn completing_a_sign_in_clears_the_login_cookie() {
+    let idp = Idp::start().await;
+    let base = serve(&idp).await;
+    let browser = client();
+
+    let begun = support::begin_sign_in(&base, &browser).await;
+    let callback = browser
+        .get(format!("{base}/auth/callback"))
+        .header("cookie", &begun.login_cookie)
+        .query(&[
+            ("code", format!("frank-7|{}", begun.nonce)),
+            ("state", begun.state),
+        ])
+        .send()
+        .await
+        .expect("the callback completes");
+
+    assert_eq!(callback.status(), 303, "the good path still works");
+    assert!(
+        session_cookie(&callback).is_some(),
+        "the good path still sets a session"
+    );
+
+    let cleared = support::set_cookie_headers(&callback)
+        .into_iter()
+        .find(|header| header.starts_with(connectors_api::auth::LOGIN_COOKIE))
+        .expect("the callback addresses the login cookie");
+    assert!(
+        cleared.to_lowercase().contains("max-age=0"),
+        "the spent login cookie was not cleared: {cleared}"
+    );
+}
+
+/// **A callback carrying a login cookie that disagrees with the `state` is refused.**
+///
+/// The cookie is present, so this is not the "no cookie at all" case; it is the attacker who can
+/// make the victim's browser hold *some* login cookie — a second tab, a stale flow — and then
+/// supplies their own `state` in the URL. Both halves must come from the same sign-in.
+#[tokio::test]
+async fn a_callback_whose_cookie_and_state_disagree_is_refused() {
+    let idp = Idp::start().await;
+    let base = serve(&idp).await;
+
+    let attacker = client();
+    let victim = client();
+    let attackers = support::begin_sign_in(&base, &attacker).await;
+    let victims = support::begin_sign_in(&base, &victim).await;
+
+    // The victim's own live cookie, the attacker's live state.
+    let callback = victim
+        .get(format!("{base}/auth/callback"))
+        .header("cookie", &victims.login_cookie)
+        .query(&[
+            ("code", format!("ATTACKER|{}", attackers.nonce)),
+            ("state", attackers.state),
+        ])
+        .send()
+        .await
+        .expect("the callback completes");
+
+    assert_eq!(
+        callback.status(),
+        400,
+        "a login cookie from one flow redeemed another flow's state"
+    );
+    assert!(
+        session_cookie(&callback).is_none(),
+        "a mismatched callback established a session"
     );
 }
 

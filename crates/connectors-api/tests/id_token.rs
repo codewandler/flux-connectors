@@ -124,6 +124,54 @@ async fn an_expired_token_is_refused() {
     assert_eq!(verify(&idp, &claims).unwrap_err(), VerifyError::Expired);
 }
 
+/// **`nbf`.** A token that is not valid yet.
+///
+/// `jsonwebtoken` defaults `validate_nbf` to false and Google does not currently send the claim, so
+/// this test exists to hold the deliberate decision to turn it on: a standard temporal claim left
+/// unenforced because the current issuer happens not to send it is a gap that opens silently the
+/// day it does.
+#[tokio::test]
+async fn a_token_that_is_not_valid_yet_is_refused() {
+    let idp = Idp::start().await;
+    let mut claims = good_claims(&idp.issuer);
+    claims["nbf"] = json!(support::unix_now() + 3600);
+
+    assert_eq!(verify(&idp, &claims).unwrap_err(), VerifyError::NotYetValid);
+}
+
+/// **`iat`.** A token claiming to have been minted in the future.
+///
+/// `exp` cannot catch this: a token issued an hour ahead with a one-hour lifetime is unexpired for
+/// two. Either a clock is badly wrong or the lifetime was stretched deliberately, and both are
+/// worth refusing.
+#[tokio::test]
+async fn a_token_issued_in_the_future_is_refused() {
+    let idp = Idp::start().await;
+    let now = support::unix_now();
+    let mut claims = good_claims(&idp.issuer);
+    claims["iat"] = json!(now + 3600);
+    claims["exp"] = json!(now + 7200);
+
+    assert_eq!(
+        verify(&idp, &claims).unwrap_err(),
+        VerifyError::IssuedInTheFuture
+    );
+}
+
+/// Clock skew within the leeway is tolerated, so the check above does not reject real traffic from
+/// a machine a few seconds fast.
+#[tokio::test]
+async fn a_token_issued_a_few_seconds_ahead_is_accepted() {
+    let idp = Idp::start().await;
+    let mut claims = good_claims(&idp.issuer);
+    claims["iat"] = json!(support::unix_now() + 5);
+
+    assert!(
+        verify(&idp, &claims).is_ok(),
+        "ordinary clock skew was refused"
+    );
+}
+
 /// **`nonce`.** A valid token, captured from another sign-in, replayed into this one.
 #[tokio::test]
 async fn a_token_carrying_another_sign_ins_nonce_is_refused() {
@@ -145,22 +193,40 @@ async fn a_token_with_no_nonce_is_refused() {
     assert_eq!(verify(&idp, &claims).unwrap_err(), VerifyError::Nonce);
 }
 
-/// **`alg`.** Algorithm confusion: a header asking to be verified as HMAC.
+/// **`alg`.** Key confusion — the real one, not an approximation of it.
 ///
-/// `HS256` is a legal `alg`, so a verifier that reads the algorithm out of the token will happily
-/// try to verify it — with the RSA *public* key, which is published, as the HMAC secret. That is a
-/// complete authentication bypass, and it is why the algorithm is pinned rather than read.
+/// `HS256` is a legal `alg`, so a verifier that reads the algorithm out of the token will try to
+/// verify it as an HMAC — keyed on the only key material it has, the RSA public key, which the
+/// provider publishes to the world. The token below is forged exactly that way: its tag is a
+/// genuine `HMAC-SHA256` over the signing input, keyed on the JWKS modulus. Against a verifier
+/// that honours the header this token **is valid**, minted by an attacker holding no secret.
+///
+/// An earlier version of this test signed RSA bytes under an `HS256` header, which is merely a
+/// broken signature — it would have been refused by a verifier that was still exploitable, so it
+/// did not test what its name claimed.
 #[tokio::test]
-async fn a_token_asking_to_be_verified_as_hmac_is_refused() {
+async fn a_token_forged_by_key_confusion_is_refused() {
     let idp = Idp::start().await;
-    let token = idp.sign_with_header(
-        &json!({ "alg": "HS256", "typ": "JWT", "kid": KID }),
-        &good_claims(&idp.issuer),
+    let token = idp.forge_by_key_confusion(&good_claims(&idp.issuer));
+
+    // Sanity: the forgery really is well-formed and really does name HS256, so the refusal below
+    // is the `alg` pin doing its job and not a malformed-input accident.
+    let header = token.split('.').next().expect("a header segment");
+    let header: Value = serde_json::from_slice(
+        &base64::Engine::decode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, header)
+            .expect("base64url"),
+    )
+    .expect("json");
+    assert_eq!(header["alg"], "HS256", "the forgery does not name HS256");
+    assert_eq!(
+        token.split('.').count(),
+        3,
+        "the forgery is not a compact JWS"
     );
 
     assert!(
         matches!(verify_raw(&idp, &token), Err(VerifyError::Malformed(_))),
-        "a token naming alg HS256 was not refused outright"
+        "a token forged by key confusion was accepted or refused for the wrong reason"
     );
 }
 
