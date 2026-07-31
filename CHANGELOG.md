@@ -9,6 +9,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A dry-run transport that cannot send, and the first check that the pack and the shipped modules
+  agree (C-145).** `connector-pack` gains a `Transport` seam whose live arm delegates to flux's
+  `http.request` exactly as C-115 landed it, and a `DryRunTransport` that answers "what request would
+  this operation make?" without making it.
+
+  It is **structurally** unable to send, not a live client with a flag: a unit struct holding no
+  client, no handle and nothing that could reach a socket, with `Egress`'s non-zero size as the
+  control. And a rehearsal contains no credential *value* at all — not a redacted one. The dry run
+  sits upstream of resolution, with no `ToolContext`, so it never calls `resolve`; it places each
+  credential's declared *reference* through the real `auth::place`, so header names, prefixes and
+  query separators come from the shipping code rather than a second copy of it.
+
+  The differential test compares, for every one of the 254 shipped operations, the request the pack
+  evaluates against the one the shipped `.flux` module declares. **These two artifacts had never been
+  compared.** They agree everywhere — so `catalog::Operation::flux`'s claim that they are the same
+  bytes is now checked rather than trusted, and a divergence fails by operation id.
+
 - **The `connectors-api` host — the caller this repository never had (C-202, C-203).** Everything
   below it already worked and was tested: `connector-pack` projects a catalogue operation onto a flux
   `ToolSpec`, evaluates `{ method, url, headers, body }` from the operation's own emitted Flux,

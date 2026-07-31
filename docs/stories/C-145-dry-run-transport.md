@@ -2,8 +2,7 @@
 id: C-145
 title: "A dry-run transport that cannot send"
 pillar: Bridge
-status: in-progress
-priority: 3
+status: done
 design: docs/designs/connector-tool-pack.md
 epic: tool-pack
 areas: [bridge]
@@ -93,3 +92,63 @@ so the adoption is small:
   `Operation` (entry, spec, declaration, settings snapshot) into a private projection and exposing a
   `DryRunTransport::project(entry, configuration)` over it. That is additive and mechanical; it was
   left out because it is not in this story's Acceptance and `Operation::egress()` is published API.
+
+## Coordinator note at integration (2026-07-31)
+
+Merged at `cafde73`; gate green on the integration branch and confirmed independently at the branch
+tip: 114 `test result: ok` across 107 binaries, clippy `-D warnings` clean, `fmt --check` clean,
+`488 artifacts up to date (45 providers checked)`.
+
+**The safety claim was verified empirically rather than read.** The reviewer stocked a `MemoryStore`
+with a sentinel under every leaf of every credential of every provider — both authority spellings,
+two account names — then dry-ran **all 254 shipped operations** and grepped every reachable surface:
+`render()`, `to_json()`, `Debug` of `DryRun` and of `Request`, `to_params()`, `method`, `url`,
+`body`, every header name and value, each `CredentialReference`'s fields, and `Display` + `Debug` of
+every refusal.
+
+```
+rehearsed=254  credential_refs=255  → zero sentinel hits
+```
+
+with the control that makes it mean anything: the **live** path over the *same* store does carry the
+sentinel. So the store was genuinely stocked and the probe could have failed. This is **absence, not
+redaction**, which is what the Acceptance asked for and what C-159's redacting `Debug` would
+otherwise have disguised.
+
+**The design deviation was the right call.** The dry run is not an `Egress` holding a stand-in tool.
+`Egress` is reached only after `build_authenticated_request` has called `credentials.resolve`, so a
+stand-in there rehearses *resolved plaintext*. The dry run sits upstream of resolution instead: it
+has no `ToolContext` and never calls `resolve`.
+
+**`auth::place` reuse is compile-forced, not conventional.** The reviewer added a `Placement::Probe`
+variant to `catalog` and rebuilt: exactly three non-exhaustive-pattern errors (`auth.rs:144`,
+`auth.rs:197`, `dry_run.rs:319`), then reverted. A new placement cannot inherit an answer silently.
+
+**The differential is not vacuous.** All 254 comparisons are real `(Ok, Ok)` request pairs, not
+error-string matches, and two planted divergences beyond the shipped control were both caught. The
+two artifacts it compares — `crates/catalog/ops/<provider>/<id>.flux` and `connectors/*.flux` — had
+never been compared before; `catalog::Operation::flux`'s sameness claim is now checked rather than
+trusted.
+
+**The failing-first proof is a compile error, and a stronger one does not exist.** The reviewer
+ported the differential to the base using `Operation::build_request` (public there) and ran it: both
+properties already held at `b4c85d9`. The pack and the shipped modules already agreed — the
+differential is a new guard that found nothing, exactly as the story predicted. Neither headline
+property *can* fail at a base where the surface does not exist, so the anti-vacuity control is what
+substitutes for a property proof, and it was stress-tested.
+
+Three minor gaps recorded rather than bounced, none of which can leak a value:
+
+- `a_reference_is_unchanged_by_the_placement_encoder` hardcodes `Placement::Query`, and the
+  integration test covers only the placements the catalogue declares today. A future *transforming*
+  variant is compile-forced to answer in `placed_form`, but nothing forces the reference to survive
+  it. Failure mode is a mangled reference in a rehearsal.
+- `first_mechanism` rehearses the first declared mechanism while the live path picks the first that
+  fully resolves. Measured `multi_mechanism_ops = 0` across all 254 operations, so this is currently
+  a distinction without a difference — but nothing fails when a multi-mechanism operation ships.
+- `shipped_declarations` slices on `op ` at column 0. Verified true today for all 254; fail-closed
+  rather than silent if it ever breaks.
+
+**A trap worth recording for the next reviewer:** a `CARGO_TARGET_DIR` under `/tmp` makes
+`connector-cli`'s fixture-hygiene tests fail, because they assert fixtures never land in the shared
+temporary directory. That is not a finding; it is the test working.
