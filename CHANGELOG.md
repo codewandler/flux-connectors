@@ -53,6 +53,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`connector-pack` is fenced against linking an HTTP client (C-199).** The guard reads the
+  **feature-resolved** graph from `cargo metadata`, not `Cargo.lock`, because the two answer
+  different questions: the existing lock fence exists precisely to catch optional dependencies, and
+  this one exists precisely not to count them. The pack does reach `reqwest` through
+  `connector-secrets`' Vault client, which is `optional`, `default = []` and requested by no
+  workspace member — so a lock-idiom fence would have gone red on a correct build, which is what
+  forced the change of instrument.
+
+  Eight mutations, each reverted: a dev-dependency edge reddens only the dev-build test, and asking
+  for `vault` from `connectors-api` reddens the *pack's* fence, so feature unification is measured
+  rather than asserted.
+
 - **The test suite could reach an operator's real credential store, and send a real request (C-207).**
   Found in security review. `App::new` honoured `CONNECTORS_CREDENTIAL_STORE`, which this crate's own
   README instructs an operator to export — so running the gate wrote their live store, and

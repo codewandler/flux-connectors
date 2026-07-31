@@ -2,7 +2,7 @@
 id: C-9
 title: Emit request bodies, headers, and response handling
 pillar: Codegen
-status: in-progress
+status: done
 priority:
 design: docs/designs/connector-pipeline.md
 epic: connectors-v1
