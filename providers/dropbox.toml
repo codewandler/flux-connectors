@@ -1,0 +1,344 @@
+# Dropbox API v2 — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Dropbox describes its v2 API in "Stone", its own vendor IDL
+# (github.com/dropbox/dropbox-api-spec), not OpenAPI — there is nothing in that shape for this
+# pipeline's ingest (C-4) to consume even once it lands, since ingest reads an OpenAPI/JSON
+# description and Stone would need its own conversion step this repository does not have. So this
+# file stays hand-authored, and drift is undetectable by machine, the same caveat zendesk, freshdesk,
+# github, notion and box already carry (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# DROPBOX'S READS ARE POSTS. EVERY OPERATION BELOW, WITHOUT EXCEPTION, IS A POST. THIS IS THE WHOLE
+# REASON THIS CONNECTOR IS HERE (C-167).
+# ---------------------------------------------------------------------------------------------
+#
+# Dropbox's v2 API is RPC wearing HTTP: `POST /2/files/list_folder` with a JSON body is how a caller
+# *reads* a folder's contents, and there is no `GET` anywhere in the v2 surface — not one endpoint,
+# not even the "who am I" call this file uses for `verify`. Every other hand-authored connector here
+# has at least one genuine `GET` (box-user-me, notion-user-me); Dropbox has none, so this file is
+# what proves out the two questions the rest only gestured at.
+#
+# **Question 1: can a POST-shaped read be a `verify` operation?** Yes, and the answer comes from
+# reading the loader rather than from the phrasing of the configuration contract. `validate_verify`
+# (`crates/connector-spec/src/provider.rs`) checks the named operation's declared `risk` and refuses
+# only `high`/`destructive` — it never inspects the HTTP method. `dropbox-user-me` below is a `POST`
+# declared `risk = "medium"` (see Question 2's neighbour on why it cannot be `"low"`), and the loader
+# accepts it as `verify` without complaint. `crates/connector-flux/tests/dropbox_connector.rs`
+# (`the_verify_operation_is_a_post_read_declared_medium_risk`) pins this rather than leaving it as an
+# accident nobody asserted. This is the honest answer, not a workaround: Dropbox genuinely has no
+# lower-risk read to fall back to, and shipping no `verify` at all — leaving a settings page with no
+# unattended connection test — is the worse outcome.
+#
+# **Question 2: is a POST ever declared idempotent?** Not once, here, and not because none of these
+# operations actually are. `check_write_metadata` (`crates/connector-flux/src/op.rs`) refuses
+# `idempotency = "idempotent"` on `POST`/`PATCH` unconditionally — it allows the claim only for `PUT`
+# and `DELETE`, methods Dropbox's v2 API never uses at all. So an idempotent POST is *expressible* in
+# this schema in general, but it is not a spelling any Dropbox operation can honestly reach: every
+# operation below — including `dropbox-user-me`, `dropbox-folder-list`, `dropbox-metadata-get` and
+# `dropbox-search`, which are pure reads and genuinely safe to retry — is declared
+# `idempotency = "non_idempotent"`. That undersells the truth in the safe direction (flux's approval
+# gate over-prompts rather than auto-retrying something it should not), the same direction
+# `providers/notion.toml`'s two POST reads chose, and it is recorded here rather than "fixed" by lying
+# about the method.
+#
+# ---------------------------------------------------------------------------------------------
+# CONTENT UPLOAD AND DOWNLOAD ARE DELIBERATELY EXCLUDED. THEY ARE A DIFFERENT ENCODING PROBLEM.
+# ---------------------------------------------------------------------------------------------
+#
+# `POST /2/files/upload` and `POST /2/files/download` (and `/2/files/get_thumbnail`) live on a
+# separate host, `content.dropboxapi.com`, and carry their JSON argument in a `Dropbox-API-Arg`
+# request *header* — the actual body is the raw file bytes. That is a second encoding problem this
+# story was not chosen for: this pipeline's request primitive has one JSON-body encoding path
+# (`crates/connector-flux/src/op.rs`), and a JSON value inside a header is not it. Shipping either
+# endpoint would mean inventing a header-JSON mechanism nothing else in this repository has, so both
+# are left out along with the content host entirely — `http_hosts` stays exactly `api.dropboxapi.com`
+# (`crates/connector-cli/src/catalog.rs`, `host_of`).
+#
+# ---------------------------------------------------------------------------------------------
+# THE ROOT PATH IS THE EMPTY STRING `""`, NOT `"/"`. THIS IS DROPBOX'S OWN STANDING GOTCHA.
+# ---------------------------------------------------------------------------------------------
+#
+# Every Dropbox path parameter identifies a file or folder by its full path from the account root,
+# except the root folder itself, whose "path" is not `"/"` — it is the empty string `""`. Passing
+# `"/"` is a documented error (`path/not_found` or `path/malformed_path` depending on the endpoint).
+# A model given a `path` parameter with no further information has every reason to complete `"/"`
+# before `""`. `dropbox-folder-list`'s `path` parameter says so in its own `description` and carries
+# `default = ""` on its JSON Schema — the same two-halves pattern `providers/box.toml` established for
+# Box's root-folder-id sentinel `"0"`.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: no optional request-body field (C-56), so every operation below declares required
+# fields only.
+# ---------------------------------------------------------------------------------------------
+#
+# The emitter binds every declared body field into the payload unconditionally, so a caller who
+# leaves an optional field alone sends an explicit `null` rather than omitting it — the same gap
+# `providers/notion.toml` records. Dropbox is stricter about some optional fields than others, so this
+# file simply excludes what it cannot always safely fill in: `recursive`, `include_media_info`,
+# `include_deleted` and `limit` on `list_folder`; `autorename` on `create_folder_v2`; `options` and
+# `match_field_options` on `search_v2`. Each excluded field's absence is the vendor's own documented
+# default (unset `autorename` is `false`, an unset `recursive` is `false`, an unfiltered `search_v2` is
+# every shared file), so leaving them out is a narrower correct answer, not a broken one.
+#
+# ---------------------------------------------------------------------------------------------
+# SCHEMA GAP: pagination is excluded outright, the same choice box and notion made.
+# ---------------------------------------------------------------------------------------------
+#
+# `list_folder` and `search_v2` each return a `cursor` for continuing past the first page, but
+# `list_folder/continue` is a separate endpoint this curated set leaves out, and `search_v2`'s own
+# `cursor` argument is exactly the same kind of opaque, server-issued token Notion's `start_cursor`
+# already is here. Neither can be percent-encoded into a query string either way (C-30 — nothing in
+# this pipeline does that), though the point is moot: cursors travel in the body, and the actual gap is
+# the missing continuation endpoint. Excluding it is a first page returned as a correct, narrower
+# answer, not a broken cursor pretending to be a correct one.
+#
+# ---------------------------------------------------------------------------------------------
+# EXCLUDED, each for a stated reason
+# ---------------------------------------------------------------------------------------------
+#
+# - `POST /2/files/upload`, `POST /2/files/download`, `POST /2/files/get_thumbnail` — the content-host
+#   and `Dropbox-API-Arg`-header section above. The largest exclusion and the one a reader is most
+#   likely to want.
+# - `POST /2/files/list_folder/continue` and `search_v2`'s `cursor` argument — pagination, above.
+# - `recursive`, `include_media_info`, `include_deleted`, `limit` on `list_folder`; `autorename` on
+#   `create_folder_v2`; `options`/`match_field_options` on `search_v2` — C-56, above.
+# - `POST /2/files/delete_v2`, `move_v2`, `copy_v2` (batch and non-batch) — destructive or
+#   state-moving operations with a larger blast radius than a first curated set takes on.
+# - Sharing (`create_shared_link_with_settings`, shared folders, shared-link listing), revisions,
+#   restore, batch job polling, team and team-admin endpoints, webhooks, and the OAuth token exchange
+#   (`POST /oauth2/token`). Out of scope for a first curated set, not blocked by anything.
+
+id = "dropbox"
+vendor = "Dropbox"
+
+# One host for every account — Dropbox has no tenant subdomain, so `base_url` carries no
+# `{placeholder}` for an operator to bind and `status.rs` reports no `unbound-base-url-template`
+# issue. This is Dropbox's RPC host; the content host (`content.dropboxapi.com`) is never reached
+# because upload/download are excluded above — widening `http_hosts` to include it would be declaring
+# egress this connector never uses.
+base_url = "https://api.dropboxapi.com"
+
+description = "Dropbox: browse folder contents, read file and folder metadata, search files, create folders, and get temporary download links"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["dropbox.access_token"] }]
+
+# The "Test connection" button. `POST /2/users/get_current_account` takes no arguments at all, so
+# pressing it cannot do anything except prove the token resolves — and it returns the authenticated
+# account's own name and email, which is the clearest confirmation available that the token is a
+# Dropbox token rather than something else pasted into the field. A `verify` operation runs
+# unattended whenever someone opens a settings page, so it must be a read; the loader refuses a
+# `high` or `destructive` one — see the header comment on why a `medium`-risk POST clears that bar
+# and why Dropbox has no lower-risk read to offer instead.
+verify = "dropbox-user-me"
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "dropbox.access_token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; its value is never read
+# here and never reaches a generated artifact.
+#
+# A long-lived scoped app token minted from the App Console and an OAuth2 access token are the same
+# thing on the wire — `Authorization: Bearer <token>` — so which one an operator supplies is
+# configuration rather than connector shape. That is why no `[auth.oauth2]` block appears: flux is
+# handed an already-minted token through the environment and runs no grant, the same provenance box's
+# and notion's bearers have.
+env = ["DROPBOX_ACCESS_TOKEN"]
+description = "Dropbox access token sent as a bearer — a scoped app access token or an OAuth2 access token"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a human supplies before any of this runs
+#
+# One field. Dropbox is single-host with no tenant subdomain, so unlike zendesk's `{subdomain}` and
+# freshdesk's `{domain}` there is no address to bind and the token is the only thing an operator can
+# supply. `binds` makes this connection-level (per tenant) rather than operator-level; `Level` is
+# derived from that and is never authored.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "access_token"
+label = "Access token"
+help = "Create an app at dropbox.com/developers/apps. For a quick connection, generate an access token directly from the app's Settings tab. For a token that keeps working for other users, complete the app's OAuth2 authorization flow and supply the resulting access token"
+# No `example`, deliberately. A placeholder for a secret field has to be recognisable as fake, and a
+# Dropbox access token is an opaque string with no fixed prefix a placeholder could safely imitate
+# without risking a shape secret scanners match — `providers/notion.toml` and `providers/shopify.toml`
+# record the release this repository actually lost that way. The shape belongs in `help`, where it
+# cannot be mistaken for a value or copied into a form.
+format = "token"
+secret = true
+docs_url = "https://developers.dropbox.com/oauth-guide"
+binds = "credential.dropbox.access_token"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 6 of several hundred Dropbox v2 routes
+#
+# Curated to what a file-browsing flow executes at runtime: list what is in a folder, read one path's
+# metadata, search shared files, create a folder, get a temporary link to a file's content — plus the
+# connection check. Everything administrative, everything sharing- or team-related, and content
+# upload/download are excluded; see the header comment for the list and the reasons.
+#
+# `/2` is Dropbox's one path version prefix and has been since the v2 API replaced v1.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only, so `op dropbox.files.list_folder` is undeclarable (C-8, C-23).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "dropbox-user-me"
+method = "POST"
+path = "/2/users/get_current_account"
+description = "Get the account this access token authenticates as, confirming the token resolves and naming the account it belongs to. Takes no parameters. Dropbox routes this read through POST, like every operation this connector declares — there is no GET anywhere in Dropbox's v2 API"
+# `medium`, not `low`: `check_write_metadata` refuses `low` on any POST regardless of what it does,
+# because it reasons from the HTTP method and cannot see that this one changes nothing. `medium` is
+# the honest ceiling a read forced through POST can reach — see the header comment.
+risk = "medium"
+# `non_idempotent`, though repeating this call is in fact perfectly safe: `check_write_metadata`
+# refuses `idempotent` on any POST/PATCH regardless of method, and Dropbox uses only POST. See the
+# header comment's Question 2.
+idempotency = "non_idempotent"
+
+[operations.response_schema]
+type = "object"
+properties = { account_id = { type = "string", description = "The account's unique, opaque id" }, name = { type = "object", description = "{given_name, surname, familiar_name, display_name, abbreviated_name}" }, email = { type = "string" }, email_verified = { type = "boolean" }, disabled = { type = "boolean" }, country = { type = "string", description = "ISO 3166-1 alpha-2 country code, if known" }, account_type = { type = "object", description = "{\".tag\": \"basic\" | \"pro\" | \"business\"}" } }
+
+[operations.quirks.error_envelope]
+# Dropbox's non-2xx body is `{"error_summary": "path/not_found/...", "error": {".tag": "...", ...}}`.
+# `error_summary` is itself the machine-readable, slash-delimited error code as well as the
+# human-readable one — the same value serves both — so there is no separate `code_pointer` to name;
+# `providers/slack.toml` records the same shape of gap for the same reason. The nested `error` object's
+# shape varies per route and per `.tag`, so no single pointer into it would be honest across every
+# operation below.
+message_pointer = "/error_summary"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "dropbox-folder-list"
+method = "POST"
+path = "/2/files/list_folder"
+description = "List the files and folders directly inside a folder, first page only. Each entry names its own type (file, folder, or deleted), name and full path. Dropbox routes this read through POST, so it is declared as a write"
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "path"
+description = "The full path of the folder to list, from the account root — or the empty string \"\" for the root folder itself. Dropbox's root has no other spelling: \"/\" is a documented error (path/not_found or path/malformed_path), not an alias for \"\""
+required = true
+schema = { type = "string", default = "" }
+
+[operations.response_schema]
+type = "object"
+properties = { entries = { type = "array", description = "This page's items, each {\".tag\": \"file\"|\"folder\"|\"deleted\", name, path_lower, path_display, id}", items = { type = "object" } }, cursor = { type = "string", description = "The cursor for continuing to the next page. This connector cannot fetch it — list_folder/continue is not shipped" }, has_more = { type = "boolean", description = "True when the folder holds more entries than this page returned. This connector cannot fetch them; see cursor" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error_summary"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "dropbox-metadata-get"
+method = "POST"
+path = "/2/files/get_metadata"
+description = "Get metadata for a file or folder at a given path: its type, name, id, and — for a file — size and content hash. Does not return a folder's contents (use dropbox-folder-list) or a file's content (use dropbox-temporary-link-get). Dropbox routes this read through POST, so it is declared as a write"
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "path"
+description = "The full path of the file or folder to inspect, from the account root. Unlike dropbox-folder-list, the account root itself (\"\") is not addressable this way — this path must name an existing file or folder"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+properties = { ".tag" = { type = "string", description = "\"file\", \"folder\" or \"deleted\" — which fields below apply depends on this" }, name = { type = "string" }, path_lower = { type = "string" }, path_display = { type = "string" }, id = { type = "string", description = "An opaque id stable across moves and renames" }, client_modified = { type = "string", format = "date-time", description = "File only: the modification time the uploading client claimed, not verified by Dropbox" }, server_modified = { type = "string", format = "date-time", description = "File only: when Dropbox's server last saw this content change" }, rev = { type = "string", description = "File only: an opaque revision id" }, size = { type = "integer", description = "File only: size in bytes" }, content_hash = { type = "string", description = "File only: Dropbox's own content hash, for verifying a download performed some other way" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error_summary"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "dropbox-search"
+method = "POST"
+path = "/2/files/search_v2"
+description = "Search file and folder names across the account, returning the first page of matches. Dropbox matches on name, not file content. Dropbox routes this read through POST, so it is declared as a write"
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "query"
+description = "The text to match against file and folder names"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+properties = { matches = { type = "array", description = "The matching files and folders, each {metadata: {...}, match_type: {\".tag\": \"filename\"|\"content\"|\"both\"}}", items = { type = "object" } }, has_more = { type = "boolean", description = "True when more matches exist than this page returned. This connector cannot fetch them — no continuation cursor is shipped" }, cursor = { type = "string", description = "The cursor for the next page, present only when has_more is true. Unusable here, for the reason given on has_more" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error_summary"
+
+# ---------------------------------------------------------------------------------------------
+# The write.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "dropbox-folder-create"
+method = "POST"
+path = "/2/files/create_folder_v2"
+description = "Create a new folder at the given path, including any missing parent folders. Naming a path that already exists answers 409 conflict rather than creating a duplicate, since autorename is not offered by this connector"
+# `medium`, not `high`. A new folder is visible only within the account that created it and is
+# attributed to the token, but Dropbox notifies nobody on a folder creation. It creates one object and
+# destroys nothing, the same reasoning `providers/box.toml`'s box-folder-create carries.
+risk = "medium"
+# Posting twice with the same path conflicts (409) rather than duplicating, but `check_write_metadata`
+# refuses `idempotent` on any POST regardless — and unlike box-folder-create there is no vendor
+# idempotency key on offer here either. `non_idempotent` is the honest declaration either way.
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "path"
+description = "The full path of the new folder, from the account root, e.g. \"/Homework/math\". Dropbox creates any missing parent folders along the way"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+properties = { metadata = { type = "object", description = "The created folder's metadata: {name, path_lower, path_display, id}", properties = { name = { type = "string" }, path_lower = { type = "string" }, path_display = { type = "string" }, id = { type = "string", description = "The created folder's id — what a later call addresses it by" } } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error_summary"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "dropbox-temporary-link-get"
+method = "POST"
+path = "/2/files/get_temporary_link"
+description = "Get a temporary, unauthenticated download link for an existing file's content, valid for approximately four hours. This connector cannot follow the link itself — it only returns the URL, for a caller to fetch separately. Dropbox routes this read through POST, so it is declared as a write"
+# `medium`, not `low` (POST forces that ceiling — see the header comment) and not `high`. Repeated
+# calls just mint another link with the same expiry; nothing is deleted, no other user is notified,
+# and no lasting Dropbox-side state changes. The one real consequence — a link that grants file
+# access to whoever holds the URL until it expires — is named in the description rather than in the
+# risk tier, since this repository's risk tiers describe blast radius of state change, not
+# information-disclosure surface.
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.body]]
+name = "path"
+description = "The full path of the file to link, from the account root. Must name a file, not a folder"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+properties = { metadata = { type = "object", description = "The linked file's metadata, the same shape dropbox-metadata-get returns for a file" }, link = { type = "string", description = "The temporary download URL, valid for approximately four hours from this call" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error_summary"
