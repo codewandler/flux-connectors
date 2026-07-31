@@ -2,8 +2,7 @@
 id: C-109
 title: Ship the Twilio connector
 pillar: Spec
-status: in-progress
-priority: 5
+status: done
 design:
 epic: provider-fleet-2
 areas: [providers]
@@ -84,3 +83,26 @@ Messaging, and a third variation on the basic-auth archetype.
 - One value serving as both a credential component and a path parameter is genuinely new. If the
   model cannot express it without duplication, that is a finding for the configuration design, not a
   reason to hand-wave the connector.
+
+### Coordinator note at integration
+
+`PARTIAL` and correctly so. The read surface ships; the **webhook binding does not**, because
+`HmacSpec::signed` cannot express Twilio's scheme. Filed as [C-188](C-188-hmac-cannot-sign-a-url.md).
+
+The connector declares its `[[events]]` and **no** `[[channels]]` binding, with a test asserting that
+absence. That is the right shape: the member contract's *"silence is never a verification answer"* rule
+governs a binding that exists, and the honest move when the scheme is inexpressible is to omit the binding
+rather than to declare one with a verification it cannot perform.
+
+Two notes on judgement calls I checked rather than took on trust:
+
+- **`twilio.webhook_signing_secret` deliberately reuses `TWILIO_AUTH_TOKEN`**, the same variable as the
+  Basic credential's secret. That looks like a copy-paste error and is not: Twilio issues exactly one
+  secret serving two roles. The implementor confirmed the loader has no rule against env reuse across
+  credentials and documented the reuse as intentional.
+- **It caught its own stale worktree base** — several commits behind `main` — confirmed only untracked
+  files were present, and re-rooted before committing anything. Handled and reported rather than silently
+  built upon, which is the coordination hazard that cost this run a wave of rework at the start.
+
+The send surface stays excluded: form values interpolate verbatim until flux publishes `L-101`, so a value
+carrying `&` or `=` would corrupt the body and could inject a field.

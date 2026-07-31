@@ -48,6 +48,7 @@ pub(crate) mod sentry;
 pub(crate) mod shopify;
 pub(crate) mod slack;
 pub(crate) mod stripe;
+pub(crate) mod twilio;
 pub(crate) mod typeform;
 pub(crate) mod vercel;
 pub(crate) mod webflow;
@@ -95,6 +96,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &shopify::PROVIDER,
     &slack::PROVIDER,
     &stripe::PROVIDER,
+    &twilio::PROVIDER,
     &typeform::PROVIDER,
     &vercel::PROVIDER,
     &webflow::PROVIDER,

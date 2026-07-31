@@ -9,6 +9,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Twilio connector (C-109) — reads only, and `PARTIAL` for two separately-recorded reasons.** Five
+  operations over a Basic join with the account SID as username, messages and calls, `account-get` as
+  `verify`.
+
+  **The send surface is excluded** because form values interpolate verbatim: C-144 added
+  `body_encoding = "form"`, but flux's form encoder (upstream `L-101`) is not in the pinned release, so a
+  value carrying `&` or `=` would corrupt the body and could inject a field.
+
+  **The webhook binding is excluded** because `HmacSpec::signed` admits only `{body}` and `{timestamp}`,
+  while Twilio signs the request URL plus its form fields sorted and reassembled. So Twilio declares its
+  events with **no channel binding**, and a test asserts that absence — declaring a binding whose
+  verification cannot be performed would be worse than declaring none. Filed as C-188, the second instance
+  of this class after C-141's composite-header finding.
+
+  The account SID is both the Basic username and a path segment on every operation, asked for once. And
+  `twilio.webhook_signing_secret` deliberately reuses `TWILIO_AUTH_TOKEN`: Twilio issues one secret serving
+  two roles, and the reuse is documented as intentional rather than left looking like a copy-paste error.
+
 - **The Microsoft Graph connector (C-108).** Three services — mail, calendar, files — eight curated
   operations over a bearer token, with the zero-argument `GET /v1.0/me/calendar` as `verify`.
 

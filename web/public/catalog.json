@@ -26926,6 +26926,1104 @@
       "channels": []
     },
     {
+      "id": "twilio",
+      "authority": null,
+      "vendor": "Twilio",
+      "description": "Twilio programmable messaging and voice: read messages, calls and the authenticated account",
+      "base_url": "https://api.twilio.com/2010-04-01",
+      "api_version": null,
+      "hosts": [
+        "api.twilio.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.twilio.com/2010-04-01",
+          "hosts": [
+            "api.twilio.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 5
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "basic",
+          "signing"
+        ],
+        "credentials": [
+          {
+            "name": "twilio.basic_auth",
+            "scheme": {
+              "kind": "basic",
+              "name": null
+            },
+            "description": "Twilio Account SID and Auth Token, sent as HTTP Basic credentials",
+            "env": [
+              "TWILIO_AUTH_TOKEN"
+            ],
+            "user_env": [
+              "TWILIO_ACCOUNT_SID"
+            ],
+            "user_suffix": null,
+            "oauth2": false
+          },
+          {
+            "name": "twilio.webhook_signing_secret",
+            "scheme": {
+              "kind": "signing",
+              "name": null
+            },
+            "description": "The same Auth Token as twilio.basic_auth, used here to verify X-Twilio-Signature on inbound status callbacks. Never sent to Twilio",
+            "env": [
+              "TWILIO_AUTH_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "twilio.basic_auth"
+          ]
+        ]
+      },
+      "operation_count": 5,
+      "operations": [
+        {
+          "id": "twilio-account-get",
+          "provider": "twilio",
+          "service": "default",
+          "description": "Verify credentials by fetching the authenticated Twilio account",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/Accounts/{account_sid}.json",
+          "parameters": [
+            {
+              "name": "account_sid",
+              "in": "path",
+              "wire": null,
+              "description": "The Account SID — the same identifier entered as this connection's Basic-auth username",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "account_sid": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "account_sid"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "date_created": {
+                "description": "RFC 2822, not ISO 8601",
+                "type": "string"
+              },
+              "date_updated": {
+                "description": "RFC 2822, not ISO 8601",
+                "type": "string"
+              },
+              "friendly_name": {
+                "description": "The account's display name, set by whoever created it",
+                "type": "string"
+              },
+              "owner_account_sid": {
+                "description": "The parent account's SID when this is a subaccount; equal to sid for a primary account",
+                "type": "string"
+              },
+              "sid": {
+                "description": "The account's own SID — the same value configured as this connection's username",
+                "type": "string"
+              },
+              "status": {
+                "description": "closed is terminal",
+                "enum": [
+                  "active",
+                  "suspended",
+                  "closed"
+                ],
+                "type": "string"
+              },
+              "type": {
+                "description": "A Trial account has sending and calling restrictions a Full account does not",
+                "enum": [
+                  "Trial",
+                  "Full"
+                ],
+                "type": "string"
+              },
+              "uri": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sid"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "twilio.basic_auth"
+            ]
+          ],
+          "hosts": [
+            "api.twilio.com"
+          ],
+          "flux": "op twilio-account-get(account_sid: String) -> Any\n  description \"Verify credentials by fetching the authenticated Twilio account\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.twilio.com/2010-04-01\"\n  url = fmt(\"{base}/Accounts/{account_sid}.json\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "twilio-message-list",
+          "provider": "twilio",
+          "service": "default",
+          "description": "List messages sent from or received by this account",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/Accounts/{account_sid}/Messages.json",
+          "parameters": [
+            {
+              "name": "account_sid",
+              "in": "path",
+              "wire": null,
+              "description": "The Account SID — the same identifier entered as this connection's Basic-auth username",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "wire": "Page",
+              "description": "Page number, 0-based",
+              "required": false,
+              "schema": {
+                "default": 0,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "page_size",
+              "in": "query",
+              "wire": "PageSize",
+              "description": "Messages per page; Twilio caps this at 1000",
+              "required": false,
+              "schema": {
+                "default": 50,
+                "maximum": 1000,
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "account_sid": {
+                "type": "string"
+              },
+              "page": {
+                "default": 0,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "page_size": {
+                "default": 50,
+                "maximum": 1000,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "account_sid"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "first_page_uri": {
+                "type": "string"
+              },
+              "messages": {
+                "description": "This page's messages, oldest or newest first depending on no filter being applied — Twilio does not document a stable default order",
+                "items": {
+                  "properties": {
+                    "account_sid": {
+                      "type": "string"
+                    },
+                    "api_version": {
+                      "type": "string"
+                    },
+                    "body": {
+                      "description": "The message text, truncated by Twilio at 1600 characters",
+                      "type": "string"
+                    },
+                    "date_created": {
+                      "description": "RFC 2822, not ISO 8601",
+                      "type": "string"
+                    },
+                    "date_sent": {
+                      "description": "RFC 2822, not ISO 8601; null until Twilio actually sends it",
+                      "type": "string"
+                    },
+                    "date_updated": {
+                      "description": "RFC 2822, not ISO 8601",
+                      "type": "string"
+                    },
+                    "direction": {
+                      "enum": [
+                        "inbound",
+                        "outbound-api",
+                        "outbound-call",
+                        "outbound-reply"
+                      ],
+                      "type": "string"
+                    },
+                    "error_code": {
+                      "description": "Null unless status is failed or undelivered",
+                      "type": "integer"
+                    },
+                    "error_message": {
+                      "description": "Null unless status is failed or undelivered",
+                      "type": "string"
+                    },
+                    "from": {
+                      "description": "The sender, as an E.164 phone number, short code or alphanumeric sender id",
+                      "type": "string"
+                    },
+                    "messaging_service_sid": {
+                      "description": "Set when the message was sent through a Messaging Service rather than a bare phone number; null otherwise",
+                      "type": "string"
+                    },
+                    "num_media": {
+                      "description": "Sent as a numeric string",
+                      "type": "string"
+                    },
+                    "num_segments": {
+                      "description": "Sent as a numeric string, not a JSON number — Twilio quirk, not a typo here",
+                      "type": "string"
+                    },
+                    "price": {
+                      "description": "Sent as a numeric string, negative for an outbound charge; null until the message settles",
+                      "type": "string"
+                    },
+                    "price_unit": {
+                      "description": "ISO 4217 currency code, e.g. the account's billing currency",
+                      "type": "string"
+                    },
+                    "sid": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "accepted",
+                        "scheduled",
+                        "queued",
+                        "sending",
+                        "sent",
+                        "failed",
+                        "delivered",
+                        "undelivered",
+                        "receiving",
+                        "received",
+                        "read",
+                        "canceled"
+                      ],
+                      "type": "string"
+                    },
+                    "to": {
+                      "description": "The recipient, as an E.164 phone number or a channel address",
+                      "type": "string"
+                    },
+                    "uri": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "sid"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "next_page_uri": {
+                "description": "Null on the last page",
+                "type": "string"
+              },
+              "page": {
+                "type": "integer"
+              },
+              "page_size": {
+                "type": "integer"
+              },
+              "previous_page_uri": {
+                "description": "Null on the first page",
+                "type": "string"
+              },
+              "uri": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "messages"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "twilio.basic_auth"
+            ]
+          ],
+          "hosts": [
+            "api.twilio.com"
+          ],
+          "flux": "op twilio-message-list(account_sid: String, page: Number, page_size: Number) -> Any\n  description \"List messages sent from or received by this account\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.twilio.com/2010-04-01\"\n  url = fmt(\"{base}/Accounts/{account_sid}/Messages.json\")\n  sep = \"?\"\n  when page\n    url = fmt(\"{url}{sep}Page={page}\")\n    sep = \"&\"\n  when page_size\n    url = fmt(\"{url}{sep}PageSize={page_size}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "twilio-message-get",
+          "provider": "twilio",
+          "service": "default",
+          "description": "Fetch one message",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/Accounts/{account_sid}/Messages/{message_sid}.json",
+          "parameters": [
+            {
+              "name": "account_sid",
+              "in": "path",
+              "wire": null,
+              "description": "The Account SID — the same identifier entered as this connection's Basic-auth username",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "message_sid",
+              "in": "path",
+              "wire": null,
+              "description": "The message's SID, `SM…` or `MM…`",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "account_sid": {
+                "type": "string"
+              },
+              "message_sid": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "account_sid",
+              "message_sid"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "account_sid": {
+                "type": "string"
+              },
+              "api_version": {
+                "type": "string"
+              },
+              "body": {
+                "description": "The message text, truncated by Twilio at 1600 characters",
+                "type": "string"
+              },
+              "date_created": {
+                "description": "RFC 2822, not ISO 8601",
+                "type": "string"
+              },
+              "date_sent": {
+                "description": "RFC 2822, not ISO 8601; null until Twilio actually sends it",
+                "type": "string"
+              },
+              "date_updated": {
+                "description": "RFC 2822, not ISO 8601",
+                "type": "string"
+              },
+              "direction": {
+                "enum": [
+                  "inbound",
+                  "outbound-api",
+                  "outbound-call",
+                  "outbound-reply"
+                ],
+                "type": "string"
+              },
+              "error_code": {
+                "description": "Null unless status is failed or undelivered",
+                "type": "integer"
+              },
+              "error_message": {
+                "description": "Null unless status is failed or undelivered",
+                "type": "string"
+              },
+              "from": {
+                "description": "The sender, as an E.164 phone number, short code or alphanumeric sender id",
+                "type": "string"
+              },
+              "messaging_service_sid": {
+                "description": "Set when the message was sent through a Messaging Service; null otherwise",
+                "type": "string"
+              },
+              "num_media": {
+                "description": "Sent as a numeric string",
+                "type": "string"
+              },
+              "num_segments": {
+                "description": "Sent as a numeric string",
+                "type": "string"
+              },
+              "price": {
+                "description": "Sent as a numeric string; null until the message settles",
+                "type": "string"
+              },
+              "price_unit": {
+                "type": "string"
+              },
+              "sid": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "accepted",
+                  "scheduled",
+                  "queued",
+                  "sending",
+                  "sent",
+                  "failed",
+                  "delivered",
+                  "undelivered",
+                  "receiving",
+                  "received",
+                  "read",
+                  "canceled"
+                ],
+                "type": "string"
+              },
+              "subresource_uris": {
+                "description": "Links to this message's media and feedback sub-resources",
+                "type": "object"
+              },
+              "to": {
+                "description": "The recipient, as an E.164 phone number or a channel address",
+                "type": "string"
+              },
+              "uri": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sid"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "twilio.basic_auth"
+            ]
+          ],
+          "hosts": [
+            "api.twilio.com"
+          ],
+          "flux": "op twilio-message-get(account_sid: String, message_sid: String) -> Any\n  description \"Fetch one message\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.twilio.com/2010-04-01\"\n  url = fmt(\"{base}/Accounts/{account_sid}/Messages/{message_sid}.json\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "twilio-call-list",
+          "provider": "twilio",
+          "service": "default",
+          "description": "List calls made from or received by this account",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/Accounts/{account_sid}/Calls.json",
+          "parameters": [
+            {
+              "name": "account_sid",
+              "in": "path",
+              "wire": null,
+              "description": "The Account SID — the same identifier entered as this connection's Basic-auth username",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "status",
+              "in": "query",
+              "wire": "Status",
+              "description": "Filter by call status",
+              "required": false,
+              "schema": {
+                "enum": [
+                  "queued",
+                  "ringing",
+                  "in-progress",
+                  "completed",
+                  "busy",
+                  "failed",
+                  "no-answer",
+                  "canceled"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "wire": "Page",
+              "description": "Page number, 0-based",
+              "required": false,
+              "schema": {
+                "default": 0,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "page_size",
+              "in": "query",
+              "wire": "PageSize",
+              "description": "Calls per page; Twilio caps this at 1000",
+              "required": false,
+              "schema": {
+                "default": 50,
+                "maximum": 1000,
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "account_sid": {
+                "type": "string"
+              },
+              "page": {
+                "default": 0,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "page_size": {
+                "default": 50,
+                "maximum": 1000,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "status": {
+                "enum": [
+                  "queued",
+                  "ringing",
+                  "in-progress",
+                  "completed",
+                  "busy",
+                  "failed",
+                  "no-answer",
+                  "canceled"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "account_sid"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "calls": {
+                "items": {
+                  "properties": {
+                    "account_sid": {
+                      "type": "string"
+                    },
+                    "answered_by": {
+                      "description": "Set only when answering-machine detection ran: human, machine_start, machine_end_beep, machine_end_silence, machine_end_other, or fax. Null otherwise",
+                      "type": "string"
+                    },
+                    "api_version": {
+                      "type": "string"
+                    },
+                    "caller_name": {
+                      "description": "CNAM lookup result, when requested; null otherwise",
+                      "type": "string"
+                    },
+                    "direction": {
+                      "enum": [
+                        "inbound",
+                        "outbound-api",
+                        "outbound-dial"
+                      ],
+                      "type": "string"
+                    },
+                    "duration": {
+                      "description": "Seconds, sent as a numeric string; empty until the call completes",
+                      "type": "string"
+                    },
+                    "end_time": {
+                      "description": "RFC 2822, not ISO 8601; null until the call ends",
+                      "type": "string"
+                    },
+                    "forwarded_from": {
+                      "description": "The number a carrier reports this call as forwarded from, when the carrier provides it",
+                      "type": "string"
+                    },
+                    "from": {
+                      "description": "The calling party",
+                      "type": "string"
+                    },
+                    "from_formatted": {
+                      "description": "A human-readable rendering of `from`",
+                      "type": "string"
+                    },
+                    "parent_call_sid": {
+                      "description": "Set when this call is a child leg (e.g. a conference or forwarded leg); null otherwise",
+                      "type": "string"
+                    },
+                    "phone_number_sid": {
+                      "description": "The Twilio number involved, when one was",
+                      "type": "string"
+                    },
+                    "price": {
+                      "description": "Sent as a numeric string, negative for an outbound charge; null until the call settles",
+                      "type": "string"
+                    },
+                    "price_unit": {
+                      "type": "string"
+                    },
+                    "sid": {
+                      "type": "string"
+                    },
+                    "start_time": {
+                      "description": "RFC 2822, not ISO 8601",
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "queued",
+                        "ringing",
+                        "in-progress",
+                        "completed",
+                        "busy",
+                        "failed",
+                        "no-answer",
+                        "canceled"
+                      ],
+                      "type": "string"
+                    },
+                    "to": {
+                      "description": "The called party, as an E.164 phone number or SIP address",
+                      "type": "string"
+                    },
+                    "to_formatted": {
+                      "description": "A human-readable rendering of `to`",
+                      "type": "string"
+                    },
+                    "uri": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "sid"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "first_page_uri": {
+                "type": "string"
+              },
+              "next_page_uri": {
+                "description": "Null on the last page",
+                "type": "string"
+              },
+              "page": {
+                "type": "integer"
+              },
+              "page_size": {
+                "type": "integer"
+              },
+              "previous_page_uri": {
+                "description": "Null on the first page",
+                "type": "string"
+              },
+              "uri": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "calls"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "twilio.basic_auth"
+            ]
+          ],
+          "hosts": [
+            "api.twilio.com"
+          ],
+          "flux": "op twilio-call-list(account_sid: String, status: String, page: Number, page_size: Number) -> Any\n  description \"List calls made from or received by this account\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.twilio.com/2010-04-01\"\n  url = fmt(\"{base}/Accounts/{account_sid}/Calls.json\")\n  sep = \"?\"\n  when status\n    url = fmt(\"{url}{sep}Status={status}\")\n    sep = \"&\"\n  when page\n    url = fmt(\"{url}{sep}Page={page}\")\n    sep = \"&\"\n  when page_size\n    url = fmt(\"{url}{sep}PageSize={page_size}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
+                "params": [
+                  "Status"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "twilio-call-get",
+          "provider": "twilio",
+          "service": "default",
+          "description": "Fetch one call",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/Accounts/{account_sid}/Calls/{call_sid}.json",
+          "parameters": [
+            {
+              "name": "account_sid",
+              "in": "path",
+              "wire": null,
+              "description": "The Account SID — the same identifier entered as this connection's Basic-auth username",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "call_sid",
+              "in": "path",
+              "wire": null,
+              "description": "The call's SID, `CA…`",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "account_sid": {
+                "type": "string"
+              },
+              "call_sid": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "account_sid",
+              "call_sid"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "account_sid": {
+                "type": "string"
+              },
+              "answered_by": {
+                "description": "Set only when answering-machine detection ran; null otherwise",
+                "type": "string"
+              },
+              "api_version": {
+                "type": "string"
+              },
+              "caller_name": {
+                "description": "CNAM lookup result, when requested; null otherwise",
+                "type": "string"
+              },
+              "direction": {
+                "enum": [
+                  "inbound",
+                  "outbound-api",
+                  "outbound-dial"
+                ],
+                "type": "string"
+              },
+              "duration": {
+                "description": "Seconds, sent as a numeric string; empty until the call completes",
+                "type": "string"
+              },
+              "end_time": {
+                "description": "RFC 2822, not ISO 8601; null until the call ends",
+                "type": "string"
+              },
+              "forwarded_from": {
+                "type": "string"
+              },
+              "from": {
+                "description": "The calling party",
+                "type": "string"
+              },
+              "from_formatted": {
+                "type": "string"
+              },
+              "parent_call_sid": {
+                "description": "Set when this call is a child leg; null otherwise",
+                "type": "string"
+              },
+              "phone_number_sid": {
+                "type": "string"
+              },
+              "price": {
+                "description": "Sent as a numeric string; null until the call settles",
+                "type": "string"
+              },
+              "price_unit": {
+                "type": "string"
+              },
+              "sid": {
+                "type": "string"
+              },
+              "start_time": {
+                "description": "RFC 2822, not ISO 8601",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "queued",
+                  "ringing",
+                  "in-progress",
+                  "completed",
+                  "busy",
+                  "failed",
+                  "no-answer",
+                  "canceled"
+                ],
+                "type": "string"
+              },
+              "subresource_uris": {
+                "description": "Links to this call's recordings, notifications and other sub-resources",
+                "type": "object"
+              },
+              "to": {
+                "description": "The called party",
+                "type": "string"
+              },
+              "to_formatted": {
+                "type": "string"
+              },
+              "uri": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sid"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "twilio.basic_auth"
+            ]
+          ],
+          "hosts": [
+            "api.twilio.com"
+          ],
+          "flux": "op twilio-call-get(account_sid: String, call_sid: String) -> Any\n  description \"Fetch one call\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.twilio.com/2010-04-01\"\n  url = fmt(\"{base}/Accounts/{account_sid}/Calls/{call_sid}.json\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ],
+      "events": [
+        {
+          "name": "message.status_callback",
+          "service": "default",
+          "oip": null,
+          "description": "A message's delivery status changed. Twilio POSTs this, form-encoded, to the StatusCallback URL supplied when the message was created",
+          "default": true,
+          "group": "Messaging",
+          "when": {},
+          "schema": {
+            "properties": {
+              "ApiVersion": {
+                "type": "string"
+              },
+              "ErrorCode": {
+                "description": "Present only when MessageStatus is failed or undelivered",
+                "type": "string"
+              },
+              "From": {
+                "description": "The sender",
+                "type": "string"
+              },
+              "MessageSid": {
+                "type": "string"
+              },
+              "MessageStatus": {
+                "enum": [
+                  "accepted",
+                  "queued",
+                  "sending",
+                  "sent",
+                  "failed",
+                  "delivered",
+                  "undelivered",
+                  "receiving",
+                  "received",
+                  "read"
+                ],
+                "type": "string"
+              },
+              "To": {
+                "description": "The recipient",
+                "type": "string"
+              }
+            },
+            "required": [
+              "MessageSid",
+              "MessageStatus"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "call.status_callback",
+          "service": "default",
+          "oip": null,
+          "description": "A call's status changed. Twilio POSTs this, form-encoded, to the StatusCallback URL configured for the call or the answering number",
+          "default": true,
+          "group": "Voice",
+          "when": {},
+          "schema": {
+            "properties": {
+              "ApiVersion": {
+                "type": "string"
+              },
+              "CallDuration": {
+                "description": "Seconds, sent as a numeric string; present only once the call has ended",
+                "type": "string"
+              },
+              "CallSid": {
+                "type": "string"
+              },
+              "CallStatus": {
+                "enum": [
+                  "queued",
+                  "ringing",
+                  "in-progress",
+                  "completed",
+                  "busy",
+                  "failed",
+                  "no-answer",
+                  "canceled"
+                ],
+                "type": "string"
+              },
+              "Direction": {
+                "enum": [
+                  "inbound",
+                  "outbound-api",
+                  "outbound-dial"
+                ],
+                "type": "string"
+              },
+              "From": {
+                "description": "The calling party",
+                "type": "string"
+              },
+              "Timestamp": {
+                "description": "RFC 2822, not ISO 8601",
+                "type": "string"
+              },
+              "To": {
+                "description": "The called party",
+                "type": "string"
+              }
+            },
+            "required": [
+              "CallSid",
+              "CallStatus"
+            ],
+            "type": "object"
+          }
+        }
+      ],
+      "channels": []
+    },
+    {
       "id": "typeform",
       "authority": null,
       "vendor": "Typeform",
