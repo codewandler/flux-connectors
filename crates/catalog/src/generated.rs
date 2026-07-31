@@ -24,6 +24,7 @@ pub(crate) mod clickup;
 pub(crate) mod cloudflare;
 pub(crate) mod contentful;
 pub(crate) mod datadog;
+pub(crate) mod discord;
 pub(crate) mod docusign;
 pub(crate) mod dropbox;
 pub(crate) mod figma;
@@ -81,6 +82,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &cloudflare::PROVIDER,
     &contentful::PROVIDER,
     &datadog::PROVIDER,
+    &discord::PROVIDER,
     &docusign::PROVIDER,
     &dropbox::PROVIDER,
     &figma::PROVIDER,
