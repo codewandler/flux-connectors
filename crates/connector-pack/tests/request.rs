@@ -46,15 +46,61 @@ fn http() -> Egress {
 /// An empty store here is what keeps the header assertions below a statement about the *emitter*
 /// rather than about whichever credential happened to resolve.
 fn credentials() -> Credentials {
-    Credentials::new(Arc::new(MemoryStore::new()), "t-request").expect("a valid tenant id")
+    Credentials::new(Arc::new(MemoryStore::new()), TENANT).expect("a valid tenant id")
+}
+
+/// The tenant both ports answer for — one constant, because a pack whose two ports name different
+/// tenants is refused at install ([`connector_pack::Error::TenantMismatch`]).
+const TENANT: &str = "t-request";
+
+/// A bound configuration port carrying a value for **every** endpoint variable the shipped
+/// catalogue declares (C-193).
+///
+/// The URLs asserted below used to read `https://{subdomain}.zendesk.com/...`, which was the bug:
+/// the request went out to a host that does not resolve. They now read `https://acme.zendesk.com/…`
+/// because *this* is where `acme` comes from — a value a host supplied through a bound port, and
+/// the only place in this crate one can come from.
+///
+/// The variables are **discovered from the catalogue** rather than listed here, so
+/// `every_shipped_operation_builds_an_absolute_request` keeps covering a connector shipped after
+/// this file was written. A hand-written list would have made that test silently narrower on the
+/// day a new templated provider landed — which is the failure mode it exists to catch.
+fn configuration() -> Configuration {
+    let mut values = MemoryConfig::new();
+    for entry in catalog::operations() {
+        for variable in project_with(entry, unconfigured()).endpoint_variables() {
+            values = values.with_endpoint(TENANT, entry.provider, variable, &value_for(variable));
+        }
+    }
+    Configuration::new(Arc::new(values), TENANT).expect("a valid tenant id")
+}
+
+/// A readable value per variable. `subdomain` and `domain` are spelled out because the URLs this
+/// file asserts by hand read as URLs that way; everything else only has to be *a* value.
+fn value_for(variable: &str) -> String {
+    match variable {
+        "subdomain" => "acme".to_string(),
+        "domain" => "acme.freshdesk.com".to_string(),
+        other => format!("a-{other}"),
+    }
+}
+
+/// An empty configuration port. Projection reads no *values* — it only reads the variables an
+/// operation's own Flux names — so this is enough to ask an entry what it needs.
+fn unconfigured() -> Configuration {
+    Configuration::new(Arc::new(MemoryConfig::new()), TENANT).expect("a valid tenant id")
+}
+
+fn project_with(entry: &'static catalog::Operation, configuration: Configuration) -> Operation {
+    Operation::project(entry, http(), credentials(), configuration)
+        .unwrap_or_else(|error| panic!("`{}`: {error}", entry.id))
 }
 
 /// One shipped operation, projected.
 fn projected(id: &str) -> Operation {
     let entry = catalog::operation(OperationKey::id(id))
         .unwrap_or_else(|| panic!("the shipped catalogue carries `{id}`"));
-    Operation::project(entry, http(), credentials())
-        .unwrap_or_else(|error| panic!("`{id}`: {error}"))
+    project_with(entry, configuration())
 }
 
 /// The request `id` makes when called with `params`.
@@ -84,7 +130,7 @@ fn a_nested_body_operation_nests_rather_than_flattening() {
     assert_eq!(request.method, "PUT");
     assert_eq!(
         request.url,
-        "https://{subdomain}.zendesk.com/api/v2/tickets/42.json"
+        "https://acme.zendesk.com/api/v2/tickets/42.json"
     );
 
     let body: Value = serde_json::from_str(
@@ -142,7 +188,7 @@ fn a_query_string_operation_separates_its_parameters() {
     );
     assert_eq!(
         all.url,
-        "https://{domain}/api/v2/tickets?requester_id=7&email=a@b.c&company_id=9\
+        "https://acme.freshdesk.com/api/v2/tickets?requester_id=7&email=a@b.c&company_id=9\
          &updated_since=2026-07-30"
     );
     assert_eq!(all.method, "GET");
@@ -160,7 +206,7 @@ fn a_query_string_operation_separates_its_parameters() {
             "updated": Value::Null,
         }),
     );
-    assert_eq!(one.url, "https://{domain}/api/v2/tickets?company_id=9");
+    assert_eq!(one.url, "https://acme.freshdesk.com/api/v2/tickets?company_id=9");
 
     // No filter at all: no `?`, and no dangling separator.
     let none = request(
@@ -172,7 +218,7 @@ fn a_query_string_operation_separates_its_parameters() {
             "updated": Value::Null,
         }),
     );
-    assert_eq!(none.url, "https://{domain}/api/v2/tickets");
+    assert_eq!(none.url, "https://acme.freshdesk.com/api/v2/tickets");
 }
 
 /// A required query parameter goes in the template and an optional one is guarded, so the two kinds
@@ -185,7 +231,7 @@ fn a_required_query_parameter_opens_the_string_and_optional_ones_follow() {
     );
     assert_eq!(
         both.url,
-        "https://{subdomain}.zendesk.com/api/v2/search.json\
+        "https://acme.zendesk.com/api/v2/search.json\
          ?query=type:ticket status:new&page=2&per_page=50"
     );
 
@@ -195,7 +241,7 @@ fn a_required_query_parameter_opens_the_string_and_optional_ones_follow() {
     );
     assert_eq!(
         required_only.url,
-        "https://{subdomain}.zendesk.com/api/v2/search.json?query=type:ticket"
+        "https://acme.zendesk.com/api/v2/search.json?query=type:ticket"
     );
 }
 
@@ -229,7 +275,7 @@ fn the_request_becomes_the_params_http_request_declares() {
     assert_eq!(
         show.to_params(),
         json!({
-            "url": "https://{subdomain}.zendesk.com/api/v2/tickets/7.json",
+            "url": "https://acme.zendesk.com/api/v2/tickets/7.json",
             "method": "GET",
         })
     );
@@ -256,9 +302,9 @@ fn the_request_becomes_the_params_http_request_declares() {
 #[test]
 fn every_shipped_operation_builds_an_absolute_request() {
     let mut built = 0usize;
+    let configuration = configuration();
     for entry in catalog::operations() {
-        let operation = Operation::project(entry, http(), credentials())
-            .unwrap_or_else(|error| panic!("`{}`: {error}", entry.id));
+        let operation = project_with(entry, configuration.clone());
 
         let params = params_from_schema(&operation);
         let request = operation
@@ -271,9 +317,21 @@ fn every_shipped_operation_builds_an_absolute_request() {
             entry.id,
             request.url
         );
+        // **C-193, over the whole catalogue.** A brace surviving into a finished URL is a request to
+        // a host that does not resolve — or, worse for the six templated connectors, one that
+        // resolves somewhere unintended. It is asserted here rather than only for Zendesk because
+        // the failure is per-connector and silent: every other assertion in this loop passes for a
+        // URL that still reads `https://{subdomain}.zendesk.com/api/v2/tickets/1.json`.
+        assert!(
+            !request.url.contains('{'),
+            "`{}` builds `{}`, which still carries an unfilled configuration placeholder",
+            entry.id,
+            request.url
+        );
         for host in entry.hosts {
+            let host = resolved_host(host, &operation);
             assert!(
-                request.url.contains(host),
+                request.url.contains(&host),
                 "`{}` builds `{}`, which does not reach its declared `{host}`",
                 entry.id,
                 request.url
@@ -287,6 +345,20 @@ fn every_shipped_operation_builds_an_absolute_request() {
         built += 1;
     }
     assert!(built > 0, "an empty catalogue would pass the loop above");
+}
+
+/// A declared host with this file's configuration filled in.
+///
+/// `entry.hosts` is the manifest's `http_hosts` and for six connectors it is a *template* —
+/// `{subdomain}.zendesk.com`. `acme.zendesk.com` is the host. Comparing a built URL against the
+/// template would have been the assertion that quietly stopped meaning anything the moment
+/// substitution started working.
+fn resolved_host(host: &str, operation: &Operation) -> String {
+    let mut out = host.to_owned();
+    for variable in operation.endpoint_variables() {
+        out = out.replace(&format!("{{{variable}}}"), &value_for(variable));
+    }
+    out
 }
 
 /// A plausible value for every parameter an operation declares, from its own input schema.

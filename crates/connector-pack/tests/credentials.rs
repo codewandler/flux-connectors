@@ -48,7 +48,9 @@
 
 use std::sync::{Arc, Mutex};
 
-use connector_pack::{Credentials, Egress, Error, Operation, DEFAULT_SERVICE};
+use connector_pack::{
+    Configuration, Credentials, Egress, Error, MemoryConfig, Operation, DEFAULT_SERVICE,
+};
 use connector_secrets::{CredentialRef, MemoryStore, Secret, SecretStore};
 use flux_runtime::{
     RuntimeTurnContext, Tool, ToolContext, ToolProgress, ToolProgressSink, ToolResult,
@@ -168,7 +170,19 @@ fn stand_in_spec() -> flux_spec::ToolSpec {
 fn projected(id: &str, http: Egress, credentials: Credentials) -> Operation {
     let entry = catalog::operation(catalog::OperationKey::id(id))
         .unwrap_or_else(|| panic!("the shipped catalogue carries `{id}`"));
-    Operation::project(entry, http, credentials).unwrap_or_else(|error| panic!("`{id}`: {error}"))
+    Operation::project(entry, http, credentials, configuration())
+        .unwrap_or_else(|error| panic!("`{id}`: {error}"))
+}
+
+/// An **empty** configuration port, bound to the same tenant as the credential port (C-193).
+///
+/// Every operation this file drives is `slack-chat-post-message`, whose base URL is the literal
+/// `https://slack.com` — it names no endpoint variable, so there is nothing to configure and an
+/// empty port is the honest binding rather than a shortcut. What this file asserts is the
+/// *credential* path, and a configuration value present here would only obscure which port a value
+/// came from.
+fn configuration() -> Configuration {
+    Configuration::new(Arc::new(MemoryConfig::new()), TENANT).expect("a valid tenant id")
 }
 
 fn post_message_params() -> Value {

@@ -386,7 +386,7 @@ impl Tool for Operation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{empty_credentials, recording_http};
+    use crate::tests::{empty_credentials, recording_http, test_configuration};
     use catalog::OperationKey;
     use serde_json::json;
 
@@ -422,6 +422,11 @@ mod tests {
     /// trait's empty defaults, and said in as many words that C-115 would have to invert it: the
     /// moment `execute` delegates to `http.request`, an empty answer stops being tolerable and
     /// becomes a hole through the host's network policy. This is that assertion, positive.
+    ///
+    /// **Inverted a second time by C-193.** It used to assert the subject
+    /// `https://{subdomain}.zendesk.com/…`, which is what the pack genuinely declared and which no
+    /// egress allow-list can match — a gate consulted with a string that names no host. The subject
+    /// is now the substituted one, and `test_configuration` is where `acme` comes from.
     #[test]
     fn the_network_gate_is_mirrored_because_execute_reaches_the_network() {
         let tool = projected("zendesk-ticket-show");
@@ -429,7 +434,7 @@ mod tests {
 
         assert_eq!(
             tool.permission_subjects(&params),
-            vec!["https://{subdomain}.zendesk.com/api/v2/tickets/1.json".to_string()],
+            vec!["https://acme.zendesk.com/api/v2/tickets/1.json".to_string()],
             "the subject must be the URL `http.request` would have declared for itself"
         );
         assert_eq!(
@@ -437,7 +442,7 @@ mod tests {
             vec![Intent {
                 behavior: IntentBehavior::NetworkFetch,
                 target: IntentTarget::Url {
-                    url: "https://{subdomain}.zendesk.com/api/v2/tickets/1.json".to_string(),
+                    url: "https://acme.zendesk.com/api/v2/tickets/1.json".to_string(),
                 },
                 role: IntentRole::ReadTarget,
                 certainty: IntentCertainty::Certain,
