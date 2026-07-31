@@ -2,7 +2,7 @@
 id: C-196
 title: "`RATIO_FLOOR_PERCENT` has no ratchet, so it can only drift"
 pillar: Build
-status: ready
+status: in-progress
 priority: 3
 design:
 epic: connectors-v1
@@ -49,22 +49,60 @@ mechanism that had just failed, applied again.
 
 ## Acceptance
 
-- [ ] **Failing-first test:** with the constants as they ship, a test proves the ratio floor may sit
+- [x] **Failing-first test:** with the constants as they ship, a test proves the ratio floor may sit
       arbitrarily far below the measurement. Name it.
-- [ ] Decide between the two shapes and record the reason:
+- [x] Decide between the two shapes and record the reason:
       - **a two-way ratchet**, mirroring `the_recorded_floor_is_the_measured_figure`, with a slack
         chosen and justified rather than copied; or
       - **derive the ratio from `COVERED_FLOOR`** and delete the constant, on the grounds that two
         numbers describing one measurement will always drift apart eventually.
       The second is smaller and removes the class rather than guarding it — prefer it unless the
       ratio genuinely guards something the count does not.
-- [ ] Whichever lands, the *stated* design survives: one honest absence must not turn an unrelated
+- [x] Whichever lands, the *stated* design survives: one honest absence must not turn an unrelated
       provider story red, and a connector arriving with no shapes at all must still fail.
-- [ ] The scoped gate is green and the build stays a fixed point.
+- [x] The scoped gate is green and the build stays a fixed point.
 
 ## Progress
 
-- (not started)
+**Landed as a two-way ratchet on a new unit, not on the percentage.** `RATIO_FLOOR_PERCENT` is
+deleted; `ABSENCE_CEILING = 33` (operations shipping *without* a response shape) and
+`ABSENCE_SLACK = 2` replace it, with `the_recorded_ceiling_is_the_measured_absence` as the second
+direction.
+
+**Deriving from `COVERED_FLOOR` was weighed first, as the story asks, and rejected on evidence.**
+`COVERED_FLOOR * 100 / operations` puts the same denominator on both sides of the comparison, so it
+reduces to `covered >= COVERED_FLOOR` — the assertion immediately above it. The arrival the constant
+exists to catch then passes: a nine-operation connector landing with nothing leaves `covered` at 268,
+and 268 of 308 clears a derived floor of 81 easily. Derivation deletes the guard along with the
+constant. The two constants bound quantities that move independently — a wave can raise covered and
+absent in the same commit — and neither is computable from the other.
+
+**Keeping a percentage with a ratchet bolted on was also rejected, and this is the finding worth
+carrying forward.** At the merge base the measurement is 268 of 299 and the floor is 88, so *five*
+operations could arrive carrying nothing before it fired — while **27 of the 53 shipped connectors
+ship five operations or fewer**. No whole-percent value fixes that: one point of 299 operations is
+three operations, so a percent cannot simultaneously admit one honest absence and refuse a
+three-operation connector. The unit was the defect, not the value, which is why a ratchet alone would
+not have restored the stated design. Counting absences directly makes the resolution one operation
+and keeps it there as the catalogue grows.
+
+**The slack is measured, not copied from `COVERED_FLOOR`'s tenth.** Bounded above by the smallest
+shipped connector (supabase, 3 operations) so a connector that size arriving with nothing is caught;
+bounded below by 1 so a single honest absence stays green. Of the two remaining values, 2 is what the
+catalogue shows: datadog (2 of 4) and google (6 of 8) each arrived with exactly two honest absences,
+and a slack of 1 would have turned both red for doing nothing wrong.
+
+**The two arrivals, asserted rather than described.**
+`a_connector_arriving_with_no_response_shapes_is_caught` holds both halves of the stated design
+against the live measurement: one honest absence stays green, and a connector the size of the
+smallest already shipped, arriving with nothing, goes red. It is the failing-first test — at the
+merge base it fails on the second half.
+
+**`AGENTS.md` needed one change and got it**: §"A ninth and tenth staleness check exist" now names
+the new constant, its ownership, and the one behavioural change for provider implementors — a story
+landing **three or more** honest absences is red on arrival and reports it rather than editing the
+constant. Zero, one or two absences are unaffected, which covers every provider story the catalogue
+has seen except babelforce (0 of 9) and fly (4).
 
 ## Notes
 

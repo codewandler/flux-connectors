@@ -175,7 +175,7 @@ are `catalog.json` and index staleness. Report them and stop; do **not** run a f
 them. The coordinator's full build at integration resolves all eight, and it is the only build that
 can, because it is the only one with every provider.
 
-### A ninth staleness check exists, and it is coordinator-owned
+### A ninth and tenth staleness check exist, and both are coordinator-owned
 
 `the_recorded_floor_is_the_measured_figure` (`crates/connector-spec/tests/response_schema_coverage.rs`)
 is a **two-way** ratchet: coverage may run ahead of `COVERED_FLOOR` by up to a tenth of the catalogue,
@@ -191,10 +191,21 @@ integration.** Two concurrent provider stories that each raised it would collide
 is exactly the failure C-104 exists to prevent. A provider implementor seeing this test red should
 report it as a ninth and stop, not edit the constant.
 
-`RATIO_FLOOR_PERCENT` is deliberately *not* raised in lockstep. It governs the different regression —
-operations added *without* shapes — and pinning it to the current 85% would fire on the next connector
-whose vendor genuinely does not specify a response, which babelforce (0 of 9) already demonstrates is
-a real category.
+**A tenth check sits beside it, with the same ownership and the same rhythm** (C-196).
+`the_recorded_ceiling_is_the_measured_absence` holds `ABSENCE_CEILING` — the count of operations
+shipping *without* a response shape — to the measurement in both directions, within
+`ABSENCE_SLACK` (2). It replaces `RATIO_FLOOR_PERCENT`, which guarded the same regression as a
+percentage, had no second direction, and had drifted to where five unschematized operations could
+land unnoticed while 27 of the 53 shipped connectors are five operations or fewer.
+
+What this changes for a provider implementor is one line: **a story landing three or more operations
+whose vendors document no response body is now red on arrival**, on
+`response_schema_coverage_does_not_fall_below_its_floor`. Report it as a tenth alongside the ninth
+and stop — like `COVERED_FLOOR`, the constant is fenced and the coordinator moves it at integration.
+A story landing zero, one or two honest absences is unaffected and stays green, which is every
+provider story the catalogue has seen except babelforce (0 of 9) and fly (4). Both of those are
+vendor-wide gaps, and a connector arriving with *nothing* is the arrival this check exists to make
+loud rather than silent.
 
 **A story that only changes an existing provider leaves three red**, not one — the index is still
 correct, but `catalog.json` and the README images are not. Measured by editing a `description` in
