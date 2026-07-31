@@ -68,6 +68,86 @@ fn load(provider: &str) -> connector_spec::Connector {
         .connector
 }
 
+/// **C-194, measured against what ships.** Narrowing any shipped provider to one of its services
+/// must leave a connector whose `config`, `graphs` and `verify` belong to that service.
+///
+/// `select_service` filtered `operations`, `events` and `channels` and spread the rest, so these
+/// three arrived whole. That was not hypothetical: `contentful` declares two services with a
+/// `[[config]]` block each — including a per-service **token** — and its `verify` names a `delivery`
+/// operation, so `--service management` narrowed to a connector carrying `delivery_token` and a
+/// Test-connection pointer into a service the build was not producing.
+///
+/// It emitted nothing, because none of the three reaches an artifact yet (C-87). This test is what
+/// keeps that a property of the *narrowing* rather than a coincidence of what the emitters read.
+///
+/// Every violation is collected and reported together rather than one per run — the same reason
+/// `connector_spec`'s loader reports every problem in a file at once. A leak of this shape is
+/// systematic, so seeing one provider at a time would understate it.
+#[test]
+fn narrowing_a_shipped_provider_carries_no_other_services_config_graphs_or_verify() {
+    let mut leaks: Vec<String> = Vec::new();
+    let mut checked = 0;
+
+    for name in shipped() {
+        let connector = load(&name);
+        let services = connector.service_names();
+        if services.len() < 2 {
+            continue;
+        }
+        checked += 1;
+
+        for service in services {
+            let selected = connector_cli::seam::select_service(&connector, service)
+                .unwrap_or_else(|error| panic!("`{name}` declares service `{service}`: {error}"));
+
+            for field in selected.config.iter().filter(|f| f.service != service) {
+                // `secret = true` is noted because it is the field most worth not misplacing, but
+                // the wording is deliberate: a `ConfigField` is a *question a settings page asks* —
+                // name, label, help, format, `binds` — and never a value. No credential value exists
+                // anywhere in this repository's inputs or outputs (AGENTS.md), so what crosses a
+                // service boundary here is a declaration, not a secret.
+                leaks.push(format!(
+                    "{name} --service {service}: configuration field `{}` configures service `{}`{}",
+                    field.name,
+                    field.service,
+                    if field.secret {
+                        " (declares secret = true)"
+                    } else {
+                        ""
+                    }
+                ));
+            }
+            for graph in selected.graphs.iter().filter(|g| g.service != service) {
+                leaks.push(format!(
+                    "{name} --service {service}: graph `{}` belongs to service `{}`",
+                    graph.name, graph.service
+                ));
+            }
+            if let Some(verify) = selected
+                .verify
+                .as_ref()
+                .filter(|id| selected.operation(id).is_none())
+            {
+                leaks.push(format!(
+                    "{name} --service {service}: `verify = {verify:?}` names an operation it no \
+                     longer declares"
+                ));
+            }
+        }
+    }
+
+    assert!(
+        leaks.is_empty(),
+        "a service-scoped narrowing carried {} surface(s) belonging to another service:\n  {}",
+        leaks.len(),
+        leaks.join("\n  ")
+    );
+    assert!(
+        checked >= 2,
+        "no multi-service provider was checked, so this test proves nothing about the narrowing"
+    );
+}
+
 /// **The byte-identity item, stated as a test.** Every installable and catalogue artifact this
 /// repository commits is unchanged by a rebuild under services.
 ///
