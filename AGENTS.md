@@ -32,11 +32,13 @@ change to a story's `status`, `priority`, `title`, `epic`, or `note`, run `/trac
 
 ## Current project boundary
 
-**Snapshot: v0.5.0.** `cargo run -p connector-cli -- build` compiles **43 providers**, **50 services**
-and **242 curated connector operations** — plus 8 events, 2 channel bindings and 77 Flux core entries
-(29 operations, 43 node kinds, 5 capabilities) with 3 core JSON Schemas — into **470 artifacts**. The
+**Snapshot: v0.6.0.** `cargo run -p connector-cli -- build` compiles **45 providers**, **52 services**
+and **254 curated connector operations** — plus 8 events, 2 channel bindings and 77 Flux core entries
+(29 operations, 43 node kinds, 5 capabilities) with 3 core JSON Schemas — into **488 artifacts**. The
 compiler, the embedded Rust catalogue, the JSON catalogue, the Tool pack and the public explorer all
-work. **Nothing in this repository makes a live API call, because nothing in it is a host.** Read
+work. **The repository now also ships a host**, `connectors-api` (C-200), which makes live API calls
+— it is fenced away from the compile path in both directions, and the compiler itself still reaches
+no network. Read
 [Intentional gaps](#intentional-gaps) before changing code that appears broken.
 
 > Every count in this paragraph and in `README.md` is **hand-typed and unchecked**. It has drifted
@@ -79,10 +81,13 @@ accepted design explicitly changes this charter.
 | `connector-secrets` | Resolving a `CredentialRef` **address** to a **value**: the `SecretStore` port, `MemoryStore`, and the optional Vault KV v2 client | Be reachable from `connector-cli` — it opens sockets, and that edge would end the offline guarantee; also: no expiry, refresh, rotation or revocation |
 | `connectors-api` | **The host** (C-200): binding the pack's ports, holding the transport and the per-tenant credential store, serving the catalogue, and running operations | Construct a request of its own — every route ends in `connector_pack::pack`; ship a transport of its own; be depended on by anything (it is a **leaf**, and `dependency_fence.rs` holds both directions); be published (`publish = false`) |
 
-The first four are the **compiler**; the last two are **host libraries**, built and tested here and
-excluded from the compile path. `crates/connector-cli/tests/dependency_fence.rs` asserts that fence
-over the resolved `Cargo.lock`, optional dependencies included, so adding the edge behind a feature
-flag trips it too. `connector-pack` is the one crate here that links flux's runtime types, and it
+The first four are the **compiler**. `connector-pack` and `connector-secrets` are **host libraries**,
+built and tested here and excluded from the compile path. `connectors-api` is the **host** itself and
+is the one crate here that opens a socket. `crates/connector-cli/tests/dependency_fence.rs` asserts
+that fence over the resolved `Cargo.lock`, optional dependencies included, so adding the edge behind
+a feature flag trips it too — and it now sorts every workspace member into one of those three
+buckets, so a new crate that is none of them fails rather than passing unexamined. Among the
+compiler and host libraries, `connector-pack` is the one that links flux's runtime types, and it
 constructs none of it — see [Relationship to flux](#relationship-to-flux).
 
 `connector-spec` ingest accepts bytes so it remains fully unit-testable. Vendor network access, when
@@ -98,7 +103,7 @@ cargo run -p connector-cli -- build
 cargo run -p connector-cli -- diff
 ```
 
-`diff` must finish with `470 artifacts up to date (43 providers checked)` for the current catalogue.
+`diff` must finish with `488 artifacts up to date (45 providers checked)` for the current catalogue.
 The artifact count may legitimately change when providers or operations change; do not encode it as
 a permanent invariant. It is also not currently checked against this file — see C-81 and the caveat
 under [Current project boundary](#current-project-boundary).
