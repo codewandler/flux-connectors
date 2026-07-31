@@ -8,7 +8,6 @@ op resend-email-send(from: String, to: Any, subject: String, html: String) -> An
   base = "https://api.resend.com"
   url = fmt("{base}/emails")
   content_type = "application/json"
-  User_Agent = "flux-connectors"
   payload = { from, html, subject, to }
-  response = http.request(body: payload, headers: { "User-Agent": User_Agent, "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response

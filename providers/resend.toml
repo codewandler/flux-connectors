@@ -25,26 +25,32 @@
 # API requests must include a `User-Agent` header."* … *"Requests without this header will be
 # rejected with a `403` status code."* … *"Most HTTP clients, all Resend SDKs, and the Resend CLI
 # include this header automatically, but if you're making direct HTTP requests, make sure to set
-# it"* — and this pipeline emits direct `http.request` calls.
+# it"* — and this pipeline emits direct `http.request` calls. **That vendor fact is recorded here
+# permanently**, because it is what makes this connector the one that surfaced the gap at all, and
+# because a `403` naming *authorization* for a *missing header* is the worst shape a failure can
+# take: the credential is the obvious suspect and rotating it changes nothing.
 #
-# **Whether the host supplies one is checkable, and it was checked: it does not.** This repository
-# now ships a host — `crates/connectors-api` (C-200) — and the transport under its `Egress` is
-# flux's own `flux_web::http::HttpRequestTool` (`crates/connectors-api/src/state.rs:108`). That tool
-# holds a `reqwest::Client` built by `codewandler-flux-web`'s `redirect_disabled_client`
-# (`egress.rs:19-29`) and its pinned sibling (`egress.rs:153-158`); neither calls
-# `ClientBuilder::user_agent`, `WebOptions` has no field that would carry one, and reqwest sends no
-# default `User-Agent` of its own. So a Resend call made through the host this repository actually
-# ships would go out bare and come back `403`, with a perfectly valid key. Hence the declaration, in
-# the one field that exists for a vendor-fixed request header — `const_headers`, whose own doc
-# comment names `User-Agent` as a case it was built for (C-55,
-# `crates/connector-spec/src/provider.rs`).
+# **This connector no longer declares the header itself, because the host now supplies it** (C-223,
+# C-241). `connector-pack` attaches
 #
-# That is the finding the floor probe actually produced: **the simplest vendor in the fleet still
-# needed one thing that is not derivable from its endpoints**, and it is the sort of thing an
-# endpoint-shaped spec ingest would not have carried either. `flux-connectors` is the value rather
-# than a version string, deliberately: the generated artifacts already carry
-# `generator = "flux-connectors <version>"`, and a version inside a request header would make every
-# release a diff on every emitted module.
+#     User-Agent: flux-connectors/<version> (+https://github.com/codewandler/flux-connectors)
+#
+# during request assembly — `request::build`, via `identify` — to every request every connector
+# makes, reading both halves from the manifest so neither goes stale at a release. See
+# `docs/designs/host-identity.md` for why that is the insertion point and not the transport.
+#
+# The declaration this file used to carry, `const_headers = { "User-Agent" = "flux-connectors" }`,
+# was correct when it was written and became the *worse* of the two values available: no version, so
+# a vendor cannot tell one release from the next, and the bare product word C-223's acceptance rules
+# out. A connector's own declaration still wins where it has one, so leaving it in place would have
+# kept these four operations on the older value — which is exactly what it did until C-241 removed
+# it.
+#
+# That is the finding the floor probe actually produced, and it survives the removal: **the simplest
+# vendor in the fleet still needed one thing that is not derivable from its endpoints**, and it is
+# the sort of thing an endpoint-shaped spec ingest would not have carried either. What changed is
+# only *where* the requirement is satisfied — centrally, for every connector, rather than once per
+# vendor with the forty-sixth omission silent.
 #
 # ---------------------------------------------------------------------------------------------
 # NO `[[config]]`, DELIBERATELY — AND THE EMPTY CASE IS NOT NEW.
@@ -133,10 +139,11 @@ verify = "resend-domain-list"
 # One alternative naming one credential. Resend documents no other mechanism for an API call.
 default_auth = [{ credentials = ["resend.api_key"] }]
 
-# An inline table deliberately — a `[const_headers]` section header would scope every provider scalar
-# after it into the table. See the header comment for why this one header is load-bearing: without it
-# Resend answers `403` even to a valid key.
-const_headers = { "User-Agent" = "flux-connectors" }
+# **No `const_headers`, and the absence is deliberate** (C-241). Resend answers a request with no
+# `User-Agent` with a `403` even to a valid key — see the header comment, where that vendor fact is
+# kept — and `connector-pack` now supplies a versioned one to every request this repository
+# assembles. A declaration here would win over it and pin these four operations to a value with no
+# version in it. Nothing else about Resend is vendor-fixed at the header level.
 
 # ---------------------------------------------------------------------------------------------
 # Credentials — one, and the whole of the connector's secret surface.

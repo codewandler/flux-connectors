@@ -7,6 +7,5 @@ op resend-domain-list -> Any
 
   base = "https://api.resend.com"
   url = fmt("{base}/domains")
-  User_Agent = "flux-connectors"
-  response = http.request(headers: { "User-Agent": User_Agent }, method: "GET", url)
+  response = http.request(method: "GET", url)
   return response

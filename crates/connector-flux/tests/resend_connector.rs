@@ -25,12 +25,12 @@
 //!    with `re_`, which is exactly the shape a secret scanner matches, and a placeholder shaped like
 //!    a real token has blocked a release in this repository before.
 //! 5. **The one thing the floor did force: a `User-Agent`.** Resend rejects a request without one
-//!    with `403`, valid key and all. The host this repository ships supplies none — its transport is
-//!    `flux_web::http::HttpRequestTool`, whose `reqwest::Client` is built without
-//!    `ClientBuilder::user_agent` and which reqwest therefore sends bare. So it is declared as a
-//!    constant header and asserted onto every emitted request here — this is the single fact about
-//!    this connector that its endpoints do not carry, and therefore the one a spec ingest would not
-//!    have found either.
+//!    with `403`, valid key and all — the single fact about this connector its endpoints do not
+//!    carry, and therefore the one a spec ingest would not have found either. It was declared here
+//!    as a constant header until C-223 gave *every* connector a versioned identity during request
+//!    assembly and C-241 removed the local one, which had become a bare, versionless override of
+//!    it. What this file pins now is the *absence*: the module must emit no `User-Agent` of its
+//!    own, so nothing here shadows the host's.
 
 use std::path::{Path, PathBuf};
 
@@ -62,9 +62,9 @@ const OPERATIONS: &[&str] = &[
     "resend-domain-get",
 ];
 
-/// The header Resend rejects a request for omitting, and the value this connector sends.
+/// The header Resend rejects a request for omitting — supplied by `connector-pack` for every
+/// connector since C-223, and therefore declared by none of them, this one included.
 const REQUIRED_HEADER: &str = "User-Agent";
-const REQUIRED_HEADER_VALUE: &str = "flux-connectors";
 
 /// The prefix Resend puts on every API key it issues, and therefore the byte sequence that must
 /// never appear in this connector's source — in an `example`, in a `help` string, or in a response
@@ -161,43 +161,53 @@ fn the_whole_credential_surface_is_one_bearer_token() {
     }
 }
 
-/// **Finding 5: every request carries a `User-Agent`, because Resend `403`s the ones that do not.**
+/// **Finding 5: the `User-Agent` Resend demands is the host's to send, and this connector declares
+/// none.**
 ///
-/// The floor probe's one surprise. Resend's introduction states it plainly — *"All API requests must
-/// include a `User-Agent` header … Requests without this header will be rejected with a `403` status
-/// code"* — and adds that SDKs supply one but direct HTTP callers must set it themselves. This
-/// pipeline emits direct `http.request` calls, and the host that runs them supplies nothing:
-/// `connectors-api` builds its `Egress` from `flux_web::http::HttpRequestTool`
-/// (`crates/connectors-api/src/state.rs:108`), whose `reqwest::Client` is constructed without
-/// `ClientBuilder::user_agent` in either `codewandler-flux-web` builder, and reqwest adds no default
-/// of its own. The header is therefore declared because it was checked and found missing, not
-/// because it could not be checked.
+/// The floor probe's one surprise, and the half of it that is durable. Resend's introduction states
+/// the requirement plainly — *"All API requests must include a `User-Agent` header … Requests
+/// without this header will be rejected with a `403` status code"* — and adds that SDKs supply one
+/// but direct HTTP callers must set it themselves. This pipeline emits direct `http.request` calls,
+/// and the transport under the host's `Egress` supplies nothing: `connectors-api` builds it from
+/// `flux_web::http::HttpRequestTool` (`crates/connectors-api/src/state.rs:108`), whose
+/// `reqwest::Client` is constructed without `ClientBuilder::user_agent` in either
+/// `codewandler-flux-web` builder, and reqwest adds no default of its own. **The vendor requirement
+/// is therefore real and is why this connector surfaced the gap at all.**
 ///
-/// Asserted on the emitted Flux, not only on the declaration, because that is where the omission
-/// would actually bite: a connector that declared the header and dropped it during emission would
-/// still load, still build, still ship, and still `403` on the first real call.
+/// What changed is where it is satisfied. C-223 moved the identity into request assembly —
+/// `connector_pack::request::build`, via `identify` — so every connector sends
+/// `flux-connectors/<version> (+<repository>)`, and C-241 removed this file's own
+/// `const_headers = { "User-Agent" = "flux-connectors" }`, which had gone from the only available
+/// answer to a bare, versionless *override* of a better one. A connector's declaration still wins
+/// where it has one, which is precisely why the absence is worth asserting rather than assuming.
+///
+/// Asserted on the emitted Flux as well as on the declaration, because that is the artifact the
+/// pack reads: a stray header symbol left in a module would shadow the host's identity on the wire
+/// while the provider file looked clean. That the header is *present and versioned* on the composed
+/// request is `connector-pack`'s to prove — `tests/request.rs`'s
+/// `resend_inherits_the_versioned_host_identity`, which is where a request exists at all.
 #[test]
-fn every_emitted_request_carries_the_user_agent_resend_demands() {
+fn no_user_agent_is_declared_here_because_the_host_supplies_a_versioned_one() {
     let connector = load();
 
     for operation in &connector.operations {
         assert_eq!(
             operation.params.const_headers.get(REQUIRED_HEADER),
-            Some(&REQUIRED_HEADER_VALUE.to_string()),
-            "{}: Resend rejects a request without a `{REQUIRED_HEADER}` with 403, valid key and all",
+            None,
+            "{}: a declared `{REQUIRED_HEADER}` wins over the host's versioned identity, and a \
+             constant in a provider file cannot carry a version",
             operation.id
         );
 
         // The emitter binds a constant header to a symbol and names the symbol in the request's
-        // header record, so both halves are checked: a binding with no reference would be dead, and
-        // a reference with no binding would not parse.
+        // header record. Neither half may survive here: a binding with no reference would be dead
+        // code in a shipped module, and a reference is the shadowing this test exists to refuse.
         let flux = emit_operation(&connector, operation)
             .unwrap_or_else(|error| panic!("{} does not emit: {error}", operation.id));
         let symbol = REQUIRED_HEADER.replace('-', "_");
         assert!(
-            flux.contains(&format!("{symbol} = \"{REQUIRED_HEADER_VALUE}\""))
-                && flux.contains(&format!("\"{REQUIRED_HEADER}\": {symbol}")),
-            "{} emits no `{REQUIRED_HEADER}` header:\n{flux}",
+            !flux.contains(&format!("{symbol} =")) && !flux.contains(REQUIRED_HEADER),
+            "{} still emits a `{REQUIRED_HEADER}` of its own:\n{flux}",
             operation.id
         );
     }
