@@ -49,6 +49,12 @@ vendor = "GitHub"
 # under this path.
 authority = "com.github.api"
 
+# **No `api_version`: this vendor puts no version segment in the URL at all.** Every operation path
+# below is unversioned (`/repos/{owner}/{repo}`) — GitHub versions its REST API by the `X-GitHub-
+# Api-Version` header and by `Accept` media type, neither of which is a path segment, so there is
+# nothing the file itself spells and nothing to record without asserting a vendor fact from outside
+# it. A `pid` and a credential path render without one; only a `gid` needs both halves.
+
 # One tenant-independent host, so no templating and no endpoint override: `api.github.com` serves
 # every user and organisation. (GitHub Enterprise Server lives at a customer host under a `/api/v3`
 # prefix, which is a different connector rather than an override of this one — the paths differ, not

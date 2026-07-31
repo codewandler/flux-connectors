@@ -146,26 +146,36 @@ id = "statuspage"
 vendor = "Atlassian Statuspage"
 
 # The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
-# and every credential path — `tenants/<tenant>/com.atlassian.statuspage/<credential>` — and until
-# it was declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector
-# could not authenticate at all.
+# and every credential path — `tenants/<tenant>/io.statuspage.api/<credential>` — and until it was
+# declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
+# authenticate at all.
 #
-# Atlassian's, and the `vendor` field above already says so. The trailing label is the product for
-# the reason `providers/jira.toml` sets out at length: two Atlassian APIs ship in this catalogue and
-# `com.atlassian.api` could only have named one of them.
+# Derived from `statuspage.io`, the domain that serves this API — `api.statuspage.io` is the host in
+# `base_url` below. A non-`com` TLD is just the first label, on the `io.fly.api` precedent.
 #
-# `io.statuspage.api` — from the live `statuspage.io` and the `api.statuspage.io` host above — is
-# the real alternative, and was rejected so that the two Atlassian products sit under one vendor
-# rather than being related by nothing an address can see.
+# **This was `com.atlassian.statuspage` first, and changing it was the correction C-92's review
+# forced.** Atlassian owns Statuspage, and the argument for putting it under the parent was that
+# `providers/jira.toml` does exactly that. But jira and statuspage are not the same case, and the
+# test that separates them is not who owns the product — it is **whether the product still publishes
+# its own API domain**. Jira does not: there is no `jira.com` API and the host is
+# `{site}.atlassian.net`, so Atlassian is the only domain available to name it by. Statuspage does:
+# `statuspage.io` is live and serves every operation below.
+#
+# The tree had already settled this and neither the first pass nor its author noticed. Salesforce
+# owns Slack, and `providers/slack.toml` is `com.slack.api` — not `com.salesforce.slack`. That is
+# one of only two authorities present at the `v0.5.0` tag, so it is the one spelling here that
+# genuinely cannot be changed. An acquired product that keeps its own API domain keeps its own
+# authority; anything else would have made this catalogue inconsistent with its own published set.
 #
 # **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
 # different spelling mints a new address and deprecates this one, because tenants provision secrets
-# under this path.
-authority = "com.atlassian.statuspage"
+# under this path. Nothing has been published under `com.atlassian.statuspage` — it never reached a
+# release — which is the only reason this correction was free to make.
+authority = "io.statuspage.api"
 
 # The vendor's own spelling, and it is already in `base_url` above: `/v1/pages/{page_id}`. Recorded
-# here so a `gid` renders (`com.atlassian.statuspage:v1`) — a credential path needs only the
-# authority and deliberately carries no version, so a token survives the vendor's next one.
+# here so a `gid` renders (`io.statuspage.api:v1`) — a credential path needs only the authority and
+# deliberately carries no version, so a token survives the vendor's next one.
 api_version = "v1"
 
 # `{page_id}` is bound by the `[[config]]` field at the foot of this file — see the header comment

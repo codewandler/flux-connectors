@@ -104,6 +104,11 @@
 id = "postmark"
 vendor = "Postmark"
 authority = "com.postmarkapp.api"
+
+# **No `api_version`: this vendor puts no version segment in the URL at all.** Every operation path
+# below is unversioned (`/email`, `/bounces`), so there is nothing the file itself spells and
+# nothing to record without asserting a vendor fact from outside it. A `pid` and a credential path
+# render without one; only a `gid` needs both halves.
 base_url = "https://api.postmarkapp.com"
 description = "Postmark transactional email: send a message, read delivery stats and bounces. Account: list and inspect servers, authenticated separately from sending"
 verify = "postmark-deliverystats-get"

@@ -355,9 +355,15 @@ async fn a_credential_too_short_to_redact_is_refused_rather_than_sent() {
 // credential, its `user_suffix: "/token"` and its `Placement::Header { Authorization, "Basic " }`
 // are all read from the shipped catalogue, and the request is built through the public
 // `Operation::build_authenticated_request` rather than by re-assembling its body in a test. That is
-// what makes this an assertion about a connector a host could actually install, and it is why the
-// old `a_basic_connector_refuses_because_it_has_no_credential_address` — which pinned the wall —
-// is gone rather than merely relaxed. A wall that no longer exists is not behaviour to pin.
+// what makes this an assertion about a connector a host could actually install.
+//
+// **What did not go away is the refusal**, and C-92's first pass deleted the only test of it on the
+// grounds that "a wall that no longer exists is not behaviour to pin". The wall does still exist:
+// `Provider::authority` is `Option<&'static str>` (`crates/catalog/src/lib.rs`), so a provider
+// without one remains constructible and `Credentials::reference` still has to refuse it. What
+// changed is only that no *shipped* provider reaches it — which is precisely the condition under
+// which a fail-closed path stops being exercised by accident and starts needing its own test.
+// [`a_provider_without_an_authority_is_refused_rather_than_addressed`] is that test.
 // ---------------------------------------------------------------------------------------------
 
 /// The tenant both ports below answer for.
@@ -501,6 +507,56 @@ async fn a_basic_credential_with_no_configured_user_is_refused_by_name() {
     assert!(rendered.contains("ZENDESK_USER"), "{rendered}");
     assert!(rendered.contains(BASIC_TENANT), "{rendered}");
     assert!(!rendered.contains(BASIC_SECRET), "{rendered}");
+}
+
+/// **A provider with no `authority` has no credential address, and the port refuses instead of
+/// guessing one.**
+///
+/// This is the crate's fail-closed assertion on that path, and it is deliberately built rather than
+/// taken from `providers/`: since C-92 every shipped provider declares an authority, so nothing in
+/// the catalogue reaches this branch any more. That makes the test *more* necessary, not less —
+/// `Provider::authority` is still `Option`, the loader still accepts a provider TOML that omits it,
+/// and the failure this guards against is the one that looks like success: composing some fallback
+/// address and sending a request under it.
+///
+/// `crates/connector-spec/tests/credential_paths.rs::the_three_outcomes_are_distinguishable` keeps
+/// the same case alive one crate over, and for the same reason. Here the fixture is a `Copy` of the
+/// shipped zendesk with the one field cleared — the same `Box::leak` technique `tool.rs` uses for a
+/// host-less entry — so everything except the missing authority is real catalogue data, and the
+/// refusal cannot be an artefact of an otherwise-synthetic provider.
+#[tokio::test]
+async fn a_provider_without_an_authority_is_refused_rather_than_addressed() {
+    fn zendesk_without_an_authority() -> &'static catalog::Provider {
+        let mut provider = *catalog::provider(catalog::ProviderKey::id("zendesk"))
+            .expect("the shipped catalogue carries zendesk");
+        assert!(
+            provider.authority.is_some(),
+            "zendesk is expected to ship an authority; clearing it below is what makes this a test"
+        );
+        provider.authority = None;
+        Box::leak(Box::new(provider))
+    }
+
+    let provider = zendesk_without_an_authority();
+    let credential = provider
+        .credential("zendesk.api_token")
+        .expect("zendesk declares its api token");
+    let credentials = Credentials::new(store_with_the_sentinel().await, TENANT).expect("a tenant");
+
+    let error = credentials
+        .reference("zendesk-ticket-show", provider, credential)
+        .expect_err("a connector with no authority has no credential address");
+
+    assert!(
+        matches!(&error, Error::NoCredentialAddress { credential, .. }
+            if credential == "zendesk.api_token"),
+        "{error}"
+    );
+    // The diagnostic has to name which fact is missing, or an operator cannot act on it — the
+    // requirement `catalog::Provider::authority`'s own documentation states.
+    let rendered = error.to_string();
+    assert!(rendered.contains("zendesk"), "{rendered}");
+    assert!(rendered.contains("zendesk-ticket-show"), "{rendered}");
 }
 
 /// A missing credential names the address that was not found, and **no request is sent**.

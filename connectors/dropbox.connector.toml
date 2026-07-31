@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "dropbox"
+gid = "com.dropbox.api:2"
 vendor = "Dropbox"
 description = "Dropbox: browse folder contents, read file and folder metadata, search files, create folders, and get temporary download links"
 base_url = "https://api.dropboxapi.com"
+api_version = "2"
 module = "dropbox.flux"
 operations = ["dropbox-user-me", "dropbox-folder-list", "dropbox-metadata-get", "dropbox-search", "dropbox-folder-create", "dropbox-temporary-link-get"]

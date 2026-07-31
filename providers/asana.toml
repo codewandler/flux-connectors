@@ -134,6 +134,11 @@ vendor = "Asana"
 # under this path.
 authority = "com.asana.api"
 
+# The vendor's own spelling, taken from the operations below — every one of their paths begins
+# `/api/1.0/`. Recorded here so a `gid` renders (`com.asana.api:1.0`); a credential path needs only
+# the authority and deliberately carries no version, so a token survives the vendor's next one.
+api_version = "1.0"
+
 # One host for every workspace and every account tier. Unlike zendesk's `{subdomain}` and freshdesk's
 # `{domain}` there is no tenant templating, so `base_url` is a bound literal, `status.rs` reports no
 # `unbound-base-url-template` issue, and the connector already has a valid destination URL.

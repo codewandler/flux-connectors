@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "shopify"
+gid = "com.shopify.api:2024-10"
 vendor = "Shopify"
 description = "Shopify Admin REST API: read orders, products, customers and inventory levels, and update a product"
 base_url = "https://{shop}.myshopify.com"
+api_version = "2024-10"
 module = "shopify.flux"
 operations = ["shopify-order-get", "shopify-product-get", "shopify-product-update", "shopify-customer-get", "shopify-inventory-level-list"]

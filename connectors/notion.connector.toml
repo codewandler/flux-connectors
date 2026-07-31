@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "notion"
+gid = "com.notion.api:v1"
 vendor = "Notion"
 description = "Notion workspace: read a page's properties, query a database, search shared content, and create a page"
 base_url = "https://api.notion.com"
+api_version = "v1"
 module = "notion.flux"
 operations = ["notion-user-me", "notion-page-get", "notion-database-query", "notion-search", "notion-page-create"]

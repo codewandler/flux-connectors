@@ -231,11 +231,11 @@ vendor = "Microsoft Graph"
 # declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
 # authenticate at all.
 #
-# Microsoft is a multi-product vendor, so the trailing label is the *product* rather than `api` —
-# the rule `providers/jira.toml` sets out for Atlassian. Here that spelling is also the literal
-# reverse of the API host, since `graph.microsoft.com` reversed is `com.microsoft.graph`, so the
-# vendor-then-product rule and the host agree. That is as much confirmation as an authority ever
-# gets.
+# Graph publishes no domain of its own — there is no `graph.com` — so it takes Microsoft's with the
+# product as the trailing label, which is the rule `providers/jira.toml` states and the same branch
+# of it Jira falls into. Here that spelling is also the literal reverse of the API host, since
+# `graph.microsoft.com` reversed is `com.microsoft.graph`, so the rule and the host agree. That is
+# as much confirmation as an authority ever gets.
 #
 # Note the connector `id` above is `microsoft_graph` with an underscore and this is not: an
 # authority label admits only lowercase ASCII letters, digits and `-`

@@ -132,6 +132,11 @@ vendor = "Front"
 # under this path.
 authority = "com.frontapp.api"
 
+# **No `api_version`: this vendor puts no version segment in the URL at all.** Every operation path
+# below is unversioned (`/conversations`), so there is nothing the file itself spells and nothing to
+# record without asserting a vendor fact from outside it. A `pid` and a credential path render
+# without one; only a `gid` needs both halves.
+
 # One host for every company — Front has no tenant subdomain, so `base_url` carries no `{placeholder}`
 # for an operator to bind and `status.rs` reports no `unbound-base-url-template` issue.
 base_url = "https://api2.frontapp.com"

@@ -87,6 +87,11 @@ vendor = "Calendly"
 # under this path.
 authority = "com.calendly.api"
 
+# **No `api_version`: this vendor puts no version segment in the URL at all.** Every operation path
+# below is unversioned (`/users/me`, `/scheduled_events`), so there is nothing the file itself
+# spells and nothing to record without asserting a vendor fact from outside it. A `pid` and a
+# credential path render without one; only a `gid` needs both halves.
+
 # One host for every account; Calendly has no per-tenant subdomain the way zendesk or freshdesk do,
 # so `base_url` is a bound literal exactly as asana's and openai's are.
 base_url = "https://api.calendly.com"

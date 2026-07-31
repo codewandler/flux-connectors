@@ -144,20 +144,43 @@ vendor = "Jira"
 # declared `Credentials::reference` refused with `NoCredentialAddress`, so this connector could not
 # authenticate at all.
 #
-# **Atlassian's, not Jira's.** `com.jira.api` would be wrong twice over: `jira.com` is not a domain
-# Atlassian publishes anything on, and the API is served from `{site}.atlassian.net`.
+# **Atlassian's, not Jira's, and that is a fact about Jira rather than about Atlassian.**
+# `com.jira.api` would be wrong twice over: `jira.com` is not a domain Atlassian publishes anything
+# on, and the API is served from `{site}.atlassian.net`. There is no Jira-owned domain to name this
+# by, so the parent's is the only one available and the product becomes the trailing label where a
+# vendor with its own domain spells `api`.
 #
-# The trailing label is the *product* where a single-product vendor spells `api`, and that is the
-# rule this file records for every multi-product vendor here. Atlassian ships two APIs into this
-# catalogue — `providers/statuspage.toml` is `com.atlassian.statuspage` — so `com.atlassian.api`
-# could only ever have named one of them, and the two products' credentials are provisioned
-# separately and must not share a credential directory. `providers/microsoft_graph.toml` follows the
-# same rule.
+# **The rule this file records, corrected during C-92's review.** The test is not "does the vendor
+# own several products" — it is **"does this product still publish its own API domain?"**
+#
+#   - It does → its own authority. `providers/slack.toml` is `com.slack.api` even though Salesforce
+#     owns Slack, and that spelling is one of only two present at the `v0.5.0` tag, so it is
+#     immutable and settles the question for everything after it. `providers/sendgrid.toml`
+#     (`com.sendgrid.api`, Twilio-owned) and `providers/statuspage.toml` (`io.statuspage.api`,
+#     Atlassian-owned) follow it.
+#   - It does not → the parent's domain with the product as the trailing label. This file, and
+#     `providers/microsoft_graph.toml` (`com.microsoft.graph`, since there is no `graph.com`).
+#
+# The first pass of C-92 got the predicate wrong — it keyed on the *parent's* shape and so put
+# statuspage under Atlassian — and justified it with a claim that is simply false: that two products
+# under one vendor label would "share a credential directory". They would not. An authority is a
+# single path segment (`tenants/<tenant>/<authority>/<service>/<credential>`), so
+# `com.atlassian.jira` and `com.atlassian.statuspage` are sibling directories sharing nothing, in
+# exactly the way `com.twilio.api` and `com.sendgrid.api` are. Nothing about credential storage
+# bears on this choice in either direction.
 #
 # **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
 # different spelling mints a new address and deprecates this one, because tenants provision secrets
 # under this path.
 authority = "com.atlassian.jira"
+
+# The vendor's own spelling, taken from the operations below — every one of their paths begins
+# `/rest/api/2/`. Recorded here so a `gid` renders (`com.atlassian.jira:2`); a credential path needs
+# only the authority and deliberately carries no version, so a token survives the vendor's next one.
+#
+# Jira Cloud also serves a `/rest/api/3/` surface, but every operation below is written against `2`
+# and the version records what this connector actually calls — not the newest one the vendor offers.
+api_version = "2"
 
 # See the `{site}` gap above. An operator's Jira Cloud site — `https://acme.atlassian.net` — is
 # tenant configuration, and `{site}` is the template a binding will resolve.

@@ -36,6 +36,11 @@ vendor = "OpenAI"
 # under this path.
 authority = "com.openai.api"
 
+# The vendor's own spelling, taken from the operations below — every one of their paths begins
+# `/v1/`. Recorded here so a `gid` renders (`com.openai.api:v1`); a credential path needs only the
+# authority and deliberately carries no version, so a token survives the vendor's next one.
+api_version = "v1"
+
 # One tenant-independent host, so unlike zendesk's `{subdomain}` and freshdesk's `{domain}` there is
 # **no template variable here and nothing to bind**. This is the first connector whose `base_url` is
 # a finished URL, which is why it is also the first that `status.rs` does not flag with

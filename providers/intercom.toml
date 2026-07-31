@@ -152,6 +152,11 @@ vendor = "Intercom"
 # under this path.
 authority = "com.intercom.api"
 
+# **No `api_version`: this vendor puts no version segment in the URL at all.** Every operation path
+# below is unversioned (`/contacts`) — Intercom versions by the `Intercom-Version` header instead,
+# so there is nothing the file itself spells and nothing to record without asserting a vendor fact
+# from outside it. A `pid` and a credential path render without one; only a `gid` needs both halves.
+
 # One host, no tenant templating: every workspace in the US region is served from `api.intercom.io`,
 # so unlike zendesk there is no `{subdomain}` for an operator to bind and this connector already has a
 # valid destination URL. `http_hosts` derives from this single value and is therefore exactly

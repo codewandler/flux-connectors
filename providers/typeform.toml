@@ -123,6 +123,11 @@ vendor = "Typeform"
 # under this path.
 authority = "com.typeform.api"
 
+# **No `api_version`: this vendor puts no version segment in the URL at all.** Every operation path
+# below is unversioned (`/forms`, `/me`), so there is nothing the file itself spells and nothing to
+# record without asserting a vendor fact from outside it. A `pid` and a credential path render
+# without one; only a `gid` needs both halves.
+
 # One host for every account; Typeform has no per-tenant subdomain in its API host (the *form-filling*
 # UI does, `{workspace}.typeform.com/to/{form_id}`, but the API this connector calls does not), so
 # `base_url` is a bound literal exactly as calendly's and launchdarkly's are.

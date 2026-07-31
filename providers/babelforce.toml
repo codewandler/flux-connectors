@@ -37,6 +37,11 @@ vendor = "Babelforce"
 # under this path.
 authority = "com.babelforce.api"
 
+# The vendor's own spelling, taken from the operations below — every one of their paths begins
+# `/api/v2/`. Recorded here so a `gid` renders (`com.babelforce.api:v2`); a credential path needs
+# only the authority and deliberately carries no version, so a token survives the vendor's next one.
+api_version = "v2"
+
 # Production, stated explicitly. The document's `servers[0]` is **staging**
 # (`https://latest.dev.babelforce.com`), so a positional "take servers[0]" ingest would silently
 # point the connector at the dev environment (§1.1, §6.5). Staging remains reachable through the

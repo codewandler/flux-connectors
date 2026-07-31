@@ -128,6 +128,39 @@ Lands in `AGENTS.md` beside the auth conventions.
 - **An authored oip string per operation.** Minimal schema, but a typo'd segment is a valid-looking
   id, and every consumer needs a parser.
 
+### How an authority is chosen (C-92)
+
+Reverse-DNS of the vendor's own primary domain, with a trailing label naming the API surface. The
+only part that needs a rule is what that trailing label is, and the rule is one question about the
+**product** — never about the parent company:
+
+> **Does this product still publish its own API domain?**
+>
+> - **Yes** → its own authority, `<product-domain-reversed>.api`. `com.slack.api`,
+>   `com.sendgrid.api`, `io.statuspage.api`.
+> - **No** → the parent's domain with the product as the trailing label.
+>   `com.atlassian.jira` (there is no `jira.com` API; the host is `{site}.atlassian.net`),
+>   `com.microsoft.graph` (there is no `graph.com`).
+
+**Ownership is not the test, and C-92's first pass got this wrong by using it.** The catalogue holds
+three acquired-product pairs — Salesforce/Slack, Twilio/SendGrid, Atlassian/Statuspage — and
+`com.slack.api` is one of only two authorities present at the `v0.5.0` tag, so it is immutable. It
+settles the question: an acquired product that kept its own API domain keeps its own authority.
+
+Two corollaries worth stating because both were got wrong once:
+
+- **Credential storage has no bearing on the choice.** An authority is a *single path segment* in
+  `tenants/<tenant>/<authority>/<service>/<credential>`, so `com.twilio.sendgrid` and
+  `com.twilio.api` are sibling directories sharing nothing. "They would share a credential
+  directory" is not an argument for or against any spelling.
+- **A non-`com` TLD is just the first label.** `io.fly.api`, `ai.openrouter.api`, `io.sentry.api`,
+  `us.zoom.api`. Where the vendor already publishes a reverse-DNS namespace of its own — Sentry's
+  `io.sentry` Maven group, Zoom's `us.zoom.*` Android packages — matching it is the strongest
+  evidence available, because it is the one case where the identifier is not our invention.
+
+A *service* is the middle segment, not a second authority: Google's gmail/calendar/drive are one
+`com.google.api` with three services, which is what the C-49 amendment above is for.
+
 ## Risks & open questions
 
 - **`#` is awkward in shells, URLs and TOML keys.** Accepted deliberately. Three mitigations must

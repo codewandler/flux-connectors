@@ -105,10 +105,39 @@
 
 id = "anthropic"
 vendor = "Anthropic"
-# The reverse-DNS authority this connector publishes under — the leading component of every
-# rendered service address (`com.anthropic/models:2023-06-01`), the same optional field
-# `providers/slack.toml` and `providers/vercel.toml` set.
-authority = "com.anthropic"
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.anthropic.api/<credential>`.
+#
+# Derived from `anthropic.com`, the vendor's own primary domain, with the trailing `api` label every
+# other single-product vendor here carries.
+#
+# **This was bare `com.anthropic` first, and normalising it was a correction C-92's review forced.**
+# It was the one authority in the catalogue that fitted neither branch of the rule
+# `providers/jira.toml` states: not `<vendor>.api` like the thirty-odd single-product connectors,
+# and not `<vendor>.<product>` like `com.atlassian.jira` or `com.microsoft.graph`. It read as a
+# third convention where there are only two.
+#
+# It was free to change because **it was never published**: it landed after the `v0.5.0` tag, and
+# `git show v0.5.0:providers/anthropic.toml` does not resolve — this file did not exist at the only
+# release cut so far. The two authorities that *are* published, and therefore genuinely immutable,
+# are `com.slack.api` and `io.fly.api`; both already carry the `.api` label this now matches.
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
+# different spelling mints a new address and deprecates this one, because tenants provision secrets
+# under this path.
+authority = "com.anthropic.api"
+
+# The vendor's own spelling, taken from the operations below — every one of their paths begins
+# `/v1/`. Its absence is why the old comment here advertised a `gid` of
+# `com.anthropic/models:2023-06-01` that never rendered: a `gid` needs both halves, and only the
+# authority was declared.
+#
+# `v1` rather than `2023-06-01`, and the choice is worth stating because this vendor versions along
+# **two** axes. The dated one is the `anthropic-version` request header, declared as a
+# `const_headers` entry below; it is a header value, not a path segment, and it is already carried
+# where it belongs. The address takes the same kind of version every other connector here takes —
+# the one in the URL — so `com.anthropic.api/models:v1` reads consistently across the catalogue.
+api_version = "v1"
 
 # One tenant-independent host for every surface below — the Models API and the Admin API are both
 # served from it. `http_hosts` derives from this single value and is therefore exactly

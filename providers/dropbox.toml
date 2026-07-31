@@ -127,6 +127,11 @@ vendor = "Dropbox"
 # under this path.
 authority = "com.dropbox.api"
 
+# The vendor's own spelling, taken from the operations below — every one of their paths begins
+# `/2/`. Recorded here so a `gid` renders (`com.dropbox.api:2`); a credential path needs only the
+# authority and deliberately carries no version, so a token survives the vendor's next one.
+api_version = "2"
+
 # One host for every account — Dropbox has no tenant subdomain, so `base_url` carries no
 # `{placeholder}` for an operator to bind and `status.rs` reports no `unbound-base-url-template`
 # issue. This is Dropbox's RPC host; the content host (`content.dropboxapi.com`) is never reached

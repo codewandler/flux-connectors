@@ -9,7 +9,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "statuspage",
     vendor: "Atlassian Statuspage",
     description: "Atlassian Statuspage: read a status page's components and incidents, and open or update a publicly visible incident on it",
-    authority: Some("com.atlassian.statuspage"),
+    authority: Some("io.statuspage.api"),
     base_url: "https://api.statuspage.io/v1/pages/{page_id}",
     auth: AUTH,
     operations: OPERATIONS,

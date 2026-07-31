@@ -107,6 +107,11 @@ id = "contentful"
 vendor = "Contentful"
 authority = "com.contentful.api"
 
+# **No `api_version`: this vendor puts no version segment in the URL at all.** Every operation path
+# below is unversioned (`/entries`, `/assets/{asset_id}`), so there is nothing the file itself
+# spells and nothing to record without asserting a vendor fact from outside it. A `pid` and a
+# credential path render without one; only a `gid` needs both halves.
+
 # Never actually reached: both services declared below fully override this with their own host *and*
 # their own `{space_id}`/`{environment_id}` template, so every operation resolves through
 # `base_url_of` to one of those, never to this connector-level fallback. Still required non-empty —

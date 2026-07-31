@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "hubspot"
+gid = "com.hubspot.api:v3"
 vendor = "HubSpot"
 description = "HubSpot CRM: read contacts, companies and deals, and create and update contact records"
 base_url = "https://api.hubapi.com"
+api_version = "v3"
 module = "hubspot.flux"
 operations = ["hubspot-contact-get", "hubspot-contact-create", "hubspot-contact-update", "hubspot-company-get", "hubspot-deal-get"]

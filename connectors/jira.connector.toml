@@ -2,8 +2,10 @@
 # Auth and the `http_hosts` allowlist land in C-10.
 generator = "flux-connectors 0.5.0"
 connector = "jira"
+gid = "com.atlassian.jira:2"
 vendor = "Jira"
 description = "Jira Cloud issue tracking: read and create issues, comment on them, and drive workflow transitions"
 base_url = "https://{site}.atlassian.net"
+api_version = "2"
 module = "jira.flux"
 operations = ["jira-issue-get", "jira-issue-create", "jira-issue-comment-list", "jira-issue-comment-add", "jira-issue-transitions-list", "jira-issue-transition"]

@@ -99,6 +99,11 @@ vendor = "OpenRouter"
 # under this path.
 authority = "ai.openrouter.api"
 
+# The vendor's own spelling, taken from the operations below — every one of their paths begins
+# `/api/v1/`. Recorded here so a `gid` renders (`ai.openrouter.api:v1`); a credential path needs
+# only the authority and deliberately carries no version, so a token survives the vendor's next one.
+api_version = "v1"
+
 # One tenant-independent host, so like OpenAI's and unlike zendesk's `{subdomain}` there is **no
 # template variable here and nothing to bind**. C-10's `http_hosts` allowlist derives from this one
 # value and is therefore exactly `openrouter.ai`, never widened to a pattern;

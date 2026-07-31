@@ -92,6 +92,12 @@ vendor = "Salesforce"
 # under this path.
 authority = "com.salesforce.api"
 
+# **No `api_version`, and this is measured rather than skipped.** The data operations are
+# `/services/data/v59.0/`, but `salesforce-whoami` is `/services/oauth2/userinfo`, which carries no
+# version at all. A connector-level version has to be true of every operation, so there is none to
+# declare here; per-service versions are the mechanism for this shape (C-49), and adopting them for
+# this provider is a separate decision from C-92's.
+
 # `{instance}` is bound by the `[[config]]` field at the end of this file — see the header comment
 # above. Every Salesforce org's My Domain host is its own, so there is no tenant-independent base URL,
 # and the loader refuses a template variable nothing binds: the gap this comment used to have to
