@@ -1878,12 +1878,31 @@ fn validate_operation_service(
 /// than assumed. Everything refused here is refused because it is either an attempt to reach the
 /// secret through the prefix, or a request the connector did not describe.
 ///
-/// **`CREDENTIAL_VALUE_PREFIXES` is deliberately not consulted.** That list catches a *constant
-/// header* whose value begins `bearer `/`token `, where the author has pasted a whole credential. A
-/// scheme word is that same text in the one position where it is correct — PagerDuty's prefix is
-/// literally `Token token=` — so reusing the list here would refuse the three vendors this story
-/// exists to unblock.
-fn validate_auth_prefix(method: &AuthMethod, prefix: &str, problems: &mut Vec<String>) {
+/// # The separator rule is the load-bearing one
+///
+/// **The host appends the credential to the prefix with nothing in between.** So a prefix that ends
+/// in an alphanumeric would be glued onto the secret — `SSWS` + `<token>` is `SSWS<token>`, a header
+/// no vendor accepts. A well-formed prefix therefore *always* ends in a separator, and requiring
+/// that catches two failures one rule apart:
+///
+/// - **A pasted credential.** `Bearer sk-live-51H8…` ends in an opaque blob, so it is refused. This
+///   is the case a `CREDENTIAL_VALUE_PREFIXES` check would only half-catch: that list is matched
+///   with `starts_with` and holds `"bearer "`, `"basic "`, `"token "`, `"apikey "`, `"digest "`, so
+///   it would refuse a pasted `Bearer …` but not a pasted `SSWS …` or `OAuth …` — one of C-184's
+///   three vendors, not three. The separator rule is indifferent to the scheme word and catches all
+///   of them.
+/// - **A missing trailing space.** `prefix = "SSWS"` was previously uncatchable, and
+///   `crates/connector-flux/tests/okta_connector.rs` says so in as many words. It is the same rule:
+///   `SSWS` does not end in a separator.
+///
+/// `Token token=` passes, because `=` *is* a separator — which is the point. The rule is about the
+/// boundary between connector data and the secret, not about the vendor's choice of syntax.
+fn validate_auth_prefix(
+    connector: &Connector,
+    method: &AuthMethod,
+    prefix: &str,
+    problems: &mut Vec<String>,
+) {
     if prefix.is_empty() {
         return;
     }
@@ -1904,21 +1923,91 @@ fn validate_auth_prefix(method: &AuthMethod, prefix: &str, problems: &mut Vec<St
              appended by the host and is never written here"
         ));
     }
-    if prefix.contains(name) {
-        problems.push(format!(
-            "credential {name:?} declares a header `prefix` naming the credential itself. A prefix \
-             is a literal, not a reference — nothing resolves the name, and the value that would \
-             make it work is one this file must never hold"
-        ));
-    }
-    for key in method.env.iter().chain(&method.user_env) {
-        if !key.trim().is_empty() && prefix.contains(key.as_str()) {
+
+    // Every credential the connector declares, not just this one, and folded — matching the sibling
+    // `credential_shaped_value`, which has always iterated `connector.auth`. A prefix naming another
+    // credential's variable is the same mistake spelled sideways, and case never made it less of one.
+    for other in &connector.auth {
+        if folded.contains(&other.name.to_ascii_lowercase()) {
             problems.push(format!(
-                "credential {name:?} declares a header `prefix` naming the environment variable \
-                 {key:?} that resolves it. A prefix is emitted as a literal, so the name would \
-                 travel as text and the value it stands for must never be written here at all"
+                "credential {name:?} declares a header `prefix` naming credential {:?}. A prefix is \
+                 a literal, not a reference — nothing resolves the name, and the value that would \
+                 make it work is one this file must never hold",
+                other.name
             ));
         }
+        for key in other.env.iter().chain(&other.user_env) {
+            if !key.trim().is_empty() && folded.contains(&key.to_ascii_lowercase()) {
+                problems.push(format!(
+                    "credential {name:?} declares a header `prefix` naming the environment variable \
+                     {key:?}, which resolves credential {:?}. A prefix is emitted as a literal, so \
+                     the name would travel as text and the value it stands for must never be \
+                     written here at all",
+                    other.name
+                ));
+            }
+        }
+    }
+
+    // See the separator rule on this function. `SSWS ` ends in a space, `Token token=` in `=`; a
+    // prefix ending in an alphanumeric would be concatenated onto the secret.
+    if prefix
+        .chars()
+        .next_back()
+        .is_some_and(|last| last.is_ascii_alphanumeric())
+    {
+        problems.push(format!(
+            "credential {name:?} declares a header `prefix` ending in an alphanumeric character. \
+             The host appends the credential directly, so this would send the prefix and the secret \
+             glued together. A scheme word ends in a separator — `\"SSWS \"` with the trailing \
+             space, `\"Token token=\"` with the `=`. If the text after the scheme word is the \
+             credential itself, it does not belong in this file at all"
+        ));
+    }
+
+    // A prefix of only spaces contributes no scheme word and puts leading whitespace in front of the
+    // credential, which `field-content` does not allow at the edges of a header value.
+    if prefix.trim().is_empty() {
+        problems.push(format!(
+            "credential {name:?} declares a header `prefix` of only whitespace, which carries no \
+             scheme word and would send a header value beginning with a space (RFC 9110 §5.5 \
+             field-content permits no leading or trailing whitespace). Omit `prefix` for a header \
+             whose whole value is the secret"
+        ));
+    }
+
+    // **The whitespace-corruption class, found by C-184's own review.**
+    //
+    // The separator rule above catches a prefix with *no* trailing separator. It does not catch one
+    // with too many, and neither did anything else: `"SSWS  "` and `" SSWS "` both loaded, and both
+    // send a header the vendor answers `401` to. Worse, nothing downstream could catch them either —
+    // a connector's own suite asserts the prefix against a constant in the same file, so an author
+    // editing both together leaves every test green.
+    //
+    // Deliberately narrow. It refuses *whitespace* corruption, which is an HTTP hygiene rule that
+    // holds for every vendor, and says nothing about repeated punctuation: `"Token token=="` is
+    // wrong for PagerDuty but this model has no basis to declare `==` wrong in general, and guessing
+    // at a vendor's syntax is how a checker starts refusing correct connectors.
+    if prefix.starts_with([' ', '\t']) {
+        problems.push(format!(
+            "credential {name:?} declares a header `prefix` beginning with whitespace. It would send \
+             a header value whose first character is a space, which RFC 9110 §5.5 field-content does \
+             not permit at the edges — and which a vendor answers with `401` rather than a message \
+             naming the space"
+        ));
+    }
+    if let Some(run) = prefix
+        .as_bytes()
+        .windows(2)
+        .position(|pair| pair.iter().all(|byte| matches!(byte, b' ' | b'\t')))
+    {
+        problems.push(format!(
+            "credential {name:?} declares a header `prefix` with two consecutive whitespace \
+             characters at byte {run}. One separator is what the scheme word needs — `\"SSWS \"`, \
+             `\"OAuth \"` — and a second one travels to the vendor verbatim, which answers `401` \
+             without saying why. Nothing downstream catches this: a connector's own test asserts the \
+             prefix against a constant beside it, so editing both together leaves the suite green"
+        ));
     }
 
     // The value half of the grammar check `name` has had since C-3. A prefix reaches a header value
@@ -1975,7 +2064,7 @@ fn validate_credentials(connector: &Connector, problems: &mut Vec<String>) {
         }
 
         if let AuthScheme::Header { prefix, .. } = &method.scheme {
-            validate_auth_prefix(method, prefix, problems);
+            validate_auth_prefix(connector, method, prefix, problems);
         }
 
         // A credential resolved from no env var and minted by no grant can never produce a value.

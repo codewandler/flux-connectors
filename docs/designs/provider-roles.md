@@ -16,6 +16,12 @@ filling the same shape is a coincidence rather than a contract.
 
 A **role** is that missing declaration: a named shape a service claims to implement, checked at load.
 
+> **This design answers *discovery*: "who can do this?"** The next question — *substitution*, where a
+> flow declares `requires secret_store`, an operator binds a concrete implementation, and calls go
+> through the contract's member names rather than the vendor's — is
+> [connector-contracts.md](connector-contracts.md). It extends this design and is blocked on
+> [C-23](../stories/C-23-operation-naming-contract.md); read it before proposing a third role.
+
 ## Roles attach to a service, not to a provider
 
 This is the correction the idea needs, and the existing model already made room for it.
@@ -139,6 +145,13 @@ measured against the shipped catalogue rather than reasoned about:
 
 So a required member is `&[&str]` — a set any one of which fills the slot — and `required_members`
 returns a slice of those.
+
+> **Re-measured at 41 providers on 2026-07-31, and it got worse.** `get` now fills **77 operations
+> across 38 of 41 providers**; a bare `list` fills **58 operations across 30 of 41**, up from 9 of
+> 19. `models.list` still matches exactly three, one per vendor — the clearest evidence that the fix
+> is the slot's *spelling* rather than the matcher. Full figures, and why a `get`/`put`/`delete`
+> contract is *unsatisfiable* rather than over-satisfied, are in
+> [connector-contracts.md](connector-contracts.md).
 
 | role | required members | providers that satisfy it |
 |---|---|---|

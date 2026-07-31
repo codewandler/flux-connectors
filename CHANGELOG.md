@@ -9,6 +9,161 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A tenant's configuration is substituted into a templated base URL (C-193).** Nine providers'
+  hosts carried a `{subdomain}`, `{shop}`, `{domain}`, `{site}`, `{instance}`, `{account_host}`,
+  `{space_id}` or `{page_id}` to the wire verbatim. A bound `ConfigStore` port — handed in at
+  construction the way `Credentials` already is, never a global and never an environment read —
+  now fills them, and substitution is **total or refused**: `Error::MissingConfig` fires before the
+  body is evaluated and `Error::UnresolvedEndpoint` is a second lock, so no request leaves with a
+  brace in it.
+
+  **The half that is easy to miss is the permission subject.** The pack calls `http.request`'s
+  `execute` directly, bypassing `Executor::dispatch`, so `permission_subjects` is the *only* place
+  flux's egress allow-list is consulted for the inner call. It previously declared the
+  un-substituted template — a subject no allow-list can match. It now declares the substituted host
+  on **both** paths, the built one and the malformed-call fallback, pinned by a whole-catalogue
+  assertion that no shipped operation's subject contains `{`, with a control that fails if the
+  catalogue ever stops carrying a templated connector.
+
+  **Substitution runs over the emitter's string literals, never the finished URL**, and that is the
+  security-relevant choice rather than a stylistic one: flux interpolates `fmt` and never `lit`, so
+  a brace surviving in a literal is by construction a name nothing fills. Substituting the finished
+  URL is one line shorter and would let a *caller's parameter value* be filled with a tenant's
+  configuration on its way to the vendor. A test pins that a parameter spelling `{subdomain}` is
+  left alone.
+
+  **A refusal nobody asked for:** both ports carry a tenant, and nothing stopped a host pairing
+  tenant A's credentials with tenant B's settings — outcome, one tenant's token sent to another
+  tenant's host. Now `Error::TenantMismatch`, refused at `project`.
+
+  The story's own measurement was low in both directions: **9 providers / 53 operations**, not 6/38.
+  Seven have a templated *host*; two (`contentful`, `statuspage`) have a templated *path* on a host
+  that resolves, which is the quieter failure — the request reaches a real server and returns a
+  `404` that reads as a missing record rather than as an unconfigured connector.
+
+  Also moved: the Basic user-half no longer reads the process environment. It is a tenant value and
+  now comes from the same port.
+
+### Fixed
+
+- **A `--service` scoped build carried another service's `config`, `graphs` and `verify` (C-194).**
+  `select_service` narrowed `services`, `operations`, `events` and `channels`, then let
+  `..connector.clone()` carry the rest through. Seventeen real crossings across four shipped
+  providers: 12 configuration fields and 5 `verify` pointers, in `anthropic`, `contentful`,
+  `microsoft_graph` and `postmark`. `graphs` leaked zero times, because **no provider declares one**.
+
+  **None of the seventeen reached a committed artifact, and the number needs its plain reading.**
+  Eight of the leaked config fields declare `secret = true`, which sounds far worse than it is: a
+  `ConfigField` is `name`/`label`/`help`/`format`/`example`/`binds` and **has no value field**.
+  `secret = true` is a claim *about a value a host will later collect*, not a credential. The worst a
+  crossing could have published is a form field — a label, its help text, and a credential name the
+  catalogue already publishes deliberately. Verified four ways that nothing reaches disk, including
+  that the leaked help string appears nowhere outside `providers/anthropic.toml`, which is input.
+  The real defect is that a `models`-scoped install would ask an operator for an admin key, eroding
+  the operator/connection level split.
+
+  It was invisible because **no test had ever looked at `select_service`'s output beyond
+  `operations`**, and an emitted-artifact test structurally cannot cover an IR-only surface. Both
+  halves are now pinned: a fixture test for what no shipped provider exercises, and a property test
+  over the real catalogue that produced the seventeen.
+
+  `auth`/`default_auth` are deliberately **not** narrowed — `AuthMethod` has no `service` field, so
+  it needs a reachability computation rather than a filter, and a test pins that so a later edit
+  cannot take it by accident. `..connector.clone()` remains the mechanism and will do this again for
+  the next service-partitioned field; `HashDomain::of` already solves the class with exhaustive
+  destructuring that fails to compile until someone states the answer.
+
+### Changed
+
+- **The docs now say what a connector actually is, and the charter was amended twice.**
+
+  `vision.md` had defined a connector as *"auth + operations + quirks"* — true of an IR with three
+  surfaces. `Connector` has **sixteen fields**, and the three the vision named are not the
+  interesting ones any more: `quirks` reaches almost nothing and `auth` reaches neither the module
+  nor the manifest. `AGENTS.md` said *"a service has three member kinds"* directly above a five-row
+  table. `README.md` advertised v0.3.0 and 19 providers. The roadmap still said *"nothing is
+  implemented yet"* against 86 done stories.
+
+  New `docs/designs/connector-surfaces.md` is the single answer to *"what can a connector bring to
+  flux?"*, and its most useful content is the negative half: **six surfaces reach no artifact at
+  all** — `config`, `graphs`, `verify`, `roles`, `quirks.pagination`, `quirks.rate_limit`. They load,
+  they validate, they move `ir_sha256`, and nothing downstream can see them. Two of the six are dead
+  for a different reason worth separating: nothing *declares* a graph (the lowering in
+  `connector-flux/src/graph.rs` is complete, tested and never called), and hubspot records its
+  `rate_limit` non-declaration deliberately.
+
+  **Charter amendment 1 — the "no runtime" non-goal is now "no runtime *for production traffic*"**,
+  permitting `crates/connectors-app`: a loopback-bound reference host proving the seams end to end,
+  never published, never a production request path. This resolves **C-34** as yes-narrowed — yes to a
+  host that proves the seams, **no** to the credential-injecting proxy the story was filed about,
+  whose confused-deputy objection stands unamended.
+
+  **Charter amendment 2 — technology adapters stay a non-goal**, with a clarification: capability
+  *contracts* span both repos, so a hand-written flux plugin (Vault) and a generated connector
+  (1Password) can satisfy one and a host need not know which it holds. This moves nothing into this
+  repo; Vault stays a flux plugin.
+
+  Also new: `docs/designs/connector-contracts.md`, which measured the thing that blocks contracts.
+  The slot vocabulary fails in **both directions at once** — `get` fills 44 of 48 services (too loose
+  to discriminate) while `put` matches **zero operations** and no operation id even contains that
+  substring (too narrow to express), because all 13 `PUT` operations are named for their domain verb.
+  So a `secret_store` contract is not merely unbuilt, it is unspellable, and **C-23 (operation naming)
+  is a hard prerequisite** rather than a nice-to-have.
+
+  The counts in these documents remain **hand-typed**: C-81 (*declared counts are checked*) is still
+  `ready`, no mechanism derives them, and they had drifted five times before this pass. They drifted
+  again *during* it — two connectors merged between the docs being written and merged.
+
+- **The Okta connector (C-161) — the probe that produced the prefix axis, now shipping on it.**
+  Five operations over `Authorization: SSWS <token>`, `okta-user-list` as `verify`, and
+  `okta-user-deactivate` as the one `destructive` write.
+
+  This story is the round trip. C-161 first ran while `AuthScheme` was a closed five-variant enum,
+  **refused to ship a connector that could not authenticate honestly**, and recorded why at
+  `path:line`. That refusal produced C-184, which built the `prefix` field; this pass ships the
+  connector on it. The probe's findings are kept rather than deleted — they are the measurement the
+  axis rests on — and `no_provider_toml_was_shipped_for_this_probe` was **inverted** rather than
+  removed, so the file still records that the refusal stood until the seam existed.
+
+  **Two curated exclusions, both made executable rather than left as prose.** Okta's `q`/`filter`/
+  `search` are free-text and SCIM-expression filters, which is the C-30 unencodable-query gap at its
+  worst case — a SCIM expression is made of quotes, spaces and punctuation, all interpolated
+  verbatim. And `after` is a cursor Okta only ever returns in a `Link` **response header**, which
+  this model cannot surface, so exposing the parameter would offer a knob nobody can turn. A test
+  fails if a later story adds either back. The cost is real and recorded: all three list operations
+  are first-page-only.
+
+  **The host is a bound `{domain}`, not a subdomain label**, because Okta orgs also live at
+  `.okta-emea.com`, `.oktapreview.com` and custom domains. The trade is recorded: `format =
+  "hostname"` validates the `example`, not the operator's input, so a mistyped host is a malformed
+  URL rather than a named error.
+
+- **The Statuspage connector (C-181) — the first shipped connector with a non-empty auth prefix.**
+  Five operations over `Authorization: OAuth <key>`, with `statuspage-component-list` as `verify`.
+  This is C-184's prefix axis proved end to end: `crates/catalog/src/generated/statuspage.rs` is the
+  first committed artifact carrying a `prefix` field with a value in it.
+
+  **`OAuth` here is a literal scheme word, not OAuth2**, and the connector declares no `oauth2` block
+  — with a test asserting `oauth2.is_none()` so the trap stays pinned. A connector spelled `bearer`
+  would compile clean and fail closed with 401 on every call, which is the trap C-107 recorded for
+  Notion and C-161 for Okta.
+
+  **The page id folds into `base_url`**, the way DocuSign's `account_id` already does — so this is
+  *not* the C-187 gap, and the story says so. The cost is recorded rather than worked around:
+  `GET /v1/pages` becomes unreachable under that base URL, and a multi-page account needs one
+  installation per page.
+
+  **What the model cannot say, and does not pretend to.** Creating a Statuspage incident emails and
+  texts every subscriber immediately. There is no effects field to declare that — `effects
+  ["network"]` is hardcoded at `connector-flux/src/op.rs:616`, which is exactly what C-155 measured
+  — and `Risk` has no value meaning externally-visible. Both writes are `risk = "high"`, matching
+  `github-issue-create` and `launchdarkly-flag-toggle`, and the asymmetry the scale cannot carry
+  lives in each operation's description: **the incident is reversible, the subscriber email is not.**
+  No `effects` key was invented, and a test greps the provider file to prove none appears.
+
+  `deliver_notifications` is a **required** body field on both writes, so a caller must make an
+  explicit choice about notifying every subscriber rather than inheriting a default.
+
 - **A credential can sit inside a header value it does not wholly occupy (C-184).**
   `AuthScheme::Header` now carries `{ name, prefix }`, so `Authorization: SSWS <token>` is expressible
   without any credential value being authored. Unblocks Okta (C-161, back to `ready`), PagerDuty
@@ -34,9 +189,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   exists. Registering the prefixed form would repeat C-159 §2's divergence in the other direction —
   holding a public word while leaving the bare token, the form a 401 body echoes back, unheld.
 
-  **A full build wrote exactly one artifact: `web/public/catalog.json`.** Every `.flux` module, manifest,
-  the embedded Rust catalogue and `connectors.lock` are byte-identical, because an empty prefix does not
+  **A full build wrote exactly one artifact: `web/public/catalog.json`.** Every `.flux` module, manifest
+  and the embedded Rust catalogue are byte-identical, because an empty prefix does not
   serialize and the catalogue's `Header` arm already emitted `prefix: ""` when it was hard-coded. The
+  IR hash domain is JSON rather than TOML (`ir.rs:1258`), and `skip_serializing_if` applies there too,
+  so `ir_sha256` cannot move either — pinned by `ir_roundtrip.rs:203`. (An earlier draft of this entry
+  also claimed `connectors.lock` was byte-identical. **That file is not produced** — `lock.rs:48` says
+  writing it is `connector-cli`'s job and the CLI never does — so the claim was vacuous. Filed as
+  C-189.) The
   catalog.json diff is purely additive — one `prefix` key per credential (31 `"Bearer "`, 13 `""`, 3
   `"Basic "`). That key is published on purpose: without it, Okta's prefixed `Authorization` and
   LaunchDarkly's raw one flatten to the same two keys.

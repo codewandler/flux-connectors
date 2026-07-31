@@ -9,8 +9,11 @@
 //!
 //! # The shape
 //!
+//! A [`Connector`] is **not** a set of operations. It declares what a vendor can do in **both
+//! directions**, and what an **operator** must supply to use it. All sixteen fields:
+//!
 //! ```text
-//! Connector { id, authority, api_version, vendor, base_url,
+//! Connector { id, authority, api_version, vendor, base_url, description,
 //!             services: [Service { name, description, base_url, api_version, roles }],
 //!             auth: [AuthMethod], default_auth: [AuthRequirement],
 //!             operations: [Operation { id, service, method, path, params, response_schema,
@@ -20,8 +23,19 @@
 //!             channels: [ChannelBinding { name, service, transport, events, verification,
 //!                                         discriminator, delivery_id, payload,
 //!                                         reply: Option<Reply>, cursor, interval }],
+//!             config:   [ConfigField { name, service, label, help, example, format, required,
+//!                                      secret, docs_url, binds }],
+//!             graphs:   [Graph { name, service, description, inputs, output, nodes, edges }],
+//!             verify:   Option<String>,
 //!             provenance }
 //! ```
+//!
+//! `operations` and `services` are the outbound direction; `events` and `channels` the inbound one;
+//! `auth`/`default_auth` span both; `config` is what a human types before any of it runs; `graphs` is
+//! a flow composed from the members above; a [`Service`]'s `roles` is the capability shape it claims;
+//! and `verify` names the one cheap read that proves the whole arrangement works. See
+//! `docs/designs/connector-surfaces.md` for the surface table, including which of these reach a
+//! generated artifact and which currently stop here.
 //!
 //! Four things about it are worth reading the docs on before using it:
 //!
@@ -32,11 +46,15 @@
 //!   what claims a [`Role`] — a checked capability shape, with the provider's set *derived* as the
 //!   union of its services'. See [`Connector::service_names`], [`Connector::roles`],
 //!   `docs/designs/provider-services.md` and `docs/designs/provider-roles.md`.
-//! - **A service has three member kinds, sharing one namespace.** An [`Operation`] is the outbound
+//! - **A service has five member kinds, sharing one namespace.** An [`Operation`] is the outbound
 //!   direction, an [`EventDecl`] the inbound one, and a [`ChannelBinding`] the composition of the two
-//!   — it names the events it carries *and* the operation that replies to them. All three project
-//!   into the same address space and into flux's declaration namespace, so a name collision across
-//!   kinds is a loader error. See [`Connector::member_names_of`] and [`inbound`].
+//!   — it names the events it carries *and* the operation that replies to them. A [`ConfigField`] is
+//!   what a human supplies before any of them run, and a [`Graph`] is a flow composed from the rest.
+//!   All five project into the same address space and into flux's declaration namespace, so a name
+//!   collision across kinds is a loader error — and a config field shares the namespace despite
+//!   nothing *calling* it, because it shares the *host's*. [`Connector::member_names_of`] returns all
+//!   five and is the definition; several doc comments elsewhere still say "three", from before the
+//!   last two landed. See also [`inbound`], [`config`] and [`graph`].
 //! - **Auth is many-to-many.** A connector declares several [`AuthMethod`]s; each [`Operation`]
 //!   selects among them with a list of [`AuthRequirement`]s — AND within a requirement, OR across
 //!   the list — and distinguishes *unset* (inherit the connector default) from *explicitly none*.

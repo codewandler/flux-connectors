@@ -39,6 +39,7 @@ pub(crate) mod launchdarkly;
 pub(crate) mod microsoft_graph;
 pub(crate) mod miro;
 pub(crate) mod notion;
+pub(crate) mod okta;
 pub(crate) mod openai;
 pub(crate) mod openrouter;
 pub(crate) mod postmark;
@@ -47,6 +48,7 @@ pub(crate) mod sendgrid;
 pub(crate) mod sentry;
 pub(crate) mod shopify;
 pub(crate) mod slack;
+pub(crate) mod statuspage;
 pub(crate) mod stripe;
 pub(crate) mod twilio;
 pub(crate) mod typeform;
@@ -87,6 +89,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &microsoft_graph::PROVIDER,
     &miro::PROVIDER,
     &notion::PROVIDER,
+    &okta::PROVIDER,
     &openai::PROVIDER,
     &openrouter::PROVIDER,
     &postmark::PROVIDER,
@@ -95,6 +98,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &sentry::PROVIDER,
     &shopify::PROVIDER,
     &slack::PROVIDER,
+    &statuspage::PROVIDER,
     &stripe::PROVIDER,
     &twilio::PROVIDER,
     &typeform::PROVIDER,

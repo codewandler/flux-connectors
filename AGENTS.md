@@ -32,15 +32,30 @@ change to a story's `status`, `priority`, `title`, `epic`, or `note`, run `/trac
 
 ## Current project boundary
 
-**Snapshot: v0.5.0.** `cargo run -p connector-cli -- build` compiles 19 providers and 110 curated
-connector operations plus 77 Flux core entries into 256 artifacts. The compiler, embedded Rust catalogue, JSON catalogue, and public
-explorer work. **No generated provider can make a live API call yet.** Read
+**Snapshot: v0.5.0.** `cargo run -p connector-cli -- build` compiles **43 providers**, **50 services**
+and **242 curated connector operations** — plus 8 events, 2 channel bindings and 77 Flux core entries
+(29 operations, 43 node kinds, 5 capabilities) with 3 core JSON Schemas — into **470 artifacts**. The
+compiler, the embedded Rust catalogue, the JSON catalogue, the Tool pack and the public explorer all
+work. **Nothing in this repository makes a live API call, because nothing in it is a host.** Read
 [Intentional gaps](#intentional-gaps) before changing code that appears broken.
+
+> Every count in this paragraph and in `README.md` is **hand-typed and unchecked**. It has drifted
+> repeatedly; `docs/stories/C-81-declared-counts-are-checked.md` is the fix and is still `ready`. Until
+> it lands, re-measure before quoting: `ls providers/*.toml | wc -l`,
+> `cargo run -p connector-cli -- diff`, and a query over `web/public/catalog.json`.
 
 flux-connectors compiles vendor API descriptions into Flux-Lang. A provider is described in
 `providers/<name>.toml`; the build emits an installable Flux module, a capability manifest,
 per-operation renderings, Rust catalogue tables, and public catalogue data. Flux—not TOML—is the
 execution format.
+
+A connector is **not** a set of operations. It declares what a vendor can do in **both directions**,
+and what an **operator** must supply to use it: operations and services outbound, events and channels
+inbound, `auth` across both, `config` for what a human types first, `graphs` for a flow composed from
+the members above, a service's `roles`, and `verify` for the read that proves the arrangement works.
+Sixteen fields of `Connector` (`crates/connector-spec/src/ir.rs`) carry it, sharing one name namespace
+per service. The full surface table is
+[docs/designs/connector-surfaces.md](docs/designs/connector-surfaces.md).
 
 The charter boundary comes first for any proposed provider:
 
@@ -60,6 +75,14 @@ accepted design explicitly changes this charter.
 | `connector-flux` | Lowering the IR to `flux_lang` AST and formatting Flux | Emit Flux with string templates |
 | `connector-cli` | Binary, orchestration, filesystem IO, and all future network IO | Reach the network during `build`, `diff`, or `check` |
 | `connector-catalog` | Static provider/operation metadata and embedded Flux | Execute operations, touch the network/filesystem, or gain runtime dependencies |
+| `connector-pack` | Projecting catalogue operations onto flux `ToolSpec`s, assembling auth onto a request, and handing the registry declarations | Open a socket, hold an HTTP client, resolve a host, or construct a runtime — egress is a constructor argument (`Egress`), and `permission_subjects`/`intents` must never be defaulted away |
+| `connector-secrets` | Resolving a `CredentialRef` **address** to a **value**: the `SecretStore` port, `MemoryStore`, and the optional Vault KV v2 client | Be reachable from `connector-cli` — it opens sockets, and that edge would end the offline guarantee; also: no expiry, refresh, rotation or revocation |
+
+The first four are the **compiler**; the last two are **host libraries**, built and tested here and
+excluded from the compile path. `crates/connector-cli/tests/dependency_fence.rs` asserts that fence
+over the resolved `Cargo.lock`, optional dependencies included, so adding the edge behind a feature
+flag trips it too. `connector-pack` is the one crate here that links flux's runtime types, and it
+constructs none of it — see [Relationship to flux](#relationship-to-flux).
 
 `connector-spec` ingest accepts bytes so it remains fully unit-testable. Vendor network access, when
 implemented, belongs only in `connector-cli`'s `fetch` path.
@@ -74,9 +97,10 @@ cargo run -p connector-cli -- build
 cargo run -p connector-cli -- diff
 ```
 
-`diff` must finish with `256 artifacts up to date (19 providers checked)` for the current catalogue.
+`diff` must finish with `470 artifacts up to date (43 providers checked)` for the current catalogue.
 The artifact count may legitimately change when providers or operations change; do not encode it as
-a permanent invariant.
+a permanent invariant. It is also not currently checked against this file — see C-81 and the caveat
+under [Current project boundary](#current-project-boundary).
 
 | Generated path | Source of truth |
 |---|---|
@@ -310,7 +334,9 @@ tenants/<tenant>/<authority>/<service>/<credential>
 
 ## Member contract
 
-A service has **three member kinds**, and they share **one name namespace**:
+A service has **five member kinds**, and they share **one name namespace** —
+`Connector::member_names_of` (`crates/connector-spec/src/ir.rs`) returns all five together, which is
+the definition:
 
 | kind | direction | emitted into the module? |
 |---|---|---|
@@ -320,7 +346,15 @@ A service has **three member kinds**, and they share **one name namespace**:
 | `[[config]]` | what a human supplies before any of it runs | **no** |
 | `[[graphs]]` | a flow composing the members above | **yes**, as one `op` |
 
-See [docs/designs/channel-bindings.md](docs/designs/channel-bindings.md).
+The last two joined later than the prose around them, and several doc comments still say "three
+member kinds" — `crates/connector-spec/src/inbound.rs`, `src/address.rs`, `src/provider.rs`,
+`crates/connector-cli/src/seam.rs`, `src/catalog.rs`, `src/site.rs`,
+`schema/provider-toml.schema.json` and `docs/designs/channel-bindings.md`. They are describing the
+namespace correctly and counting it wrongly; treat this table as the authority.
+
+See [docs/designs/channel-bindings.md](docs/designs/channel-bindings.md) and, for the whole connector
+surface rather than the member kinds alone,
+[docs/designs/connector-surfaces.md](docs/designs/connector-surfaces.md).
 
 - **A channel binding declares; it never installs.** It reaches the manifest and the catalogue and
   emits nothing into the module — flux lifts `op` declarations only, while `channel` and `trigger` are
@@ -382,10 +416,46 @@ AWS). The service is the unit that is addressed, versioned, selected, emitted an
 
 These failures are recorded decisions. Do not “fix” one without reading its story and design.
 
-- **No provider can make a live call.** `http.request` can replace a whole value with
-  `{"$secret": "ENV"}`, but it cannot assemble a Bearer header or a Basic pair. The required
-  `$auth` seam is designed in [docs/designs/auth-seam.md](docs/designs/auth-seam.md) and must land in
-  flux.
+- **Nothing here makes a live call, because nothing here is a *host* — not because flux is missing a
+  seam.** The older account ("the `$auth` seam must land in flux") is **stale**. C-114 shipped the Tool
+  pack's declaration half, C-115 gave each Tool its egress with the network gate mirrored, and C-116
+  bound a `CredentialStore` port and moved auth assembly — the `Bearer` prefix, the basic-auth base64,
+  query placement — **into Rust**. flux's whole-value `{"$secret": "ENV"}` marker therefore never has
+  to grow prefix or encode support, `$auth` is off the critical path, and
+  [docs/designs/auth-seam.md](docs/designs/auth-seam.md) now records a road not taken rather than a
+  blocker. See [docs/designs/connector-tool-pack.md](docs/designs/connector-tool-pack.md).
+
+  What is actually missing is two things, and both are in *this* workspace:
+
+  1. **An `http.request` implementation in the dependency graph.** `Egress::new` takes an already
+     configured `Arc<dyn Tool>`, and nothing here supplies one: `flux-web`, which owns
+     `HttpRequestTool`, is not in `Cargo.lock` at all. Every `connector-pack` test passes a stub, and
+     says so.
+  2. **A host to bind it.** Something has to construct the registry, bind the secret store and the
+     transport, and run the loop. That is the reference host the vision's narrowed non-goal now
+     permits — `crates/connectors-app`, resolving C-34 as yes-narrowed; see
+     [docs/designs/connectors-app.md](docs/designs/connectors-app.md).
+
+- **Six declarable surfaces reach no artifact at all.** This is the largest real gap in the repository.
+  The IR models each one and the loader validates it, and then neither `connectors/*.connector.toml`
+  — whose emitted fields are exactly `generator`, `connector`, `service`, `gid`, `vendor`,
+  `description`, `base_url`, `api_version`, `module`, `operations`, `events`, `channels` — nor
+  `web/public/catalog.json` carries it:
+
+  | surface | declared today | where it stops |
+  |---|---|---|
+  | `[[config]]` | 45 fields across 28 providers | IR and loader only |
+  | `verify` | 28 providers | IR and loader only |
+  | `[[services]] roles` | 1 role (`anthropic` / `models`) | IR and loader only |
+  | `quirks.pagination` | 6 operations across 3 providers | IR and loader only |
+  | `[[graphs]]` | none — the lowering exists (`crates/connector-flux/src/graph.rs`) and nothing declares one | no consumer *and* no producer |
+  | `quirks.rate_limit` | none — `providers/hubspot.toml` records a deliberate non-declaration | no consumer *and* no producer |
+
+  The first four are the sharp ones, because the declarations already exist: a host reading a manifest
+  cannot render a settings page, cannot find the "Test connection" operation, cannot ask what a service
+  claims to do, and cannot page a list — for connectors that state all four in their provider TOML.
+  Do not close this by widening the manifest ad hoc; the surface-to-artifact mapping is decided in
+  [docs/designs/connector-surfaces.md](docs/designs/connector-surfaces.md).
 - **Freshdesk declares no credential.** Its API key occupies the Basic username position, which the
   current model treats as non-secret config. Emitting it would bypass secret gating and redaction;
   the deliberate result is a fail-closed 401.
@@ -446,5 +516,9 @@ are not docs-only and require the relevant Rust tests plus formatting and clippy
   `[workspace.dependencies]`. Do not replace it with a git or `../flux` path dependency; those do not
   resolve in a fresh clone and couple the build to an unpublished tree.
 - The **compiler** crates — `connector-spec`, `connector-flux`, `connector-cli` — depend on no part of the flux runtime, and `connector-catalog` stays dependency-free. `connector-pack` alone links `flux-runtime`/`flux-spec`, because a declaration handed to a host must be spelled in the host's own `ToolSpec`/`Tool` vocabulary. This repository still constructs no runtime: it compiles; flux executes.
-- The critical runtime change is flux's `$auth` support for `http.request`. Its design is recorded
-  here; implementation stories belong to flux's own board.
+- **flux's `$auth` support for `http.request` is no longer the critical path**, and had been listed
+  here as though it were. C-114/C-115/C-116 assemble auth in Rust inside `connector-pack`, so the
+  whole-value `{"$secret"}` marker never has to grow a prefix or an encoder.
+  [docs/designs/auth-seam.md](docs/designs/auth-seam.md) is kept as the composite-path design; C-26's
+  paste-ready flux drafts should not be filed as written. What still genuinely waits on a flux release
+  is the **form/query encoder** (upstream `L-101`) — see the `zendesk-ticket-search` gap above.

@@ -13,7 +13,7 @@
 use std::sync::Arc;
 
 use catalog::OperationKey;
-use connector_pack::{Credentials, Egress, MemoryStore};
+use connector_pack::{Configuration, Credentials, Egress, MemoryConfig, MemoryStore, Operation};
 use flux_runtime::{Tool, ToolRegistry};
 use serde_json::{json, Map, Value};
 
@@ -44,7 +44,59 @@ fn http() -> Egress {
 /// secret could end up in a permission subject, which is precisely what this file must not let
 /// happen quietly.
 fn credentials() -> Credentials {
-    Credentials::new(Arc::new(MemoryStore::new()), "t-network-gate").expect("a valid tenant id")
+    Credentials::new(Arc::new(MemoryStore::new()), TENANT).expect("a valid tenant id")
+}
+
+/// The tenant both ports answer for.
+const TENANT: &str = "t-network-gate";
+
+/// The value this file binds for every endpoint variable, whatever it is called.
+///
+/// One spelling rather than a per-variable table, because what is asserted below is *that the
+/// subject carries the configured value* — not which value. `a-subdomain.zendesk.com` is as good a
+/// resolvable host for that as `acme.zendesk.com`, and it makes the assertion messages say which
+/// variable was involved.
+fn value_for(variable: &str) -> String {
+    format!("a-{variable}")
+}
+
+/// A bound configuration port carrying a value for **every** endpoint variable the shipped
+/// catalogue declares (C-193).
+///
+/// Discovered from the catalogue rather than listed, so a templated connector shipped after this
+/// file was written is covered on the day it lands — which matters more here than anywhere else,
+/// since this file's whole claim is that it asserts the gate over *every* operation rather than a
+/// sampled one.
+fn configuration() -> Configuration {
+    let mut values = MemoryConfig::new();
+    for entry in catalog::operations() {
+        for variable in probe(entry).endpoint_variables() {
+            values = values.with_endpoint(TENANT, entry.provider, variable, &value_for(variable));
+        }
+    }
+    Configuration::new(Arc::new(values), TENANT).expect("a valid tenant id")
+}
+
+/// One entry projected against an empty configuration, purely to ask it which variables it names.
+/// Projection reads no values, so this cannot fail for want of one.
+fn probe(entry: &'static catalog::Operation) -> Operation {
+    let empty = Configuration::new(Arc::new(MemoryConfig::new()), TENANT).expect("a tenant");
+    Operation::project(entry, http(), credentials(), empty)
+        .unwrap_or_else(|error| panic!("`{}`: {error}", entry.id))
+}
+
+/// A declared host with this file's configuration filled in.
+///
+/// `entry.hosts` is the manifest's `http_hosts`, and for six connectors it is a **template**:
+/// `{subdomain}.zendesk.com`. The host a request actually reaches is `a-subdomain.zendesk.com`, and
+/// that is what a subject has to name — see
+/// [`a_templated_host_is_never_declared_as_a_permission_subject`].
+fn resolved_host(entry: &'static catalog::Operation, host: &str) -> String {
+    let mut out = host.to_owned();
+    for variable in probe(entry).endpoint_variables() {
+        out = out.replace(&format!("{{{variable}}}"), &value_for(variable));
+    }
+    out
 }
 
 /// Every provider the catalogue ships, in its own stable order.
@@ -59,7 +111,7 @@ fn every_provider() -> Vec<&'static str> {
 fn whole_catalogue() -> ToolRegistry {
     let providers = every_provider();
     let mut registry = ToolRegistry::new();
-    connector_pack::pack(&providers, http(), credentials())(&mut registry)
+    connector_pack::pack(&providers, http(), credentials(), configuration())(&mut registry)
         .expect("the shipped catalogue installs");
     registry
 }
@@ -122,15 +174,17 @@ fn every_tool_declares_the_host_it_reaches() {
         );
 
         // The declared data, not a re-parse of the URL template: the manifest's `http_hosts` is
-        // what an operator's egress policy was written against.
+        // what an operator's egress policy was written against — **once its `{placeholder}`s carry
+        // this tenant's values**, which is the part C-193 added.
         assert!(
             !entry.hosts.is_empty(),
             "`{}` declares no host, so no subject could name one",
             entry.id
         );
         for host in entry.hosts {
+            let host = resolved_host(entry, host);
             assert!(
-                subjects.iter().any(|subject| subject.contains(host)),
+                subjects.iter().any(|subject| subject.contains(&host)),
                 "`{}` reaches `{host}` but its subjects are {subjects:?}",
                 entry.id
             );
@@ -186,9 +240,62 @@ fn a_tool_still_declares_its_host_when_the_request_cannot_be_built() {
         "a call with no parameters at all must still declare where it would go"
     );
     for host in entry.hosts {
+        let host = resolved_host(entry, host);
         assert!(
-            subjects.iter().any(|subject| subject.contains(host)),
+            subjects.iter().any(|subject| subject.contains(&host)),
             "the fallback must name the declared host, got {subjects:?}"
         );
     }
+    // The fallback is the path most likely to be forgotten — it fires exactly when the request
+    // could not be built — so it gets the placeholder assertion of its own. Substituting on the
+    // successful path only would leave a gate that is correct until a caller gets a parameter
+    // wrong, and then silently is not.
+    for subject in &subjects {
+        assert!(
+            !subject.contains('{'),
+            "the fallback declared `{subject}`, which no egress allow-list can match"
+        );
+    }
+}
+
+/// **The second half of C-193, over the whole catalogue.**
+///
+/// `Tool::execute` calls `http.request`'s `execute` directly, so this is the *only* place a host's
+/// egress allow-list is consulted for the inner call. A subject of
+/// `https://{subdomain}.zendesk.com/api/v2/tickets/1.json` asks that allow-list to match a string no
+/// host ever resolves to, and there are only two ways that ends: the call is refused for a reason
+/// that names nothing an operator can fix, or the operator widens the rule to a wildcard until it
+/// passes — which is the gate being removed rather than satisfied.
+///
+/// Asserted over every shipped operation rather than over Zendesk, because the six templated
+/// connectors are the ones nobody would think to check twice.
+#[test]
+fn a_templated_host_is_never_declared_as_a_permission_subject() {
+    let registry = whole_catalogue();
+    let mut templated = 0usize;
+
+    for entry in catalog::operations() {
+        let dotted = connector_pack::dotted_name(entry.id).expect("a dotted tool name");
+        let tool = registry.get(&dotted).expect("the operation is registered");
+        if entry.hosts.iter().any(|host| host.contains('{')) {
+            templated += 1;
+        }
+
+        for subject in tool.permission_subjects(&params_for(tool.as_ref())) {
+            assert!(
+                !subject.contains('{'),
+                "`{}` declares the permission subject `{subject}`, which an egress allow-list \
+                 cannot match — the request would reach a host the gate was never shown",
+                entry.id
+            );
+        }
+    }
+
+    // The control. Without it this test passes trivially on a catalogue that happens to carry no
+    // templated connector at all, which is precisely the state it is guarding against regressing
+    // *from*.
+    assert!(
+        templated > 0,
+        "no shipped connector declares a templated host, so this test asserted nothing"
+    );
 }

@@ -4,21 +4,25 @@
 
 # flux-connectors
 
-Compile SaaS API descriptions into typed [Flux-Lang](https://github.com/codewandler/flux)
-operations, capability manifests, and a queryable Rust catalogue.
+Compile SaaS API descriptions into [Flux-Lang](https://github.com/codewandler/flux). A connector
+declares what a vendor can do in **both directions** — the operations flux calls, and the events the
+vendor sends back — and what an **operator** must supply to use it: credentials, configuration, and the
+one read that proves the connection works. Out come typed Flux operations, capability manifests, a
+queryable Rust catalogue, and a flux Tool pack.
 
 > [!WARNING]
-> **v0.3.0 is a compiler and catalogue preview, not a live connector runtime.** The build works end
-> to end, but none of the generated providers can authenticate and make a live API call yet. See
-> [Current limitations](#current-limitations).
+> **v0.5.0 is a compiler, a catalogue and a Tool pack — not a running system.** The build works end to
+> end and the pack can authenticate and dispatch, but nothing in this repository is a *host*, so
+> nothing here makes a live API call on its own. See [Current limitations](#current-limitations).
 
-The repository currently contains 110 curated connector operations across 19 providers — **Fly.io**
-(9), **Zendesk** (7),
-**Freshdesk** (9), **babelforce** (9), **Google Workspace** (8, across three services), **Jira** (6),
-**GitHub** (5), **HubSpot** (5), **Intercom** (5), **Shopify** (5), **Asana** (5), **OpenAI** (4),
-**OpenRouter** (4), **Slack** (4), **Airtable** (4), **Sentry** (4) and **Zoom** (4). It also publishes
-77 Flux-owned core operations, nodes, and capability records. A full build compiles everything into
-237 committed, reviewable artifacts without contacting a vendor.
+The repository currently contains **242 curated connector operations across 43 providers and 50
+services**, plus 8 events and 2 channel bindings. It also publishes 77 Flux-owned core operations, node
+kinds and capability records, and 3 core JSON Schemas. A full build compiles everything into **454
+committed, reviewable artifacts** without contacting a vendor. Browse them in the
+[catalogue explorer](https://flux.codewandler.org/explorer).
+
+> These counts are hand-typed and nothing checks them; they have drifted repeatedly. `C-81` is the fix
+> and has not landed. Re-measure with `cargo run -p connector-cli -- diff` before quoting them.
 
 ## Why this exists
 
@@ -63,7 +67,7 @@ cargo run -p connector-cli -- build
 On a clean checkout, `diff` reports:
 
 ```text
-256 artifacts up to date (19 providers checked)
+470 artifacts up to date (43 providers checked)
 ```
 
 Then inspect [`connectors/zendesk.flux`](connectors/zendesk.flux), browse the
@@ -143,21 +147,30 @@ applying their scheme, and registering secret values with its redactor.
 These are stated plainly because a connector that merely looks executable is worse than one that
 fails closed:
 
-- **No provider can make a live call yet.** All three need credentials, and flux's `http.request`
-  cannot express their auth schemes. Its `{"$secret": "ENV"}` marker replaces a whole value, so it
-  produces neither a `Bearer ` prefix nor a base64-joined Basic pair. The required `$auth` seam is
-  designed in [docs/designs/auth-seam.md](docs/designs/auth-seam.md) and must land in flux.
+- **Nothing here makes a live call, because nothing here is a host.** This is no longer a missing flux
+  feature: `connector-pack` assembles auth in Rust — the `Bearer ` prefix, the base64-joined Basic
+  pair, query placement — and registers the value with flux's redactor before building the request. Two
+  pieces are missing from *this* workspace: an `http.request` implementation in the dependency graph
+  (`Egress` takes one as a constructor argument, and nothing here supplies it), and a process to bind
+  it. A loopback-only reference host is planned as `crates/connectors-app`.
+- **Six declarable surfaces reach no artifact.** `config` (45 fields across 28 providers), `verify`
+  (28), a service's `roles`, `quirks.pagination`, `graphs` and `quirks.rate_limit` are modelled in the
+  IR and validated by the loader, and then appear in neither the manifest nor the published catalogue.
+  A host reading a connector today cannot render its settings page or find its "Test connection"
+  operation, even though the connector declares both.
 - **Freshdesk ships with no credential at all**, deliberately. Its `base64(<api_key>:X)` places the
   secret in a position the current IR cannot mark as secret. Emitting it would bypass secret gating
   and redaction, so the connector fails closed with a 401 instead.
 - **`zendesk-ticket-search` is non-functional.** Query values are not percent-encoded and flux has
-  no operation that can encode them. Spaces can appear to work while `&`, `#`, and `+` corrupt the
-  request; `x&per_page=1` can inject a parameter. See
-  [docs/designs/query-encoding.md](docs/designs/query-encoding.md).
-- **Base URLs can contain unbound template variables**, such as
-  `https://{subdomain}.zendesk.com`; environment binding has not landed.
-- **OpenAPI ingest is not wired.** All 19 providers are hand-authored. A `[spec]`-backed provider
-  is rejected rather than compiled into a plausible but empty module.
+  no operation a Flux *program* can call to encode them. Spaces can appear to work while `&`, `#`, and
+  `+` corrupt the request; `x&per_page=1` can inject a parameter. The same gap applies to `form` request
+  bodies. See [docs/designs/query-encoding.md](docs/designs/query-encoding.md).
+- **Base URLs can contain template variables**, such as `https://{subdomain}.zendesk.com`. A connector
+  binds each one with a `[[config]]` field — but since `config` reaches no artifact, a host cannot yet
+  discover what to ask for.
+- **OpenAPI ingest is not wired.** All 43 providers are hand-authored, and `specs/` currently vendors
+  only flux's own core catalogue. A `[spec]`-backed provider is rejected rather than compiled into a
+  plausible but empty module.
 - **`check`, `fetch`, and `install` are not implemented.** Their CLI entries fail explicitly and
   point to their owning stories.
 
@@ -194,8 +207,11 @@ workflow.
 | `crates/connector-flux` | Flux emission through `flux_lang`'s AST and formatter. |
 | `crates/connector-cli` | Filesystem and future network orchestration for the `flux-connectors` binary. |
 | `crates/catalog` | Dependency-free `connector-catalog`, with every operation embedded at compile time. |
+| `crates/connector-pack` | Host library: projects catalogue operations onto flux `ToolSpec`s and installs them as a Tool pack. Assembles auth; opens no socket. |
+| `crates/connector-secrets` | Host library: resolves a credential *address* to a *value*. `SecretStore`, an in-memory store, and an optional Vault KV v2 client. Unreachable from the compiler, by test. |
 | `providers/` | Hand-authored provider definitions. |
-| `specs/` | Vendored vendor-spec cache used by offline builds. |
+| `connectors/` | The generated Flux modules and capability manifests. |
+| `specs/` | Vendored spec cache used by offline builds. Currently flux's own core catalogue only — no vendor spec is vendored yet. |
 | `docs/` | Vision, roadmap, designs, and the story board. |
 | `web/` | The public VitePress documentation and operation explorer. |
 

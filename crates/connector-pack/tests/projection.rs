@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use catalog::{OperationKey, ProviderKey};
-use connector_pack::{Credentials, Egress, MemoryStore};
+use connector_pack::{Configuration, Credentials, Egress, MemoryConfig, MemoryStore};
 use flux_runtime::ToolRegistry;
 
 /// A stand-in for flux's `http.request`, which every projected operation delegates its egress to.
@@ -38,7 +38,23 @@ fn http() -> Egress {
 /// reason the transport is a stand-in. Whether a value happens to be stored must not decide whether
 /// the shipped catalogue installs.
 fn credentials() -> Credentials {
-    Credentials::new(Arc::new(MemoryStore::new()), "t-projection").expect("a valid tenant id")
+    Credentials::new(Arc::new(MemoryStore::new()), TENANT).expect("a valid tenant id")
+}
+
+/// The tenant both ports answer for. One constant, because a pack whose two ports name different
+/// tenants is refused at install ([`connector_pack::Error::TenantMismatch`]).
+const TENANT: &str = "t-projection";
+
+/// A bound configuration port (C-193).
+///
+/// Installing needs no *values* — projection reads which variables an operation names, never what
+/// they are — so this is empty except for the one connector whose **refusals** are asserted below.
+/// `zendesk` is configured there so that a call omitting `ticket_id` still refuses by naming
+/// `ticket_id`: without a subdomain the first thing missing is the subdomain, which is a true
+/// answer to a different question.
+fn configuration() -> Configuration {
+    let values = MemoryConfig::new().with_endpoint(TENANT, "zendesk", "subdomain", "acme");
+    Configuration::new(Arc::new(values), TENANT).expect("a valid tenant id")
 }
 
 /// Every provider the catalogue ships, in its own stable order.
@@ -60,7 +76,7 @@ fn every_shipped_operation_projects_to_a_registrable_spec() {
     let providers = every_provider();
     let mut registry = ToolRegistry::new();
 
-    connector_pack::pack(&providers, http(), credentials())(&mut registry)
+    connector_pack::pack(&providers, http(), credentials(), configuration())(&mut registry)
         .expect("the shipped catalogue installs into an empty registry");
 
     let mut projected = 0usize;
@@ -111,7 +127,7 @@ fn every_shipped_operation_projects_to_a_registrable_spec() {
 #[test]
 fn the_reference_flow_resolves_every_operation_it_calls() {
     let mut registry = ToolRegistry::new();
-    connector_pack::pack(&["zendesk"], http(), credentials())(&mut registry)
+    connector_pack::pack(&["zendesk"], http(), credentials(), configuration())(&mut registry)
         .expect("zendesk installs");
 
     for name in [
@@ -132,7 +148,7 @@ fn the_reference_flow_resolves_every_operation_it_calls() {
 #[test]
 fn the_spec_carries_the_catalogue_entry_and_invents_nothing() {
     let mut registry = ToolRegistry::new();
-    connector_pack::pack(&["zendesk"], http(), credentials())(&mut registry)
+    connector_pack::pack(&["zendesk"], http(), credentials(), configuration())(&mut registry)
         .expect("zendesk installs");
 
     let operation = catalog::operation(OperationKey::id("zendesk-ticket-comment-add"))
@@ -169,12 +185,13 @@ fn the_spec_carries_the_catalogue_entry_and_invents_nothing() {
 #[test]
 fn a_collision_surfaces_fluxs_duplicate_diagnostic_rather_than_panicking() {
     let mut registry = ToolRegistry::new();
-    connector_pack::pack(&["zendesk"], http(), credentials())(&mut registry)
+    connector_pack::pack(&["zendesk"], http(), credentials(), configuration())(&mut registry)
         .expect("the first install succeeds");
 
     // The same provider again: every one of its operations collides with itself.
-    let error = connector_pack::pack(&["zendesk"], http(), credentials())(&mut registry)
-        .expect_err("installing the same provider twice must be refused, not silently merged");
+    let error =
+        connector_pack::pack(&["zendesk"], http(), credentials(), configuration())(&mut registry)
+            .expect_err("installing the same provider twice must be refused, not silently merged");
     let rendered = error.to_string();
 
     assert!(
@@ -198,8 +215,10 @@ fn an_unknown_provider_is_refused_rather_than_installed_as_nothing() {
     // `salesforce` used to be the sentinel and stopped being unknown when C-163 shipped it.
     const NO_SUCH_PROVIDER: &str = "no-such-vendor";
 
-    let error = connector_pack::pack(&[NO_SUCH_PROVIDER], http(), credentials())(&mut registry)
-        .expect_err("an unknown provider must be refused");
+    let error = connector_pack::pack(&[NO_SUCH_PROVIDER], http(), credentials(), configuration())(
+        &mut registry,
+    )
+    .expect_err("an unknown provider must be refused");
 
     assert!(error.to_string().contains(NO_SUCH_PROVIDER), "{error}");
     assert!(registry.names().is_empty());
@@ -218,8 +237,9 @@ fn an_unknown_provider_is_refused_rather_than_installed_as_nothing() {
 fn a_call_that_cannot_be_built_is_refused_by_name_rather_than_panicking() {
     let entry = catalog::operation(OperationKey::id("zendesk-ticket-show"))
         .expect("the shipped catalogue carries zendesk-ticket-show");
-    let operation = connector_pack::Operation::project(entry, http(), credentials())
-        .expect("the entry projects");
+    let operation =
+        connector_pack::Operation::project(entry, http(), credentials(), configuration())
+            .expect("the entry projects");
 
     let error = operation
         .build_request(&serde_json::json!({}))

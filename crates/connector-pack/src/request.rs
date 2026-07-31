@@ -49,8 +49,30 @@
 //!   `lit_text`. A parameter a caller passed `null` for is falsey, so a guarded filter is not sent;
 //!   rendering it as the literal text `null` would put `?page=null` on the wire in the one case the
 //!   guard exists to prevent.
+//!
+//! # A `{placeholder}` in a *literal* is the connector's configuration (C-193)
+//!
+//! flux interpolates `fmt` and never a `lit`, so a brace inside a bound string literal names
+//! something flux itself would never fill — which is exactly what a templated `base_url` is. In the
+//! shipped catalogue that correspondence is not approximate but exact: across all 242 emitted
+//! operations, the **only** string literals carrying braces are the nine templated base URLs
+//! (`{subdomain}.zendesk.com`, `{shop}.myshopify.com`, `{site}.atlassian.net`, freshdesk's and
+//! okta's `{domain}`, `{instance}.my.salesforce.com`, docusign's `{account_host}`/`{account_id}`
+//! pair, contentful's `{space_id}`/`{environment_id}` and statuspage's `{page_id}`).
+//!
+//! So [`endpoint_variables`] reads an operation's configuration variables off its own emitted Flux
+//! rather than waiting for C-87 to publish them, in the same spirit as everything else here: the
+//! pack's request is the module's request by construction. [`Build::endpoints`] then substitutes the
+//! host's values, and **into literals only**.
+//!
+//! Literals only is the safety half. Substituting over the *finished* URL instead would reach a
+//! caller's parameter values — an argument spelled `{account_id}` would be filled in with a tenant's
+//! configuration on its way to the vendor. A literal is authored by the emitter, so nothing a caller
+//! passes can be substituted into. The residual case — a caller value that *contains* a placeholder
+//! and therefore survives into the URL — is caught by the guard in [`build`], which refuses a URL
+//! still naming a configuration variable rather than sending it.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use flux_lang::ast::Node;
 use flux_lang::program::CompositeOpDecl;
@@ -112,17 +134,85 @@ impl Request {
     }
 }
 
-/// Build the request `declaration` makes when called with `params`.
+/// **The endpoint-configuration variables `declaration` needs**, in stable order.
+///
+/// Every `{name}` appearing in a string literal in the operation's body. See this module's
+/// documentation for why that set is exactly the connector's configuration and nothing else: flux
+/// interpolates `fmt` and never `lit`, so a brace surviving in a literal is by construction a name
+/// no evaluation fills.
+///
+/// Derived once, when the operation is projected, so a missing value is a refusal that can name the
+/// variable *before* anything is assembled — rather than a brace noticed in a finished URL.
+pub(crate) fn endpoint_variables(declaration: &CompositeOpDecl) -> Vec<String> {
+    let mut found = BTreeSet::new();
+    scan(&declaration.body.body, &mut found);
+    found.into_iter().collect()
+}
+
+/// Collect the placeholders of every string literal in `nodes`.
+///
+/// The node set walked is exactly the one [`run`] and [`eval`] model; anything outside it is
+/// [`Error::Unbuildable`] at build time, so skipping it here cannot let a request through with a
+/// variable nobody resolved.
+fn scan(nodes: &[Node], found: &mut BTreeSet<String>) {
+    for node in nodes {
+        scan_node(node, found);
+    }
+}
+
+fn scan_node(node: &Node, found: &mut BTreeSet<String>) {
+    match node {
+        Node::Lit {
+            value: Value::String(text),
+        } => {
+            scan_template(text, |name| {
+                found.insert(name.to_owned());
+                None
+            });
+        }
+        Node::Bind { value, .. } => scan_node(value, found),
+        Node::Call { args, .. } => scan(args, found),
+        Node::Obj { fields } => {
+            for value in fields.values() {
+                scan_node(value, found);
+            }
+        }
+        Node::List { items } => scan(items, found),
+        Node::Parse { value, .. } => scan_node(value, found),
+        Node::When {
+            cond,
+            then,
+            otherwise,
+        } => {
+            scan_node(cond, found);
+            scan(then, found);
+            scan(otherwise, found);
+        }
+        // `Var`, `Fmt` and `Return` carry no literal text: a `fmt` template's placeholders are
+        // symbols the body binds, which is the opposite of what this is looking for.
+        _ => {}
+    }
+}
+
+/// Build the request `declaration` makes when called with `params`, over `endpoints`.
+///
+/// `endpoints` maps each name [`endpoint_variables`] reported to the value the host's configuration
+/// port supplied. It is **complete or the call does not get here** — [`crate::Operation`] resolves
+/// every variable and refuses first — so substitution is total by construction rather than by
+/// inspection.
 ///
 /// # Errors
 ///
-/// [`Error::MissingParameter`] when the caller omitted a parameter the operation declares, and
+/// [`Error::MissingParameter`] when the caller omitted a parameter the operation declares,
 /// [`Error::Unbuildable`] when the body contains something this evaluator does not model or a
-/// free-form body is not JSON. Both refuse; neither repairs.
+/// free-form body is not JSON, and [`Error::UnresolvedEndpoint`] when a configuration variable is
+/// still named in the finished URL — which only a caller-supplied value can cause. All three refuse;
+/// none repairs.
 pub(crate) fn build(
     operation: &str,
     declaration: &CompositeOpDecl,
     params: &Value,
+    endpoints: &BTreeMap<String, String>,
 ) -> Result<Request, Error> {
     let mut env = Env::new();
 
@@ -143,168 +233,209 @@ pub(crate) fn build(
         env.insert(name.to_string(), value);
     }
 
-    match run(operation, &declaration.body.body, &mut env)? {
-        Some(request) => Ok(request),
-        None => Err(Error::Unbuildable {
-            operation: operation.to_owned(),
-            message: format!("its body makes no `{HTTP_REQUEST}` call"),
-        }),
-    }
-}
-
-/// The symbols an op body has bound so far.
-type Env = BTreeMap<String, Value>;
-
-/// Run `nodes`, stopping at the `http.request` call.
-fn run(operation: &str, nodes: &[Node], env: &mut Env) -> Result<Option<Request>, Error> {
-    for node in nodes {
-        match node {
-            // `response = http.request(…)`: the request is the whole point of the body, so it ends
-            // the walk. Nothing after it can change what is sent.
-            Node::Bind { value, .. } if matches!(value.as_ref(), Node::Call { .. }) => {
-                let Node::Call { op, args } = value.as_ref() else {
-                    unreachable!("the guard above matched a call");
-                };
-                return request_of(operation, op, args, env).map(Some);
-            }
-            // A bare statement-position call. The emitter binds its response rather than discarding
-            // it (C-9), so this is not a shape the catalogue carries — it is here because reading
-            // the request off it is the same operation, and refusing it would be a refusal of
-            // spelling rather than of substance.
-            Node::Call { op, args } => return request_of(operation, op, args, env).map(Some),
-            Node::Bind { name, value, .. } => {
-                let value = eval(operation, value, env)?;
-                env.insert(name.0.clone(), value);
-            }
-            Node::When {
-                cond,
-                then,
-                otherwise,
-            } => {
-                let taken = if truthy(&eval(operation, cond, env)?) {
-                    then
-                } else {
-                    otherwise
-                };
-                if let Some(request) = run(operation, taken, env)? {
-                    return Ok(Some(request));
-                }
-            }
-            // The emitted body ends `return $response`, which cannot be reached before the request
-            // is built. Anything the walk has not modelled is refused rather than skipped.
-            Node::Return { .. } => break,
-            other => {
-                return Err(Error::Unbuildable {
-                    operation: operation.to_owned(),
-                    message: format!(
-                        "its body contains {}, which this pack does not evaluate",
-                        kind(other)
-                    ),
-                })
-            }
+    let cx = Build {
+        operation,
+        endpoints,
+    };
+    let request = match cx.run(&declaration.body.body, &mut env)? {
+        Some(request) => request,
+        None => {
+            return Err(Error::Unbuildable {
+                operation: operation.to_owned(),
+                message: format!("its body makes no `{HTTP_REQUEST}` call"),
+            })
         }
-    }
-    Ok(None)
-}
-
-/// Read `{ method, url, headers, body }` off the `http.request` call the body ends in.
-fn request_of(operation: &str, op: &str, args: &[Node], env: &Env) -> Result<Request, Error> {
-    if op != HTTP_REQUEST {
-        return Err(Error::Unbuildable {
-            operation: operation.to_owned(),
-            message: format!(
-                "its body calls `{op}`, and this pack delegates only `{HTTP_REQUEST}`"
-            ),
-        });
-    }
-    let [Node::Obj { fields }] = args else {
-        return Err(Error::Unbuildable {
-            operation: operation.to_owned(),
-            message: format!(
-                "its `{HTTP_REQUEST}` call takes something other than one named record"
-            ),
-        });
     };
 
-    let mut request = Request {
-        // `http.request` itself defaults an absent method to GET; the emitter always states one, so
-        // this default is the same answer arrived at twice rather than a guess.
-        method: "GET".to_string(),
-        url: String::new(),
-        headers: BTreeMap::new(),
-        body: None,
-    };
-    for (name, value) in fields {
-        match name.as_str() {
-            "url" => request.url = text(&eval(operation, value, env)?),
-            "method" => request.method = text(&eval(operation, value, env)?),
-            "body" => request.body = Some(text(&eval(operation, value, env)?)),
-            "headers" => {
-                let Node::Obj { fields } = value.as_ref() else {
-                    return Err(Error::Unbuildable {
-                        operation: operation.to_owned(),
-                        message: "its request headers are not a record".to_string(),
-                    });
-                };
-                for (header, value) in fields {
-                    request
-                        .headers
-                        .insert(header.clone(), text(&eval(operation, value, env)?));
-                }
-            }
-            other => {
-                return Err(Error::Unbuildable {
-                    operation: operation.to_owned(),
-                    message: format!("its request names `{other}`, which this pack does not carry"),
-                })
-            }
-        }
-    }
-
-    if request.url.is_empty() {
-        return Err(Error::Unbuildable {
+    // **The second lock on "total or refused".** Every configuration variable had a value, so no
+    // literal can have carried one through — but a caller may have passed a *parameter* whose text
+    // spells one, and interpolating that leaves the brace in the URL. Sending it would be a request
+    // to a host, or a path, that names a variable nobody resolved.
+    if let Some(variable) = endpoints
+        .keys()
+        .find(|variable| request.url.contains(&format!("{{{variable}}}")))
+    {
+        return Err(Error::UnresolvedEndpoint {
             operation: operation.to_owned(),
-            message: "its request has no URL".to_string(),
+            variable: variable.clone(),
+            url: request.url,
         });
     }
     Ok(request)
 }
 
-/// Evaluate one pure value node.
-fn eval(operation: &str, node: &Node, env: &Env) -> Result<Value, Error> {
-    match node {
-        Node::Lit { value } => Ok(value.clone()),
-        Node::Var { name } => env.get(&name.0).cloned().ok_or_else(|| Error::Unbuildable {
-            operation: operation.to_owned(),
-            message: format!("its body reads `{}` before binding it", name.0),
-        }),
-        Node::Fmt { template } => Ok(Value::String(interpolate(template, env))),
-        Node::Obj { fields } => {
-            let mut object = serde_json::Map::new();
-            for (name, value) in fields {
-                object.insert(name.clone(), eval(operation, value, env)?);
-            }
-            Ok(Value::Object(object))
+/// The symbols an op body has bound so far.
+type Env = BTreeMap<String, Value>;
+
+/// One request being built: the operation it belongs to, and the configuration its literals are
+/// substituted against.
+///
+/// A context rather than two more arguments on five functions, and it is where the operation id the
+/// refusals quote lives.
+struct Build<'a> {
+    /// The operation id, for a refusal that names what it refused.
+    operation: &'a str,
+    /// The host's resolved endpoint values, keyed as [`endpoint_variables`] reports them.
+    endpoints: &'a BTreeMap<String, String>,
+}
+
+impl Build<'_> {
+    /// This operation could not be built, and why.
+    fn unbuildable(&self, message: String) -> Error {
+        Error::Unbuildable {
+            operation: self.operation.to_owned(),
+            message,
         }
-        // `parse($body, as: "json")` is how a free-form body reaches the vendor at all: it
-        // canonicalizes a record *and* validates a JSON string, so both spellings of "here is my
-        // body" arrive intact. A string that is not JSON is refused here rather than sent.
-        Node::Parse { value, as_type } if as_type == "json" => match eval(operation, value, env)? {
-            Value::String(text) => {
-                serde_json::from_str(&text).map_err(|source| Error::Unbuildable {
-                    operation: operation.to_owned(),
-                    message: format!("its body was supplied as text that is not JSON: {source}"),
-                })
+    }
+
+    /// Run `nodes`, stopping at the `http.request` call.
+    fn run(&self, nodes: &[Node], env: &mut Env) -> Result<Option<Request>, Error> {
+        for node in nodes {
+            match node {
+                // `response = http.request(…)`: the request is the whole point of the body, so it
+                // ends the walk. Nothing after it can change what is sent.
+                Node::Bind { value, .. } if matches!(value.as_ref(), Node::Call { .. }) => {
+                    let Node::Call { op, args } = value.as_ref() else {
+                        unreachable!("the guard above matched a call");
+                    };
+                    return self.request_of(op, args, env).map(Some);
+                }
+                // A bare statement-position call. The emitter binds its response rather than
+                // discarding it (C-9), so this is not a shape the catalogue carries — it is here
+                // because reading the request off it is the same operation, and refusing it would
+                // be a refusal of spelling rather than of substance.
+                Node::Call { op, args } => return self.request_of(op, args, env).map(Some),
+                Node::Bind { name, value, .. } => {
+                    let value = self.eval(value, env)?;
+                    env.insert(name.0.clone(), value);
+                }
+                Node::When {
+                    cond,
+                    then,
+                    otherwise,
+                } => {
+                    let taken = if truthy(&self.eval(cond, env)?) {
+                        then
+                    } else {
+                        otherwise
+                    };
+                    if let Some(request) = self.run(taken, env)? {
+                        return Ok(Some(request));
+                    }
+                }
+                // The emitted body ends `return $response`, which cannot be reached before the
+                // request is built. Anything the walk has not modelled is refused rather than
+                // skipped.
+                Node::Return { .. } => break,
+                other => {
+                    return Err(self.unbuildable(format!(
+                        "its body contains {}, which this pack does not evaluate",
+                        kind(other)
+                    )))
+                }
             }
-            other => Ok(other),
-        },
-        other => Err(Error::Unbuildable {
-            operation: operation.to_owned(),
-            message: format!(
+        }
+        Ok(None)
+    }
+
+    /// Read `{ method, url, headers, body }` off the `http.request` call the body ends in.
+    fn request_of(&self, op: &str, args: &[Node], env: &Env) -> Result<Request, Error> {
+        if op != HTTP_REQUEST {
+            return Err(self.unbuildable(format!(
+                "its body calls `{op}`, and this pack delegates only `{HTTP_REQUEST}`"
+            )));
+        }
+        let [Node::Obj { fields }] = args else {
+            return Err(self.unbuildable(format!(
+                "its `{HTTP_REQUEST}` call takes something other than one named record"
+            )));
+        };
+
+        let mut request = Request {
+            // `http.request` itself defaults an absent method to GET; the emitter always states one,
+            // so this default is the same answer arrived at twice rather than a guess.
+            method: "GET".to_string(),
+            url: String::new(),
+            headers: BTreeMap::new(),
+            body: None,
+        };
+        for (name, value) in fields {
+            match name.as_str() {
+                "url" => request.url = text(&self.eval(value, env)?),
+                "method" => request.method = text(&self.eval(value, env)?),
+                "body" => request.body = Some(text(&self.eval(value, env)?)),
+                "headers" => {
+                    let Node::Obj { fields } = value.as_ref() else {
+                        return Err(
+                            self.unbuildable("its request headers are not a record".to_string())
+                        );
+                    };
+                    for (header, value) in fields {
+                        request
+                            .headers
+                            .insert(header.clone(), text(&self.eval(value, env)?));
+                    }
+                }
+                other => {
+                    return Err(self.unbuildable(format!(
+                        "its request names `{other}`, which this pack does not carry"
+                    )))
+                }
+            }
+        }
+
+        if request.url.is_empty() {
+            return Err(self.unbuildable("its request has no URL".to_string()));
+        }
+        Ok(request)
+    }
+
+    /// Evaluate one pure value node.
+    fn eval(&self, node: &Node, env: &Env) -> Result<Value, Error> {
+        match node {
+            // **The one substitution point.** A brace in a literal is a configuration variable and
+            // never a symbol, because flux does not interpolate a `lit` — see this module's
+            // documentation for why doing it here rather than over the finished URL is the half
+            // that keeps caller data out of it.
+            Node::Lit {
+                value: Value::String(literal),
+            } => Ok(Value::String(self.substitute(literal))),
+            Node::Lit { value } => Ok(value.clone()),
+            Node::Var { name } => env.get(&name.0).cloned().ok_or_else(|| {
+                self.unbuildable(format!("its body reads `{}` before binding it", name.0))
+            }),
+            Node::Fmt { template } => Ok(Value::String(interpolate(template, env))),
+            Node::Obj { fields } => {
+                let mut object = serde_json::Map::new();
+                for (name, value) in fields {
+                    object.insert(name.clone(), self.eval(value, env)?);
+                }
+                Ok(Value::Object(object))
+            }
+            // `parse($body, as: "json")` is how a free-form body reaches the vendor at all: it
+            // canonicalizes a record *and* validates a JSON string, so both spellings of "here is my
+            // body" arrive intact. A string that is not JSON is refused here rather than sent.
+            Node::Parse { value, as_type } if as_type == "json" => match self.eval(value, env)? {
+                Value::String(text) => serde_json::from_str(&text).map_err(|source| {
+                    self.unbuildable(format!(
+                        "its body was supplied as text that is not JSON: {source}"
+                    ))
+                }),
+                other => Ok(other),
+            },
+            other => Err(self.unbuildable(format!(
                 "its body computes {}, which this pack does not evaluate",
                 kind(other)
-            ),
-        }),
+            ))),
+        }
+    }
+
+    /// Fill this operation's configuration variables into a string literal.
+    ///
+    /// The same brace grammar [`interpolate`] uses, over the host's values instead of the body's
+    /// symbols — one scanner, so the two cannot drift into disagreeing about what a placeholder is.
+    fn substitute(&self, literal: &str) -> String {
+        scan_template(literal, |name| self.endpoints.get(name).cloned())
     }
 }
 
@@ -314,6 +445,21 @@ fn eval(operation: &str, node: &Node, env: &Env) -> Result<Value, Error> {
 /// exist because of, so reproducing it is what keeps a guarded filter genuinely unsent rather than
 /// sent as the literal text `{page}`.
 fn interpolate(template: &str, env: &Env) -> String {
+    scan_template(template, |name| env.get(name).map(text))
+}
+
+/// **The one brace grammar**, shared by all three things this module does with a template.
+///
+/// `fill` is called with each placeholder name in order; `Some` replaces it, `None` leaves it
+/// verbatim — which is flux-lang's own `interpolate_str` behaviour and the whole reason the
+/// emitter's `when` guards mean anything. [`interpolate`] fills from an op's bound symbols,
+/// [`Build::substitute`] from the host's configuration, and [`scan_node`] answers `None` to every
+/// name while recording it.
+///
+/// One scanner rather than three, because the alternative is three implementations of "what counts
+/// as a placeholder" that agree until one of them does not — and the one that disagrees would be the
+/// one deciding whether a URL still carries a variable.
+fn scan_template(template: &str, mut fill: impl FnMut(&str) -> Option<String>) -> String {
     if !template.contains('{') {
         return template.to_string();
     }
@@ -332,9 +478,9 @@ fn interpolate(template: &str, env: &Env) -> String {
             out.push_str(at_brace);
             return out;
         };
-        match env.get(inner[..close].trim()) {
+        match fill(inner[..close].trim()) {
             Some(value) => {
-                out.push_str(&text(value));
+                out.push_str(&value);
                 rest = &inner[close + close_token.len()..];
             }
             None => {
