@@ -1,18 +1,28 @@
-//! Contract for the deliberately narrow Vercel provider (C-170).
+//! Contract for the deliberately narrow Vercel provider (C-170), as C-187 reshaped it.
 //!
-//! **The archetype this connector exists for.** Every operation Vercel exposes here takes an
-//! optional `?teamId=` query parameter — optional in the API, load-bearing in effect. Omit it and
-//! the call is scoped to the caller's personal account instead of any team, silently: there is no
-//! error, no prompt, and (for the two `list` operations) a complete, plausible-looking response for
-//! the wrong account. A `description` that does not say so hands a model a silent footgun — this
-//! file's real acceptance claim, the one C-107's `Notion-Version` test and C-171's root-folder
-//! sentinel test are the standing archetypes for, is that **every** declared `teamId` parameter says
-//! so in the text a model actually reads.
+//! **The archetype this connector exists for.** Every Vercel endpoint here takes a `?teamId=` query
+//! parameter that is *optional in the API and load-bearing in effect*: omit it and the call is
+//! scoped to the caller's personal account instead of any team, silently — no error, no prompt, and
+//! (for the two `list` operations) a complete, plausible-looking response for the wrong account.
+//!
+//! C-170 could only mitigate that with prose, because nothing in `ConfigField::binds` reached a
+//! query parameter: `teamId` shipped as an optional caller argument whose `description` warned about
+//! the fallback, which is text a model reads and may not act on. **C-187 removed the hazard instead
+//! of describing it.** `teamId` is now pinned by a `[[config]]` field (`binds = "query.teamId"`),
+//! mandatory, and a parameter of no operation — so the "not sent" state the archetype is about does
+//! not exist, and a model cannot act as an account the operator did not name.
+//!
+//! `the_team_is_pinned_by_configuration_and_is_a_parameter_of_no_operation` is the acceptance test,
+//! and `every_operation_sends_the_pinned_team` is what stops a later edit from scoping only some of
+//! the service's calls — which would leave the rest addressing a different account, the same failure
+//! by another route.
 
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{provider, Connector, HttpMethod, Idempotency, Param, Risk};
+use connector_spec::{
+    provider, Binding, Connector, HttpMethod, Idempotency, Level, Position, Risk,
+};
 
 const PROVIDER: &str = "vercel";
 const BASE_URL: &str = "https://api.vercel.com";
@@ -47,19 +57,6 @@ fn vercel() -> Connector {
         .connector
 }
 
-/// Every `teamId` query parameter across the connector, wherever it appears.
-fn team_id_params(connector: &Connector) -> Vec<(&str, &Param)> {
-    let mut found = Vec::new();
-    for operation in &connector.operations {
-        for param in &operation.params.query {
-            if param.name == "teamId" {
-                found.push((operation.id.as_str(), param));
-            }
-        }
-    }
-    found
-}
-
 #[test]
 fn the_vercel_connector_loads() {
     let connector = vercel();
@@ -91,49 +88,90 @@ fn the_curated_operation_set_is_the_one_the_story_selected() {
     assert_eq!(ids, OPERATIONS);
 }
 
-/// **The acceptance assertion.** Every operation declares an optional `teamId` query parameter, and
-/// its description names the personal-account fallback — the fact a model must read before deciding
-/// whether it is safe to omit.
+/// **The acceptance assertion** (C-187): the team is configuration, not an argument.
+///
+/// Three properties, and each removes one way the original hazard could come back. It is *pinned*,
+/// so it is supplied once rather than chosen per call. It is *required*, so there is no state in
+/// which the parameter simply is not sent — which is the entire archetype. And it is a parameter of
+/// no operation, so a model cannot override the operator's choice of account.
 #[test]
-fn every_operation_declares_team_id_and_names_the_personal_account_fallback() {
+fn the_team_is_pinned_by_configuration_and_is_a_parameter_of_no_operation() {
     let connector = vercel();
-    let params = team_id_params(&connector);
 
+    let team = connector
+        .config_field("team_id")
+        .expect("`[[config]]` must ask for the team this connection acts on behalf of");
     assert_eq!(
-        params.len(),
-        OPERATIONS.len(),
-        "expected every one of the {} curated operations to declare `teamId`; found it on {:?}",
-        OPERATIONS.len(),
-        params.iter().map(|(id, _)| *id).collect::<Vec<_>>()
+        team.binding(),
+        Some(Binding::Request {
+            position: Position::Query,
+            name: "teamId"
+        })
+    );
+    assert_eq!(
+        team.level(),
+        Some(Level::Connection),
+        "a team is one per tenant, not one per vendor — the level is derived from `binds`"
+    );
+    assert!(
+        !team.secret,
+        "a Vercel team id is a public identifier, shown in the vendor's own dashboard URL"
+    );
+    assert!(
+        team.required,
+        "the whole hazard is a `teamId` that goes unsent; an optional pin would reproduce it"
     );
 
-    for (operation_id, param) in &params {
+    for operation in &connector.operations {
         assert!(
-            !param.required,
-            "`{operation_id}`'s `teamId` is declared required — the whole hazard is that the API \
-             makes it optional"
-        );
-        assert_eq!(param.schema["type"], "string");
-        let description = param.description.to_lowercase();
-        assert!(
-            description.contains("personal account"),
-            "`{operation_id}`'s `teamId` description does not name the personal-account fallback. \
-             Full text: {:?}",
-            param.description
-        );
-        assert!(
-            description.contains("omit"),
-            "`{operation_id}`'s `teamId` description does not describe what omitting it does. Full \
-             text: {:?}",
-            param.description
+            operation.params.query.iter().all(|p| p.name != "teamId"),
+            "`{}` declares `teamId` as a query parameter. A value an operator pins at install time \
+             and a caller may also pass is not pinned — the caller's wins, and a write can land on \
+             an account the operator never named",
+            operation.id
         );
     }
 }
 
-/// The connector-level `description` on the two `list` operations also names the hazard — a model
-/// choosing which tool to call reads this before it ever reaches a parameter description.
+/// **Every operation sends it, not merely most of them.**
+///
+/// A tenant scope honoured on some of a service's calls and not others leaves the rest addressing a
+/// different account, which is the original failure wearing a different hat. Asserted on the emitted
+/// Flux rather than on the declaration, because the emitted module is what actually travels.
 #[test]
-fn list_operations_name_the_hazard_in_their_own_description() {
+fn every_operation_sends_the_pinned_team() {
+    let connector = vercel();
+    for id in OPERATIONS {
+        let operation = connector
+            .operations
+            .iter()
+            .find(|operation| operation.id == *id)
+            .unwrap_or_else(|| panic!("missing {id}"));
+        let flux = emit_operation(&connector, operation)
+            .unwrap_or_else(|error| panic!("`{id}` must emit: {error}"));
+
+        assert!(
+            flux.contains("teamId = \"{teamId}\""),
+            "`{id}` must bind the pinned team as a literal carrying its placeholder:\n{flux}"
+        );
+        assert!(
+            flux.contains("teamId={teamId}"),
+            "`{id}` must send `?teamId=` unconditionally — no `when` guard, because a pinned value \
+             has no \"not supplied\" state:\n{flux}"
+        );
+        assert!(
+            !flux.starts_with(&format!("op {id}(teamId")),
+            "`{id}` must not declare the pinned team as its first parameter:\n{flux}"
+        );
+    }
+}
+
+/// The two `list` operations are the ones whose wrong-account failure is silent, so their own
+/// descriptions — the text a model reads when choosing a tool — must say which account they answer
+/// for. The claim changed with the shape: it is no longer "omitting `teamId` is dangerous" but "this
+/// connector is installed for one team and reaches no other".
+#[test]
+fn list_operations_state_the_account_they_answer_for() {
     let connector = vercel();
     for id in ["vercel-projects-list", "vercel-deployments-list"] {
         let operation = connector
@@ -143,8 +181,8 @@ fn list_operations_name_the_hazard_in_their_own_description() {
             .unwrap_or_else(|| panic!("missing {id}"));
         let description = operation.description.to_lowercase();
         assert!(
-            description.contains("personal account") && description.contains("team"),
-            "`{id}` description does not name the team/personal-account hazard. Full text: {:?}",
+            description.contains("team") && description.contains("pinned at install time"),
+            "`{id}` description does not say which account it answers for. Full text: {:?}",
             operation.description
         );
     }
@@ -169,15 +207,15 @@ fn risk_and_idempotency_track_effect() {
     }
 }
 
-/// The connection-level configuration surface: the access token, and no realistic-looking example on
-/// it. `teamId` is deliberately absent from `[[config]]` — nothing in `ConfigField::binds` can name a
-/// per-request query parameter, so it stays a caller argument instead (see `providers/vercel.toml`'s
-/// header comment).
+/// The connection-level configuration surface: the access token and the pinned team, and no
+/// realistic-looking example on the token. The pair is the connector's whole install form — one
+/// field says what it may do, the other what it may do it to.
 #[test]
 fn the_access_token_is_configurable_and_carries_no_example_value() {
     let connector = vercel();
 
-    assert_eq!(connector.config.len(), 1, "teamId cannot be a config field");
+    let names: Vec<&str> = connector.config.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(names, ["token", "team_id"]);
     let field = &connector.config[0];
     assert_eq!(field.name, "token");
     assert!(field.secret, "a Vercel access token is a secret");

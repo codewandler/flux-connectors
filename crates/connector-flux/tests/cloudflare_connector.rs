@@ -1,17 +1,22 @@
-//! `providers/cloudflare.toml` exists, emits analyzable Flux, and answers C-169's actual question:
-//! **is a Cloudflare zone id configuration or a per-call argument?**
+//! `providers/cloudflare.toml` exists, emits analyzable Flux, and answers C-169's actual question —
+//! **is a Cloudflare zone id configuration or a per-call argument?** — which C-187 re-opened by
+//! making the first of the two expressible at all.
 //!
-//! Nearly every Cloudflare endpoint is scoped `/zones/{zone_id}/…`. `[[config]]` could in principle
-//! pin one zone per installed connector, the way `providers/zendesk.toml` pins `{subdomain}` into its
-//! host — but `ConfigField::binds` (`crates/connector-spec/src/config.rs`) only ever reaches a
-//! `{placeholder}` in `Connector::base_url`, through `endpoint.<variable>`, and Cloudflare's
-//! `base_url` is one host shared by every zone with no such placeholder to bind. So this connector
-//! declares `zone_id` as a required `params.path` argument on every zone-scoped operation, and the
-//! only one that plausibly omits it is `cloudflare-zone-list` — the call that exists to *discover*
-//! zone ids, so there is nothing yet to scope. `the_zone_id_is_a_per_call_argument_everywhere_but_zone_list`
-//! is the test for that claim, and `no_config_field_binds_a_zone` is what stops a later edit from
-//! quietly reintroducing a config-level zone as an unbound `endpoint.zone_id` the loader would refuse
-//! outright, or a *bound* one this file's own header comment says was deliberately not chosen.
+//! Nearly every Cloudflare endpoint is scoped `/zones/{zone_id}/…`. C-169 asked whether that id is
+//! configuration or a per-call argument and got the argument, because `ConfigField::binds` reached a
+//! `{placeholder}` in `Connector::base_url` and nothing else — and Cloudflare's `base_url` is one
+//! host shared by every zone, with no such placeholder to bind. C-169 recorded that if `[[config]]`
+//! ever reached an operation path, this connector's operations "would drop the parameter in favour
+//! of it".
+//!
+//! **C-187 reached it, and they did.** `zone_id` is now pinned by a `[[config]]` field
+//! (`binds = "path.zone_id"`), is a parameter of no operation, and reaches the emitted module as a
+//! substitutable placeholder — so one installed connection addresses one zone, and a model holding
+//! it cannot address another. `cloudflare-zone-list` stays unscoped, because it is the call that
+//! discovers the value an operator pins.
+//! `the_zone_id_is_pinned_by_configuration_and_is_a_parameter_of_no_operation` is the test for that
+//! claim, and `the_pinned_zone_reaches_the_module_as_a_substitutable_placeholder` is what stops a
+//! later edit from turning the pin back into an argument, or into a literal committed here.
 //!
 //! The other half of the story is getting `risk`/`idempotency` right on the two operations where they
 //! are least alike: a DNS record delete (destructive, and the vendor documents no repeat guarantee)
@@ -25,7 +30,9 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{provider, Connector, HttpMethod, Idempotency, Risk};
+use connector_spec::{
+    provider, Binding, Connector, HttpMethod, Idempotency, Level, Position, Risk,
+};
 
 /// `<repo root>/providers/cloudflare.toml`, derived from this crate's manifest directory so the test
 /// is independent of the working directory a runner happens to use.
@@ -66,8 +73,9 @@ fn the_cloudflare_connector_loads() {
     assert_eq!(connector.vendor, "Cloudflare");
     assert_eq!(
         connector.base_url, "https://api.cloudflare.com/client/v4",
-        "one host shared by every zone and every account — the fact that forces zone_id to be an \
-         argument rather than `[[config]]`"
+        "one host shared by every zone and every account — the fact that puts the zone scope in the \
+         operation path rather than in the address, and therefore out of reach of \
+         `endpoint.<variable>`"
     );
     assert!(
         !connector.operations.is_empty(),
@@ -99,70 +107,99 @@ fn the_curated_operation_set_is_the_one_the_story_selected() {
     );
 }
 
-/// **The acceptance assertion: `zone_id` is a per-call argument, not configuration.**
+/// **The acceptance assertion: `zone_id` is an operator's pin, not a caller's argument** (C-187).
 ///
-/// Every operation that reaches into a zone declares `zone_id` as a required path parameter;
-/// `cloudflare-zone-list` is the sole exception, because it is the call that discovers zone ids in
-/// the first place and has nothing yet to scope.
+/// Every operation scoped into a zone carries `{zone_id}` in its path and declares **no** parameter
+/// for it: the value is supplied once, when the connection is made. `cloudflare-zone-list` carries
+/// no zone scope at all, because it is the call that discovers zone ids and therefore the one an
+/// operator uses to *find* the value this connector then asks them to pin.
+///
+/// The half that makes this a pin rather than a default is the second loop: nothing declares
+/// `zone_id` as a parameter anywhere, so a model holding this connector cannot address a zone the
+/// operator did not choose — whatever the underlying token would permit.
 #[test]
-fn the_zone_id_is_a_per_call_argument_everywhere_but_zone_list() {
+fn the_zone_id_is_pinned_by_configuration_and_is_a_parameter_of_no_operation() {
     let connector = cloudflare();
 
+    let zone = connector
+        .config_field("zone_id")
+        .expect("`[[config]]` must ask for the zone this connection manages");
+    assert_eq!(
+        zone.binding(),
+        Some(Binding::Request {
+            position: Position::Path,
+            name: "zone_id"
+        })
+    );
+    assert_eq!(
+        zone.level(),
+        Some(Level::Connection),
+        "a zone is one per tenant, not one per vendor — the level is derived from `binds`, never \
+         authored"
+    );
+    assert!(
+        !zone.secret,
+        "a zone id is a public identifier an operator reads back off a settings page; marking it \
+         secret would claim gating this repository does not provide"
+    );
+    assert!(
+        zone.required,
+        "a host refuses the whole request when a pinned value is missing, so an optional pin is a \
+         connector that composes no URL"
+    );
+
     for operation in &connector.operations {
-        let zone_param = operation
-            .params
-            .path
-            .iter()
-            .find(|param| param.name == "zone_id");
-
-        if operation.id == "cloudflare-zone-list" {
-            assert!(
-                zone_param.is_none(),
-                "`cloudflare-zone-list` declares a `zone_id` path parameter, but it is the operation \
-                 that discovers zone ids — it has nothing to scope yet"
-            );
-            continue;
-        }
-
-        let zone_param = zone_param.unwrap_or_else(|| {
-            panic!(
-                "`{}` is scoped under /zones/{{zone_id}}/… but declares no `zone_id` path \
-                 parameter — every zone-scoped operation must take it as a caller argument, because \
-                 `[[config]]` has no binding that reaches an operation path (only \
-                 `endpoint.<var>` in `base_url`)",
-                operation.id
-            )
-        });
         assert!(
-            zone_param.required,
-            "`{}`'s `zone_id` must be required — an optional tenant id is an unaddressed request",
+            operation.params.path.iter().all(|p| p.name != "zone_id"),
+            "`{}` declares `zone_id` as a path parameter. A value an operator pins at install time \
+             and a caller may also pass is not pinned — the caller's wins, and the operator's \
+             choice of zone becomes a suggestion",
             operation.id
         );
-        assert!(
-            operation.path.contains("{zone_id}"),
-            "`{}` declares a `zone_id` parameter but its path {:?} has no `{{zone_id}}` placeholder",
-            operation.id,
-            operation.path
-        );
+        if operation.id == "cloudflare-zone-list" {
+            assert!(
+                !operation.path.contains("{zone_id}"),
+                "`cloudflare-zone-list` is the operation that discovers zone ids — it has nothing \
+                 to scope yet"
+            );
+        } else {
+            assert!(
+                operation.path.contains("{zone_id}"),
+                "`{}` is not scoped to the pinned zone; its path is {:?}",
+                operation.id,
+                operation.path
+            );
+        }
     }
 }
 
-/// The design decision's other half: no `[[config]]` field binds a zone at all. A config-level zone
-/// would have to be `endpoint.<var>`, and `base_url` carries no zone placeholder for one to bind —
-/// this pins the decision against a later edit re-adding it as a dead or refused binding.
+/// **The pin reaches the emitted module as a placeholder, not as a value** — which is what keeps it
+/// operator data rather than repository data.
+///
+/// The zone id is bound to a *string literal spelling its own placeholder*, exactly as a templated
+/// `base_url` is (`base = "https://{subdomain}.zendesk.com"`). That is the mechanism and not a
+/// resemblance: `connector-pack` reads a connector's configuration variables off the braces
+/// surviving in its emitted literals, and substitutes a tenant's value into literals only. Nothing
+/// in this repository holds a zone id, which is C-187's own constraint — a tenant id committed here
+/// is the same category error as a credential value.
 #[test]
-fn no_config_field_binds_a_zone() {
+fn the_pinned_zone_reaches_the_module_as_a_substitutable_placeholder() {
     let connector = cloudflare();
-    for field in &connector.config {
-        assert!(
-            !field.name.to_ascii_lowercase().contains("zone") && !field.binds.contains("zone"),
-            "config field `{}` (binds = {:?}) names a zone. `[[config]]` cannot pin a Cloudflare \
-             zone: `endpoint.<var>` only reaches a `{{placeholder}}` in `base_url`, and this \
-             connector's `base_url` is one host shared by every zone with no such placeholder",
-            field.name,
-            field.binds
-        );
-    }
+    let flux = emit_operation(&connector, op(&connector, "cloudflare-dns-record-list"))
+        .expect("the operation must emit");
+
+    assert!(
+        flux.contains("zone_id = \"{zone_id}\""),
+        "the pin must be bound as a literal carrying its placeholder:\n{flux}"
+    );
+    assert!(
+        flux.contains("url = fmt(\"{base}/zones/{zone_id}/dns_records\")"),
+        "the URL must interpolate the pinned symbol:\n{flux}"
+    );
+    assert!(
+        flux.starts_with("op cloudflare-dns-record-list -> Any"),
+        "the pinned value must not reach the declared parameter list:\n{flux}"
+    );
 }
 
 /// The DNS record delete: destructive, and not claimed idempotent on a guess.

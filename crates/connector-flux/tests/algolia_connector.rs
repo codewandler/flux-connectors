@@ -1,48 +1,34 @@
 //! Algolia (C-164) is the epic's probe for a value that has to reach **two positions on the same
 //! request at once**: `X-Algolia-Application-Id` is a mandatory header on every Algolia REST call,
-//! and the *same* application id also forms the request's hostname
-//! (`{app_id}-dsn.algolia.net`). Two configured hosts had already shipped by the time this story
-//! ran (Salesforce's `{instance}`, C-163) and two credentials on one request had already shipped
-//! (Datadog, C-160) — this connector needed both of those *and* one more fact neither needed: the
-//! same operator-supplied value in two places.
+//! and the *same* application id also forms the request's hostname (`{app_id}-dsn.algolia.net`).
 //!
-//! This is not a per-provider contract test in the shape every sibling in this directory is: there
-//! is no `providers/algolia.toml` to load, because **no declared value can reach both positions
-//! honestly**. That is the answer this probe was chosen to produce — see the story's `## Progress`
-//! for the full account — and this file pins the finding down with the loader itself rather than
-//! leaving it as prose:
+//! C-164 found all three available routes blocked and shipped no `providers/algolia.toml`. **C-187
+//! removed one of the three**, and this file is the record of exactly which:
 //!
-//! 1. **`ConfigField::binds` parses to exactly one of five destinations, and none of them is a
-//!    request header.** `Binding` (`crates/connector-spec/src/config.rs:178-202`) is `Endpoint`,
-//!    `Credential`, `Username`, `OAuthClientId` or `OAuthClientSecret`; `parse_binding`
-//!    (`config.rs:239-267`) accepts only `endpoint.`, `credential.`, `username.`,
-//!    `oauth.client_id`, `oauth.client_secret` and refuses everything else, including a
-//!    `header.`-shaped destination that does not exist.
-//! 2. **The one route that *can* reach a header — an `[[auth]]`-declared credential — forces
-//!    `secret = true` on whatever `[[config]]` field binds it**, unconditionally
-//!    (`crates/connector-spec/src/provider.rs:609-629`, `Binding::is_secret`,
-//!    `config.rs:223-231`). The application id is not a secret — Algolia's own docs publish it
-//!    alongside a search-only key as safe to embed in client-side code — so declaring it this way
-//!    would be the exact "a field claiming otherwise" case `config.rs`'s own module docs warn
-//!    against, not a workaround.
-//! 3. **A caller-supplied header parameter (`ParamSet::header`, `crates/connector-spec/src/ir.rs:259-266`)
-//!    is a *per-call* argument a model fills in on every invocation** — it has no connection to
-//!    `[[config]]` at all, so pinning the application id there does not pin it anywhere; it only
-//!    gives the operator a second place to type the same value, with nothing to keep the two in
-//!    step.
+//! 1. **`ConfigField::binds` reaches a header now, without routing through `[[auth]]`.**
+//!    `Binding::Request { position: Position::Header, .. }` is a non-secret, connection-level
+//!    destination — `header.X-Algolia-Application-Id` parses, its `is_secret()` is `false`, and the
+//!    emitted module carries the value as a substitutable placeholder in its header record. That was
+//!    C-164's first finding and it no longer holds.
+//! 2. **The credential route still forces a lie, and is still the wrong one.** An `[[auth]]`-declared
+//!    credential makes `secret = true` unconditional for any `[[config]]` field binding it
+//!    (`Binding::is_secret`), and an application id Algolia publishes as safe to embed client-side is
+//!    not a secret. Unchanged, and now avoidable rather than merely refused.
+//! 3. **One declared value still cannot occupy two positions.** `binds` names exactly *one*
+//!    destination, and a header pin's placeholder is its header name while an endpoint binding's is
+//!    its template variable — so the hostname and the header are two fields with two placeholders and
+//!    two host-side slots. An operator would type the application id twice, with nothing keeping the
+//!    two in step, which is precisely the outcome C-164 weighed against a refusal.
 //!
-//! So the two positions genuinely cannot share one declared value today: the endpoint binding
-//! reaches the hostname and nothing else, and every route that reaches a header either does not
-//! exist (a non-secret header binding) or requires mislabelling a public identifier as a secret.
-//! Filed as a finding for
-//! [C-187](../../../docs/stories/C-187-config-cannot-pin-a-request-component.md), which already
-//! tracks the config surface's reach into a path segment and a query parameter — this is the same
-//! gap, met at a header instead.
+//! So the probe's answer is now *narrower* rather than overturned, and this file pins the new
+//! boundary with the loader and the emitter rather than leaving it as prose. Shipping
+//! `providers/algolia.toml` remains C-164's call, and needs the third finding addressed.
 
 use std::path::{Path, PathBuf};
 
+use connector_flux::emit_operation;
 use connector_spec::config::parse_binding;
-use connector_spec::{provider, Binding};
+use connector_spec::{provider, Binding, Level, Position};
 
 /// A minimal, otherwise-valid provider fixture. Only the pieces under test vary — the rest is held
 /// constant so a failure is about the binding, and nothing else.
@@ -95,23 +81,42 @@ fn providers_dir() -> PathBuf {
         .join("providers")
 }
 
-/// **`Binding` is closed to five destinations, and a request header is not one of them.**
+/// **A non-secret, operator-supplied value reaches a request header** (C-187) — C-164's first
+/// finding, overturned.
 ///
-/// `crates/connector-spec/src/config.rs:178-202` declares
-/// `enum Binding { Endpoint { variable }, Credential { name }, Username { name }, OAuthClientId,
-/// OAuthClientSecret }`. `parse_binding` (`:239-267`) accepts only the four string prefixes and two
-/// literals that name those five variants and refuses everything else — including a `header.`
-/// destination this connector would need, which was never given a spelling to refuse or accept.
+/// `header.<name>` parses to `Binding::Request { position: Header, .. }`: connection level, derived
+/// rather than authored, and **not secret**, so the `secret`/`binds` agreement that makes the
+/// credential path trustworthy is untouched. That is the shape C-164's own note asked for — "a
+/// binding that reaches a header *without* routing through `[[auth]]`" — rather than the weakening
+/// it ruled out.
 #[test]
-fn config_binding_has_no_header_destination() {
-    let error =
-        parse_binding("header.X-Algolia-Application-Id").expect_err("no header binding exists");
-    assert!(
-        error.contains("is not a binding"),
-        "expected the closed-set refusal message, got: {error}"
+fn a_config_field_reaches_a_header_without_routing_through_auth() {
+    assert_eq!(
+        parse_binding("header.X-Algolia-Application-Id"),
+        Ok(Binding::Request {
+            position: Position::Header,
+            name: "X-Algolia-Application-Id"
+        })
     );
+    assert_eq!(
+        parse_binding("header.X-Algolia-Application-Id").map(Binding::level),
+        Ok(Level::Connection),
+        "an application id is one per tenant, not one per vendor"
+    );
+    assert_eq!(
+        parse_binding("header.X-Algolia-Application-Id").map(Binding::is_secret),
+        Ok(false),
+        "the whole point: a public identifier reaches a header without being declared a credential"
+    );
+
+    // The set is still closed. A destination nobody gave a spelling is still a load error, not a
+    // key the loader accepts and ignores.
+    let error = parse_binding("cookie.session").expect_err("no such destination exists");
     for known in [
         "endpoint.<variable>",
+        "path.<variable>",
+        "query.<name>",
+        "header.<name>",
         "credential.<name>",
         "username.<name>",
         "oauth.client_id",
@@ -122,6 +127,43 @@ fn config_binding_has_no_header_destination() {
             "expected the refusal to list every real destination including {known:?}, got: {error}"
         );
     }
+}
+
+/// The header pin reaches the wire, not just the declaration: the emitted module binds it as a
+/// literal carrying its placeholder and puts that symbol in the request's header record, and it
+/// never appears in the operation's parameter list.
+#[test]
+fn a_pinned_header_reaches_the_emitted_request_and_not_the_signature() {
+    let config = r#"
+[[config]]
+name = "app_id"
+label = "Algolia application id"
+help = "For the probe fixture only"
+binds = "endpoint.app_id"
+
+[[config]]
+name = "application_id_header"
+label = "Algolia application id (header)"
+help = "For the probe fixture only"
+binds = "header.X-Algolia-Application-Id"
+"#;
+    let loaded = provider::load("providers/algolia.toml", &fixture("", config))
+        .expect("a non-secret header pin is a legal declaration");
+    let operation = &loaded.connector.operations[0];
+    let flux = emit_operation(&loaded.connector, operation).expect("it must emit");
+
+    assert!(
+        flux.contains(r#"X_Algolia_Application_Id = "{X-Algolia-Application-Id}""#),
+        "the pin must be bound as a literal carrying its placeholder:\n{flux}"
+    );
+    assert!(
+        flux.contains(r#""X-Algolia-Application-Id": X_Algolia_Application_Id"#),
+        "the pinned symbol must reach the request's header record:\n{flux}"
+    );
+    assert!(
+        flux.starts_with("op algolia-index-list -> Any"),
+        "a pinned header is never a caller argument:\n{flux}"
+    );
 }
 
 /// **The one route that reaches a header — a declared `[[auth]]` credential — forces `secret =
@@ -162,73 +204,76 @@ binds = "credential.algolia.application_id"
     );
 }
 
-/// **The endpoint binding reaches the hostname only — never a header — and a caller-supplied
-/// header parameter has no link back to it.**
+/// **One declared value still cannot occupy two positions** — C-164's third finding, unchanged.
 ///
-/// Binding the application id to `endpoint.app_id` loads cleanly and correctly resolves the
-/// `{app_id}` template variable in `base_url`. But `ParamSet::header`
-/// (`crates/connector-spec/src/ir.rs:259-266`) is caller-supplied — a value a *model* fills in on
-/// every call, not one a `[[config]]` field can reach — so declaring the same header as an
-/// operation parameter does not pin it to the config value at all. It only gives an operator (or a
-/// model acting for one) a second, disconnected place to repeat the same string, with nothing
-/// enforcing that the two ever agree.
+/// `binds` names exactly one destination, and the two that Algolia needs carry *different*
+/// placeholders: an endpoint binding's is its `base_url` template variable (`app_id`), a header
+/// pin's is the header name itself (`X-Algolia-Application-Id`). A host keys a configuration value
+/// by `(tenant, provider, service, kind, name)`, so those are two slots — two questions in the
+/// connect form, both answered with the same string, with nothing enforcing that they agree.
+///
+/// That is not a defect in the pin; it is the boundary of what C-187 set out to move. It is asserted
+/// here so that shipping this connector remains a deliberate decision rather than an oversight.
 #[test]
-fn the_endpoint_binding_reaches_only_the_host_and_a_header_parameter_is_a_separate_per_call_value()
-{
+fn the_hostname_and_the_header_are_still_two_declared_fields_with_two_slots() {
     let config = r#"
 [[config]]
 name = "app_id"
 label = "Algolia application id"
 help = "For the probe fixture only"
-secret = false
 binds = "endpoint.app_id"
+
+[[config]]
+name = "application_id_header"
+label = "Algolia application id (header)"
+help = "For the probe fixture only"
+binds = "header.X-Algolia-Application-Id"
 "#;
-    let source = fixture("", config);
-    let loaded = provider::load("providers/algolia.toml", &source)
-        .expect("binding `endpoint.app_id` to the host template is legal on its own");
-    let field = loaded
+    let loaded = provider::load("providers/algolia.toml", &fixture("", config))
+        .expect("both declarations are legal — that is the problem");
+
+    let bindings: Vec<Option<Binding<'_>>> = loaded
         .connector
         .config
         .iter()
-        .find(|f| f.name == "app_id")
-        .expect("the fixture declares it");
+        .filter(|field| field.name != "api_key")
+        .map(|field| field.binding())
+        .collect();
     assert_eq!(
-        field.binding(),
-        Some(Binding::Endpoint { variable: "app_id" })
+        bindings,
+        [
+            Some(Binding::Endpoint { variable: "app_id" }),
+            Some(Binding::Request {
+                position: Position::Header,
+                name: "X-Algolia-Application-Id"
+            }),
+        ],
+        "two fields, two binding targets — an operator types the application id twice"
     );
 
-    // Nothing about this connector's declared operations, or its config, names a route from this
-    // binding to a request header. A header parameter reaching `X-Algolia-Application-Id` would
-    // have to be declared separately on every operation and filled in by a caller each time —
-    // exactly the "ask the operator for the same value twice" outcome the story weighs against a
-    // refusal, and the mismatch between the two is a vendor-side 4xx neither half of this pipeline
-    // would explain.
-    assert!(
-        loaded
-            .connector
-            .operations
-            .iter()
-            .all(|op| op.params.header.is_empty()),
-        "the probe fixture declares no header parameter — the point being that nothing here could \
-         connect one to the `app_id` config field even if it did"
+    // And the loader is right not to refuse them: they resolve two *different* placeholders, so
+    // they are not the C-197 one-slot collapse the pin rules do refuse. They are simply two
+    // questions with one answer, which no declaration here can express as one.
+    assert_ne!(
+        loaded.connector.config[1].binds,
+        loaded.connector.config[2].binds
     );
 }
 
 /// **The recorded outcome: no dishonest connector was shipped for this probe.**
 ///
-/// `providers/algolia.toml` does not exist. See the story's `## Progress` for the full account. If
-/// a future story adds one, it must do so only once the config surface can pin a non-secret value
-/// into a request header (C-187) — shipping today would mean either asking an operator for the
-/// application id twice with no guard against the two disagreeing, or mislabelling a public
-/// identifier as a secret.
+/// `providers/algolia.toml` still does not exist, and C-187 narrowed rather than removed the reason.
+/// Mislabelling a public identifier as a secret is no longer necessary — a header pin is non-secret
+/// by construction — but asking an operator for the application id **twice**, with no guard against
+/// the two answers disagreeing, still is. Shipping this connector is C-164's call and needs that
+/// third finding addressed; see the module documentation and the story's `## Progress`.
 #[test]
 fn no_provider_toml_was_shipped_for_this_probe() {
     let path = providers_dir().join("algolia.toml");
     assert!(
         !path.exists(),
-        "providers/algolia.toml exists, but C-164 concluded the application id cannot honestly \
-         reach both the hostname and the header from one declared value — if this now exists, the \
-         story's refusal has been overturned and this test (and the story's `## Progress`) must be \
-         updated to say how"
+        "providers/algolia.toml exists, but one declared value still cannot reach both the \
+         hostname and the header — if this now exists, that finding has been overturned and this \
+         test (and the story's `## Progress`) must be updated to say how"
     );
 }

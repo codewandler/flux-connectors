@@ -17,7 +17,7 @@
 #
 # ---------------------------------------------------------------------------------------------
 # THE ARCHETYPE THIS CONNECTOR EXISTS FOR: `?teamId=` IS OPTIONAL IN THE API AND LOAD-BEARING IN
-# EFFECT.
+# EFFECT — SO THIS CONNECTOR MAKES IT MANDATORY, PINNED BY THE OPERATOR, AND NOT A CALLER'S TO SET.
 #
 # Every one of the five operations below accepts an optional `teamId` query parameter — Vercel's own
 # words are "the Team identifier to perform the request on behalf of." There is no "current team" a
@@ -43,16 +43,34 @@
 #   different resource. That is the safer failure mode of the two, and this file does not overstate
 #   it into the same "silent redirect" claim the list operations earn.
 #
-# `teamId` is safe to declare as a query parameter despite this pipeline's standing query-encoding
-# gap (C-30, `crates/connector-flux/src/op.rs`, *"Query values are interpolated verbatim"*): Vercel's
-# team ids are its own generated tokens (`team_` followed by an opaque alphanumeric string), never
-# free text a caller composes, so no value here can carry the `&`/`#`/`+` that makes
-# `zendesk-ticket-search` non-functional. The same restricted-alphabet reasoning that clears
-# `github.toml`'s path parameters clears this one query parameter.
+# **C-170 shipped `teamId` as an optional caller argument because nothing else was expressible**, and
+# recorded that the only mitigation available was to say so in each `description` — text a model reads
+# and may not act on. C-187 replaced that: `binds = "query.teamId"` below pins the team once, when the
+# connection is made, and the emitted operations send `?teamId={teamId}` unconditionally with the
+# operator's value substituted in. Three things follow, and the first two are the whole point:
 #
-# `crates/connector-flux/tests/vercel_connector.rs` asserts every operation declares `teamId` and
-# that its description names the personal-account fallback, so this stays a property of the
-# connector rather than of this comment.
+#  - **`teamId` is no longer optional, anywhere.** A pinned value must be `required` — a host with no
+#    value refuses the whole request rather than dropping the pin — so the state this connector's
+#    archetype is *about*, "the parameter was simply not sent", no longer exists. There is no call
+#    this connector can make that silently lands on a personal account.
+#  - **`teamId` is no longer a caller's to choose.** It reaches no operation's signature, so a model
+#    cannot act as an account the operator did not name. The loader and the emitter both refuse a
+#    value that is pinned *and* declared, so this cannot regress into an advisory default.
+#  - **A personal-account installation is out of scope for this connector, deliberately.** Vercel
+#    spells "personal account" as the *absence* of `teamId`, and an optional pin would be exactly the
+#    silent-redirect archetype again. An operator who wants the personal workspace wants a different
+#    connector shape than this one, and that is a better answer than a connector that can act as the
+#    wrong account whenever a value goes unset.
+#
+# The pin is safe to put in a query string despite this pipeline's standing query-encoding gap (C-30,
+# `crates/connector-flux/src/op.rs`, *"Query values are interpolated verbatim"*), and now for a
+# checked reason rather than a reasoned one: Vercel's team ids are its own generated tokens (`team_`
+# followed by an opaque alphanumeric string), never free text a caller composes, and
+# `Position::validate_value` independently refuses any pinned query value carrying the `&`/`=`/`#`/`+`
+# that makes `zendesk-ticket-search` non-functional.
+#
+# `crates/connector-flux/tests/vercel_connector.rs` asserts every operation sends `teamId` and that no
+# operation declares it, so this stays a property of the connector rather than of this comment.
 # ---------------------------------------------------------------------------------------------
 #
 # No `[[services]]` block. Unlike fly's single `v1`, Vercel versions each endpoint independently in
@@ -91,14 +109,10 @@ description = "Vercel access token sent as a bearer"
 # ---------------------------------------------------------------------------------------------
 # Configuration — what a human supplies before any of this runs
 #
-# One field. Vercel is single-host with no tenant subdomain, so unlike zendesk's `{subdomain}` there
-# is no address to bind and the token is the only thing an operator can supply — the same shape
-# `providers/box.toml` and `providers/dropbox.toml` carry for the same reason. `teamId` is NOT a
-# `[[config]]` field: `binds` closes over `endpoint.*`, `credential.*`, `username.*` and
-# `oauth.client_*` only (`crates/connector-spec/src/config.rs`), and none of those forms names a
-# per-request query parameter, so this file has no honest way to pre-bind it. It stays a caller
-# argument on every operation instead, which is exactly the shape that makes the archetype above
-# reachable at all.
+# Two fields. Vercel is single-host with no tenant subdomain, so unlike zendesk's `{subdomain}` there
+# is no address to bind — but the account a call acts as is not in the address here, it is in the
+# query string, and that is what the second field pins. See the header comment for why it is
+# mandatory.
 # ---------------------------------------------------------------------------------------------
 
 [[config]]
@@ -113,6 +127,21 @@ secret = true
 docs_url = "https://vercel.com/docs/rest-api#creating-an-access-token"
 binds = "credential.vercel.token"
 
+# The team every call acts on behalf of, pinned once (C-187). Not a secret: a team id is a public
+# identifier Vercel shows in its own dashboard URL and in `vercel.json`, and it must stay readable
+# back so an operator can confirm which workspace a connection points at.
+#
+# `format` stays `text`. A team id is `team_` plus an opaque alphanumeric string, and the closed
+# `Format` enum has no variant for that; `token` would claim it is a credential, which is the exact
+# mislabelling `secret`/`binds` agreement exists to prevent.
+[[config]]
+name = "team_id"
+label = "Vercel team id"
+help = "The team this connection acts on behalf of. Find it under Team Settings -> General -> Team ID, or in the URL of your team's dashboard. Every call this connector makes is scoped to it; a personal (non-team) account is not supported"
+example = "team_1a2b3c4d5e6f7g8h9i0j"
+docs_url = "https://vercel.com/docs/rest-api/reference/welcome#authentication"
+binds = "query.teamId"
+
 # ---------------------------------------------------------------------------------------------
 # Operations — 5 of several dozen documented under Vercel's "projects" and "deployments" groups
 # ---------------------------------------------------------------------------------------------
@@ -121,15 +150,9 @@ binds = "credential.vercel.token"
 id = "vercel-projects-list"
 method = "GET"
 path = "/v10/projects"
-description = "List projects. Scoped to the personal account unless teamId names a team — on a team workspace, omitting teamId silently returns the wrong, but real-looking, project list rather than an error"
+description = "List the projects of the team this connector is installed for. The team is pinned at install time and is not a parameter, so every call returns that team's projects and no other account's"
 risk = "low"
 idempotency = "idempotent"
-
-[[operations.params.query]]
-name = "teamId"
-description = "The team to act on behalf of. Omit it and this lists the personal account's projects instead — Vercel accepts the call and returns a complete, plausible list either way, so there is no error to notice if this is the wrong account"
-required = false
-schema = { type = "string", minLength = 1 }
 
 # Vercel's own reference page documents THREE mutually-incompatible top-level shapes for this same
 # 200 (a bare array, and two `{pagination, projects}` variants that differ in which per-project field
@@ -143,7 +166,7 @@ schema = { type = "string", minLength = 1 }
 id = "vercel-project-get"
 method = "GET"
 path = "/v9/projects/{idOrName}"
-description = "Get one project by its id or name. teamId scopes which account's project this addresses; a team project looked up with the wrong or absent teamId is documented to 404 rather than silently returning a different project"
+description = "Get one project of the team this connector is installed for, by its id or name. A project belonging to any other account is a 404 here: the team is pinned at install time and is not a parameter"
 risk = "low"
 idempotency = "idempotent"
 
@@ -151,12 +174,6 @@ idempotency = "idempotent"
 name = "idOrName"
 description = "The project's id (prj_…) or its name"
 required = true
-schema = { type = "string", minLength = 1 }
-
-[[operations.params.query]]
-name = "teamId"
-description = "The team to act on behalf of. Omit it and Vercel looks for the project in the personal account instead of any team"
-required = false
 schema = { type = "string", minLength = 1 }
 
 [operations.response_schema]
@@ -170,19 +187,13 @@ properties = { id = { type = "string", description = "The project's own id (prj_
 id = "vercel-deployments-list"
 method = "GET"
 path = "/v7/deployments"
-description = "List deployments. Scoped to the personal account unless teamId names a team — on a team workspace, omitting teamId silently returns the wrong, but real-looking, deployment list rather than an error"
+description = "List the deployments of the team this connector is installed for, newest first, optionally filtered to one project. The team is pinned at install time and is not a parameter, so every call returns that team's deployments and no other account's"
 risk = "low"
 idempotency = "idempotent"
 
 [[operations.params.query]]
 name = "projectId"
 description = "Filter to deployments of one project, by its id or name"
-required = false
-schema = { type = "string", minLength = 1 }
-
-[[operations.params.query]]
-name = "teamId"
-description = "The team to act on behalf of. Omit it and this lists the personal account's deployments instead — Vercel accepts the call and returns a complete, plausible list either way, so there is no error to notice if this is the wrong account"
 required = false
 schema = { type = "string", minLength = 1 }
 
@@ -197,7 +208,7 @@ properties = { deployments = { type = "array", items = { type = "object", requir
 id = "vercel-deployment-get"
 method = "GET"
 path = "/v13/deployments/{idOrUrl}"
-description = "Get one deployment by its id or its hostname. teamId scopes which account's authorization applies; a team deployment looked up with the wrong or absent teamId is documented to fail rather than silently returning a different deployment"
+description = "Get one deployment of the team this connector is installed for, by its id or its unique hostname. A deployment belonging to any other account fails here: the team is pinned at install time and is not a parameter"
 risk = "low"
 idempotency = "idempotent"
 
@@ -205,12 +216,6 @@ idempotency = "idempotent"
 name = "idOrUrl"
 description = "The deployment's id (dpl_…) or its unique hostname"
 required = true
-schema = { type = "string", minLength = 1 }
-
-[[operations.params.query]]
-name = "teamId"
-description = "The team to act on behalf of. Omit it and Vercel looks for the deployment in the personal account instead of any team"
-required = false
 schema = { type = "string", minLength = 1 }
 
 # Vercel's reference documents three variants for this 200 (an anonymous view, an owner-authenticated
@@ -228,7 +233,7 @@ properties = { id = { type = "string", description = "The deployment's unique id
 id = "vercel-deployment-cancel"
 method = "PATCH"
 path = "/v12/deployments/{id}/cancel"
-description = "Cancel a deployment that is still building, stopping it before it completes; refused with 400 if it already finished (READY, ERROR or CANCELED). teamId scopes which account's authorization applies — omit it and Vercel looks for the deployment in the personal account instead of any team, most often failing closed rather than cancelling a different one"
+description = "Cancel a deployment of the team this connector is installed for, stopping it before it completes; refused with 400 if it already finished (READY, ERROR or CANCELED). The team is pinned at install time and is not a parameter, so this cannot reach a deployment of another account"
 risk = "high"
 idempotency = "non_idempotent"
 
@@ -236,12 +241,6 @@ idempotency = "non_idempotent"
 name = "id"
 description = "The deployment's id (dpl_…) to cancel"
 required = true
-schema = { type = "string", minLength = 1 }
-
-[[operations.params.query]]
-name = "teamId"
-description = "The team to act on behalf of. Omit it and Vercel looks for the deployment in the personal account instead of any team"
-required = false
 schema = { type = "string", minLength = 1 }
 
 # Confirm a cancellation with `vercel-deployment-get` rather than trusting this response alone: this

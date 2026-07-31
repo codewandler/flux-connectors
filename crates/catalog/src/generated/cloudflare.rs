@@ -31,7 +31,7 @@ static OPERATIONS: &[crate::Operation] = &[
         id: "cloudflare-zone-list",
         provider: "cloudflare",
         service: "default",
-        description: "List the zones (domains) this API token can see, with each zone's id, name, status and assigned Cloudflare name servers. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note). The zone `id` returned here is what every other operation in this connector needs as `zone_id`",
+        description: "List the zones (domains) this API token can see, with each zone's id, name, status and assigned Cloudflare name servers. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note). The zone `id` returned here is the value an operator pins as this connection's `zone_id`; every other operation in this connector is already scoped to that one zone and does not take it as an argument",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
         credentials: &[&["cloudflare.api_token"]],

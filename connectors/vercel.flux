@@ -2,80 +2,70 @@
 # Provider: vercel
 # Regenerate with `flux-connectors build`.
 
-op vercel-projects-list(teamId: String) -> Any
-  description "List projects. Scoped to the personal account unless teamId names a team — on a team workspace, omitting teamId silently returns the wrong, but real-looking, project list rather than an error"
+op vercel-projects-list -> Any
+  description "List the projects of the team this connector is installed for. The team is pinned at install time and is not a parameter, so every call returns that team's projects and no other account's"
   risk "low"
   idempotency "idempotent"
   effects ["network"]
   expose true
 
   base = "https://api.vercel.com"
-  url = fmt("{base}/v10/projects")
-  sep = "?"
-  when teamId
-    url = fmt("{url}{sep}teamId={teamId}")
+  teamId = "{teamId}"
+  url = fmt("{base}/v10/projects?teamId={teamId}")
   response = http.request(method: "GET", url)
   return response
 
-op vercel-project-get(idOrName: String, teamId: String) -> Any
-  description "Get one project by its id or name. teamId scopes which account's project this addresses; a team project looked up with the wrong or absent teamId is documented to 404 rather than silently returning a different project"
+op vercel-project-get(idOrName: String) -> Any
+  description "Get one project of the team this connector is installed for, by its id or name. A project belonging to any other account is a 404 here: the team is pinned at install time and is not a parameter"
   risk "low"
   idempotency "idempotent"
   effects ["network"]
   expose true
 
   base = "https://api.vercel.com"
-  url = fmt("{base}/v9/projects/{idOrName}")
-  sep = "?"
-  when teamId
-    url = fmt("{url}{sep}teamId={teamId}")
+  teamId = "{teamId}"
+  url = fmt("{base}/v9/projects/{idOrName}?teamId={teamId}")
   response = http.request(method: "GET", url)
   return response
 
-op vercel-deployments-list(projectId: String, teamId: String) -> Any
-  description "List deployments. Scoped to the personal account unless teamId names a team — on a team workspace, omitting teamId silently returns the wrong, but real-looking, deployment list rather than an error"
+op vercel-deployments-list(projectId: String) -> Any
+  description "List the deployments of the team this connector is installed for, newest first, optionally filtered to one project. The team is pinned at install time and is not a parameter, so every call returns that team's deployments and no other account's"
   risk "low"
   idempotency "idempotent"
   effects ["network"]
   expose true
 
   base = "https://api.vercel.com"
-  url = fmt("{base}/v7/deployments")
-  sep = "?"
+  teamId = "{teamId}"
+  url = fmt("{base}/v7/deployments?teamId={teamId}")
+  sep = "&"
   when projectId
     url = fmt("{url}{sep}projectId={projectId}")
-    sep = "&"
-  when teamId
-    url = fmt("{url}{sep}teamId={teamId}")
   response = http.request(method: "GET", url)
   return response
 
-op vercel-deployment-get(idOrUrl: String, teamId: String) -> Any
-  description "Get one deployment by its id or its hostname. teamId scopes which account's authorization applies; a team deployment looked up with the wrong or absent teamId is documented to fail rather than silently returning a different deployment"
+op vercel-deployment-get(idOrUrl: String) -> Any
+  description "Get one deployment of the team this connector is installed for, by its id or its unique hostname. A deployment belonging to any other account fails here: the team is pinned at install time and is not a parameter"
   risk "low"
   idempotency "idempotent"
   effects ["network"]
   expose true
 
   base = "https://api.vercel.com"
-  url = fmt("{base}/v13/deployments/{idOrUrl}")
-  sep = "?"
-  when teamId
-    url = fmt("{url}{sep}teamId={teamId}")
+  teamId = "{teamId}"
+  url = fmt("{base}/v13/deployments/{idOrUrl}?teamId={teamId}")
   response = http.request(method: "GET", url)
   return response
 
-op vercel-deployment-cancel(id: String, teamId: String) -> Any
-  description "Cancel a deployment that is still building, stopping it before it completes; refused with 400 if it already finished (READY, ERROR or CANCELED). teamId scopes which account's authorization applies — omit it and Vercel looks for the deployment in the personal account instead of any team, most often failing closed rather than cancelling a different one"
+op vercel-deployment-cancel(id: String) -> Any
+  description "Cancel a deployment of the team this connector is installed for, stopping it before it completes; refused with 400 if it already finished (READY, ERROR or CANCELED). The team is pinned at install time and is not a parameter, so this cannot reach a deployment of another account"
   risk "high"
   idempotency "non_idempotent"
   effects ["network"]
   expose true
 
   base = "https://api.vercel.com"
-  url = fmt("{base}/v12/deployments/{id}/cancel")
-  sep = "?"
-  when teamId
-    url = fmt("{url}{sep}teamId={teamId}")
+  teamId = "{teamId}"
+  url = fmt("{base}/v12/deployments/{id}/cancel?teamId={teamId}")
   response = http.request(method: "PATCH", url)
   return response
