@@ -9,6 +9,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Postmark connector (C-180) — the first provider whose two credentials are partitioned by
+  service.** `X-Postmark-Server-Token` for the `server` service, `X-Postmark-Account-Token` for
+  `account`; they are never sent together, which is what a service is for. Six operations. Two *named*
+  services rather than one named beside an elided default, because the service contract refuses an
+  implicit `default` the moment any named service exists.
+
+  **Its `GET /servers` response carries live server tokens in plaintext, and the connector now says so
+  where a reader will see it.** The first attempt noted the hazard in a TOML comment and omitted the
+  field from `response_schema` — which looks like caution and is the reverse, because `site.rs:680`
+  clones the schema into `web/public/catalog.json` and a comment reaches no artifact. Following Zoom's
+  `start_url` and Zendesk's `authenticity_token`, `ApiTokens` is now declared with a description that
+  names it as account-privileged and not to be logged, echoed, or passed to another tool — and both
+  operations' own descriptions repeat it, since that is what a model reads before calling.
+
 - **The Anthropic connector (C-122).** Two services — `models` (catalogue, claiming the
   `llm_catalogue` role) and `admin` (organization, workspaces, API keys) — five read operations, every
   endpoint verified against Anthropic's published reference.

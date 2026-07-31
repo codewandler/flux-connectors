@@ -36,6 +36,7 @@ pub(crate) mod miro;
 pub(crate) mod notion;
 pub(crate) mod openai;
 pub(crate) mod openrouter;
+pub(crate) mod postmark;
 pub(crate) mod sendgrid;
 pub(crate) mod sentry;
 pub(crate) mod shopify;
@@ -75,6 +76,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &notion::PROVIDER,
     &openai::PROVIDER,
     &openrouter::PROVIDER,
+    &postmark::PROVIDER,
     &sendgrid::PROVIDER,
     &sentry::PROVIDER,
     &shopify::PROVIDER,

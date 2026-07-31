@@ -18047,6 +18047,858 @@
       "channels": []
     },
     {
+      "id": "postmark",
+      "authority": "com.postmarkapp.api",
+      "vendor": "Postmark",
+      "description": "Postmark transactional email: send a message, read delivery stats and bounces. Account: list and inspect servers, authenticated separately from sending",
+      "base_url": "https://api.postmarkapp.com",
+      "api_version": null,
+      "hosts": [
+        "api.postmarkapp.com"
+      ],
+      "services": [
+        {
+          "name": "server",
+          "description": "Postmark's own \"Server API\" naming: send mail and read one server's delivery stats and bounces. Authenticates with the Server Token; the Account Token cannot reach this surface at all",
+          "base_url": "https://api.postmarkapp.com",
+          "hosts": [
+            "api.postmarkapp.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 4
+        },
+        {
+          "name": "account",
+          "description": "Postmark's own \"Account API\" naming: account-wide administration — list and inspect servers. Authenticates with the Account Token; the Server Token cannot reach this surface at all",
+          "base_url": "https://api.postmarkapp.com",
+          "hosts": [
+            "api.postmarkapp.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 2
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "header"
+        ],
+        "credentials": [
+          {
+            "name": "postmark.server_token",
+            "scheme": {
+              "kind": "header",
+              "name": "X-Postmark-Server-Token"
+            },
+            "description": "Postmark Server API token, scoped to one server. Authenticates sending and that server's own message history; cannot list or manage servers",
+            "env": [
+              "POSTMARK_SERVER_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          },
+          {
+            "name": "postmark.account_token",
+            "scheme": {
+              "kind": "header",
+              "name": "X-Postmark-Account-Token"
+            },
+            "description": "Postmark Account API token. Authenticates account-wide server administration only; Postmark rejects it for sending",
+            "env": [
+              "POSTMARK_ACCOUNT_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "postmark.server_token"
+          ]
+        ]
+      },
+      "operation_count": 6,
+      "operations": [
+        {
+          "id": "postmark-email-send",
+          "provider": "postmark",
+          "service": "server",
+          "description": "Send a single email immediately from the token's server. Delivered within seconds and cannot be recalled",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/email",
+          "parameters": [
+            {
+              "name": "from",
+              "in": "body",
+              "wire": "From",
+              "description": "The sending address. Must be a Sender Signature or verified domain address on this server — the caller's own input, never an example value here",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "to",
+              "in": "body",
+              "wire": "To",
+              "description": "Recipient address(es), comma-separated, up to 50. The caller's own input, never an example value here",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "cc",
+              "in": "body",
+              "wire": "Cc",
+              "description": "Additional recipients, comma-separated. The caller's own input, never an example value here",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "bcc",
+              "in": "body",
+              "wire": "Bcc",
+              "description": "Blind-copied recipients, comma-separated. The caller's own input, never an example value here",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "subject",
+              "in": "body",
+              "wire": "Subject",
+              "description": "The email's subject line",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "text_body",
+              "in": "body",
+              "wire": "TextBody",
+              "description": "The plain-text body. Postmark requires at least one of `text_body` or `html_body`; this schema cannot express that cross-field rule and does not enforce it",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "html_body",
+              "in": "body",
+              "wire": "HtmlBody",
+              "description": "The HTML body. Postmark requires at least one of `text_body` or `html_body`; this schema cannot express that cross-field rule and does not enforce it",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "reply_to",
+              "in": "body",
+              "wire": "ReplyTo",
+              "description": "Reply-To address, when replies should not go to `from`. The caller's own input, never an example value here",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "tag",
+              "in": "body",
+              "wire": "Tag",
+              "description": "A short label for categorizing this message in Postmark's activity view and statistics",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "bcc": {
+                "type": "string"
+              },
+              "cc": {
+                "type": "string"
+              },
+              "from": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "html_body": {
+                "type": "string"
+              },
+              "reply_to": {
+                "type": "string"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "tag": {
+                "type": "string"
+              },
+              "text_body": {
+                "type": "string"
+              },
+              "to": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "ErrorCode": {
+                "description": "0 on success",
+                "type": "integer"
+              },
+              "Message": {
+                "description": "Human-readable status, \"OK\" on success",
+                "type": "string"
+              },
+              "MessageID": {
+                "description": "Postmark's id for this send; the handle for later bounce or delivery-stat lookups",
+                "type": "string"
+              },
+              "SubmittedAt": {
+                "description": "When Postmark accepted the message for delivery",
+                "type": "string"
+              },
+              "To": {
+                "description": "Echoes the recipient(s) this message was sent to — personal data, never an example value",
+                "type": "string"
+              }
+            },
+            "required": [
+              "To",
+              "SubmittedAt",
+              "MessageID",
+              "ErrorCode",
+              "Message"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "postmark.server_token"
+            ]
+          ],
+          "hosts": [
+            "api.postmarkapp.com"
+          ],
+          "flux": "op postmark-email-send(from: String, to: String, cc: String, bcc: String, subject: String, text_body: String, html_body: String, reply_to: String, tag: String) -> Any\n  description \"Send a single email immediately from the token's server. Delivered within seconds and cannot be recalled. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/Message`, its error code at `/ErrorCode` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.postmarkapp.com\"\n  url = fmt(\"{base}/email\")\n  content_type = \"application/json\"\n  payload = { Bcc: bcc, Cc: cc, From: from, HtmlBody: html_body, ReplyTo: reply_to, Subject: subject, Tag: tag, TextBody: text_body, To: to }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "postmark-deliverystats-get",
+          "provider": "postmark",
+          "service": "server",
+          "description": "Get delivery statistics for this server: total inactive addresses and a breakdown of bounces by type. Also this connector's `verify` — a bounded read that runs unattended, needing no argument",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/deliverystats",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "Bounces": {
+                "description": "One entry per bounce type, plus a leading \"All\" total with no `Type` field",
+                "items": {
+                  "properties": {
+                    "Count": {
+                      "type": "integer"
+                    },
+                    "Name": {
+                      "type": "string"
+                    },
+                    "Type": {
+                      "description": "Absent on the leading \"All\" total entry",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "Name",
+                    "Count"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "InactiveMails": {
+                "description": "Recipient addresses currently marked inactive on this server",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "InactiveMails",
+              "Bounces"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "postmark.server_token"
+            ]
+          ],
+          "hosts": [
+            "api.postmarkapp.com"
+          ],
+          "flux": "op postmark-deliverystats-get -> Any\n  description \"Get delivery statistics for this server: total inactive addresses and a breakdown of bounces by type. Also this connector's `verify` — a bounded read that runs unattended, needing no argument. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/Message`, its error code at `/ErrorCode` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.postmarkapp.com\"\n  url = fmt(\"{base}/deliverystats\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "postmark-bounce-list",
+          "provider": "postmark",
+          "service": "server",
+          "description": "List bounces recorded on this server, most recent first",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/bounces",
+          "parameters": [
+            {
+              "name": "count",
+              "in": "query",
+              "wire": null,
+              "description": "Number of bounces to return; Postmark requires this on every call",
+              "required": true,
+              "schema": {
+                "maximum": 500,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "offset",
+              "in": "query",
+              "wire": null,
+              "description": "Number of bounces to skip, for paging; Postmark requires this on every call",
+              "required": true,
+              "schema": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "count": {
+                "maximum": 500,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "offset": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "count",
+              "offset"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "Bounces": {
+                "items": {
+                  "properties": {
+                    "BouncedAt": {
+                      "type": "string"
+                    },
+                    "CanActivate": {
+                      "type": "boolean"
+                    },
+                    "Description": {
+                      "type": "string"
+                    },
+                    "Details": {
+                      "type": "string"
+                    },
+                    "DumpAvailable": {
+                      "description": "Whether the raw SMTP dump can be fetched separately",
+                      "type": "boolean"
+                    },
+                    "Email": {
+                      "description": "The bounced recipient's own address — personal data, never an example value",
+                      "type": "string"
+                    },
+                    "From": {
+                      "description": "The sending address the bounced message used — never an example value",
+                      "type": "string"
+                    },
+                    "ID": {
+                      "type": "integer"
+                    },
+                    "Inactive": {
+                      "type": "boolean"
+                    },
+                    "MessageID": {
+                      "type": "string"
+                    },
+                    "Name": {
+                      "type": "string"
+                    },
+                    "ServerID": {
+                      "type": "integer"
+                    },
+                    "Subject": {
+                      "type": "string"
+                    },
+                    "Tag": {
+                      "description": "The message's tag, when it had one",
+                      "type": "string"
+                    },
+                    "Type": {
+                      "description": "e.g. HardBounce, SoftBounce, SpamComplaint",
+                      "type": "string"
+                    },
+                    "TypeCode": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "ID",
+                    "Type",
+                    "Name",
+                    "Email",
+                    "Inactive",
+                    "CanActivate"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "TotalCount": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "TotalCount",
+              "Bounces"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "postmark.server_token"
+            ]
+          ],
+          "hosts": [
+            "api.postmarkapp.com"
+          ],
+          "flux": "op postmark-bounce-list(count: Number, offset: Number) -> Any\n  description \"List bounces recorded on this server, most recent first. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/Message`, its error code at `/ErrorCode` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.postmarkapp.com\"\n  url = fmt(\"{base}/bounces?count={count}&offset={offset}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "postmark-bounce-get",
+          "provider": "postmark",
+          "service": "server",
+          "description": "Get one recorded bounce by id",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/bounces/{bounce_id}",
+          "parameters": [
+            {
+              "name": "bounce_id",
+              "in": "path",
+              "wire": null,
+              "description": "The bounce's id, from postmark-bounce-list or postmark-email-send's follow-up lookups",
+              "required": true,
+              "schema": {
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "bounce_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "bounce_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "BouncedAt": {
+                "type": "string"
+              },
+              "CanActivate": {
+                "type": "boolean"
+              },
+              "Description": {
+                "type": "string"
+              },
+              "Details": {
+                "type": "string"
+              },
+              "DumpAvailable": {
+                "type": "boolean"
+              },
+              "Email": {
+                "description": "The bounced recipient's own address — personal data, never an example value",
+                "type": "string"
+              },
+              "From": {
+                "description": "The sending address the bounced message used — never an example value",
+                "type": "string"
+              },
+              "ID": {
+                "type": "integer"
+              },
+              "Inactive": {
+                "type": "boolean"
+              },
+              "MessageID": {
+                "type": "string"
+              },
+              "Name": {
+                "type": "string"
+              },
+              "ServerID": {
+                "type": "integer"
+              },
+              "Subject": {
+                "type": "string"
+              },
+              "Tag": {
+                "type": "string"
+              },
+              "Type": {
+                "type": "string"
+              },
+              "TypeCode": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "ID",
+              "Type",
+              "Name",
+              "Email",
+              "Inactive",
+              "CanActivate"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "postmark.server_token"
+            ]
+          ],
+          "hosts": [
+            "api.postmarkapp.com"
+          ],
+          "flux": "op postmark-bounce-get(bounce_id: Number) -> Any\n  description \"Get one recorded bounce by id. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/Message`, its error code at `/ErrorCode` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.postmarkapp.com\"\n  url = fmt(\"{base}/bounces/{bounce_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "postmark-server-list",
+          "provider": "postmark",
+          "service": "account",
+          "description": "List every server on this account. Each entry also carries `ApiTokens`, that server's own live Server Token(s) in plaintext — see that field's own description before handling this response",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/servers",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "Servers": {
+                "items": {
+                  "properties": {
+                    "ApiTokens": {
+                      "description": "ACCOUNT-PRIVILEGED. This server's own live Server Token(s), in plaintext — the Account API's own mechanism for retrieving one. Treat it as a credential: do not log it, echo it, or pass it to another tool",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "Color": {
+                      "type": "string"
+                    },
+                    "DeliveryType": {
+                      "enum": [
+                        "Live",
+                        "Test"
+                      ],
+                      "type": "string"
+                    },
+                    "ID": {
+                      "type": "integer"
+                    },
+                    "InboundAddress": {
+                      "description": "This server's own inbound-processing address, not a third party's",
+                      "type": "string"
+                    },
+                    "InboundDomain": {
+                      "type": "string"
+                    },
+                    "Name": {
+                      "type": "string"
+                    },
+                    "RawEmailEnabled": {
+                      "type": "boolean"
+                    },
+                    "SMTPApiActivated": {
+                      "type": "boolean"
+                    },
+                    "ServerLink": {
+                      "type": "string"
+                    },
+                    "TrackLinks": {
+                      "enum": [
+                        "None",
+                        "HtmlAndText",
+                        "HtmlOnly",
+                        "TextOnly"
+                      ],
+                      "type": "string"
+                    },
+                    "TrackOpens": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ID",
+                    "Name",
+                    "Color",
+                    "SMTPApiActivated",
+                    "DeliveryType"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "TotalCount": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "TotalCount",
+              "Servers"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "postmark.account_token"
+            ]
+          ],
+          "hosts": [
+            "api.postmarkapp.com"
+          ],
+          "flux": "op postmark-server-list -> Any\n  description \"List every server on this account. Each entry also carries `ApiTokens`, that server's own live Server Token(s) in plaintext — see that field's own description before handling this response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/Message`, its error code at `/ErrorCode` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.postmarkapp.com\"\n  url = fmt(\"{base}/servers\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "postmark-server-get",
+          "provider": "postmark",
+          "service": "account",
+          "description": "Get one server's configuration by id. The response also carries `ApiTokens`, that server's own live Server Token(s) in plaintext — see that field's own description before handling this response",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/servers/{server_id}",
+          "parameters": [
+            {
+              "name": "server_id",
+              "in": "path",
+              "wire": null,
+              "description": "The server's id, from postmark-server-list",
+              "required": true,
+              "schema": {
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "server_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "server_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "ApiTokens": {
+                "description": "ACCOUNT-PRIVILEGED. This server's own live Server Token(s), in plaintext — the Account API's own mechanism for retrieving one. Treat it as a credential: do not log it, echo it, or pass it to another tool",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "Color": {
+                "type": "string"
+              },
+              "DeliveryType": {
+                "enum": [
+                  "Live",
+                  "Test"
+                ],
+                "type": "string"
+              },
+              "ID": {
+                "type": "integer"
+              },
+              "InboundAddress": {
+                "description": "This server's own inbound-processing address, not a third party's",
+                "type": "string"
+              },
+              "InboundDomain": {
+                "type": "string"
+              },
+              "Name": {
+                "type": "string"
+              },
+              "RawEmailEnabled": {
+                "type": "boolean"
+              },
+              "SMTPApiActivated": {
+                "type": "boolean"
+              },
+              "ServerLink": {
+                "type": "string"
+              },
+              "TrackLinks": {
+                "enum": [
+                  "None",
+                  "HtmlAndText",
+                  "HtmlOnly",
+                  "TextOnly"
+                ],
+                "type": "string"
+              },
+              "TrackOpens": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "ID",
+              "Name",
+              "Color",
+              "SMTPApiActivated",
+              "DeliveryType"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "postmark.account_token"
+            ]
+          ],
+          "hosts": [
+            "api.postmarkapp.com"
+          ],
+          "flux": "op postmark-server-get(server_id: Number) -> Any\n  description \"Get one server's configuration by id. The response also carries `ApiTokens`, that server's own live Server Token(s) in plaintext — see that field's own description before handling this response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/Message`, its error code at `/ErrorCode` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.postmarkapp.com\"\n  url = fmt(\"{base}/servers/{server_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "sendgrid",
       "authority": null,
       "vendor": "SendGrid",

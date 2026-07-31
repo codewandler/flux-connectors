@@ -2,8 +2,7 @@
 id: C-180
 title: Ship the Postmark connector
 pillar: Spec
-status: in-progress
-priority: 3
+status: done
 design:
 epic: provider-fleet-2
 areas: [providers]
@@ -144,3 +143,29 @@ This is the clean version of what [C-177](C-177-provider-contentful.md) probes: 
 - Whole-catalogue artifacts are coordinator-owned: `crates/catalog/src/generated.rs`,
   `web/public/catalog.json`, `web/public/v1/**`, `assets/readme-snippet-*.svg`. The per-provider
   `crates/catalog/src/generated/postmark.rs` is **not** in that set and is yours to commit.
+
+### Coordinator note at integration
+
+**Integrated after one REWORK round, on a finding an independent review caught and neither the
+implementor nor the coordinator would have.**
+
+The connector originally noted that `GET /servers` returns `ApiTokens` — live server tokens in
+plaintext — and then *omitted* the property from `response_schema` with "Not declared here." That reads
+as caution and is the opposite. `crates/connector-cli/src/site.rs:680` clones `response_schema` into
+`web/public/catalog.json`, which `providers/zoom.toml` itself calls *"the one place a consumer will
+read"*, so the only hazard note lived in a TOML source comment reaching no artifact — leaving a
+published schema that looks complete over a response that embeds credential material.
+
+`providers/zoom.toml`'s `start_url` and `providers/zendesk.toml`'s `authenticity_token` had already
+settled the convention: keep the field **in** the schema with a description that states the danger, so
+the warning travels with the data. Declaring a shape and warning about it needs neither an example nor a
+value, so this never touched the credential-value invariant.
+
+Verified at integration rather than accepted on report: the disclosure appears in both operations'
+`response_schema` **and** their top-level `description` (the text a model reads before calling), reaches
+`crates/catalog/src/generated/postmark.rs`, and now appears six times in the published
+`web/public/catalog.json`.
+
+The review also corrected the framing in the implementor's own report, which is recorded on
+[C-122](C-122-provider-anthropic.md): the two-token partition is enforced by `Operation::auth`, not by
+`credential_ref_for`.
