@@ -5,7 +5,23 @@ version.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-rust-version.workspace = true
+# **Not `rust-version.workspace = true`, and the divergence is a correction rather than a bump**
+# (C-213). This crate reaches `zip` through `flux-web -> flux-plugin`, and `flux-plugin` requires
+# `zip ^8` — **every** published 8.x declares `rust-version = 1.88.0`. So there is no version of
+# this dependency that the workspace's declared 1.87 can build, and no pin that changes that; the
+# inherited 1.87 was simply false here, and had been since C-202 put `flux-web` in the graph.
+#
+# Declaring the truth is safe *for this crate specifically* because it is `publish = false` below:
+# its MSRV is a promise to this repository's own gate and to nobody else. The four **published**
+# crates keep the workspace's 1.87, which their own closures do honour — measured by
+# `crates/connector-cli/tests/msrv_fence.rs`, which walks each member separately for exactly this
+# reason.
+#
+# **This does not pre-empt the workspace-wide decision.** Raising `[workspace.package]
+# rust-version` to 1.88 is semver-relevant for four published crates and belongs to the owner; if
+# it is taken, this override and `jsonwebtoken`'s `~10.3.0` pin both become dead weight and should
+# be deleted together.
+rust-version = "1.88"
 description = "The reference host: binds the connector pack's three ports and runs its operations"
 
 # **Never published** (C-201). The publish closure is four crates — `connector-catalog`,

@@ -1,5 +1,26 @@
 [workspace]
-resolver = "2"
+# **MSRV-aware dependency resolution** (C-213). Under `resolver = "2"` cargo selected the newest
+# semver-compatible release of every requirement and never looked at what Rust version it declared,
+# so a caret `jsonwebtoken = "10.3"` resolved straight to 10.4.0 — `rust-version = 1.88.0` against
+# this workspace's 1.87 — and nothing said so. It was caught by a person reading the lockfile.
+# `resolver = "3"` picks the newest version whose declared `rust-version` this workspace satisfies,
+# which turns that class of drift from a review finding into a resolution outcome. It needs cargo
+# 1.84+; the MSRV below is 1.87, so every toolchain this workspace claims to support has it.
+#
+# **What it does not do**, because a partial guarantee read as a total one is worse than none:
+#   - It is a *preference*, not a constraint. If a requirement's whole version range declares too
+#     high an MSRV, cargo still resolves it and only warns. That case is what
+#     `crates/connector-cli/tests/msrv_fence.rs` is for — the resolver avoids the breach, the fence
+#     is what *fails* on one.
+#   - It does not revisit an existing `Cargo.lock`. Versions already locked stay locked until
+#     something re-resolves them, so switching the resolver moved nothing on its own.
+#   - It reads *declarations*. A dependency using a 1.88 feature without raising its own
+#     `rust-version`, or such a feature written here, is invisible to it.
+#   - It does not build anything on the declared MSRV. CI installs one pinned toolchain (1.97.0)
+#     and no job builds on 1.87, so the declared MSRV remains **untested** — see the fence's
+#     `ci_pins_a_toolchain_far_above_the_declared_msrv`, which asserts that gap rather than letting
+#     the resolver imply coverage that does not exist.
+resolver = "3"
 members = [
     "crates/connector-spec",
     "crates/connector-flux",
@@ -175,14 +196,24 @@ flux-credentials = { package = "codewandler-flux-credentials", version = "0.41" 
 # picked between them: 11.0.0 declares `rust-version = 1.88.0`, and so — measured after the fact,
 # which is the whole reason for the tilde — does **10.4.0**. This workspace declares 1.87. A plain
 # `"10.3"` is a caret requirement, so cargo resolved it straight to 10.4.0 and quietly made the
-# workspace unbuildable on the toolchain it advertises; `resolver = "2"` does no MSRV-aware
+# workspace unbuildable on the toolchain it advertises; `resolver = "2"` did no MSRV-aware
 # resolution, so nothing said so. `~10.3.0` is `>=10.3.0, <10.4.0`: patch releases of the 10.3 line
 # — where a fix to a JWT verifier would land — still float in, and the MSRV bump does not.
+#
+# **The resolver now catches this too, and the tilde still earns its place** (C-213). Under
+# `resolver = "3"` a caret `"10.3"` resolves to 10.3.0 and cargo reports `available: v10.4.0` —
+# measured, by relaxing the requirement and re-resolving. That is the durable fix. The tilde stays
+# because the resolver is a *preference* a `--ignore-rust-version` or a `--precise` overrides, and
+# because a downstream consumer of the published crates resolves under its own settings, not this
+# workspace's.
 #
 # **This is a pin against a version, not a decision that 1.87 is right.** Raising the workspace
 # MSRV to 1.88 may well be correct, but it is a repository-wide change affecting four *published*
 # crates, and taking it as a side effect of a sign-in story is how an MSRV moves without anyone
-# deciding it should. Left for the coordinator.
+# deciding it should. Still open, and still the owner's: see
+# `docs/stories/C-213-msrv-is-unenforced-and-was-caught-by-hand.md`, which carries the evidence. If
+# it is taken, this requirement relaxes to `"10.3"` and **this whole comment goes with it** —
+# `crates/connectors-api/Cargo.toml`'s `rust-version` override is the other half to delete.
 #
 # `default-features = false` drops `use_pem` (`pem` + `simple_asn1`): Google's JWKS gives RSA
 # modulus/exponent components, never PEM, so `DecodingKey::from_jwk` is the only constructor used.
