@@ -144,6 +144,33 @@ pub enum Error {
         name: String,
     },
 
+    /// **A request slot claimed by an operator's pin and by a caller's parameter at once** — C-187.
+    ///
+    /// A `[[config]]` field binding `path.zone_id` or `query.teamId` says *this connector is
+    /// installed for this tenant*. An operation declaring the same path segment or query parameter
+    /// says *the caller chooses the tenant on every call*. There is no reading under which both are
+    /// true, and neither precedence is safe to pick silently: honour the parameter and the pin is
+    /// decoration, honour the pin and the operation declares an argument whose value vanishes. Both
+    /// produce a request the vendor answers `200` to, addressed to a tenant nobody chose.
+    ///
+    /// The same judgement as [`ConstantHeaderParam`](Self::ConstantHeaderParam) one story earlier,
+    /// applied to the two positions a pin reaches that a constant header does not. A pinned *header*
+    /// colliding with anything is an [`Error::HeaderConflict`] instead, which already compares every
+    /// source that can claim a header name.
+    #[error(
+        "operation `{operation}`: the {position} value `{name}` is both pinned by a `[[config]]` \
+         field and declared as a parameter of this operation. A value an operator pins at install \
+         time and a caller may also pass is not pinned — declare it on one side only"
+    )]
+    PinnedValueConflict {
+        /// The operation id.
+        operation: String,
+        /// The request position, as `binds` spells it — `path` or `query`.
+        position: &'static str,
+        /// The contested name.
+        name: String,
+    },
+
     /// A constant header whose name is not an HTTP field name.
     ///
     /// `http.request` builds a `HeaderName` from it and errors on anything that is not an RFC 9110

@@ -40,6 +40,44 @@
 //! A free-form `pattern` escape hatch is deliberately **not** here yet. None of the shipped providers
 //! needs one, and adding it means a regex dependency in a crate that has six — it lands when a real
 //! provider needs something the enum cannot say.
+//!
+//! # An operator can pin a tenant scope, not only a host (C-187)
+//!
+//! [`Binding::Endpoint`] reaches a `{placeholder}` in a service's `base_url` and nothing else. That
+//! covered every vendor whose tenancy is a *hostname* — `{subdomain}.zendesk.com` — and none whose
+//! tenancy sits further down the request. Two shipped connectors measured the gap in one wave:
+//! Cloudflare's `zone_id` is a **path** segment on every scoped operation (C-169), Vercel's `teamId`
+//! is a **query** parameter (C-170), and both had to ship as per-call arguments a model chooses on
+//! every invocation. A third, Algolia (C-164), could not ship at all, because its application id has
+//! to reach a **header** and the only declaration that reached one was a credential.
+//!
+//! [`Binding::Request`] is the answer: three positions ([`Position`]), one placeholder per pinned
+//! value, and the value supplied once when the connection is made. Three properties make it a pin
+//! rather than a default:
+//!
+//! 1. **It is not also an argument.** The loader refuses a service whose operations declare a
+//!    parameter the pin already claims, and `connector-flux` refuses the same shape independently.
+//!    A pin a caller can override is advisory, which is the opposite of the point.
+//! 2. **It is mandatory.** A host substitutes a pinned placeholder into a string literal and refuses
+//!    a request when it has no value (`connector-pack`'s `Error::MissingConfig`), so `required =
+//!    false` on a pinned field describes a connector that cannot compose a URL. It is refused. This
+//!    is also the whole reason a *query* pin is safe: Vercel's `teamId` is dangerous precisely
+//!    because omitting it silently redirects the call to a personal account, and an optional pin
+//!    would reproduce that with extra steps.
+//! 3. **It is never a secret.** See [`Binding::Request`].
+//!
+//! # `ConfigField` stays connector-scoped, and that is recorded rather than assumed
+//!
+//! C-177 asked whether [`ConfigField::name`] should be a per-*service* namespace like operations,
+//! events and channels are — Contentful ships `delivery_space_id`/`management_space_id` where two
+//! services would each say `space_id`. The answer is **no, not through this story**, for a reason
+//! the runtime port makes concrete: a value is addressed by `(tenant, provider, service, kind,
+//! name)` where `name` is the **binding target** and not the field name (C-197), so the service is
+//! *already* what keeps Contentful's two spaces apart. What a per-service field namespace would buy
+//! is shorter form-field names, and what it would cost is renaming every shipped field a host has
+//! already stored a value under. A field that legitimately spans services has no answer under it at
+//! all, which is the second reason to leave it: `service` is exactly one, always concrete, so
+//! "spans services" is spelled as two fields today and would still be two fields after.
 
 use serde::{Deserialize, Serialize};
 
@@ -173,6 +211,128 @@ fn validate_label(label: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Where on a request an operator-pinned value lands. The detail of [`Binding::Request`].
+///
+/// **A closed set of three, and it is closed on the same principle
+/// [`BodyEncoding`](crate::BodyEncoding) is**: an unknown spelling must be a load error rather than
+/// a key the loader accepts and ignores. The three are exactly the request positions a *tenant
+/// scope* sits in on the vendors this repository has met — a path segment (Cloudflare's `zone_id`),
+/// a query parameter (Vercel's `teamId`), a header (Algolia's `X-Algolia-Application-Id`).
+///
+/// # Why the body is not a fourth
+///
+/// A body field the connector fixes is already expressible — a JSON Schema `const` on a
+/// [`Param`](crate::Param), which `connector-flux` sends without declaring — and no vendor met so
+/// far scopes a tenant through a request body. Adding a variant with no vendor behind it is how a
+/// closed set stops meaning anything; it lands when a real provider needs it, which is the call
+/// [`Format`]'s missing `pattern` already makes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Position {
+    /// A `{variable}` in an operation's path template — `/zones/{zone_id}/dns_records`.
+    Path,
+    /// A query parameter, sent on every operation of the field's service — `?teamId=…`.
+    Query,
+    /// A request header, sent on every operation of the field's service —
+    /// `X-Algolia-Application-Id`.
+    Header,
+}
+
+impl Position {
+    /// The prefix a [`ConfigField::binds`] string spells this position with.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Path => "path",
+            Self::Query => "query",
+            Self::Header => "header",
+        }
+    }
+
+    /// **Whether `value` can be substituted into this position without reshaping the request.**
+    ///
+    /// This crate never sees a real configuration value, exactly as [`Format::validate`] never
+    /// does: it is applied by the loader to [`ConfigField::example`], and by a host to the value it
+    /// is about to substitute. The reason it exists at all is that a pinned value lands *inside* a
+    /// URL a host composes, so a value carrying the wrong character does not fail — it produces a
+    /// **different, valid request**, which is the failure mode this whole surface is arranged
+    /// against:
+    ///
+    /// - a path pin holding `a/../b` or `../../accounts` **escapes its segment** and addresses a
+    ///   resource the operator never named, on the same host, with the same credential;
+    /// - a query pin holding `x&admin=1` appends a parameter, and nothing here percent-encodes —
+    ///   flux registers no URL-encoding op, which is the standing gap `op.rs` records for query
+    ///   values generally;
+    /// - a header pin holding a CR or LF appends a header of the value's choosing to every request.
+    ///
+    /// A brace is refused in every position for a fourth reason: substitution fills
+    /// `{placeholder}`s in emitted string literals, so a value that spells one would either be
+    /// filled in a second time or survive into the URL as text.
+    pub fn validate_value(self, value: &str) -> Result<(), String> {
+        if value.is_empty() {
+            return Err("a pinned value must not be empty".to_owned());
+        }
+        if let Some(bad) = value.chars().find(|c| *c == '{' || *c == '}') {
+            return Err(format!(
+                "{value:?} contains {bad:?}. A pinned value is substituted into a `{{placeholder}}` \
+                 in the emitted module, so a value spelling one of its own would be filled in twice \
+                 or reach the vendor verbatim"
+            ));
+        }
+        match self {
+            Self::Path => {
+                if value == "." || value == ".." {
+                    return Err(format!(
+                        "{value:?} is a relative path segment, so the request would address the \
+                         segment above or beside the one it was pinned to"
+                    ));
+                }
+                if let Some(bad) = value
+                    .chars()
+                    .find(|c| "/?#%\\".contains(*c) || c.is_whitespace() || c.is_control())
+                {
+                    return Err(format!(
+                        "{value:?} contains {bad:?}, which does not stay inside one path segment — \
+                         a `/` (or a `%` that could encode one) reshapes the URL, and a `?` or `#` \
+                         ends the path entirely"
+                    ));
+                }
+                Ok(())
+            }
+            Self::Query => {
+                if let Some(bad) = value
+                    .chars()
+                    .find(|c| "&=?#+%".contains(*c) || c.is_whitespace() || c.is_control())
+                {
+                    return Err(format!(
+                        "{value:?} contains {bad:?}, and nothing percent-encodes a query value on \
+                         the way out — an `&` or `=` would add a parameter of its own to every \
+                         request"
+                    ));
+                }
+                Ok(())
+            }
+            Self::Header => {
+                if let Some(bad) = value
+                    .chars()
+                    .find(|c| !c.is_ascii() || c.is_ascii_control())
+                {
+                    return Err(format!(
+                        "{value:?} contains {bad:?}, which is not an HTTP field value (RFC 9110 \
+                         §5.5). A newline in particular would append a header of its own to every \
+                         request"
+                    ));
+                }
+                if value.trim() != value {
+                    return Err(format!(
+                        "{value:?} starts or ends with whitespace, which an HTTP field value may \
+                         not (RFC 9110 §5.5)"
+                    ));
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 /// Where a collected value goes. The parsed form of [`ConfigField::binds`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Binding<'a> {
@@ -180,6 +340,38 @@ pub enum Binding<'a> {
     Endpoint {
         /// The template variable name, without braces.
         variable: &'a str,
+    },
+    /// **A tenant-scoping value an operator pins at install time**, landing on one position of
+    /// every request the field's service makes — `path.zone_id`, `query.teamId`,
+    /// `header.X-Algolia-Application-Id`.
+    ///
+    /// # It is configuration, not a credential — and the distinction is enforced, not stated
+    ///
+    /// A pinned value is **operator-supplied configuration**: it is readable back, shown in a
+    /// settings page, and may appear in a log. [`is_secret`](Self::is_secret) is `false` for it
+    /// unconditionally, so the loader's `secret`/`binds` agreement refuses a field that claims
+    /// otherwise, and nothing here registers it with a host's redactor. That is the point rather
+    /// than an omission: the one route that already reached a header was an `[[auth]]`-declared
+    /// credential, and taking it for a public identifier would have bought the header at the cost
+    /// of a false `secret = true` (C-164 measured exactly that on Algolia's application id).
+    ///
+    /// The converse is guarded too, because a URL is the one place a secret must never be pinned:
+    /// a field binding a credential cannot also bind a request position — `binds` names exactly one
+    /// destination — and [`Position::validate_value`] refuses the characters that would let a
+    /// pinned value reshape the request it is substituted into.
+    ///
+    /// # `name` is the placeholder *and* the wire spelling
+    ///
+    /// One string, deliberately: it is the `{variable}` in an operation's path for
+    /// [`Path`](Position::Path), and both the wire name and the placeholder for
+    /// [`Query`](Position::Query) and [`Header`](Position::Header). A second, private spelling
+    /// would be a second thing to keep in step, and the endpoint form already demonstrates that a
+    /// binding target and a field `name` are allowed to differ where they need to.
+    Request {
+        /// Where on the request the value lands.
+        position: Position,
+        /// The `{placeholder}` the emitted module carries, and the name the vendor sees.
+        name: &'a str,
     },
     /// The secret half of a declared credential — `credential.zendesk.api_token`.
     Credential {
@@ -203,12 +395,23 @@ pub enum Binding<'a> {
 
 impl Binding<'_> {
     /// Who supplies this value. See [`Level`].
+    /// **A pinned request value is *connection* level, and that is derivation rather than
+    /// preference.** "Operator" here means *once per vendor, by whoever runs the product* — the app
+    /// registration every tenant shares. A zone or a team is the opposite: one per tenant, chosen by
+    /// the person connecting their own account, and two tenants of one deployment pin two different
+    /// ones. Calling it operator level would put one customer's zone in front of every other
+    /// customer, which is the same conflation in the same direction as asking an end user for a
+    /// client secret.
+    ///
+    /// The story's phrase "operator-pinned" describes *when* the value is supplied — at install
+    /// time, rather than on every call — not *which* of these two levels supplies it.
     pub fn level(self) -> Level {
         match self {
             Self::OAuthClientId | Self::OAuthClientSecret => Level::Operator,
-            Self::Endpoint { .. } | Self::Credential { .. } | Self::Username { .. } => {
-                Level::Connection
-            }
+            Self::Endpoint { .. }
+            | Self::Request { .. }
+            | Self::Credential { .. }
+            | Self::Username { .. } => Level::Connection,
         }
     }
 
@@ -225,8 +428,12 @@ impl Binding<'_> {
             Self::Credential { .. } | Self::OAuthClientSecret => true,
             // A Basic username is config, not a gated secret — `AuthMethod::user_env` documents the
             // same split, and it is why zendesk's agent email may appear in a log where its token
-            // may not.
-            Self::Endpoint { .. } | Self::Username { .. } | Self::OAuthClientId => false,
+            // may not. A pinned request value is the same category and for a sharper reason: it
+            // travels in a URL or a header the module itself composes, where a secret must never be.
+            Self::Endpoint { .. }
+            | Self::Request { .. }
+            | Self::Username { .. }
+            | Self::OAuthClientId => false,
         }
     }
 }
@@ -255,13 +462,29 @@ pub fn parse_binding(binds: &str) -> Result<Binding<'_>, String> {
         }
         return Ok(Binding::Username { name });
     }
+    for position in [Position::Path, Position::Query, Position::Header] {
+        let Some(name) = binds
+            .strip_prefix(position.word())
+            .and_then(|rest| rest.strip_prefix('.'))
+        else {
+            continue;
+        };
+        if name.is_empty() {
+            return Err(format!(
+                "`{}.` names no {} value",
+                position.word(),
+                position.word()
+            ));
+        }
+        return Ok(Binding::Request { position, name });
+    }
     match binds {
         "oauth.client_id" => Ok(Binding::OAuthClientId),
         "oauth.client_secret" => Ok(Binding::OAuthClientSecret),
         _ => Err(format!(
             "{binds:?} is not a binding. A configuration value goes to exactly one of: \
-             `endpoint.<variable>`, `credential.<name>`, `username.<name>`, `oauth.client_id`, \
-             `oauth.client_secret`"
+             `endpoint.<variable>`, `path.<variable>`, `query.<name>`, `header.<name>`, \
+             `credential.<name>`, `username.<name>`, `oauth.client_id`, `oauth.client_secret`"
         )),
     }
 }
@@ -337,6 +560,17 @@ impl ConfigField {
     /// Who supplies this value, derived from its binding. See [`Level`].
     pub fn level(&self) -> Option<Level> {
         Some(self.binding()?.level())
+    }
+
+    /// The request position and placeholder this field pins, when it pins one.
+    ///
+    /// The question `connector-flux` asks of every field of an operation's service, so it is one
+    /// call rather than a `matches!` repeated at each request position.
+    pub fn pin(&self) -> Option<(Position, &str)> {
+        match self.binding()? {
+            Binding::Request { position, name } => Some((position, name)),
+            _ => None,
+        }
     }
 }
 
@@ -429,6 +663,97 @@ mod tests {
         assert!(parse_binding("subdomain").is_err());
         assert!(parse_binding("endpoint.").is_err());
         assert!(parse_binding("oauth.client_token").is_err());
+    }
+
+    /// The three request positions an operator can pin, and the two facts a pin must carry: it is
+    /// connection level (one per tenant, derived) and it is never a secret.
+    #[test]
+    fn a_pinned_request_value_parses_and_is_connection_level_configuration() {
+        for (binds, position, name) in [
+            ("path.zone_id", Position::Path, "zone_id"),
+            ("query.teamId", Position::Query, "teamId"),
+            (
+                "header.X-Algolia-Application-Id",
+                Position::Header,
+                "X-Algolia-Application-Id",
+            ),
+        ] {
+            assert_eq!(
+                parse_binding(binds),
+                Ok(Binding::Request { position, name }),
+                "{binds}"
+            );
+            assert_eq!(
+                parse_binding(binds).map(Binding::level),
+                Ok(Level::Connection),
+                "{binds}: a zone or a team is one per tenant, not one per vendor"
+            );
+            assert_eq!(
+                parse_binding(binds).map(Binding::is_secret),
+                Ok(false),
+                "{binds}: a pinned value is configuration an operator reads back, not a credential"
+            );
+        }
+
+        for empty in ["path.", "query.", "header."] {
+            assert!(parse_binding(empty).is_err(), "{empty}");
+        }
+        // A prefix that only *looks* like one of the three is still not a binding.
+        assert!(parse_binding("pathzone_id").is_err());
+        assert!(parse_binding("headers.X-Thing").is_err());
+    }
+
+    /// **A pinned path segment must not be able to escape its segment.** The value lands inside a
+    /// URL a host composes, so a `/`, a `..` or a `%`-encoded slash does not fail — it addresses a
+    /// different resource on the same host with the same credential.
+    #[test]
+    fn a_pinned_value_cannot_reshape_the_request_it_lands_in() {
+        assert!(Position::Path
+            .validate_value("023e105f4ecef8ad9ca31a8372d0c353")
+            .is_ok());
+        for escape in [
+            "..",
+            ".",
+            "a/b",
+            "../../accounts",
+            "%2F..%2Fadmin",
+            "zone?x=1",
+            "zone#frag",
+            "zone id",
+            "a\\b",
+            "",
+        ] {
+            assert!(
+                Position::Path.validate_value(escape).is_err(),
+                "a path pin holding {escape:?} would not stay in its segment"
+            );
+        }
+
+        assert!(Position::Query.validate_value("team_abc123").is_ok());
+        for injected in ["a&admin=1", "a=b", "a b", "a+b", "a%26b", "a#f", ""] {
+            assert!(
+                Position::Query.validate_value(injected).is_err(),
+                "nothing percent-encodes a query value, so {injected:?} would add a parameter"
+            );
+        }
+
+        assert!(Position::Header.validate_value("ABC123XYZ").is_ok());
+        assert!(
+            Position::Header.validate_value("two words").is_ok(),
+            "an HTTP field value may contain an inner space"
+        );
+        for injected in ["a\r\nX-Evil: 1", "a\nb", " a", "a ", "café", ""] {
+            assert!(
+                Position::Header.validate_value(injected).is_err(),
+                "a header pin holding {injected:?} is not an HTTP field value"
+            );
+        }
+
+        // A brace is refused everywhere: substitution fills placeholders in emitted literals, so a
+        // value spelling one would be filled in twice or reach the vendor as text.
+        for position in [Position::Path, Position::Query, Position::Header] {
+            assert!(position.validate_value("{subdomain}").is_err());
+        }
     }
 
     #[test]

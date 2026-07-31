@@ -36,7 +36,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{parse_binding, template_variables, Binding, ConfigField};
+use crate::config::{parse_binding, template_variables, Binding, ConfigField, Position};
 use crate::graph::{Graph, GraphNode, NodeKind, PortRef};
 use crate::inbound::{
     parse_tolerance, signed_placeholders, validate_path, validate_symbol, ChannelBinding,
@@ -572,6 +572,10 @@ fn validate_binding(connector: &Connector, field: &ConfigField, problems: &mut V
                 ));
             }
         }
+        Binding::Request {
+            position,
+            name: pinned,
+        } => validate_pin(connector, field, position, pinned, problems),
         Binding::Credential { name: credential } | Binding::Username { name: credential } => {
             match connector.auth_method(credential) {
                 None => problems.push(format!(
@@ -627,6 +631,196 @@ fn validate_binding(connector: &Connector, field: &ConfigField, problems: &mut V
             )
         });
     }
+}
+
+/// **An operator-pinned request value resolves, is mandatory, and is not also an argument** —
+/// C-187.
+///
+/// A pin says "this connector is installed for *this* zone / *this* team". Three ways that can be
+/// declared and mean nothing, each refused here rather than discovered later:
+///
+/// 1. **It reaches nothing.** A `path.<variable>` no operation's path carries, a header name that
+///    is not an HTTP field name — the pin would be collected from a human and dropped. This is the
+///    request-position twin of the endpoint rule two functions down.
+/// 2. **It is also a caller argument.** If any operation of the service declares a parameter the
+///    pin already claims, the pin is *advisory*: the emitted op still takes the value, and a model
+///    passing its own overrides the operator's. That is the opposite of the point, so it is a
+///    refusal and not a precedence rule — there is no reading under which two declarations of one
+///    request slot are both right.
+/// 3. **It is optional.** A host substitutes a pinned placeholder into a string literal and refuses
+///    the whole request when it has no value (`connector-pack`'s `Error::MissingConfig`), so
+///    `required = false` describes a connector that composes no URL. For a *query* pin it is worse
+///    than useless: Vercel's `teamId` is dangerous precisely because omitting it silently redirects
+///    the call to a personal account, and an optional pin would reintroduce that.
+///
+/// The fourth check is about *addressing* rather than reach. A host keys a configuration value by
+/// `(tenant, provider, service, kind, name)` and the emitted module carries one `{placeholder}` per
+/// pinned value, so two values of one service sharing a placeholder name are **one slot** — the
+/// exact collapse C-197 found between Contentful's two spaces, where a management write landed in
+/// whichever space the delivery reads were configured with. Two declarations that would share a
+/// placeholder are refused here so that they can never share a slot there.
+fn validate_pin(
+    connector: &Connector,
+    field: &ConfigField,
+    position: Position,
+    pinned: &str,
+    problems: &mut Vec<String>,
+) {
+    let name = field.name.as_str();
+    let service = field.service.as_str();
+    let word = position.word();
+
+    // A pin whose value never arrives is a connector with no URL, not one that sends less.
+    if !field.required {
+        problems.push(format!(
+            "configuration field {name:?} pins `{word}.{pinned}` but declares `required = false`. A \
+             pinned value is substituted into the emitted module, and a host with no value refuses \
+             the whole request rather than omitting the pin — so an optional pin is a connector that \
+             composes no URL. Drop `required` or drop the pin"
+        ));
+    }
+
+    // The example is what a user copies into the field, so it is held to the rule the position
+    // imposes on the real value — the same reasoning `format`/`example` already carries.
+    if let Some(example) = &field.example {
+        if let Err(reason) = position.validate_value(example) {
+            problems.push(format!(
+                "configuration field {name:?} pins a {word} value but gives an `example` that could \
+                 not be one: {reason}"
+            ));
+        }
+    }
+
+    match position {
+        Position::Path => {
+            let carried = connector
+                .operations_of(service)
+                .any(|operation| template_variables(&operation.path).contains(&pinned));
+            if !carried {
+                problems.push(format!(
+                    "configuration field {name:?} pins `{{{pinned}}}` in the request path, which no \
+                     operation of service {service:?} carries. A pin nothing interpolates is a \
+                     question whose answer is discarded"
+                ));
+            }
+        }
+        Position::Query => {
+            if let Err(reason) = position.validate_value(pinned) {
+                problems.push(format!(
+                    "configuration field {name:?} pins query parameter {pinned:?}, which is not a \
+                     query parameter name: {reason}"
+                ));
+            }
+        }
+        Position::Header => {
+            let folded = pinned.to_ascii_lowercase();
+            if !is_http_field_name(pinned) {
+                problems.push(format!(
+                    "configuration field {name:?} pins header {pinned:?}, which is not an HTTP \
+                     field name — only ASCII token characters are allowed (RFC 9110 §5.1), and a \
+                     request carrying it could never be built"
+                ));
+            }
+            if folded == "content-type" {
+                problems.push(format!(
+                    "configuration field {name:?} pins `content-type`, which is the emitter's: it \
+                     is derived from the request body, so pinning it would describe an encoding the \
+                     emitted module does not produce"
+                ));
+            }
+            // The line this binding exists **not** to cross. A pinned value is non-secret by
+            // construction and reaches no redactor, so letting one land in an auth-owned header
+            // would be a second, ungated route for a credential — the thing `const_headers` is
+            // already refused for.
+            if AUTH_OWNED_HEADERS.contains(&folded.as_str()) {
+                problems.push(format!(
+                    "configuration field {name:?} pins header {pinned:?}, which carries a \
+                     credential. A pinned value is configuration: it is never masked, never \
+                     redacted, and readable back by anyone who can open a settings page. \
+                     Credentials are declared in `[[auth]]` and injected by the host at the `$auth` \
+                     seam"
+                ));
+            }
+            for method in &connector.auth {
+                if let AuthScheme::Header { name: owned, .. } = &method.scheme {
+                    if owned.eq_ignore_ascii_case(pinned) {
+                        problems.push(format!(
+                            "configuration field {name:?} pins header {pinned:?}, which is where \
+                             credential {:?} is injected. One of the two would overwrite the other, \
+                             and which one depends on an order nothing declares",
+                            method.name
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    // A pin that is also an argument is advisory, and an advisory pin is not a pin.
+    for operation in connector.operations_of(service) {
+        let claimed = match position {
+            Position::Path => operation
+                .params
+                .path
+                .iter()
+                .any(|param| wire_of(param) == pinned),
+            Position::Query => operation
+                .params
+                .query
+                .iter()
+                .any(|param| wire_of(param) == pinned),
+            Position::Header => {
+                operation
+                    .params
+                    .header
+                    .iter()
+                    .any(|param| wire_of(param).eq_ignore_ascii_case(pinned))
+                    || operation
+                        .params
+                        .const_headers
+                        .keys()
+                        .any(|header| header.eq_ignore_ascii_case(pinned))
+            }
+        };
+        if claimed {
+            problems.push(format!(
+                "configuration field {name:?} pins `{word}.{pinned}`, but operation {:?} already \
+                 declares it. A value an operator pins at install time and a caller may also pass is \
+                 not pinned — the caller's wins, and the operator's choice of tenant becomes a \
+                 suggestion. Declare it on one side only",
+                operation.id
+            ));
+        }
+    }
+
+    // One placeholder, one host-side slot. See this function's documentation for the C-197 collapse
+    // this refusal exists to make unreachable.
+    for other in connector.config_of(service) {
+        if std::ptr::eq(other, field) {
+            continue;
+        }
+        let shared = match other.binding() {
+            Some(Binding::Endpoint { variable }) => variable == pinned,
+            Some(Binding::Request { name: other, .. }) => other == pinned,
+            _ => false,
+        };
+        if shared {
+            problems.push(format!(
+                "configuration fields {name:?} and {:?} both resolve `{{{pinned}}}` in service \
+                 {service:?}, so a host would key them to one value under one slot. Two questions \
+                 that share an answer are one question — bind one of them to a different name",
+                other.name
+            ));
+        }
+    }
+}
+
+/// The spelling the vendor sees for a parameter: its `wire` alias when it declares one.
+///
+/// A pin is compared against this rather than against `name`, because it is the wire name that
+/// occupies the request slot the pin would claim.
+fn wire_of(param: &crate::Param) -> &str {
+    param.wire.as_deref().unwrap_or(&param.name)
 }
 
 /// **Every template variable is asked for.** This is the rule that closes the `SCHEMA GAP:` comment
