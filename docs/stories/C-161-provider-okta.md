@@ -3,7 +3,6 @@ id: C-161
 title: Ship the Okta connector
 pillar: Spec
 status: blocked
-priority: 2
 design:
 epic: provider-fleet-2
 areas: [providers]
@@ -175,3 +174,16 @@ Read the `scheme` field's accepted values before designing. If it is closed to b
 - Whole-catalogue artifacts are coordinator-owned: `crates/catalog/src/generated.rs`,
   `web/public/catalog.json`, `web/public/v1/**`, `assets/readme-snippet-*.svg`. The per-provider
   `crates/catalog/src/generated/okta.rs` is **not** in that set and is yours to commit.
+
+### Coordinator note at integration
+
+Blocked on [C-184](C-184-auth-scheme-prefix-axis.md), filed from this finding. The probe did its job:
+it answered a question for **five** stories at the cost of one, and the answer is now an executable
+test rather than a paragraph.
+
+Its split of the five is the part worth keeping: `SSWS` (this story), `Token token=` ([C-162](C-162-provider-pagerduty.md))
+and `OAuth` ([C-181](C-181-provider-statuspage.md)) need a prefix axis that was designed in
+`docs/designs/unified-auth.md:75-77` and never built. `LaunchDarkly` ([C-175](C-175-provider-launchdarkly.md))
+and `ClickUp` ([C-178](C-178-provider-clickup.md)) need **no new capability at all** — a raw
+Authorization value is already `AuthScheme::Header { name: "Authorization" }`, which this story's test
+proves loads and round-trips. Those two were re-marked `ready` on that evidence and dispatched.

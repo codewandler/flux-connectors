@@ -116,8 +116,8 @@ _A connector's operations are currently legible only by reading `providers/<name
 - [C-32 — Emit a curl form for each operation](C-32-curl-tab.md) · Codegen
 
 ### Provider Fleet 2
+- [C-184 — AuthScheme cannot spell a credential with a prefix, and three connectors are blocked on it](C-184-auth-scheme-prefix-axis.md) · Spec · measured by C-161: AuthScheme is a closed 5-variant enum with no prefix field. unified-auth.md called a prefix 'the single highest-value element of this whole design' and it was never built. Blocks Okta, PagerDuty, Statuspage
 - [C-160 — Ship the Datadog connector](C-160-provider-datadog.md) · Spec · PROBE: needs TWO credentials on one request (DD-API-KEY + DD-APPLICATION-KEY). Every shipped provider sends exactly one. If `[[auth]]` is single-valued this is a refusal story, and that is a finding worth having
-- [C-161 — Ship the Okta connector](C-161-provider-okta.md) · Spec · PROBE: `Authorization: SSWS <token>` — a non-bearer, non-basic scheme. Tests whether an arbitrary Authorization prefix is expressible or whether `scheme` is a closed set
 - [C-162 — Ship the PagerDuty connector](C-162-provider-pagerduty.md) · Spec · PROBE: `Authorization: Token token=<key>` — a prefix containing `=`, so the credential is a *substructure* of the header value, not a suffix
 - [C-163 — Ship the Salesforce connector](C-163-provider-salesforce.md) · Spec · PROBE: base URL is per-tenant (`https://{instance}.my.salesforce.com`) — the first provider whose HOST comes from configuration. AGENTS.md names Salesforce as belonging here
 - [C-164 — Ship the Algolia connector](C-164-provider-algolia.md) · Spec · PROBE: two credentials AND the application id is part of the HOSTNAME (`{app_id}-dsn.algolia.net`) — a configured host whose value also travels as a header
@@ -127,7 +127,6 @@ _A connector's operations are currently legible only by reading `providers/<name
 - [C-168 — Ship the SendGrid connector](C-168-provider-sendgrid.md) · Spec · the send body is a nested array-of-objects envelope (`personalizations[].to[]`) — deeper than Asana's envelope, and the first place body nesting depth is really tested
 - [C-169 — Ship the Cloudflare connector](C-169-provider-cloudflare.md) · Spec · zone-scoped paths where the zone id is a required first segment on every operation — a natural test of whether `[[config]]` can pin a path variable rather than a caller supplying it each call
 - [C-170 — Ship the Vercel connector](C-170-provider-vercel.md) · Spec · team scope is an OPTIONAL query parameter (`?teamId=`) that changes which account the write lands on — an optional argument with a blast radius
-- [C-172 — Ship the Calendly connector](C-172-provider-calendly.md) · Spec · every resource is addressed by a full URI, not an id — so a parameter's value is itself a URL, and the template must not double-compose it
 - [C-173 — Ship the Typeform connector](C-173-provider-typeform.md) · Spec · responses are cursor-paginated with a `before`/`after` token pair, and the response payload is answer-shaped rather than record-shaped
 - [C-174 — Ship the DocuSign connector](C-174-provider-docusign.md) · Spec · the base URI is returned by a userinfo call and is per-account (`{base_uri}/restapi/v2.1/accounts/{account_id}`) — TWO configured path levels above every operation
 - [C-175 — Ship the LaunchDarkly connector](C-175-provider-launchdarkly.md) · Spec · `Authorization: <token>` with NO scheme word at all — tests whether 'no prefix' is expressible distinctly from bearer, or whether it collapses into it
@@ -174,6 +173,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-36 — Prove the proxy and the Flux emitter build the same request](C-36-proxy-emitter-conformance.md) · Bridge · blocked on C-34 · two backends over one IR will drift without this
 - [C-130 — The ivr service and its atomic operation inventory](C-130-ivr-atomics-inventory.md) · Spec · BLOCKED by its own inventory: the atomics have no wire identity. babelforce's parse_settings.go maps call-module names onto them, there is no endpoint per module, and the one Application CRUD resource is unmounted and already excluded as provisioning. Re-scope onto the six mounted /api/v3 endpoints
 - [C-131 — The IVR inbound event set, including the two different invites](C-131-ivr-events.md) · Spec · 'on invite' is NOT the SIP INVITE of an inbound call — in this codebase it is the ACD inviting an AGENT to take a queued call (acd/handler.go:290-297). Both are real; they must not share a name
+- [C-161 — Ship the Okta connector](C-161-provider-okta.md) · Spec · blocked — measured, not predicted. `AuthScheme` is a closed five-variant enum (crates/connector-spec/src/auth.rs:70-102) with no prefix axis; Okta's `Authorization: SSWS <token>` cannot be expressed honestly without either extending that enum (a connector-spec change four other auth stories are also waiting on) or baking `SSWS ` into a credential value, which AGENTS.md forbids outright
 
 ## Backlog
 
@@ -276,6 +276,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-152 — The redaction guarantee has two holes and one vacuous assertion](C-152-redaction-guarantee-has-holes.md) · Bridge · found by C-116's review. flux's Redactor SILENTLY DROPS values under 6 trimmed characters, so a short credential travels unredacted through all four surfaces — and our docs state the guarantee unconditionally. Plus auth::Assembled derives Debug over the plaintext
 - [C-166 — Ship the GitLab connector](C-166-provider-gitlab.md) · Spec · a project is addressed as a URL-ENCODED path (`group%2Fsub%2Fproject`), so a path segment must survive percent-encoding — the same gap as zendesk-ticket-search, in the path position
 - [C-171 — Ship the Box connector](C-171-provider-box.md) · Spec · folder and file ids are opaque strings where `0` is the magic root — a sentinel value a model will guess wrong without being told
+- [C-172 — Ship the Calendly connector](C-172-provider-calendly.md) · Spec · every resource is addressed by a full URI, not an id — so a parameter's value is itself a URL, and the template must not double-compose it
 - [C-176 — Ship the Figma connector](C-176-provider-figma.md) · Spec · `X-Figma-Token` — a custom header credential, and a file is addressed by a key taken from a URL a human copied
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
