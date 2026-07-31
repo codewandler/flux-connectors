@@ -1,8 +1,47 @@
 # Design: `connectors-app` — the reference host
 
-**Status:** accepted in principle — **the charter was amended to permit it; read §The charter change
-first** · **Pillar:** Bridge · **Resolves:** [C-34](../stories/C-34-proxy-charter-decision.md) as
-**yes-narrowed** · **Supersedes:** [connectors-proxy.md](connectors-proxy.md)
+**Status:** **superseded by [connectors-api.md](connectors-api.md)** on 2026-07-31, on the narrowing
+only — the rest of this document is current and is cited by live stories · **Pillar:** Bridge ·
+**Resolved:** [C-34](../stories/C-34-proxy-charter-decision.md) as **yes-narrowed**, since widened by
+[C-201](../stories/C-201-charter-multi-tenant-host.md) · **Supersedes:**
+[connectors-proxy.md](connectors-proxy.md)
+
+> ## What was superseded, and what was not
+>
+> The owner directed a **deployed multi-tenant host** on 2026-07-31
+> ([C-200](../stories/C-200-connectors-api-epic.md)), and
+> [C-201](../stories/C-201-charter-multi-tenant-host.md) amended `../vision.md` to permit it. The
+> crate that exists is `crates/connectors-api`, not the `crates/connectors-app` this document names.
+>
+> **Superseded — do not cite these as current:**
+>
+> - The narrowing table below (§"Why narrowed"), specifically its `callers`, `credential scope` and
+>   `binding` rows. Multi-tenancy is no longer out of scope, and the bind is no longer promised
+>   loopback *forever*.
+> - §"Out of scope" → **Multi-tenancy** and **Serving anything to anyone else**.
+> - §"The fences" names `connectors-app` in `NETWORK_CRATES`; the shipped constant names
+>   `connectors-api`.
+> - The measurement in §"What is already unblocked" — *"exactly seven providers carry an
+>   `authority`"* — is stale. Every one of the 44 does since C-92, and `codewandler-flux-web` turned
+>   out to be published at 0.41.1, which §"The transport problem" recorded as unknown.
+>
+> **Still current, and deliberately kept:**
+>
+> - **The host constructs no request of its own.** This is the structural reason this document
+>   superseded [connectors-proxy.md](connectors-proxy.md), it is untouched by tenancy, and
+>   `connectors-api` holds it (`crates/connectors-api/src/lib.rs`).
+> - §"Vertical slice 1" — the sequence [C-203](../stories/C-203-connectors-api-skeleton.md) follows.
+> - §"The transport problem, which slice 1 must solve first" — the `Egress` analysis and the
+>   "take `flux-web`, not a `reqwest` stand-in" conclusion, which
+>   [C-202](../stories/C-202-flux-web-egress.md) implements.
+> - §"The boundary with C-147" and the dry-run/live split.
+> - §"Loopback is a property of the code, not of a flag." The *reasoning* survives the widening
+>   intact — see [connectors-api.md](connectors-api.md) §"The bind", which keeps it as the gate on
+>   when the bind may widen rather than discarding it.
+>
+> The confused-deputy question this document answered by *narrowing* is reopened in full by a
+> multi-tenant host, and is answered again in
+> [connectors-api.md](connectors-api.md) §"The confused deputy, answered again".
 
 > Every `path:line` in this repository was read on **2026-07-31**. Citations into `../flux` were read
 > at `codewandler-flux-lang` **0.39.0**. Re-grep by symbol; line numbers move.
@@ -79,6 +118,13 @@ rid of — *"a credential-injecting proxy is, by construction, a confused-deputy
 job is to add authority a caller does not have."*
 
 A reference host is not that, and the distinction is structural rather than a matter of degree:
+
+> **Superseded in part (C-201).** The `callers`, `credential scope` and `binding` rows below describe
+> the narrowing, which no longer holds as written: the host is multi-tenant by charter. The **second
+> request path** row is the one that survives, and it is the row that was doing the real work. The
+> replacement table — what distinguishes a multi-tenant host from the rejected proxy, when "the
+> caller *is* the principal" is no longer available as the answer — is in
+> [connectors-api.md](connectors-api.md) §"The confused deputy, answered again".
 
 | | the proxy (C-34's original subject) | `connectors-app` |
 |---|---|---|
@@ -289,6 +335,14 @@ Two further constraints on the crate itself, which belong in its manifest rather
 
 ### Loopback is a property of the code, not of a flag
 
+> **Kept, with its conclusion re-derived (C-201).** A host that is to be *deployed* must eventually
+> bind something other than `127.0.0.1`, so "no configuration surface at all, forever" cannot be the
+> permanent rule. The argument underneath it — that a safety property enforced by a flag is one a
+> caller forgets — is untouched, and it is what makes the bind a *gate* rather than a setting. The
+> host binds `Ipv4Addr::LOCALHOST` with no flag today
+> (`crates/connectors-api/src/main.rs`); [connectors-api.md](connectors-api.md) §"The bind" states
+> what must be true before that changes.
+
 [C-145](../stories/C-145-dry-run-transport.md)'s acceptance sets the standard this should follow:
 *"It is structurally incapable of sending… a flag on a live client is something a caller forgets."*
 The same reasoning applies to the bind address. `connectors-app` should have **no configuration
@@ -358,12 +412,19 @@ of one construction, and a third opinion about what a request should be is the d
 
 ## Out of scope
 
-- **Multi-tenancy.** One tenant, bound at construction, exactly as `Credentials::new` takes it.
+- ~~**Multi-tenancy.** One tenant, bound at construction, exactly as `Credentials::new` takes it.~~
+  **Superseded by [C-201](../stories/C-201-charter-multi-tenant-host.md).** The tenant is now a
+  parameter of every port. `Credentials::new(store, tenant)` is unchanged — what changed is that the
+  host constructs one per request rather than once at startup.
 - **Token refresh.** Out of scope since C-90 and still is
   (`crates/connector-pack/src/credentials.rs:49-52`): *"No cache, no expiry, no refresh."*
-- **Serving anything to anyone else.** No API, no forwarding, no second caller. The moment a second
-  principal can reach it, it is the proxy [connectors-proxy.md](connectors-proxy.md) describes, and
-  that design's confused-deputy analysis applies again in full.
+- ~~**Serving anything to anyone else.** No API, no forwarding, no second caller.~~ **Superseded by
+  [C-201](../stories/C-201-charter-multi-tenant-host.md)** — a second principal is now the point. The
+  *warning* attached to it was correct and is kept: **the moment a second principal can reach it,
+  that design's confused-deputy analysis applies again in full.** It does, and
+  [connectors-api.md](connectors-api.md) §"The confused deputy, answered again" is where it is
+  answered rather than waved past. **Forwarding is still out of scope** — the host runs catalogue
+  operations, and does not terminate a request naming an arbitrary host.
 - **Channels and inbound delivery.** The pack's operation path is what this proves.
   [C-118](../stories/C-118-connector-channel-adapter.md) is the second surface and has its own host
   requirements.

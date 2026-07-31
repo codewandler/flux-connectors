@@ -424,8 +424,21 @@ AWS). The service is the unit that is addressed, versioned, selected, emitted an
 
 These failures are recorded decisions. Do not “fix” one without reading its story and design.
 
-- **Nothing here makes a live call, because nothing here is a *host* — not because flux is missing a
-  seam.** The older account ("the `$auth` seam must land in flux") is **stale**. C-114 shipped the Tool
+- **~~Nothing here makes a live call, because nothing here is a *host*.~~ CLOSED 2026-07-31 — this
+  gap is no longer real.** `crates/connectors-api` is the host, and both halves that were missing
+  are in the graph: `codewandler-flux-web` supplies `HttpRequestTool` as the `Egress`, and the
+  service binds the ports and runs the loop. The first real call to a vendor is recorded, with its
+  response, in `crates/connectors-api/README.md` §"The live leg, performed and labelled". The host
+  is loopback-bound and single-tenant-valued today; the charter permitting a deployed multi-tenant
+  one, and the gate on widening the bind, are
+  [docs/designs/connectors-api.md](docs/designs/connectors-api.md).
+
+  **What remains open is narrower and is the module path, not the host path.** No generated provider
+  can make a live call *as Flux* — `connectors/*.flux` is still unauthenticated, because `$auth` was
+  taken off the critical path rather than landed. The history below is kept because it is what makes
+  that distinction legible:
+
+  The older account ("the `$auth` seam must land in flux") is **stale**. C-114 shipped the Tool
   pack's declaration half, C-115 gave each Tool its egress with the network gate mirrored, and C-116
   bound a `CredentialStore` port and moved auth assembly — the `Bearer` prefix, the basic-auth base64,
   query placement — **into Rust**. flux's whole-value `{"$secret": "ENV"}` marker therefore never has
@@ -433,16 +446,19 @@ These failures are recorded decisions. Do not “fix” one without reading its 
   [docs/designs/auth-seam.md](docs/designs/auth-seam.md) now records a road not taken rather than a
   blocker. See [docs/designs/connector-tool-pack.md](docs/designs/connector-tool-pack.md).
 
-  What is actually missing is two things, and both are in *this* workspace:
+  Two things used to be missing here, and **both have since landed**:
 
-  1. **An `http.request` implementation in the dependency graph.** `Egress::new` takes an already
-     configured `Arc<dyn Tool>`, and nothing here supplies one: `flux-web`, which owns
-     `HttpRequestTool`, is not in `Cargo.lock` at all. Every `connector-pack` test passes a stub, and
-     says so.
-  2. **A host to bind it.** Something has to construct the registry, bind the secret store and the
-     transport, and run the loop. That is the reference host the vision's narrowed non-goal now
-     permits — `crates/connectors-app`, resolving C-34 as yes-narrowed; see
-     [docs/designs/connectors-app.md](docs/designs/connectors-app.md).
+  1. ~~An `http.request` implementation in the dependency graph.~~ **Closed.**
+     `codewandler-flux-web` is published at 0.41.1, matching the pinned flux 0.41, and
+     `connectors-api` constructs its `HttpRequestTool` once and hands it to every operation as the
+     `Egress`. Note what did *not* change: `connector-pack`'s own tests still pass a stub, and still
+     say so — the crate must never link a client.
+  2. ~~A host to bind it.~~ **Closed.** `crates/connectors-api` constructs the registry, binds the
+     secret store and the transport, and runs the loop. It is not the `crates/connectors-app` the
+     older text names: the loopback narrowing that crate was designed under was superseded by
+     [C-201](docs/stories/C-201-charter-multi-tenant-host.md). See
+     [docs/designs/connectors-api.md](docs/designs/connectors-api.md), and
+     [docs/designs/connectors-app.md](docs/designs/connectors-app.md) for the parts still current.
 
 - **Six declarable surfaces reach no artifact at all.** This is the largest real gap in the repository.
   The IR models each one and the loader validates it, and then neither `connectors/*.connector.toml`
