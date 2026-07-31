@@ -33,6 +33,7 @@ pub(crate) mod launchdarkly;
 pub(crate) mod notion;
 pub(crate) mod openai;
 pub(crate) mod openrouter;
+pub(crate) mod sendgrid;
 pub(crate) mod sentry;
 pub(crate) mod shopify;
 pub(crate) mod slack;
@@ -66,6 +67,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &notion::PROVIDER,
     &openai::PROVIDER,
     &openrouter::PROVIDER,
+    &sendgrid::PROVIDER,
     &sentry::PROVIDER,
     &shopify::PROVIDER,
     &slack::PROVIDER,

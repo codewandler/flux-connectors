@@ -9,6 +9,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The SendGrid connector (C-168) — four operations, and deliberately not the send.** Templates,
+  bounce suppressions and address validation ship over a bearer key.
+
+  **`sendgrid-mail-send` is excluded, and the reason is a gap wider than SendGrid:** `BodyNode` builds
+  nested objects from a dotted `wire` path and **never arrays**, while SendGrid's envelope is
+  `personalizations[].to[]` — arrays of objects containing arrays of objects, which SendGrid will not
+  accept in bare-object form. Filed as C-185, which also names the four other fleet connectors that
+  will hit it independently.
+
+  So this catalogue has an email provider that cannot send email. That is the honest state and it is
+  named in the connector's own header, rather than an operation that emits a body SendGrid answers
+  `400` to. The mechanically-legal workaround — one array-typed body-root parameter — was rejected on
+  Notion's precedent: it decomposes nothing and dresses a guess as a typed field.
+
 - **The Dropbox connector (C-167).** Six operations, and **every one is a `POST` including the reads** —
   Dropbox's v2 API is RPC wearing HTTP. A test asserts exactly that, because it is the property a
   future author is most likely to "fix" by turning a read into a `GET` that returns `405`.

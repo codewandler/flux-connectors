@@ -2,8 +2,7 @@
 id: C-168
 title: Ship the SendGrid connector
 pillar: Spec
-status: in-progress
-priority: 3
+status: done
 design:
 epic: provider-fleet-2
 areas: [providers]
@@ -119,3 +118,19 @@ long-stable, frequently-documented SendGrid endpoints I have higher confidence i
 (`sendgrid-suppression-bounce-list`). SendGrid also has Blocks, Invalid Emails, Spam Reports and
 Global (Unsubscribe) suppression lists, each its own endpoint with its own response shape; only
 Bounces is selected here rather than guessing at the other three's exact fields.
+
+### Coordinator note at integration
+
+Shipped as four operations with **`sendgrid-mail-send` excluded**, which is this story's Acceptance
+working rather than failing: it told the implementor to establish what body nesting the schema
+expresses *before* promising the send, and to ship the reads if it did not.
+
+The measured cause is a gap wider than SendGrid: **`BodyNode` builds nested objects via `wire` and
+never arrays.** Filed as [C-185](C-185-body-arrays.md). The workaround that would have been
+mechanically legal — one array-typed body-root parameter — was correctly rejected on
+`providers/notion.toml`'s precedent: it decomposes nothing and dresses an unassisted guess at a shape
+as a typed field.
+
+So this catalogue now has an email provider that cannot send email. That is the honest state, it is
+named in the connector's own header, and it is better than an operation that emits a body SendGrid
+answers `400` to.

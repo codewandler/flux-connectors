@@ -15775,6 +15775,494 @@
       "channels": []
     },
     {
+      "id": "sendgrid",
+      "authority": null,
+      "vendor": "SendGrid",
+      "description": "SendGrid transactional email: read templates and bounce suppressions, validate an email address. Cannot send mail — see the header comment for why the send envelope is not expressible here",
+      "base_url": "https://api.sendgrid.com",
+      "api_version": null,
+      "hosts": [
+        "api.sendgrid.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.sendgrid.com",
+          "hosts": [
+            "api.sendgrid.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 4
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "sendgrid.api_key",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "SendGrid API key sent as a bearer",
+            "env": [
+              "SENDGRID_API_KEY"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "sendgrid.api_key"
+          ]
+        ]
+      },
+      "operation_count": 4,
+      "operations": [
+        {
+          "id": "sendgrid-template-list",
+          "provider": "sendgrid",
+          "service": "default",
+          "description": "List transactional templates (name, id, generation, and each template's versions). Also this connector's `verify` — a bounded read that runs unattended",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v3/templates",
+          "parameters": [
+            {
+              "name": "generations",
+              "in": "query",
+              "wire": null,
+              "description": "Restrict the list to `legacy`, `dynamic`, or `both` templates. SendGrid defaults to `dynamic` when this is omitted",
+              "required": false,
+              "schema": {
+                "enum": [
+                  "legacy",
+                  "dynamic",
+                  "both"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "page_size",
+              "in": "query",
+              "wire": null,
+              "description": "Results per page; SendGrid caps this at 200",
+              "required": false,
+              "schema": {
+                "maximum": 200,
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "generations": {
+                "enum": [
+                  "legacy",
+                  "dynamic",
+                  "both"
+                ],
+                "type": "string"
+              },
+              "page_size": {
+                "maximum": 200,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "_metadata": {
+                "description": "Cursor pagination. `next`, when present, is the full URL of the following page — an opaque server-issued value this connector does not attempt to re-encode, the same reasoning that excludes Asana's `offset` and Notion's `start_cursor`",
+                "type": "object"
+              },
+              "result": {
+                "description": "The matching templates",
+                "items": {
+                  "properties": {
+                    "generation": {
+                      "enum": [
+                        "legacy",
+                        "dynamic"
+                      ],
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "The template's id, e.g. `d-…` for a dynamic template",
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "versions": {
+                      "description": "The template's versions (subject, content, active flag) — not enumerated further here; see sendgrid-template-get",
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "generation"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "result"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "sendgrid.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.sendgrid.com"
+          ],
+          "flux": "op sendgrid-template-list(generations: String, page_size: Number) -> Any\n  description \"List transactional templates (name, id, generation, and each template's versions). Also this connector's `verify` — a bounded read that runs unattended\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.sendgrid.com\"\n  url = fmt(\"{base}/v3/templates\")\n  sep = \"?\"\n  when generations\n    url = fmt(\"{url}{sep}generations={generations}\")\n    sep = \"&\"\n  when page_size\n    url = fmt(\"{url}{sep}page_size={page_size}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
+                "params": [
+                  "generations"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "sendgrid-template-get",
+          "provider": "sendgrid",
+          "service": "default",
+          "description": "Get one transactional template by id, including every version's subject and content",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v3/templates/{template_id}",
+          "parameters": [
+            {
+              "name": "template_id",
+              "in": "path",
+              "wire": null,
+              "description": "The template's id, e.g. `d-…` for a dynamic template — the `id` field from sendgrid-template-list",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "template_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "template_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "generation": {
+                "enum": [
+                  "legacy",
+                  "dynamic"
+                ],
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "versions": {
+                "description": "Every version of this template — its subject, its plain-text and HTML content, and which one is active. Not enumerated further here",
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "generation"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "sendgrid.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.sendgrid.com"
+          ],
+          "flux": "op sendgrid-template-get(template_id: String) -> Any\n  description \"Get one transactional template by id, including every version's subject and content\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.sendgrid.com\"\n  url = fmt(\"{base}/v3/templates/{template_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "sendgrid-suppression-bounce-list",
+          "provider": "sendgrid",
+          "service": "default",
+          "description": "List addresses that have bounced and are suppressed from receiving further mail. Each entry is personal data about a third party — read it only for what the calling flow needs",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v3/suppression/bounces",
+          "parameters": [
+            {
+              "name": "start_time",
+              "in": "query",
+              "wire": null,
+              "description": "Only bounces created at or after this Unix timestamp",
+              "required": false,
+              "schema": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "end_time",
+              "in": "query",
+              "wire": null,
+              "description": "Only bounces created at or before this Unix timestamp",
+              "required": false,
+              "schema": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "end_time": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "start_time": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "description": "The matching bounces",
+            "items": {
+              "properties": {
+                "created": {
+                  "description": "Unix timestamp the bounce was recorded",
+                  "type": "integer"
+                },
+                "email": {
+                  "description": "The suppressed recipient's own address — personal data, never an example value",
+                  "type": "string"
+                },
+                "reason": {
+                  "description": "The bounce reason SendGrid recorded, e.g. an SMTP response",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "The SMTP status code reported with the bounce",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "email",
+                "created",
+                "reason",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "credentials": [
+            [
+              "sendgrid.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.sendgrid.com"
+          ],
+          "flux": "op sendgrid-suppression-bounce-list(start_time: Number, end_time: Number) -> Any\n  description \"List addresses that have bounced and are suppressed from receiving further mail. Each entry is personal data about a third party — read it only for what the calling flow needs\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.sendgrid.com\"\n  url = fmt(\"{base}/v3/suppression/bounces\")\n  sep = \"?\"\n  when start_time\n    url = fmt(\"{url}{sep}start_time={start_time}\")\n    sep = \"&\"\n  when end_time\n    url = fmt(\"{url}{sep}end_time={end_time}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "sendgrid-email-validate",
+          "provider": "sendgrid",
+          "service": "default",
+          "description": "Check whether an email address is well-formed and likely deliverable, without sending it any mail. Requires SendGrid's Email Address Validation add-on to be enabled on the account",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/v3/validations/email",
+          "parameters": [
+            {
+              "name": "email",
+              "in": "body",
+              "wire": null,
+              "description": "The address to check. This is the address a caller supplies for validation — not a recipient this connector addresses mail to, and never an example value here",
+              "required": true,
+              "schema": {
+                "format": "email",
+                "type": "string"
+              }
+            },
+            {
+              "name": "source",
+              "in": "body",
+              "wire": null,
+              "description": "A free-text label for where the check originated, e.g. `signup`. Purely descriptive; SendGrid does not validate its contents",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "email": {
+                "format": "email",
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "email"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "result": {
+                "properties": {
+                  "email": {
+                    "description": "Echoes the checked address — the caller's own input, never an example value",
+                    "type": "string"
+                  },
+                  "host": {
+                    "description": "The domain part of the address (after the `@`)",
+                    "type": "string"
+                  },
+                  "local": {
+                    "description": "The local part of the address (before the `@`)",
+                    "type": "string"
+                  },
+                  "score": {
+                    "description": "A confidence score between 0 and 1",
+                    "type": "number"
+                  },
+                  "suggestion": {
+                    "description": "A suggested correction, when SendGrid has one, otherwise null"
+                  },
+                  "verdict": {
+                    "enum": [
+                      "Valid",
+                      "Risky",
+                      "Invalid"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email",
+                  "verdict"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "result"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "sendgrid.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.sendgrid.com"
+          ],
+          "flux": "op sendgrid-email-validate(email: String, source: String) -> Any\n  description \"Check whether an email address is well-formed and likely deliverable, without sending it any mail. Requires SendGrid's Email Address Validation add-on to be enabled on the account. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.sendgrid.com\"\n  url = fmt(\"{base}/v3/validations/email\")\n  content_type = \"application/json\"\n  payload = { email, source }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "sentry",
       "authority": null,
       "vendor": "Sentry",
