@@ -135,10 +135,11 @@ function stylesheet() {
 
 /** Every file under the explorer's own sources — where hand-maintained data would have to live. */
 function explorerSources() {
+  const config = path.join(webRoot, '.vitepress')
   const roots = [
     path.join(webRoot, 'data'),
     path.join(webRoot, 'operations'),
-    path.join(webRoot, '.vitepress', 'theme'),
+    path.join(config, 'theme'),
   ]
   const files = [path.join(webRoot, 'explorer.md')]
   const walk = (dir) => {
@@ -150,7 +151,14 @@ function explorerSources() {
     }
   }
   roots.forEach(walk)
-  return files.filter(existsSync)
+  // C-205. Markdown under `.vitepress/` is not content. VitePress routes pages from the site root
+  // and `.vitepress/` is its config and theme directory, so `theme/components/README.md` is built
+  // into no page — the 328 pages in `dist` include neither README the repo carries. It is notes for
+  // whoever edits the components, which is the same category as a comment and is read the same way:
+  // not at all. Page Markdown — `explorer.md`, `operations/[operation].md` — is still a source.
+  return files
+    .filter(existsSync)
+    .filter((file) => !(path.extname(file) === '.md' && file.startsWith(config + path.sep)))
 }
 
 /** Every Vue component the explorer is built from, as absolute paths in directory order. */
@@ -169,6 +177,173 @@ function componentSources() {
  */
 function importedModules(source) {
   return [...source.matchAll(/^\s*import\b[\s\S]*?\bfrom\s*'([^']+)'/gm)].map((match) => match[1])
+}
+
+/**
+ * Script comments removed, string literals kept.
+ *
+ * String-aware on purpose rather than a `//.*$` sweep: a hard-coded `https://api.postmark.com` is
+ * exactly what the guard below exists to catch, and a line sweep would cut it at its own `//` and
+ * hide it. Comments are replaced by a space so removing one cannot join its neighbours into a token
+ * that was never written.
+ *
+ * A quote that opens no string — an apostrophe in a stray position — makes the scanner read the
+ * rest of the file as string content, so it keeps text rather than dropping it. Every ambiguity
+ * here fails towards matching more, which is the safe direction for a guard.
+ */
+function withoutScriptComments(source) {
+  let kept = ''
+  for (let i = 0; i < source.length; ) {
+    const pair = source.slice(i, i + 2)
+    if (pair === '//') {
+      const end = source.indexOf('\n', i)
+      kept += ' '
+      i = end === -1 ? source.length : end
+    } else if (pair === '/*') {
+      const end = source.indexOf('*/', i + 2)
+      kept += ' '
+      i = end === -1 ? source.length : end + 2
+    } else if (source[i] === "'" || source[i] === '"' || source[i] === '`') {
+      const quote = source[i]
+      const start = i++
+      while (i < source.length && source[i] !== quote) i += source[i] === '\\' ? 2 : 1
+      kept += source.slice(start, ++i)
+    } else {
+      kept += source[i++]
+    }
+  }
+  return kept
+}
+
+/** Style comments removed. CSS has only the one form. */
+function withoutStyleComments(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, ' ')
+}
+
+/** Markup comments removed. The one form Markdown and a Vue template share. */
+function withoutMarkupComments(source) {
+  return source.replace(/<!--[\s\S]*?-->/g, ' ')
+}
+
+/**
+ * What a source contributes to the built site: its code, its markup and its rendered text, with the
+ * prose written *about* them removed.
+ *
+ * C-205. The guard below greps the explorer's sources for catalogue values. Read as raw text it
+ * greps their comments too, and **thirteen catalogue service names are ordinary English words** —
+ * `account`, `admin`, `calendar`, `default`, `delivery`, `drive`, `files`, `gmail`, `machines`,
+ * `mail`, `management`, `models`, `server`. Postmark shipping a service called `server` turned a
+ * sentence about the VitePress dev server into a gate failure. An allowlist would be that bug filed
+ * once per connector, and "do not use these words in a comment" is a rule no author can follow.
+ *
+ * So the narrowing is on what hand-maintained data *is*, not on which words are exempt: data
+ * hand-written into the site is a value the site can **render** — a literal in code, an attribute
+ * or text in markup, the body of a page. A comment renders nothing, so a comment is never
+ * hand-maintained catalogue data whatever words it happens to contain. Everything that is not a
+ * comment is still matched as raw text, exactly as it was, so nothing that reaches a reader has
+ * become invisible to the guard.
+ *
+ * A Vue file is three languages, so its `<script>` and `<style>` blocks are read as such and its
+ * template as markup.
+ */
+function renderedSource(file, source) {
+  const script = ['.mts', '.cts', '.ts', '.mjs', '.cjs', '.js']
+  const extension = path.extname(file)
+  if (script.includes(extension)) return withoutScriptComments(source)
+  if (extension === '.css') return withoutStyleComments(source)
+  if (extension === '.md') return withoutMarkupComments(source)
+  if (extension !== '.vue') return source
+
+  const blocks = /(<(script|style)\b[^>]*>)([\s\S]*?)(<\/\2>)/g
+  let kept = ''
+  let read = 0
+  for (const block of source.matchAll(blocks)) {
+    const [whole, open, language, body, close] = block
+    kept += withoutMarkupComments(source.slice(read, block.index))
+    kept += open + (language === 'script' ? withoutScriptComments(body) : withoutStyleComments(body)) + close
+    read = block.index + whole.length
+  }
+  return kept + withoutMarkupComments(source.slice(read))
+}
+
+/**
+ * Every value in the generated catalogue that the site must render rather than restate.
+ *
+ * Read out of the document, so a new provider is covered with no edit here — which is the property
+ * the guard that uses this exists to defend.
+ */
+function catalogueValues(document) {
+  const values = new Set()
+  for (const provider of document.providers) {
+    values.add(provider.id)
+    values.add(provider.vendor)
+    values.add(provider.base_url)
+    provider.hosts.forEach((host) => values.add(host))
+    provider.auth.credentials.forEach((credential) => values.add(credential.name))
+    // A service name and a published address are catalogue data like any other. The reserved name
+    // is the one exception, and only because it is not data: it is grammar the site has to know
+    // about in order to render nothing for it.
+    for (const service of provider.services) {
+      if (service.name !== RESERVED_SERVICE) values.add(service.name)
+      if (service.gid) values.add(service.gid)
+    }
+    for (const operation of provider.operations) {
+      values.add(operation.id)
+      operation.status.issues.forEach((issue) => values.add(issue.code))
+    }
+    // C-83. A member's rendered address is catalogue data like an operation id, and the inbound
+    // components render one, so hard-coding one is the same failure.
+    //
+    // The bare *names* are deliberately not here, and that is not an oversight: an event keeps its
+    // vendor spelling, and vendors spell them as ordinary English words — one shipped connector
+    // declares an event called `message`. C-205 narrowed the *matching* rather than the set, so a
+    // name in a comment is no longer a find; a name rendered into a component still would be.
+    for (const member of [...provider.events, ...provider.channels]) {
+      if (member.oip) values.add(member.oip)
+    }
+  }
+  return values
+}
+
+/**
+ * Whether a text names a catalogue value, as opposed to merely containing its letters.
+ *
+ * C-205, the second narrowing. `data/catalog.mts` declares the shape of the document it loads, and
+ * one of the fields is `delivery_id` — which contains the letters of the service `delivery`. A
+ * field name is structure, not data, and `delivery_id` is no more the service `delivery` than
+ * `gmail` is the service `mail` or `drives` is the service `drive`; the story records both of those
+ * as the same misread. So a value counts when it stands as a word, not as a fragment of a longer
+ * one.
+ *
+ * The trailing boundary treats a capital as the end of a word, because an identifier does: a
+ * hard-coded `zendeskTicket` still names `zendesk` and is still caught. The leading boundary is a
+ * plain word character, which is why `gmail` does not report `mail`.
+ */
+function namesValue(text, value) {
+  for (let at = text.indexOf(value); at !== -1; at = text.indexOf(value, at + 1)) {
+    const before = at === 0 ? '' : text[at - 1]
+    const after = text[at + value.length] ?? ''
+    if (!/[A-Za-z0-9_]/.test(before) && !/[a-z0-9_]/.test(after)) return true
+  }
+  return false
+}
+
+/**
+ * Every catalogue value a source hand-writes into the site, as `{ file, value }`.
+ *
+ * Takes the sources as `{ file, source }` rather than reading them, so a test can ask the question
+ * of a source that is not on disk — which is how the two halves of this guard are proved: that
+ * prose is tolerated, and that hand-written data is still caught.
+ */
+function handMaintainedData(sources, values) {
+  const found = []
+  for (const { file, source } of sources) {
+    const rendered = renderedSource(file, source)
+    for (const value of values) {
+      if (namesValue(rendered, value)) found.push({ file: path.relative(webRoot, file), value })
+    }
+  }
+  return found
 }
 
 test('the site ships the generated catalogue at the path VitePress serves', () => {
@@ -1069,47 +1244,118 @@ test('a published service address is shown, and an absent one is shown as nothin
 })
 
 test('nothing about the catalogue is hand-maintained in the explorer sources', () => {
+  const files = explorerSources()
+  assert.ok(files.length > 0, 'no explorer sources were found; this test would pass vacuously')
+
+  const sources = files.map((file) => ({ file, source: readFileSync(file, 'utf-8') }))
+  for (const { file, value } of handMaintainedData(sources, catalogueValues(catalog()))) {
+    assert.fail(
+      `${file} names \`${value}\` — catalogue data hand-written into the site is the failure this project exists to correct`
+    )
+  }
+})
+
+// C-205, the first of the guard's two halves. The gate was red on `main` because the guard read the
+// sources as raw text: `data/catalog.data.mts` says "reloads the dev server" in a comment about
+// VitePress, Postmark declares a service called `server`, and the two collided.
+//
+// Asserted against the tree as it stands rather than against a fixture alone, because the point of
+// the story is that the real comment is allowed to stay English. The first assertion is what keeps
+// this honest: if nobody ever writes a catalogue word in prose again, the tolerance is untested and
+// this says so instead of passing.
+test('a catalogue name used as an English word in prose is not hand-maintained data', () => {
+  const values = catalogueValues(catalog())
+  const sources = explorerSources().map((file) => ({ file, source: readFileSync(file, 'utf-8') }))
+
+  const written = sources.flatMap(({ file, source }) =>
+    [...values]
+      .filter((value) => namesValue(source, value))
+      .map((value) => `${path.relative(webRoot, file)}: ${value}`)
+  )
+  assert.ok(
+    written.length > 0,
+    'no explorer source writes a catalogue name at all, so the tolerance this test exists for is untested'
+  )
+
+  assert.deepEqual(
+    handMaintainedData(sources, values),
+    [],
+    `the guard reads prose as data — each of these is a sentence, not a value: ${written.join(', ')}`
+  )
+
+  // And in the small, so the mechanism is pinned rather than inferred from the tree. Every one of
+  // the catalogue's one-word service names, in the three comment forms the sources are written in.
+  const words = [...values].filter((value) => /^[a-z]+$/.test(value)).join(' ')
+  assert.ok(words.includes('server'), 'the catalogue no longer declares a one-word service name')
+  const fixtures = [
+    { file: 'data/notes.mts', source: `// ${words}\n/* ${words} */\nexport const rows = []\n` },
+    {
+      file: 'theme/Card.vue',
+      source: [
+        `<script setup>\n// ${words}\n</script>`,
+        `<template>\n  <!-- ${words} -->\n  <p>{{ label }}</p>\n</template>`,
+        `<style scoped>\n/* ${words} */\n.card { color: red; }\n</style>`,
+      ].join('\n\n'),
+    },
+    { file: 'explorer.md', source: `# The explorer\n\n<!-- ${words} -->\n\n<CatalogExplorer />\n` },
+  ]
+  assert.deepEqual(handMaintainedData(fixtures, values), [])
+})
+
+// C-205, the other half, and the one that matters more: the narrowing above must not have turned
+// the guard off. A comment is exempt because it renders nothing — everything a reader can see is
+// still read as raw text, in every language the sources are written in.
+test('the guard still catches catalogue data hand-written into the explorer', () => {
   const document = catalog()
+  const values = catalogueValues(document)
+  const provider = document.providers.find((entry) => entry.operations.length > 0)
+  const { id, base_url: url } = provider
+  const operation = provider.operations[0].id
 
-  const forbidden = new Set()
-  for (const provider of document.providers) {
-    forbidden.add(provider.id)
-    forbidden.add(provider.vendor)
-    forbidden.add(provider.base_url)
-    provider.hosts.forEach((host) => forbidden.add(host))
-    provider.auth.credentials.forEach((credential) => forbidden.add(credential.name))
-    // A service name and a published address are catalogue data like any other. The reserved name
-    // is the one exception, and only because it is not data: it is grammar the site has to know
-    // about in order to render nothing for it.
-    for (const service of provider.services) {
-      if (service.name !== RESERVED_SERVICE) forbidden.add(service.name)
-      if (service.gid) forbidden.add(service.gid)
-    }
-    for (const operation of provider.operations) {
-      forbidden.add(operation.id)
-      operation.status.issues.forEach((issue) => forbidden.add(issue.code))
-    }
-    // C-83. A member's rendered address is catalogue data like an operation id, and the inbound
-    // components render one, so hard-coding one is the same failure.
-    //
-    // The bare *names* are deliberately not here, and that is not an oversight: an event keeps its
-    // vendor spelling, and vendors spell them as ordinary English words — one shipped connector
-    // declares an event called `message`. Adding those would fail on any component that used the
-    // word in a comment, which is a false positive by construction rather than a real find.
-    for (const member of [...provider.events, ...provider.channels]) {
-      if (member.oip) forbidden.add(member.oip)
-    }
-  }
+  const caught = (file, source) =>
+    handMaintainedData([{ file, source }], values).map((hit) => hit.value)
+  const finds = (file, source, value) =>
+    assert.ok(
+      caught(file, source).includes(value),
+      `the guard no longer catches \`${value}\` hand-written into ${file}`
+    )
 
-  for (const file of explorerSources()) {
-    const source = readFileSync(file, 'utf-8')
-    for (const token of forbidden) {
-      assert.ok(
-        !source.includes(token),
-        `${path.relative(webRoot, file)} names \`${token}\` — catalogue data hand-written into the site is the failure this project exists to correct`
-      )
-    }
-  }
+  // A literal in code, on a line whose comment is stripped: the removal is surgical, not by line.
+  finds('data/catalog.mts', `export const first = '${id}' // the first connector\n`, id)
+  // A base URL, which contains the `//` a line-wise comment sweep would have cut it at.
+  finds('data/catalog.mts', `const base = '${url}'\n`, url)
+  // Rendered text and a bound attribute in a Vue template, and a literal in its script block.
+  finds('theme/Card.vue', `<template>\n  <p>${operation}</p>\n</template>\n`, operation)
+  finds('theme/Card.vue', `<template>\n  <a href="/operations/${operation}">go</a>\n</template>\n`, operation)
+  finds('theme/Card.vue', `<script setup>\nconst only = '${id}'\n</script>\n`, id)
+  // A style block, where a hard-coded id would be a selector or generated content.
+  finds('theme/Card.vue', `<style>\n.card[data-provider='${id}'] { color: red; }\n</style>\n`, id)
+  // And the body of a page, which is all rendered.
+  finds('explorer.md', `# The explorer\n\nStart with ${id}.\n`, id)
+
+  // A value glued into a longer identifier is still a value: the word boundary ends at a capital,
+  // exactly where an identifier's own word does.
+  finds('data/catalog.mts', `const ${id}Ticket = 1\n`, id)
+
+  // The exemption is the comment and nothing wider: a value in code is caught on the same line that
+  // an exempt one sits in a comment.
+  const surgical = caught('data/catalog.mts', `const first = '${id}' // and ${operation}\n`)
+  assert.ok(surgical.includes(id), 'a literal beside a comment is no longer read')
+  assert.ok(!surgical.includes(operation), 'the comment beside it is read after all')
+
+  // And the two narrowings do not overlap into a third: the word rule exempts a longer *word*, not
+  // a longer line, so it cannot be used to smuggle a value past the guard by suffixing it.
+  const services = document.providers.flatMap((entry) => entry.services)
+  assert.ok(
+    services.some((entry) => entry.name === 'delivery'),
+    'no connector declares the service `delivery`, so the case below is stale'
+  )
+  assert.ok(!caught('data/catalog.mts', 'delivery_id: FieldSelector | null\n').includes('delivery'))
+  assert.ok(caught('data/catalog.mts', "const only = 'delivery'\n").includes('delivery'))
+
+  // The message still names the file and the value, because it is the only thing the author sees.
+  const hand = { file: path.join(webRoot, 'data', 'catalog.mts'), source: `'${id}'` }
+  assert.deepEqual(handMaintainedData([hand], values)[0], { file: 'data/catalog.mts', value: id })
 })
 
 // C-142. The sibling of the test above: that one keeps catalogue *data* out of the components, this
