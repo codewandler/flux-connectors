@@ -1,22 +1,29 @@
 //! What this host must get right, asserted over its real HTTP surface.
 //!
-//! # Why there is no live vendor leg here
+//! # Why the live vendor leg is not in *this* file
 //!
-//! Every test below stops at or before the send, and that is deliberate. To assert *"the request
-//! that reached the vendor carried tenant A's credential"* a test needs a vendor it controls, which
-//! means a loopback address — and no shipped connector's `base_url` can be pointed at one. Nine
+//! Every test below stops at or before the send. That used to be the whole story here, on the
+//! reasoning that no shipped connector's `base_url` can be pointed at a loopback address — nine
 //! carry a `{placeholder}`, but every one of them templates a *label* inside a fixed vendor suffix
-//! (`{subdomain}.zendesk.com`), never the whole host. There is no configuration value that makes a
-//! connector call `127.0.0.1`, by design.
+//! (`{subdomain}.zendesk.com`), never the whole host, and C-214's `request::Slot` guard exists to
+//! keep it that way. That reasoning still holds, and it is still why no test *drives a route* to a
+//! vendor it controls.
 //!
-//! The available alternative was a substitute `Egress` that records instead of sending. That is
-//! precisely what `connector-pack`'s own tests already do, for want of a transport, and `Egress`'s
+//! **What no longer holds is the conclusion that nothing here can send.** `tests/live_egress.rs`
+//! (C-202) sends one request through the real `HttpRequestTool` to a loopback server and asserts
+//! the vendor received exactly the `{ method, url, headers, body }` the pack built. It reaches a
+//! loopback address by retargeting one string literal in a shipped operation's own emitted Flux
+//! and by granting `PrivateNetAllow::Hosts(["127.0.0.1"])` through [`App::with_web_options`] — a
+//! grant for one host, on one `App`, with the shipped default untouched. That file documents the
+//! trade in full.
+//!
+//! The alternative both files refuse is a substitute `Egress` that records instead of sending —
+//! precisely what `connector-pack`'s own tests do, for want of a transport, and `Egress`'s
 //! documentation says what is wrong with treating it as proof: *"a stand-in that ignores `body`, or
 //! that resolves `url` against some base of its own, is not a substitute — it is a different
-//! connector."* Adding a second stubbed suite here would grow the count of green tests without
-//! growing what is known.
+//! connector."*
 //!
-//! So the live leg is **manual and labelled manual**, which is the standard
+//! The leg against a **real vendor** stays manual and labelled manual, which is the standard
 //! `docs/designs/connectors-app.md` sets and the mistake
 //! [`C-149`](../../../docs/stories/C-149-vault-live-leg-reports-ok-when-it-skips.md) records — a live
 //! leg that reports OK when it skips is worse than none. It was performed against
@@ -93,15 +100,24 @@ async fn a_stored_credential_reaches_no_surface() {
         "/auth/status",
         "/",
     ] {
-        let body = client
+        let response = client
             .get(format!("{base}{path}"))
             .header("cookie", &cookie)
             .send()
             .await
-            .unwrap_or_else(|error| panic!("GET {path}: {error}"))
-            .text()
-            .await
-            .expect("a body");
+            .unwrap_or_else(|error| panic!("GET {path}: {error}"));
+        // **The sweep must run against the real surface, not an error page** (C-228). Every path
+        // here is fetched *with* a session precisely so it renders the thing that could leak. A
+        // refusal body contains no secret either, so without this line the guarantee would still be
+        // reported as held if a route started answering `401` — which is how `/v1/operations/…`
+        // came to be swept here while having no test that its gate was even reachable.
+        let status = response.status();
+        assert!(
+            status.is_success(),
+            "GET {path} answered {status} with a session, so the no-secrets sweep below would pass \
+             on an error page rather than on the surface it claims to cover"
+        );
+        let body = response.text().await.expect("a body");
         for (secret, what) in secrets {
             assert!(!body.contains(secret), "`{path}` served {what}");
         }
@@ -306,6 +322,14 @@ fn the_transport_is_flux_http_request() {
 /// shipped `Any` would let a connector — or a prompt-injected caller choosing a parameter that lands
 /// in a URL — reach into the network the host is running on. Asserted on the value rather than
 /// trusted from the doc comment, because the default is one word away from the opposite.
+///
+/// **What this does *not* assert, measured** (C-202): it reads a constant out of `flux-web`, not
+/// this host's policy. Changing [`App::new`] to pass `PrivateNetAllow::Any` leaves this test green —
+/// tried, and it stays green — because `WebOptions::default()` is unchanged by that edit. The gap is
+/// closed behaviourally by `tests/live_egress.rs`'s
+/// `the_default_egress_refuses_the_very_request_the_grant_admits`, which runs a real request under
+/// [`App::new`] and requires it to be refused with nothing on the wire. Both are kept: this one
+/// names the value a reader is looking for, that one proves the host actually uses it.
 #[test]
 fn the_default_egress_guards_the_private_network() {
     use flux_system::net::PrivateNetAllow;

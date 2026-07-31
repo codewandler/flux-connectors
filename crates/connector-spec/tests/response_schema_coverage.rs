@@ -8,13 +8,19 @@
 //!
 //! So two figures are recorded, and both are floors:
 //!
-//! - [`COVERED_FLOOR`] — the absolute count. Deleting a schema fails here.
-//! - [`RATIO_FLOOR_PERCENT`] — the share of all shipped operations. **Adding operations without
+//! - [`COVERED_FLOOR`] — the count of operations that carry one. Deleting a schema fails here.
+//! - [`ABSENCE_CEILING`] — the count of operations that do not. **Adding operations without
 //!   response shapes fails here**, which is the regression the count alone cannot see and the one
 //!   that actually happened between the design's measurement and C-126.
 //!
-//! Both may be *raised* freely — that is the ratchet turning. Lowering either is a deliberate act
-//! that belongs in a story with a reason, not a quiet edit to make a build green.
+//! They bound the two halves of one measurement, and neither bounds the other: a wave can raise the
+//! covered count and the absent count in the same commit. `COVERED_FLOOR` may be *raised* freely and
+//! `ABSENCE_CEILING` *lowered* freely — that is the ratchet turning. Moving either the other way is
+//! a deliberate act that belongs in a story with a reason, not a quiet edit to make a build green.
+//!
+//! **Both are held to the measurement in both directions** (C-196). A bound nobody ever has to move
+//! is a bound that has stopped describing anything, and it stops silently: the assertion goes on
+//! passing while the gap it allows grows wide enough to drive a whole connector through.
 //!
 //! The third test is what keeps the measure honest. A coverage count is trivially gameable by
 //! declaring `{}` or `{"type": "object"}` on everything: both satisfy "declares a response schema"
@@ -71,34 +77,66 @@ use connector_spec::JsonSchema;
 /// coming. Giving them one is filed as its own story rather than fixed by lowering anything here.
 const COVERED_FLOOR: usize = 250;
 
-/// The same floor as a share of every shipped operation, in whole percent. This is the half that
-/// notices a connector arriving with no response shapes at all.
+/// The other half of the same measurement: operations that ship **without** a response shape. This
+/// is the half that notices a connector arriving with no response shapes at all.
 ///
-/// 92 of 110 is 83%, and the floor is set one point under the measurement deliberately: a single
-/// honest absence — one operation whose vendor documents no body — should not turn an unrelated
-/// provider story red on arrival, while a connector landing with nothing still does. There is no room
-/// in one point for a whole provider.
+/// It replaces `RATIO_FLOOR_PERCENT`, which guarded the same arrival as a share of the catalogue and
+/// stopped being able to ([C-196](../../../docs/stories/C-196-the-ratio-floor-has-no-ratchet.md)).
+/// Two separate failures, both measured at 268 of 299:
 ///
-/// **Raised 82 → 87 on 2026-07-31, because it had drifted out of its own design.** 82 was one point
-/// under 83 when the measurement was 92 of 110. The measurement is now 220 of 248 — **88.7%** — so
-/// the gap had quietly become *six* points, which at 248 operations is room for roughly sixteen
-/// unschematized operations: a whole provider landing with nothing, which is precisely the arrival
-/// this constant exists to catch. It was doing the archaeology its sibling's ratchet was built to
-/// prevent.
+/// 1. **It had no ratchet, so it could only drift.** `the_recorded_floor_is_the_measured_figure`
+///    turns [`COVERED_FLOOR`] both ways; nothing turned that one. It was moved by hand twice —
+///    82 → 87 → 88 — each time *after* somebody noticed, which is exactly the archaeology its
+///    sibling's second direction exists to prevent.
+/// 2. **A percent was too coarse an instrument for what it guarded, and grew coarser as the
+///    catalogue grew.** One point of 110 operations is one operation; one point of 299 is three. At
+///    a floor of 88, **five** operations could arrive carrying nothing before the guard fired — and
+///    **27 of the 53 shipped connectors are five operations or fewer**. Over half the catalogue
+///    could have landed with no response shapes at all and passed.
 ///
-/// **And that is the finding: this constant has no ratchet.** `the_recorded_floor_is_the_measured_
-/// figure` turns [`COVERED_FLOOR`] both ways; nothing turns this one, so it can only drift. Wiring
-/// the same two-way check here — or deriving this from `COVERED_FLOOR` rather than storing it twice
-/// — is worth a story. Until then it is raised by hand, which is the mechanism that just failed.
+/// The second is why this is not a percent with a ratchet bolted on. *No* whole-percent value both
+/// admits one honest absence and refuses a three-operation connector at this catalogue size: the
+/// unit was the defect, not the number. Counting absences directly makes the guard's resolution one
+/// operation, and keeps it there whatever the catalogue grows to.
 ///
-/// **Raised 87 → 88 on 2026-07-31 by the provider wave, deliberately and while nothing forced it.**
-/// The measurement is now 250 of 281 — **89.0%** — so 87 had become two points under and was
-/// drifting in the same direction as before. Nothing failed: this constant still has no ratchet, so
-/// it went on being satisfied while the gap widened, which is precisely the archaeology described
-/// above. Moving it back to one point under is the whole of the fix available by hand, and having to
-/// *notice* it rather than be *told* is the standing argument for
-/// [C-196](../../../docs/stories/C-196-the-ratio-floor-has-no-ratchet.md).
-const RATIO_FLOOR_PERCENT: usize = 88;
+/// Deriving a ratio from [`COVERED_FLOOR`] was weighed first and rejected, because it deletes the
+/// guard along with the constant. `COVERED_FLOOR * 100 / operations` puts the same denominator on
+/// both sides of the comparison, so it reduces to `covered >= COVERED_FLOOR` — the check that
+/// already exists — and the arrival this constant is for passes it: a nine-operation connector
+/// landing with nothing leaves `covered` untouched at 268, and 268 of 308 clears a derived floor of
+/// 81 comfortably. Two constants stand here because they bound two quantities that move
+/// independently. Covered can rise while absent rises too, in the same commit, and neither figure
+/// can be computed from the other.
+///
+/// **31 operations across 18 providers ship without a shape today, and they are not a defect.**
+/// babelforce (0 of 9) and fly (4) are vendor-wide gaps their provider files explain; datadog and
+/// google contribute 2 each; the remaining 14 are single operations, each recorded next to the
+/// operation in its own provider file. [`COVERED_FLOOR`]'s doc enumerates *eighteen* — that is the
+/// figure from the 110-operation era, kept as the record of what C-126 measured, not a count of
+/// today's.
+const ABSENCE_CEILING: usize = 33;
+
+/// How far [`ABSENCE_CEILING`] may sit above the measured absence. This is the guard's resolution,
+/// and the only number in this file that was chosen rather than read off the catalogue, so it is the
+/// one that owes an argument.
+///
+/// It is bounded from above by the smallest shipped connector. supabase ships **3** operations, so a
+/// slack of 3 would let a connector exactly that size land carrying nothing and stay green, which is
+/// the one arrival [`ABSENCE_CEILING`] exists to catch. It is bounded from below by the design this
+/// file has always stated: a single honest absence — one operation whose vendor documents no body —
+/// must not turn an unrelated provider story red on arrival, so it is at least 1.
+///
+/// That leaves 1 or 2, and 2 is the measured answer. datadog (2 of 4) and google (6 of 8) each
+/// arrived carrying exactly two operations whose vendors document no response body; a slack of 1
+/// would have turned both of those stories red on arrival for doing nothing wrong.
+///
+/// A story landing **three or more** honest absences is therefore red on arrival, and deliberately
+/// so — that is a claim about the catalogue large enough to be worth a sentence in a story. It
+/// reports this test alongside the ninth staleness check and stops; the coordinator moves the
+/// ceiling at integration, in the commit that earned it. Same per-wave rhythm [`COVERED_FLOOR`]
+/// already has, and the same reason both constants are fenced to the coordinator: three concurrent
+/// provider stories that each moved one would collide on a single line.
+const ABSENCE_SLACK: usize = 2;
 
 fn providers_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -204,10 +242,47 @@ fn response_schema_coverage_does_not_fall_below_its_floor() {
         table(&tallies)
     );
     assert!(
-        percent >= RATIO_FLOOR_PERCENT,
-        "response_schema coverage is {covered} of {operations} ({percent}%), below the recorded \
-         floor of {RATIO_FLOOR_PERCENT}%. The count did not fall, so operations were added without \
-         response shapes — declare them, or lower this floor deliberately and say why.\n{}",
+        absence_is_within_bounds(operations, covered),
+        "{} of {operations} operations now ship without a response shape, above the recorded \
+         ceiling of {ABSENCE_CEILING}. The covered count did not fall, so operations were added \
+         without response shapes — declare them, or raise this ceiling deliberately and say why.\n{}",
+        operations - covered,
+        table(&tallies)
+    );
+}
+
+/// **The guard, as a function rather than an inline assertion**, so it can be asked about arrivals
+/// that have not happened yet — which is the only way to test that a bound still bounds anything.
+fn absence_is_within_bounds(operations: usize, covered: usize) -> bool {
+    operations - covered <= ABSENCE_CEILING
+}
+
+/// **The stated design, asserted rather than described.** Both halves, in the file's own words: one
+/// honest absence must not turn an unrelated provider story red on arrival, and a connector landing
+/// with nothing at all still must.
+#[test]
+fn a_connector_arriving_with_no_response_shapes_is_caught() {
+    let tallies = coverage();
+    let operations: usize = tallies.iter().map(|tally| tally.operations).sum();
+    let covered: usize = tallies.iter().map(|tally| tally.covered).sum();
+    let smallest = tallies
+        .iter()
+        .map(|tally| tally.operations)
+        .min()
+        .expect("the catalogue ships at least one provider");
+
+    assert!(
+        absence_is_within_bounds(operations + 1, covered),
+        "one operation whose vendor documents no body turns the guard red at {covered} of \
+         {operations}. The floor is meant to leave room for a single honest absence.\n{}",
+        table(&tallies)
+    );
+    assert!(
+        !absence_is_within_bounds(operations + smallest, covered),
+        "a connector the size of the smallest already shipped ({smallest} operations) could land \
+         carrying no response shapes at all — {covered} of {} — and this guard would stay green. \
+         That arrival is the one thing it exists to catch.\n{}",
+        operations + smallest,
         table(&tallies)
     );
 }
@@ -229,6 +304,30 @@ fn the_recorded_floor_is_the_measured_figure() {
         covered <= COVERED_FLOOR + operations / 10,
         "coverage is {covered} of {operations} but the floor still records {COVERED_FLOOR}. Raise \
          it in the same commit that raised coverage, so the ratchet only turns one way.\n{}",
+        table(&tallies)
+    );
+}
+
+/// **The same direction, for the ceiling — and the whole of C-196.**
+///
+/// `RATIO_FLOOR_PERCENT` had only the forward half. It sat wherever it was last set by hand while
+/// the catalogue moved underneath it, went on passing the entire time, and the gap it allowed grew
+/// from one operation to five without a single test noticing. A bound that never has to move is
+/// indistinguishable from a bound that has stopped measuring, and this is the test that tells them
+/// apart: every absence resolved has to be given back, in the commit that resolved it.
+#[test]
+fn the_recorded_ceiling_is_the_measured_absence() {
+    let tallies = coverage();
+    let operations: usize = tallies.iter().map(|tally| tally.operations).sum();
+    let covered: usize = tallies.iter().map(|tally| tally.covered).sum();
+    let absent = operations - covered;
+
+    assert!(
+        ABSENCE_CEILING <= absent + ABSENCE_SLACK,
+        "{absent} of {operations} operations ship without a response shape, but the ceiling still \
+         records {ABSENCE_CEILING}. Absences were resolved and the ceiling kept the room they \
+         freed, which is room for a connector to arrive carrying nothing. Lower it in the same \
+         commit that earned it, so the ratchet only turns one way.\n{}",
         table(&tallies)
     );
 }

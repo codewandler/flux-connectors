@@ -38,8 +38,16 @@
   .conn.on { background: var(--panel); box-shadow: inset 3px 0 0 var(--accent); }
   .conn .name { font-weight: 550; }
   .conn .count { color: var(--muted); font-size: .8rem; margin-left: auto; }
+  /* The three states an operator can be in, and a fourth for "some of it". A connector with
+     nothing to supply must not look like one that has been left unconfigured forever, so
+     `no-credential-required` gets a filled mark of its own rather than the empty one. */
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); flex: none; }
-  .dot.live { background: var(--accent); }
+  .dot.wired { background: var(--accent); }
+  .dot.partly-wired { background: var(--accent); opacity: .45; }
+  .dot.no-credential-required { background: var(--muted); }
+  .state { font-size: .78rem; }
+  .op.uncallable .id { opacity: .55; }
+  .op .needs { font-size: .7rem; color: var(--warn); margin-left: .4rem; }
   h2 { font-size: 1.1rem; margin: 0 0 .2rem; }
   .muted { color: var(--muted); }
   .sub { color: var(--muted); font-size: .85rem; margin-bottom: 1rem; }
@@ -105,6 +113,22 @@ const api = async (method, path, body) => {
 
 let connectors = [], current = null;
 
+// The three answers to "is there anything for me to do here?", plus the partial one. Keyed by the
+// server's own `wiring` token — the same vocabulary the published catalogue uses for the third
+// state (`no-credential-required`, C-206), so the two surfaces cannot drift into two spellings.
+//
+// The one this page exists for is the third: before C-212 a connector whose vendor needs no
+// credential was drawn exactly like one nobody had configured, so an operator went looking for a
+// token that does not exist.
+const WIRING = {
+  'no-credential-required': c => ['ok', 'Nothing to supply — this connector needs no credential.'],
+  'wired':       c => ['ok',    `Ready — all ${c.operation_count} operations are callable.`],
+  'partly-wired':c => ['muted', `${c.callable_operations} of ${c.operation_count} operations are callable. `
+                              + `The rest need a credential you have not supplied.`],
+  'not-wired':   c => ['muted', `Nothing is callable yet — supply a credential below.`],
+};
+const wiringOf = c => (WIRING[c.wiring] ?? (() => ['muted', c.wiring]))(c);
+
 async function load() {
   connectors = await api('GET', '/v1/connectors');
   const ops = connectors.reduce((n, c) => n + c.operation_count, 0);
@@ -115,10 +139,13 @@ async function load() {
 function renderList() {
   const list = $('#list');
   list.replaceChildren(...connectors.map(c => {
-    const node = el('div', { className: 'conn' + (current === c.id ? ' on' : '') },
-      el('span', { className: 'dot' + (c.connected ? ' live' : '') }),
+    const node = el('div', { className: 'conn' + (current === c.id ? ' on' : ''), title: wiringOf(c)[1] },
+      el('span', { className: 'dot ' + c.wiring }),
       el('span', { className: 'name' }, c.vendor),
-      el('span', { className: 'count' }, String(c.operation_count)));
+      el('span', { className: 'count' },
+        c.wiring === 'no-credential-required' || c.wiring === 'wired'
+          ? String(c.operation_count)
+          : `${c.callable_operations}/${c.operation_count}`));
     node.onclick = () => show(c.id);
     return node;
   }));
@@ -130,12 +157,19 @@ async function show(id) {
   const c = await api('GET', `/v1/connectors/${id}`);
   const d = $('#detail');
   d.replaceChildren();
-  d.append(el('h2', {}, c.vendor), el('div', { className: 'sub' }, c.description));
+  const [tone, sentence] = wiringOf(c);
+  d.append(el('h2', {}, c.vendor), el('div', { className: 'sub' }, c.description),
+    el('p', { className: 'state ' + tone, style: 'margin:-.7rem 0 1rem' }, sentence));
 
   // --- credentials -------------------------------------------------------
   const creds = el('section', {}, el('h3', {}, 'Credentials'));
   if (!c.credentials.length) {
-    creds.append(el('p', { className: 'muted' }, 'This connector declares none.'));
+    // Which is the whole point of the third state: "declares none" is a fact about the connector,
+    // and on its own it does not tell an operator whether that is good news.
+    creds.append(el('p', { className: c.wiring === 'no-credential-required' ? 'ok' : 'muted' },
+      c.wiring === 'no-credential-required'
+        ? 'This connector declares none, and needs none. There is nothing for you to supply.'
+        : 'This connector declares none.'));
   }
   for (const cr of c.credentials) {
     const input = el('input', { type: 'password', placeholder: cr.stored ? '•••••••• stored' : 'paste value' });
@@ -187,14 +221,20 @@ async function show(id) {
   }
 
   // --- operations --------------------------------------------------------
-  const opsSection = el('section', {}, el('h3', {}, `Operations · ${c.operation_count}`));
+  // The honest unit is the operation, so each one says for itself whether it can be called and,
+  // when it cannot, which credential is missing. `requires` is an OR over mechanisms, each an AND
+  // of names that must travel together, so it is rendered as such rather than flattened.
+  const opsSection = el('section', {}, el('h3', {}, `Operations · ${c.callable_operations} of ${c.operation_count} callable`));
   const holder = el('div', {}, el('span', { className: 'muted' }, 'loading…'));
   opsSection.append(holder);
   d.append(opsSection);
-  const ids = await Promise.all(c.operation_ids.map(id => api('GET', `/v1/operations/${id}`)));
-  holder.replaceChildren(...ids.map(o => {
-    const node = el('div', { className: 'op' },
+  const details = await Promise.all(c.operations.map(o => api('GET', `/v1/operations/${o.id}`)));
+  holder.replaceChildren(...details.map((o, i) => {
+    const w = c.operations[i];
+    const node = el('div', { className: 'op' + (w.callable ? '' : ' uncallable') },
       el('span', { className: 'id' }, o.tool),
+      w.callable ? '' : el('span', { className: 'needs' },
+        'needs ' + w.requires.map(m => m.join(' + ')).join(' or ')),
       el('span', { className: 'muted', style: 'font-size:.8rem' }, o.description),
       el('span', { className: 'risk' }, o.risk));
     node.onclick = () => playground(o, opsSection);
@@ -229,14 +269,23 @@ async function playground(op, after) {
 }
 
 // Sign-in gates everything below, so the page asks who is asking before it asks for anything else.
-// Three states, and each is a real one an operator lands in:
-//   - not configured  → say which environment variables to set, and where to register
-//   - configured, not signed in → a button
-//   - signed in       → the catalogue, scoped to that account's tenant
+// The states, and each is a real one an operator lands in:
+//   - no door at all   → say which environment variables to set, and where to register
+//   - a door, not signed in → a button per door that actually exists
+//   - signed in        → the catalogue, scoped to that account's tenant
+//
+// `status.dev` (C-234) is the *same* value the server built its route table from, so the page can
+// never offer a button that would 404. The dev button is drawn only when it is true; on an ordinary
+// host this branch produces nothing at all.
 async function start() {
   const status = await api('GET', '/auth/status');
 
-  if (!status.configured) {
+  if (status.dev) {
+    $('header .note').textContent =
+      'DEV MODE — authentication is disabled. Loopback only. Not a real account.';
+  }
+
+  if (!status.configured && !status.dev) {
     $('#who').textContent = 'sign-in not configured';
     // `textContent` on a <pre>, never innerHTML: the message is server-composed, but a page that
     // renders server strings as markup is one server change away from being an XSS sink.
@@ -248,12 +297,40 @@ async function start() {
 
   if (!status.signed_in) {
     $('#who').textContent = 'not signed in';
-    const button = el('button', {}, 'Sign in with Google');
-    button.onclick = () => { window.location.href = '/auth/signin'; };
-    $('#detail').replaceChildren(
-      el('p', { className: 'muted' },
-        'Connectors and credentials belong to the signed-in account.'),
-      button);
+    const doors = [el('p', { className: 'muted' },
+      'Connectors and credentials belong to the signed-in account.')];
+
+    if (status.configured) {
+      const button = el('button', {}, 'Sign in with Google');
+      button.onclick = () => { window.location.href = '/auth/signin'; };
+      doors.push(button);
+    }
+
+    if (status.dev) {
+      // Labelled so it cannot be mistaken for the real sign-in: it says what it is, it says the
+      // account is fake, and it is styled as a secondary action rather than the primary one.
+      const dev = el('button', { className: 'ghost' },
+        'Sign in as DEVELOPER — fake account, no Google, dev mode only');
+      dev.onclick = async () => {
+        // A POST rather than a link, for the reason `/auth/signout` is one: a route that changes
+        // state must not be reachable from a cross-site top-level GET.
+        await fetch('/auth/dev', { method: 'POST', redirect: 'manual' });
+        window.location.reload();
+      };
+      doors.push(dev);
+      doors.push(el('p', { className: 'err', style: 'font-size:.82rem' },
+        'The developer sign-in exists because this host was started with --dev. '
+        + 'It authenticates nobody. Its tenant is dev-local and it can see no real account’s data.'));
+    }
+
+    if (!status.configured) {
+      doors.push(
+        el('p', { className: 'muted', style: 'font-size:.82rem;margin-top:1rem' },
+          'Google sign-in is not set up. To use a real account instead:'),
+        el('pre', { textContent: status.setup ?? '' }));
+    }
+
+    $('#detail').replaceChildren(...doors);
     return;
   }
 

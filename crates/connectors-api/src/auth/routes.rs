@@ -61,6 +61,31 @@ pub async fn signin(State(app): State<App>) -> Response {
         .into_response()
 }
 
+// **The three ways the callback refuses before it ever looks at a token, named.**
+//
+// All three answer `400` and all three clear the binding, so the *message* is the only thing that
+// distinguishes them from outside — which makes it the only thing a route-level test can assert to
+// prove which branch it reached. They are constants rather than inline literals for exactly that
+// reason: C-228 was filed because `a_callback_with_an_unknown_state_is_refused` had silently
+// stopped reaching `NO_SUCH_SIGN_IN` and was passing on `NO_BINDING` instead, and a test holding
+// its own copy of the string would have been just as blind. A test that names the constant cannot
+// drift from the branch, because there is only one string.
+
+/// No cookie at all: the request never came from a browser that started a sign-in here. **This is
+/// the login-CSRF refusal** — the victim of a link-or-`<img>` attack has no binding cookie.
+pub const NO_BINDING: &str =
+    "this callback did not come from a browser that started a sign-in here";
+
+/// A cookie is present but carries a different flow's `state`.
+pub const BINDING_DISAGREES: &str =
+    "this callback's state does not belong to this browser's sign-in";
+
+/// The binding held, and the `state` still was not one this host has outstanding — never issued, or
+/// already spent. This is the issued-here/single-use guard, and it sits **behind** the two above,
+/// which is precisely why a test aimed at it must present a cookie that agrees.
+pub const NO_SUCH_SIGN_IN: &str =
+    "this callback does not correspond to a sign-in this host started";
+
 /// What Google sends back.
 #[derive(Deserialize)]
 pub struct CallbackParams {
@@ -119,23 +144,17 @@ pub async fn callback(State(app): State<App>, request: axum::extract::Request) -
     // is the entire vulnerability: an attacker's victim has no cookie, and a check that skips when
     // absent is a check that is never performed on the one request that matters.
     let Some(bound_state) = crate::auth::login_state_of(&parts) else {
-        return refuse_and_clear(
-            "this callback did not come from a browser that started a sign-in here".to_owned(),
-        );
+        return refuse_and_clear(NO_BINDING.to_owned());
     };
     if !crate::auth::oidc::constant_time_eq(bound_state.as_bytes(), state.as_bytes()) {
-        return refuse_and_clear(
-            "this callback's state does not belong to this browser's sign-in".to_owned(),
-        );
+        return refuse_and_clear(BINDING_DISAGREES.to_owned());
     }
 
     // ---------------------------------------------------------------------------------------
     // 2. Was it issued here, and not already spent?
     // ---------------------------------------------------------------------------------------
     let Some((verifier, nonce)) = app.sessions().take_login(&state) else {
-        return refuse_and_clear(
-            "this callback does not correspond to a sign-in this host started".to_owned(),
-        );
+        return refuse_and_clear(NO_SUCH_SIGN_IN.to_owned());
     };
 
     // ---------------------------------------------------------------------------------------
@@ -269,6 +288,76 @@ pub async fn signout(State(app): State<App>, request: axum::extract::Request) ->
         .into_response()
 }
 
+/// **Sign in as the developer — the door that needs no Google registration** (C-234).
+///
+/// # This route does not exist unless the process was started with `--dev`
+///
+/// It is added to the table in [`crate::router`] behind `App::dev_signin()`, so a host started
+/// without the flag answers `404` here — not `403`. That distinction is the whole design. A route
+/// that exists and refuses is one edited condition away from a route that accepts, and the edit
+/// would read like a refactor; a route the router was never given cannot be reached by any
+/// misconfiguration, at any log level, from any origin. Nothing in this function checks whether dev
+/// mode is on, because by the time it runs the question has already been answered structurally.
+///
+/// # It mints an ordinary session, through the ordinary machinery
+///
+/// `Accounts::of_subject` → `Sessions::create` → [`session_cookie`] — the same three calls, in the
+/// same order, as [`callback`]'s tail. There is no second session type, no flag on the record, and
+/// no branch anywhere downstream: `Principal`, the tenant resolution, the TTL, the opacity and the
+/// server-side revocation are all the same code. A dev mode that special-cased any of those would
+/// make every other route behave differently under test than in production, which is precisely what
+/// makes most dev modes cost more than they are worth.
+///
+/// The identity is fixed by [`Account::developer`] and takes no input, so this is not an
+/// impersonation primitive: there is no parameter that would let a caller ask to be somebody. Its
+/// tenant is `dev-local`, which no `id_token` can reach — see
+/// [`crate::auth::session::DEV_TENANT`].
+///
+/// # Why it is a `POST`, and the one header it looks at
+///
+/// A `GET` would be reachable from a link or an `<img>`, which is exactly how C-204's login-CSRF
+/// worked. A `POST` is not, but a cross-site *form* still is, and this route mints a session from a
+/// request that carries no cookie — so `SameSite=Lax`, which protects the credential-writing
+/// routes, does nothing for this one. `Sec-Fetch-Site: cross-site` is therefore refused.
+///
+/// That check is **defence in depth and nothing more**. The load-bearing controls are that the
+/// route is absent without `--dev` and that this host binds loopback only. `Sec-Fetch-Site` is sent
+/// by every current browser and by no command-line client, so an absent header is read as "not a
+/// browser" and allowed — which is what keeps `curl http://localhost:8787/auth/dev` working, and
+/// that is the flow the story asks to be verified by hand.
+///
+/// **Nothing here touches C-204's `connectors_login` binding.** This is a door beside that one. The
+/// binding cookie, its constant-time comparison and the single-use `state` are untouched, and a dev
+/// session is not a way to shortcut any of them — it is a different account in a different tenant.
+pub async fn dev_signin(State(app): State<App>, request: axum::extract::Request) -> Response {
+    let (parts, _) = request.into_parts();
+
+    if parts
+        .headers
+        .get("sec-fetch-site")
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|site| site.eq_ignore_ascii_case("cross-site"))
+    {
+        return Failure::new(
+            StatusCode::FORBIDDEN,
+            "the dev sign-in is not reachable from another origin".to_owned(),
+        )
+        .into_response();
+    }
+
+    let account = app.accounts().of_subject(Account::developer());
+    let token = app.sessions().create(account);
+
+    (
+        StatusCode::SEE_OTHER,
+        [
+            (header::LOCATION, "/".to_owned()),
+            (header::SET_COOKIE, session_cookie(&token)),
+        ],
+    )
+        .into_response()
+}
+
 /// Who is signed in.
 ///
 /// Carries the labels and the tenant, which is not a secret — it is the prefix of every credential
@@ -298,6 +387,10 @@ pub async fn status(
     Json(json!({
         "configured": app.oidc().is_some(),
         "setup": app.setup_message(),
+        // Whether the dev door exists on this process (C-234), so the page draws the button only
+        // where it would work rather than offering one that 404s. This is the *same* value the
+        // route table was built from, so the page cannot disagree with the router.
+        "dev": app.dev_signin(),
         "signed_in": signed_in.is_some(),
         "account": signed_in.map(|account| json!({
             "subject": account.subject(),

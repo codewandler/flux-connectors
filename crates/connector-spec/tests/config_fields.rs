@@ -318,6 +318,44 @@ fn an_example_that_fails_its_own_format_is_refused() {
     );
 }
 
+/// **A secret field declares no `example` at all** — C-231.
+///
+/// Not a documentation preference: a token-shaped placeholder has tripped GitHub's push protection
+/// and blocked a release in this repository before. The cost is asymmetric — a placeholder that
+/// merely *looks* like a token blocks a push, and one that *is* a token is a disclosed credential.
+#[test]
+fn a_secret_field_that_declares_an_example_is_refused() {
+    let error = refuse(&fixture(&GOOD.replace(
+        r#"format = "token"
+secret = true"#,
+        r#"example = "ACME-A1B2C3D4E5"
+format = "token"
+secret = true"#,
+    )));
+    assert!(
+        error.contains("declares `secret = true` and an `example`"),
+        "a secret field must carry no placeholder:\n{error}"
+    );
+    assert!(
+        error.contains("push protection"),
+        "the error must say why this matters:\n{error}"
+    );
+}
+
+/// The rule is about **secrets**, not about examples. A non-secret field's placeholder is a
+/// documentation question and stays welcome — the scope line C-231 draws explicitly.
+#[test]
+fn a_non_secret_field_may_still_declare_an_example() {
+    let connector = load(&fixture(GOOD));
+    assert_eq!(
+        connector
+            .config_field("tenant")
+            .and_then(|field| field.example.as_deref()),
+        Some("widgets"),
+        "a subdomain placeholder is documentation, and nothing here should discourage it"
+    );
+}
+
 #[test]
 fn config_names_join_the_shared_member_namespace() {
     let error = refuse(&fixture(
@@ -426,6 +464,54 @@ fn no_shipped_provider_has_an_unbound_template_variable() {
     }
     // Derived-set discipline (C-54): an empty providers/ must fail loudly rather than pass vacuously.
     assert!(checked > 0, "no providers were checked");
+}
+
+/// **C-231's acceptance, mechanised over the whole fleet.** No shipped provider gives a secret
+/// configuration field an `example` — which, like the rule above, the loader now refuses outright,
+/// and which is worth asserting over the real corpus anyway.
+///
+/// The corpus is the point. A per-connector version of this check is what 24 connector tests
+/// wrote and 14 providers with a secret field never got, which is why `example = "NRAK-ABCDEFG"` on
+/// `providers/newrelic.toml`'s secret `api_key` turned nothing red. `providers/` is read from disk
+/// so that a connector landing tomorrow is covered without anyone adding it to a list — the C-81
+/// defect one level up.
+///
+/// Note what a violation looks like now: `shipped()` panics with the loader's own refusal before
+/// this loop is reached. That is the rule working, and the message names the file and the field.
+#[test]
+fn no_shipped_provider_gives_a_secret_field_an_example() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers");
+    let mut checked = 0;
+    let mut secrets = 0;
+    for entry in std::fs::read_dir(&dir).expect("providers/ is readable") {
+        let path = entry.expect("entry").path();
+        if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+            continue;
+        }
+        let name = path
+            .file_stem()
+            .expect("stem")
+            .to_string_lossy()
+            .to_string();
+        for field in &shipped(&name).config {
+            if !field.secret {
+                continue;
+            }
+            secrets += 1;
+            assert!(
+                field.example.is_none(),
+                "providers/{name}.toml gives secret field `{}` an `example`. A token-shaped \
+                 placeholder in a committed file has tripped GitHub push protection and blocked a \
+                 release here; a real one would be a disclosed credential",
+                field.name
+            );
+        }
+        checked += 1;
+    }
+    // Derived-set discipline (C-54): neither an empty providers/ nor a catalogue that happens to
+    // declare no secret at all may pass this vacuously.
+    assert!(checked > 0, "no providers were checked");
+    assert!(secrets > 0, "no secret configuration field was checked");
 }
 
 /// The four templated providers, named. This is the list the `SCHEMA GAP:` comments used to live in,

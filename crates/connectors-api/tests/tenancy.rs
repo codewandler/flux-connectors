@@ -18,6 +18,7 @@ mod support;
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
+use connectors_api::auth::routes::{NO_BINDING, NO_SUCH_SIGN_IN};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use support::{client, query_param, serve, session_cookie, sign_in, Idp};
@@ -103,6 +104,12 @@ async fn an_unauthenticated_request_is_refused() {
     for (method, path) in [
         ("GET", "/v1/connectors"),
         ("GET", "/v1/connectors/anthropic"),
+        // C-204 gated this one and enumerated the other four here without it, so nothing failed if
+        // the gate came off (C-228). It serves only published catalogue data, which is exactly why
+        // it is the route a later change is most likely to un-gate as an obvious simplification —
+        // and exactly why "every route under `/v1` takes a `Principal`" has to have no exception to
+        // remember. The rule is what is under test, not the confidentiality of this payload.
+        ("GET", "/v1/operations/anthropic-models-list"),
         ("PUT", "/v1/credentials/anthropic/anthropic.api_key"),
         ("POST", "/v1/operations/anthropic-models-list/execute"),
     ] {
@@ -569,13 +576,25 @@ async fn a_callback_whose_cookie_and_state_disagree_is_refused() {
     );
 }
 
-/// **A callback whose `state` was not issued by this host is refused.**
+/// **A callback carrying no binding cookie at all is refused.**
 ///
 /// This is login-CSRF: an attacker who can make a browser fetch a callback URL of their choosing
 /// signs the victim into the *attacker's* account, and everything the victim then connects is
-/// connected for the attacker.
+/// connected for the attacker. The victim's browser holds no `connectors_login` cookie, because it
+/// never began a sign-in — which is what this case is.
+///
+/// # It asserts *which* refusal, and that is the point of the test
+///
+/// This test was called `a_callback_with_an_unknown_state_is_refused` until C-228, and it named a
+/// check it had stopped reaching. C-204 put the binding check *in front of* `take_login`, so a
+/// request with no cookie now stops one guard earlier and never consults the pending map at all.
+/// Measured at C-204's merge base: deleting the entire `take_login` guard left all 60 tests in this
+/// crate green. Asserting [`NO_BINDING`] rather than the bare `400` is what pins this test to the
+/// branch its name claims — and
+/// [`a_callback_whose_cookie_matches_an_unissued_state_is_refused`] is the other branch, which now
+/// has a test of its own.
 #[tokio::test]
-async fn a_callback_with_an_unknown_state_is_refused() {
+async fn a_callback_with_no_login_cookie_is_refused() {
     let idp = Idp::start().await;
     let base = serve(&idp).await;
     let client = client();
@@ -598,6 +617,68 @@ async fn a_callback_with_an_unknown_state_is_refused() {
     assert!(
         session_cookie(&response).is_none(),
         "a refused callback still set a session cookie"
+    );
+
+    let body = response.text().await.expect("a body");
+    assert!(
+        body.contains(NO_BINDING),
+        "a callback with no cookie was refused by some other check than the binding one, so this \
+         test no longer covers the branch it names; body was: {body}"
+    );
+}
+
+/// **A callback whose cookie agrees with a `state` this host never issued is refused.**
+///
+/// The branch behind the binding check, and until C-228 no route-level test reached it: every
+/// existing case either presented no cookie or presented one that disagreed, and both stop earlier.
+/// The store-level unit tests in `src/auth/session.rs` covered `take_login` itself, but nothing
+/// asserted that the *route* consults it.
+///
+/// # Why the cookie and the state are both attacker-chosen here
+///
+/// The binding is a **double-submit**: the cookie's value *is* the `state` in the URL, so anyone who
+/// can set the cookie can satisfy the binding check by construction. That is why this second guard
+/// has to hold on its own — see the note on the residual in `crates/connectors-api/README.md`. What
+/// stops this request is that `a-state-this-host-never-issued` is not in the pending map.
+///
+/// Asserted on [`NO_SUCH_SIGN_IN`] rather than on the `400`, because *every* refusal in this route
+/// is a `400` and the status alone cannot tell this branch from the two in front of it. The `code`
+/// deliberately carries a nonce, so a host that skipped `take_login` would proceed to the exchange
+/// and fail later with a different message rather than not failing at all.
+#[tokio::test]
+async fn a_callback_whose_cookie_matches_an_unissued_state_is_refused() {
+    let idp = Idp::start().await;
+    let base = serve(&idp).await;
+    let client = client();
+
+    let unissued = "a-state-this-host-never-issued";
+    let response = client
+        .get(format!("{base}/auth/callback"))
+        .header(
+            "cookie",
+            format!("{}={unissued}", connectors_api::auth::LOGIN_COOKIE),
+        )
+        .query(&[("code", "mallory-6|whatever"), ("state", unissued)])
+        .send()
+        .await
+        .expect("the callback completes");
+
+    assert_eq!(
+        response.status(),
+        400,
+        "a state this host never issued was redeemed"
+    );
+    assert!(
+        session_cookie(&response).is_none(),
+        "a refused callback still set a session cookie"
+    );
+
+    let body = response.text().await.expect("a body");
+    assert!(
+        body.contains(NO_SUCH_SIGN_IN),
+        "the callback did not refuse at `take_login`: the binding check passed, so this request \
+         reached the issued-here/single-use guard and that guard is what must have refused it. \
+         Body was: {body}"
     );
 }
 

@@ -127,6 +127,14 @@ Chrome and Firefox treat localhost as a trustworthy origin. So `Secure` is set u
 of a real deployment. Safari has historically been stricter, and that is recorded in the crate
 README rather than worked around.
 
+> **Sharpened by C-228.** This paragraph reasons about the *session* cookie alone, which is all that
+> existed when it was written. The login-CSRF fix later in this story made `connectors_login`
+> `Secure` too, and that moves the failure for a browser that refuses `Secure` on `http://` from
+> "signs in, then does not stay signed in" to "cannot sign in at all": the cookie is dropped at
+> `/auth/signin`, so `/auth/callback` sees no binding and answers `400`. The trade is unchanged and
+> still the right one — it is the consequence that got worse, and it now fails closed and loudly
+> rather than silently. The crate README carries the operator-facing version.
+
 Serving the goal also decided the unconfigured case. A host with no Google registration **starts**,
 serves its page, and names the two unset variables at the console, at `/auth/signin` (`503`), at
 `/auth/status` and on the page itself. Panicking would turn a first `cargo run` into a stack trace;
@@ -198,7 +206,19 @@ I had, rather than from the attack, agreed with me.
 against the `state` query parameter **before `take_login` is consulted** — so a cross-site attempt
 cannot even consume somebody else's live state as a side effect of being refused. The cookie is
 `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/auth/callback`, `Max-Age` = `LOGIN_TTL`, and is
-cleared on every exit from the callback. Single-use is kept as well; both properties are needed.
+cleared on every exit **from the binding check onwards**. Single-use is kept as well; both
+properties are needed.
+
+> **Corrected by C-228.** This paragraph originally said the cookie "is cleared on every exit from
+> the callback". It is not, and never was: the provider-error branch and the missing-`code`/`state`
+> branch sit *in front of* the binding check and return through `refuse`, which sets no `Set-Cookie`
+> at all. The rule the code actually implements is the one stated on `refuse_and_clear` — from the
+> binding check onwards — and that doc comment is the authority rather than this sentence.
+>
+> **This has no security effect**, which is why it is a documentation defect and not a second bug.
+> Neither of those two branches consults or consumes the `state`, so nothing has been spent when
+> they return: the binding value in the browser still names a live, unredeemed sign-in, and the same
+> browser can simply retry. A binding that is still bound is not one worth clearing.
 
 **`Lax`, not `Strict`, and it is load-bearing**: the callback arrives as a cross-site top-level
 `GET` redirected from the identity provider, and `Strict` withholds cookies on exactly that

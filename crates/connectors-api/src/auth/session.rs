@@ -43,6 +43,40 @@ pub const LOGIN_TTL: Duration = Duration::from_secs(10 * 60);
 /// `/auth/signin` cannot grow this map without limit. Reached only by pruning first.
 const MAX_PENDING: usize = 4096;
 
+/// **The subject the dev sign-in signs in as** (C-234).
+///
+/// Deliberately not shaped like a Google `sub`, which is a run of decimal digits. Anyone reading a
+/// log line, a store path or the `/auth/me` body sees at once that this is not a person.
+pub const DEV_SUBJECT: &str = "DEVELOPER-NOT-A-REAL-ACCOUNT";
+
+/// **The tenant a dev session owns, and why it cannot collide with a real one.**
+///
+/// Every tenant this host can produce comes from one of exactly two constructors, and `Account`'s
+/// fields are private so there is no third way to build one:
+///
+/// | constructor | tenant | reachable from |
+/// |---|---|---|
+/// | [`Account::from_claims`] | `google-{sub}` | a verified `id_token`, and only that |
+/// | [`Account::developer`] | `dev-local` | `POST /auth/dev`, which exists only under `--dev` |
+///
+/// The two are disjoint because `from_claims` prepends the literal `google-` unconditionally and
+/// this constant does not begin with it. That is a structural argument, not a statistical one: it
+/// does not depend on what Google happens to put in a `sub`, and it survives Google changing the
+/// shape of its subject identifiers. `crates/connectors-api/tests/dev_signin.rs` drives both doors
+/// on one process and asserts that a credential stored under one is invisible to the other.
+///
+/// The consequence worth stating plainly: a credential pasted into a dev session lands at
+/// `tenants/dev-local/…` and no real account can ever read it, and a credential pasted into a real
+/// session is unreachable from the dev door.
+pub const DEV_TENANT: &str = "dev-local";
+
+/// The label an operator sees for the dev account.
+///
+/// It goes where an email address would, and it is not one. `Account::email` is left `None` for the
+/// dev account precisely so that nothing shaped like `dev@example.com` ever renders as though
+/// somebody owned that mailbox.
+pub const DEV_LABEL: &str = "DEVELOPER — NOT A REAL ACCOUNT";
+
 /// One signed-in person.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Account {
@@ -79,6 +113,33 @@ impl Account {
                 .filter(|_| claims.email_verified.unwrap_or(false)),
             name: claims.name.clone(),
         })
+    }
+
+    /// **The developer account** — the one identity the dev sign-in mints (C-234).
+    ///
+    /// This is the *only* constructor of an `Account` that does not require a verified `id_token`,
+    /// and it is reachable from exactly one route, which exists on a process only when it was
+    /// started with `--dev`. It takes no arguments on purpose: there is nothing a caller could pass
+    /// that would change who this is, so no request can steer the identity it produces. That is
+    /// what keeps the dev door a *fixed* door rather than an impersonation primitive — nobody can
+    /// ask it for `google-110169484474386276334`.
+    ///
+    /// Everything downstream of it is ordinary. The account goes through
+    /// [`Accounts::of_subject`] and [`Sessions::create`] exactly as a Google account does, so the
+    /// cookie, the opacity, the TTL, the server-side revocation and the [`crate::auth::Principal`]
+    /// extraction are the same code, not a parallel implementation.
+    ///
+    /// See [`DEV_TENANT`] for why the tenant cannot collide with a real account's.
+    #[must_use]
+    pub fn developer() -> Self {
+        Self {
+            subject: DEV_SUBJECT.to_owned(),
+            tenant: DEV_TENANT.to_owned(),
+            // Not `Some("dev@example.com")`. An address is what an operator reads to know whose
+            // session they are in, and one that looks real is worse than none at all here.
+            email: None,
+            name: Some(DEV_LABEL.to_owned()),
+        }
     }
 
     /// The OIDC subject.
@@ -349,6 +410,60 @@ mod tests {
         }
         assert!(Account::from_claims(&claims(&"9".repeat(101))).is_err());
         assert!(Account::from_claims(&claims("110169484474386276334")).is_ok());
+    }
+
+    /// **No `id_token` can produce the dev tenant, and the dev account produces no real one.**
+    ///
+    /// The disjointness is asserted on the derivation rather than on a list of examples: every
+    /// subject `validate_subject` admits is checked to yield a `google-`-prefixed tenant, and the
+    /// dev tenant is checked not to carry that prefix. A future change that dropped the prefix
+    /// would fail here rather than silently merge the two namespaces.
+    #[test]
+    fn a_dev_tenant_cannot_be_reached_from_any_id_token() {
+        let developer = Account::developer();
+        assert_eq!(developer.tenant(), DEV_TENANT);
+        assert!(
+            !developer.tenant().starts_with("google-"),
+            "the dev tenant is inside the Google namespace"
+        );
+
+        for subject in [
+            "110169484474386276334",
+            "dev-local",
+            "DEVELOPER-NOT-A-REAL-ACCOUNT",
+            "_",
+            &"9".repeat(100),
+        ] {
+            let account = Account::from_claims(&claims(subject)).expect("a usable subject");
+            assert!(
+                account.tenant().starts_with("google-"),
+                "a Google account escaped the google- namespace: {}",
+                account.tenant()
+            );
+            assert_ne!(
+                account.tenant(),
+                DEV_TENANT,
+                "an id_token reached the dev tenant with sub {subject:?}"
+            );
+        }
+    }
+
+    /// The dev identity carries no address that could be mistaken for a real one.
+    #[test]
+    fn the_dev_account_has_no_email_and_says_it_is_fake() {
+        let developer = Account::developer();
+        assert_eq!(
+            developer.email, None,
+            "the dev account carries an email address"
+        );
+        assert!(developer
+            .name
+            .as_deref()
+            .is_some_and(|name| name.contains("NOT A REAL ACCOUNT")));
+        assert!(
+            !developer.subject().chars().all(|c| c.is_ascii_digit()),
+            "the dev subject is shaped like a Google `sub`"
+        );
     }
 
     /// An unverified email is not presented as the person's address.

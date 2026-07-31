@@ -7,6 +7,112 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A dev sign-in, so the app is usable without a Google registration (C-234).** `cargo run -p
+  connectors-api -- --dev` mints a session through the same machinery a Google sign-in uses — same
+  cookie attributes, same opacity, same tenant resolution — for an account labelled
+  `DEVELOPER — NOT A REAL ACCOUNT` in tenant `dev-local`.
+
+  Without the flag the route does **not exist**: `404` with an empty body, not `403`, because an
+  absent route cannot be reached by a misconfiguration. Probed with 156 raw HTTP requests written on
+  a bare socket so nothing normalised them — `/auth/%2564ev`, `/auth/x/../dev`, `/auth/dev%00`,
+  method overrides, `X-Original-URL`, `X-Forwarded-*` — all refused, none set a cookie. No
+  `id_token`, with any attacker-chosen `sub`, can reach the dev tenant: `from_claims` prepends a
+  literal `google-` and `developer()` takes no arguments. The binary now also refuses unknown
+  arguments, because the loopback-only bind is what makes the dev door safe enough to exist.
+
+- **The first byte (C-202).** A test now sends one request through a real `HttpRequestTool` wrapped
+  in `Egress` to a loopback server under test control, and asserts the vendor received exactly the
+  `{ method, url, headers, body }` the pack built. The request path was a proposition asserted
+  against stubs; it is now something that has sent.
+
+  The loopback-versus-SSRF-guard tension — the host sets `PrivateNetAllow::None`, which refuses the
+  very address such a test must reach — resolved as a one-host grant on one `App`, leaving
+  `WebOptions::default()` and `App::new` untouched. The grant is proved load-bearing by running the
+  same operation under `App::new` and requiring a refusal with nothing recorded by the vendor.
+
+### Fixed
+
+- **The host serves three wiring states where a boolean carried two (C-212).** `connected` was
+  `false` both for "supply a credential" and for "this vendor needs none" — two opposite situations,
+  one value, in the view a person uses to choose among 53 connectors.
+
+  It also fixes the second half: `all_stored` required **every** declared credential, so supplying
+  Anthropic's `api_key` — which nearly every operation uses — left the connector reading as unwired
+  because `admin_key`, a management-surface value no ordinary request carries, was unset. The code
+  already contained the argument against itself, excluding inbound signing secrets for exactly that
+  reason; the principle now holds by construction rather than as a special case, so Slack reads as
+  wired on its bot token alone.
+
+  Verified against a running host, not only by test: freshdesk `no-credential-required`; anthropic
+  `not-wired` 0/5 → `partly-wired` 2/5 → `wired` 5/5. Uses C-206's own `no-credential-required`
+  token rather than a second vocabulary for the same distinction.
+
+- **The route-level login guard had no coverage anywhere, and now does (C-228).** C-204's fix is
+  sound — a security review reproduced the cross-account capture at the base and proved it dead on
+  the fix. This is the residue: when a new guard runs *before* an old one, tests aimed at the old one
+  stop reaching it and keep passing.
+
+  **The measurement came out worse than the story predicted.** The story said the route-level
+  `take_login` refusal was "covered only by store-level unit tests". Deleting the entire guard at the
+  merge base left **all 60 tests in the crate green, across all six binaries** — nothing anywhere
+  observed that the issued-here/single-use check had been removed from the route.
+
+  Split into two tests, each named for the branch it exercises: no cookie, and a cookie matching an
+  unissued state. Every refusal in the callback answers `400` and clears the binding, so the *message*
+  is the only observable that distinguishes the three branches — the three are now `pub const`s and
+  the tests name the constant, because a test holding its own copy of the string would drift exactly
+  as the original did. Also adds the missing negative test for `/v1/operations/{operation}`, and makes
+  the no-secrets sweep in `tests/host.rs` fail on a `401` rather than pass on it.
+
+- **An `example` on a secret configuration field is refused at load (C-231).** It was enforced by
+  per-connector goodwill, and the gap was three times wider than it looked: 38 providers declare a
+  secret field, **24 had a local test guarding it and 14 had nothing** — two dozen duplicated
+  spellings of one rule that still left a third of the exposed surface uncovered.
+
+  It lands as a **loader refusal** rather than a test, because these crates published today: a
+  downstream author writing their own provider TOML is now a real person, and `provider::load` is the
+  only form of the rule that reaches them. **This rejects input the live 0.7.0 accepted**, so it ships
+  as 0.8.0. No shipped provider is affected — all 43 secret fields across 53 files were parsed and
+  none carries an `example`.
+
+  Still open, and deliberately not smuggled in: nothing stops a credential-shaped literal in a `help`,
+  `description`, `label` or TOML comment. Push protection matches the string, not the key it sits
+  under.
+
+- **A per-provider test can no longer assert over the catalogue (C-230).** Trello's test asserted the
+  query-placed credential set equalled a two-element literal — green only because no provider since
+  Trello had placed a credential in the query string, and the next one that did would have turned
+  *Trello's* test red from a worktree that could not see it.
+
+  The guard refuses the **walk**, not the walk-plus-literal, because detecting "compared against a
+  literal" textually fails open — and because the author of a per-provider test cannot review the
+  population they quantify over, so even a monotone claim there is correct by luck. `AGENTS.md` now
+  names three homes for a genuine catalogue-wide claim, and the guard's failure message points at
+  them. All 122 test files were audited; no other instance.
+
+- **`RATIO_FLOOR_PERCENT` could only drift, and is replaced by a unit that cannot (C-196).** It
+  guarded against a connector arriving with no response shapes at all, as a share of the catalogue,
+  and nothing ratcheted it — it was moved by hand twice, each time *after* somebody noticed.
+
+  Both obvious fixes were rejected on evidence. Deriving it from `COVERED_FLOOR` puts the same
+  denominator on both sides and collapses to the assertion above it, deleting the guard along with
+  the constant. Keeping a percentage fails for a sharper reason: **one point of 110 operations is one
+  operation; one point of 299 is three.** At a floor of 88, five operations could arrive carrying
+  nothing before it fired — and 27 of the 53 shipped connectors are five operations or fewer, so over
+  half the catalogue could have landed with nothing and passed. The unit was the defect, not the
+  number.
+
+  `ABSENCE_CEILING` and `ABSENCE_SLACK` count absences directly, ratcheted both ways, with the slack
+  read off the catalogue rather than copied: datadog and google each landed with exactly two honest
+  absences, so a slack of one would have turned both red for doing nothing wrong.
+
+- **An SSRF guard that was asserting a third-party constant (C-202).**
+  `the_default_egress_guards_the_private_network` read `flux_web::WebOptions::default()` rather than
+  this host's policy, so a host shipping `PrivateNetAllow::Any` passed it. Found by mutation, and now
+  caught by a behavioural test instead.
+
 ## [0.7.0] — 2026-07-31
 
 ### Added

@@ -14,8 +14,8 @@
 //!    `[[channels]]` and no `[[graphs]]` — and it loads, emits and renders anyway.** The story asked
 //!    whether the empty configuration surface actually works end to end, on the suspicion that every
 //!    shipped example carries at least one field and the empty case may simply be untested. It is
-//!    not untested: this test also names the other shipped providers that declare none, so the
-//!    finding is measured rather than asserted.
+//!    not untested: this test also names three connectors that shipped before Resend and declare
+//!    none, so the finding is measured rather than asserted.
 //! 3. **The curated set is four operations, and the emitter's constraints are what bound it.** Not
 //!    one query parameter and not one optional body field: query values are interpolated verbatim
 //!    (`crates/connector-flux/src/op.rs:138-143`) and an unset optional body field travels as an
@@ -97,23 +97,6 @@ fn load_provider(id: &str) -> Connector {
     provider::load(&format!("providers/{id}.toml"), &source_of(id))
         .unwrap_or_else(|error| panic!("providers/{id}.toml does not load: {error}"))
         .connector
-}
-
-fn shipped() -> Vec<String> {
-    let mut names: Vec<String> = std::fs::read_dir(providers_dir())
-        .expect("providers/ is readable")
-        .filter_map(|entry| {
-            let path = entry.expect("a readable directory entry").path();
-            (path.extension()? == "toml").then(|| {
-                path.file_stem()
-                    .expect("a .toml file has a stem")
-                    .to_string_lossy()
-                    .into_owned()
-            })
-        })
-        .collect();
-    names.sort();
-    names
 }
 
 /// **Finding 1: the whole credential surface is one bearer token, unconditionally.**
@@ -224,10 +207,10 @@ fn every_emitted_request_carries_the_user_agent_resend_demands() {
 /// to end — and the empty case was never untested.**
 ///
 /// The story's premise was that "every shipped example has at least one config field, so the empty
-/// case may be untested". Measured here rather than assumed: this test names every shipped provider
-/// declaring no configuration field, and asserts Resend is *not* the first. The empty surface has
-/// been exercised by the shipped catalogue since before this connector existed, which is a finding
-/// about the premise and not about Resend.
+/// case may be untested". Measured here rather than assumed: this test names three connectors that
+/// shipped before Resend and declare no configuration field, and so asserts Resend is *not* the
+/// first. The empty surface has been exercised by the shipped catalogue since before this connector
+/// existed, which is a finding about the premise and not about Resend.
 ///
 /// What Resend adds is the *complete* floor — no config, no services, no events, no channels, no
 /// graphs — with a connector that still loads through the real loader and still emits every
@@ -262,22 +245,32 @@ fn no_configuration_surface_is_declared_and_the_connector_still_holds() {
             .unwrap_or_else(|error| panic!("{} does not emit: {error}", operation.id));
     }
 
-    // The premise, measured. A zero-config connector is not new; Resend is one of several.
-    let mut without_config: Vec<String> = shipped()
-        .into_iter()
-        .filter(|id| load_provider(id).config.is_empty())
-        .collect();
-    without_config.sort();
-    assert!(
-        without_config.contains(&PROVIDER.to_string()),
-        "resend declares no config field"
-    );
-    assert!(
-        without_config.len() > 1,
-        "the story's premise was that the empty `[[config]]` case may be untested. If resend is \
-         genuinely the only zero-config provider, that premise holds and this connector is the \
-         first exercise of it — say so rather than deleting this assertion. Measured: {without_config:?}"
-    );
+    // The premise, measured against connectors that shipped before this one (C-230). This was a
+    // walk of `providers/` asserting `without_config.len() > 1`. The count was monotone, so it
+    // could not be falsified by a provider landing — but it quantified over a catalogue this file's
+    // author could not see, in a worktree holding one connector, and the edit that turns such a
+    // count into an equality is one word. `crates/connector-cli/tests/per_provider_test_scope.rs`
+    // now refuses the shape outright for that reason.
+    //
+    // Naming the predecessors is the stronger claim anyway. The story's premise was that the empty
+    // `[[config]]` case may be untested; three connectors that shipped before Resend and declare no
+    // configuration field disprove it, and — unlike a count — they say *which* ones, so a reviewer
+    // can check the finding rather than trust it. If one of these grows a `[[config]]` field the
+    // evidence genuinely weakens and this test should say so.
+    let predecessors = ["slack", "github", "openai"];
+    for id in predecessors {
+        let earlier = load_provider(id);
+        assert!(
+            earlier.config.is_empty(),
+            "`{id}` declared no configuration field when this finding was measured; the empty \
+             `[[config]]` surface was exercised by the shipped catalogue before Resend existed, \
+             and this connector is not its first"
+        );
+        assert_ne!(
+            id, PROVIDER,
+            "a predecessor must be some other connector, or this proves only that resend is resend"
+        );
+    }
 }
 
 /// **Finding 3: the curated set is four operations, and nothing in it enters an emitter gap.**

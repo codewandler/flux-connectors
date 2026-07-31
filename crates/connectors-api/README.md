@@ -66,11 +66,16 @@ consent screen the operator sees when they connect a provider rather than when t
 
 ### Two things worth knowing about running it locally
 
-- **The session cookie is `Secure`**, and that is not relaxed for local use. Chrome and Firefox
-  treat `http://localhost` as a trustworthy origin and accept `Secure` cookies there, so this costs
-  nothing on those two. A browser that does not — Safari has historically been strict — will not
-  hold the session. The alternative was an environment variable that drops `Secure`, which is a
-  switch somebody forgets to unset in front of a real deployment.
+- **Both cookies this host sets are `Secure`**, and that is not relaxed for local use. Chrome and
+  Firefox treat `http://localhost` as a trustworthy origin and accept `Secure` cookies there, so it
+  costs nothing on those two. A browser that does not — Safari has historically been strict —
+  **cannot sign in at all**, and the failure is not the one you would guess: it drops
+  `connectors_login` at `/auth/signin`, so `/auth/callback` then finds no binding and answers `400`.
+  Sign-in fails at the callback rather than "succeeding and not sticking". The alternative was an
+  environment variable that drops `Secure`, which is a switch somebody forgets to unset in front of
+  a real deployment. The attributes themselves are not restated here — `session_cookie` and
+  `login_cookie` in `src/auth/mod.rs` are the only place they are written, and
+  `tests/tenancy.rs::the_login_cookie_is_scoped_short_lived_and_locked_down` asserts them.
 - **Sessions live in memory**, like credentials. Restarting the process signs everyone out, which
   is the same cleanup story the rest of this host has.
 
@@ -118,6 +123,36 @@ test, and it asserts on the resulting **identity** rather than a status code.
 `SameSite=Lax` on that cookie is not a weaker choice than `Strict` — it is the only workable one.
 The callback arrives as a cross-site top-level `GET` from Google, and `Strict` withholds cookies on
 exactly that navigation.
+
+#### What the binding does not cover, stated so nobody has to re-derive it
+
+**The binding is a double-submit, and the cookie's value *is* the `state` that appears in the URL.**
+So the check is "these two are equal", and anyone who can *set* the cookie satisfies it by
+construction: presenting `Cookie: connectors_login=<attacker state>` alongside that same attacker
+state does yield a session. Cookie integrity is the whole defence here — there is no server-side
+secret in the comparison.
+
+This is a real residual and it is also the ordinary property of most double-submit implementations,
+so it is recorded rather than treated as an open defect:
+
+- **It needs a cookie-injection foothold** — a sibling subdomain that can write a `Domain` cookie
+  for this host, an XSS on this origin, or an active network position on plaintext. Every one of
+  those is already game over for a session cookie by other routes.
+- **It is outside the threat model C-204 closes.** That attack needed nothing but a link or an
+  `<img>` — the victim's browser had no cookie at all, which is precisely why the fix refuses a
+  missing binding instead of skipping the check. An attacker who can already set cookies on this
+  origin was never in scope, and no version of a double-submit excludes them.
+- **The second guard still holds independently.** `take_login` requires the `state` to be one this
+  host issued and has not spent, so even a forged binding only opens the attacker's *own* live flow
+  — which is the sign-in they could complete anyway.
+
+**`__Host-` is what would close it, and it is foreclosed by the scoping.** The `__Host-` prefix
+would pin the cookie to this exact origin with no `Domain`, which is the sibling-subdomain half of
+the problem — but it also *requires* `Path=/`, and this cookie is deliberately
+`Path=/auth/callback` (`src/auth/mod.rs`) so it is not attached to every request the browser makes.
+The two cannot both be had. Narrow scoping was chosen; if this host is ever deployed under a domain
+with untrusted siblings, that is the decision to revisit, and widening the path to `/` is the price.
+The session cookie declines `__Host-` for a different reason, recorded on `SESSION_COOKIE`.
 
 ### The two requests that bypass the egress guard
 
@@ -178,23 +213,39 @@ The `request-id`, the `cf-ray` and the Cloudflare `server` header are Anthropic'
 Both halves matter: without a credential the pack **refuses by address** and sends nothing, and with
 one the request goes out through flux's own `http.request`.
 
-## Why the automated tests stop before the socket
+## The automated leg: one request, to a vendor under test control
 
-To assert *"the request that reached the vendor carried tenant A's credential"* a test needs a vendor
-it controls, which means a loopback address — and **no shipped connector can be pointed at one**.
-Nine carry a `{placeholder}`, but every one templates a label inside a fixed vendor suffix
-(`{subdomain}.zendesk.com`), never the whole host.
+`tests/live_egress.rs` (C-202) sends. A loopback HTTP server records what arrives, a shipped
+operation is projected onto the host's real `Egress`, and the assertion is **equality on all four
+fields** — the `{ method, url, headers, body }` the vendor received against the ones
+`Operation::build_authenticated_request` built. Nothing is stubbed: the same `HttpRequestTool`, the
+same `Egress`, the same pack, the same bytes.
 
-The alternative was a substitute `Egress` that records instead of sending, which is exactly what
-`connector-pack`'s tests already do for want of a transport — and `Egress`'s own documentation says
-what is wrong with calling that proof: *"a stand-in that ignores `body`, or that resolves `url`
-against some base of its own, is not a substitute — it is a different connector."* A second stubbed
-suite here would grow the count of green tests without growing what is known.
+Two things had to be reconciled to get there, and both are recorded in that file rather than worked
+around:
 
-So `tests/host.rs` asserts everything that happens **before** the socket, which is where this crate's
-own defects would live: the address a credential resolves at, the tenant it belongs to, whether a
-value can reach a surface, and that the transport really is `http.request`. The live leg is manual,
-and this file is where it is recorded.
+- **The host's own SSRF guard refuses loopback**, which is where a controlled vendor has to live.
+  The test passes `PrivateNetAllow::Hosts(["127.0.0.1"])` through `App::with_web_options` — a grant
+  for one host on one `App`, not `PrivateNetAllow::Any`, and the shipped default is untouched. The
+  same file then runs the *same* operation under `App::new` and requires it to be refused with
+  nothing on the wire, so the widening is proved to be the only reason the live test can send.
+- **No shipped connector can be pointed at a loopback address**, deliberately: nine carry a
+  `{placeholder}`, every one templates a label inside a fixed vendor suffix
+  (`{subdomain}.zendesk.com`), and C-214's `Slot` guard exists to stop a configuration value from
+  moving a request to another host. So the test rewrites **one string literal** — the origin — in
+  the operation's own emitted Flux, and nothing else. The method, path, module-set header, body
+  encoding, credential placement and `Bearer ` prefix are all the shipped operation's.
+
+The bound is worth stating: this proves the pack's request survives the wire intact, not that
+`api.openai.com` answers it. The leg against a **real vendor** stays manual, and the section above is
+where it is recorded.
+
+What the automated tests still stop before is a **route** reaching a controlled vendor — asserting
+*"the request that reached the vendor carried tenant A's credential"* end to end through
+`POST /v1/operations/…/execute` needs a catalogue entry that names a loopback host, which no shipped
+connector does. `tests/host.rs` covers that half up to the socket: the address a credential resolves
+at, the tenant it belongs to, whether a value can reach a surface, and that the transport really is
+`http.request`.
 
 ## Where it is going
 
