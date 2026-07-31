@@ -2,7 +2,7 @@
 id: C-178
 title: Ship the ClickUp connector
 pillar: Spec
-status: ready
+status: in-progress
 priority: 3
 design:
 epic: provider-fleet-2
@@ -36,21 +36,59 @@ Same raw-Authorization question as [C-175](C-175-provider-launchdarkly.md); read
 
 ## Acceptance
 
-- [ ] `providers/clickup.toml`, hand-authored and **curated** — a small set of operations this pipeline
-      can express honestly, not every endpoint the vendor documents.
-- [ ] Declared `risk`, `idempotency` and effects per operation, and a `description` on each written for
-      a *model* to read rather than as UI copy.
-- [ ] A `[[config]]` surface with `label` and `help` on every field, and `secret` agreeing with `binds`.
-- [ ] A `verify` operation that is a read and runs unattended.
-- [ ] `crates/connector-flux/tests/clickup_connector.rs` — a per-provider contract test asserting the
-      thing *this* connector is about (see the archetype above), not that the file parses.
-- [ ] **Failing-first test:** the contract test must fail before `providers/clickup.toml` exists.
-- [ ] The scoped gate is green: `build --provider clickup`, `diff --provider clickup` reporting no drift,
+- [x] `providers/clickup.toml`, hand-authored and **curated** — a small set of operations this pipeline
+      can express honestly, not every endpoint the vendor documents. → `providers/clickup.toml`, six
+      operations: `clickup-team-list` (verify), `clickup-space-folder-list`, `clickup-list-task-list`,
+      `clickup-task-get`, `clickup-task-create`, `clickup-task-update`.
+- [x] Declared `risk`, `idempotency` and effects per operation, and a `description` on each written for
+      a *model* to read rather than as UI copy. → every `[[operations]]` block in `providers/clickup.toml`
+      declares `risk`/`idempotency`; the two writes are `medium`/`non_idempotent` with the reasoning in
+      the comment above them.
+- [x] A `[[config]]` surface with `label` and `help` on every field, and `secret` agreeing with `binds`.
+      → `providers/clickup.toml`'s `[[config]]` block (`token`), `secret = true` against
+      `binds = "credential.clickup.token"`.
+- [x] A `verify` operation that is a read and runs unattended. → `verify = "clickup-team-list"`,
+      `GET /team`, no parameters.
+- [x] `crates/connector-flux/tests/clickup_connector.rs` — a per-provider contract test asserting the
+      thing *this* connector is about (see the archetype above), not that the file parses. → asserts the
+      bare-`Authorization`-header shape and that the curated set stops short of two specific navigation
+      rungs (team's spaces, folder's lists).
+- [x] **Failing-first test:** the contract test must fail before `providers/clickup.toml` exists. → see
+      `BASE_PROOF` below.
+- [x] The scoped gate is green: `build --provider clickup`, `diff --provider clickup` reporting no drift,
       `cargo build --workspace`, `cargo test --workspace --no-fail-fast`,
       `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all --check`.
-- [ ] **Exactly eight tests are red and reported, not silenced** — the whole-catalogue staleness checks
+- [x] **Exactly eight tests are red and reported, not silenced** — the whole-catalogue staleness checks
       `AGENTS.md` tabulates. They are red because you correctly did not write a coordinator-owned
-      artifact. Report the eight; if the number differs, that is the finding.
+      artifact. Report the eight; if the number differs, that is the finding. → exactly eight, plus the
+      documented ninth (`the_recorded_floor_is_the_measured_figure`); see the implementor's report.
+
+## Progress
+
+- Confirmed via live fetches against `developer.clickup.com/reference/*` (not guessed): `GET /team`,
+  `GET /space/{space_id}/folder`, `GET /list/{list_id}/task`, `GET /task/{task_id}`,
+  `POST /list/{list_id}/task`, `PUT /task/{task_id}` — paths, methods, and the response/body field
+  names used in `providers/clickup.toml`'s schemas.
+- **Curated to six operations, not the five the story starts from**, because `verify` must name a
+  declared operation and the only parameterless read ClickUp's API offers is `GET /team`
+  (`clickup-team-list`). Deliberately did **not** add a "list a team's spaces" operation (a space id is
+  read off ClickUp's own UI URL, the same argument `providers/gitlab.toml` makes for a numeric
+  `project_id`) or a "list a folder's lists" operation (`GET /space/{space_id}/folder` already nests
+  each folder's lists inline, so a separate rung would refetch data the first call already returned).
+  See the header comment in `providers/clickup.toml` for the full argument.
+- **Unverified / left out, named rather than guessed:** the array-valued query filters on
+  `GET /list/{list_id}/task` (`statuses[]`, `assignees[]`, `watchers[]`, `tags[]`,
+  `custom_fields[]`) — this pipeline's query-parameter model is one name to one scalar value, and
+  there is no way to express a repeated `key[]=a&key[]=b` query key without a connector-specific
+  encoding rule. `custom_task_ids`/`team_id` alternate addressing and the opaque `custom_fields` JSON
+  filter on `clickup-task-get` are excluded for the same reason. `assignees`/`watchers` on
+  `clickup-task-update` are excluded because ClickUp takes them as `{add, rem}` deltas naming specific
+  people, not a plain value.
+- The exact shape of `folders[].lists[]` (bare ids vs. nested list objects) was not pinned to a single
+  schema — described loosely as "the lists inside this folder, each with at least `{id, name}`" — one
+  fetched summary described it as bare ids while ClickUp's public docs elsewhere show nested objects;
+  rather than guess, the response schema documents intent without asserting a strict `items` shape a
+  future drift check could fail on.
 
 ## Notes
 

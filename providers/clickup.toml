@@ -1,0 +1,351 @@
+# ClickUp REST API v2 — hand-authored, no vendor spec vendored.
+#
+# ClickUp does not publish a machine-readable OpenAPI document this pipeline ingests, so this is
+# authored the same way zendesk, freshdesk, github, notion and gitlab already are: by reading
+# `developer.clickup.com/reference/*` directly. Provenance is hand-authored and drift against
+# ClickUp's own documentation is undetectable by machine until C-4's ingest and C-6's overlay exist
+# (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# AUTH: `Authorization: <token>`, raw — no scheme word, no `Bearer `, no base64.
+# ---------------------------------------------------------------------------------------------
+#
+# C-161's Okta probe measured `AuthScheme` as closed at five variants
+# (`crates/connector-spec/src/auth.rs:70-102`: `Bearer | Basic | Header { name } | Query { name } |
+# Signing`, `deny_unknown_fields`, no prefix field) and found that shape a *trap* for Okta, whose
+# token needs a custom scheme word (`SSWS <token>`) this model cannot spell: `AuthScheme::Header`
+# loads legally on `Authorization` but has nowhere to carry a prefix, so it would silently drop
+# `SSWS ` rather than refuse. ClickUp is the mirror case: its personal API token *is* the entire
+# header value with no scheme word at all, which is exactly what `AuthScheme::Header { name =
+# "Authorization" }` already produces on the wire. No change to `connector-spec` is needed, and none
+# is made here — see `crates/connector-flux/tests/clickup_connector.rs` for the pinned assertion.
+#
+# ---------------------------------------------------------------------------------------------
+# THE HIERARCHY THIS CONNECTOR DOES NOT FULLY CLIMB.
+# ---------------------------------------------------------------------------------------------
+#
+# ClickUp's containment tree is five levels deep: team (called a "workspace" in ClickUp's UI) ->
+# space -> folder -> list -> task. The epic's rule (C-105) is that a connector earns its place by
+# exercising something the model has not met, not by teaching the tree rung by rung, and "five
+# navigation endpoints teach nothing" is this story's own hazard. Two rungs are deliberately absent
+# as operations:
+#
+# - **No "list a team's spaces" operation.** A space is addressed the same way
+#   `providers/gitlab.toml` addresses a project: a human has the id already, visible in ClickUp's own
+#   UI URL (`app.clickup.com/{team_id}/v/o/s/{space_id}`), the same "the id is already in the address
+#   bar" argument gitlab's numeric `project_id` rests on. `clickup-team-list` (below) still exists,
+#   but only because a connector's `verify` read must be a parameterless GET, and "the teams this
+#   token can see" is the only such read ClickUp's API offers — its value as a navigation aid is
+#   secondary to its value as the "Test connection" button.
+# - **No "list a folder's lists" operation.** `GET /space/{space_id}/folder` — the one navigation rung
+#   this connector does ship — already returns each folder's lists inline (`folders[].lists`). A
+#   caller who lists a space's folders already has every list id in the same response; a second rung
+#   fetching the same lists again would be exactly the "endpoint that only adds a row" the epic
+#   refuses to ship.
+#
+# So the curated set is six operations, not ten: the verify read, the one navigation rung that
+# genuinely earns its place, and the four task operations the story starts from.
+#
+# ---------------------------------------------------------------------------------------------
+# WHAT IS LEFT OUT OF THE TASK OPERATIONS, deliberately rather than guessed at.
+# ---------------------------------------------------------------------------------------------
+#
+# `GET /list/{list_id}/task` accepts several array-valued query parameters on the real API
+# (`statuses[]`, `assignees[]`, `watchers[]`, `tags[]`, `custom_fields[]`). None are declared here:
+# this pipeline's query parameter model is one name to one scalar value
+# (`crates/connector-flux/src/op.rs`), and there is no way to interpolate a repeated `key[]=a&key[]=b`
+# query key from a single declared parameter without inventing a connector-specific encoding rule —
+# exactly the DSL AGENTS.md refuses. `page`, `order_by`, `reverse`, `archived` and `include_closed`
+# are declared because each is a single scalar value ClickUp's own enum or integer type, with no
+# encoding hazard. The same reasoning excludes `custom_task_ids`/`team_id` (an alternate addressing
+# mode this connector does not need) and `custom_fields` (an opaque JSON-string filter) from
+# `clickup-task-get`.
+#
+# `clickup-task-update`'s body omits `assignees`/`watchers`/`group_assignees`: ClickUp's update takes
+# each as an `{add, rem}` object, not a plain value, and a caller supplying one wants to name
+# *specific people* — data this repository's connectors avoid embedding a shape for when a plain
+# field replacement (name, description, status, priority, due date) already covers the update this
+# story asks for.
+#
+# ---------------------------------------------------------------------------------------------
+
+id = "clickup"
+vendor = "ClickUp"
+
+base_url = "https://api.clickup.com/api/v2"
+
+description = "ClickUp: list workspaces and a space's folders, and read, list, create and update tasks in a list"
+
+# The "Test connection" button. `GET /team` takes no parameters and cannot do anything except prove
+# the token resolves — it lists the workspaces (ClickUp's UI calls a workspace a "team") the token
+# can see.
+verify = "clickup-team-list"
+
+default_auth = [{ credentials = ["clickup.token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "clickup.token"
+scheme = { header = { name = "Authorization" } }
+# The sole credential. Gated and registered with flux's redactor by the host; its value is never
+# read here and never reaches a generated artifact.
+#
+# A ClickUp personal API token (`pk_...`) travels as the *entire* value of the `Authorization`
+# header — no `Bearer `, no scheme word, unlike almost every other bearer-style connector in this
+# repository. `AuthScheme::Header { name = "Authorization" }` produces exactly that wire form.
+env = ["CLICKUP_TOKEN"]
+description = "ClickUp personal API token, sent as the raw value of the Authorization header with no scheme word. Grant access to the workspaces, spaces and lists the operations below need to read or write"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 6: the parameterless verify read, the one navigation rung that earns its place, and
+# the four task operations the story starts from.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "clickup-team-list"
+method = "GET"
+path = "/team"
+description = "List the workspaces (called \"teams\" in ClickUp's API) the token can see. Takes no parameters; used as the verify read to prove a token resolves, and as the source of the workspace-level context a space id is nested under"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["teams"]
+properties = { teams = { type = "array", description = "Every workspace the token can see", items = { type = "object", required = ["id", "name"], properties = { id = { type = "string", description = "The workspace's id" }, name = { type = "string" }, color = { type = "string", description = "Hex color ClickUp's UI displays this workspace in" }, avatar = { type = "string", format = "uri", description = "Workspace avatar image URL, or null" }, members = { type = "array", description = "Each `{user: {id, username, email, color, profilePicture}}`" } } } } }
+
+# ---------------------------------------------------------------------------------------------
+# THE ONE NAVIGATION RUNG. See the header comment for why this is the only rung between team and
+# task that ships as its own operation: it is where a caller gets list ids from, because ClickUp's
+# own response nests each folder's lists inline.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "clickup-space-folder-list"
+method = "GET"
+path = "/space/{space_id}/folder"
+description = "List a space's folders. Each folder's own lists are nested inline in the response — read a folder's `lists` field for the list ids clickup-list-task-list and clickup-task-create take, rather than looking for a separate folder-to-list operation"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "space_id"
+description = "The space's id, visible in ClickUp's UI URL (app.clickup.com/{team_id}/v/o/s/{space_id}) — this connector has no operation that lists a workspace's spaces, the same way providers/gitlab.toml expects a project's numeric id from its URL rather than from a lookup"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.query]]
+name = "archived"
+description = "Include archived folders"
+required = false
+schema = { type = "boolean" }
+
+[operations.response_schema]
+type = "object"
+required = ["folders"]
+properties = { folders = { type = "array", description = "The space's folders", items = { type = "object", required = ["id", "name"], properties = { id = { type = "string" }, name = { type = "string" }, orderindex = { type = "integer" }, override_statuses = { type = "boolean", description = "Whether this folder overrides the space's default statuses" }, hidden = { type = "boolean" }, task_count = { type = "string", description = "The folder's task count, as a string" }, lists = { type = "array", description = "The lists inside this folder, each with at least `{id, name}` — the list id later operations take. Read this field rather than calling a separate folder-to-list operation; none is declared" } } } } }
+
+# ---------------------------------------------------------------------------------------------
+# Task operations — the story's starting set.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "clickup-list-task-list"
+method = "GET"
+path = "/list/{list_id}/task"
+description = "List tasks in a list, most recently created first by default"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "list_id"
+description = "The list's id — from clickup-space-folder-list's `folders[].lists[].id`, or from ClickUp's own UI URL"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.query]]
+name = "archived"
+description = "Include archived tasks"
+required = false
+schema = { type = "boolean" }
+
+[[operations.params.query]]
+name = "page"
+description = "0-based page number"
+required = false
+schema = { type = "integer", minimum = 0 }
+
+[[operations.params.query]]
+name = "order_by"
+description = "Sort field"
+required = false
+schema = { type = "string", enum = ["id", "created", "updated", "due_date"] }
+
+[[operations.params.query]]
+name = "reverse"
+description = "Reverse the sort order"
+required = false
+schema = { type = "boolean" }
+
+[[operations.params.query]]
+name = "include_closed"
+description = "Include closed tasks; excluded by default"
+required = false
+schema = { type = "boolean" }
+
+[operations.response_schema]
+type = "object"
+required = ["tasks"]
+properties = { tasks = { type = "array", description = "The matching tasks", items = { type = "object", required = ["id", "name"], properties = { id = { type = "string" }, name = { type = "string" }, description = { type = "string" }, status = { type = "object", description = "`{status, color, orderindex, type}`" }, orderindex = { type = "string" }, date_created = { type = "string", description = "Unix epoch milliseconds, as a string" }, date_updated = { type = "string", description = "Unix epoch milliseconds, as a string" }, date_closed = { type = "string", description = "Unix epoch milliseconds, as a string, or null" }, archived = { type = "boolean" }, creator = { type = "object", description = "`{id, username, email, color, profilePicture}`" }, assignees = { type = "array", description = "Each an assigned user object" }, priority = { type = "object", description = "`{id, priority, color}`, or null" }, due_date = { type = "string", description = "Unix epoch milliseconds, as a string, or null" }, start_date = { type = "string", description = "Unix epoch milliseconds, as a string, or null" }, time_estimate = { type = "integer", description = "Milliseconds, or null" }, list = { type = "object", description = "`{id, name}`" }, folder = { type = "object", description = "`{id, name}`" }, space = { type = "object", description = "`{id}`" }, url = { type = "string", format = "uri", description = "The task's ClickUp page" } } } }, last_page = { type = "boolean", description = "Whether this is the final page" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "clickup-task-get"
+method = "GET"
+path = "/task/{task_id}"
+description = "Get one task by id"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "task_id"
+description = "The task's id, from clickup-list-task-list or ClickUp's own UI URL"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.query]]
+name = "include_subtasks"
+description = "Include the task's subtasks in the response"
+required = false
+schema = { type = "boolean" }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "name"]
+properties = { id = { type = "string" }, name = { type = "string" }, description = { type = "string" }, status = { type = "object", description = "`{id, status, color, orderindex, type}`" }, creator = { type = "object", description = "`{id, username, email, color, profilePicture}`" }, assignees = { type = "array" }, priority = { type = "object", description = "`{id, priority, color}`, or null" }, due_date = { type = "string", description = "Unix epoch milliseconds, as a string, or null" }, points = { type = "number", description = "Sprint points, or null" }, time_estimate = { type = "integer", description = "Milliseconds, or null" }, custom_fields = { type = "array" }, team_id = { type = "string" }, url = { type = "string", format = "uri" } }
+
+# ---------------------------------------------------------------------------------------------
+# The two writes. Both `medium` — a ClickUp workspace is not the public internet a GitHub issue
+# reaches, but each is a real change teammates with access to the list will see, and with no
+# `notify_all`/assignee argument declared below nobody is emailed by either call. Both
+# `non_idempotent`: ClickUp documents no idempotency key on either endpoint, and this repository's
+# convention (first written for `providers/asana.toml`) is that a write earns `idempotent` only from
+# a vendor-documented guarantee, never from an accident of implementation.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "clickup-task-create"
+method = "POST"
+path = "/list/{list_id}/task"
+description = "Create a task in a list. Created with `notify_all` left at its default (false), so nobody is emailed by this call"
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "list_id"
+description = "The list's id to create the task in — from clickup-space-folder-list's `folders[].lists[].id`, or from ClickUp's own UI URL"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "name"
+description = "The task's name, as it appears in ClickUp's list view. The only vendor-required field"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "description"
+description = "The task's plain-text description"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "status"
+description = "The status to create the task in, e.g. \"to do\" — must be one of the list's own configured statuses. Omit to use the list's default status"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "priority"
+description = "1 (urgent), 2 (high), 3 (normal) or 4 (low). Omit for no priority"
+required = false
+schema = { type = "integer", enum = [1, 2, 3, 4] }
+
+[[operations.params.body]]
+name = "due_date"
+description = "Due date/time as Unix epoch milliseconds"
+required = false
+schema = { type = "integer" }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "name"]
+properties = { id = { type = "string", description = "The created task's id — what clickup-task-get and clickup-task-update address it by afterwards" }, name = { type = "string" }, description = { type = "string" }, status = { type = "object", description = "`{status, color, orderindex, type}`" }, date_created = { type = "string", description = "Unix epoch milliseconds, as a string" }, creator = { type = "object", description = "The account the token belongs to — a created task is attributed to it" }, url = { type = "string", format = "uri", description = "The task's page — the link to give a human" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "clickup-task-update"
+method = "PUT"
+path = "/task/{task_id}"
+description = "Update a task's plain fields (name, description, status, priority, due date). Every field below is optional and ClickUp's update is sparse: an omitted field is left unchanged. Reassigning or rewatching the task is not supported by this operation — ClickUp takes those as {add, rem} deltas naming specific people, which this connector does not declare"
+risk = "medium"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "task_id"
+description = "The task's id to update"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "name"
+description = "The task's new name. Omit to leave it unchanged"
+required = false
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "description"
+description = "The task's new plain-text description. Omit to leave it unchanged"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "status"
+description = "The task's new status, e.g. \"complete\" — must be one of the list's own configured statuses. Omit to leave it unchanged"
+required = false
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "priority"
+description = "1 (urgent), 2 (high), 3 (normal) or 4 (low). Omit to leave it unchanged"
+required = false
+schema = { type = "integer", enum = [1, 2, 3, 4] }
+
+[[operations.params.body]]
+name = "due_date"
+description = "Due date/time as Unix epoch milliseconds. Omit to leave it unchanged"
+required = false
+schema = { type = "integer" }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "name"]
+properties = { id = { type = "string" }, name = { type = "string" }, description = { type = "string" }, status = { type = "object", description = "`{id, status, color, orderindex, type}`" }, date_updated = { type = "string", description = "Unix epoch milliseconds, as a string" }, url = { type = "string", format = "uri" } }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a human supplies before any of the above runs
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "token"
+label = "ClickUp personal API token"
+help = "Copy it from ClickUp under your avatar -> Settings -> Apps. ClickUp shows the full token there each time; treat it like a password — it is sent raw, with no scheme word, on every request"
+format = "token"
+secret = true
+docs_url = "https://developer.clickup.com/docs/authentication"
+binds = "credential.clickup.token"
