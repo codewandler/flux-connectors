@@ -1,0 +1,247 @@
+# Vercel REST API — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER, even though Vercel does publish one (`openapi.vercel.sh`).
+# That document is enormous — access groups, AI Gateway rules, artifacts, billing, deployments,
+# domains, edge config, projects, teams, webhooks and more — and nothing is vendored under `specs/`
+# for it here because ingest (C-4) and the overlay (C-6) do not exist yet. So this stays hand-authored
+# and drift is undetectable by machine, exactly as for zendesk, freshdesk, github and notion
+# (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# Every path, method and query parameter below was checked against Vercel's own reference pages
+# (vercel.com/docs/rest-api/{projects,deployments}, fetched 2026-07-31) rather than recalled, and the
+# five operations are the selection: list projects, get a project, list deployments, get a
+# deployment, cancel a deployment. Vercel's REST reference lists dozens more under both groups
+# (domains, env vars, transfers, rollback, OIDC tokens, pause/unpause…) and none of them are smuggled
+# in — a connector named for the platform's core deploy/inspect loop, not its whole account-admin
+# surface.
+#
+# ---------------------------------------------------------------------------------------------
+# THE ARCHETYPE THIS CONNECTOR EXISTS FOR: `?teamId=` IS OPTIONAL IN THE API AND LOAD-BEARING IN
+# EFFECT.
+#
+# Every one of the five operations below accepts an optional `teamId` query parameter — Vercel's own
+# words are "the Team identifier to perform the request on behalf of." There is no "current team" a
+# token carries; omit it and the request is scoped to the caller's **personal account** instead,
+# silently, with no error and no prompt. Vercel's own CLI carries the identical footgun under
+# `--scope`, so this is not a documentation oversight, it is how the platform works: a team's
+# workspace and its owner's personal workspace are just two account ids the same token can act as,
+# and the query parameter alone decides which one answers.
+#
+# The practical consequence differs by operation shape, and this file says so per-operation rather
+# than asserting one uniform story:
+#
+# - `vercel-projects-list` and `vercel-deployments-list` take no resource id at all, so omitting
+#   `teamId` does not fail — it silently returns a **different, complete data set**: the personal
+#   account's projects or deployments instead of the team's. A model or flow that lists "the"
+#   deployments without ever having been told which account it is asking has no way to notice this
+#   from the response alone; the call succeeds and returns plausible-looking data for the wrong
+#   scope.
+# - `vercel-project-get`, `vercel-deployment-get` and `vercel-deployment-cancel` address one resource
+#   by its own opaque, globally-unique id (`prj_…`, `dpl_…`), so `teamId` there mainly supplies the
+#   authorization context the call runs under. A team resource addressed with the wrong (or absent)
+#   `teamId` is documented to fail closed — a 404 or 403 — rather than silently resolving to a
+#   different resource. That is the safer failure mode of the two, and this file does not overstate
+#   it into the same "silent redirect" claim the list operations earn.
+#
+# `teamId` is safe to declare as a query parameter despite this pipeline's standing query-encoding
+# gap (C-30, `crates/connector-flux/src/op.rs`, *"Query values are interpolated verbatim"*): Vercel's
+# team ids are its own generated tokens (`team_` followed by an opaque alphanumeric string), never
+# free text a caller composes, so no value here can carry the `&`/`#`/`+` that makes
+# `zendesk-ticket-search` non-functional. The same restricted-alphabet reasoning that clears
+# `github.toml`'s path parameters clears this one query parameter.
+#
+# `crates/connector-flux/tests/vercel_connector.rs` asserts every operation declares `teamId` and
+# that its description names the personal-account fallback, so this stays a property of the
+# connector rather than of this comment.
+# ---------------------------------------------------------------------------------------------
+#
+# No `[[services]]` block. Unlike fly's single `v1`, Vercel versions each endpoint independently in
+# its own path segment (`/v10/projects`, `/v7/deployments`, `/v13/deployments/{idOrUrl}`,
+# `/v12/deployments/{id}/cancel`) rather than versioning one API surface, so there is no single
+# `api_version` this connector could honestly assign a service. The default (unnamed) service is
+# used, and each operation's path already carries its own version.
+
+id = "vercel"
+vendor = "Vercel"
+authority = "com.vercel.api"
+base_url = "https://api.vercel.com"
+description = "Vercel: list and inspect projects and deployments, and cancel an in-progress deployment"
+default_auth = [{ credentials = ["vercel.token"] }]
+verify = "vercel-projects-list"
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "vercel.token"
+scheme = "bearer"
+# The sole secret. Gated and registered with flux's redactor by the host; never read here. Minted as
+# a personal Access Token (vercel.com/account/tokens) or an integration token — both present
+# identically as `Authorization: Bearer <token>`.
+env = ["VERCEL_TOKEN"]
+description = "Vercel access token sent as a bearer"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a human supplies before any of this runs
+#
+# One field. Vercel is single-host with no tenant subdomain, so unlike zendesk's `{subdomain}` there
+# is no address to bind and the token is the only thing an operator can supply — the same shape
+# `providers/box.toml` and `providers/dropbox.toml` carry for the same reason. `teamId` is NOT a
+# `[[config]]` field: `binds` closes over `endpoint.*`, `credential.*`, `username.*` and
+# `oauth.client_*` only (`crates/connector-spec/src/config.rs`), and none of those forms names a
+# per-request query parameter, so this file has no honest way to pre-bind it. It stays a caller
+# argument on every operation instead, which is exactly the shape that makes the archetype above
+# reachable at all.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "token"
+label = "Access token"
+help = "Create one at vercel.com/account/tokens (personal) or via an Integration's OAuth flow. Scope it to the narrowest team or project you can"
+# No `example`, deliberately. A placeholder for a secret field has to be recognisable as fake, and a
+# Vercel token is an opaque string with no fixed, safely-imitable prefix — `providers/notion.toml`
+# and `providers/shopify.toml` record the release this repository actually lost by guessing one.
+format = "token"
+secret = true
+docs_url = "https://vercel.com/docs/rest-api#creating-an-access-token"
+binds = "credential.vercel.token"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 5 of several dozen documented under Vercel's "projects" and "deployments" groups
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "vercel-projects-list"
+method = "GET"
+path = "/v10/projects"
+description = "List projects. Scoped to the personal account unless teamId names a team — on a team workspace, omitting teamId silently returns the wrong, but real-looking, project list rather than an error"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "teamId"
+description = "The team to act on behalf of. Omit it and this lists the personal account's projects instead — Vercel accepts the call and returns a complete, plausible list either way, so there is no error to notice if this is the wrong account"
+required = false
+schema = { type = "string", minLength = 1 }
+
+# Vercel's own reference page documents THREE mutually-incompatible top-level shapes for this same
+# 200 (a bare array, and two `{pagination, projects}` variants that differ in which per-project field
+# is present) with nothing here to say which an account gets. Rather than guess, this operation
+# declares no `response_schema` at all; `vercel-project-get` below has a single documented shape and
+# carries one.
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "vercel-project-get"
+method = "GET"
+path = "/v9/projects/{idOrName}"
+description = "Get one project by its id or name. teamId scopes which account's project this addresses; a team project looked up with the wrong or absent teamId is documented to 404 rather than silently returning a different project"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "idOrName"
+description = "The project's id (prj_…) or its name"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.query]]
+name = "teamId"
+description = "The team to act on behalf of. Omit it and Vercel looks for the project in the personal account instead of any team"
+required = false
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "name", "accountId"]
+properties = { id = { type = "string", description = "The project's own id (prj_…), stable across renames" }, name = { type = "string" }, accountId = { type = "string", description = "The personal or team account id that owns this project" }, framework = { type = "string", description = "The detected framework, or null when none is set", nullable = true }, live = { type = "boolean", description = "Whether the project currently has a production deployment" }, paused = { type = "boolean", description = "Whether the project is paused and will not build or serve traffic" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "vercel-deployments-list"
+method = "GET"
+path = "/v7/deployments"
+description = "List deployments. Scoped to the personal account unless teamId names a team — on a team workspace, omitting teamId silently returns the wrong, but real-looking, deployment list rather than an error"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "projectId"
+description = "Filter to deployments of one project, by its id or name"
+required = false
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.query]]
+name = "teamId"
+description = "The team to act on behalf of. Omit it and this lists the personal account's deployments instead — Vercel accepts the call and returns a complete, plausible list either way, so there is no error to notice if this is the wrong account"
+required = false
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["deployments", "pagination"]
+properties = { deployments = { type = "array", items = { type = "object", required = ["uid", "name", "url", "created", "createdAt", "readyState", "type", "projectId", "creator", "inspectorUrl"], properties = { uid = { type = "string", description = "The deployment's unique id" }, name = { type = "string", description = "The project name at the time this deployment was created" }, url = { type = "string", description = "Null when the deployment has not finished uploading" }, created = { type = "number", description = "Creation timestamp, milliseconds" }, createdAt = { type = "number" }, readyState = { type = "string", enum = ["BLOCKED", "BUILDING", "CANCELED", "DELETED", "ERROR", "INITIALIZING", "QUEUED", "READY"] }, type = { type = "string" }, projectId = { type = "string" }, target = { type = "string", description = "production, staging, or null for a preview deployment", nullable = true }, creator = { type = "object" }, inspectorUrl = { type = "string", nullable = true } } }, pagination = { type = "object", required = ["count", "next", "prev"], properties = { count = { type = "integer", description = "Items in this page" }, next = { type = "number", description = "Timestamp for the next page, or null", nullable = true }, prev = { type = "number", description = "Timestamp for the previous page, or null", nullable = true } } } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "vercel-deployment-get"
+method = "GET"
+path = "/v13/deployments/{idOrUrl}"
+description = "Get one deployment by its id or its hostname. teamId scopes which account's authorization applies; a team deployment looked up with the wrong or absent teamId is documented to fail rather than silently returning a different deployment"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "idOrUrl"
+description = "The deployment's id (dpl_…) or its unique hostname"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.query]]
+name = "teamId"
+description = "The team to act on behalf of. Omit it and Vercel looks for the deployment in the personal account instead of any team"
+required = false
+schema = { type = "string", minLength = 1 }
+
+# Vercel's reference documents three variants for this 200 (an anonymous view, an owner-authenticated
+# view and a reduced team view), differing on which fields are present. `id` and `readyState` are the
+# only two members every variant requires, so only those two are declared required here — asserting
+# more would be asserting a shape only one variant actually carries.
+[operations.response_schema]
+type = "object"
+required = ["id", "readyState"]
+properties = { id = { type = "string", description = "The deployment's unique id" }, readyState = { type = "string", enum = ["BLOCKED", "BUILDING", "CANCELED", "ERROR", "INITIALIZING", "QUEUED", "READY"] }, url = { type = "string", description = "Present on the owner and reduced-team views; absent on the anonymous view" }, name = { type = "string" }, target = { type = "string", description = "production, staging, or null for a preview deployment", nullable = true } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "vercel-deployment-cancel"
+method = "PATCH"
+path = "/v12/deployments/{id}/cancel"
+description = "Cancel a deployment that is still building, stopping it before it completes; refused with 400 if it already finished (READY, ERROR or CANCELED). teamId scopes which account's authorization applies — omit it and Vercel looks for the deployment in the personal account instead of any team, most often failing closed rather than cancelling a different one"
+risk = "high"
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "id"
+description = "The deployment's id (dpl_…) to cancel"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.query]]
+name = "teamId"
+description = "The team to act on behalf of. Omit it and Vercel looks for the deployment in the personal account instead of any team"
+required = false
+schema = { type = "string", minLength = 1 }
+
+# Confirm a cancellation with `vercel-deployment-get` rather than trusting this response alone: this
+# endpoint returns the deployment's owner-authenticated view, but `readyState` is the one field this
+# file trusts across every documented variant.
+[operations.response_schema]
+type = "object"
+required = ["id", "readyState"]
+properties = { id = { type = "string" }, readyState = { type = "string", description = "Always CANCELED on success", enum = ["BLOCKED", "BUILDING", "CANCELED", "ERROR", "INITIALIZING", "QUEUED", "READY"] } }
