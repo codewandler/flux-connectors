@@ -9,6 +9,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Calendly connector (C-172).** Five read operations over a bearer token, `GET /users/me` as
+  `verify`.
+
+  **It was filed expecting a refusal and shipped instead, which is the more useful outcome.** The
+  story predicted a collision with the unencoded-query gap, since Calendly identifies a resource by
+  its full `https://api.calendly.com/…` URI passed as a *query value*. Measured, that is wrong: a
+  Calendly URI's charset — scheme, host, path, hyphens — is structurally disjoint from the emitter's
+  four-character danger set (space, `&`, `#`, `=`), so the value survives verbatim. The argument is
+  tied down by a schema-level `pattern` that mechanically excludes the danger set, not by prose.
+
+  A path parameter is the **bare uuid, never the full URI**, so the template cannot double-compose a
+  URL from a value that is already one. `min_start_time`/`max_start_time` and invitee-email filtering
+  are excluded: ISO-8601 offsets and `+`-tagged addresses each carry the `+`-in-query hazard this
+  connector was not chosen to demonstrate.
+
 - **The Figma connector (C-176).** Six read operations over `X-Figma-Token`, following Shopify's
   existing `header` scheme rather than inventing a second spelling — no change to the auth model.
 
