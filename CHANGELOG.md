@@ -7,6 +7,46 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A mutable `ConfigStore` could show the egress gate one host and send the request to another
+  (C-198).** The pack calls `http.request`'s `execute` directly, bypassing `Executor::dispatch`, so
+  `permission_subjects` is the **only** place flux's allow-list is consulted for the inner call — and
+  it performed an independent `get` from the one that built the request. Two reads, one call, through
+  the single gate. The failing-first test showed it concretely: `host-0` was gated, `host-1` went out.
+
+  **Enforced rather than documented.** `Operation` now holds a `config::Snapshot` taken once at
+  `project`, *instead of* the `Configuration` — so it has no handle to the store and there is nowhere
+  left to read twice. The test asserts the store is read exactly once, which is the stronger claim
+  than comparing two values. A documented invariant a caller can break silently is weaker than one
+  the type prevents.
+
+  The behavioural consequence is named rather than hidden: a host that mutates its store *after*
+  building the pack now sees the snapshot, not the new value, and must rebuild the pack. That was
+  already the module's stated advice; it is now the semantics.
+
+### Changed
+
+- **The four published crates are `codewandler-connector-{catalog,spec,secrets,pack}`.** The bare
+  `connector-*` namespace is contested — `connector-cli` is already taken on crates.io by an
+  unrelated project — so the published names take the prefix the flux family uses. `[lib] name` is
+  pinned on each, so **no source file changed**: `use catalog::`, `use connector_spec::`,
+  `use connector_secrets::` and `use connector_pack::` are all unaffected.
+
+  The rename surfaced **five latent defects**, every one invisible while nothing in the tree was
+  aliased, and two of which would have fired for the first time during a real publish — the one
+  operation with no undo. The publish script matched dependency edges on the local alias rather than
+  the package, dropping `codewandler-connector-spec` from the closure entirely and emitting an order
+  that publishes a crate before its own dependency; the independent Rust recomputation of that order
+  reached the same wrong answer by a different route (it read each member's manifest, where the alias
+  is not); a `package =` key rebinds the extern away from `[lib] name`; a renamed package renames its
+  crate; and `dependency_fence.rs` fenced a name that no longer existed — failing loudly with *"this
+  fence has nothing to fence"* rather than passing vacuously and quietly retiring the offline
+  guarantee.
+
+  The two-implementation disagreement test in `publish_closure.rs` is what caught the first two, and
+  it only worked because both were wrong in *different* ways.
+
 ### Added
 
 - **The PagerDuty connector (C-162) — the third and last vendor C-184's prefix axis unblocked.** Six

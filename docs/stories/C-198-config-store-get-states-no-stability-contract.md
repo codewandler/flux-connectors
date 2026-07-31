@@ -2,7 +2,7 @@
 id: C-198
 title: "`ConfigStore::get` states no stability contract, so a mutable store can gate one host and call another"
 pillar: Bridge
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/connector-configuration.md
 epic: tool-pack
