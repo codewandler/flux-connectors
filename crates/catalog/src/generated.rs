@@ -46,6 +46,7 @@ pub(crate) mod slack;
 pub(crate) mod stripe;
 pub(crate) mod typeform;
 pub(crate) mod vercel;
+pub(crate) mod webflow;
 pub(crate) mod zendesk;
 pub(crate) mod zoom;
 
@@ -88,6 +89,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &stripe::PROVIDER,
     &typeform::PROVIDER,
     &vercel::PROVIDER,
+    &webflow::PROVIDER,
     &zendesk::PROVIDER,
     &zoom::PROVIDER,
 ];

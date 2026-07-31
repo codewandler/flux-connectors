@@ -9,6 +9,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Webflow connector (C-182), and it completes a taxonomy.** Six operations over a bearer token;
+  `site-list` doubles as `verify` and as the site-id discovery step, since `base_url` has no per-tenant
+  placeholder to bind.
+
+  **Item creation is excluded, and this is now the third distinct answer to "a payload this pipeline
+  cannot type."** Notion excluded a *recursive* union. Miro shipped a *bounded* one as a read-side
+  `oneOf`. Webflow's `fieldData` is **unbounded and tenant-defined** — there is no enumerable set of
+  shapes to write down at all — so neither prior mechanism applies, and `webflow-collection-get` ships as
+  the honest runtime-discovery substitute. Independently, Webflow's create endpoint wraps the item body
+  in an array, which is the genuinely-blocked nested case of C-185.
+
+  `webflow-site-publish` carries no `response_schema`: its body is not confidently known, and absence
+  beats a guessed placeholder by the coverage ratchet's own stated principle.
+
 - **The Front connector (C-179).** Six operations over a bearer token, prefixed resource ids (`cnv_`,
   `tea_`) declared so a model cannot invent one, and a bounded `GET /conversations?limit=1` as `verify` —
   Front's `/me` identifies the OAuth-granting company rather than a plain token's owner, so it was not a
