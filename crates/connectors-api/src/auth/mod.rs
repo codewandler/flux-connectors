@@ -47,6 +47,9 @@ use session::{Account, SESSION_TTL};
 /// be runnable locally. Recorded rather than overlooked.
 pub const SESSION_COOKIE: &str = "connectors_session";
 
+/// The short-lived cookie that binds a sign-in in progress to the browser that began it.
+pub const LOGIN_COOKIE: &str = "connectors_login";
+
 /// The `Set-Cookie` that establishes a session.
 ///
 /// Every attribute is load-bearing:
@@ -78,8 +81,52 @@ pub fn cleared_cookie() -> String {
     format!("{SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0")
 }
 
-/// The session token carried by a request, if any.
-pub fn token_of(parts: &Parts) -> Option<String> {
+/// **The `Set-Cookie` that binds a sign-in in progress to the browser that began it.**
+///
+/// # Why this exists, and what its absence cost
+///
+/// Without it the OAuth `state` is a value held only in a process-global map, redeemable by
+/// *anyone* who presents it. An attacker begins a sign-in in their own browser, keeps the `state`,
+/// and gets the victim's browser to fetch the callback URL — a top-level `GET`, so a link or an
+/// `<img>` is enough. The victim is then silently signed in **as the attacker**, and every
+/// credential they paste lands in the attacker's tenant. That is login CSRF, and the first version
+/// of this module had it: `/auth/signin` set no cookie, and `/auth/callback` never asked which
+/// browser was in front of it.
+///
+/// Single-use consumption of the `state` does **not** close this. That is a *replay* defence — it
+/// stops the same callback being redeemed twice — and the two were conflated. RFC 6749 §10.12 is
+/// explicit that the binding value must be kept *"in a location accessible only to the client and
+/// the user-agent"*, which means a cookie. Both properties are needed and both are now enforced.
+///
+/// The attributes:
+///
+/// - **`SameSite=Lax`, emphatically not `Strict`.** The callback arrives as a cross-site top-level
+///   `GET` redirected from the identity provider. `Strict` withholds cookies on exactly that
+///   navigation, so it would turn this fix into a sign-in that can never complete. `Lax` sends the
+///   cookie on top-level GETs and withholds it on cross-site POSTs, which is the shape needed here.
+/// - **`Path=/auth/callback`** — the only route that reads it, so it is not attached to every
+///   request the browser makes.
+/// - **`HttpOnly` + `Secure`** — the same reasoning as [`session_cookie`]: script cannot read it,
+///   and it never travels in clear.
+/// - **`Max-Age`** matching [`session::LOGIN_TTL`], because a binding value for a flow that has to
+///   complete in ten minutes has no business outliving it.
+pub fn login_cookie(state: &str) -> String {
+    format!(
+        "{LOGIN_COOKIE}={state}; Path=/auth/callback; HttpOnly; Secure; SameSite=Lax; Max-Age={}",
+        session::LOGIN_TTL.as_secs()
+    )
+}
+
+/// The `Set-Cookie` that clears a spent sign-in binding.
+///
+/// `Path` must match [`login_cookie`]'s exactly or the browser keeps the original alongside the
+/// deletion, and a spent binding value sits there for its full lifetime.
+pub fn cleared_login_cookie() -> String {
+    format!("{LOGIN_COOKIE}=; Path=/auth/callback; HttpOnly; Secure; SameSite=Lax; Max-Age=0")
+}
+
+/// One named cookie carried by a request, if any.
+pub fn cookie_of(parts: &Parts, name: &str) -> Option<String> {
     let header = parts
         .headers
         .get(axum::http::header::COOKIE)?
@@ -88,8 +135,18 @@ pub fn token_of(parts: &Parts) -> Option<String> {
     header
         .split(';')
         .filter_map(|pair| pair.split_once('='))
-        .find(|(name, _)| name.trim() == SESSION_COOKIE)
+        .find(|(key, _)| key.trim() == name)
         .map(|(_, value)| value.trim().to_owned())
+}
+
+/// The session token carried by a request, if any.
+pub fn token_of(parts: &Parts) -> Option<String> {
+    cookie_of(parts, SESSION_COOKIE)
+}
+
+/// The sign-in binding value carried by a request, if any.
+pub fn login_state_of(parts: &Parts) -> Option<String> {
+    cookie_of(parts, LOGIN_COOKIE)
 }
 
 /// **Whose data this request is about.**

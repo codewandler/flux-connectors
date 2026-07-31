@@ -61,7 +61,16 @@ pub fn router(app: App) -> Router {
         // Sign-in. These five are the only routes reachable without a session, and each is
         // reachable without one for a reason: two are the flow that establishes a session, one
         // ends it, one reports whether sign-in is even configured, and `/` has to render something
-        // to sign in *from*. Every other route below takes a `Principal`.
+        // to sign in *from*.
+        //
+        // **Every route under `/v1` takes a `Principal`**, with no exceptions. The review that
+        // followed C-204's first landing found this comment claiming as much while
+        // `/v1/operations/{operation}` did not. It served only published catalogue data, so nothing
+        // tenant-scoped was leaking — but "all of them except one, and that one is fine" is a rule
+        // nobody can check at a glance, and the exception would have been inherited by whatever
+        // was added next to it. The route is gated rather than the comment softened: the catalogue
+        // is public through `web/public/catalog.json` anyway, so gating costs nothing and buys a
+        // rule with no footnote.
         .route("/auth/signin", get(auth::routes::signin))
         .route("/auth/callback", get(auth::routes::callback))
         .route("/auth/signout", post(auth::routes::signout))

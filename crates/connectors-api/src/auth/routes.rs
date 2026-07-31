@@ -15,7 +15,7 @@ use crate::api::Failure;
 use crate::auth::oidc::{Expectations, Settings, Setup, VerifyError, SCOPES};
 use crate::auth::session::Account;
 use crate::auth::{cleared_cookie, session_cookie, token_of, Principal};
-use crate::state::App;
+use crate::state::{App, Oidc};
 
 /// **Start a sign-in.**
 ///
@@ -23,12 +23,18 @@ use crate::state::App;
 /// browser to Google with only the challenge. The code that comes back is therefore redeemable
 /// only by whoever holds the verifier — this process — which is what PKCE buys even for a
 /// confidential client whose secret could be stolen from a redirect.
+///
+/// It also **sets [`crate::auth::LOGIN_COOKIE`]**, which is what ties the flow to this browser.
+/// Without it the `state` is a bare value redeemable by anybody who presents it, and the attack
+/// that follows is login CSRF in its severe direction: the victim signed in as the attacker. See
+/// [`crate::auth::login_cookie`] for the full account.
 pub async fn signin(State(app): State<App>) -> Response {
     let Some(oidc) = app.oidc() else {
         return not_configured(&app);
     };
 
     let login = app.sessions().start_login();
+    let binding = crate::auth::login_cookie(&login.state);
     // `oauth_authorize_url` reads only `challenge` from the pair. The verifier stays in the session
     // store and never reaches a URL, which is the entire point of the exchange.
     let pkce = flux_credentials::Pkce {
@@ -48,7 +54,11 @@ pub async fn signin(State(app): State<App>) -> Response {
     // *this* sign-in; without it a token obtained in another session replays into this one.
     url.push_str(&format!("&nonce={}", urlencoding::encode(&login.nonce)));
 
-    (StatusCode::SEE_OTHER, [(header::LOCATION, url)]).into_response()
+    (
+        StatusCode::SEE_OTHER,
+        [(header::LOCATION, url), (header::SET_COOKIE, binding)],
+    )
+        .into_response()
 }
 
 /// What Google sends back.
@@ -62,10 +72,24 @@ pub struct CallbackParams {
 
 /// **Finish a sign-in.**
 ///
-/// Everything that makes this safe happens between receiving the code and setting the cookie:
-/// the `state` must be one this host issued and has not already redeemed, the code is exchanged
-/// with the verifier, and the `id_token` passes all five checks before an account exists.
-pub async fn callback(State(app): State<App>, Query(params): Query<CallbackParams>) -> Response {
+/// Four things must hold before an account exists, and they close four different attacks:
+///
+/// 1. **The browser presents the binding cookie, and it matches the `state` in the URL.** This is
+///    the login-CSRF defence — see below. Checked *first*, before the pending entry is even looked
+///    up, so a cross-site attempt cannot consume somebody else's live `state` as a side effect of
+///    being refused.
+/// 2. **The `state` is one this host issued and has not already redeemed** (single-use). This is
+///    the *replay* defence, and it is a different property from 1 — conflating the two is the
+///    mistake that left this route exploitable.
+/// 3. **The code is exchanged with the PKCE verifier**, which never left this process.
+/// 4. **The `id_token` passes every check** in [`crate::auth::oidc`].
+pub async fn callback(State(app): State<App>, request: axum::extract::Request) -> Response {
+    let (parts, _) = request.into_parts();
+    let params = match Query::<CallbackParams>::try_from_uri(&parts.uri) {
+        Ok(Query(params)) => params,
+        Err(error) => return refuse(format!("the callback's query is unreadable: {error}")),
+    };
+
     let Some(oidc) = app.oidc() else {
         return not_configured(&app);
     };
@@ -81,19 +105,45 @@ pub async fn callback(State(app): State<App>, Query(params): Query<CallbackParam
         return refuse("the callback carried no code and state".to_owned());
     };
 
-    // Single-use, and unknown means unsolicited. This is the login-CSRF defence: an attacker who
-    // can make a browser fetch a callback URL of their choosing would otherwise sign the victim
-    // into the *attacker's* account, and everything the victim then connected would be connected
-    // for the attacker.
+    // ---------------------------------------------------------------------------------------
+    // 1. Is this the browser that began the flow?
+    // ---------------------------------------------------------------------------------------
+    //
+    // The `state` in the URL travels through the identity provider and is therefore visible to
+    // whoever built the link. The cookie does not: only this origin can set it, and only the
+    // browser it was set in sends it back. Requiring both, and requiring them to agree, is what
+    // makes the URL alone useless — which is RFC 6749 §10.12's requirement that the binding value
+    // live "in a location accessible only to the client and the user-agent".
+    //
+    // A missing cookie is refused rather than treated as "no binding to check". That distinction
+    // is the entire vulnerability: an attacker's victim has no cookie, and a check that skips when
+    // absent is a check that is never performed on the one request that matters.
+    let Some(bound_state) = crate::auth::login_state_of(&parts) else {
+        return refuse_and_clear(
+            "this callback did not come from a browser that started a sign-in here".to_owned(),
+        );
+    };
+    if !crate::auth::oidc::constant_time_eq(bound_state.as_bytes(), state.as_bytes()) {
+        return refuse_and_clear(
+            "this callback's state does not belong to this browser's sign-in".to_owned(),
+        );
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // 2. Was it issued here, and not already spent?
+    // ---------------------------------------------------------------------------------------
     let Some((verifier, nonce)) = app.sessions().take_login(&state) else {
-        return refuse(
+        return refuse_and_clear(
             "this callback does not correspond to a sign-in this host started".to_owned(),
         );
     };
 
-    let id_token = match exchange(&oidc.settings, &code, &verifier).await {
+    // ---------------------------------------------------------------------------------------
+    // 3 and 4. Redeem the code, and believe the token only after every check.
+    // ---------------------------------------------------------------------------------------
+    let id_token = match exchange(oidc, &code, &verifier).await {
         Ok(token) => token,
-        Err(why) => return refuse(why),
+        Err(why) => return refuse_and_clear(why),
     };
 
     let expect = Expectations {
@@ -104,24 +154,31 @@ pub async fn callback(State(app): State<App>, Query(params): Query<CallbackParam
 
     let claims = match verify_with_rotation(&app, &id_token, &expect).await {
         Ok(claims) => claims,
-        Err(error) => return refuse(error.to_string()),
+        Err(error) => return refuse_and_clear(error.to_string()),
     };
 
     let account = match Account::from_claims(&claims) {
         Ok(account) => account,
-        Err(why) => return refuse(format!("this identity cannot own a tenant: {why}")),
+        Err(why) => return refuse_and_clear(format!("this identity cannot own a tenant: {why}")),
     };
     let account = app.accounts().of_subject(account);
     let token = app.sessions().create(account);
 
-    (
-        StatusCode::SEE_OTHER,
-        [
-            (header::LOCATION, "/".to_owned()),
-            (header::SET_COOKIE, session_cookie(&token)),
-        ],
-    )
-        .into_response()
+    // Two `Set-Cookie` headers: establish the session, and clear the spent binding. Appended
+    // rather than handed to axum as an array, because an array of header pairs with one repeated
+    // name is the shape where "insert" and "append" differ and only one of them is correct.
+    let mut response =
+        (StatusCode::SEE_OTHER, [(header::LOCATION, "/".to_owned())]).into_response();
+    append_cookie(&mut response, session_cookie(&token));
+    append_cookie(&mut response, crate::auth::cleared_login_cookie());
+    response
+}
+
+/// Add one more `Set-Cookie` to a response without displacing those already on it.
+fn append_cookie(response: &mut Response, cookie: String) {
+    if let Ok(value) = axum::http::HeaderValue::from_str(&cookie) {
+        response.headers_mut().append(header::SET_COOKIE, value);
+    }
 }
 
 /// Verify, and survive a key rotation.
@@ -154,8 +211,12 @@ async fn verify_with_rotation(
 /// is precisely the artefact this story must verify, so the four lines of form encoding are written
 /// out. The PKCE half — which is where a fourth implementation would actually be a hazard — is
 /// still `flux-credentials`'.
-async fn exchange(settings: &Settings, code: &str, verifier: &str) -> Result<String, String> {
-    let response = reqwest::Client::new()
+async fn exchange(oidc: &Oidc, code: &str, verifier: &str) -> Result<String, String> {
+    let settings: &Settings = &oidc.settings;
+    // The shared back-channel client: timeouts, a connect timeout, and no redirect following. A
+    // redirect here would carry the `client_secret` in the re-sent body to wherever it pointed.
+    let response = oidc
+        .http
         .post(&settings.token_url)
         .form(&[
             ("grant_type", "authorization_code"),
@@ -177,9 +238,10 @@ async fn exchange(settings: &Settings, code: &str, verifier: &str) -> Result<Str
         return Err(format!("the token endpoint answered {status}"));
     }
 
-    let body: serde_json::Value = response
-        .json()
+    let body = crate::auth::oidc::read_bounded(response, crate::auth::oidc::MAX_TOKEN_BYTES)
         .await
+        .map_err(|why| format!("the token endpoint's answer could not be read: {why}"))?;
+    let body: serde_json::Value = serde_json::from_str(&body)
         .map_err(|error| format!("the token endpoint's answer was not JSON: {error}"))?;
     body.get("id_token")
         .and_then(|value| value.as_str())
@@ -262,4 +324,15 @@ fn not_configured(app: &App) -> Response {
 /// that failed and nothing else, which is what makes them safe to show an operator.
 fn refuse(why: String) -> Response {
     Failure::new(StatusCode::BAD_REQUEST, why).into_response()
+}
+
+/// A refusal that also drops the sign-in binding.
+///
+/// Used for every refusal from the binding check onwards. The flow is over either way, and a
+/// binding value left in the browser after its `state` has been spent is a value with nothing left
+/// to bind — so it is cleared rather than left to age out.
+fn refuse_and_clear(why: String) -> Response {
+    let mut response = refuse(why);
+    append_cookie(&mut response, crate::auth::cleared_login_cookie());
+    response
 }
