@@ -240,13 +240,6 @@ fn modules() -> Vec<Module> {
     modules
 }
 
-/// Every `[[config]]` field `providers/<connector>.toml` declares.
-///
-/// A line reader over a block shape the JSON schema already constrains
-/// (`schema/provider-toml.schema.json`), and fail-closed at every step: a block whose `name` or
-/// `binds` is missing panics, and the number of blocks read is checked against the number of
-/// `[[config]]` headers in the file. A reader that silently found nothing would restore exactly the
-/// vacuous pass this story removes.
 /// A `[[config]]` block being read, before its mandatory keys have been checked.
 #[derive(Default)]
 struct Block {
@@ -276,6 +269,25 @@ impl Block {
     }
 }
 
+/// Every `[[config]]` field `providers/<connector>.toml` declares.
+///
+/// A line reader over a block shape the JSON schema already constrains
+/// (`schema/provider-toml.schema.json`), and fail-closed at every step: a block whose `name` or
+/// `binds` is missing panics, and the number of blocks read is checked against the number of
+/// `[[config]]` headers in the file. A reader that silently found nothing would restore exactly the
+/// vacuous pass this story removes.
+///
+/// # `example` is the one key with no oracle, and that is a known gap
+///
+/// `the_declared_configuration_agrees_with_every_templated_base_url` cross-checks `name`, `service`
+/// and `binds` against a *different* artifact — the emitted manifest's `base_url` — so dropping one
+/// of those is loud. `example` has no second source: making this return `None` for every one of
+/// them leaves both catalogue-wide tests green, because a synthesised `a-<variable>` fallback is a
+/// perfectly good value for composing a request. It is caught only by the four hand-written URL
+/// assertions above, which happen to name zendesk and freshdesk. The exposure is bounded — a
+/// silently unused `example` weakens *how realistic* the values are, never whether a variable is
+/// declared, which is the property C-232 is about — and it closes with C-87, when the configuration
+/// surface reaches the catalogue and this reader is deleted.
 fn declared_config(connector: &str) -> Vec<Declared> {
     let path = root().join("providers").join(format!("{connector}.toml"));
     let text = read(&path);
@@ -841,6 +853,79 @@ fn a_rehearsal_and_a_projection_agree_on_a_shipped_operation() {
             .build_request(&params)
             .expect("the projected request composes")
             .to_params()
+    );
+}
+
+/// **The refusal runs at the projection call site too, and this is what pins it** (C-232).
+///
+/// `refuse_unconfigurable` is called twice — in `Operation::project` and again in `request::build` —
+/// on the stated ground that "the answer must not depend on which entry point a host reaches".
+/// Without this test nothing executed the first of the two: deleting the call in
+/// `crates/connector-pack/src/tool.rs` left the whole workspace green, so a guarantee the doc
+/// asserted was carried by the *other* call site alone. A doubled check that only one half of is
+/// pinned is a single check with a comment claiming otherwise.
+///
+/// # Why the entry has to be doctored, and why that is not the C-233 route
+///
+/// `catalog::Operation` is `#[non_exhaustive]`, so no synthetic one can be *constructed* here. A
+/// shipped one can be **copied** and its `pub` fields overwritten, which is what
+/// `tests/differential.rs` does to compare two artifacts — and it is enough to reach
+/// `Operation::project` with a body that must be refused.
+///
+/// It is not, however, a route a provider implementor could have used, which is why
+/// [`connector_pack::Rehearsal`] still exists. Doctoring gives you *another connector's* entry
+/// wearing your Flux: the id, the service, the declared hosts and the credentials are still the
+/// shipped one's, `project` refuses a declaration whose name disagrees with `entry.id`
+/// (`Error::Mismatched`), and correcting `provider` to your own then fails the index lookup with
+/// `Error::UnknownProvider`. What it can do is exactly what it does here — take one *shipped*
+/// operation and give it a different body.
+#[test]
+fn a_document_literal_is_refused_at_projection_and_not_only_at_build() {
+    const OPERATION: &str = "zendesk-ticket-show";
+
+    /// The shipped operation's own id and metadata, with C-110's body. Deliberately still a
+    /// templated base URL, so the only thing this can be refused for is the document.
+    const DOCTORED: &str = r#"op zendesk-ticket-show -> Any
+  description "Show one ticket"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/graphql")
+  content_type = "application/json"
+  query = """query Viewer {
+  viewer {
+    displayName
+  }
+}
+"""
+  payload = { query }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response
+"#;
+
+    let entry = catalog::operation(OperationKey::id(OPERATION))
+        .unwrap_or_else(|| panic!("the shipped catalogue carries `{OPERATION}`"));
+
+    // The control: the real entry projects, so a failure below is the doctoring and not the fixture.
+    Operation::project(entry, http(), credentials(), configuration())
+        .expect("the shipped entry projects");
+
+    let mut doctored = *entry;
+    doctored.flux = DOCTORED;
+    let doctored: &'static catalog::Operation = Box::leak(Box::new(doctored));
+
+    let error = Operation::project(doctored, http(), credentials(), configuration())
+        .expect_err("a body binding an unclassifiable literal must not install");
+    assert!(
+        matches!(error, connector_pack::Error::Unbuildable { .. }),
+        "refused at projection, but for the wrong reason: {error}"
+    );
+    assert!(
+        error.to_string().contains("displayName"),
+        "the refusal must quote the literal it could not classify: {error}"
     );
 }
 

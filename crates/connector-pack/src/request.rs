@@ -321,10 +321,19 @@ fn carries_placeholder(literal: &str) -> bool {
 /// are two entry points a host can reach and the answer must not depend on which: projection is
 /// where a connector fails to install, and `build` is the one gate every request passes through.
 ///
+/// **Both call sites are pinned**, which is worth saying because the doubling is the kind of claim
+/// that quietly becomes a single check: deleting the call in `crate::Operation::project` fails
+/// `tests/request.rs::a_document_literal_is_refused_at_projection_and_not_only_at_build`, and
+/// deleting the one below fails
+/// [`tests::a_graphql_operation_is_refused_rather_than_configured_or_corrupted`].
+///
 /// # Errors
 ///
 /// [`Error::Unbuildable`], quoting the literal so an implementor can find it in their own emitted
-/// module.
+/// module, and naming **which** clause refused — a document whose braces are the vendor's own
+/// syntax, or a sole placeholder whose name [`is_pin_name`] does not model. The two want opposite
+/// responses (rewrite the operation; rename the field), so collapsing them into one sentence would
+/// send whoever hits the second one looking in the wrong place.
 pub(crate) fn refuse_unconfigurable(
     operation: &str,
     declaration: &CompositeOpDecl,
@@ -339,15 +348,38 @@ pub(crate) fn refuse_unconfigurable(
         None => Ok(()),
         Some(literal) => Err(Error::Unbuildable {
             operation: operation.to_owned(),
-            message: format!(
-                "its body binds the string literal {}, whose `{{…}}` is neither a templated URL nor \
-                 a configuration pin — the only two kinds this pack reads a brace in a literal as \
-                 (C-193). Filling it would substitute a tenant's configuration into the vendor's \
-                 own syntax, which is what withdrew C-110's connector; making a literal opaque to \
-                 this scan is C-87, publishing the configuration surface",
-                abbreviated(&literal)
-            ),
+            message: unconfigurable_reason(&literal),
         }),
+    }
+}
+
+/// Why `literal` could not be classified, phrased for whoever has to change something.
+fn unconfigurable_reason(literal: &str) -> String {
+    let sole = literal
+        .strip_prefix('{')
+        .and_then(|inner| inner.strip_suffix('}'))
+        .map(str::trim)
+        .filter(|inner| !inner.is_empty() && !inner.contains(['{', '}']));
+    match sole {
+        // A pin the *loader* would accept and this module does not model. Narrower than the loader
+        // on purpose — see [`is_pin_name`] — so the answer is "rename the field", not "this is not a
+        // pin", which is what an earlier revision said and would have sent someone hunting.
+        Some(name) => format!(
+            "its body binds the pin literal {}, and {name:?} is not a name this pack models: a \
+             configuration pin may not carry whitespace or a `\"`. The loader is wider — it \
+             requires only that a `path.`/`query.`/`header.` binding name something — so this is \
+             this pack's limit and not a defect in the provider file. Renaming the `[[config]]` \
+             field's `binds` suffix is the fix",
+            abbreviated(literal)
+        ),
+        None => format!(
+            "its body binds the string literal {}, whose `{{…}}` is neither a templated URL nor a \
+             configuration pin — the only two kinds this pack reads a brace in a literal as \
+             (C-193). Filling it would substitute a tenant's configuration into the vendor's own \
+             syntax, which is what withdrew C-110's connector; making a literal opaque to this scan \
+             is C-87, publishing the configuration surface",
+            abbreviated(literal)
+        ),
     }
 }
 
@@ -800,27 +832,46 @@ fn collect_binds(
 /// The single variable `literal` consists of, if it is nothing else — the pin-bind shape
 /// `zone_id = "{zone_id}"`.
 ///
-/// The inner text must be a **configuration field name**, not merely brace-delimited. Without that
-/// clause `{"already": "json"}` — a JSON object bound as a literal — reads as a pin named
+/// The inner text must be a **pin name**, not merely brace-delimited. Without that clause
+/// `{"already": "json"}` — a JSON object bound as a literal — reads as a pin named
 /// `"already": "json"`, and a shape this module cannot classify would slip through as one it can.
-/// The name grammar is the loader's: a `[[config]]` field's `binds` suffix is an identifier, so
-/// anything else was never a pin.
 fn sole_placeholder(literal: &str) -> Option<&str> {
     let inner = literal.strip_prefix('{')?.strip_suffix('}')?;
     let inner = inner.trim();
-    is_variable_name(inner).then_some(inner)
+    is_pin_name(inner).then_some(inner)
 }
 
-/// Whether `name` is spelled the way a configuration variable is: a leading ASCII letter or `_`,
-/// then ASCII alphanumerics, `_` or `-`. Every shipped variable — `subdomain`, `account_host`,
-/// `teamId`, `project_ref` — satisfies it.
-fn is_variable_name(name: &str) -> bool {
-    let mut chars = name.chars();
-    match chars.next() {
-        Some(first) if first.is_ascii_alphabetic() || first == '_' => {}
-        _ => return false,
-    }
-    chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+/// **Whether `name` can be the `binds` suffix of a pin, as this module is able to recognise one.**
+///
+/// # The loader is authoritative, and this is deliberately narrower than it
+///
+/// `connector_spec::config`'s `parse_binding` requires a `path.`/`query.`/`header.` suffix to be
+/// **non-empty and nothing else** (`crates/connector-spec/src/config.rs:465-480`), so the loader is
+/// the wider grammar and the one a provider author is actually held to. An earlier revision of this
+/// comment claimed the two were the same rule; they are not, and the difference is measurable:
+/// spelling `providers/vercel.toml`'s pin `binds = "query.page.size"` loads, emits
+/// `page_size = "{page.size}"`, and an identifier-only predicate then reports it as *"neither a
+/// templated URL nor a configuration pin"* — a wrong diagnosis for a literal that is exactly a pin.
+///
+/// So the reconciliation runs toward the loader, and stops one clause short of it: **a pin name
+/// carries no whitespace and no `"`.** Dotted, bracketed and hyphenated names — `page.size`,
+/// `page[size]`, `a-b` — are pins here exactly as they are for the loader.
+///
+/// The one clause is load-bearing rather than tidy-minded, and it is what the quote is doing:
+/// **a JSON object literal necessarily quotes its keys**, so `{"already": "json"}` and every
+/// minified sibling of it fails this and is refused as the unclassifiable literal it is. Dropping
+/// the clause to match the loader exactly would re-admit that shape as a pin named after its own
+/// contents, which is the C-110 failure with a different vendor syntax.
+///
+/// A pin whose declared name *does* carry whitespace or a quote is therefore refused here while the
+/// loader accepts it. That is fail-closed and no shipped provider is affected, and
+/// [`refuse_unconfigurable`] says which of the two clauses refused so the diagnosis is right when it
+/// happens. [`tests::the_pin_name_rule_is_narrower_than_the_loaders`] is where the divergence is
+/// pinned, in the same spirit as
+/// [`tests::the_query_rule_admits_a_percent_because_it_encodes_one`] for the other place this module
+/// deliberately disagrees with `connector-spec`.
+fn is_pin_name(name: &str) -> bool {
+    !name.is_empty() && !name.contains(['{', '}', '"']) && !name.chars().any(char::is_whitespace)
 }
 
 /// Place every placeholder of a templated URL literal by where it falls in that URL.
@@ -1968,5 +2019,59 @@ mod tests {
                 "{literal:?} is neither a templated URL nor a pin bind and was accepted"
             );
         }
+    }
+
+    /// **Where this module's pin-name rule and the loader's disagree**, pinned so the next person
+    /// reads a measurement rather than a claim — the same treatment
+    /// [`the_query_rule_admits_a_percent_because_it_encodes_one`] gives the other divergence.
+    ///
+    /// `connector_spec::config`'s `parse_binding` requires a `path.`/`query.`/`header.` suffix to be
+    /// **non-empty and nothing else**. [`is_pin_name`] adds exactly one clause: no whitespace and no
+    /// `"`. The loader is authoritative for what a provider file may declare; this is where a pin
+    /// stops being one this pack can *recognise in an emitted literal*, which is a different
+    /// question and is answered more narrowly on purpose.
+    #[test]
+    fn the_pin_name_rule_is_narrower_than_the_loaders() {
+        // Every one of these is a name the loader accepts, and the reconciliation ran far enough to
+        // accept them here too. `page.size` is the measured case: `binds = "query.page.size"` loads
+        // and emits `page_size = "{page.size}"`, and an identifier-only rule called that a document.
+        for name in [
+            "teamId",
+            "zone_id",
+            "page.size",
+            "page[size]",
+            "a-b",
+            "_x",
+            "9",
+        ] {
+            let literal = format!("{{{name}}}");
+            assert_eq!(
+                sole_placeholder(&literal),
+                Some(name),
+                "{literal:?} is a pin the loader accepts and this refused"
+            );
+            assert!(unconfigurable(&literal).is_none(), "{literal:?}");
+        }
+
+        // The one clause this module adds, and the shape it exists for: a JSON object literal
+        // quotes its keys, so it can never be mistaken for a pin named after its own contents.
+        for literal in ["{\"already\": \"json\"}", "{\"a\":1}", "{a b}", "{}", "{ }"] {
+            assert!(
+                sole_placeholder(literal).is_none(),
+                "{literal:?} was read as a pin"
+            );
+        }
+
+        // And the refusal says *which* clause, because "rename the field" and "rewrite the
+        // operation" are opposite instructions.
+        assert!(
+            unconfigurable_reason("{my name}").contains("not a name this pack models"),
+            "{}",
+            unconfigurable_reason("{my name}")
+        );
+        assert!(
+            unconfigurable_reason("query Viewer {\n  viewer {\n    id\n  }\n}\n")
+                .contains("neither a templated URL nor a configuration pin"),
+        );
     }
 }

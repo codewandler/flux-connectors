@@ -112,6 +112,30 @@ vacuous.
 Left for a follow-up: the reader exists only because `[[config]]` reaches no artifact
 (`AGENTS.md`, "Six declarable surfaces reach no artifact at all"). C-87 deletes it.
 
+**2026-07-31, round 1 rework** — review passed (299 operations byte-identical across the merge base
+and head, 14 of 15 mutations caught); four comments asserting things that were not true, which this
+repository treats as a defect.
+
+- **The pin-name grammar was reconciled toward the loader.** `crates/connector-spec/src/config.rs`
+  requires a `path.`/`query.`/`header.` binding suffix to be non-empty and nothing else, so the
+  identifier-only predicate here rejected pins the loader accepts — measured: `binds =
+  "query.page.size"` emits `page_size = "{page.size}"` and was reported as a document. `is_pin_name`
+  now admits every loader-legal name **except** one carrying whitespace or a `"`, because a JSON
+  object literal necessarily quotes its keys and dropping that clause re-admits `{"already":
+  "json"}` as a pin named after its own contents. The loader is authoritative; the one extra clause
+  and its reason are stated at `is_pin_name`, and `the_pin_name_rule_is_narrower_than_the_loaders`
+  pins the divergence.
+- **The doubled refusal is no longer a claim.** `refuse_unconfigurable` is called in
+  `Operation::project` and in `request::build`, and only the second was executed — deleting the
+  first left the workspace green.
+  `a_document_literal_is_refused_at_projection_and_not_only_at_build` closes it by doctoring a
+  shipped entry's `flux`, the technique `differential.rs` already uses. Verified by mutation in both
+  directions.
+- **The manifest comment** claiming this crate "never sees `providers/*.toml`" now says what is
+  true: no *code* reads one and there is no `connector-spec` edge, and the tests do read them.
+- A doc comment was glued to the wrong item, and `example`'s missing oracle is now recorded at
+  `declared_config` rather than left unsaid.
+
 ## Notes
 
 - **This is a different defect from the one that caused it.** Whether a GraphQL document's braces

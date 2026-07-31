@@ -116,6 +116,16 @@ What a rehearsal deliberately does **not** cover, because it needs the catalogue
 module: credential placement (the connector's `[[auth]]` table), the network gate's declared hosts,
 and dotted-tool-name collisions across a whole pack. Those still arrive at integration.
 
+**2026-07-31, round 1 rework** — the `#[non_exhaustive]` argument was judged correct and is kept,
+with one overclaim corrected. "No synthetic `catalog::Operation` can be built outside the `catalog`
+crate" is true of *construction* and not of *copying*: the fields are `pub`, so a shipped entry can
+be cloned and overwritten, which `tests/differential.rs` does and which
+`a_document_literal_is_refused_at_projection_and_not_only_at_build` now does too. It is still not a
+route a provider implementor has, and `crates/connector-pack/tests/request.rs` says why where the
+technique is used: doctoring yields another connector's entry wearing your Flux — its id, service,
+hosts and credentials are the shipped one's, a declaration whose name disagrees with `entry.id` is
+`Error::Mismatched`, and correcting `provider` fails the index lookup with `Error::UnknownProvider`.
+
 ## Notes
 
 - Read `docs/designs/graphql-vendors.md` first — C-110 wrote it as the record of the refusal, and it
