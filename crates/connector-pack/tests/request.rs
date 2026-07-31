@@ -16,7 +16,9 @@
 use std::sync::Arc;
 
 use catalog::OperationKey;
-use connector_pack::{Configuration, Credentials, Egress, MemoryConfig, MemoryStore, Operation, Request};
+use connector_pack::{
+    Configuration, Credentials, Egress, MemoryConfig, MemoryStore, Operation, Request,
+};
 use flux_runtime::Tool;
 use serde_json::{json, Value};
 
@@ -206,7 +208,10 @@ fn a_query_string_operation_separates_its_parameters() {
             "updated": Value::Null,
         }),
     );
-    assert_eq!(one.url, "https://acme.freshdesk.com/api/v2/tickets?company_id=9");
+    assert_eq!(
+        one.url,
+        "https://acme.freshdesk.com/api/v2/tickets?company_id=9"
+    );
 
     // No filter at all: no `?`, and no dangling separator.
     let none = request(

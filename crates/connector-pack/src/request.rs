@@ -54,11 +54,11 @@
 //!
 //! flux interpolates `fmt` and never a `lit`, so a brace inside a bound string literal names
 //! something flux itself would never fill — which is exactly what a templated `base_url` is. In the
-//! shipped catalogue that correspondence is not approximate: the **only** string literals carrying
-//! braces anywhere in the 43 emitted operations are the seven templated base URLs
-//! (`{subdomain}.zendesk.com`, `{shop}.myshopify.com`, `{site}.atlassian.net`, `{domain}`,
-//! `{instance}.my.salesforce.com`, docusign's `{account_host}`/`{account_id}` pair, and
-//! contentful's `{space_id}`/`{environment_id}` path segments).
+//! shipped catalogue that correspondence is not approximate but exact: across all 242 emitted
+//! operations, the **only** string literals carrying braces are the nine templated base URLs
+//! (`{subdomain}.zendesk.com`, `{shop}.myshopify.com`, `{site}.atlassian.net`, freshdesk's and
+//! okta's `{domain}`, `{instance}.my.salesforce.com`, docusign's `{account_host}`/`{account_id}`
+//! pair, contentful's `{space_id}`/`{environment_id}` and statuspage's `{page_id}`).
 //!
 //! So [`endpoint_variables`] reads an operation's configuration variables off its own emitted Flux
 //! rather than waiting for C-87 to publish them, in the same spirit as everything else here: the

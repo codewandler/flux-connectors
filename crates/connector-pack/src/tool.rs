@@ -233,12 +233,7 @@ impl Operation {
     /// `{placeholder}` in the connector's base URL. All refuse rather than sending a
     /// partly-assembled call.
     pub fn build_request(&self, params: &Value) -> Result<Request, Error> {
-        request::build(
-            self.entry.id,
-            &self.declaration,
-            params,
-            &self.endpoints()?,
-        )
+        request::build(self.entry.id, &self.declaration, params, &self.endpoints()?)
     }
 
     /// **The request as it goes out**: built, then authenticated with the bound credential port.
@@ -393,8 +388,13 @@ mod tests {
     fn projected(id: &str) -> Operation {
         let entry = catalog::operation(OperationKey::id(id))
             .unwrap_or_else(|| panic!("the shipped catalogue carries `{id}`"));
-        Operation::project(entry, recording_http(), empty_credentials(), test_configuration())
-            .unwrap_or_else(|error| panic!("`{id}`: {error}"))
+        Operation::project(
+            entry,
+            recording_http(),
+            empty_credentials(),
+            test_configuration(),
+        )
+        .unwrap_or_else(|error| panic!("`{id}`: {error}"))
     }
 
     #[test]
@@ -480,7 +480,12 @@ mod tests {
         let entry: &'static catalog::Operation = Box::leak(Box::new(entry));
 
         assert!(matches!(
-            Operation::project(entry, recording_http(), empty_credentials(), test_configuration()),
+            Operation::project(
+                entry,
+                recording_http(),
+                empty_credentials(),
+                test_configuration()
+            ),
             Err(Error::NoDeclaredHost { .. })
         ));
     }

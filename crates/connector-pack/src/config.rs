@@ -210,13 +210,7 @@ impl MemoryConfig {
 
     /// Bind a `{var}` of `provider`'s base URL for `tenant`.
     #[must_use]
-    pub fn with_endpoint(
-        self,
-        tenant: &str,
-        provider: &str,
-        variable: &str,
-        value: &str,
-    ) -> Self {
+    pub fn with_endpoint(self, tenant: &str, provider: &str, variable: &str, value: &str) -> Self {
         self.with(tenant, provider, Field::Endpoint(variable), value)
     }
 
@@ -302,7 +296,10 @@ mod tests {
             store.get("t-one", "zendesk", Field::Endpoint("subdomain")),
             Some("one".to_string())
         );
-        assert_eq!(store.get("t-two", "zendesk", Field::Endpoint("subdomain")), None);
+        assert_eq!(
+            store.get("t-two", "zendesk", Field::Endpoint("subdomain")),
+            None
+        );
     }
 
     /// An empty string is not a value. Left alone it would substitute into
@@ -319,7 +316,11 @@ mod tests {
             .lookup("zendesk", Field::Endpoint("subdomain"))
             .is_none());
         let error = configuration
-            .require("zendesk-ticket-show", "zendesk", Field::Endpoint("subdomain"))
+            .require(
+                "zendesk-ticket-show",
+                "zendesk",
+                Field::Endpoint("subdomain"),
+            )
             .expect_err("an empty subdomain is not a subdomain");
         assert!(error.to_string().contains("endpoint.subdomain"), "{error}");
     }

@@ -293,7 +293,6 @@ impl Credentials {
         }
         Ok(assembled)
     }
-
 }
 
 /// The user half of a Basic join, with its literal suffix, or `None` for every other acquisition.

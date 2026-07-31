@@ -115,13 +115,23 @@
 //! # Configuration resolves through a bound port (C-193)
 //!
 //! What used to stand here was the note that a templated base URL reached the wire verbatim. It
-//! does not any more. Seven of the shipped connectors declare a `base_url` carrying a
-//! `{placeholder}` — `{subdomain}.zendesk.com`, `{shop}.myshopify.com`, `{site}.atlassian.net`,
-//! freshdesk's whole-host `{domain}`, `{instance}.my.salesforce.com`, docusign's
-//! `{account_host}`/`{account_id}` pair and contentful's `{space_id}`/`{environment_id}` path
-//! segments — which is **43 operations, six of them with a templated *host***. A tenant's values
-//! reach them through [`Configuration`], the second bound port, on the same terms as
-//! [`Credentials`]: handed in at construction, never a global, and never the process environment.
+//! does not any more. **Nine** of the 43 shipped connectors declare a `base_url` carrying a
+//! `{placeholder}`, covering **53 of 242 operations**:
+//!
+//! | | connectors | operations |
+//! |---|---|---|
+//! | a templated **host**, which does not resolve at all | `zendesk`, `shopify`, `jira`, `freshdesk`, `salesforce`, `docusign`, `okta` | 43 |
+//! | a templated **path**, on a host that does resolve | `contentful`, `statuspage` | 10 |
+//!
+//! Both rows matter and only the first is obvious. `https://api.statuspage.io/v1/pages/{page_id}`
+//! reaches a real server and asks it for a page called `{page_id}`, which is a `404` that reads like
+//! a missing record rather than a connector nobody configured.
+//!
+//! A tenant's values reach them through [`Configuration`], the second bound port, on the same terms
+//! as [`Credentials`]: handed in at construction, never a global, and never the process
+//! environment. Note that `freshdesk` and `okta` both name their variable `domain` — the port is
+//! keyed by connector as well as by variable, so the two are different values rather than a
+//! collision.
 //!
 //! Two consequences worth stating, because both are the kind that look like they work:
 //!
@@ -755,8 +765,13 @@ pub(crate) mod tests {
     #[test]
     fn a_providers_operations_are_labelled_with_the_provider() {
         let mut registry = ToolRegistry::new();
-        pack(&["zendesk"], recording_http(), empty_credentials(), test_configuration())(&mut registry)
-            .expect("zendesk installs");
+        pack(
+            &["zendesk"],
+            recording_http(),
+            empty_credentials(),
+            test_configuration(),
+        )(&mut registry)
+        .expect("zendesk installs");
 
         assert_eq!(
             registry.source("zendesk.ticket.show"),
@@ -770,7 +785,12 @@ pub(crate) mod tests {
     fn the_pack_outlives_the_names_it_was_built_from() {
         let install = {
             let names = vec!["zendesk"];
-            pack(&names, recording_http(), empty_credentials(), test_configuration())
+            pack(
+                &names,
+                recording_http(),
+                empty_credentials(),
+                test_configuration(),
+            )
         };
 
         let mut registry = ToolRegistry::new();
@@ -782,8 +802,13 @@ pub(crate) mod tests {
     #[test]
     fn several_providers_install_together() {
         let mut registry = ToolRegistry::new();
-        pack(&["zendesk", "slack"], recording_http(), empty_credentials(), test_configuration())(&mut registry)
-            .expect("both install");
+        pack(
+            &["zendesk", "slack"],
+            recording_http(),
+            empty_credentials(),
+            test_configuration(),
+        )(&mut registry)
+        .expect("both install");
 
         assert!(registry.get("zendesk.ticket.show").is_some());
         assert!(registry.get("slack.chat.post.message").is_some());
@@ -800,8 +825,13 @@ pub(crate) mod tests {
         // stopped being unknown the moment C-163 shipped it.
         const NO_SUCH_PROVIDER: &str = "no-such-vendor";
 
-        let error = pack(&[NO_SUCH_PROVIDER], recording_http(), empty_credentials(), test_configuration())(&mut registry)
-            .expect_err("no such connector");
+        let error = pack(
+            &[NO_SUCH_PROVIDER],
+            recording_http(),
+            empty_credentials(),
+            test_configuration(),
+        )(&mut registry)
+        .expect_err("no such connector");
 
         assert!(error.to_string().contains(NO_SUCH_PROVIDER), "{error}");
         assert!(registry.names().is_empty());
@@ -817,8 +847,13 @@ pub(crate) mod tests {
         assert!(!entries.is_empty(), "zendesk carries operations");
 
         for entry in entries {
-            let operation = Operation::project(entry, http.clone(), empty_credentials(), test_configuration())
-                .expect("the entry projects");
+            let operation = Operation::project(
+                entry,
+                http.clone(),
+                empty_credentials(),
+                test_configuration(),
+            )
+            .expect("the entry projects");
             assert!(
                 Arc::ptr_eq(http.tool(), operation.egress().tool()),
                 "`{}` holds a transport the host did not supply",

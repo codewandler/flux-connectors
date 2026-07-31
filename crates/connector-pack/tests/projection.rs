@@ -189,8 +189,9 @@ fn a_collision_surfaces_fluxs_duplicate_diagnostic_rather_than_panicking() {
         .expect("the first install succeeds");
 
     // The same provider again: every one of its operations collides with itself.
-    let error = connector_pack::pack(&["zendesk"], http(), credentials(), configuration())(&mut registry)
-        .expect_err("installing the same provider twice must be refused, not silently merged");
+    let error =
+        connector_pack::pack(&["zendesk"], http(), credentials(), configuration())(&mut registry)
+            .expect_err("installing the same provider twice must be refused, not silently merged");
     let rendered = error.to_string();
 
     assert!(
@@ -214,8 +215,10 @@ fn an_unknown_provider_is_refused_rather_than_installed_as_nothing() {
     // `salesforce` used to be the sentinel and stopped being unknown when C-163 shipped it.
     const NO_SUCH_PROVIDER: &str = "no-such-vendor";
 
-    let error = connector_pack::pack(&[NO_SUCH_PROVIDER], http(), credentials(), configuration())(&mut registry)
-        .expect_err("an unknown provider must be refused");
+    let error = connector_pack::pack(&[NO_SUCH_PROVIDER], http(), credentials(), configuration())(
+        &mut registry,
+    )
+    .expect_err("an unknown provider must be refused");
 
     assert!(error.to_string().contains(NO_SUCH_PROVIDER), "{error}");
     assert!(registry.names().is_empty());
@@ -234,8 +237,9 @@ fn an_unknown_provider_is_refused_rather_than_installed_as_nothing() {
 fn a_call_that_cannot_be_built_is_refused_by_name_rather_than_panicking() {
     let entry = catalog::operation(OperationKey::id("zendesk-ticket-show"))
         .expect("the shipped catalogue carries zendesk-ticket-show");
-    let operation = connector_pack::Operation::project(entry, http(), credentials(), configuration())
-        .expect("the entry projects");
+    let operation =
+        connector_pack::Operation::project(entry, http(), credentials(), configuration())
+            .expect("the entry projects");
 
     let error = operation
         .build_request(&serde_json::json!({}))

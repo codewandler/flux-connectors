@@ -1,10 +1,10 @@
 //! **The templated-host gap (C-193).**
 //!
-//! Six shipped connectors declare a `base_url` whose *host* carries a `{placeholder}`, and a
-//! seventh — `contentful` — carries two in its *path*. Before this story nothing substituted a
-//! tenant's value into any of them, so the request went out to a host containing a brace and
-//! `permission_subjects` declared that same unresolvable string as the subject a host's egress
-//! allow-list was asked to match.
+//! Seven shipped connectors declare a `base_url` whose *host* carries a `{placeholder}`, and two
+//! more — `contentful` and `statuspage` — carry one in the *path*. Before this story nothing
+//! substituted a tenant's value into any of them, so the request went out to a host containing a
+//! brace and `permission_subjects` declared that same unresolvable string as the subject a host's
+//! egress allow-list was asked to match.
 //!
 //! The two halves are asserted separately on purpose. Building a working URL while leaving the
 //! subject templated produces a request that is either refused by the gate for a reason naming
@@ -207,7 +207,11 @@ fn an_untemplated_connector_needs_no_configuration() {
     let request = operation
         .build_request(&json!({ "channel": "C0FLUX", "text": "hi", "thread_ts": null }))
         .expect("a literal base URL needs nothing bound");
-    assert!(request.url.starts_with("https://slack.com/"), "{}", request.url);
+    assert!(
+        request.url.starts_with("https://slack.com/"),
+        "{}",
+        request.url
+    );
 }
 
 /// **Two ports, one tenant.** Nothing in the types stops a host from pairing tenant A's credentials
