@@ -341,6 +341,59 @@ async fn a_credential_too_short_to_redact_is_refused_rather_than_sent() {
     );
 }
 
+/// **A second resolve of the same credential registers nothing** (C-159, finding 3).
+///
+/// `Redactor::add_secret` pushes onto a `Vec` and dedupes nothing, and `redact` is linear in that
+/// set — so a long-lived process making tens of thousands of credentialed calls grew the set by an
+/// entry per call and paid for it on every scrub of every tool result. The pack now asks the
+/// redactor whether it already holds the value and tells it only what it does not.
+///
+/// # The probe, and why it is honest
+///
+/// `flux_secret::Redactor` exposes no count: `values` is private and there is no `len`. What is
+/// observable is that `redact` replaces **each** registered copy in turn and that its replacement
+/// text `[redacted]` *contains* the word `redacted` — so a duplicate in the set nests the marker,
+/// and `[[redacted]]` is a set of two while `[redacted]` is a set of one.
+///
+/// That makes the probe dependent on flux's replacement text, so the expectation is **measured**
+/// from a control redactor rather than written out, and the third assertion checks that the probe
+/// can see a duplicate at all. If a future flux makes duplicates invisible, this test says so
+/// instead of quietly asserting nothing.
+#[tokio::test]
+async fn a_repeated_resolve_does_not_grow_the_registered_set() {
+    /// A value the redaction marker contains. Not a token shape, and not a plausible credential —
+    /// it is a probe, and the doc comment above is why it has to be this word.
+    const PROBE: &str = "redacted";
+
+    // The control: a redactor told the value exactly once, and then a second time.
+    let control = context(Arc::new(Progress::default()));
+    control.redactor.add_secret(PROBE.to_owned());
+    let once = control.redactor.redact(PROBE);
+    control.redactor.add_secret(PROBE.to_owned());
+    assert_ne!(
+        control.redactor.redact(PROBE),
+        once,
+        "the probe cannot distinguish one registration from two, so the assertion below would hold \
+         against any implementation"
+    );
+
+    let credentials = Credentials::new(store_holding(PROBE).await, TENANT).expect("a tenant");
+    let ctx = context(Arc::new(Progress::default()));
+    let tool = projected("slack-chat-post-message", reflecting_egress(), credentials);
+
+    for _ in 0..2 {
+        tool.build_authenticated_request(&ctx, &post_message_params())
+            .await
+            .expect("the store holds the value");
+    }
+
+    assert_eq!(
+        ctx.redactor.redact(PROBE),
+        once,
+        "a repeated resolve of one credential grew the redactor's registered set"
+    );
+}
+
 // ---------------------------------------------------------------------------------------------
 // The Basic user half, driven through the public entry point (C-198, unblocked by C-92)
 //

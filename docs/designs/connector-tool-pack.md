@@ -195,6 +195,113 @@ pack refuses a call the vendor would have answered.
   result with `ToolResult::ok`, which leaves `view: None`, so the test's stand-in transport has to
   answer with `ToolResult::ok_view` for that assertion to scrub anything at all.
 
+## What travels is not always what was resolved (C-159)
+
+An independent review of C-152 found two more of the same class *while* C-152 was closing the
+smaller version of it. Both are closed here.
+
+### The registered string and the travelling string had diverged
+
+**Decision: register every *form* of a credential that is not recoverable from a form the redactor
+already holds, and let one function decide which forms those are.**
+
+`register`'s own documentation said *"every value this pack puts on a request goes through here"*.
+That was true of the door and false of the bytes. `auth::place` percent-encodes a
+`Placement::Query` credential onto the URL, and `+`, `/` and `=` do not survive that — which is the
+alphabet a base64 credential is made of, so the one case that diverged is the one that matters. For
+a query-placed base64 token the string on the wire shared **no substring** with the string the
+redactor had been told about, and all four surfaces `Executor::dispatch` scrubs rendered it in the
+clear. It is the same class of overclaim C-152 exists to remove, introduced by the sentence that
+closed it.
+
+Three answers were open, and the story named all three: register the encoded form as well, refuse
+query placement until something did, or restate the claim precisely. **Registering won**, on the
+same three grounds C-152's own refusal won on, read the other way round:
+
+- **It is what the rest of the port already does.** `base64(user:secret)` contains neither half, so
+  C-116 already registered the assembled value on its own terms. A percent-encoded value is the same
+  situation with a different transform, and answering it differently would be an inconsistency a
+  reader has to hold in their head.
+- **Refusing would refuse a placement the IR models and the loader accepts**, over a defect in this
+  crate rather than in the connector. The catalogue happens to declare zero query placements today;
+  that is a fact about which vendors have been described so far, not a decision to drop the axis.
+- **Restating would document the leak rather than remove it** — C-152's own reason for rejecting
+  option 1, and it applies unchanged.
+
+The generalisation that covers all three transforms is C-184's rule, stated once and now enforced in
+one place: **the redactor holds every form that is not recoverable from a form it already holds.**
+Acquisition can transform (`base64`); placement can *surround* (a header prefix, which leaves the
+credential verbatim inside the header and needs nothing extra — registering `SSWS ` would scrub a
+public word out of unrelated prose and leave the bare token unheld) or *transform* (query encoding).
+`auth::placed_form` is the single answer to which of the two a placement does; `auth::place` writes
+what it returns and `credentials::resolve_mechanism` registers it, so the two cannot be derived
+apart. Its match over `Placement` is exhaustive, so a placement added later has to state its answer
+rather than inherit `no` by omission.
+
+**Unreachable today, and that is why it is worth a test.** The committed catalogue is 18
+`Placement::Header` and 2 `Placement::Inbound`. A fail-closed path with no shipped consumer gets no
+accidental coverage, so `credentials.rs`'s test doctors the shipped slack provider's placement and
+drives the real resolve path — the same technique, and the same justification, as the
+authority-less-provider test one file over.
+
+### `Request`'s derived `Debug` was the larger of the two plaintext exposures
+
+**Decision: `Request` prints its shape and none of its values.**
+
+C-152 hand-wrote a redacting `Debug` for `auth::Assembled` because a derive there was a foot-gun
+waiting for the first `{:?}` added while debugging. The reviewer's observation is that `Assembled` is
+built at one internal site and never escapes, while **`Request` is `pub`**, carries the assembled
+credential in a header value and — for a query placement — in its URL, and is something a host can
+hold and format. Nothing formats it today; that was equally true of `Assembled`.
+
+What prints is the method, the host, the path, the header *names* and the query-parameter *names*.
+What does not is every value, including the body — which prints as present or absent and never as
+content or as a length, because a length is a fingerprint. There is deliberately **no allow-list of
+safe header names**: a request cannot know which header holds the credential, and such a list rots
+into a leak the first time a vendor puts a token somewhere new.
+
+### Registration is idempotent, and it is verified rather than remembered
+
+`Redactor::add_secret` pushes onto a `Vec` and dedupes nothing, while `redact` walks that set for
+every scrub — so a long-lived host resolving one credential per call grew the set by an entry per
+call. The reviewer measured the cost rather than guessing (1.6µs at one value, 23ms at 100k) and
+judged it not to be C-152's problem; it is this story's.
+
+The story framed it as a memo keyed on `(CredentialRef, value)` within a pack. **It is implemented
+one step stronger and in the other direction: the redactor in hand is asked, every time, and told
+only what it does not already hold.** A memo on this side would be a memory of some *earlier*
+redactor — `ExecutionEnvironment::new` constructs one per environment, and whether that is per turn
+or per process is decided by a binding in flux rather than here — so a remembered registration
+against a redactor that never received the value is exactly a credential travelling unheld. Asking
+also dedupes across two credentials that happen to hold one value, which a key on the address cannot.
+
+The question has to be asked precisely, and `credentials::holds` is where that lives. `redact` runs
+two passes — exact substrings from the registered set, then credential-*shaped* tokens (`sk-ant-…`,
+`xoxb-…`) it was never told about — so `redact(value) != value` answers "yes" for a value nobody
+registered, and a caller deciding whether to register from it would skip precisely the tokens that
+look most like credentials. Gluing a non-boundary byte to the front leaves the shape pass
+inapplicable and the substring pass untouched, so what remains is the question actually being asked.
+`a_token_shape_the_redactor_scrubs_is_not_a_registration` pins it.
+
+**And that answer has a condition, stated rather than assumed** — which is the discipline C-152
+exists to enforce. flux-secret exposes no membership test, so what is observable is *coverage*:
+`holds` is true when a registered value is a substring of the probed one, which is wider than "this
+value is registered". The two differ only when a **proper** substring of the value is registered and
+the rest of it is not, and there a skipped registration would leave the surrounding fragment
+rendering in the clear. The three forms this port registers cannot stand in that relation — the
+stored value `S`, `base64(user:S)` which does not contain `S`, and a percent-encoding which either
+equals its input or escapes a character out of it — and the one containment that does occur in
+practice, a trailing newline, is the case where skipping is *correct*, because `add_secret` stores
+values trimmed and both spellings are one entry either way. What is left over is a store holding a
+truncated copy of its own credential under a second address.
+
+The registered set's size is not observable through `flux-secret` 1.0.1 — `values` is private and
+there is no count — so `tests/credentials.rs` observes it through the one thing that does leak it:
+`redact` replaces *each* copy in turn and its replacement text contains the word `redacted`, so a
+duplicate nests the marker. The expectation is measured from a control redactor rather than written
+out, and the test asserts that the probe can distinguish one registration from two before it asserts
+anything else — if a future flux makes duplicates invisible, it says so rather than quietly holding.
+
 ## Ports the host binds
 
 - **`CredentialStore`** — the adapter this repo already modelled and never wired to anything.
