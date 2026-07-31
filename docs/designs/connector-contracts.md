@@ -9,6 +9,12 @@ is `backlog` and never started; read §The prerequisite first** · **Pillar:** S
 > (`crates/connector-spec/src/ir.rs:556`) over `web/public/catalog.json` and cross-checking with an
 > independent `awk` pass. Citations into `../flux` were read at `codewandler-flux-lang` **0.39.0**.
 > Re-grep by symbol; line numbers move.
+>
+> **The slot-fill figures below were not re-measured after C-161 (Okta) and C-181 (Statuspage)
+> landed**, which took the catalogue to 43 providers / 242 operations / 50 services. Both are
+> ordinary REST surfaces with `get`/`list` members, so every ratio here moves in the direction the
+> argument already points — the slots get *looser*, not tighter. Re-run the measurement before
+> quoting a number as current.
 
 ## Why
 
@@ -108,7 +114,7 @@ concedes the consequence: *"A one-segment slot is loose, and known to be."*
 `provider-roles.md:133` and [C-121](../stories/C-121-llm-catalogue-role.md)`:71-79` measured this at
 19 providers. The catalogue has since more than doubled. Re-measured:
 
-| slot | at 19 providers (`provider-roles.md:133`, `C-121:71-79`) | **today, at 41 providers / 232 operations / 48 services** |
+| slot | at 19 providers (`provider-roles.md:133`, `C-121:71-79`) | **today, at 43 providers / 242 operations / 50 services** |
 |---|---|---|
 | `get` | 37 operations, 17 providers | **77 operations, 38 of 41 providers, 44 of 48 services** |
 | `list` (bare) | 9 of 19 providers | **58 operations, 30 of 41 providers, 32 of 48 services** |

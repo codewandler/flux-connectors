@@ -69,10 +69,6 @@ _A flux session has no way to ask **"which connector can do this?"**. The catalo
 - [C-139 — The LiveDatasource backend and its binding](C-139-datasource-backend.md) · Bridge · implements flux's existing LiveDatasource trait over the compiled-in catalogue. Binds through the SAME ClientBuilder call as the Tool pack, so a host configures discovery and invocation in one place
 - [C-140 — Search that is good enough to act on](C-140-datasource-search.md) · Bridge · a search that returns the wrong connector confidently is worse than no search, because the caller acts on it. Role-aware search is what makes the roles epic pay off — 'find me a ticketing provider' is a role query
 
-### the connectors proxy — server-side credential injection
-_Every credential problem in this repo has the same shape: **the caller must not hold the secret, but_
-- [C-34 — Decide whether a connectors proxy belongs in this project](C-34-proxy-charter-decision.md) · Bridge · **decision, not code** · blocks the whole epic · contradicts a stated non-goal
-
 ### Connectors v1 — spec to Flux
 _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-79 — Declare that a response field is a credential](C-79-sensitive-response-fields.md) · Spec · Zoom's start_url carries a host-privileged token · the redactor cannot see it
@@ -212,6 +208,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-27 — Wire the CLI seams to the loader and the emitter](C-27-wire-cli-seams.md) · Build · two functions · mechanical once C-3 and C-8 land
 - [C-28 — Resolve percent-encoding for query values](C-28-query-percent-encoding.md) · Codegen · blocks zendesk ticket search · flux has no urlencode op at all
 - [C-29 — Close the request-body modelling gaps in the IR](C-29-body-modelling-gaps.md) · Spec · found by C-17 transcribing real providers · blocks correct write operations
+- [C-34 — Decide whether a connectors proxy belongs in this project](C-34-proxy-charter-decision.md) · Bridge · **decision, not code** · blocks the whole epic · contradicts a stated non-goal
 - [C-38 — Render Flux per operation and embed it in a catalog crate](C-38-operation-catalog-crate.md) · Build · **the goal** · one .flux per expanded op, consumable as a Rust crate
 - [C-42 — Emit catalog.json for the public site](C-42-catalog-json.md) · Codegen · the site's data must be generated, never hand-maintained
 - [C-43 — Scaffold the VitePress site and deploy to GitHub Pages](C-43-vitepress-pages.md) · Surfaces · first Node toolchain in a Rust repo — keep it contained

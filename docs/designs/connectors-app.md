@@ -328,7 +328,7 @@ So the division is:
 
 **Neither forks the request path**, which is the property worth defending. C-145's differential test
 — *"for every shipped operation, the dry-run request and the emitted `.flux` module's request agree
-on method, URL and body shape"* — is what keeps them honest, and it covers all 232 operations offline
+on method, URL and body shape"* — is what keeps them honest, and it covers all 242 operations offline
 without a vendor account.
 
 One consequence to state now, because it will come up: **if the app and the explorer ever disagree
