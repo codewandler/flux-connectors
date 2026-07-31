@@ -2,7 +2,7 @@
 id: C-110
 title: Ship the Linear connector — or record why a GraphQL vendor cannot be one
 pillar: Spec
-status: in-progress
+status: done
 priority: 6
 design: docs/designs/graphql-vendors.md
 epic: provider-fleet-2

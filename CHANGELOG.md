@@ -9,6 +9,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A GraphQL vendor cannot be a connector yet, and the reason is recorded rather than rediscovered
+  (C-110).** The story allowed either outcome — ship it, or record why not. Linear was built, found
+  unusable, and withdrawn; `docs/designs/graphql-vendors.md` is the record.
+
+  `connector-pack` derives an operation's configuration variables by scanning every string literal
+  for `{…}`, and a GraphQL selection set is braces. Unconfigured, all eight operations refused. **With
+  configuration supplied, the whole selection set was replaced by a configuration value** — a
+  connector that looks callable and silently ships a mutilated document, which is worse than one
+  that refuses. The fix is C-87 (publish the configuration surface so the pack reads an operation's
+  variables instead of inferring them from syntax), which is a three-crate change and not a provider
+  story.
+
+  Four boundaries are recorded as already solved so a future attempt need not re-derive them:
+  path-per-operation is a non-event, C-55 covers a pinned query document, multi-line documents
+  round-trip verbatim, and the `data.<field>` envelope is declarable. Two tests now sit inside
+  `connector-pack` pinning the collision, one executing the real build against an **empty**
+  configuration — the case whose absence let a fully green gate coexist with eight dead operations.
+
 - **The Confluence and New Relic connectors (C-219, C-220).**
 
   **Confluence** was shipped to answer a question, and the answer is its real deliverable: two
