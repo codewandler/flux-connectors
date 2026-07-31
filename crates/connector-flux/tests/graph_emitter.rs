@@ -1162,3 +1162,267 @@ fn an_object_with_no_fields_is_refused() {
         "the refusal must name the node, got: {error}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// The node-path map (C-96)
+//
+// A diagnostic flux raises against the emitted op carries a `node_path` — `body[3].then[0]` — and
+// the map is what turns that back into the graph node an author drew. The spelling is **flux's
+// own** (D-139), so these tests read it out of a real `Diagnostic` rather than out of a local
+// imitation of the grammar: a path this repository only agreed with itself about would be
+// worthless to the canvas the seam exists for.
+// ---------------------------------------------------------------------------
+
+/// The statement at a flux node path, walked the way flux's analyzer builds one.
+fn statement_at<'a>(body: &'a [flux_lang::ast::Node], path: &str) -> &'a flux_lang::ast::Node {
+    use flux_lang::ast::Node;
+
+    let mut block: &[Node] = body;
+    let mut current: Option<&Node> = None;
+    for segment in path.split('.') {
+        let (label, index) = segment
+            .split_once('[')
+            .unwrap_or_else(|| panic!("`{segment}` of `{path}` is not a `label[index]` segment"));
+        let index: usize = index
+            .trim_end_matches(']')
+            .parse()
+            .unwrap_or_else(|error| panic!("`{segment}` of `{path}` carries no index: {error}"));
+        if let Some(node) = current {
+            block = match (label, node) {
+                ("then", Node::When { then, .. }) => then,
+                (
+                    "body",
+                    Node::Retry { body, .. }
+                    | Node::Confirm { body, .. }
+                    | Node::Throttle { body, .. },
+                ) => body,
+                _ => panic!("`{path}` opens a `{label}` block on a statement that has none"),
+            };
+        }
+        current = Some(
+            block
+                .get(index)
+                .unwrap_or_else(|| panic!("`{path}` names statement {index} of a shorter block")),
+        );
+    }
+    current.expect("a node path names at least one statement")
+}
+
+/// Whether `statement` is the one a node of this kind produces — the table in the emitter's module
+/// documentation, read back off the reparsed AST.
+fn statement_of_kind(kind: &NodeKind, statement: &flux_lang::ast::Node) -> bool {
+    use flux_lang::ast::Node;
+
+    // A node carrying a value binds its statement to a generated symbol; a call whose node declares
+    // no output port is the bare statement form, and a region is a statement in its own right.
+    let produced = match statement {
+        Node::Bind { value, .. } => value.as_ref(),
+        other => other,
+    };
+    match kind {
+        NodeKind::Operation { operation } => {
+            matches!(produced, Node::Call { op, .. } if op == operation)
+        }
+        NodeKind::Select { .. } => matches!(produced, Node::Jq { .. }),
+        NodeKind::Template { .. } => matches!(produced, Node::Fmt { .. }),
+        NodeKind::Object { .. } => matches!(produced, Node::Obj { .. }),
+        NodeKind::Literal { .. } => matches!(produced, Node::Lit { .. }),
+        NodeKind::Gate { .. } => matches!(produced, Node::When { .. }),
+        NodeKind::Approval { .. } => matches!(produced, Node::Confirm { .. }),
+        NodeKind::Retry { .. } => matches!(produced, Node::Retry { .. }),
+        NodeKind::Throttle { .. } => matches!(produced, Node::Throttle { .. }),
+        // A boundary is a parameter of the emitted op and reaches no statement at all.
+        NodeKind::Trigger { .. } | NodeKind::Schedule { .. } | NodeKind::Endpoint { .. } => false,
+    }
+}
+
+/// A catalogue that knows no operation, so every call in the emitted op raises a node-scoped
+/// diagnostic. flux's analyzer is the only honest source of a `node_path` to key back.
+struct NoOperations;
+
+impl flux_lang::opspec::OpCatalog for NoOperations {
+    fn lookup(&self, _name: &str) -> Option<flux_lang::opspec::OpSignature> {
+        None
+    }
+}
+
+/// **Total and correct.** Every node that lowers to a statement appears in the map, the path it
+/// names resolves to a statement of that node's own kind, and the only nodes absent are the
+/// boundary — a trigger, a schedule and an endpoint are *parameters*, and flux renders no path for
+/// one.
+#[test]
+fn the_map_names_the_statement_every_node_produced() {
+    for graph in [autoreply(), nightly_sweep()] {
+        let (emitted, paths) = connector_flux::emit_graph_with_paths(&vendor(), &graph)
+            .unwrap_or_else(|error| panic!("graph `{}` must lower: {error}", graph.name));
+        let body = body_of(&emitted);
+
+        for node in &graph.nodes {
+            match paths.path_of(&node.id) {
+                Some(path) => assert!(
+                    statement_of_kind(&node.kind, statement_at(&body, path)),
+                    "`{}` is a `{}` and `{path}` names {:?}",
+                    node.id,
+                    node.kind.word(),
+                    statement_at(&body, path)
+                ),
+                None => assert!(
+                    node.kind.is_boundary(),
+                    "the map is total over every node that reaches a statement, and `{}` is a \
+                     `{}` rather than a boundary",
+                    node.id,
+                    node.kind.word()
+                ),
+            }
+        }
+
+        // …and it names nothing else: a stale id would key a diagnostic to a node the author
+        // deleted, which is worse than not answering at all.
+        for (id, path) in paths.iter() {
+            assert!(
+                graph.node(id).is_some(),
+                "the map names `{id}` at `{path}`, which graph `{}` does not declare",
+                graph.name
+            );
+        }
+        assert_eq!(
+            paths.iter().count(),
+            graph
+                .nodes
+                .iter()
+                .filter(|node| !node.kind.is_boundary())
+                .count(),
+            "graph `{}`: one path per statement-producing node, no more",
+            graph.name
+        );
+    }
+}
+
+/// The worked example, pinned: the reply sits inside the gate's `then` block, and the trigger that
+/// wakes the flow sits in no block at all.
+#[test]
+fn a_node_inside_a_gate_names_the_block_it_sits_in() {
+    let (_, paths) = connector_flux::emit_graph_with_paths(&vendor(), &autoreply())
+        .expect("the worked example lowers");
+
+    assert_eq!(paths.path_of("guard"), Some("body[3]"));
+    assert_eq!(paths.path_of("reply"), Some("body[3].then[0]"));
+    assert_eq!(
+        paths.path_of("wake"),
+        None,
+        "a trigger is a parameter of the emitted op, not a statement"
+    );
+}
+
+/// **Both directions.** A real `Diagnostic.node_path` — flux's own, from flux's own analyzer — keys
+/// back to the node that produced the statement it names, and that node's recorded path is the one
+/// the diagnostic sits at or inside. flux descends *into* a statement (`body[1].body[0]` is the
+/// bind, `.value` is the call it binds), so the answer is the innermost statement the path falls
+/// within.
+#[test]
+fn a_diagnostic_path_keys_back_to_the_node_that_produced_it() {
+    let (emitted, paths) = connector_flux::emit_graph_with_paths(&vendor(), &nightly_sweep())
+        .expect("the region fixture lowers");
+
+    let diagnostics = flux_lang::analyze::analyze_flow(
+        &op_of(&emitted).body,
+        &NoOperations,
+        &std::collections::HashSet::new(),
+    )
+    .expect_err("a catalogue that knows no operation must reject every call");
+
+    let mut keyed = 0;
+    for diagnostic in &diagnostics {
+        let Some(path) = &diagnostic.node_path else {
+            continue; // a flow-level finding sits in no node, and flux renders no path for one
+        };
+        let node = paths.node_at(path).unwrap_or_else(|| {
+            panic!(
+                "no graph node owns `{path}`: {}\n{emitted}",
+                diagnostic.message
+            )
+        });
+        let recorded = paths
+            .path_of(node)
+            .expect("the node the map answered with is in the map");
+        assert!(
+            path == recorded || path.starts_with(&format!("{recorded}.")),
+            "`{path}` was keyed to `{node}`, whose statement is at `{recorded}`"
+        );
+        if diagnostic
+            .message
+            .contains("unknown operation: `vendor-thing-search`")
+        {
+            assert_eq!(
+                node, "fetch",
+                "the search runs inside the retry, so its diagnostic belongs to `fetch`"
+            );
+            keyed += 1;
+        }
+    }
+    assert!(
+        keyed > 0,
+        "the unknown-operation finding is the one this test keys back; the diagnostics were {:?}",
+        diagnostics.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+}
+
+/// A gate comparing against a literal binds that literal as a statement of its **own**, before the
+/// `when` — so every path in the block from there on shifts by one. The map is recorded from the
+/// statements as they are pushed, which is what keeps it from drifting off an index counted by
+/// hand.
+#[test]
+fn a_gates_bound_literal_shifts_the_paths_after_it() {
+    let mut sweep = nightly_sweep();
+    for node in &mut sweep.nodes {
+        if node.id == "guard" {
+            node.kind = NodeKind::Gate {
+                condition: Condition {
+                    left: PortRef {
+                        node: "read".to_string(),
+                        port: "result".to_string(),
+                    },
+                    op: Compare::Eq,
+                    right: Some(json!("ok")),
+                },
+            };
+        }
+    }
+
+    let (emitted, paths) =
+        connector_flux::emit_graph_with_paths(&vendor(), &sweep).expect("a comparison lowers");
+    let body = body_of(&emitted);
+
+    assert_eq!(
+        paths.path_of("guard"),
+        Some("body[5]"),
+        "the expected literal is bound at body[4], so the gate follows it"
+    );
+    assert_eq!(paths.path_of("audit"), Some("body[5].then[0]"));
+    assert!(
+        matches!(
+            statement_at(&body, "body[4]"),
+            flux_lang::ast::Node::Bind { .. }
+        ),
+        "the statement the gate is offset by is the bound literal"
+    );
+    assert!(matches!(
+        statement_at(&body, "body[5]"),
+        flux_lang::ast::Node::When { .. }
+    ));
+}
+
+/// The map is generated output like the module beside it, so it is committed and drift-checked the
+/// same way. Nothing in `providers/` declares a `[[graphs]]` yet, so these two fixtures are the
+/// only graphs in the repository — and the goldens are where their maps are pinned.
+#[test]
+fn golden_node_paths() {
+    for (graph, golden) in [
+        (autoreply(), "graph-message-autoreply.paths.json"),
+        (nightly_sweep(), "graph-nightly-sweep.paths.json"),
+    ] {
+        let (_, paths) = connector_flux::emit_graph_with_paths(&vendor(), &graph)
+            .unwrap_or_else(|error| panic!("graph `{}` must lower: {error}", graph.name));
+        assert_golden(golden, &paths.to_json());
+    }
+}

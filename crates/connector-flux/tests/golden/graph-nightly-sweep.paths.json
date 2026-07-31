@@ -1,0 +1,10 @@
+{
+  "ask": "body[3]",
+  "audit": "body[4].then[0]",
+  "fetch": "body[1].body[0]",
+  "guard": "body[4]",
+  "note": "body[2]",
+  "read": "body[1]",
+  "window": "body[0]",
+  "wipe": "body[3].body[0]"
+}

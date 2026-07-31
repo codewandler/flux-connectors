@@ -1,0 +1,7 @@
+{
+  "channel": "body[1]",
+  "greeting": "body[2]",
+  "guard": "body[3]",
+  "reply": "body[3].then[0]",
+  "thread": "body[0]"
+}
