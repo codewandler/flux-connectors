@@ -7,7 +7,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- **A graph's node ids now map to Flux AST paths, so a diagnostic lands on the node that produced it
+  (C-96).** `emit_graph_with_paths` returns the emitted module alongside a `NodePaths` map, and the
+  round trip is asserted in both directions against real `flux_lang::analyze` diagnostics: every
+  diagnostic path resolves to a recorded node, and that node's own path is the one the diagnostic
+  sits at or inside. No second attribution mechanism was invented — the path grammar is flux's own,
+  consumed from `analyze_flow` rather than re-spelled locally.
+
+  **Boundary nodes are deliberately absent from the map, and the test asserts each absence.** A
+  `trigger`, `schedule` or `endpoint` becomes a *parameter* of the emitted op rather than a
+  statement, and flux renders no path for a parameter finding. Spelling one anyway (`params[0]`)
+  would be exactly the second mechanism this story exists not to build.
+
+  **What did not land, and why it could not:** the map is not yet a committed, drift-checked
+  repository artifact. Nothing in `providers/` declares `[[graphs]]` and `connector-cli` never calls
+  `emit_graph`, so `build` writes no graph module for a map to sit beside. Both fixture graphs' maps
+  are committed as goldens instead, drift-checked on every run; the `connectors/*.paths.json` writer
+  belongs with whichever story first gives the lowering a producer.
 
 ## [0.6.0] — 2026-07-31
 

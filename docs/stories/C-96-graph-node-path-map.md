@@ -2,8 +2,8 @@
 id: C-96
 title: Map graph node ids to Flux AST paths, so a diagnostic lands on a canvas node
 pillar: Bridge
-status: in-progress
-priority: 4
+status: done
+priority:
 design: docs/designs/flow-graph.md
 epic: flow-graph
 areas: [connector-flux, connector-cli]
