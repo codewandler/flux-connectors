@@ -4366,6 +4366,529 @@
       "channels": []
     },
     {
+      "id": "dropbox",
+      "authority": null,
+      "vendor": "Dropbox",
+      "description": "Dropbox: browse folder contents, read file and folder metadata, search files, create folders, and get temporary download links",
+      "base_url": "https://api.dropboxapi.com",
+      "api_version": null,
+      "hosts": [
+        "api.dropboxapi.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.dropboxapi.com",
+          "hosts": [
+            "api.dropboxapi.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 6
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "dropbox.access_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "Dropbox access token sent as a bearer — a scoped app access token or an OAuth2 access token",
+            "env": [
+              "DROPBOX_ACCESS_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "dropbox.access_token"
+          ]
+        ]
+      },
+      "operation_count": 6,
+      "operations": [
+        {
+          "id": "dropbox-user-me",
+          "provider": "dropbox",
+          "service": "default",
+          "description": "Get the account this access token authenticates as, confirming the token resolves and naming the account it belongs to. Takes no parameters. Dropbox routes this read through POST, like every operation this connector declares — there is no GET anywhere in Dropbox's v2 API",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/2/users/get_current_account",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "account_id": {
+                "description": "The account's unique, opaque id",
+                "type": "string"
+              },
+              "account_type": {
+                "description": "{\".tag\": \"basic\" | \"pro\" | \"business\"}",
+                "type": "object"
+              },
+              "country": {
+                "description": "ISO 3166-1 alpha-2 country code, if known",
+                "type": "string"
+              },
+              "disabled": {
+                "type": "boolean"
+              },
+              "email": {
+                "type": "string"
+              },
+              "email_verified": {
+                "type": "boolean"
+              },
+              "name": {
+                "description": "{given_name, surname, familiar_name, display_name, abbreviated_name}",
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "dropbox.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.dropboxapi.com"
+          ],
+          "flux": "op dropbox-user-me -> Any\n  description \"Get the account this access token authenticates as, confirming the token resolves and naming the account it belongs to. Takes no parameters. Dropbox routes this read through POST, like every operation this connector declares — there is no GET anywhere in Dropbox's v2 API. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error_summary` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.dropboxapi.com\"\n  url = fmt(\"{base}/2/users/get_current_account\")\n  response = http.request(method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "dropbox-folder-list",
+          "provider": "dropbox",
+          "service": "default",
+          "description": "List the files and folders directly inside a folder, first page only. Each entry names its own type (file, folder, or deleted), name and full path. Dropbox routes this read through POST, so it is declared as a write",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/2/files/list_folder",
+          "parameters": [
+            {
+              "name": "path",
+              "in": "body",
+              "wire": null,
+              "description": "The full path of the folder to list, from the account root — or the empty string \"\" for the root folder itself. Dropbox's root has no other spelling: \"/\" is a documented error (path/not_found or path/malformed_path), not an alias for \"\"",
+              "required": true,
+              "schema": {
+                "default": "",
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "path": {
+                "default": "",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "cursor": {
+                "description": "The cursor for continuing to the next page. This connector cannot fetch it — list_folder/continue is not shipped",
+                "type": "string"
+              },
+              "entries": {
+                "description": "This page's items, each {\".tag\": \"file\"|\"folder\"|\"deleted\", name, path_lower, path_display, id}",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "has_more": {
+                "description": "True when the folder holds more entries than this page returned. This connector cannot fetch them; see cursor",
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "dropbox.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.dropboxapi.com"
+          ],
+          "flux": "op dropbox-folder-list(path: String) -> Any\n  description \"List the files and folders directly inside a folder, first page only. Each entry names its own type (file, folder, or deleted), name and full path. Dropbox routes this read through POST, so it is declared as a write. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error_summary` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.dropboxapi.com\"\n  url = fmt(\"{base}/2/files/list_folder\")\n  content_type = \"application/json\"\n  payload = { path }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "dropbox-metadata-get",
+          "provider": "dropbox",
+          "service": "default",
+          "description": "Get metadata for a file or folder at a given path: its type, name, id, and — for a file — size and content hash. Does not return a folder's contents (use dropbox-folder-list) or a file's content (use dropbox-temporary-link-get). Dropbox routes this read through POST, so it is declared as a write",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/2/files/get_metadata",
+          "parameters": [
+            {
+              "name": "path",
+              "in": "body",
+              "wire": null,
+              "description": "The full path of the file or folder to inspect, from the account root. Unlike dropbox-folder-list, the account root itself (\"\") is not addressable this way — this path must name an existing file or folder",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "path": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              ".tag": {
+                "description": "\"file\", \"folder\" or \"deleted\" — which fields below apply depends on this",
+                "type": "string"
+              },
+              "client_modified": {
+                "description": "File only: the modification time the uploading client claimed, not verified by Dropbox",
+                "format": "date-time",
+                "type": "string"
+              },
+              "content_hash": {
+                "description": "File only: Dropbox's own content hash, for verifying a download performed some other way",
+                "type": "string"
+              },
+              "id": {
+                "description": "An opaque id stable across moves and renames",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "path_display": {
+                "type": "string"
+              },
+              "path_lower": {
+                "type": "string"
+              },
+              "rev": {
+                "description": "File only: an opaque revision id",
+                "type": "string"
+              },
+              "server_modified": {
+                "description": "File only: when Dropbox's server last saw this content change",
+                "format": "date-time",
+                "type": "string"
+              },
+              "size": {
+                "description": "File only: size in bytes",
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "dropbox.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.dropboxapi.com"
+          ],
+          "flux": "op dropbox-metadata-get(path: String) -> Any\n  description \"Get metadata for a file or folder at a given path: its type, name, id, and — for a file — size and content hash. Does not return a folder's contents (use dropbox-folder-list) or a file's content (use dropbox-temporary-link-get). Dropbox routes this read through POST, so it is declared as a write. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error_summary` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.dropboxapi.com\"\n  url = fmt(\"{base}/2/files/get_metadata\")\n  content_type = \"application/json\"\n  payload = { path }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "dropbox-search",
+          "provider": "dropbox",
+          "service": "default",
+          "description": "Search file and folder names across the account, returning the first page of matches. Dropbox matches on name, not file content. Dropbox routes this read through POST, so it is declared as a write",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/2/files/search_v2",
+          "parameters": [
+            {
+              "name": "query",
+              "in": "body",
+              "wire": null,
+              "description": "The text to match against file and folder names",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "query": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "cursor": {
+                "description": "The cursor for the next page, present only when has_more is true. Unusable here, for the reason given on has_more",
+                "type": "string"
+              },
+              "has_more": {
+                "description": "True when more matches exist than this page returned. This connector cannot fetch them — no continuation cursor is shipped",
+                "type": "boolean"
+              },
+              "matches": {
+                "description": "The matching files and folders, each {metadata: {...}, match_type: {\".tag\": \"filename\"|\"content\"|\"both\"}}",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "dropbox.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.dropboxapi.com"
+          ],
+          "flux": "op dropbox-search(query: String) -> Any\n  description \"Search file and folder names across the account, returning the first page of matches. Dropbox matches on name, not file content. Dropbox routes this read through POST, so it is declared as a write. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error_summary` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.dropboxapi.com\"\n  url = fmt(\"{base}/2/files/search_v2\")\n  content_type = \"application/json\"\n  payload = { query }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "dropbox-folder-create",
+          "provider": "dropbox",
+          "service": "default",
+          "description": "Create a new folder at the given path, including any missing parent folders. Naming a path that already exists answers 409 conflict rather than creating a duplicate, since autorename is not offered by this connector",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/2/files/create_folder_v2",
+          "parameters": [
+            {
+              "name": "path",
+              "in": "body",
+              "wire": null,
+              "description": "The full path of the new folder, from the account root, e.g. \"/Homework/math\". Dropbox creates any missing parent folders along the way",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "path": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "metadata": {
+                "description": "The created folder's metadata: {name, path_lower, path_display, id}",
+                "properties": {
+                  "id": {
+                    "description": "The created folder's id — what a later call addresses it by",
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "path_display": {
+                    "type": "string"
+                  },
+                  "path_lower": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "dropbox.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.dropboxapi.com"
+          ],
+          "flux": "op dropbox-folder-create(path: String) -> Any\n  description \"Create a new folder at the given path, including any missing parent folders. Naming a path that already exists answers 409 conflict rather than creating a duplicate, since autorename is not offered by this connector. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error_summary` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.dropboxapi.com\"\n  url = fmt(\"{base}/2/files/create_folder_v2\")\n  content_type = \"application/json\"\n  payload = { path }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "dropbox-temporary-link-get",
+          "provider": "dropbox",
+          "service": "default",
+          "description": "Get a temporary, unauthenticated download link for an existing file's content, valid for approximately four hours. This connector cannot follow the link itself — it only returns the URL, for a caller to fetch separately. Dropbox routes this read through POST, so it is declared as a write",
+          "risk": "medium",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/2/files/get_temporary_link",
+          "parameters": [
+            {
+              "name": "path",
+              "in": "body",
+              "wire": null,
+              "description": "The full path of the file to link, from the account root. Must name a file, not a folder",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "path": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "link": {
+                "description": "The temporary download URL, valid for approximately four hours from this call",
+                "type": "string"
+              },
+              "metadata": {
+                "description": "The linked file's metadata, the same shape dropbox-metadata-get returns for a file",
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "dropbox.access_token"
+            ]
+          ],
+          "hosts": [
+            "api.dropboxapi.com"
+          ],
+          "flux": "op dropbox-temporary-link-get(path: String) -> Any\n  description \"Get a temporary, unauthenticated download link for an existing file's content, valid for approximately four hours. This connector cannot follow the link itself — it only returns the URL, for a caller to fetch separately. Dropbox routes this read through POST, so it is declared as a write. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error_summary` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.dropboxapi.com\"\n  url = fmt(\"{base}/2/files/get_temporary_link\")\n  content_type = \"application/json\"\n  payload = { path }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "figma",
       "authority": null,
       "vendor": "Figma",

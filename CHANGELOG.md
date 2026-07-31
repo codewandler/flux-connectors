@@ -9,6 +9,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Dropbox connector (C-167).** Six operations, and **every one is a `POST` including the reads** —
+  Dropbox's v2 API is RPC wearing HTTP. A test asserts exactly that, because it is the property a
+  future author is most likely to "fix" by turning a read into a `GET` that returns `405`.
+
+  **A POST-shaped read can be a `verify` operation, and that was measured rather than argued.** The
+  configuration contract's prose says a `verify` op *is a read*; the loader's actual check
+  (`provider.rs:664-687`) tests the declared `risk`, not the method. So `POST
+  /2/users/get_current_account` is a legal `verify`, and shipping one is more honest than refusing on
+  the strength of a sentence.
+
+  Content upload and download are excluded: they use a different host and a `Dropbox-API-Arg` header
+  carrying JSON, which is a second encoding problem this connector was not chosen for.
+
 - **The LaunchDarkly connector (C-175).** Five operations over a raw, unprefixed `Authorization`
   header, and a test asserts **no emitted operation carries a `Bearer` or `Basic` word** — the failure
   mode here is silent, since either prefix would produce a request LaunchDarkly rejects.
