@@ -775,34 +775,35 @@ fn the_tenant_template_is_unbound_and_the_host_is_never_a_wildcard() {
     }
 }
 
-/// **No `example` on a secret configuration field.**
+/// **Confluence asks for all three halves of its installation**: the site, and both halves of the
+/// Basic credential.
 ///
-/// The story calls this out by name: a token-shaped placeholder has tripped GitHub's push
-/// protection and blocked a release in this repository before. The loader validates an `example`
-/// against its field's `format`; nothing stops one being written on a secret, so this does.
+/// This test used to be `no_secret_config_field_carries_an_example`, and it also re-checked that
+/// every field was renderable. Both of those are catalogue-wide rules, and both are now **loader
+/// refusals** in `connector_spec::provider` (C-231), asserted over the corpus by
+/// `no_shipped_provider_gives_a_secret_field_an_example` — which reaches this file the way it
+/// reaches every other provider, by reading `providers/` from disk. Restating a catalogue rule in
+/// one connector's contract test is the defect C-230 is about, so what is left here is the part
+/// that is genuinely about *this* connector: which questions it asks.
 #[test]
-fn no_secret_config_field_carries_an_example() {
+fn the_configuration_surface_asks_for_the_site_and_both_credential_halves() {
     let connector = load();
 
-    assert!(
-        !connector.config.is_empty(),
-        "confluence declares a configuration surface"
+    let asked: Vec<(&str, &str)> = connector
+        .config
+        .iter()
+        .map(|field| (field.name.as_str(), field.binds.as_str()))
+        .collect();
+    assert_eq!(
+        asked,
+        vec![
+            ("site", "endpoint.site"),
+            ("email", "username.confluence.api_token"),
+            ("api_token", "credential.confluence.api_token"),
+        ],
+        "a Confluence installation is a site plus a Basic pair; dropping one asks for a connector \
+         that cannot compose a URL or authenticate"
     );
-    for field in &connector.config {
-        assert!(
-            !field.label.is_empty() && !field.help.is_empty(),
-            "config field `{}` must be renderable: `label` and `help` are mandatory",
-            field.name
-        );
-        if field.secret {
-            assert!(
-                field.example.is_none(),
-                "config field `{}` is secret and carries an example. A token-shaped placeholder \
-                 has tripped GitHub push protection in this repository before",
-                field.name
-            );
-        }
-    }
 }
 
 /// The C-11 gate for this provider: every operation emits Flux that parses, is already canonical,
