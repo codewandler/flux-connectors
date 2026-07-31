@@ -20321,6 +20321,638 @@
       "channels": []
     },
     {
+      "id": "vercel",
+      "authority": "com.vercel.api",
+      "vendor": "Vercel",
+      "description": "Vercel: list and inspect projects and deployments, and cancel an in-progress deployment",
+      "base_url": "https://api.vercel.com",
+      "api_version": null,
+      "hosts": [
+        "api.vercel.com"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.vercel.com",
+          "hosts": [
+            "api.vercel.com"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 5
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "bearer"
+        ],
+        "credentials": [
+          {
+            "name": "vercel.token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null
+            },
+            "description": "Vercel access token sent as a bearer",
+            "env": [
+              "VERCEL_TOKEN"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "vercel.token"
+          ]
+        ]
+      },
+      "operation_count": 5,
+      "operations": [
+        {
+          "id": "vercel-projects-list",
+          "provider": "vercel",
+          "service": "default",
+          "description": "List projects. Scoped to the personal account unless teamId names a team — on a team workspace, omitting teamId silently returns the wrong, but real-looking, project list rather than an error",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v10/projects",
+          "parameters": [
+            {
+              "name": "teamId",
+              "in": "query",
+              "wire": null,
+              "description": "The team to act on behalf of. Omit it and this lists the personal account's projects instead — Vercel accepts the call and returns a complete, plausible list either way, so there is no error to notice if this is the wrong account",
+              "required": false,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "teamId": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": null,
+          "credentials": [
+            [
+              "vercel.token"
+            ]
+          ],
+          "hosts": [
+            "api.vercel.com"
+          ],
+          "flux": "op vercel-projects-list(teamId: String) -> Any\n  description \"List projects. Scoped to the personal account unless teamId names a team — on a team workspace, omitting teamId silently returns the wrong, but real-looking, project list rather than an error\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.vercel.com\"\n  url = fmt(\"{base}/v10/projects\")\n  sep = \"?\"\n  when teamId\n    url = fmt(\"{url}{sep}teamId={teamId}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
+                "params": [
+                  "teamId"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "vercel-project-get",
+          "provider": "vercel",
+          "service": "default",
+          "description": "Get one project by its id or name. teamId scopes which account's project this addresses; a team project looked up with the wrong or absent teamId is documented to 404 rather than silently returning a different project",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v9/projects/{idOrName}",
+          "parameters": [
+            {
+              "name": "idOrName",
+              "in": "path",
+              "wire": null,
+              "description": "The project's id (prj_…) or its name",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "teamId",
+              "in": "query",
+              "wire": null,
+              "description": "The team to act on behalf of. Omit it and Vercel looks for the project in the personal account instead of any team",
+              "required": false,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "idOrName": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "teamId": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "idOrName"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "accountId": {
+                "description": "The personal or team account id that owns this project",
+                "type": "string"
+              },
+              "framework": {
+                "description": "The detected framework, or null when none is set",
+                "nullable": true,
+                "type": "string"
+              },
+              "id": {
+                "description": "The project's own id (prj_…), stable across renames",
+                "type": "string"
+              },
+              "live": {
+                "description": "Whether the project currently has a production deployment",
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "paused": {
+                "description": "Whether the project is paused and will not build or serve traffic",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "accountId"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "vercel.token"
+            ]
+          ],
+          "hosts": [
+            "api.vercel.com"
+          ],
+          "flux": "op vercel-project-get(idOrName: String, teamId: String) -> Any\n  description \"Get one project by its id or name. teamId scopes which account's project this addresses; a team project looked up with the wrong or absent teamId is documented to 404 rather than silently returning a different project\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.vercel.com\"\n  url = fmt(\"{base}/v9/projects/{idOrName}\")\n  sep = \"?\"\n  when teamId\n    url = fmt(\"{url}{sep}teamId={teamId}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
+                "params": [
+                  "teamId"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "vercel-deployments-list",
+          "provider": "vercel",
+          "service": "default",
+          "description": "List deployments. Scoped to the personal account unless teamId names a team — on a team workspace, omitting teamId silently returns the wrong, but real-looking, deployment list rather than an error",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v7/deployments",
+          "parameters": [
+            {
+              "name": "projectId",
+              "in": "query",
+              "wire": null,
+              "description": "Filter to deployments of one project, by its id or name",
+              "required": false,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "teamId",
+              "in": "query",
+              "wire": null,
+              "description": "The team to act on behalf of. Omit it and this lists the personal account's deployments instead — Vercel accepts the call and returns a complete, plausible list either way, so there is no error to notice if this is the wrong account",
+              "required": false,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "projectId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "teamId": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "deployments": {
+                "items": {
+                  "properties": {
+                    "created": {
+                      "description": "Creation timestamp, milliseconds",
+                      "type": "number"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "creator": {
+                      "type": "object"
+                    },
+                    "inspectorUrl": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "The project name at the time this deployment was created",
+                      "type": "string"
+                    },
+                    "projectId": {
+                      "type": "string"
+                    },
+                    "readyState": {
+                      "enum": [
+                        "BLOCKED",
+                        "BUILDING",
+                        "CANCELED",
+                        "DELETED",
+                        "ERROR",
+                        "INITIALIZING",
+                        "QUEUED",
+                        "READY"
+                      ],
+                      "type": "string"
+                    },
+                    "target": {
+                      "description": "production, staging, or null for a preview deployment",
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "uid": {
+                      "description": "The deployment's unique id",
+                      "type": "string"
+                    },
+                    "url": {
+                      "description": "Null when the deployment has not finished uploading",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "uid",
+                    "name",
+                    "url",
+                    "created",
+                    "createdAt",
+                    "readyState",
+                    "type",
+                    "projectId",
+                    "creator",
+                    "inspectorUrl"
+                  ],
+                  "type": "object"
+                },
+                "pagination": {
+                  "properties": {
+                    "count": {
+                      "description": "Items in this page",
+                      "type": "integer"
+                    },
+                    "next": {
+                      "description": "Timestamp for the next page, or null",
+                      "nullable": true,
+                      "type": "number"
+                    },
+                    "prev": {
+                      "description": "Timestamp for the previous page, or null",
+                      "nullable": true,
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "count",
+                    "next",
+                    "prev"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "deployments",
+              "pagination"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "vercel.token"
+            ]
+          ],
+          "hosts": [
+            "api.vercel.com"
+          ],
+          "flux": "op vercel-deployments-list(projectId: String, teamId: String) -> Any\n  description \"List deployments. Scoped to the personal account unless teamId names a team — on a team workspace, omitting teamId silently returns the wrong, but real-looking, deployment list rather than an error\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.vercel.com\"\n  url = fmt(\"{base}/v7/deployments\")\n  sep = \"?\"\n  when projectId\n    url = fmt(\"{url}{sep}projectId={projectId}\")\n    sep = \"&\"\n  when teamId\n    url = fmt(\"{url}{sep}teamId={teamId}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
+                "params": [
+                  "projectId",
+                  "teamId"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "vercel-deployment-get",
+          "provider": "vercel",
+          "service": "default",
+          "description": "Get one deployment by its id or its hostname. teamId scopes which account's authorization applies; a team deployment looked up with the wrong or absent teamId is documented to fail rather than silently returning a different deployment",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/v13/deployments/{idOrUrl}",
+          "parameters": [
+            {
+              "name": "idOrUrl",
+              "in": "path",
+              "wire": null,
+              "description": "The deployment's id (dpl_…) or its unique hostname",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "teamId",
+              "in": "query",
+              "wire": null,
+              "description": "The team to act on behalf of. Omit it and Vercel looks for the deployment in the personal account instead of any team",
+              "required": false,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "idOrUrl": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "teamId": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "idOrUrl"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "id": {
+                "description": "The deployment's unique id",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "readyState": {
+                "enum": [
+                  "BLOCKED",
+                  "BUILDING",
+                  "CANCELED",
+                  "ERROR",
+                  "INITIALIZING",
+                  "QUEUED",
+                  "READY"
+                ],
+                "type": "string"
+              },
+              "target": {
+                "description": "production, staging, or null for a preview deployment",
+                "nullable": true,
+                "type": "string"
+              },
+              "url": {
+                "description": "Present on the owner and reduced-team views; absent on the anonymous view",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "readyState"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "vercel.token"
+            ]
+          ],
+          "hosts": [
+            "api.vercel.com"
+          ],
+          "flux": "op vercel-deployment-get(idOrUrl: String, teamId: String) -> Any\n  description \"Get one deployment by its id or its hostname. teamId scopes which account's authorization applies; a team deployment looked up with the wrong or absent teamId is documented to fail rather than silently returning a different deployment\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.vercel.com\"\n  url = fmt(\"{base}/v13/deployments/{idOrUrl}\")\n  sep = \"?\"\n  when teamId\n    url = fmt(\"{url}{sep}teamId={teamId}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
+                "params": [
+                  "teamId"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "vercel-deployment-cancel",
+          "provider": "vercel",
+          "service": "default",
+          "description": "Cancel a deployment that is still building, stopping it before it completes; refused with 400 if it already finished (READY, ERROR or CANCELED). teamId scopes which account's authorization applies — omit it and Vercel looks for the deployment in the personal account instead of any team, most often failing closed rather than cancelling a different one",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "PATCH",
+          "path": "/v12/deployments/{id}/cancel",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "wire": null,
+              "description": "The deployment's id (dpl_…) to cancel",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "teamId",
+              "in": "query",
+              "wire": null,
+              "description": "The team to act on behalf of. Omit it and Vercel looks for the deployment in the personal account instead of any team",
+              "required": false,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "teamId": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "readyState": {
+                "description": "Always CANCELED on success",
+                "enum": [
+                  "BLOCKED",
+                  "BUILDING",
+                  "CANCELED",
+                  "ERROR",
+                  "INITIALIZING",
+                  "QUEUED",
+                  "READY"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "readyState"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "vercel.token"
+            ]
+          ],
+          "hosts": [
+            "api.vercel.com"
+          ],
+          "flux": "op vercel-deployment-cancel(id: String, teamId: String) -> Any\n  description \"Cancel a deployment that is still building, stopping it before it completes; refused with 400 if it already finished (READY, ERROR or CANCELED). teamId scopes which account's authorization applies — omit it and Vercel looks for the deployment in the personal account instead of any team, most often failing closed rather than cancelling a different one\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.vercel.com\"\n  url = fmt(\"{base}/v12/deployments/{id}/cancel\")\n  sep = \"?\"\n  when teamId\n    url = fmt(\"{url}{sep}teamId={teamId}\")\n  response = http.request(method: \"PATCH\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
+                "params": [
+                  "teamId"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "zendesk",
       "authority": null,
       "vendor": "Zendesk",

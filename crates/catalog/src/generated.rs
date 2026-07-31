@@ -39,6 +39,7 @@ pub(crate) mod sentry;
 pub(crate) mod shopify;
 pub(crate) mod slack;
 pub(crate) mod stripe;
+pub(crate) mod vercel;
 pub(crate) mod zendesk;
 pub(crate) mod zoom;
 
@@ -74,6 +75,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &shopify::PROVIDER,
     &slack::PROVIDER,
     &stripe::PROVIDER,
+    &vercel::PROVIDER,
     &zendesk::PROVIDER,
     &zoom::PROVIDER,
 ];

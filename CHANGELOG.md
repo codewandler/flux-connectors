@@ -9,6 +9,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Vercel connector (C-170).** Five operations over a bearer token, all five endpoint shapes
+  verified against Vercel's published reference rather than recalled.
+
+  The archetype is **an optional parameter with a blast radius**: omit `teamId` and the call lands on
+  the personal account instead of the team. Every operation declares it and every list operation's own
+  `description` names the fallback, asserted by
+  `every_operation_declares_team_id_and_names_the_personal_account_fallback`.
+
+  **`vercel-projects-list` deliberately ships with no `response_schema`** — Vercel documents three
+  mutually incompatible top-level shapes for that one endpoint, so declaring one would be a guess
+  dressed as a type. Absence is honest; the coverage ratchet permits it precisely because it measures
+  the aggregate and leaves the per-operation judgement to the provider file.
+
 - **The Cloudflare connector (C-169).** Five operations over a bearer token: DNS records (list, create,
   delete), a cache purge, and `zone-list` as `verify`.
 
