@@ -2,7 +2,7 @@
 id: C-228
 title: "Two auth tests no longer reach the checks they name, one gated route has no negative test, and three documents describe the login flow as it was before C-204"
 pillar: Bridge
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/connectors-api.md
 epic: connectors-api

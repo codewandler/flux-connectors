@@ -34,6 +34,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The route-level login guard had no coverage anywhere, and now does (C-228).** C-204's fix is
+  sound — a security review reproduced the cross-account capture at the base and proved it dead on
+  the fix. This is the residue: when a new guard runs *before* an old one, tests aimed at the old one
+  stop reaching it and keep passing.
+
+  **The measurement came out worse than the story predicted.** The story said the route-level
+  `take_login` refusal was "covered only by store-level unit tests". Deleting the entire guard at the
+  merge base left **all 60 tests in the crate green, across all six binaries** — nothing anywhere
+  observed that the issued-here/single-use check had been removed from the route.
+
+  Split into two tests, each named for the branch it exercises: no cookie, and a cookie matching an
+  unissued state. Every refusal in the callback answers `400` and clears the binding, so the *message*
+  is the only observable that distinguishes the three branches — the three are now `pub const`s and
+  the tests name the constant, because a test holding its own copy of the string would drift exactly
+  as the original did. Also adds the missing negative test for `/v1/operations/{operation}`, and makes
+  the no-secrets sweep in `tests/host.rs` fail on a `401` rather than pass on it.
+
 - **An `example` on a secret configuration field is refused at load (C-231).** It was enforced by
   per-connector goodwill, and the gap was three times wider than it looked: 38 providers declare a
   secret field, **24 had a local test guarding it and 14 had nothing** — two dozen duplicated
