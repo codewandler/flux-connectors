@@ -386,6 +386,16 @@ pub(crate) enum Slot {
     ///
     /// Being unreachable is exactly why its rule has to be right on inspection: nothing executing
     /// will ever tell anyone it is wrong.
+    ///
+    /// **C-229 will make it reachable, and deliberately so.** That story lets one collected value
+    /// reach more than one position — Algolia's application id must be both the `{app_id}` of
+    /// `{app_id}-dsn.algolia.net` and the `X-Algolia-Application-Id` header — and [`record`] already
+    /// collapses a variable seen in two slots to this one. That is the right answer rather than a
+    /// degradation: a value living in two positions must satisfy both rules, and this arm is their
+    /// intersection. What will *not* survive is
+    /// [`tests::every_shipped_configuration_variable_is_placed`], which asserts nothing lands here.
+    /// It is meant to fail then, so that whoever lands C-229 decides this on purpose instead of
+    /// inheriting it.
     Unplaced,
 }
 
