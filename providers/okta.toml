@@ -1,0 +1,263 @@
+# Okta — hand-authored, no vendor spec.
+#
+# Curated to the five operations `docs/stories/C-161-provider-okta.md` selected: list users, get one
+# user, list groups, list one user's groups, and deactivate a user. As with zendesk, freshdesk,
+# github, notion, calendly, shopify and launchdarkly, nothing is vendored under `specs/` for this
+# connector, so drift against Okta's own documentation (`https://developer.okta.com/docs/api/`) is
+# undetectable by machine until C-14's fetch and C-4's ingest land
+# (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# THE FINDING THIS CONNECTOR EXISTS TO ESTABLISH: is an arbitrary Authorization scheme word
+# expressible?
+# ---------------------------------------------------------------------------------------------
+#
+# Okta authenticates with `Authorization: SSWS <apiToken>`. When C-161 first ran, the answer was
+# **no**, and it shipped a recorded refusal instead of a connector: `AuthScheme` was a closed
+# five-member enum, `Header` carried only a header *name*, and the one route from there to
+# `SSWS <token>` was baking `"SSWS "` into the credential value an operator pastes into
+# `OKTA_API_TOKEN` — the single thing AGENTS.md forbids outright ("no credential value enters
+# provider TOML, generated Flux, a manifest, the public catalogue, or the lockfile"). A connector
+# shipped on that route would have compiled, formatted, round-tripped and then failed closed with
+# `401` on every real call, which is the exact trap C-107 recorded for Notion.
+#
+# C-184 built the axis that measurement produced: `AuthScheme::Header` now carries `{ name, prefix }`,
+# so the vendor's scheme word is **connector data on the placement** and the credential is appended by
+# the host. There is no substitution point in a prefix for an author to aim a secret at, which is what
+# makes the honest spelling the only spelling. `docs/designs/unified-auth.md` §"The prefix axis, as
+# built" records why it is a prefix rather than a `prefix`+`suffix` pair or a value template.
+#
+# **The trailing space in `"SSWS "` is part of the literal.** The host concatenates prefix and
+# credential with nothing in between, so `prefix = "SSWS"` would send `Authorization: SSWS<token>` —
+# a header Okta rejects, from a file that reads as correct. That used to be uncatchable and is not
+# any more: the loader refuses a non-empty prefix ending in an alphanumeric
+# (`crates/connector-spec/src/provider.rs::validate_auth_prefix`), so this file cannot lose its space
+# silently. `crates/connector-flux/tests/okta_connector.rs` asserts both halves.
+#
+# ---------------------------------------------------------------------------------------------
+# EXCLUDED, deliberately, rather than guessed at:
+# ---------------------------------------------------------------------------------------------
+#
+# - **`q`, `filter` and `search` on the list endpoints.** These are Okta's free-text prefix search and
+#   its SCIM filter expression (`profile.firstName eq "Ada"`, `status eq "ACTIVE" and lastUpdated gt
+#   "…"`). They are the unencodable free-text shape AGENTS.md records under `zendesk-ticket-search`
+#   and C-30 owns: query values are interpolated into the URL verbatim, with no percent-encoder a
+#   Flux program can call, so a `&`, `#` or `+` inside the value corrupts the request and can inject a
+#   parameter. A SCIM filter is *made of* punctuation, quotes and spaces, so it is not a marginal case
+#   here — it is the worst one in the catalogue. Half-encoding it in emitted Flux would look correct
+#   and be wrong. These come back when C-30's structured-`query` handoff lands, not before.
+# - **The `after` pagination cursor.** Okta pages with an opaque `after` value that it hands back
+#   **only** in a `Link` response header (`rel="next"`). This model surfaces a response *body*; it has
+#   no way to give a caller a response header, so a caller could never learn the cursor it was being
+#   asked for. Declaring the parameter would offer a knob nobody can turn, which is worse than
+#   offering nothing. `limit` is offered, so a caller controls page size; paging past the first page
+#   waits on a response-header seam this repository does not have.
+# - **A `maximum` on `limit`.** Okta documents different caps per endpoint and this file has no
+#   machine-checkable source for any of them, so `minimum = 1` is declared and no ceiling is invented.
+#   A guessed maximum would reject a request the vendor would have accepted.
+# - **Every other lifecycle transition** — activate, reactivate, suspend, unsuspend, unlock, delete,
+#   reset password, expire password, reset factors — and **every user or group write** (create,
+#   update, assign to group, remove from group). The story asked for a small curated set that answers
+#   the auth question; a fuller lifecycle surface is a separate story with its own risk review. The
+#   one write here is the one the story named.
+# - **`DELETE /users/{id}`.** Okta's true delete requires the user already be DEPROVISIONED and erases
+#   them permanently. Deactivation is the reversible transition an operator actually reaches for, and
+#   it is the one this connector exposes.
+#
+# ---------------------------------------------------------------------------------------------
+
+id = "okta"
+vendor = "Okta"
+
+# Every Okta org has its own host — `acme.okta.com`, `acme.okta-emea.com`, an `-admin` variant, or a
+# fully customised domain — so this is a bound `{domain}` the way zendesk's `{subdomain}` is, not a
+# fixed literal. The whole host is asked for rather than a label, because the label alone cannot
+# reach `.okta-emea.com` or a custom domain; that is the same call `providers/freshdesk.toml` makes.
+base_url = "https://{domain}/api/v1"
+
+description = "Okta identity management: read users and groups in an org, read a user's group memberships, and deactivate a user"
+
+# The "Test connection" operation: a bounded read of the user list, taking no required argument — the
+# natural `verify` a settings page can call unattended.
+verify = "okta-user-list"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["okta.api_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "okta.api_token"
+# See the header comment. `SSWS ` is the vendor's public scheme word, printed in Okta's own
+# documentation; the token is appended to it by the host and is never written in this repository.
+# The trailing space is part of the literal.
+scheme = { header = { name = "Authorization", prefix = "SSWS " } }
+env = ["OKTA_API_TOKEN"]
+description = "Okta API token, sent as `Authorization: SSWS <token>`. The `SSWS ` scheme word is supplied by the connector; the token is the value alone"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 5: four reads, one destructive write
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "okta-user-list"
+method = "GET"
+path = "/users"
+description = "List users in the Okta org. Returns a JSON array of user objects, most recently created first. Without a filter this is the org's active user population, so use `limit` to bound it — see okta-user-get to read one user by id or login"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "limit"
+description = "Maximum number of users to return in this page. Okta caps this per endpoint and the cap is not declared here, so a value above it is reduced by Okta rather than rejected"
+required = false
+schema = { type = "integer", minimum = 1 }
+
+[operations.response_schema]
+type = "array"
+description = "The org's users"
+items = { type = "object", required = ["id", "status", "profile"], properties = { id = { type = "string", description = "The user's Okta id, e.g. `00u1a2b3c4D5e6F7g8h9` — pass this as `user_id` to the other operations below" }, status = { type = "string", description = "The user's lifecycle state. Okta's values include STAGED, PROVISIONED, ACTIVE, RECOVERY, PASSWORD_EXPIRED, LOCKED_OUT, SUSPENDED and DEPROVISIONED; treat this as an open string rather than a closed set, because Okta has added states over time" }, created = { type = "string", description = "When the user was created, ISO 8601" }, activated = { type = "string" }, statusChanged = { type = "string" }, lastLogin = { type = "string", description = "When the user last authenticated; absent for a user who never has" }, lastUpdated = { type = "string" }, passwordChanged = { type = "string" }, type = { type = "object", description = "The user type this user was created with, as `{id, …}`" }, profile = { type = "object", description = "The user's profile attributes. `login` and `email` are always present; an org may add custom attributes to its user schema, so this object is not exhaustively enumerated here", properties = { login = { type = "string", description = "The user's unique sign-in identifier, usually their email address. Accepted in place of the id by okta-user-get" }, email = { type = "string" }, firstName = { type = "string" }, lastName = { type = "string" }, mobilePhone = { type = "string" }, secondEmail = { type = "string" } } }, credentials = { type = "object", description = "Which authentication providers and recovery factors are configured for this user. Never carries a password or a secret value" } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "okta-user-get"
+method = "GET"
+path = "/users/{user_id}"
+description = "Get one user's full record, including their lifecycle status and profile attributes. Accepts the user's Okta id or their login, so a caller holding an email address does not need to list first"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "user_id"
+description = "The user's Okta id (from okta-user-list's `id`) or their login, e.g. `ada@example.com`. Okta resolves either"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "status", "profile"]
+properties = { id = { type = "string" }, status = { type = "string", description = "The user's lifecycle state — see okta-user-list for the values Okta documents. `DEPROVISIONED` is what okta-user-deactivate leaves behind" }, created = { type = "string" }, activated = { type = "string" }, statusChanged = { type = "string" }, lastLogin = { type = "string" }, lastUpdated = { type = "string" }, passwordChanged = { type = "string" }, type = { type = "object" }, profile = { type = "object", description = "The user's profile attributes; an org may add custom ones to its user schema", properties = { login = { type = "string" }, email = { type = "string" }, firstName = { type = "string" }, lastName = { type = "string" }, mobilePhone = { type = "string" }, secondEmail = { type = "string" } } }, credentials = { type = "object", description = "Which authentication providers and recovery factors are configured for this user. Never carries a password or a secret value" } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "okta-group-list"
+method = "GET"
+path = "/groups"
+description = "List groups in the Okta org. Returns a JSON array of group objects. A group is how Okta grants application access in bulk, so this is the set a membership question is asked against"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "limit"
+description = "Maximum number of groups to return in this page. Okta caps this per endpoint and the cap is not declared here, so a value above it is reduced by Okta rather than rejected"
+required = false
+schema = { type = "integer", minimum = 1 }
+
+[operations.response_schema]
+type = "array"
+description = "The org's groups"
+items = { type = "object", required = ["id", "type", "profile"], properties = { id = { type = "string", description = "The group's Okta id, e.g. `00g1a2b3c4D5e6F7g8h9`" }, type = { type = "string", description = "Where the group comes from. Okta's values include OKTA_GROUP (created in Okta), APP_GROUP (sourced from an application such as an LDAP or AD directory) and BUILT_IN (Okta's own, e.g. Everyone); treat this as an open string" }, created = { type = "string" }, lastUpdated = { type = "string" }, lastMembershipUpdated = { type = "string", description = "When a member was last added or removed" }, objectClass = { type = "array", description = "The group's schema classes, e.g. `[\"okta:user_group\"]`", items = { type = "string" } }, profile = { type = "object", description = "The group's own attributes", required = ["name"], properties = { name = { type = "string", description = "The group's display name" }, description = { type = "string" } } } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "okta-user-group-list"
+method = "GET"
+path = "/users/{user_id}/groups"
+description = "List the groups one user is a member of. This is the direct answer to \"what access does this person have\", because Okta grants application assignments through group membership"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "user_id"
+description = "The user's Okta id (from okta-user-list's `id`) or their login, e.g. `ada@example.com`. Okta resolves either"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.query]]
+name = "limit"
+description = "Maximum number of groups to return in this page. Okta caps this per endpoint and the cap is not declared here, so a value above it is reduced by Okta rather than rejected"
+required = false
+schema = { type = "integer", minimum = 1 }
+
+[operations.response_schema]
+type = "array"
+description = "The groups this user belongs to, in the same shape okta-group-list returns"
+items = { type = "object", required = ["id", "type", "profile"], properties = { id = { type = "string" }, type = { type = "string", description = "Where the group comes from — see okta-group-list" }, created = { type = "string" }, lastUpdated = { type = "string" }, lastMembershipUpdated = { type = "string" }, objectClass = { type = "array", items = { type = "string" } }, profile = { type = "object", required = ["name"], properties = { name = { type = "string" }, description = { type = "string" } } } } }
+
+# ---------------------------------------------------------------------------------------------
+# THE DESTRUCTIVE WRITE. This is the one operation in the connector that can lock a real person out
+# of their working day, and the only tier that makes flux's approval gate stop for it is
+# `destructive` — "deletes or otherwise irreversible" (`crates/connector-spec/src/ir.rs`'s own doc
+# comment on `Risk::Destructive`).
+#
+# Deactivation is not a soft flag. Okta ends every one of that person's active sessions immediately,
+# revokes their OAuth tokens and grants, and removes their access to every application the org
+# assigns through Okta. A `high` classification here would read as "a reviewer would want to see
+# this first" when the honest statement is "this takes someone's access away now".
+#
+# It is *reversible* in the sense that an administrator can reactivate the account, but reactivation
+# is a separate transition this connector deliberately does not offer, and it does not restore the
+# sessions and tokens the deactivation destroyed. Cloudflare's DNS-record delete and typeform's
+# response delete are classified on the same reading.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "okta-user-deactivate"
+method = "POST"
+path = "/users/{user_id}/lifecycle/deactivate"
+description = "Deactivate a user, moving them to DEPROVISIONED. This takes effect immediately: Okta ends the person's active sessions, revokes their tokens and grants, and removes their access to every application the org assigns through Okta. They cannot sign in afterwards. An administrator can reactivate the account later, but that is a separate operation this connector does not offer, and it does not restore the sessions or tokens this call destroyed"
+risk = "destructive"
+# Not idempotent, and not on a technicality: `POST` aside, this is a lifecycle *transition*. Okta
+# answers the second call differently once the user has left ACTIVE, and this file has no evidence it
+# repeats the first response rather than refusing the transition — the same call
+# `providers/miro.toml` and `providers/cloudflare.toml` make for their own writes. Nothing here is
+# marked idempotent on a claim it cannot back, because that field is what tells flux whether a
+# `retry` around the request is sound.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "user_id"
+description = "The user's Okta id (from okta-user-list's `id`) or their login, e.g. `ada@example.com`. Okta resolves either — confirm with okta-user-get before calling this"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# Okta's default is to send no email. The emitted Flux appends a query parameter only when the value
+# is truthy, so `true` sends `?sendEmail=true` and anything else sends nothing at all — which lands on
+# Okta's own default, so the two spellings of "no email" agree.
+[[operations.params.query]]
+name = "send_email"
+wire = "sendEmail"
+description = "Set true to have Okta send its deactivation notification email. Omit for Okta's default, which sends none"
+required = false
+schema = { type = "boolean" }
+
+# No `response_schema`: Okta answers a successful deactivation with an empty body, and this file
+# declares nothing rather than a permissive placeholder for a response that does not exist — the same
+# call `providers/miro.toml` makes for its own delete.
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any of the above can run
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "domain"
+label = "Okta domain"
+help = "The full host you sign in to, without `https://` — if your Okta URL is `https://acme.okta.com`, this is `acme.okta.com`. European and preview orgs use `.okta-emea.com` and `.oktapreview.com`, and an org with a customised domain uses that instead, so give the whole host rather than just the first part"
+example = "acme.okta.com"
+format = "hostname"
+docs_url = "https://developer.okta.com/docs/api/#url-namespace"
+binds = "endpoint.domain"
+
+[[config]]
+name = "api_token"
+label = "API token"
+help = "Create one under Security → API → Tokens in the Okta Admin Console. The token inherits the permissions of the administrator who creates it, so create it as an account with only the access this connection needs — reading users and groups needs a read-only administrator, and okta-user-deactivate needs one that can manage users. Okta shows the token once, and it expires after 30 days without use"
+format = "token"
+secret = true
+docs_url = "https://developer.okta.com/docs/guides/create-an-api-token/"
+binds = "credential.okta.api_token"
