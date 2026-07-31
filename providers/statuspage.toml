@@ -1,0 +1,390 @@
+# Atlassian Statuspage REST API (v1) — hand-authored, no vendor spec.
+#
+# Statuspage publishes no machine-readable description of this surface convenient to vendor here;
+# the five operations below are transcribed from Atlassian's own Statuspage API reference, one
+# operation at a time. As with zendesk, freshdesk, github, notion, salesforce, launchdarkly and
+# docusign, provenance is hand-authored and **drift against the vendor's own documentation is
+# undetectable by machine** until C-14's fetch and C-4's ingest land
+# (`docs/designs/provider-operation-inventory.md` §6.7).
+#
+# ---------------------------------------------------------------------------------------------
+# THE QUESTION THIS CONNECTOR WAS CHOSEN TO ANSWER: `OAuth` as a literal scheme word.
+# ---------------------------------------------------------------------------------------------
+#
+# Statuspage authenticates with `Authorization: OAuth <api_key>`. The word `OAuth` is **not OAuth2**
+# and this connector participates in no grant: the key is a static string a human copies out of the
+# Statuspage account settings and pastes into a form, and the vendor simply requires that word in
+# front of it. It sits in exactly the place Okta's `SSWS` and PagerDuty's `Token token=` sit, and
+# C-161 measured all three as one shape rather than three.
+#
+# That shape is the **prefix axis**, built by C-184: `AuthScheme::Header` carries `{ name, prefix }`,
+# so this file spells `prefix = "OAuth "` and the host appends the resolved secret to it. The
+# spelling is pinned at the model by
+# `crates/connector-spec/tests/auth_prefix.rs::a_scheme_word_that_is_not_oauth2_is_still_just_a_prefix`;
+# this connector is the **first one to ship it**. Every `header` credential in the catalogue before
+# Statuspage omits `prefix` — figma's `X-Figma-Token`, gitlab's `PRIVATE-TOKEN`, shopify's
+# `X-Shopify-Access-Token`, launchdarkly's bare `Authorization` — so this is the file that carries a
+# non-empty prefix into committed artifacts.
+#
+# **The trailing space is load-bearing, not typography.** The host concatenates prefix and secret
+# with nothing in between, so `"OAuth"` would travel as `OAuth<key>`, which Statuspage rejects.
+# Since `3457581` hardened C-184's guard, a non-empty prefix ending in an alphanumeric is a **load
+# error** (`crates/connector-spec/src/provider.rs::validate_auth_prefix`) — so this file cannot ship
+# the missing space even by accident, which is the whole reason that rule exists.
+#
+# **No `[auth.oauth2]` block, deliberately, and this is the trap the connector is named for.** The
+# word in the header invites one; declaring it would tell the host to run an effectful
+# authorization-code exchange against an authorization server Statuspage does not operate for this
+# key. `crates/connector-flux/tests/statuspage_connector.rs` asserts `oauth2.is_none()` so the trap
+# stays pinned against a future author who reads `OAuth` and reaches for the block.
+#
+# ---------------------------------------------------------------------------------------------
+# THE PAGE ID FOLDS INTO `base_url`, AND THIS IS NOT THE C-187 GAP — but it is not free either.
+# ---------------------------------------------------------------------------------------------
+#
+# Every operation here sits under one page: `https://api.statuspage.io/v1/pages/{page_id}/…`. That
+# reads at first like the path-segment binding C-169/C-170 (filed as C-187) measured as out of
+# reach — `ConfigField::binds` reaches `base_url` and nothing else. **It is not that shape**, for
+# the same reason `providers/docusign.toml:117` already ships: the id is a *prefix* of every path,
+# so it folds into `base_url` as a `{page_id}` template variable bound by one `[[config]]` field
+# (`binds = "endpoint.page_id"`), the identical mechanism `providers/salesforce.toml` uses for
+# `{instance}`. Nothing here needed C-187 to land.
+#
+# **The cost, recorded rather than worked around.** Folding the id into the base URL puts two of
+# Statuspage's own endpoints out of reach:
+#
+#   - `GET /v1/pages` — list the pages this key can administer.
+#   - `GET /v1/pages/{page_id}` — read one page's own settings.
+#
+# Both sit *above* this base URL, and no operation can climb back up to them. DocuSign hit the
+# identical wall at its own `/accounts/{account_id}` tail and chose a sibling read (`/folders`) for
+# its connection check; this connector does the same, with `/components`. The second cost is that an
+# account administering several status pages needs **one installation per page**, because the page
+# is connection configuration rather than a per-call argument.
+#
+# **C-187 remains the right story for the general problem.** What makes the fold work here is purely
+# that the id happens to sit at the front of every path. Had Statuspage put it mid-path or in a
+# query string — the way Cloudflare's `zone_id` or Vercel's `teamId` would need — no spelling would
+# exist at all, and this connector would be a recorded refusal instead.
+#
+# ---------------------------------------------------------------------------------------------
+# "PUBLICLY VISIBLE" IS NOT EXPRESSIBLE. This file does not pretend otherwise.
+# ---------------------------------------------------------------------------------------------
+#
+# Creating a Statuspage incident publishes it to a web page anyone can read, and — when
+# `deliver_notifications` is true — emails and texts every subscriber the page has. C-181 asks for
+# that to be declared "as external-facing, not as an ordinary create". **There is no field that can
+# say so, and none is invented here:**
+#
+#   - `effects` is not authorable at all. `crates/connector-flux/src/op.rs:616` hardcodes
+#     `effects: vec![from_tag("network")?]` on every generated op — every op makes an HTTP request
+#     and nothing else it does is an effect flux tracks. That is the measurement C-155 recorded.
+#   - `Risk` has four values (`crates/connector-spec/src/ir.rs:85-94`): `low`, `medium`, `high`,
+#     `destructive`. None of them means external-facing.
+#
+# So the honest declaration is `risk = "high"` — "writes a reviewer would want to see first", the
+# same value this repository already gives `github-issue-create` and `launchdarkly-flag-toggle`, and
+# the value that puts the call behind flux's approval gate. It is not `destructive`: an incident can
+# be resolved or deleted.
+#
+# **The asymmetry the scale cannot carry, stated here and in each operation's own `description`,
+# which is the one string a model actually reads: the incident is reversible; the subscriber email
+# and SMS are not.** Deleting an incident removes it from the page and removes nothing from anyone's
+# inbox. `medium` would be a lie about the audience, `destructive` a lie about the reversibility,
+# and `high` plus prose is as close as this model gets.
+#
+# ---------------------------------------------------------------------------------------------
+# `deliver_notifications` IS REQUIRED, AND THAT IS THE POINT.
+# ---------------------------------------------------------------------------------------------
+#
+# Under C-56 an optional request-body field travels as an explicit `null`, so **every declared body
+# field on the two writes below is required** — the same constraint google, intercom, shopify and
+# airtable already record. Requiring `deliver_notifications` is therefore free in mechanism, and it
+# buys the thing `risk` could not: a caller cannot post to a public status page without stating, in
+# the call itself, whether every subscriber gets an email and a text about it. That explicit choice
+# is the closest this model gets to declaring the effect it has no field to name.
+#
+# ---------------------------------------------------------------------------------------------
+# EXCLUDED, deliberately, rather than guessed at:
+# ---------------------------------------------------------------------------------------------
+#
+# - **Pagination.** Statuspage's incident and component collections take `page`/`per_page`. This file
+#   has no verified account of their bounds or defaults, and the repository's rule is that a
+#   confident small set beats a guessed larger one — a `minimum`/`maximum` invented here would ship
+#   as a constraint the vendor never stated. Left out; named as unverified in the story's
+#   `## Progress`. Every collection read below therefore returns Statuspage's own first page.
+# - **The incident search `q`.** A free-text query value with no percent-encoder in front of it is
+#   exactly the `zendesk-ticket-search` defect (C-28, C-30): `&`, `#` and `+` corrupt the request and
+#   `x&per_page=1` injects a parameter. **No operation in this connector declares a query parameter
+#   at all**, which is what makes the C-30 gap harmless here rather than merely unlikely.
+# - **`impact_override`.** Statuspage computes an incident's impact from the components it affects;
+#   `impact_override` replaces that calculation. Under C-56 declaring it would make overriding
+#   *mandatory* on every create, so this connector leaves the vendor's own calculation alone.
+# - **`component_ids` / `components`.** Naming affected components, and setting their statuses
+#   through the incident body, is a second surface with its own dynamic-key object shape. Under C-56
+#   it too would become mandatory on every create. An incident that names no component is valid on
+#   Statuspage, so the curated create makes one and the component surface is left for a story that
+#   can verify it.
+# - **Deleting an incident, and the component `PATCH`.** Both are writes this story did not select.
+# - **Scheduled maintenances**, and the `scheduled`/`in_progress`/`verifying`/`completed` statuses
+#   that go with them: a different resource tree (`/incidents` accepts them, but the scheduling
+#   fields that make them meaningful are not curated here). The `status` enums below carry the
+#   realtime-incident lifecycle only.
+# - **`postmortem`** as a `status` value. Publishing a postmortem is its own Statuspage workflow with
+#   its own fields; admitting the status without them would let a caller move an incident into a
+#   state this connector cannot then populate.
+#
+# ---------------------------------------------------------------------------------------------
+# STILL CANNOT MAKE A LIVE CALL, for the same reason as every shipped connector: `http.request`
+# takes `{"$secret": …}` as a whole-value replacement and cannot assemble an `Authorization` value
+# itself, prefix or no prefix (`docs/designs/auth-seam.md`, AGENTS.md's *Intentional gaps*). This
+# connector is the catalogue's proof that the prefix axis carries a real vendor, not a working
+# client.
+# ---------------------------------------------------------------------------------------------
+
+id = "statuspage"
+vendor = "Atlassian Statuspage"
+
+# `{page_id}` is bound by the `[[config]]` field at the foot of this file — see the header comment
+# for why it lives here, and for the two endpoints that fold costs us.
+base_url = "https://api.statuspage.io/v1/pages/{page_id}"
+
+description = "Atlassian Statuspage: read a status page's components and incidents, and open or update a publicly visible incident on it"
+
+# The connection check for a settings page's Test Connection button. Statuspage's own page-read
+# (`GET /v1/pages/{page_id}`) would be the more obvious choice and sits at exactly the tail this
+# `base_url` already ends at, where an operation's `path` would have to be empty — the same wall
+# `providers/docusign.toml` hit. `/components` is the next-simplest read: it takes no parameter at
+# all, it succeeds for any page the key can administer whether that page has components or not, and
+# it reads nothing but the page's own configuration.
+verify = "statuspage-component-list"
+
+# Every operation authenticates the same way.
+default_auth = [{ credentials = ["statuspage.api_key"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "statuspage.api_key"
+# The literal scheme word, with its trailing space. `bearer` would send `Bearer <key>`, which
+# Statuspage rejects — a connector spelled that way compiles clean and fails closed with 401 on
+# every call, which is the trap C-107 recorded for Notion and C-161 for Okta. The host appends the
+# resolved secret directly after this text and nothing else; see the header comment.
+scheme = { header = { name = "Authorization", prefix = "OAuth " } }
+env = ["STATUSPAGE_API_KEY"]
+# No `[auth.oauth2]`. `OAuth` here is the vendor's scheme word, not a protocol this connector runs —
+# there is no authorization server, no grant, no refresh and no scope anywhere in this file.
+description = "Statuspage API key, sent as the Authorization header after the literal scheme word `OAuth ` — a static key from the account's own API settings, not an OAuth2 access token"
+
+# ---------------------------------------------------------------------------------------------
+# Operations — five: three reads, and two writes that publish to a page the general public reads.
+#
+# Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
+# alphanumerics, `_` and `-` only (C-8, C-23).
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "statuspage-incident-list"
+method = "GET"
+path = "/incidents"
+description = "List this status page's incidents, most recent first — both unresolved and already-resolved ones. Returns Statuspage's own first page of results; this connector declares no paging parameters, so a page with a long incident history is not enumerated exhaustively here"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "array"
+description = "The page's incidents, most recent first. Statuspage returns a bare JSON array here, not an object wrapping one"
+items = { type = "object", required = ["id", "name", "status"], properties = { id = { type = "string", description = "The incident's own id — what statuspage-incident-get and statuspage-incident-update address it by" }, name = { type = "string", description = "The incident's title, as shown on the public page" }, status = { type = "string", description = "investigating, identified, monitoring or resolved for a realtime incident; scheduled, in_progress, verifying or completed for a scheduled maintenance, which this connector does not create or update" }, impact = { type = "string", description = "none, maintenance, minor, major or critical — Statuspage's own calculation from the affected components unless an override was set" }, shortlink = { type = "string", description = "The public short URL for this incident" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, monitoring_at = { type = "string", format = "date-time", description = "When the incident moved to monitoring; null until it does" }, resolved_at = { type = "string", format = "date-time", description = "When the incident was resolved; null until it is" }, page_id = { type = "string", description = "The page this incident belongs to — the same id this connection is configured with" }, incident_updates = { type = "array", description = "Every update posted to this incident, most recent first. Each update's body is what subscribers received", items = { type = "object", properties = { id = { type = "string" }, status = { type = "string" }, body = { type = "string", description = "The publicly visible message this update posted" }, created_at = { type = "string", format = "date-time" }, display_at = { type = "string", format = "date-time" } } } }, components = { type = "array", description = "The components this incident affects, in the shape statuspage-component-list returns", items = { type = "object" } } } }
+
+[operations.quirks.error_envelope]
+# Statuspage answers a failure with `{"error": …}`. The value is a string for an authentication or
+# authorization failure and an array of strings for a validation failure, so the pointer names where
+# the message is rather than claiming a single scalar shape; no `code_pointer`, because Statuspage
+# publishes no machine-readable error code alongside it.
+message_pointer = "/error"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "statuspage-incident-get"
+method = "GET"
+path = "/incidents/{incident_id}"
+description = "Get one incident on this status page, including every update posted to it so far"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "incident_id"
+description = "The incident's own id, from statuspage-incident-list's `id` field or from statuspage-incident-create's response"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "name", "status"]
+properties = { id = { type = "string" }, name = { type = "string", description = "The incident's title, as shown on the public page" }, status = { type = "string", description = "investigating, identified, monitoring or resolved for a realtime incident" }, impact = { type = "string", description = "none, maintenance, minor, major or critical" }, shortlink = { type = "string", description = "The public short URL for this incident" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, monitoring_at = { type = "string", format = "date-time" }, resolved_at = { type = "string", format = "date-time" }, page_id = { type = "string" }, incident_updates = { type = "array", description = "Every update posted to this incident, most recent first. Each update's body is what subscribers received", items = { type = "object", properties = { id = { type = "string" }, status = { type = "string" }, body = { type = "string", description = "The publicly visible message this update posted" }, created_at = { type = "string", format = "date-time" }, display_at = { type = "string", format = "date-time" } } } }, components = { type = "array", description = "The components this incident affects", items = { type = "object" } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error"
+
+# ---------------------------------------------------------------------------------------------
+# THE FIRST PUBLIC WRITE. See the header comment: this is immediately visible to everyone who loads
+# the status page, and it notifies every subscriber unless the caller says otherwise. `risk = "high"`
+# is as far as the scale goes; the audience and the one-way half of the effect are stated in the
+# description, which is what a model actually reads.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "statuspage-incident-create"
+method = "POST"
+path = "/incidents"
+description = "Open a new incident on this status page. It is public the moment this call returns — anyone loading the page sees it, and with deliver_notifications true Statuspage emails and texts every subscriber the page has. The incident itself is reversible (resolve it, or delete it), but a notification that has been sent cannot be recalled, so treat deliver_notifications as the irreversible half of this call"
+risk = "high"
+# `POST` is not idempotent under RFC 9110 §9.2.2, and calling this twice opens two separate public
+# incidents rather than one. The emitter refuses `idempotent` on a `POST` anyway
+# (`crates/connector-flux/src/op.rs::check_write_metadata`), and here the refusal agrees with the
+# truth.
+idempotency = "non_idempotent"
+
+# Statuspage nests every incident field under an `incident` object, so each body parameter carries a
+# `wire` path. Every one of them is required: under C-56 an optional body field travels as an
+# explicit `null`, so there is no such thing as "declared but omitted" here.
+
+[[operations.params.body]]
+name = "name"
+wire = "incident.name"
+description = "The incident's title, shown on the public status page and used as the subject line of the notification. Write it for the page's readers, not for an operator"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "status"
+wire = "incident.status"
+description = "The lifecycle stage this incident opens in. investigating means the cause is not yet known; identified means it is; monitoring means a fix is deployed and being watched; resolved opens the incident already closed, which is how a retroactive record of a past outage is posted"
+required = true
+schema = { type = "string", enum = ["investigating", "identified", "monitoring", "resolved"] }
+
+[[operations.params.body]]
+name = "body"
+wire = "incident.body"
+description = "The first update's message, shown publicly under the incident and sent verbatim to subscribers if deliver_notifications is true. This is the text the outside world reads, so it must not contain internal hostnames, customer identifiers or anything else not meant to leave the organisation"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "deliver_notifications"
+wire = "incident.deliver_notifications"
+description = "Whether to notify subscribers. true emails and texts every subscriber this page has, immediately and irreversibly; false publishes the incident to the page silently. There is no default here on purpose — publishing to a public page is a choice about an audience, and this connector requires it to be made explicitly on every call"
+required = true
+schema = { type = "boolean" }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "name", "status"]
+properties = { id = { type = "string", description = "The new incident's id — what statuspage-incident-get and statuspage-incident-update address it by" }, name = { type = "string" }, status = { type = "string", description = "Echoes the status just set" }, impact = { type = "string", description = "Statuspage's own calculation for the new incident" }, shortlink = { type = "string", description = "The public short URL for this incident — already live" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, page_id = { type = "string" }, incident_updates = { type = "array", description = "The one update this call posted", items = { type = "object" } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error"
+
+# ---------------------------------------------------------------------------------------------
+# THE SECOND PUBLIC WRITE. Same audience, same one-way notification. `name` is deliberately not
+# declared: under C-56 it would have to be required, and a caller restating a title on every update
+# is a caller who can silently rename a live public incident by mistyping it.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "statuspage-incident-update"
+method = "PATCH"
+path = "/incidents/{incident_id}"
+description = "Post an update to an existing incident on this status page, moving it to a new lifecycle stage and adding a publicly visible message. The update appears on the page immediately, and with deliver_notifications true Statuspage emails and texts every subscriber. The incident's status can be moved again afterwards, but a notification that has been sent cannot be recalled. Does not rename the incident — this operation cannot change its title"
+risk = "high"
+# `PATCH` is not an idempotent method under RFC 9110 §9.2.2, and this repository's emitter refuses
+# `idempotent` on one. It is also true in effect here: each call appends another incident update and
+# another round of subscriber notifications, so repeating is not free.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "incident_id"
+description = "The incident's own id, from statuspage-incident-list's `id` field or statuspage-incident-create's response"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "status"
+wire = "incident.status"
+description = "The lifecycle stage to move the incident to. resolved closes it and marks the status page green again if nothing else is open; monitoring says a fix is deployed and being watched; identified says the cause is known. Moving to a stage the incident is already in is allowed and simply posts another update"
+required = true
+schema = { type = "string", enum = ["investigating", "identified", "monitoring", "resolved"] }
+
+[[operations.params.body]]
+name = "body"
+wire = "incident.body"
+description = "This update's message, shown publicly under the incident and sent verbatim to subscribers if deliver_notifications is true. Required by this connector rather than by Statuspage: an update with no message posts an empty entry to a page the outside world reads"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.body]]
+name = "deliver_notifications"
+wire = "incident.deliver_notifications"
+description = "Whether to notify subscribers of this update. true emails and texts every subscriber immediately and irreversibly; false posts the update to the page silently. Required on every call for the same reason as on statuspage-incident-create — the audience is a choice, not a default"
+required = true
+schema = { type = "boolean" }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "name", "status"]
+properties = { id = { type = "string" }, name = { type = "string", description = "Unchanged — this operation cannot rename an incident" }, status = { type = "string", description = "Echoes the status just set" }, impact = { type = "string" }, shortlink = { type = "string" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, monitoring_at = { type = "string", format = "date-time" }, resolved_at = { type = "string", format = "date-time", description = "Set once the status reaches resolved" }, page_id = { type = "string" }, incident_updates = { type = "array", description = "Every update on the incident including the one this call just posted, most recent first", items = { type = "object" } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error"
+
+# ---------------------------------------------------------------------------------------------
+# The connection check. See `verify` above for why this read rather than the page's own resource.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "statuspage-component-list"
+method = "GET"
+path = "/components"
+description = "List the components this status page publishes — the individual services whose operational state the page shows. Takes no parameter at all and succeeds for any page the API key can administer, which is what makes it the connection check for a settings page's Test Connection button. Returns Statuspage's own first page of results; this connector declares no paging parameters"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "array"
+description = "The page's components, in the page's own display order. Statuspage returns a bare JSON array here, not an object wrapping one"
+items = { type = "object", required = ["id", "name", "status"], properties = { id = { type = "string", description = "The component's own id" }, name = { type = "string", description = "The component's name as shown on the public page" }, status = { type = "string", description = "operational, under_maintenance, degraded_performance, partial_outage or major_outage" }, description = { type = "string", description = "The component's own description, shown on the public page" }, position = { type = "integer", description = "Display order within the page or the component group" }, group = { type = "boolean", description = "Whether this entry is a component *group* rather than a component" }, group_id = { type = "string", description = "The id of the group this component belongs to; null when it is ungrouped or is itself a group" }, showcase = { type = "boolean", description = "Whether the component is shown on the public page at all" }, only_show_if_degraded = { type = "boolean", description = "Whether the component is hidden from the public page while it is operational" }, page_id = { type = "string" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, start_date = { type = "string", description = "The date this component's uptime history begins, as YYYY-MM-DD" } } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any of the above can run.
+#
+# Two fields, both connection level, derived from what they bind: one Statuspage page is one tenant
+# of this connector, and there is no operator-level registration to model because there is no OAuth2
+# app here (see the `[[auth]]` note above).
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "page_id"
+label = "Status page id"
+help = "The id of the status page this connection administers. Statuspage shows it in the address bar of the page's own management screen (manage.statuspage.io/pages/<page id>) and on the API keys screen. One connection administers one page: an account with several status pages needs one installation per page"
+# No `example`. A page id is a short opaque string, and any placeholder shaped like one reads as a
+# real page belonging to a real organisation; `providers/docusign.toml` records the same caution for
+# its account id, and the help text above says where to find the real value instead.
+binds = "endpoint.page_id"
+
+[[config]]
+name = "api_key"
+label = "Statuspage API key"
+help = "Create one under your Statuspage user account's API keys screen. The key carries the permissions of the account that created it, so an account that should only read incidents must not be the one that mints this key. Statuspage shows the key once"
+# No `example`, deliberately: a realistic-looking placeholder for a secret field has already tripped
+# GitHub's push protection and blocked a release (`providers/notion.toml`, `providers/salesforce.toml`
+# and `providers/docusign.toml` record the same caution).
+format = "token"
+secret = true
+docs_url = "https://developer.statuspage.io/"
+binds = "credential.statuspage.api_key"

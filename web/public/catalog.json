@@ -25915,6 +25915,794 @@
       ]
     },
     {
+      "id": "statuspage",
+      "authority": null,
+      "vendor": "Atlassian Statuspage",
+      "description": "Atlassian Statuspage: read a status page's components and incidents, and open or update a publicly visible incident on it",
+      "base_url": "https://api.statuspage.io/v1/pages/{page_id}",
+      "api_version": null,
+      "hosts": [
+        "api.statuspage.io"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://api.statuspage.io/v1/pages/{page_id}",
+          "hosts": [
+            "api.statuspage.io"
+          ],
+          "api_version": null,
+          "gid": null,
+          "operation_count": 5
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "header"
+        ],
+        "credentials": [
+          {
+            "name": "statuspage.api_key",
+            "scheme": {
+              "kind": "header",
+              "name": "Authorization",
+              "prefix": "OAuth "
+            },
+            "description": "Statuspage API key, sent as the Authorization header after the literal scheme word `OAuth ` — a static key from the account's own API settings, not an OAuth2 access token",
+            "env": [
+              "STATUSPAGE_API_KEY"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "statuspage.api_key"
+          ]
+        ]
+      },
+      "operation_count": 5,
+      "operations": [
+        {
+          "id": "statuspage-incident-list",
+          "provider": "statuspage",
+          "service": "default",
+          "description": "List this status page's incidents, most recent first — both unresolved and already-resolved ones. Returns Statuspage's own first page of results; this connector declares no paging parameters, so a page with a long incident history is not enumerated exhaustively here",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/incidents",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "description": "The page's incidents, most recent first. Statuspage returns a bare JSON array here, not an object wrapping one",
+            "items": {
+              "properties": {
+                "components": {
+                  "description": "The components this incident affects, in the shape statuspage-component-list returns",
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The incident's own id — what statuspage-incident-get and statuspage-incident-update address it by",
+                  "type": "string"
+                },
+                "impact": {
+                  "description": "none, maintenance, minor, major or critical — Statuspage's own calculation from the affected components unless an override was set",
+                  "type": "string"
+                },
+                "incident_updates": {
+                  "description": "Every update posted to this incident, most recent first. Each update's body is what subscribers received",
+                  "items": {
+                    "properties": {
+                      "body": {
+                        "description": "The publicly visible message this update posted",
+                        "type": "string"
+                      },
+                      "created_at": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "display_at": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "monitoring_at": {
+                  "description": "When the incident moved to monitoring; null until it does",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "The incident's title, as shown on the public page",
+                  "type": "string"
+                },
+                "page_id": {
+                  "description": "The page this incident belongs to — the same id this connection is configured with",
+                  "type": "string"
+                },
+                "resolved_at": {
+                  "description": "When the incident was resolved; null until it is",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "shortlink": {
+                  "description": "The public short URL for this incident",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "investigating, identified, monitoring or resolved for a realtime incident; scheduled, in_progress, verifying or completed for a scheduled maintenance, which this connector does not create or update",
+                  "type": "string"
+                },
+                "updated_at": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "credentials": [
+            [
+              "statuspage.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.statuspage.io"
+          ],
+          "flux": "op statuspage-incident-list -> Any\n  description \"List this status page's incidents, most recent first — both unresolved and already-resolved ones. Returns Statuspage's own first page of results; this connector declares no paging parameters, so a page with a long incident history is not enumerated exhaustively here. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.statuspage.io/v1/pages/{page_id}\"\n  url = fmt(\"{base}/incidents\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {page_id} value before it has a valid destination URL.",
+                "params": [
+                  "page_id"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "statuspage-incident-get",
+          "provider": "statuspage",
+          "service": "default",
+          "description": "Get one incident on this status page, including every update posted to it so far",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/incidents/{incident_id}",
+          "parameters": [
+            {
+              "name": "incident_id",
+              "in": "path",
+              "wire": null,
+              "description": "The incident's own id, from statuspage-incident-list's `id` field or from statuspage-incident-create's response",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "incident_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "incident_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "components": {
+                "description": "The components this incident affects",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "impact": {
+                "description": "none, maintenance, minor, major or critical",
+                "type": "string"
+              },
+              "incident_updates": {
+                "description": "Every update posted to this incident, most recent first. Each update's body is what subscribers received",
+                "items": {
+                  "properties": {
+                    "body": {
+                      "description": "The publicly visible message this update posted",
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "display_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "monitoring_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "name": {
+                "description": "The incident's title, as shown on the public page",
+                "type": "string"
+              },
+              "page_id": {
+                "type": "string"
+              },
+              "resolved_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "shortlink": {
+                "description": "The public short URL for this incident",
+                "type": "string"
+              },
+              "status": {
+                "description": "investigating, identified, monitoring or resolved for a realtime incident",
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "status"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "statuspage.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.statuspage.io"
+          ],
+          "flux": "op statuspage-incident-get(incident_id: String) -> Any\n  description \"Get one incident on this status page, including every update posted to it so far. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.statuspage.io/v1/pages/{page_id}\"\n  url = fmt(\"{base}/incidents/{incident_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {page_id} value before it has a valid destination URL.",
+                "params": [
+                  "page_id"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "statuspage-incident-create",
+          "provider": "statuspage",
+          "service": "default",
+          "description": "Open a new incident on this status page. It is public the moment this call returns — anyone loading the page sees it, and with deliver_notifications true Statuspage emails and texts every subscriber the page has. The incident itself is reversible (resolve it, or delete it), but a notification that has been sent cannot be recalled, so treat deliver_notifications as the irreversible half of this call",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "POST",
+          "path": "/incidents",
+          "parameters": [
+            {
+              "name": "name",
+              "in": "body",
+              "wire": "incident.name",
+              "description": "The incident's title, shown on the public status page and used as the subject line of the notification. Write it for the page's readers, not for an operator",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "status",
+              "in": "body",
+              "wire": "incident.status",
+              "description": "The lifecycle stage this incident opens in. investigating means the cause is not yet known; identified means it is; monitoring means a fix is deployed and being watched; resolved opens the incident already closed, which is how a retroactive record of a past outage is posted",
+              "required": true,
+              "schema": {
+                "enum": [
+                  "investigating",
+                  "identified",
+                  "monitoring",
+                  "resolved"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "body",
+              "in": "body",
+              "wire": "incident.body",
+              "description": "The first update's message, shown publicly under the incident and sent verbatim to subscribers if deliver_notifications is true. This is the text the outside world reads, so it must not contain internal hostnames, customer identifiers or anything else not meant to leave the organisation",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "deliver_notifications",
+              "in": "body",
+              "wire": "incident.deliver_notifications",
+              "description": "Whether to notify subscribers. true emails and texts every subscriber this page has, immediately and irreversibly; false publishes the incident to the page silently. There is no default here on purpose — publishing to a public page is a choice about an audience, and this connector requires it to be made explicitly on every call",
+              "required": true,
+              "schema": {
+                "type": "boolean"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "body": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "deliver_notifications": {
+                "type": "boolean"
+              },
+              "name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "investigating",
+                  "identified",
+                  "monitoring",
+                  "resolved"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "status",
+              "body",
+              "deliver_notifications"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "description": "The new incident's id — what statuspage-incident-get and statuspage-incident-update address it by",
+                "type": "string"
+              },
+              "impact": {
+                "description": "Statuspage's own calculation for the new incident",
+                "type": "string"
+              },
+              "incident_updates": {
+                "description": "The one update this call posted",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "name": {
+                "type": "string"
+              },
+              "page_id": {
+                "type": "string"
+              },
+              "shortlink": {
+                "description": "The public short URL for this incident — already live",
+                "type": "string"
+              },
+              "status": {
+                "description": "Echoes the status just set",
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "status"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "statuspage.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.statuspage.io"
+          ],
+          "flux": "op statuspage-incident-create(name: String, status: String, body: String, deliver_notifications: Bool) -> Any\n  description \"Open a new incident on this status page. It is public the moment this call returns — anyone loading the page sees it, and with deliver_notifications true Statuspage emails and texts every subscriber the page has. The incident itself is reversible (resolve it, or delete it), but a notification that has been sent cannot be recalled, so treat deliver_notifications as the irreversible half of this call. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.statuspage.io/v1/pages/{page_id}\"\n  url = fmt(\"{base}/incidents\")\n  content_type = \"application/json\"\n  payload = { incident: { body, deliver_notifications, name, status } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {page_id} value before it has a valid destination URL.",
+                "params": [
+                  "page_id"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "statuspage-incident-update",
+          "provider": "statuspage",
+          "service": "default",
+          "description": "Post an update to an existing incident on this status page, moving it to a new lifecycle stage and adding a publicly visible message. The update appears on the page immediately, and with deliver_notifications true Statuspage emails and texts every subscriber. The incident's status can be moved again afterwards, but a notification that has been sent cannot be recalled. Does not rename the incident — this operation cannot change its title",
+          "risk": "high",
+          "idempotency": "non_idempotent",
+          "method": "PATCH",
+          "path": "/incidents/{incident_id}",
+          "parameters": [
+            {
+              "name": "incident_id",
+              "in": "path",
+              "wire": null,
+              "description": "The incident's own id, from statuspage-incident-list's `id` field or statuspage-incident-create's response",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "status",
+              "in": "body",
+              "wire": "incident.status",
+              "description": "The lifecycle stage to move the incident to. resolved closes it and marks the status page green again if nothing else is open; monitoring says a fix is deployed and being watched; identified says the cause is known. Moving to a stage the incident is already in is allowed and simply posts another update",
+              "required": true,
+              "schema": {
+                "enum": [
+                  "investigating",
+                  "identified",
+                  "monitoring",
+                  "resolved"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "body",
+              "in": "body",
+              "wire": "incident.body",
+              "description": "This update's message, shown publicly under the incident and sent verbatim to subscribers if deliver_notifications is true. Required by this connector rather than by Statuspage: an update with no message posts an empty entry to a page the outside world reads",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "deliver_notifications",
+              "in": "body",
+              "wire": "incident.deliver_notifications",
+              "description": "Whether to notify subscribers of this update. true emails and texts every subscriber immediately and irreversibly; false posts the update to the page silently. Required on every call for the same reason as on statuspage-incident-create — the audience is a choice, not a default",
+              "required": true,
+              "schema": {
+                "type": "boolean"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "body": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "deliver_notifications": {
+                "type": "boolean"
+              },
+              "incident_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "investigating",
+                  "identified",
+                  "monitoring",
+                  "resolved"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "incident_id",
+              "status",
+              "body",
+              "deliver_notifications"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "impact": {
+                "type": "string"
+              },
+              "incident_updates": {
+                "description": "Every update on the incident including the one this call just posted, most recent first",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "monitoring_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "name": {
+                "description": "Unchanged — this operation cannot rename an incident",
+                "type": "string"
+              },
+              "page_id": {
+                "type": "string"
+              },
+              "resolved_at": {
+                "description": "Set once the status reaches resolved",
+                "format": "date-time",
+                "type": "string"
+              },
+              "shortlink": {
+                "type": "string"
+              },
+              "status": {
+                "description": "Echoes the status just set",
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "status"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "statuspage.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.statuspage.io"
+          ],
+          "flux": "op statuspage-incident-update(incident_id: String, status: String, body: String, deliver_notifications: Bool) -> Any\n  description \"Post an update to an existing incident on this status page, moving it to a new lifecycle stage and adding a publicly visible message. The update appears on the page immediately, and with deliver_notifications true Statuspage emails and texts every subscriber. The incident's status can be moved again afterwards, but a notification that has been sent cannot be recalled. Does not rename the incident — this operation cannot change its title. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.statuspage.io/v1/pages/{page_id}\"\n  url = fmt(\"{base}/incidents/{incident_id}\")\n  content_type = \"application/json\"\n  payload = { incident: { body, deliver_notifications, status } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PATCH\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {page_id} value before it has a valid destination URL.",
+                "params": [
+                  "page_id"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "statuspage-component-list",
+          "provider": "statuspage",
+          "service": "default",
+          "description": "List the components this status page publishes — the individual services whose operational state the page shows. Takes no parameter at all and succeeds for any page the API key can administer, which is what makes it the connection check for a settings page's Test Connection button. Returns Statuspage's own first page of results; this connector declares no paging parameters",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "method": "GET",
+          "path": "/components",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "description": "The page's components, in the page's own display order. Statuspage returns a bare JSON array here, not an object wrapping one",
+            "items": {
+              "properties": {
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "description": {
+                  "description": "The component's own description, shown on the public page",
+                  "type": "string"
+                },
+                "group": {
+                  "description": "Whether this entry is a component *group* rather than a component",
+                  "type": "boolean"
+                },
+                "group_id": {
+                  "description": "The id of the group this component belongs to; null when it is ungrouped or is itself a group",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The component's own id",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "The component's name as shown on the public page",
+                  "type": "string"
+                },
+                "only_show_if_degraded": {
+                  "description": "Whether the component is hidden from the public page while it is operational",
+                  "type": "boolean"
+                },
+                "page_id": {
+                  "type": "string"
+                },
+                "position": {
+                  "description": "Display order within the page or the component group",
+                  "type": "integer"
+                },
+                "showcase": {
+                  "description": "Whether the component is shown on the public page at all",
+                  "type": "boolean"
+                },
+                "start_date": {
+                  "description": "The date this component's uptime history begins, as YYYY-MM-DD",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "operational, under_maintenance, degraded_performance, partial_outage or major_outage",
+                  "type": "string"
+                },
+                "updated_at": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "credentials": [
+            [
+              "statuspage.api_key"
+            ]
+          ],
+          "hosts": [
+            "api.statuspage.io"
+          ],
+          "flux": "op statuspage-component-list -> Any\n  description \"List the components this status page publishes — the individual services whose operational state the page shows. Takes no parameter at all and succeeds for any page the API key can administer, which is what makes it the connection check for a settings page's Test Connection button. Returns Statuspage's own first page of results; this connector declares no paging parameters. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.statuspage.io/v1/pages/{page_id}\"\n  url = fmt(\"{base}/components\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {page_id} value before it has a valid destination URL.",
+                "params": [
+                  "page_id"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "channels": []
+    },
+    {
       "id": "stripe",
       "authority": null,
       "vendor": "Stripe",
