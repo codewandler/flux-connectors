@@ -50,7 +50,7 @@ use connector_spec::JsonSchema;
 /// (Drive's default field projection is undocumented), jira 1 and zoom 1 (`204`, no body at all),
 /// hubspot 1 (its `PATCH` reference renders no response section). Every one of them says so in its
 /// provider file, next to the operation.
-const COVERED_FLOOR: usize = 105;
+const COVERED_FLOOR: usize = 122;
 
 /// The same floor as a share of every shipped operation, in whole percent. This is the half that
 /// notices a connector arriving with no response shapes at all.

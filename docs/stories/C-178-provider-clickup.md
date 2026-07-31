@@ -2,8 +2,7 @@
 id: C-178
 title: Ship the ClickUp connector
 pillar: Spec
-status: in-progress
-priority: 3
+status: done
 design:
 epic: provider-fleet-2
 areas: [providers]

@@ -18,6 +18,7 @@ pub(crate) mod asana;
 pub(crate) mod babelforce;
 pub(crate) mod r#box;
 pub(crate) mod calendly;
+pub(crate) mod clickup;
 pub(crate) mod figma;
 pub(crate) mod fly;
 pub(crate) mod freshdesk;
@@ -48,6 +49,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &babelforce::PROVIDER,
     &r#box::PROVIDER,
     &calendly::PROVIDER,
+    &clickup::PROVIDER,
     &figma::PROVIDER,
     &fly::PROVIDER,
     &freshdesk::PROVIDER,

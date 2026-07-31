@@ -131,7 +131,6 @@ _A connector's operations are currently legible only by reading `providers/<name
 - [C-174 — Ship the DocuSign connector](C-174-provider-docusign.md) · Spec · the base URI is returned by a userinfo call and is per-account (`{base_uri}/restapi/v2.1/accounts/{account_id}`) — TWO configured path levels above every operation
 - [C-175 — Ship the LaunchDarkly connector](C-175-provider-launchdarkly.md) · Spec · `Authorization: <token>` with NO scheme word at all — tests whether 'no prefix' is expressible distinctly from bearer, or whether it collapses into it
 - [C-177 — Ship the Contentful connector](C-177-provider-contentful.md) · Spec · space AND environment are both path variables, and there are two distinct hosts (delivery vs management) with different credentials — the first provider whose SERVICES need different authorities and different secrets
-- [C-178 — Ship the ClickUp connector](C-178-provider-clickup.md) · Spec · `Authorization: <pk_...>` raw, and the resource tree is four levels deep (team → space → folder → list) before a task
 - [C-179 — Ship the Front connector](C-179-provider-front.md) · Spec · resource ids carry a TYPE PREFIX (`cnv_`, `msg_`, `tea_`) that a model must not invent, and pagination is a full-URL `_links.next`
 - [C-180 — Ship the Postmark connector](C-180-provider-postmark.md) · Spec · `X-Postmark-Server-Token`, and the server token is per-SERVER while the account token is a different header for a different endpoint set — two credentials scoped to different operation subsets
 - [C-181 — Ship the Statuspage connector](C-181-provider-statuspage.md) · Spec · `Authorization: OAuth <token>` — a fourth Authorization scheme word, and a page id prefixes every path
@@ -278,6 +277,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-171 — Ship the Box connector](C-171-provider-box.md) · Spec · folder and file ids are opaque strings where `0` is the magic root — a sentinel value a model will guess wrong without being told
 - [C-172 — Ship the Calendly connector](C-172-provider-calendly.md) · Spec · every resource is addressed by a full URI, not an id — so a parameter's value is itself a URL, and the template must not double-compose it
 - [C-176 — Ship the Figma connector](C-176-provider-figma.md) · Spec · `X-Figma-Token` — a custom header credential, and a file is addressed by a key taken from a URL a human copied
+- [C-178 — Ship the ClickUp connector](C-178-provider-clickup.md) · Spec · `Authorization: <pk_...>` raw, and the resource tree is four levels deep (team → space → folder → list) before a task
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

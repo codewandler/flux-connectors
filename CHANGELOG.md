@@ -9,6 +9,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The ClickUp connector (C-178).** Six operations over a bare `Authorization` header — no scheme
+  word, which needs no new capability: it is `AuthScheme::Header { name: "Authorization" }`, the
+  variant C-161 proved loads and round-trips cleanly. ClickUp's raw token and Okta's prefixed one look
+  alike and are not: only the second needs C-184.
+
+  **It deliberately does not ship every rung of team → space → folder → list → task**, and a test
+  (`the_curated_set_stops_short_of_every_navigation_rung`) pins that rather than leaving it to a future
+  author's restraint. Five navigation endpoints would have added five rows and taught nothing.
+
+  Provenance is better than most of this catalogue: all six shapes were verified against ClickUp's
+  published reference rather than recalled.
+
 - **The Calendly connector (C-172).** Five read operations over a bearer token, `GET /users/me` as
   `verify`.
 
