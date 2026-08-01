@@ -10,9 +10,11 @@
 //!    *patch set* that selects and corrects operations from them. [`load_with_spec`] is that path:
 //!    ingest (C-4) turns each document into every operation the vendor declares, and the patch set
 //!    says which of them this connector publishes and what it corrects about each. **Selection is
-//!    opt-in**, so a pointer with no patch is a connector with no operations. Widening what one
-//!    statement can select — a path-prefix selector, a naming rule, risk stated for a whole set — is
-//!    C-411, C-412 and C-414, and none of it changes that.
+//!    opt-in**, so a pointer with no patch is a connector with no operations. What one *statement*
+//!    selects is wide — [`OperationSelector`] matches a set by service, path prefix and method,
+//!    [`Naming`] derives op ids through one declared rule with pinned exceptions, and both `risk`
+//!    and `expose` may be stated for a whole matched set (C-411, C-412, C-414) — and none of that
+//!    changes opt-in, because a selector is still something an author wrote.
 //!
 //!    **One document is one [`Service`]** (C-410). `[spec]` names one and `[[spec]]` names several;
 //!    they are one key in two TOML spellings and the table is the one-element case. A vendor that
@@ -42,7 +44,7 @@
 //! [`load`] takes bytes and a display name. Reading `providers/*.toml` off disk and fetching specs
 //! is `connector-cli`'s job — see the crate docs.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -204,16 +206,41 @@ impl SpecSource {
     }
 }
 
-/// The patch set applied over an ingested spec — C-6's input.
+/// The patch set applied over an ingested spec — C-6's input, widened to statements about sets by
+/// C-411, C-412 and C-414.
 ///
 /// **Selection is opt-in**, which is why there is no `hide`. A 163-operation spec must not become
 /// 163 LLM tools (`docs/designs/provider-operation-inventory.md` §5.2 selects 9 of them), and an
-/// opt-out list would make every new upstream operation a new tool by default. Only operations
-/// named by a [`OperationPatch::select`] reach the connector.
+/// opt-out list would make every new upstream operation a new tool by default. Only operations a
+/// [`OperationPatch::select`] names or an [`OperationSelector`] matches reach the connector, and a
+/// selector widens what one *statement* selects without making anything default-selected.
+///
+/// # The merge order, stated once
+///
+/// **spec → select → per-operation patch → validate**, and it is total:
+///
+/// 1. ingest turns each document into every operation the vendor declares;
+/// 2. every [`OperationSelector`] states what it states about the set it matched, and two selectors
+///    that state different values for one operation are refused rather than ordered;
+/// 3. the [`OperationPatch`] that names an operation overrides the selector **field by field** —
+///    where the block is silent the selector's statement stands, and where neither speaks the rules
+///    on each field decide;
+/// 4. the result is validated by exactly the pass a hand-authored operation goes through.
+///
+/// The published order follows from the same sentence: operations a `[[patch.operations]]` block
+/// names publish in file order, then everything a selector matched publishes in document order, per
+/// `[[spec]]` entry. Fixed, so identical inputs produce byte-identical IR — and so a file that
+/// declares no selector publishes exactly what it published before selectors existed.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Patch {
-    /// The operations selected from the spec, each with its corrections.
+    /// The statements that select **sets** of operations — C-411.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub select: Vec<OperationSelector>,
+    /// How an `operationId` becomes an op id, declared once — C-412.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub naming: Option<Naming>,
+    /// The operations selected one at a time, each with its corrections.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub operations: Vec<OperationPatch>,
 }
@@ -221,8 +248,349 @@ pub struct Patch {
 impl Patch {
     /// Whether the file carries no patches at all.
     pub fn is_empty(&self) -> bool {
-        self.operations.is_empty()
+        self.select.is_empty() && self.naming.is_none() && self.operations.is_empty()
     }
+
+    /// How to spell the block an author would go and edit, for a refusal about a patch set with no
+    /// `[spec]` to apply to.
+    ///
+    /// Names what the file actually wrote rather than the commonest key: a message about
+    /// `[[patch.operations]]` sends someone who only wrote a selector looking for a block they never
+    /// authored.
+    fn declared(&self) -> &'static str {
+        if !self.operations.is_empty() {
+            "[[patch.operations]]"
+        } else if !self.select.is_empty() {
+            "[[patch.select]]"
+        } else {
+            "[patch.naming]"
+        }
+    }
+}
+
+/// One statement that selects a **set** of operations — C-411.
+///
+/// ```toml
+/// [[patch.select]]
+/// service = "manager"
+/// path_prefix = "/api/v2/agents"
+/// methods = ["GET"]
+/// risk = "low"
+/// idempotency = "idempotent"
+/// expose = false
+/// ```
+///
+/// # Why this exists
+///
+/// [`OperationPatch`] selects exactly one `operationId`. For babelforce's canonical surface that is
+/// **397** blocks, each carrying a `select`, a `rename`, a `risk` and an `idempotency` before any
+/// real correction — a file nobody reviews, which means a file in which nobody notices a wrong
+/// safety claim. A selector is the same statements at the grain they are actually true at: one risk
+/// for 50 DELETEs, one exposure decision for the 388 operations that are callable without being
+/// tools.
+///
+/// # What it does *not* do
+///
+/// It does not make anything default-selected. A file with no selector and no
+/// `[[patch.operations]]` publishes nothing, and there is no `hide`: an opt-out list would make
+/// every operation a vendor adds upstream a tool by default, learned about from a model's behaviour
+/// rather than from a diff.
+///
+/// A selector that matches nothing is a **loud error**, for the same reason
+/// [`OperationPatch::select`] naming an absent `operationId` is: a prefix that stops matching after
+/// an upstream reshuffle would quietly empty the connector and the build would stay green.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OperationSelector {
+    /// **Which document this selector reads** — the `service` of one `[[spec]]` entry (C-410).
+    ///
+    /// Absent is legal only when the file declares exactly one document, and means that one. The
+    /// rule is [`OperationPatch::service`]'s and for the same reason: a path prefix is no more
+    /// unique across documents than an `operationId` is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service: Option<String>,
+    /// The path prefix an operation's path must carry, matched on **whole segments**.
+    ///
+    /// `/api/v2/agents` reaches `/api/v2/agents` and `/api/v2/agents/{id}` and does not reach
+    /// `/api/v2/agentsummary` — a prefix that matched half a segment would select by spelling
+    /// accident, which is the opposite of a statement.
+    ///
+    /// Absent means every path in the document. That is a real case (a document that *is* one
+    /// resource namespace) and still an explicit statement, so it stays legal.
+    ///
+    /// **Path prefix rather than tag**: `Manager` tags 309 of the manager document's 356
+    /// operations, while 47 distinct three-segment prefixes reproduce the SDK's 36 resource
+    /// namespaces almost exactly. The vendor's tags describe the docs site; its paths describe the
+    /// API.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path_prefix: Option<String>,
+    /// The HTTP methods to match. Empty means every method.
+    ///
+    /// Splitting a prefix by method is how one `risk` covers a set honestly: the reads and the
+    /// deletes under one prefix are not one damage claim.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub methods: Vec<HttpMethod>,
+    /// The [`Risk`] every matched operation carries — C-414.
+    ///
+    /// **Silence on a mutating method refuses the build.** See [`Self::idempotency`] for the whole
+    /// rule, which is one rule for both fields.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub risk: Option<Risk>,
+    /// The [`Idempotency`] every matched operation carries — C-414.
+    ///
+    /// # Silence refuses on a write and is answered on a read, and that asymmetry is the point
+    ///
+    /// No OpenAPI document publishes either field, so 214 of babelforce's 398 operations need both
+    /// stated by someone. Deriving them from the HTTP method is the failure mode this repository has
+    /// legislated against twice ([`Risk`] has no `Default`; C-186 made `conditional` state its
+    /// condition or not build), because a default that *flatters* turns 214 unmade decisions into
+    /// 214 claims a host reads as a licence.
+    ///
+    /// So: a matched operation whose method is `POST`, `PUT`, `PATCH` or `DELETE` and about which
+    /// neither this selector nor a `[[patch.operations]]` block says anything is **refused, by
+    /// name**. A matched operation whose method changes nothing takes `low` and `idempotent` — not
+    /// a flattering default but the only values a read can have, and the direction is conservative
+    /// either way, since a default that must be overridden to *lower* risk is safe.
+    ///
+    /// The asymmetry belongs to **selection**, which is a statement about a set that may mix
+    /// methods. A `[[patch.operations]]` block is a statement about one operation, and it still
+    /// states both — one line, on the operation an author is already looking at.
+    ///
+    /// # `conditional` is not made bulk by this
+    ///
+    /// A selector may state `idempotency = "conditional"`, and every matched mutating operation
+    /// then still owes the stated `repeatable_because` C-186 requires — which no selector can
+    /// supply for many operations at once, because one sentence about 54 endpoints is not a
+    /// condition. So the build refuses, per operation. A bulk escape hatch around C-186 is the one
+    /// thing this field must not become.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idempotency: Option<Idempotency>,
+    /// Whether every matched operation reaches a model as a tool — C-413's [`Operation::expose`],
+    /// declared for a set.
+    ///
+    /// Absent means the field's own default, which is **exposed**: silence here decides nothing, and
+    /// nothing-decided must keep meaning what the repository already does. Declaring the inverse
+    /// per operation is 388 lines for babelforce, which is the whole reason this key is here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expose: Option<bool>,
+}
+
+/// How an `operationId` becomes an op id, declared once — C-412.
+///
+/// ```toml
+/// [patch.naming]
+/// rule = "kebab"                     # listReportingCalls -> babelforce-list-reporting-calls
+/// prefix = "babelforce"
+/// [patch.naming.pin]                 # the escape hatch, and the only per-op naming cost
+/// listAgents = "babelforce-agent-list"
+/// ```
+///
+/// # Why a rule is allowed to exist beside "op naming is a public contract"
+///
+/// It is not allowed to exist *instead* of it. `docs/designs/connector-pipeline.md` refuses ids
+/// "derived from volatile spec fields like `operationId` without a pinned override" — and this is
+/// the pinned override, made bulk. Three properties are what make it safe, and all three are
+/// enforced rather than intended:
+///
+/// - the rule is **declared**, so it is reviewable as one line rather than inferred per operation;
+/// - **collisions refuse** — two `operationId`s deriving one op id is an error, never
+///   last-write-wins, because the loser would silently become unreachable under a name a user or a
+///   model still calls;
+/// - a derived id that is not a legal flux `decl_name` is **reported, naming the operation**, never
+///   mangled into something that happens to parse.
+///
+/// The remaining half is a test, not a type: `tests/operation_selection.rs` pins the full derived
+/// id set for a fixture, so an upstream `operationId` rename moves an op id **loudly**.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Naming {
+    /// The derivation to apply. Required: a rule that could be omitted would be a rule decided by
+    /// silence, and silence must not name a public contract.
+    pub rule: NamingRule,
+    /// Prepended to every derived id, joined with `-`. Absent means no prefix.
+    ///
+    /// In practice this is the connector id, because an op id is global: `babelforce` +
+    /// `listReportingCalls` is `babelforce-list-reporting-calls`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prefix: Option<String>,
+    /// `operationId` → the op id to publish it as, overriding [`Self::rule`].
+    ///
+    /// This is where the ids a connector already ships are held still while everything around them
+    /// is derived — the nine `providers/babelforce.toml` publishes today are exactly that case.
+    ///
+    /// **Keyed by `operationId` alone**, which is unique inside one document and nowhere else. A
+    /// key two of the connector's documents both declare is refused rather than applied twice; the
+    /// way to name one of them is a `[[patch.operations]]` block with a `rename`, which is
+    /// service-qualified and outranks a pin.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub pin: BTreeMap<String, String>,
+}
+
+/// The declared derivation from `operationId` to op id.
+///
+/// A closed enum with one variant today, so a second rule is a deliberate addition with its own
+/// review rather than a string the loader interprets — and so a typo is refused by serde naming
+/// every rule that exists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NamingRule {
+    /// `listReportingCalls` → `list-reporting-calls`, with case boundaries becoming `-`.
+    ///
+    /// Acronyms keep their shape: `listHTTPCalls` → `list-http-calls`, because the boundary is read
+    /// at the *end* of a run of capitals rather than at every capital.
+    Kebab,
+}
+
+impl Naming {
+    /// The op id this declaration gives `operation_id`, or the reason it gives none.
+    ///
+    /// A pin answers directly; otherwise the rule derives one and the result is held to the same
+    /// grammar an authored `rename` is. The `Err` is the *reason*, phrased to be pasted into a
+    /// refusal that has already named the operation.
+    fn derive(&self, operation_id: &str) -> std::result::Result<String, String> {
+        if let Some(pinned) = self.pin.get(operation_id) {
+            let pinned = pinned.trim();
+            return legal_op_id(pinned).map(|()| pinned.to_owned());
+        }
+
+        let stem = match self.rule {
+            NamingRule::Kebab => kebab(operation_id),
+        };
+        let derived = match self
+            .prefix
+            .as_deref()
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+        {
+            Some(prefix) => format!("{prefix}-{stem}"),
+            None => stem,
+        };
+        legal_op_id(&derived).map(|()| derived)
+    }
+}
+
+impl OperationSelector {
+    /// Whether this selector matches one of a document's operations.
+    ///
+    /// The `internal` guard is **not** here: matching and eligibility are different questions, and
+    /// a selector that matched only internal paths must still be reported as matching nothing
+    /// rather than as matching something it then dropped.
+    fn matches(&self, operation: &crate::openapi::SpecOperation) -> bool {
+        if !self.methods.is_empty() && !self.methods.contains(&operation.method) {
+            return false;
+        }
+        match self.path_prefix.as_deref().map(str::trim) {
+            Some(prefix) => path_has_prefix(&operation.path, prefix),
+            None => true,
+        }
+    }
+
+    /// How the selector reads back in a refusal — the statement, not an index nobody can find.
+    fn describe(&self) -> String {
+        let mut parts = Vec::new();
+        if let Some(service) = self.service.as_deref() {
+            parts.push(format!("service = {service:?}"));
+        }
+        if let Some(prefix) = self.path_prefix.as_deref() {
+            parts.push(format!("path_prefix = {prefix:?}"));
+        }
+        if !self.methods.is_empty() {
+            let methods: Vec<&str> = self.methods.iter().copied().map(method_word).collect();
+            parts.push(format!("methods = {methods:?}"));
+        }
+        if parts.is_empty() {
+            "`[[patch.select]]` (stating nothing)".to_owned()
+        } else {
+            format!("`[[patch.select]] {}`", parts.join(", "))
+        }
+    }
+}
+
+/// Whether `path` lies under `prefix`, matched on **whole segments**.
+///
+/// `/api/v2/agents` covers `/api/v2/agents/{id}` and not `/api/v2/agentsummary`. Without the
+/// boundary a prefix would select by spelling accident, and the accident would be invisible: the
+/// extra operations arrive silently and correctly-shaped.
+fn path_has_prefix(path: &str, prefix: &str) -> bool {
+    let prefix = prefix.trim_end_matches('/');
+    if prefix.is_empty() {
+        return true;
+    }
+    path == prefix
+        || path
+            .strip_prefix(prefix)
+            .is_some_and(|rest| rest.starts_with('/'))
+}
+
+/// The path segment no selection may ever reach.
+///
+/// Zero of the 398 operations babelforce's five documents declare carry it, which is exactly why it
+/// is here: this is a guard against a *future* pull, and the moment a vendor publishes an internal
+/// endpoint a broad selector would otherwise catalogue it as a supported call. Costing one check to
+/// keep that impossible is the trade.
+const INTERNAL_SEGMENT: &str = "internal";
+
+/// Whether a path names the vendor's own internals.
+fn is_internal(path: &str) -> bool {
+    path.split('/').any(|segment| segment == INTERNAL_SEGMENT)
+}
+
+/// `listReportingCalls` → `list-reporting-calls`.
+///
+/// The boundary is read at the end of a run of capitals rather than at every capital, so
+/// `listHTTPCalls` is `list-http-calls` and not `list-h-t-t-p-calls`. Characters that are neither
+/// letters nor digits are **passed through unchanged** rather than substituted: the result is then
+/// held to the `decl_name` grammar, so an `operationId` that cannot produce a legal id is reported
+/// as itself instead of being silently mangled into something that parses.
+fn kebab(operation_id: &str) -> String {
+    let chars: Vec<char> = operation_id.chars().collect();
+    let mut out = String::with_capacity(operation_id.len() + 8);
+    for (index, ch) in chars.iter().copied().enumerate() {
+        if !ch.is_ascii_uppercase() {
+            out.push(ch);
+            continue;
+        }
+        let follows_a_word = index > 0
+            && (chars[index - 1].is_ascii_lowercase() || chars[index - 1].is_ascii_digit());
+        let ends_an_acronym = index > 0
+            && chars[index - 1].is_ascii_uppercase()
+            && chars.get(index + 1).is_some_and(char::is_ascii_lowercase);
+        if follows_a_word || ends_an_acronym {
+            out.push('-');
+        }
+        out.push(ch.to_ascii_lowercase());
+    }
+    out
+}
+
+/// Whether `id` is a name flux can declare and `connector-pack` can project onto a tool name.
+///
+/// The charset is `flux_lang`'s `decl_name` grammar (C-8) — ASCII alphanumerics, `_` and `-` — and
+/// the empty-level rule is `connector_pack::dotted_name`'s, because an id with a `--` in it becomes
+/// a dotted tool name with an empty level. Re-stated here rather than imported: `connector-spec`
+/// takes neither dependency, and this crate is where a bad id must be refused, since by the time
+/// the emitter sees one the file that produced it is three layers away.
+fn legal_op_id(id: &str) -> std::result::Result<(), String> {
+    if id.is_empty() {
+        return Err("it is empty".to_owned());
+    }
+    if let Some(offender) = id
+        .chars()
+        .find(|ch| !ch.is_ascii_alphanumeric() && *ch != '_' && *ch != '-')
+    {
+        return Err(format!(
+            "it holds {offender:?}, and flux-lang's `decl_name` grammar admits ASCII \
+             alphanumerics, `_` and `-` only"
+        ));
+    }
+    if id.starts_with('-') || id.ends_with('-') || id.contains("--") {
+        return Err(
+            "it has an empty `-`-separated level, so `connector-pack` cannot project it onto a \
+             dotted tool name"
+                .to_owned(),
+        );
+    }
+    Ok(())
 }
 
 /// One operation selected from the vendor spec, and everything the author corrects about it.
@@ -288,6 +656,14 @@ pub struct OperationPatch {
     /// omit the parameter, and the two statements read in that order.
     #[serde(default, skip_serializing_if = "ParamOmission::is_empty")]
     pub omit: ParamOmission,
+    /// Overrides whether this operation reaches a model as a tool — C-413's [`Operation::expose`].
+    ///
+    /// The counterpart of [`OperationSelector::expose`], and the reason both exist: a selector
+    /// states the rule for a set (`expose = false` over 388 operations) and a block states the
+    /// exception (`expose = true` on the curated nine). Absent means whatever the selector that
+    /// matched this operation said, and exposed if none did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expose: Option<bool>,
 }
 
 /// A correction to one parameter of a selected operation.
@@ -816,15 +1192,7 @@ fn ingest_specs(
         }
     }
 
-    let mut selected = Vec::new();
-    for patch in &loaded.patch.operations {
-        let Some(document) = resolve_document(&ingested, &specs, patch, problems) else {
-            continue;
-        };
-        if let Some(operation) = select(document, patch, problems) {
-            selected.push(operation);
-        }
-    }
+    let selected = publish(&loaded.patch, &specs, &ingested, problems);
     loaded.connector.operations.extend(selected);
     loaded.ingested = ingested;
 }
@@ -852,21 +1220,20 @@ fn block(many: bool) -> &'static str {
 fn resolve_document<'a>(
     ingested: &'a [IngestedDocument],
     specs: &[SpecSource],
-    patch: &OperationPatch,
+    service: Option<&str>,
+    subject: &str,
     problems: &mut Vec<String>,
 ) -> Option<&'a IngestedDocument> {
-    let select = patch.select.as_str();
-
-    let Some(service) = patch.service.as_deref().map(str::trim) else {
+    let Some(service) = service.map(str::trim) else {
         if specs.len() == 1 {
             // Present unless *that* document failed to resolve or ingest, which is already reported.
             return ingested.first();
         }
         problems.push(format!(
-            "patch for {select:?} states no `service`, but this connector declares {} vendored \
-             documents ({}). Two documents may declare one `operationId` — babelforce's `getUser` \
-             is in both `manager` and `user` — so a `select` alone does not name an operation; \
-             state the `service` whose document this patch reads",
+            "{subject} states no `service`, but this connector declares {} vendored documents \
+             ({}). Two documents may declare one `operationId` — babelforce's `getUser` is in both \
+             `manager` and `user` — so a `select` alone does not name an operation; state the \
+             `service` whose document this patch reads",
             specs.len(),
             declared_services(specs)
         ));
@@ -881,8 +1248,8 @@ fn resolve_document<'a>(
     // under the patch. Silently selecting nothing is the rot `select` is already loud about.
     if !specs.iter().any(|spec| spec.service() == service) {
         problems.push(format!(
-            "patch for {select:?} names service {service:?}, which no `[[spec]]` entry declares. \
-             The documents this connector compiles are: {}",
+            "{subject} names service {service:?}, which no `[[spec]]` entry declares. The \
+             documents this connector compiles are: {}",
             declared_services(specs)
         ));
     }
@@ -898,72 +1265,421 @@ fn declared_services(specs: &[SpecSource]) -> String {
         .join(", ")
 }
 
-/// One `[[patch.operations]]` block against the ingested document, or a problem saying why not.
+/// **The whole overlay: select, then patch, then publish** — C-6, widened by C-411/412/414.
 ///
-/// Returns `None` on every failure rather than short-circuiting the caller, so a file with five bad
-/// patches reports five lines — the same "every problem at once" contract the rest of this loader
-/// keeps.
-fn select(
-    document: &IngestedDocument,
-    patch: &OperationPatch,
+/// The order is [`Patch`]'s and it is total. Selectors state what they state about the sets they
+/// matched; a `[[patch.operations]]` block overrides that field by field for the one operation it
+/// names; and everything neither statement covers falls to the per-field rules, each of which either
+/// has a value nobody can get wrong or refuses.
+///
+/// Returns the operations to publish. Every failure is a pushed problem and a skipped operation
+/// rather than an early return, so a file with fifty bad statements reports fifty lines.
+fn publish(
+    patch: &Patch,
+    specs: &[SpecSource],
+    ingested: &[IngestedDocument],
     problems: &mut Vec<String>,
-) -> Option<Operation> {
-    let ingested = &document.ingested;
-    let path = document.path.as_str();
-    let select = patch.select.as_str();
-    let Some(spec) = ingested.operation(select) else {
-        // Loud rather than a silent no-op, because a `select` that quietly matches nothing is how a
-        // patch set rots underneath a vendor's rename: the operation disappears from the connector
-        // and the build stays green.
-        problems.push(format!(
-            "`[[patch.operations]] select = {select:?}` names no `operationId` in {path}. {}",
-            nearest(ingested, select)
-        ));
-        return None;
+) -> Vec<Operation> {
+    if let Some(naming) = patch.naming.as_ref() {
+        check_pins(naming, ingested, problems);
+    }
+    let naming = patch.naming.as_ref();
+
+    // **2 · select.** What every selector states about every operation it matched, merged — and a
+    // disagreement between two of them refused here rather than resolved by declaration order.
+    let mut matched: BTreeMap<(&str, &str), Stated> = BTreeMap::new();
+    for selector in &patch.select {
+        let subject = selector.describe();
+        let Some(document) = resolve_document(
+            ingested,
+            specs,
+            selector.service.as_deref(),
+            &subject,
+            problems,
+        ) else {
+            continue;
+        };
+
+        let mut hits = 0usize;
+        for operation in &document.ingested.operations {
+            if !selector.matches(operation) {
+                continue;
+            }
+            // **Matched but not eligible.** A bulk statement never asked for the vendor's
+            // internals, so sweeping one up is silent; naming one by hand is a different act and is
+            // refused below. Counted out of `hits` so a selector that reached *only* internal paths
+            // still reports as matching nothing.
+            if is_internal(&operation.path) {
+                continue;
+            }
+            hits += 1;
+            matched
+                .entry((document.service.as_str(), operation.operation_id.as_str()))
+                .or_default()
+                .absorb(selector, &subject, &operation.operation_id, problems);
+        }
+
+        if hits == 0 {
+            problems.push(format!(
+                "{subject} matches no operation in {}. A selector that selects nothing is refused \
+                 for the same reason a `select` naming an absent `operationId` is: a prefix that \
+                 stopped matching after an upstream reshuffle would empty this connector quietly \
+                 and the build would stay green",
+                document.path
+            ));
+        }
+    }
+
+    // **3 · per-operation patch.** File order, and it wins field by field over any selector that
+    // also matched — which is why the selector's statement is looked up rather than discarded.
+    let mut published: Vec<Operation> = Vec::new();
+    let mut taken: BTreeMap<String, Claim> = BTreeMap::new();
+    let mut claimed: BTreeSet<(&str, &str)> = BTreeSet::new();
+
+    for block in &patch.operations {
+        let select = block.select.as_str();
+        let subject = format!("patch for {select:?}");
+        let Some(document) = resolve_document(
+            ingested,
+            specs,
+            block.service.as_deref(),
+            &subject,
+            problems,
+        ) else {
+            continue;
+        };
+        let Some(spec) = document.ingested.operation(select) else {
+            // Loud rather than a silent no-op, because a `select` that quietly matches nothing is
+            // how a patch set rots underneath a vendor's rename: the operation disappears from the
+            // connector and the build stays green.
+            problems.push(format!(
+                "`[[patch.operations]] select = {select:?}` names no `operationId` in {}. {}",
+                document.path,
+                nearest(&document.ingested, select)
+            ));
+            continue;
+        };
+        claimed.insert((document.service.as_str(), select));
+
+        if is_internal(&spec.path) {
+            problems.push(format!(
+                "`[[patch.operations]] select = {select:?}` names an operation whose path {:?} \
+                 carries an `internal` segment. An endpoint a vendor keeps behind that word is not \
+                 a supported call, so it is selectable neither in bulk nor by name",
+                spec.path
+            ));
+            continue;
+        }
+
+        let stated = matched.get(&(document.service.as_str(), select));
+        if let Some((operation, claim)) = compose(
+            document,
+            spec,
+            Some(block),
+            stated.is_some(),
+            stated.unwrap_or(&Stated::EMPTY),
+            naming,
+            problems,
+        ) {
+            offer(&mut taken, &mut published, operation, claim, problems);
+        }
+    }
+
+    // Everything a selector matched that no block named, in document order per `[[spec]]` entry —
+    // so the published order is a function of the inputs and of nothing else.
+    for document in ingested {
+        for spec in &document.ingested.operations {
+            let key = (document.service.as_str(), spec.operation_id.as_str());
+            if claimed.contains(&key) {
+                continue;
+            }
+            let Some(stated) = matched.get(&key) else {
+                continue;
+            };
+            if let Some((operation, claim)) =
+                compose(document, spec, None, true, stated, naming, problems)
+            {
+                offer(&mut taken, &mut published, operation, claim, problems);
+            }
+        }
+    }
+
+    published
+}
+
+/// What the selectors that matched one operation stated about it, and which one stated each field.
+///
+/// The second half of each pair is what makes a disagreement reportable: "two selectors disagree"
+/// is not actionable, and "`path_prefix = "/api/v2/agents"` and `path_prefix =
+/// "/api/v2/agents/{id}"` disagree about `risk`" is.
+#[derive(Debug, Clone, Default)]
+struct Stated {
+    risk: Option<(Risk, String)>,
+    idempotency: Option<(Idempotency, String)>,
+    expose: Option<(bool, String)>,
+}
+
+impl Stated {
+    /// What a selector states about an operation no selector matched: nothing.
+    const EMPTY: Self = Self {
+        risk: None,
+        idempotency: None,
+        expose: None,
     };
 
-    // `rename` is required, and this is the one place the requirement is stated. An op id is a
-    // public contract users and models call by name, and `operationId` is a volatile vendor field —
-    // promoting one to the other silently is exactly what `docs/designs/connector-pipeline.md`'s "Op
-    // naming is a public contract" refuses. C-412 replaces the per-operation `rename` with a naming
-    // rule declared once; until it lands, an author states each one.
-    let Some(id) = patch.rename.clone() else {
-        problems.push(format!(
-            "patch for {select:?} states no `rename`. An op id is a public name that users and \
-             models call, and `operationId` is a volatile vendor field, so ingest will not promote \
-             one into one — state `rename`"
-        ));
-        return None;
+    /// Fold one more selector's statement in, reporting any field the two disagree about.
+    fn absorb(
+        &mut self,
+        selector: &OperationSelector,
+        subject: &str,
+        operation_id: &str,
+        problems: &mut Vec<String>,
+    ) {
+        agree(
+            &mut self.risk,
+            selector.risk,
+            risk_word,
+            "risk",
+            subject,
+            operation_id,
+            problems,
+        );
+        agree(
+            &mut self.idempotency,
+            selector.idempotency,
+            idempotency_word,
+            "idempotency",
+            subject,
+            operation_id,
+            problems,
+        );
+        agree(
+            &mut self.expose,
+            selector.expose,
+            bool_word,
+            "expose",
+            subject,
+            operation_id,
+            problems,
+        );
+    }
+}
+
+/// Merge one field of one selector's statement into what is already held for an operation.
+///
+/// Silence is not disagreement — a selector that states nothing about `risk` is not fighting with
+/// one that does, it is simply saying less. Two *stated* values that differ are refused, because
+/// picking one would make the merge order depend on the order the selectors happen to be written
+/// in, and an author would have no way to see which won.
+fn agree<T: PartialEq + Copy>(
+    held: &mut Option<(T, String)>,
+    stated: Option<T>,
+    word: fn(T) -> &'static str,
+    field: &str,
+    subject: &str,
+    operation_id: &str,
+    problems: &mut Vec<String>,
+) {
+    let Some(value) = stated else {
+        return;
     };
-    let (Some(risk), Some(idempotency)) = (patch.risk, patch.idempotency) else {
+    match held {
+        Some((existing, first)) if *existing != value => problems.push(format!(
+            "two selectors match {operation_id:?} and disagree about `{field}`: {first} states \
+             {:?} and {subject} states {:?}. Overlapping selectors are legal only while they \
+             agree — two statements fighting over one operation is how the merge order stops being \
+             total",
+            word(*existing),
+            word(value)
+        )),
+        Some(_) => {}
+        None => *held = Some((value, subject.to_owned())),
+    }
+}
+
+/// Where a published op id came from, for a collision that has to explain itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IdSource {
+    /// A `[[patch.operations]] rename`.
+    Renamed,
+    /// A `[patch.naming.pin]` entry.
+    Pinned,
+    /// The `[patch.naming]` rule.
+    Derived,
+}
+
+/// One published op id and the statement that produced it.
+#[derive(Debug, Clone)]
+struct Claim {
+    service: String,
+    operation_id: String,
+    source: IdSource,
+}
+
+/// Publish an operation unless its op id is already claimed — **collisions refuse**.
+///
+/// An op id is what a user or a model calls by name, so two operations deriving one id cannot be
+/// resolved by order: whichever lost would still be documented, still be catalogued, and simply be
+/// unreachable. The colliding operation is dropped rather than published so that
+/// [`validate_operations`] does not report the same cause a second time in different words.
+///
+/// Two **authored** `rename`s colliding is left alone: `validate_patch` already reports that case
+/// with a message about the `rename` key, which is the one an author would go and edit.
+fn offer(
+    taken: &mut BTreeMap<String, Claim>,
+    published: &mut Vec<Operation>,
+    operation: Operation,
+    claim: Claim,
+    problems: &mut Vec<String>,
+) {
+    if let Some(first) = taken.get(&operation.id) {
+        if first.source == IdSource::Renamed && claim.source == IdSource::Renamed {
+            published.push(operation);
+            return;
+        }
         problems.push(format!(
-            "patch for {select:?} states no {}. No OpenAPI document publishes either, so a \
-             selected operation states both or is not published; guessing on the operation's \
-             behalf is how a `retry` turns one charge into three and how a delete is waved through \
-             an approval gate",
-            match (patch.risk, patch.idempotency) {
+            "op id {:?} is claimed twice: by `operationId` {:?} in service {:?} and by {:?} in \
+             service {:?}. An op id is the public name users and models call, so two operations \
+             deriving one is refused rather than resolved by order — pin one of them with \
+             `[patch.naming.pin]`, or rename it with a `[[patch.operations]]` block, which states \
+             its `service` and outranks a pin",
+            operation.id, first.operation_id, first.service, claim.operation_id, claim.service
+        ));
+        return;
+    }
+    taken.insert(operation.id.clone(), claim);
+    published.push(operation);
+}
+
+/// One ingested operation plus everything stated about it, or a problem saying why not.
+///
+/// This is where the three declarations meet, and every field resolves by the same sentence:
+/// **the block, then the selector, then the rule for that field.**
+fn compose(
+    document: &IngestedDocument,
+    spec: &crate::openapi::SpecOperation,
+    patch: Option<&OperationPatch>,
+    selected: bool,
+    stated: &Stated,
+    naming: Option<&Naming>,
+    problems: &mut Vec<String>,
+) -> Option<(Operation, Claim)> {
+    let select = spec.operation_id.as_str();
+
+    // **Naming: `rename`, then a pin, then the rule.** An op id is a public contract users and
+    // models call by name and `operationId` is a volatile vendor field, so nothing here promotes
+    // one into the other by silence — `docs/designs/connector-pipeline.md`, "Op naming is a public
+    // contract". C-412 makes the *pinned override* bulk; it does not remove the requirement to
+    // decide.
+    let (id, source) = match patch.and_then(|patch| patch.rename.clone()) {
+        Some(rename) => (rename, IdSource::Renamed),
+        None => match naming {
+            Some(naming) => match naming.derive(select) {
+                Ok(id) => (
+                    id,
+                    if naming.pin.contains_key(select) {
+                        IdSource::Pinned
+                    } else {
+                        IdSource::Derived
+                    },
+                ),
+                Err(reason) => {
+                    problems.push(format!(
+                        "`operationId` {select:?} in {} derives no legal op id: {reason}. A name a \
+                         user calls is never mangled into one that happens to parse — pin this \
+                         operation with `[patch.naming.pin]`, or select it with a \
+                         `[[patch.operations]]` block that states `rename`",
+                        document.path
+                    ));
+                    return None;
+                }
+            },
+            None if patch.is_some() => {
+                problems.push(format!(
+                    "patch for {select:?} states no `rename`. An op id is a public name that users \
+                     and models call, and `operationId` is a volatile vendor field, so ingest will \
+                     not promote one into one — state `rename`, or declare a `[patch.naming]` rule"
+                ));
+                return None;
+            }
+            None => {
+                problems.push(format!(
+                    "a `[[patch.select]]` matched {select:?} in {}, but this connector declares no \
+                     `[patch.naming]` rule, so nothing says what to publish it as. An op id is a \
+                     public name that users and models call — declare `[patch.naming]`, or select \
+                     this operation with a `[[patch.operations]]` block that states `rename`",
+                    document.path
+                ));
+                return None;
+            }
+        },
+    };
+
+    // **Risk and idempotency: the block, then the selector, then the method.** See
+    // [`OperationSelector::idempotency`] for why the last step exists on a read and refuses on a
+    // write, and why that asymmetry is the safe direction rather than a convenience.
+    let risk = patch
+        .and_then(|patch| patch.risk)
+        .or(stated.risk.as_ref().map(|(value, _)| *value));
+    let idempotency = patch
+        .and_then(|patch| patch.idempotency)
+        .or(stated.idempotency.as_ref().map(|(value, _)| *value));
+    let mutating = matches!(
+        spec.method,
+        HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch | HttpMethod::Delete
+    );
+
+    let (risk, idempotency) = match (risk, idempotency) {
+        (Some(risk), Some(idempotency)) => (risk, idempotency),
+        // A read a selector matched takes the two values a read cannot have wrong. This is the
+        // only default in the whole overlay, and it is available only to a method that changes
+        // nothing — see the type docs.
+        (risk, idempotency) if !mutating && selected => (
+            risk.unwrap_or(Risk::Low),
+            idempotency.unwrap_or(Idempotency::Idempotent),
+        ),
+        (risk, idempotency) => {
+            let missing = match (risk, idempotency) {
                 (None, Some(_)) => "`risk`",
                 (Some(_), None) => "`idempotency`",
                 _ => "`risk` and no `idempotency`",
-            }
-        ));
-        return None;
+            };
+            problems.push(if selected {
+                format!(
+                    "{select:?} is a {} and states no {missing}. No OpenAPI document publishes \
+                     either, and silence about damage on a method that changes something is \
+                     refused rather than defaulted to `low` — state it on the `[[patch.select]]` \
+                     that matched this operation, or on a `[[patch.operations]]` block for it",
+                    method_word(spec.method)
+                )
+            } else {
+                format!(
+                    "patch for {select:?} states no {missing}. No OpenAPI document publishes \
+                     either, so a selected operation states both or is not published; guessing on \
+                     the operation's behalf is how a `retry` turns one charge into three and how a \
+                     delete is waved through an approval gate"
+                )
+            });
+            return None;
+        }
     };
 
     let mut params = spec.params.clone();
-    for correction in &patch.params {
-        correct(&mut params, correction, select, problems);
-    }
-    // **Corrections first, then omissions**, because the omission rules read the corrected
-    // parameter: `required` is refused as the *connector* states it, not as the vendor guessed it.
-    // A document that marks a filter required when it is not would otherwise pin that argument into
-    // the tool with no way out, and the way out has to stay a written statement — correct the flag,
-    // then drop the parameter.
-    for (position, name) in patch.omit.entries() {
-        omit(&mut params, position, name, select, problems);
+    if let Some(patch) = patch {
+        for correction in &patch.params {
+            correct(&mut params, correction, select, problems);
+        }
+        // **Corrections first, then omissions**, because the omission rules read the corrected
+        // parameter: `required` is refused as the *connector* states it, not as the vendor guessed
+        // it. A document that marks a filter required when it is not would otherwise pin that
+        // argument into the tool with no way out, and the way out has to stay a written statement —
+        // correct the flag, then drop the parameter.
+        for (position, name) in patch.omit.entries() {
+            omit(&mut params, position, name, select, problems);
+        }
     }
 
-    Some(Operation {
+    let operation = Operation {
         id,
         // **The document decides the service, not the patch's own opinion of it** — C-410. A
         // `[[spec]]` entry becomes a service and a patch selects out of a document, so the two
@@ -974,25 +1690,75 @@ fn select(
         method: spec.method,
         path: spec.path.clone(),
         description: patch
-            .description
-            .clone()
+            .and_then(|patch| patch.description.clone())
             .unwrap_or_else(|| spec.description.clone()),
         risk,
         idempotency,
+        // **Never stated in bulk.** A selector may declare `idempotency = "conditional"`, and each
+        // matched write then still owes the condition C-186 requires — which arrives here as `None`
+        // and is refused, by name, by `validate_repeatability_condition`. One sentence about 54
+        // endpoints is not a condition, so there is no key here for a selector to write it in.
         repeatable_because: None,
-        auth: patch.auth.clone(),
+        auth: patch.and_then(|patch| patch.auth.clone()),
         params,
         response_schema: spec.response_schema.clone(),
-        quirks: patch.quirks.clone().unwrap_or_default(),
-        // Resolved at integration: C-4 built this literal and C-413 added the field, and neither
-        // branch could see the other. `exposed()` rather than a bare `true` so an ingested operation
-        // takes the same default a hand-authored one does from serde, in one place — and so a spec
-        // route that silently diverged from the file route would fail here rather than in a
-        // catalogue nobody re-reads. Declaring exposure *per selector* is C-411's, not ingest's:
-        // `OperationPatch` carries no `expose` key today, so silence here means the connector-wide
-        // default and never a decision ingest made on an author's behalf.
-        expose: crate::ir::exposed(),
-    })
+        quirks: patch
+            .and_then(|patch| patch.quirks.clone())
+            .unwrap_or_default(),
+        // **The block, then the selector, then the field's own default** — which is exposed, so a
+        // connector nobody said anything about behaves exactly as it did before C-413. `exposed()`
+        // rather than a bare `true` so the spec route and the file route take one default from one
+        // place and cannot drift into a catalogue nobody re-reads.
+        expose: patch
+            .and_then(|patch| patch.expose)
+            .or(stated.expose.as_ref().map(|(value, _)| *value))
+            .unwrap_or_else(crate::ir::exposed),
+    };
+
+    Some((
+        operation,
+        Claim {
+            service: document.service.clone(),
+            operation_id: select.to_owned(),
+            source,
+        },
+    ))
+}
+
+/// Every `[patch.naming.pin]` entry names an operation, and names exactly one — C-412.
+///
+/// A pin that matches nothing is the rot `select` is already loud about, one field over: the vendor
+/// renames an `operationId`, the pin stops applying, and the op id it was holding still quietly
+/// moves to whatever the rule derives. A pin that matches *two* is the C-410 problem in a key that
+/// cannot carry a service — babelforce declares `getUser` in `manager` and in `user` — so it is
+/// refused rather than applied to both, which would only collide one step later with a worse
+/// message.
+fn check_pins(naming: &Naming, ingested: &[IngestedDocument], problems: &mut Vec<String>) {
+    for operation_id in naming.pin.keys() {
+        let declaring: Vec<&str> = ingested
+            .iter()
+            .filter(|document| document.ingested.operation(operation_id).is_some())
+            .map(|document| document.service.as_str())
+            .collect();
+
+        match declaring.len() {
+            0 => problems.push(format!(
+                "`[patch.naming.pin]` pins {operation_id:?}, which no vendored document declares. \
+                 A pin that matches nothing is how a public name rots underneath a vendor's \
+                 rename: the pin stops applying, the rule derives a different id, and the build \
+                 stays green"
+            )),
+            1 => {}
+            count => problems.push(format!(
+                "`[patch.naming.pin]` pins {operation_id:?}, which {count} of this connector's \
+                 documents declare ({}). An `operationId` is unique inside one document and \
+                 nowhere else, so one pin cannot say which of them it means — name the one you \
+                 mean with a `[[patch.operations]]` block, which states its `service` and outranks \
+                 a pin",
+                declaring.join(", ")
+            )),
+        }
+    }
 }
 
 /// Apply one [`ParamPatch`] to a selected operation's parameters.
@@ -1284,11 +2050,13 @@ fn validate(
         );
     }
     if loaded.specs.is_empty() && !loaded.patch.is_empty() {
-        problems.push(
-            "declares `[[patch.operations]]` but no `[spec]`; there is nothing for the patches to \
-             apply to"
-                .to_owned(),
-        );
+        // The key is the one the file actually wrote: a message about `[[patch.operations]]` sends
+        // an author who only declared a selector looking for a block they never authored. The
+        // `[[patch.operations]]` rendering is the golden's, byte for byte.
+        problems.push(format!(
+            "declares `{}` but no `[spec]`; there is nothing for the patches to apply to",
+            loaded.patch.declared()
+        ));
     }
     validate_specs(loaded, &mut problems);
 
@@ -3608,6 +4376,27 @@ fn validate_repeatability_condition(operation: &Operation, problems: &mut Vec<St
     }
 }
 
+/// The `risk` value as an author spells it in a provider file. Exhaustive for the reason
+/// [`idempotency_word`] is: a fifth variant must be a compile error here, not a refusal quoting a
+/// word the file cannot contain.
+fn risk_word(risk: Risk) -> &'static str {
+    match risk {
+        Risk::Low => "low",
+        Risk::Medium => "medium",
+        Risk::High => "high",
+        Risk::Destructive => "destructive",
+    }
+}
+
+/// A boolean as an author spells it, so `expose` reads the same way in a refusal as in the file.
+fn bool_word(value: bool) -> &'static str {
+    if value {
+        "true"
+    } else {
+        "false"
+    }
+}
+
 /// The `idempotency` value as an author spells it in a provider file. Exhaustive so a fourth variant
 /// is a compile error here rather than a refusal quoting the wrong word.
 fn idempotency_word(idempotency: Idempotency) -> &'static str {
@@ -3751,6 +4540,76 @@ fn validate_patch(loaded: &LoadedProvider, inline: &[String], problems: &mut Vec
             }
         }
     }
+
+    validate_selectors(&loaded.patch, problems);
+    if let Some(naming) = loaded.patch.naming.as_ref() {
+        validate_naming(naming, problems);
+    }
+}
+
+/// The `[[patch.select]]` statements themselves — C-411.
+///
+/// Only what can be judged without a document. Whether a selector *matches* anything is
+/// [`publish`]'s, because it needs the ingest; whether it is a well-formed statement is here, so
+/// `load` refuses a malformed one exactly as `load_with_spec` does.
+fn validate_selectors(patch: &Patch, problems: &mut Vec<String>) {
+    for selector in &patch.select {
+        let subject = selector.describe();
+        if let Some(prefix) = selector.path_prefix.as_deref() {
+            let prefix = prefix.trim();
+            if prefix.is_empty() {
+                problems.push(format!(
+                    "{subject} states an empty `path_prefix`. Omit the key to match every path in \
+                     the document — an empty string is the same statement written so it reads like \
+                     a mistake"
+                ));
+            } else if !prefix.starts_with('/') {
+                problems.push(format!(
+                    "{subject} states `path_prefix = {prefix:?}`, which must start with `/`: it is \
+                     matched against the document's own path templates, and those do"
+                ));
+            }
+        }
+    }
+}
+
+/// The `[patch.naming]` declaration itself — C-412.
+///
+/// The pins are checked against the documents in [`check_pins`]; this is the half that holds
+/// without one, so a prefix or a pinned value that could never produce a legal op id is refused
+/// even by [`load`].
+fn validate_naming(naming: &Naming, problems: &mut Vec<String>) {
+    if let Some(prefix) = naming.prefix.as_deref() {
+        let prefix = prefix.trim();
+        if prefix.is_empty() {
+            problems.push(
+                "`[patch.naming] prefix` is empty. Omit the key for no prefix — an empty string is \
+                 the same statement written so it reads like a mistake"
+                    .to_owned(),
+            );
+        } else if let Err(reason) = legal_op_id(prefix) {
+            problems.push(format!(
+                "`[patch.naming] prefix = {prefix:?}` cannot begin a legal op id: {reason}"
+            ));
+        }
+    }
+
+    for (operation_id, pinned) in &naming.pin {
+        if operation_id.trim().is_empty() {
+            problems.push(
+                "`[patch.naming.pin]` has an entry with an empty key; a pin is keyed by the spec's \
+                 `operationId`"
+                    .to_owned(),
+            );
+            continue;
+        }
+        if let Err(reason) = legal_op_id(pinned.trim()) {
+            problems.push(format!(
+                "`[patch.naming.pin]` pins {operation_id:?} to {pinned:?}, which is not a legal op \
+                 id: {reason}"
+            ));
+        }
+    }
 }
 
 /// The keys the loader actually accepts, per documented object, **as serde reports them**.
@@ -3773,6 +4632,8 @@ pub fn accepted_keys() -> Vec<(&'static str, Vec<String>)> {
         ("service", probe::<Service>()),
         ("spec", probe::<SpecSource>()),
         ("patch", probe::<Patch>()),
+        ("operationSelector", probe::<OperationSelector>()),
+        ("naming", probe::<Naming>()),
         ("operationPatch", probe::<OperationPatch>()),
         ("paramPatch", probe::<ParamPatch>()),
         ("paramOmission", probe::<ParamOmission>()),
