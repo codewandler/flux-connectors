@@ -8,7 +8,11 @@
 //! Planning everything before writing anything is also what makes a failed run safe: a provider
 //! that will not compile aborts the run while the tree is still untouched.
 
-use std::path::PathBuf;
+use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::OsStr;
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use connector_spec::{LockEntry, Lockfile};
@@ -38,6 +42,36 @@ impl Change {
     }
 }
 
+/// Whether an artifact belongs to a *family* whose membership follows the inputs — C-429.
+///
+/// This is the half of the build that answers "what on disk did I **not** write". A build compares
+/// each planned artifact against the tree; the inverse — a committed file under a directory the
+/// build owns that no plan claims — had no answer at all, so a rendering whose operation was
+/// deselected survived a full `build` and a `diff` reporting everything up to date. Five did, across
+/// two stories, and every one was deleted by hand.
+///
+/// Stating it here rather than in a list of directories somewhere is the point. The roots are
+/// **derived** from what the plan actually writes, and a new kind of artifact cannot reach the tree
+/// without its author answering this question, because [`planned`] will not compile without it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Ownership {
+    /// One member of a family that owns `root` outright: every file below `root` sharing an
+    /// extension with some member of the family is either claimed by the plan or an orphan.
+    ///
+    /// The root is a *directory the build owns*, not merely the directory the file sits in. A
+    /// generated file that shares its directory with hand-written ones has no family root — see
+    /// [`Ownership::Singleton`].
+    Family(PathBuf),
+    /// A single file a full run always writes, wherever it sits.
+    ///
+    /// It cannot be orphaned: its membership is not a function of what is committed, so a full plan
+    /// either claims it or the artifact no longer exists in the emitter at all. This is what keeps
+    /// `connectors.lock` from making the repository root an artifact root — which would put
+    /// `Cargo.lock` up for removal — and `crates/catalog/src/generated.rs` from doing the same to
+    /// `crates/catalog/src/lib.rs`.
+    Singleton,
+}
+
 /// One artifact, compiled and compared but not yet written.
 #[derive(Debug, Clone)]
 pub struct PlannedArtifact {
@@ -49,6 +83,17 @@ pub struct PlannedArtifact {
     pub current: Option<String>,
     /// The verdict.
     pub change: Change,
+    /// Whether a sibling of this file could be an orphan, and under which root — C-429.
+    pub ownership: Ownership,
+}
+
+/// A committed file under an artifact root that no plan claims — C-429.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Orphan {
+    /// The file on disk.
+    pub path: PathBuf,
+    /// The artifact root it sits under, which is what makes it judgeable.
+    pub root: PathBuf,
 }
 
 /// The full result of compiling a workspace, ready to write or to render.
@@ -65,6 +110,14 @@ pub struct Plan {
     /// hand-authored connector, which is why no committed artifact and no existing CLI output moves
     /// when this is empty.
     pub diagnostics: Vec<String>,
+    /// Committed files under an artifact root that this plan does not claim — C-429.
+    ///
+    /// **Empty on a scoped run, and that is not the same as "none".** `--provider` and `--service`
+    /// compiled a subset, so every artifact of every provider the run never looked at would read as
+    /// unclaimed, and the check would report the catalogue as garbage. It therefore runs against a
+    /// whole-catalogue plan or not at all — the same hazard `connectors.lock` carries one layer
+    /// down. See [`plan_selected`].
+    pub orphans: Vec<Orphan>,
 }
 
 impl Plan {
@@ -136,6 +189,9 @@ pub fn plan_selected(
             lockfile
                 .to_toml()
                 .context("cannot render connectors.lock")?,
+            // One file at the repository root, always written by a full run. Its directory is the
+            // repository, not an artifact root — see [`Ownership::Singleton`].
+            Ownership::Singleton,
         )?);
 
         artifacts.push(planned(
@@ -146,28 +202,114 @@ pub fn plan_selected(
                     .map(|provider| provider.name.clone())
                     .collect::<Vec<_>>(),
             )?,
+            Ownership::Singleton,
         )?);
 
         let core = core_catalog::read_optional(workspace)?;
         artifacts.push(planned(
             workspace.site_catalog_path(),
             site::document_with_core(entries, core.clone())?,
+            Ownership::Singleton,
         )?);
         if let Some(core) = &core {
+            let root = core_catalog::public_root(workspace);
             for (path, contents) in core_catalog::public_artifacts(workspace, core)? {
-                artifacts.push(planned(path, contents)?);
+                // A family: one document per record in the vendored snapshot, so a record Flux
+                // retires leaves its published document behind.
+                artifacts.push(planned(path, contents, Ownership::Family(root.clone()))?);
             }
         }
         artifacts.extend(readme_images(workspace)?);
     }
 
     artifacts.sort_by(|a, b| a.path.cmp(&b.path));
+    let orphans = if whole_catalogue {
+        orphaned(&artifacts)?
+    } else {
+        Vec::new()
+    };
 
     Ok(Plan {
         providers: providers.into_iter().map(|p| p.name).collect(),
         artifacts,
         diagnostics,
+        orphans,
     })
+}
+
+/// Every committed file under an artifact root that `artifacts` does not claim — C-429.
+///
+/// The roots are **derived**: each is a directory some planned artifact declared it belongs to, so
+/// the set grows with the artifacts rather than with a list somebody remembers to edit. A root a
+/// hand-written list forgot is an orphan class nobody would ever find, which is the same argument
+/// `tests/publish_closure.rs` makes about the publish set.
+///
+/// The *shape* is derived the same way. A file counts only if it shares an extension with some
+/// member of that root's family, which is what keeps `crates/catalog/ops/README.md` — a hand-written
+/// file in a directory whose generated contents are `.flux` — out of the report. A false positive in
+/// a gate is how a gate stops being read, so the check is deliberately narrower than "everything
+/// under this directory".
+fn orphaned(artifacts: &[PlannedArtifact]) -> Result<Vec<Orphan>> {
+    let mut families: BTreeMap<&Path, BTreeSet<&OsStr>> = BTreeMap::new();
+    for artifact in artifacts {
+        if let Ownership::Family(root) = &artifact.ownership {
+            if let Some(extension) = artifact.path.extension() {
+                families.entry(root).or_default().insert(extension);
+            }
+        }
+    }
+    let claimed: BTreeSet<&Path> = artifacts
+        .iter()
+        .map(|artifact| artifact.path.as_path())
+        .collect();
+
+    let mut orphans = Vec::new();
+    for (root, extensions) in families {
+        let mut committed = Vec::new();
+        collect_files(root, &mut committed)?;
+        for path in committed {
+            let shaped_like_an_artifact = path
+                .extension()
+                .is_some_and(|extension| extensions.contains(extension));
+            if shaped_like_an_artifact && !claimed.contains(path.as_path()) {
+                orphans.push(Orphan {
+                    path,
+                    root: root.to_path_buf(),
+                });
+            }
+        }
+    }
+    orphans.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(orphans)
+}
+
+/// Every regular file below `dir`, recursively; an absent directory contributes nothing.
+///
+/// Symlinks are skipped rather than followed: a link is not a file this build wrote, and following
+/// one could walk out of the root the caller reasoned about.
+fn collect_files(dir: &Path, into: &mut Vec<PathBuf>) -> Result<()> {
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        // A fixture tree that never grew this directory, which is the ordinary case for a catalogue
+        // with no renderings yet.
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(error).with_context(|| format!("cannot read {}", dir.display()));
+        }
+    };
+    for entry in entries {
+        let entry = entry.with_context(|| format!("cannot read an entry of {}", dir.display()))?;
+        let path = entry.path();
+        let kind = entry
+            .file_type()
+            .with_context(|| format!("cannot inspect {}", path.display()))?;
+        if kind.is_dir() {
+            collect_files(&path, into)?;
+        } else if kind.is_file() {
+            into.push(path);
+        }
+    }
+    Ok(())
 }
 
 /// The README's syntax-highlighted images, planned like every other artifact (C-45).
@@ -193,6 +335,12 @@ fn readme_images(workspace: &Workspace) -> Result<Vec<PlannedArtifact>> {
             planned(
                 workspace.snippet_svg_path(theme.name),
                 connector_flux::highlight::render_svg(&source, theme),
+                // One file per compiled-in theme, and `assets/` is not an artifact root: it holds
+                // the hand-maintained `readme-snippet.flux` and the brand images. `THEMES` is a
+                // constant of the highlighter rather than a function of what is committed, so the
+                // set cannot shrink under a build — only under an edit to that constant, which is
+                // reviewed as a diff to code.
+                Ownership::Singleton,
             )
         })
         .collect()
@@ -253,14 +401,19 @@ fn compile(
     // One module and one manifest per service — the emitted unit (C-49). A `default`-only provider
     // yields exactly the two files it always did.
     let mut artifacts = Vec::new();
+    // `connectors/` holds nothing but these two files per service, so it is the family's root: a
+    // module whose service stopped existing has nowhere to hide there (C-429).
+    let units = Ownership::Family(workspace.artifacts_dir());
     for unit in emitted.services {
         artifacts.push(planned(
             workspace.service_module_path(&provider.name, &unit.service),
             unit.module,
+            units.clone(),
         )?);
         artifacts.push(planned(
             workspace.service_manifest_path(&provider.name, &unit.service),
             unit.manifest,
+            units.clone(),
         )?);
     }
 
@@ -269,11 +422,14 @@ fn compile(
         artifacts.push(planned(
             workspace.catalog_module_path(&provider.name),
             emitted.catalog,
+            Ownership::Family(workspace.catalog_generated_dir()),
         )?);
+        let renderings = Ownership::Family(workspace.catalog_ops_root());
         for rendering in emitted.operations {
             artifacts.push(planned(
                 workspace.catalog_op_path(&provider.name, &rendering.id),
                 rendering.source,
+                renderings.clone(),
             )?);
         }
     }
@@ -321,7 +477,12 @@ fn lock_entry(
     Ok(entry)
 }
 
-fn planned(path: PathBuf, contents: String) -> Result<PlannedArtifact> {
+/// Compare one artifact against the tree.
+///
+/// `ownership` has no parameter default on purpose: it is the only place the build states which
+/// directory it owns, and an artifact that reached the tree without stating it would be a family
+/// whose orphans nothing looks for. See [`Ownership`].
+fn planned(path: PathBuf, contents: String, ownership: Ownership) -> Result<PlannedArtifact> {
     let current = artifact::read_if_exists(&path)?;
     let change = match &current {
         None => Change::Created,
@@ -333,6 +494,7 @@ fn planned(path: PathBuf, contents: String) -> Result<PlannedArtifact> {
         contents,
         current,
         change,
+        ownership,
     })
 }
 
@@ -341,6 +503,9 @@ fn planned(path: PathBuf, contents: String) -> Result<PlannedArtifact> {
 /// Returns the paths actually written. Skipping unchanged files is what keeps a rebuild from
 /// churning mtimes, and it is the reason a second build is a true no-op rather than a rewrite that
 /// happens to produce the same bytes.
+///
+/// **This function never removes a file**, including an orphan ([`Plan::orphans`]). `build` refuses
+/// and names one instead — see `crate::build`.
 pub fn apply(plan: &Plan) -> Result<Vec<PathBuf>> {
     let mut written = Vec::new();
     for artifact in plan.changes() {
