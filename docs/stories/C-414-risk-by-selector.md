@@ -2,8 +2,7 @@
 id: C-414
 title: "Risk and idempotency stated by selector, with silence refusing"
 pillar: Spec
-status: in-progress
-priority: 2
+status: done
 design: docs/designs/spec-front-end.md
 epic: spec-front-end
 areas: [connector-spec]

@@ -2,8 +2,7 @@
 id: C-412
 title: "A declared naming rule turns operationId into a stable op id"
 pillar: Spec
-status: in-progress
-priority: 2
+status: done
 design: docs/designs/spec-front-end.md
 epic: spec-front-end
 areas: [connector-spec]

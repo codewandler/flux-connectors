@@ -26,6 +26,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **One statement selects many operations, names them, and states their risk** (C-411, C-412, C-414).
+  Three stories describing one declaration, landed together because they are one struct. The result is
+  the number the epic was built to produce: **the whole babelforce surface selects in 175 declaration
+  lines**, of which 135 are the selection itself — 13 `[[patch.select]]` blocks, a naming rule with
+  nine compatibility pins, and 10 per-operation exception blocks. One block per operation would have
+  been **north of 1,600 lines**.
+
+  - **`[[patch.select]]`** matches by service, path prefix and method, on **whole path segments**.
+    Selection stays opt-in: there is no `hide` key and a test asserts there never is one. A selector
+    matching nothing is refused, and two overlapping selectors that *disagree* are refused while two
+    that agree are not — silence is not disagreement.
+  - **`[patch.naming]`** derives an op id from `operationId` through one declared rule, with pins for
+    exceptions. Precedence is total: `rename`, then a pin, then the rule. Measured against the real
+    documents, the rule derives **397 distinct ids from 398 operationIds** — exactly one collision,
+    `getUser`, which babelforce declares in two different documents. Collisions **refuse**; an
+    `operationId` that cannot produce a legal name is reported rather than mangled, because
+    non-alphanumerics are passed through precisely so the result fails.
+  - **Risk and idempotency by selector**, with silence on a mutating method refusing by name. The one
+    default in the whole overlay is that a *selector-matched* read may go unstated — `low` and
+    `idempotent` are not flattering guesses for a `GET`, they are the only values a read can have. A
+    `[[patch.operations]]` block still states both, so no existing provider moves.
+  - **C-186 has no bulk escape hatch**: a selector carries no `repeatable_because` key at all, so a
+    bulk `conditional` arrives with no condition and is refused per operation, by name.
+  - **No operation on a path carrying an `internal` segment is ever selected.** Zero exist across the
+    five documents, so this is a guard against a future spec pull rather than a filter.
+
 - **`connectors.lock` is written** (C-189). Three CHANGELOG entries asserted byte-identity of a file
   that **did not exist**. `lock.rs` was a complete, tested hash domain whose *writer* was never built,
   so provenance was computed and discarded and drift detection — vision principle 1 — was unenforced

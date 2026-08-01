@@ -2,8 +2,7 @@
 id: C-411
 title: "One selector selects many operations, so 397 do not cost 397 blocks"
 pillar: Spec
-status: in-progress
-priority: 2
+status: done
 design: docs/designs/spec-front-end.md
 epic: spec-front-end
 areas: [connector-spec]
