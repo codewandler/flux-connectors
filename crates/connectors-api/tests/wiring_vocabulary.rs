@@ -30,6 +30,7 @@ const PAGE: &str = include_str!("../src/index.html");
 fn every_variant() -> Vec<Wiring> {
     let all = vec![
         Wiring::NoCredentialRequired,
+        Wiring::NoCredential,
         Wiring::Wired,
         Wiring::PartlyWired,
         Wiring::NotWired,
@@ -37,6 +38,7 @@ fn every_variant() -> Vec<Wiring> {
     for wiring in &all {
         match wiring {
             Wiring::NoCredentialRequired
+            | Wiring::NoCredential
             | Wiring::Wired
             | Wiring::PartlyWired
             | Wiring::NotWired => {}

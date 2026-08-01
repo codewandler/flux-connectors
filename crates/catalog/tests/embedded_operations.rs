@@ -283,6 +283,56 @@ fn no_operation_names_a_credential_it_does_not_reference() {
     }
 }
 
+/// **Every operation says *why* it names the credentials it does** — C-235.
+///
+/// The invariant [`catalog::Operation::credential_requirement`]'s doc states, held over whatever
+/// ships: the requirement is [`Declared`](catalog::CredentialRequirement::Declared) exactly when
+/// the mechanism list is non-empty. The two empty states are what the field exists for, and they
+/// are the ones a consumer could not previously tell apart.
+///
+/// A **property**, not a census (`AGENTS.md`, "A per-provider test asserts about its provider,
+/// never about the catalogue"): it names no connector and counts nothing, so a fifty-fourth
+/// provider satisfies it or is exactly the arrival it should fail on. What it cannot assert is that
+/// any particular state is *reached* — nothing declares `auth = []` yet, and requiring one here
+/// would be a rule forbidding the catalogue from being what it currently is.
+#[test]
+fn the_declared_requirement_agrees_with_the_mechanism_list() {
+    use catalog::CredentialRequirement;
+
+    for operation in all() {
+        let declared = operation.credential_requirement == CredentialRequirement::Declared;
+        assert_eq!(
+            declared,
+            !operation.credentials.is_empty(),
+            "`{}` is catalogued as {:?} with {} mechanism(s) — a requirement of `Declared` and a \
+             mechanism list are the same claim, and they disagree",
+            operation.id,
+            operation.credential_requirement,
+            operation.credentials.len()
+        );
+    }
+}
+
+/// **The tokens are C-206's published ones**, character for character.
+///
+/// `no-credential-required` and `no-credential` are the two codes `web/public/catalog.json` already
+/// publishes for these states (`docs/designs/catalog-json.md`), and `connectors-api`'s `Wiring`
+/// serializes them onwards to an operator page. They are published contract tokens: extended, never
+/// renamed. This crate depends on nothing, so the agreement is asserted against the literals rather
+/// than against `connector_cli::status`'s constants — which is also the direction that matters,
+/// since a consumer switching on the string is who both surfaces are for.
+#[test]
+fn the_requirement_tokens_are_the_published_ones() {
+    use catalog::CredentialRequirement;
+
+    assert_eq!(CredentialRequirement::Declared.as_str(), "declared");
+    assert_eq!(
+        CredentialRequirement::NoneRequired.as_str(),
+        "no-credential-required"
+    );
+    assert_eq!(CredentialRequirement::Withheld.as_str(), "no-credential");
+}
+
 /// The two directions of the middle level: every operation belongs to a provider that lists it, and
 /// every provider's listing holds only its own.
 #[test]
