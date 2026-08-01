@@ -9,6 +9,47 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A configuration field can declare a closed set of values** (C-225). A two-choice region rendered as
+  free text, so a wrong answer looked exactly like a bad key — the user got a 401 and no way to tell
+  which mistake they had made. Two vendors were waiting on it, and `providers/intercom.toml` recorded
+  *"the regional hosts are not selectable"* as an open gap in the file itself. Both now declare their
+  set, and that comment is gone.
+
+  Each choice carries a **label**, so a UI shows a person "European Union" rather than
+  `api.eu.newrelic.com`. A value outside the set is refused where it is supplied, and the refusal names
+  the permitted answers. The set is **published** to the manifest and `catalog.json`, because a
+  hosted product that cannot read the choices still renders a text box. Every permitted value is
+  checked against the field's own `format`, and against its request position where it is pinned.
+
+  A stored value that later leaves the set is deliberately **not** re-validated on the way out: this is
+  a write-path check, and silently rejecting a credential that was valid when it was saved is a worse
+  failure than the one it would prevent.
+
+  Intercom's `base_url` becomes `https://{host}`, so an EU or AU workspace can be connected at all —
+  a behaviour change to a shipped connector, taken deliberately, and it fails closed with
+  `MissingConfig` naming the field rather than defaulting to a region.
+
+- **`scripts/cut-release.sh` cuts a release in one transactional command** (C-427). Cutting v0.9.0 was
+  nine hand-run steps, and the dangerous one is the bump: this repository is a compiler whose output
+  records its own version, so **120 generated manifests carry `generator = "flux-connectors <version>"`**
+  and `connectors.lock` hashes them. A bump without a regenerate in the same commit leaves the tree
+  inconsistent with itself, and it surfaces *after* the commit. Doing it by hand rewrote 184 artifacts.
+
+  A red gate restores the tree exactly, so a failed cut is safe to re-run, and the script stages **only**
+  the release files — a property that matters in a repository where several sessions work at once, as
+  one did during this very run.
+
+  **A transactional hole in the script this was ported from was found by hitting it.** An `EXIT` trap
+  alone does not run for an untrapped fatal signal, so a `SIGPIPE` mid-cut left the changelogs promoted
+  and the manifest bumped with the snapshot restoring nothing. Fixed here with
+  `trap 'exit N' HUP INT PIPE TERM`, and a test fails without those four lines. **The upstream script
+  has the same gap.**
+
+  It does not push and does not publish. Pushing the tag *is* the crates.io publication, so the script
+  prepares that moment and never takes it by accident.
+
+### Added
+
 - **`build` sees the artifact no plan claims, and refuses to ship it** (C-429). `build` and `diff`
   compared each *planned* artifact against what was committed and had no view of the inverse: a file
   under an artifact root that **no plan claims**. A rendering whose operation was deselected was never

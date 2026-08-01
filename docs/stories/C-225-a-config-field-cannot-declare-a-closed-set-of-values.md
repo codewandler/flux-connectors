@@ -2,8 +2,7 @@
 id: C-225
 title: "A configuration field cannot declare a closed set of values, so a two-choice region reads as free text and a wrong answer looks exactly like a bad key"
 pillar: Spec
-status: in-progress
-priority: 2
+status: done
 design: docs/designs/connector-configuration.md
 epic:
 areas: [connector-spec, bridge]

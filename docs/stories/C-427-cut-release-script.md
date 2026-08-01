@@ -2,8 +2,7 @@
 id: C-427
 title: "Cutting a release is nine hand-run steps, and flux already has the script"
 pillar: Build
-status: in-progress
-priority: 2
+status: done
 areas: [build]
 note: "found while documenting the release process 2026-08-01 — AGENTS.md now spells out nine ordered steps that a human or an agent performs by hand, and step 2 is load-bearing: 120 generated manifests carry the version string, so a bump that forgets to regenerate leaves `diff` red. flux's scripts/cut-release.sh is 217 lines and transactional"
 ---
