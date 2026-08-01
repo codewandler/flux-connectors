@@ -138,6 +138,61 @@ the field past its own rule), it is the input type a renderer falls back to, and
 Ranges, patterns and conditionals are each their own argument, and the same call `format`'s missing
 `pattern` already makes applies.
 
+### `also_binds` is one question reaching more than one **destination** (C-229)
+
+`choices` is about the set of legal *values*; this is about the set of *destinations*. They are
+genuinely different questions, and Algolia is the vendor that forces the second one:
+`X-Algolia-Application-Id` is a mandatory header on every call, and the *same* application id also
+composes the request's hostname. The value is not a secret — Algolia publishes it in client-side code
+— so it belongs in `[[config]]`, and until this landed there was no way to say it once.
+
+C-164 refused to ship the connector twice rather than say it dishonestly, and measured all three ways
+of faking it:
+
+| shape | outcome |
+|---|---|
+| two fields, different names (`endpoint.app_id` + `header.X-Algolia-Application-Id`) | **loads** — and is the problem: two host-side slots, one answer, nothing keeping them in step, and no honest `help` for the second field |
+| two fields, one name | **refused** — the shared-slot rule (invariant 11): *two questions that share an answer are one question* |
+| one field, header pin alone, hostname resolving from it | **refused** — only `endpoint.<var>` binds a `base_url` variable (invariant 1) |
+
+Both refusals are right. What was missing is **the one question**:
+
+```toml
+[[config]]
+name       = "app_id"
+label      = "Algolia application id"
+help       = "…it forms the hostname every call goes to, and is sent as a header on every request — you supply it once here"
+example    = "B1G2GM9NG0"
+binds      = "endpoint.app_id"
+also_binds = ["header.X-Algolia-Application-Id"]
+```
+
+One `name`, one `label`, one `help`, one row in a form, **one host-side slot**, two destinations.
+
+**Why `also_binds` and not `binds` becoming a list.** A list of peers has no head, and this
+declaration needs one, because `Position::name` is deliberately both the `{placeholder}` and the wire
+spelling. A field whose destinations spell the value differently — `app_id` in the host,
+`X-Algolia-Application-Id` on the wire — therefore forces a choice about which spelling the emitted
+module carries. With a head there is one rule and no conditional: **the emitted module carries
+`binds`' own target, everywhere**, and a further destination contributes only what the vendor sees.
+With a bare list the answer would be "element zero" — a convention about ordering rather than a
+property of the declaration. It also keeps `binding()`, `level()` and the stored `(kind, name)`
+address exactly what they were for every field that existed before.
+
+**A further destination is a request position and nothing else** (`path.`, `query.`, `header.`).
+Every other kind resolves under its own address through a different port: a credential and an OAuth
+half through the secret side, a `username.` under its own `(kind, name)`. One collected value has one
+address, so a field naming any of those names it alone. An `endpoint.` destination is the head or
+nothing — its spelling is fixed by a `base_url` the author already wrote, so it is the destination
+with the least freedom and the natural head.
+
+**Every destination validates, and the host rule is the strict one.** The `example` and every
+`choice` are checked once per destination, because the intersection of two rules is taken by checking
+both. That matters in one direction specifically: `acme.example@evil.example` passes the path, query
+and header rules — none of those positions cares about an `@` — and substituted into an authority it
+moves the origin. `connector-pack` reaches the same conclusion from the runtime end: a variable it
+sees in two positions is held to every rule at once, and is not encoded differently per destination.
+
 **A stored value that later leaves the set keeps working.** Membership is checked where a value is
 *supplied* — `ConfigField::permits`, called by whatever accepts a value from a human, which in this
 repository is `connectors-api`'s `PUT /v1/config/…` — and never where a stored value is read back
@@ -189,6 +244,19 @@ so is the breaking `auth.oauth2` flattening.
     literal, a set is all of them); the `example` is one of the choices; and where the field pins a
     request position, every choice satisfies that position too — a permitted value that escaped its
     path segment would be a *sanctioned* way to address another resource.
+11. **Two fields never share a slot, and never share a wire position** (C-197, extended by C-229). A
+    host keys a value by `(tenant, provider, service, kind, name)` and the emitted module carries one
+    `{placeholder}` per field, so two fields of one service whose slots collide are one slot — the
+    collapse C-197 found between Contentful's two spaces, where a management write landed in whichever
+    space the delivery reads were configured with. *Two questions that share an answer are one
+    question.* C-229 does not weaken this; it answers the other half, and one field with two
+    destinations is one question with one slot. The second clause is what a further destination makes
+    newly possible: two fields, two slots, one header — a request carrying one of two values depending
+    on an order nothing declares.
+12. **A further destination is a request position, named once** (C-229). Every other kind resolves
+    under its own address through a different port, so it cannot share a slot; and one value reaches a
+    position once. Each destination's own rule applies to the `example` and to every choice, the host
+    rule included — see the `also_binds` section for why the host rule is the strict one.
 
 ## Webhooks as a full exposure
 

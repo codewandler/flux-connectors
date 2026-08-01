@@ -2396,9 +2396,72 @@ fn validate_choices(field: &ConfigField, problems: &mut Vec<String>) {
 }
 
 /// Checks one field's `binds`: that it parses, that it resolves, and that `secret` agrees with it.
+///
+/// **And each of its `also_binds`, on the same terms** (C-229). A field reaching several
+/// destinations is validated once per destination rather than once per field, so "every position is
+/// checked, not only the first" is how the loop is written rather than a claim beside it. The
+/// per-field questions — the destination set is well-formed, and the slot collides with nothing —
+/// are [`validate_destinations`] and [`validate_slot_is_not_shared`].
 fn validate_binding(connector: &Connector, field: &ConfigField, problems: &mut Vec<String>) {
+    validate_destinations(field, problems);
+    for binds in
+        std::iter::once(field.binds.as_str()).chain(field.also_binds.iter().map(String::as_str))
+    {
+        validate_one_binding(connector, field, binds, problems);
+    }
+    validate_slot_is_not_shared(connector, field, problems);
+}
+
+/// **The destination set itself is well-formed**, before any of its members is resolved.
+///
+/// Three rules, and each is a consequence of the slot being `binds`' own target:
+///
+/// 1. **A further destination is a request position and nothing else.** An `endpoint.` entry here
+///    would be a second `{placeholder}` in a `base_url` the emitter fills from a slot that is not
+///    its own, so it would arrive at the vendor as text; a `credential.`, `username.` or `oauth.`
+///    entry resolves through a *different port* under a different address, which is the one thing a
+///    single slot cannot be. The `endpoint.` case has a spelling that works and it is `binds`.
+/// 2. **No destination is named twice.** One value written into one position twice is either a
+///    duplicate the emitter drops or a header sent twice; either way the second entry says nothing
+///    the first did not.
+/// 3. **`also_binds` on its own means nothing** — it is only ever the tail of `binds`, so an entry
+///    that fails to parse is reported against the field like `binds` is.
+fn validate_destinations(field: &ConfigField, problems: &mut Vec<String>) {
     let name = field.name.as_str();
-    let binding = match parse_binding(&field.binds) {
+    let mut seen: Vec<&str> = vec![field.binds.as_str()];
+    for binds in field.also_binds.iter().map(String::as_str) {
+        if seen.contains(&binds) {
+            problems.push(format!(
+                "configuration field {name:?} names the destination {binds:?} twice. One collected \
+                 value reaches a position once; a repeat is either dropped by the emitter or sent \
+                 twice, and neither says anything the first one did not"
+            ));
+        }
+        seen.push(binds);
+        match parse_binding(binds) {
+            Ok(Binding::Request { .. }) | Err(_) => {}
+            Ok(other) => problems.push(format!(
+                "configuration field {name:?} declares `also_binds = [… {binds:?} …]`, which is a \
+                 `{}` destination. Only a request position — `path.`, `query.` or `header.` — may \
+                 be a further destination: every other kind is resolved under its own address by a \
+                 different port, and one collected value has exactly one address. A `base_url` \
+                 variable belongs in `binds`, where it becomes the placeholder every other \
+                 destination carries",
+                other.kind()
+            )),
+        }
+    }
+}
+
+/// One destination of one field: that it parses, that it resolves, and that `secret` agrees with it.
+fn validate_one_binding(
+    connector: &Connector,
+    field: &ConfigField,
+    binds: &str,
+    problems: &mut Vec<String>,
+) {
+    let name = field.name.as_str();
+    let binding = match parse_binding(binds) {
         Ok(binding) => binding,
         Err(reason) => {
             problems.push(format!("configuration field {name:?}: {reason}"));
@@ -2424,6 +2487,11 @@ fn validate_binding(connector: &Connector, field: &ConfigField, problems: &mut V
                     }
                 ));
             }
+            // The host half of "every value is checked where it lands" (C-214/C-229), and the strict
+            // one: `acme.example@evil.example` is a legal header value and a legal path segment, and
+            // substituted into an authority it sends the request — and the operator's own
+            // credential — to a host nobody named. See `config::validate_host_value`.
+            validate_substituted_values(field, binding, "composes a host", problems);
         }
         Binding::Request {
             position,
@@ -2470,19 +2538,56 @@ fn validate_binding(connector: &Connector, field: &ConfigField, problems: &mut V
     if field.secret != expected {
         problems.push(if expected {
             format!(
-                "configuration field {name:?} binds {} but declares `secret = false`. That value is \
-                 a credential: it must be masked on input, kept out of logs, and stored where a \
-                 secret is stored",
-                field.binds
+                "configuration field {name:?} binds {binds} but declares `secret = false`. That \
+                 value is a credential: it must be masked on input, kept out of logs, and stored \
+                 where a secret is stored"
             )
         } else {
             format!(
-                "configuration field {name:?} binds {} but declares `secret = true`. That value is \
-                 configuration, not a credential — marking it secret hides it from an operator who \
-                 needs to read it back, and claims gating this repository does not provide",
-                field.binds
+                "configuration field {name:?} binds {binds} but declares `secret = true`. That \
+                 value is configuration, not a credential — marking it secret hides it from an \
+                 operator who needs to read it back, and claims gating this repository does not \
+                 provide"
             )
         });
+    }
+}
+
+/// **The `example`, and every permitted choice, held to the rule of one destination they reach.**
+///
+/// Both are values a human will end up supplying: an `example` is the placeholder a user copies, and
+/// a choice is a value the connector *invites* an operator to pick. Neither may be one the position
+/// it lands in would refuse — a permitted value that escaped its path segment would be a sanctioned
+/// way to address another resource on the same host with the same credential, and one that moved the
+/// authority would be the same thing with a different host.
+///
+/// Called once per destination (C-229), which is what makes a multi-destination field satisfy
+/// **every** rule rather than the first: the intersection is taken by checking each, not by picking
+/// one. `did` names the destination in the refusal — "pins a header value", "composes a host" — so
+/// an author told their example is illegal is also told *which* of the field's destinations refused
+/// it.
+fn validate_substituted_values(
+    field: &ConfigField,
+    binding: Binding<'_>,
+    did: &str,
+    problems: &mut Vec<String>,
+) {
+    let name = field.name.as_str();
+    if let Some(example) = &field.example {
+        if let Err(reason) = binding.validate_value(example) {
+            problems.push(format!(
+                "configuration field {name:?} {did} but gives an `example` that could not be one: \
+                 {reason}"
+            ));
+        }
+    }
+    for choice in &field.choices {
+        if let Err(reason) = binding.validate_value(&choice.value) {
+            problems.push(format!(
+                "configuration field {name:?} {did} but offers a choice that could not be one: \
+                 {reason}"
+            ));
+        }
     }
 }
 
@@ -2506,12 +2611,10 @@ fn validate_binding(connector: &Connector, field: &ConfigField, problems: &mut V
 ///    than useless: Vercel's `teamId` is dangerous precisely because omitting it silently redirects
 ///    the call to a personal account, and an optional pin would reintroduce that.
 ///
-/// The fourth check is about *addressing* rather than reach. A host keys a configuration value by
-/// `(tenant, provider, service, kind, name)` and the emitted module carries one `{placeholder}` per
-/// pinned value, so two values of one service sharing a placeholder name are **one slot** — the
-/// exact collapse C-197 found between Contentful's two spaces, where a management write landed in
-/// whichever space the delivery reads were configured with. Two declarations that would share a
-/// placeholder are refused here so that they can never share a slot there.
+/// The addressing check that used to be the fourth is now [`validate_slot_is_not_shared`], run once
+/// per field rather than once per pin: a field that reaches several positions (C-229) has one slot,
+/// not one per destination, so asking the question here would have asked it several times and
+/// answered it about the wire spelling rather than about the slot.
 fn validate_pin(
     connector: &Connector,
     field: &ConfigField,
@@ -2533,31 +2636,19 @@ fn validate_pin(
         ));
     }
 
-    // The example is what a user copies into the field, so it is held to the rule the position
-    // imposes on the real value — the same reasoning `format`/`example` already carries.
-    if let Some(example) = &field.example {
-        if let Err(reason) = position.validate_value(example) {
-            problems.push(format!(
-                "configuration field {name:?} pins a {word} value but gives an `example` that could \
-                 not be one: {reason}"
-            ));
-        }
-    }
-
-    // **And so is every value a closed set permits** (C-225). This is the interaction worth stating
-    // rather than leaving to inference: a choice is not merely displayed, it is a value an operator
-    // is *invited* to pick, and it lands inside a URL the host composes. A permitted value that
-    // escaped its path segment would be a sanctioned way to address another resource on the same
-    // host with the same credential — the failure `Position::validate_value` exists for, with the
-    // connector's own blessing on it.
-    for choice in &field.choices {
-        if let Err(reason) = position.validate_value(&choice.value) {
-            problems.push(format!(
-                "configuration field {name:?} pins a {word} value but offers a choice that could \
-                 not be one: {reason}"
-            ));
-        }
-    }
+    // The example is what a user copies into the field, and every value a closed set permits is one
+    // an operator is *invited* to pick (C-225) — so both are held to the rule this position imposes
+    // on the real value, once per position the field reaches (C-229). See
+    // `validate_substituted_values`.
+    validate_substituted_values(
+        field,
+        Binding::Request {
+            position,
+            name: pinned,
+        },
+        &format!("pins a {word} value"),
+        problems,
+    );
 
     match position {
         Position::Path => {
@@ -2660,25 +2751,82 @@ fn validate_pin(
             ));
         }
     }
+}
 
-    // One placeholder, one host-side slot. See this function's documentation for the C-197 collapse
-    // this refusal exists to make unreachable.
+/// **Two configuration fields may not share a slot, and may not share a destination** — the C-197
+/// addressing rule, and the door C-229 must not reopen.
+///
+/// A host keys a configuration value by `(tenant, provider, service, kind, name)` and the emitted
+/// module carries one `{placeholder}` per field, so two fields of one service whose slots collide are
+/// **one slot** — the exact collapse C-197 found between Contentful's two spaces, where a management
+/// write landed in whichever space the delivery reads were configured with. That is the refusal
+/// C-164 measured and quoted: *two questions that share an answer are one question*.
+///
+/// **It still fires, and it means the same thing.** C-229 does not weaken it; it answers the other
+/// half. One field naming two destinations is *one* question with one answer and one slot, which is
+/// what the rule was protecting. Two *fields* keyed to one slot is still one field's answer silently
+/// discarded, so the comparison is between slots — [`ConfigField::slot`] — and a further destination
+/// is not a slot and cannot become one.
+///
+/// The second clause is what a further destination makes newly possible and is refused for its own
+/// reason: two fields, two slots, one *wire position*. Two answers written into one header on the
+/// same request is not an addressing collapse, it is a request that carries one of two values
+/// depending on an order nothing declares. `connector-flux` refuses the emitted shape independently
+/// (`Error::HeaderConflict`); this is the declaration-level half, so the refusal names the two
+/// fields rather than an operation.
+///
+/// **Scope, deliberately unchanged.** It runs for a field that reaches at least one request
+/// position, exactly as it did when it lived inside `validate_pin`. Two `endpoint.` fields of one
+/// service sharing a variable is a shape this has never refused — Contentful ships two `space_id`
+/// fields under two *different* services, which is precisely why the check is service-scoped — and
+/// widening it is not this story's to do.
+fn validate_slot_is_not_shared(
+    connector: &Connector,
+    field: &ConfigField,
+    problems: &mut Vec<String>,
+) {
+    let pins = field.pins();
+    if pins.is_empty() {
+        return;
+    }
+    let name = field.name.as_str();
+    let service = field.service.as_str();
+    let Some(slot) = field.slot() else {
+        return;
+    };
+
     for other in connector.config_of(service) {
         if std::ptr::eq(other, field) {
             continue;
         }
-        let shared = match other.binding() {
-            Some(Binding::Endpoint { variable }) => variable == pinned,
-            Some(Binding::Request { name: other, .. }) => other == pinned,
-            _ => false,
-        };
-        if shared {
+        if other.slot() == Some(slot) {
             problems.push(format!(
-                "configuration fields {name:?} and {:?} both resolve `{{{pinned}}}` in service \
+                "configuration fields {name:?} and {:?} both resolve `{{{slot}}}` in service \
                  {service:?}, so a host would key them to one value under one slot. Two questions \
-                 that share an answer are one question — bind one of them to a different name",
+                 that share an answer are one question — bind one of them to a different name, or \
+                 make them one field with an `also_binds`",
                 other.name
             ));
+        }
+        for theirs in other.pins() {
+            let collides = pins.iter().any(|ours| {
+                ours.position == theirs.position
+                    && match ours.position {
+                        Position::Header => ours.name.eq_ignore_ascii_case(theirs.name),
+                        Position::Path | Position::Query => ours.name == theirs.name,
+                    }
+            });
+            if collides {
+                problems.push(format!(
+                    "configuration fields {name:?} and {:?} both send {:?} on the {} of every \
+                     request of service {service:?}. They are two questions with two slots writing \
+                     one position, so which value the vendor sees depends on an order nothing \
+                     declares — declare it on one side only",
+                    other.name,
+                    theirs.name,
+                    theirs.position.word()
+                ));
+            }
         }
     }
 }
@@ -2703,6 +2851,11 @@ fn validate_every_template_variable_is_asked_for(
 ) {
     for service in connector.service_names() {
         for variable in template_variables(connector.base_url_of(service)) {
+            // Only `binds` can answer, and never an `also_binds`: a further destination is a request
+            // position by construction (`validate_destinations`), so a header pin still does not
+            // bind a hostname. That is C-164's third measured shape, and C-229 does not move it —
+            // the field that binds Algolia's hostname *and* its header binds the hostname in
+            // `binds`, which is what makes `{app_id}` the one placeholder both destinations carry.
             let bound = connector.config_of(service).any(|field| {
                 matches!(field.binding(), Some(Binding::Endpoint { variable: v }) if v == variable)
             });

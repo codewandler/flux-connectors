@@ -527,6 +527,678 @@
       "config_choices": []
     },
     {
+      "id": "algolia",
+      "authority": "com.algolia.api",
+      "vendor": "Algolia",
+      "description": "Algolia search: list an application's indices, search one, and read, save or delete a single record by its object id",
+      "runtime": "http",
+      "base_url": "https://{app_id}.algolia.net",
+      "api_version": "1",
+      "hosts": [
+        "{app_id}.algolia.net"
+      ],
+      "services": [
+        {
+          "name": "default",
+          "description": "",
+          "base_url": "https://{app_id}.algolia.net",
+          "hosts": [
+            "{app_id}.algolia.net"
+          ],
+          "api_version": "1",
+          "gid": "com.algolia.api:1",
+          "operation_count": 5
+        }
+      ],
+      "auth": {
+        "schemes": [
+          "header"
+        ],
+        "credentials": [
+          {
+            "name": "algolia.api_key",
+            "scheme": {
+              "kind": "header",
+              "name": "X-Algolia-API-Key",
+              "prefix": ""
+            },
+            "description": "An Algolia API key with the ACLs this connector needs: `search` and `browse` for the reads, `addObject` and `deleteObject` for the writes. Scope it to the indices this connection should reach rather than using the Admin key",
+            "env": [
+              "ALGOLIA_API_KEY"
+            ],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": false
+          }
+        ],
+        "default": [
+          [
+            "algolia.api_key"
+          ]
+        ]
+      },
+      "operation_count": 5,
+      "operations": [
+        {
+          "id": "algolia-index-list",
+          "provider": "algolia",
+          "service": "default",
+          "description": "List the indices in this Algolia application, with each index's record count and size. This is the call that discovers the index names every other operation here takes",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "repeatable_because": null,
+          "method": "GET",
+          "path": "/1/indexes",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "items": {
+                "description": "The application's indices",
+                "items": {
+                  "properties": {
+                    "createdAt": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "dataSize": {
+                      "description": "The size of the index's records in bytes",
+                      "type": "integer"
+                    },
+                    "entries": {
+                      "description": "How many records the index holds",
+                      "type": "integer"
+                    },
+                    "fileSize": {
+                      "description": "The size of the index on disk in bytes, records plus internal structures",
+                      "type": "integer"
+                    },
+                    "lastBuildTimeS": {
+                      "description": "How long the index's last build took, in seconds",
+                      "type": "integer"
+                    },
+                    "name": {
+                      "description": "The index name — what every other operation here passes as `index_name`",
+                      "type": "string"
+                    },
+                    "numberOfPendingTasks": {
+                      "description": "Indexing operations accepted but not yet applied. Non-zero means a recent write is not visible to search yet",
+                      "type": "integer"
+                    },
+                    "pendingTask": {
+                      "description": "Whether any indexing operation is still pending",
+                      "type": "boolean"
+                    },
+                    "primary": {
+                      "description": "For a replica index, the name of the index it replicates. Absent on a primary",
+                      "type": "string"
+                    },
+                    "replicas": {
+                      "description": "The names of this index's replicas, if it has any",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "updatedAt": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "nbPages": {
+                "description": "How many pages of indices exist. This connector requests only the first",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "items"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "algolia.api_key"
+            ]
+          ],
+          "hosts": [
+            "{app_id}.algolia.net"
+          ],
+          "flux": "op algolia-index-list -> Any\n  description \"List the indices in this Algolia application, with each index's record count and size. This is the call that discovers the index names every other operation here takes. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{app_id}.algolia.net\"\n  X_Algolia_Application_Id = \"{app_id}\"\n  url = fmt(\"{base}/1/indexes\")\n  response = http.request(headers: { \"X-Algolia-Application-Id\": X_Algolia_Application_Id }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {app_id} value before it has a valid destination URL.",
+                "params": [
+                  "app_id"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "algolia-index-search",
+          "provider": "algolia",
+          "service": "default",
+          "description": "Search one index and return the matching records. Algolia ranks results by its own configured relevance, so the order is the index's, not this connector's; `hits_per_page` and `page` walk the result set, and `filters` narrows it with Algolia's filter syntax over the index's own attributes",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "repeatable_because": null,
+          "method": "GET",
+          "path": "/1/indexes/{index_name}",
+          "parameters": [
+            {
+              "name": "index_name",
+              "in": "path",
+              "wire": null,
+              "description": "The index to search, from algolia-index-list's `name` field",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "query",
+              "in": "query",
+              "wire": null,
+              "description": "The search text. An empty string matches every record in the index, ranked by the index's own ranking rules — which is how this operation browses rather than searches",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "hits_per_page",
+              "in": "query",
+              "wire": "hitsPerPage",
+              "description": "How many records to return per page. Algolia's own default is 20 and its maximum is 1000",
+              "required": false,
+              "schema": {
+                "maximum": 1000,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "wire": null,
+              "description": "Which page of results to return, counting from 0",
+              "required": false,
+              "schema": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "filters",
+              "in": "query",
+              "wire": null,
+              "description": "An Algolia filter expression over this index's own attributes, e.g. `category:book AND price < 20`. The attribute names are the index's content and are not knowable here; an index that has not declared an attribute as filterable answers a filter on it with a 400",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "filters": {
+                "type": "string"
+              },
+              "hits_per_page": {
+                "maximum": 1000,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "index_name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "page": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "index_name",
+              "query"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "exhaustiveNbHits": {
+                "description": "False when `nbHits` is an approximation, which Algolia does for very large result sets",
+                "type": "boolean"
+              },
+              "hits": {
+                "description": "The matching records, in Algolia's ranked order. Each hit is the stored record itself — its attributes are this index's own content and are not knowable at build time — plus `objectID` and Algolia's `_highlightResult` annotations",
+                "items": {
+                  "properties": {
+                    "objectID": {
+                      "description": "The record's own id — what algolia-object-get, -save and -delete address it by",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "objectID"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "hitsPerPage": {
+                "type": "integer"
+              },
+              "nbHits": {
+                "description": "How many records matched in total, which may exceed what this page returned",
+                "type": "integer"
+              },
+              "nbPages": {
+                "description": "How many pages the result set has at this `hitsPerPage`",
+                "type": "integer"
+              },
+              "page": {
+                "description": "The page that was returned, counting from 0",
+                "type": "integer"
+              },
+              "params": {
+                "description": "Echoes the search parameters Algolia actually applied, URL-encoded",
+                "type": "string"
+              },
+              "processingTimeMS": {
+                "description": "How long Algolia spent on the query, in milliseconds",
+                "type": "integer"
+              },
+              "query": {
+                "description": "Echoes the search text",
+                "type": "string"
+              }
+            },
+            "required": [
+              "hits",
+              "nbHits"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "algolia.api_key"
+            ]
+          ],
+          "hosts": [
+            "{app_id}.algolia.net"
+          ],
+          "flux": "op algolia-index-search(index_name: String, query: String, hits_per_page: Number, page: Number, filters: String) -> Any\n  description \"Search one index and return the matching records. Algolia ranks results by its own configured relevance, so the order is the index's, not this connector's; `hits_per_page` and `page` walk the result set, and `filters` narrows it with Algolia's filter syntax over the index's own attributes. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{app_id}.algolia.net\"\n  X_Algolia_Application_Id = \"{app_id}\"\n  url = fmt(\"{base}/1/indexes/{index_name}?query={query}\")\n  sep = \"&\"\n  when hits_per_page\n    url = fmt(\"{url}{sep}hitsPerPage={hits_per_page}\")\n    sep = \"&\"\n  when page\n    url = fmt(\"{url}{sep}page={page}\")\n    sep = \"&\"\n  when filters\n    url = fmt(\"{url}{sep}filters={filters}\")\n  response = http.request(headers: { \"X-Algolia-Application-Id\": X_Algolia_Application_Id }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unencodable-query-value",
+                "scope": "operation",
+                "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
+                "params": [
+                  "query",
+                  "filters"
+                ]
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {app_id} value before it has a valid destination URL.",
+                "params": [
+                  "app_id"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "algolia-object-get",
+          "provider": "algolia",
+          "service": "default",
+          "description": "Read one record from an index by its object id. Returns the stored record as it is; its attributes are this index's own content model, so nothing here can name them",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "repeatable_because": null,
+          "method": "GET",
+          "path": "/1/indexes/{index_name}/{object_id}",
+          "parameters": [
+            {
+              "name": "index_name",
+              "in": "path",
+              "wire": null,
+              "description": "The index the record is in, from algolia-index-list's `name` field",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "object_id",
+              "in": "path",
+              "wire": null,
+              "description": "The record's own id — Algolia's `objectID`, from a search hit or from whatever wrote the record",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "index_name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "object_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "index_name",
+              "object_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "description": "The stored record. Every attribute other than `objectID` is this index's own content and is not knowable at build time",
+            "properties": {
+              "objectID": {
+                "description": "The record's own id, echoed back",
+                "type": "string"
+              }
+            },
+            "required": [
+              "objectID"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "algolia.api_key"
+            ]
+          ],
+          "hosts": [
+            "{app_id}.algolia.net"
+          ],
+          "flux": "op algolia-object-get(index_name: String, object_id: String) -> Any\n  description \"Read one record from an index by its object id. Returns the stored record as it is; its attributes are this index's own content model, so nothing here can name them. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{app_id}.algolia.net\"\n  X_Algolia_Application_Id = \"{app_id}\"\n  url = fmt(\"{base}/1/indexes/{index_name}/{object_id}\")\n  response = http.request(headers: { \"X-Algolia-Application-Id\": X_Algolia_Application_Id }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {app_id} value before it has a valid destination URL.",
+                "params": [
+                  "app_id"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "algolia-object-save",
+          "provider": "algolia",
+          "service": "default",
+          "description": "Save one record at a known object id, creating it if it does not exist and REPLACING it wholesale if it does. This is not a partial update: attributes absent from the body are removed from the stored record. Algolia applies the write asynchronously, so the response's `taskID` is an acknowledgement of acceptance rather than of visibility, and a search run immediately afterwards may still return the old record",
+          "risk": "high",
+          "idempotency": "conditional",
+          "repeatable_because": "the body carries the record's whole content as an absolute value rather than a delta, so re-sending it leaves the record in the state the caller asked for, however many times it runs. Conditional rather than idempotent because Algolia applies the write asynchronously and answers each call with a fresh `taskID`, so a stored result must never be served in place of running it",
+          "method": "PUT",
+          "path": "/1/indexes/{index_name}/{object_id}",
+          "parameters": [
+            {
+              "name": "index_name",
+              "in": "path",
+              "wire": null,
+              "description": "The index to write to, from algolia-index-list's `name` field. Algolia creates an index that does not exist on first write",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "object_id",
+              "in": "path",
+              "wire": null,
+              "description": "The id to store the record under. An existing record at this id is replaced in full",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "body": {
+                "description": "The record to store, as a flat or nested JSON object. Its attributes are this index's own content model and are not knowable at build time — see the header comment for why this is one opaque schema rather than named fields. An `objectID` inside the body is redundant with the one in the path and Algolia takes the path's",
+                "type": "object"
+              },
+              "index_name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "object_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "index_name",
+              "object_id",
+              "body"
+            ],
+            "type": "object"
+          },
+          "body_schema": {
+            "description": "The record to store, as a flat or nested JSON object. Its attributes are this index's own content model and are not knowable at build time — see the header comment for why this is one opaque schema rather than named fields. An `objectID` inside the body is redundant with the one in the path and Algolia takes the path's",
+            "type": "object"
+          },
+          "response_schema": {
+            "properties": {
+              "objectID": {
+                "description": "The id the record was stored under, echoed back",
+                "type": "string"
+              },
+              "taskID": {
+                "description": "Algolia's own id for the asynchronous indexing task. The write is accepted when this returns and visible to search some time after; this connector declares no operation that waits on it",
+                "type": "integer"
+              },
+              "updatedAt": {
+                "description": "When Algolia accepted the write",
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "objectID",
+              "taskID"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "algolia.api_key"
+            ]
+          ],
+          "hosts": [
+            "{app_id}.algolia.net"
+          ],
+          "flux": "op algolia-object-save(index_name: String, object_id: String, body: Any) -> Any\n  description \"Save one record at a known object id, creating it if it does not exist and REPLACING it wholesale if it does. This is not a partial update: attributes absent from the body are removed from the stored record. Algolia applies the write asynchronously, so the response's `taskID` is an acknowledgement of acceptance rather than of visibility, and a search run immediately afterwards may still return the old record. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message` in the response body.\"\n  risk \"high\"\n  idempotency \"conditional\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{app_id}.algolia.net\"\n  X_Algolia_Application_Id = \"{app_id}\"\n  url = fmt(\"{base}/1/indexes/{index_name}/{object_id}\")\n  content_type = \"application/json\"\n  payload = parse(body, as: \"json\")\n  response = http.request(body: payload, headers: { \"X-Algolia-Application-Id\": X_Algolia_Application_Id, \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {app_id} value before it has a valid destination URL.",
+                "params": [
+                  "app_id"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "algolia-object-delete",
+          "provider": "algolia",
+          "service": "default",
+          "description": "Delete one record from an index by its object id. The record is gone with no undo route in the API — restoring it means re-indexing it from the source of truth. Algolia applies the delete asynchronously, so the `taskID` acknowledges acceptance rather than visibility",
+          "risk": "destructive",
+          "idempotency": "non_idempotent",
+          "repeatable_because": null,
+          "method": "DELETE",
+          "path": "/1/indexes/{index_name}/{object_id}",
+          "parameters": [
+            {
+              "name": "index_name",
+              "in": "path",
+              "wire": null,
+              "description": "The index the record is in, from algolia-index-list's `name` field",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "object_id",
+              "in": "path",
+              "wire": null,
+              "description": "The record's own id — Algolia's `objectID`. The record at this id is deleted",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "index_name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "object_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "index_name",
+              "object_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "deletedAt": {
+                "description": "When Algolia accepted the delete",
+                "format": "date-time",
+                "type": "string"
+              },
+              "taskID": {
+                "description": "Algolia's own id for the asynchronous delete task. The delete is accepted when this returns and visible to search some time after",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "taskID"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "algolia.api_key"
+            ]
+          ],
+          "hosts": [
+            "{app_id}.algolia.net"
+          ],
+          "flux": "op algolia-object-delete(index_name: String, object_id: String) -> Any\n  description \"Delete one record from an index by its object id. The record is gone with no undo route in the API — restoring it means re-indexing it from the source of truth. Algolia applies the delete asynchronously, so the `taskID` acknowledges acceptance rather than visibility. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message` in the response body.\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{app_id}.algolia.net\"\n  X_Algolia_Application_Id = \"{app_id}\"\n  url = fmt(\"{base}/1/indexes/{index_name}/{object_id}\")\n  response = http.request(headers: { \"X-Algolia-Application-Id\": X_Algolia_Application_Id }, method: \"DELETE\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {app_id} value before it has a valid destination URL.",
+                "params": [
+                  "app_id"
+                ]
+              }
+            ],
+            "notes": []
+          }
+        }
+      ],
+      "events": [],
+      "channels": [],
+      "config_choices": []
+    },
+    {
       "id": "anthropic",
       "authority": "com.anthropic.api",
       "vendor": "Anthropic",

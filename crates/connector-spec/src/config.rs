@@ -100,6 +100,76 @@
 //!    would reproduce that with extra steps.
 //! 3. **It is never a secret.** See [`Binding::Request`].
 //!
+//! # One question can reach more than one destination (C-229)
+//!
+//! [`Binding::Request`] gave a field a request position. It still gave it exactly *one* destination,
+//! and Algolia (C-164) is the vendor that shape cannot express: its application id composes the
+//! hostname (`{app_id}-dsn.algolia.net`) **and** travels as `X-Algolia-Application-Id` on every
+//! call. Of C-187's three motivating vendors it is the only one whose tenant scope sits in two
+//! positions — Cloudflare's `zone_id` and Vercel's `teamId` sit in one each, which is why those
+//! ship.
+//!
+//! Neither of the two shapes that existed works, and C-164 measured both rather than arguing them:
+//!
+//! - **Two fields, two names** (`endpoint.app_id` + `header.X-Algolia-Application-Id`) loads, and is
+//!   the problem: two host-side slots for one answer, no honest `help` for the second field — the
+//!   only truthful text is *"type the same value again"* — and a typo in one of them produces a DNS
+//!   error or a vendor `403` that neither declaration explains.
+//! - **Two fields, one name** is refused by the loader's shared-slot pass, *by name*: **two
+//!   questions that share an answer are one question**. That rule is right (C-197: two fields keyed
+//!   to one slot silently discard one answer) and it stays. What was missing is the other half — a
+//!   way to write **the one question**.
+//!
+//! [`ConfigField::also_binds`] is that half. `binds` keeps naming exactly one destination and
+//! `also_binds` names the rest, so the field stays one `name`, one `label`, one `help`, one row in a
+//! form, and one value a host stores.
+//!
+//! ## Why `also_binds` and not `binds` becoming a list
+//!
+//! A list of peers has no head, and this declaration needs one. Three consequences follow from that
+//! rather than from taste:
+//!
+//! 1. **The placeholder question gets a structural answer.** [`Binding::Request`]'s `name` is
+//!    deliberately both the `{placeholder}` and the wire spelling, so a field whose destinations
+//!    spell the value differently — `app_id` in the host, `X-Algolia-Application-Id` on the wire —
+//!    forces a choice about which one the emitted module carries. With a head there is one rule and
+//!    no conditional: **the emitted module carries `binds`' own target, everywhere**
+//!    ([`ConfigField::slot`]), and a further destination contributes only the spelling the vendor
+//!    sees. With a bare list the answer would be "element zero", which is a convention about
+//!    ordering rather than a property of the declaration.
+//! 2. **One slot, provably.** A host keys a value by `(tenant, provider, service, kind, name)` and
+//!    `connector-pack` resolves every `{placeholder}` in an emitted module by that one name, so
+//!    "one slot" *is* "one placeholder". Deriving the slot from `binds` alone keeps
+//!    [`ConfigField::binding`], [`ConfigField::level`] and the stored address exactly what they were
+//!    for every field that existed before this landed.
+//! 3. **It reads as what it is.** `also_binds` is subordinate at the declaration site; `binds =
+//!    ["endpoint.app_id", "header.X-…"]` reads as a set of equals, which is the shape the shared-slot
+//!    rule refuses to key.
+//!
+//! ## What a further destination may be, and why the set is narrow
+//!
+//! Only a request position (`path.`, `query.`, `header.`). Every other destination resolves through
+//! a **different port**: a credential and an OAuth secret through the secret side, a `username.`
+//! through its own `(kind, name)` address. Sharing a placeholder with any of them is not something
+//! this model can arrange, so a field naming one of them names it alone — and the `secret`/`binds`
+//! agreement would refuse the credential half anyway, since a value that reaches a URL must never be
+//! a secret.
+//!
+//! An `endpoint.` destination is the **head or nothing**, for the same reason it is the head in
+//! Algolia: its spelling is fixed by a `base_url` the author already wrote, so it is the destination
+//! with the least freedom, and making it the slot is what keeps one rule instead of two.
+//!
+//! ## Every destination validates, not just the first
+//!
+//! A value substituted into two positions must satisfy **both** of their rules, and it is encoded
+//! the same way in each — the alternative, encoding per destination, would send the vendor two
+//! different strings for one answer. So [`Position::validate_value`] is applied to
+//! [`example`](ConfigField::example) and to **every** [`choice`](ConfigField::choices) once per
+//! destination the field reaches, and the host half is [`validate_host_value`], which is the strict
+//! one: `acme.example@evil.example` is a legal header value and a legal path segment, and it moves
+//! the authority. `connector-pack` reaches the same conclusion from the other end — a variable it
+//! sees in two positions collapses to a slot held to every rule at once.
+//!
 //! # `ConfigField` stays connector-scoped, and that is recorded rather than assumed
 //!
 //! C-177 asked whether [`ConfigField::name`] should be a per-*service* namespace like operations,
@@ -367,6 +437,42 @@ impl Position {
     }
 }
 
+/// **Whether `value` can be substituted into a `base_url` without moving the authority it declared.**
+///
+/// The host counterpart of [`Position::validate_value`], and the strict one of the family: it is an
+/// **allow-list** of the characters that cannot delimit an authority, because a blocklist stops the
+/// `@` somebody thought of and not the `:` that becomes a port, the `%` that decodes to a delimiter
+/// or the `/` that ends the authority early. `acme.zendesk.com@evil.example` is a legal HTTP field
+/// value and a legal path segment; substituted into `https://{subdomain}.zendesk.com` it sends the
+/// request, and the operator's own credential, to a host nobody named.
+///
+/// Applied by the loader to [`ConfigField::example`] and to every [`ConfigField::choices`] entry of
+/// a field that binds `endpoint.<variable>` — this crate never sees a real configuration value, and
+/// `connector-pack` applies the same rule to the value a tenant actually supplies. It exists here
+/// because C-229 lets one value reach a hostname *and* a request position, and a field checked only
+/// against its request positions would be checked against the **weaker** of the two.
+pub fn validate_host_value(value: &str) -> Result<(), String> {
+    if value.is_empty() {
+        return Err("a value substituted into a host must not be empty".to_owned());
+    }
+    if let Some(bad) = value
+        .chars()
+        .find(|c| !(c.is_ascii_alphanumeric() || *c == '-' || *c == '.' || *c == '_'))
+    {
+        return Err(format!(
+            "{value:?} contains {bad:?}, which is not a host character — a value substituted into a \
+             `base_url` may not introduce one, because `@`, `:`, `/` and `%` all move or truncate \
+             the authority the connector declared"
+        ));
+    }
+    if value.split('.').any(str::is_empty) {
+        return Err(format!(
+            "{value:?} has an empty label, so it cannot be part of a hostname"
+        ));
+    }
+    Ok(())
+}
+
 /// Where a collected value goes. The parsed form of [`ConfigField::binds`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Binding<'a> {
@@ -498,6 +604,32 @@ impl<'a> Binding<'a> {
             | Self::Request { .. }
             | Self::Username { .. }
             | Self::OAuthClientId => false,
+        }
+    }
+
+    /// **Whether `value` can be substituted at this destination without reshaping the request.**
+    ///
+    /// One entry point over [`Position::validate_value`] and [`validate_host_value`], so that a
+    /// field reaching several destinations (C-229) is checked against **each** of them from one
+    /// loop rather than from a `match` repeated per caller — the shape in which "every position is
+    /// validated, not only the first" is a property of the code instead of a claim about it.
+    ///
+    /// `Ok` for the three destinations that are not substituted into a request the emitter composes:
+    /// a credential and an OAuth half travel through the secret side, and a Basic username is joined
+    /// and base64-encoded rather than placed. Nothing here is a value this crate ever sees — the
+    /// loader applies it to [`ConfigField::example`] and to every [`ConfigField::choices`] entry.
+    ///
+    /// # Errors
+    ///
+    /// The reason, phrased for whoever wrote the declaration.
+    pub fn validate_value(self, value: &str) -> Result<(), String> {
+        match self {
+            Self::Endpoint { .. } => validate_host_value(value),
+            Self::Request { position, .. } => position.validate_value(value),
+            Self::Credential { .. }
+            | Self::Username { .. }
+            | Self::OAuthClientId
+            | Self::OAuthClientSecret => Ok(()),
         }
     }
 }
@@ -645,7 +777,26 @@ pub struct ConfigField {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub docs_url: Option<String>,
     /// Where the collected value goes. See [`parse_binding`].
+    ///
+    /// **Exactly one destination, and the head of the list when there are more** — see
+    /// [`also_binds`](Self::also_binds). It is what [`slot`](Self::slot) reads, so it decides the
+    /// `{placeholder}` the emitted module carries and the `(kind, name)` a host stores the value
+    /// under.
     pub binds: String,
+    /// **The further destinations this one value also reaches** — empty for all but a handful of
+    /// vendors (C-229).
+    ///
+    /// Algolia's application id composes the hostname *and* travels as `X-Algolia-Application-Id` on
+    /// every call. Declaring that as two fields ships two host-side slots for one answer and a
+    /// second field with no honest `help`; declaring it as two fields under one name is refused as a
+    /// shared slot, correctly. This is the one question those two rules leave unwritable.
+    ///
+    /// Each entry is a request position — `path.<variable>`, `query.<name>`, `header.<name>` — and
+    /// nothing else. See the module docs for why the set is that narrow, why the `endpoint.`
+    /// destination is the head rather than an entry here, and why the placeholder every destination
+    /// carries is [`binds`](Self::binds)' target.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub also_binds: Vec<String>,
 }
 
 impl ConfigField {
@@ -696,16 +847,80 @@ impl ConfigField {
         ))
     }
 
-    /// The request position and placeholder this field pins, when it pins one.
+    /// The request position and placeholder [`binds`](Self::binds) pins, when it pins one.
     ///
-    /// The question `connector-flux` asks of every field of an operation's service, so it is one
-    /// call rather than a `matches!` repeated at each request position.
+    /// **The head destination only.** A field that also reaches further positions (C-229) has more
+    /// than one pin and a placeholder that is not its wire name, so anything composing a request
+    /// wants [`pins`](Self::pins) instead; this stays the answer to the narrower question *"is this
+    /// field's own binding a pin"*.
     pub fn pin(&self) -> Option<(Position, &str)> {
         match self.binding()? {
             Binding::Request { position, name } => Some((position, name)),
             _ => None,
         }
     }
+
+    /// Every destination this field reaches, in declaration order, with [`binds`](Self::binds)
+    /// first. `None` when any of them is malformed — which the loader refuses, so on a loaded
+    /// connector this is always `Some`.
+    pub fn bindings(&self) -> Option<Vec<Binding<'_>>> {
+        std::iter::once(self.binds.as_str())
+            .chain(self.also_binds.iter().map(String::as_str))
+            .map(|binds| parse_binding(binds).ok())
+            .collect()
+    }
+
+    /// **The one host-side slot every destination of this field reads** — the `{placeholder}` the
+    /// emitted module carries and the `name` half of the `(kind, name)` a host stores the value
+    /// under.
+    ///
+    /// Always [`binds`](Self::binds)' own target, whatever else the field reaches. That is the whole
+    /// answer to the question a multi-destination field forces: [`Binding::Request`]'s `name` is
+    /// both the placeholder and the wire spelling, and when two destinations spell the value
+    /// differently the placeholder is the head's and the rest contribute only what the vendor sees.
+    pub fn slot(&self) -> Option<&str> {
+        Some(self.binding()?.target())
+    }
+    /// **Every request position this field pins**, each carrying the field's one slot.
+    ///
+    /// The question `connector-flux` asks of every field of an operation's service, so it is one
+    /// call rather than a `matches!` repeated at each request position. An empty result means the
+    /// field reaches no request position at all.
+    pub fn pins(&self) -> Vec<Pin<'_>> {
+        let Some(variable) = self.slot() else {
+            return Vec::new();
+        };
+        self.bindings()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|binding| match binding {
+                Binding::Request { position, name } => Some(Pin {
+                    position,
+                    name,
+                    variable,
+                }),
+                _ => None,
+            })
+            .collect()
+    }
+}
+
+/// **One request position a [`ConfigField`] pins, and the placeholder that reaches it.**
+///
+/// The two strings are the same for every field that binds exactly one destination, and that is why
+/// [`Binding::Request`] carries only one: `name` is the placeholder *and* the wire spelling. A field
+/// that also reaches a `base_url` variable (C-229) breaks the coincidence — Algolia's application id
+/// is `app_id` in the host and `X-Algolia-Application-Id` on the wire — so an emitter needs both,
+/// and the pair is spelled out here rather than left to whichever caller guessed right.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Pin<'a> {
+    /// Where on the request the value lands.
+    pub position: Position,
+    /// The name the vendor sees — the header, the query parameter, the path template variable.
+    pub name: &'a str,
+    /// The `{placeholder}` the emitted module carries for it: the field's
+    /// [`slot`](ConfigField::slot).
+    pub variable: &'a str,
 }
 
 /// The `{variable}` names a base URL template carries, in order, deduplicated.
@@ -888,6 +1103,108 @@ mod tests {
         for position in [Position::Path, Position::Query, Position::Header] {
             assert!(position.validate_value("{subdomain}").is_err());
         }
+    }
+
+    /// **The host rule is the strict one of the family** (C-229), and this is why a field reaching a
+    /// hostname *and* a request position cannot be checked against the request positions alone.
+    ///
+    /// `acme.example@evil.example` passes the path rule, the query rule and the header rule — none
+    /// of those positions cares about an `@` — and substituted into an authority it moves the origin.
+    #[test]
+    fn a_host_value_is_refused_for_what_no_request_position_would_catch() {
+        assert!(validate_host_value("B1G2GM9NG0").is_ok());
+        assert!(validate_host_value("acme-corp").is_ok());
+        assert!(validate_host_value("acme.freshdesk.com").is_ok());
+
+        let moves_the_origin = "acme.example@evil.example";
+        assert!(Position::Path.validate_value(moves_the_origin).is_ok());
+        assert!(Position::Query.validate_value(moves_the_origin).is_ok());
+        assert!(Position::Header.validate_value(moves_the_origin).is_ok());
+        assert!(
+            validate_host_value(moves_the_origin).is_err(),
+            "the `@` turns everything before it into userinfo, and only the host rule sees that"
+        );
+
+        for bad in ["acme:8080", "a/b", "acme..example", "acme example", ""] {
+            assert!(validate_host_value(bad).is_err(), "{bad:?}");
+        }
+
+        // And the dispatcher agrees with each of its arms, which is what lets the loader check every
+        // destination of a field from one loop.
+        assert_eq!(
+            Binding::Endpoint { variable: "app_id" }.validate_value(moves_the_origin),
+            validate_host_value(moves_the_origin)
+        );
+        assert_eq!(
+            Binding::Request {
+                position: Position::Header,
+                name: "X-Algolia-Application-Id"
+            }
+            .validate_value("café"),
+            Position::Header.validate_value("café")
+        );
+        // A destination that is not substituted into a request the emitter composes answers `Ok`:
+        // a credential travels through the secret side, and a Basic username is joined and encoded.
+        assert_eq!(
+            Binding::Credential { name: "acme.token" }.validate_value("anything at all"),
+            Ok(())
+        );
+    }
+
+    /// One field, several destinations, **one placeholder** — the C-229 derivation, at the level of
+    /// the type rather than of a provider file.
+    #[test]
+    fn a_multi_destination_field_carries_one_slot_into_every_pin() {
+        let field = ConfigField {
+            name: "app_id".to_owned(),
+            service: default_service(),
+            label: "Algolia application id".to_owned(),
+            help: "Both the host prefix and a header".to_owned(),
+            example: Some("B1G2GM9NG0".to_owned()),
+            format: Format::Text,
+            choices: Vec::new(),
+            required: true,
+            secret: false,
+            docs_url: None,
+            binds: "endpoint.app_id".to_owned(),
+            also_binds: vec!["header.X-Algolia-Application-Id".to_owned()],
+        };
+
+        assert_eq!(
+            field.bindings(),
+            Some(vec![
+                Binding::Endpoint { variable: "app_id" },
+                Binding::Request {
+                    position: Position::Header,
+                    name: "X-Algolia-Application-Id"
+                },
+            ])
+        );
+        assert_eq!(field.slot(), Some("app_id"));
+        assert_eq!(
+            field.pins(),
+            vec![Pin {
+                position: Position::Header,
+                name: "X-Algolia-Application-Id",
+                variable: "app_id",
+            }]
+        );
+        // `binding`, `level` and `pin` still answer about the head, so every consumer that existed
+        // before this landed reads exactly what it read before.
+        assert_eq!(
+            field.binding(),
+            Some(Binding::Endpoint { variable: "app_id" })
+        );
+        assert_eq!(field.level(), Some(Level::Connection));
+        assert_eq!(field.pin(), None);
+
+        // A malformed destination makes the whole set unreadable rather than silently shorter.
+        let broken = ConfigField {
+            also_binds: vec!["cookie.session".to_owned()],
+            ..field
+        };
+        assert_eq!(broken.bindings(), None);
+        assert!(broken.pins().is_empty());
     }
 
     #[test]

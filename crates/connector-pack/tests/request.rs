@@ -101,6 +101,9 @@ struct Declared {
     service: Option<String>,
     /// The `binds` target, e.g. `endpoint.subdomain`, `path.zone_id`, `credential.zendesk.api_token`.
     binds: String,
+    /// The further request positions the same value also reaches (C-229) — `providers/algolia.toml`
+    /// is the shipped case, where one application id composes the host *and* travels as a header.
+    also_binds: Vec<String>,
     /// The declared placeholder value, when the field declares one. Several deliberately do not —
     /// a realistic-looking placeholder for an opaque id reads as a real one belonging to a real
     /// organisation, and for a secret it has already tripped GitHub's push protection.
@@ -116,6 +119,17 @@ impl Declared {
     fn variable(&self) -> Option<&str> {
         let (kind, name) = self.binds.split_once('.')?;
         matches!(kind, "endpoint" | "path" | "query" | "header").then_some(name)
+    }
+
+    /// Every request header this field's value lands in — from `binds` or from `also_binds`.
+    ///
+    /// The one thing a configuration value may legitimately move besides a URL (C-187, C-229), and
+    /// therefore the exemption the header assertion below is allowed to carry.
+    fn pinned_headers(&self) -> Vec<&str> {
+        std::iter::once(self.binds.as_str())
+            .chain(self.also_binds.iter().map(String::as_str))
+            .filter_map(|binds| binds.strip_prefix("header."))
+            .collect()
     }
 
     /// The value an operator would supply, as the provider declares it.
@@ -247,6 +261,7 @@ struct Block {
     name: Option<String>,
     service: Option<String>,
     binds: Option<String>,
+    also_binds: Vec<String>,
     example: Option<String>,
 }
 
@@ -265,6 +280,7 @@ impl Block {
             field,
             service: self.service,
             binds,
+            also_binds: self.also_binds,
             example: self.example,
         }
     }
@@ -315,6 +331,8 @@ fn declared_config(connector: &str) -> Vec<Declared> {
                 block.service = Some(value);
             } else if let Some(value) = value_of(line, "binds") {
                 block.binds = Some(value);
+            } else if let Some(values) = strings(line, "also_binds") {
+                block.also_binds = values;
             } else if let Some(value) = value_of(line, "example") {
                 block.example = Some(value);
             }
@@ -350,6 +368,31 @@ fn declared_for(module: &Module) -> BTreeMap<String, String> {
             field
                 .variable()
                 .map(|variable| (variable.to_owned(), field.value()))
+        })
+        .collect()
+}
+
+/// The request headers this module's `[[config]]` fields pin, folded to lowercase.
+///
+/// Empty for every connector but one: `providers/algolia.toml` pins
+/// `X-Algolia-Application-Id` from the same field that composes its host (C-229). This is the
+/// exemption the header assertion carries, and it is derived from the provider file rather than
+/// listed, so the next connector that pins a header is covered without anyone remembering to.
+fn pinned_headers_for(module: &Module) -> BTreeSet<String> {
+    declared_config(&module.connector)
+        .into_iter()
+        .filter(|field| {
+            field
+                .service
+                .as_ref()
+                .is_none_or(|service| *service == module.service)
+        })
+        .flat_map(|field| {
+            field
+                .pinned_headers()
+                .into_iter()
+                .map(str::to_ascii_lowercase)
+                .collect::<Vec<_>>()
         })
         .collect()
 }
@@ -662,8 +705,12 @@ fn the_request_becomes_the_params_http_request_declares() {
 /// 3. **The assertion is not only the URL.** A request whose URL composes while its body has been
 ///    rewritten by configuration substitution is the second half of what C-110's review found, so
 ///    every operation is built twice against two different declared configurations and the **body
-///    and headers must not move**. Nothing today binds configuration into a body; the day something
-///    does, this fails and someone decides it on purpose.
+///    must not move**, and no header moves except one the provider file *declares* as a pin. Nothing
+///    today binds configuration into a body; the day something does, this fails and someone decides
+///    it on purpose. The header half was a blanket refusal until C-229 shipped `providers/
+///    algolia.toml`, whose application id composes the host and travels as `X-Algolia-Application-Id`
+///    on every call — so it is now "only where declared", derived from the provider file, and the
+///    pinned header is asserted to move rather than merely permitted to.
 /// 4. **It is driven from per-provider artifacts**, so a provider story's own connector is covered
 ///    before it reaches the index.
 #[test]
@@ -680,6 +727,7 @@ fn every_declared_operation_composes_a_request_from_its_declared_configuration()
         if declared.is_empty() {
             unconfigured_modules += 1;
         }
+        let pinned = pinned_headers_for(&module);
         let host = resolved_authority(&module.base_url, &declared);
 
         for id in &module.operations {
@@ -736,10 +784,43 @@ fn every_declared_operation_composes_a_request_from_its_declared_configuration()
                 "`{id}`'s request body changed when its configuration did, so a tenant's settings \
                  are being substituted into something that is not a URL — the C-110 shape"
             );
+            // **A header may move, and only where the provider file says it may.** C-187 made a
+            // `[[config]]` value reach a request header on purpose and C-229 shipped the first
+            // connector that uses it, so a blanket "headers never move" would now be asserting the
+            // opposite of a declared feature. What is still asserted is the property that mattered:
+            // every *other* header is untouched, so a tenant's settings are not leaking into a
+            // header nobody declared — and the pinned one moved, which is what it is for.
+            let expected: BTreeMap<&String, &String> = moved
+                .headers
+                .iter()
+                .filter(|(header, _)| !pinned.contains(&header.to_ascii_lowercase()))
+                .collect();
+            let actual: BTreeMap<&String, &String> = request
+                .headers
+                .iter()
+                .filter(|(header, _)| !pinned.contains(&header.to_ascii_lowercase()))
+                .collect();
             assert_eq!(
-                request.headers, moved.headers,
-                "`{id}`'s request headers changed when its configuration did"
+                actual, expected,
+                "`{id}`'s request headers changed when its configuration did, outside the headers \
+                 `providers/{}.toml` pins ({pinned:?})",
+                module.connector
             );
+            for header in &pinned {
+                let before = request
+                    .headers
+                    .iter()
+                    .find(|(name, _)| name.to_ascii_lowercase() == *header);
+                let after = moved
+                    .headers
+                    .iter()
+                    .find(|(name, _)| name.to_ascii_lowercase() == *header);
+                assert_ne!(
+                    before, after,
+                    "`{id}` pins {header:?} to a configuration value, but the header did not move \
+                     when that value did — so the pin is not reaching the request"
+                );
+            }
 
             built += 1;
         }

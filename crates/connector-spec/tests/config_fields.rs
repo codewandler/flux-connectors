@@ -12,7 +12,7 @@
 //! The third property — that `secret` agrees with what a field binds — is the one with a security
 //! edge, and it has its own section.
 
-use connector_spec::{provider, Binding, Connector, Format, Level, Position};
+use connector_spec::{provider, Binding, Connector, Format, Level, Pin, Position};
 
 #[path = "support/shipped_provider.rs"]
 mod shipped_provider;
@@ -872,4 +872,334 @@ fn a_pin_that_claims_to_be_secret_is_refused() {
         error.contains("That value is configuration, not a credential"),
         "a pin is not a credential and must not be declared one:\n{error}"
     );
+}
+
+// ---------------------------------------------------------------------------------------------
+// C-229: one question whose single answer reaches more than one destination.
+//
+// C-187 gave a field a request position; it still gave it exactly one. Algolia's application id
+// composes the hostname *and* travels as a header on every call, so the vendor's own shape is one
+// the section above cannot express. These tests are about a field naming several destinations
+// while staying one question with one host-side slot.
+// ---------------------------------------------------------------------------------------------
+
+/// The Algolia shape, reduced to what a binding needs: a hostname composed from a tenant scope the
+/// vendor *also* requires as a header on every call.
+fn two_position_fixture(config: &str) -> String {
+    format!(
+        r#"
+id = "acme"
+vendor = "Acme"
+base_url = "https://{{app_id}}-dsn.acme.example"
+
+[[auth]]
+name = "acme.api_key"
+scheme = {{ header = {{ name = "X-Acme-Api-Key" }} }}
+env = ["ACME_API_KEY"]
+
+[[operations]]
+id = "acme-index-list"
+method = "GET"
+path = "/1/indexes"
+risk = "low"
+idempotency = "idempotent"
+
+[[config]]
+name = "api_key"
+label = "API key"
+help = "From your Acme dashboard"
+format = "token"
+secret = true
+binds = "credential.acme.api_key"
+
+{config}
+"#
+    )
+}
+
+/// **The failing-first test.** One field, one `name`, one answer — reaching both the `base_url`
+/// placeholder and a request header.
+///
+/// It cannot be declared today: `binds` is one string naming one destination, and the two shapes
+/// that would fake it are each refused or wrong. Two fields with two names load and ship two
+/// host-side slots for one answer; two fields with one name are refused by `validate_pin`'s C-197
+/// shared-slot pass, and rightly so — *two questions that share an answer are one question*. What
+/// is missing is the one question, and `also_binds` is it.
+#[test]
+fn one_field_declares_two_destinations_and_one_value_reaches_both() {
+    let config = r#"
+[[config]]
+name = "app_id"
+label = "Acme application id"
+help = "Shown on your Acme dashboard. It is both the host prefix and a header on every call"
+example = "B1G2GM9NG0"
+binds = "endpoint.app_id"
+also_binds = ["header.X-Acme-Application-Id"]
+"#;
+    let connector = load(&two_position_fixture(config));
+    let field = connector
+        .config_field("app_id")
+        .expect("the fixture declares it");
+
+    // One question. The header destination adds no second field and no second name.
+    assert_eq!(
+        connector
+            .config
+            .iter()
+            .filter(|other| other.name != "api_key")
+            .count(),
+        1,
+        "a value reaching two positions is still one thing to ask a human for"
+    );
+
+    // Both destinations, in declaration order, with `binds` the head.
+    assert_eq!(
+        field.bindings(),
+        Some(vec![
+            Binding::Endpoint { variable: "app_id" },
+            Binding::Request {
+                position: Position::Header,
+                name: "X-Acme-Application-Id",
+            },
+        ])
+    );
+
+    // **One host-side slot**, and it is `binds`' own target. That is the answer to the question a
+    // multi-destination field forces: `Position::name` is both the placeholder and the wire
+    // spelling, so when the two destinations spell the value differently the emitted module carries
+    // the *slot's* spelling everywhere and the header's name is only what the vendor sees.
+    assert_eq!(field.slot(), Some("app_id"));
+    assert_eq!(
+        field.pins(),
+        vec![Pin {
+            position: Position::Header,
+            name: "X-Acme-Application-Id",
+            variable: "app_id",
+        }],
+        "the header pin carries the slot's placeholder, not a second one"
+    );
+
+    // Derivation is unchanged: every destination agrees about level and secrecy, and the loader
+    // refuses a field whose destinations do not.
+    assert_eq!(field.level(), Some(Level::Connection));
+    assert!(
+        !field.secret,
+        "neither destination is a credential, so the field is not one"
+    );
+}
+
+/// A field whose destinations differ only in position, with the slot coming from `binds` — the
+/// shape a vendor wanting its tenant scope in a path segment *and* a header would write.
+fn two_pins(config: &str) -> String {
+    scoped_fixture(config)
+}
+
+/// **Only a request position may be a further destination.**
+///
+/// Every other kind resolves under its own address through a different port — a credential and an
+/// OAuth half through the secret side, a Basic username under its own `(kind, name)` — so a single
+/// slot cannot serve them. The `endpoint.` case has a spelling that works and it is `binds`, which
+/// is what keeps the placeholder rule unconditional.
+#[test]
+fn a_further_destination_that_is_not_a_request_position_is_refused() {
+    for (also, kind) in [
+        ("endpoint.tenant", "endpoint"),
+        ("credential.acme.api_token", "credential"),
+        ("username.acme.api_token", "username"),
+        ("oauth.client_id", "oauth"),
+    ] {
+        let config = format!(
+            r#"
+[[config]]
+name = "zone_id"
+label = "Acme zone"
+help = "The zone this connector is installed for"
+binds = "path.zone_id"
+also_binds = ["{also}"]
+"#
+        );
+        let error = refuse(&two_pins(&config));
+        assert!(
+            error.contains("also_binds") && error.contains(kind),
+            "a `{also}` destination cannot share one slot, and the refusal must say which kind it \
+             is:\n{error}"
+        );
+    }
+}
+
+/// One value reaches a position once. A repeat is either dropped by the emitter or sent twice, and
+/// says nothing the first did not.
+#[test]
+fn a_destination_named_twice_is_refused() {
+    let config = r#"
+[[config]]
+name = "zone_id"
+label = "Acme zone"
+help = "The zone this connector is installed for"
+binds = "path.zone_id"
+also_binds = ["header.X-Acme-Zone", "header.X-Acme-Zone"]
+"#;
+    let error = refuse(&two_pins(config));
+    assert!(
+        error.contains("twice"),
+        "a destination declared twice must be refused:\n{error}"
+    );
+}
+
+/// **Every destination is checked, not only the first** — and each pair is chosen so that exactly
+/// one of the two destinations can refuse it.
+///
+/// `zone/admin` is a perfectly good HTTP field value and reshapes a path; `café` is a perfectly good
+/// path segment and is not an HTTP field value at all. Neither is caught by the other destination's
+/// rule, so a loader checking only `binds` would ship one of them and a loader checking only the
+/// last would ship the other.
+#[test]
+fn an_example_is_checked_against_every_destination_and_not_only_the_first() {
+    for (example, expected) in [("zone/admin", "path"), ("café", "header")] {
+        let config = format!(
+            r#"
+[[config]]
+name = "zone_id"
+label = "Acme zone"
+help = "The zone this connector is installed for"
+example = "{example}"
+binds = "path.zone_id"
+also_binds = ["header.X-Acme-Zone"]
+"#
+        );
+        let error = refuse(&two_pins(&config));
+        assert!(
+            error.contains(expected) && error.contains("`example`"),
+            "an example illegal in the {expected} destination must be refused by it:\n{error}"
+        );
+    }
+}
+
+/// The C-225 interaction, spelled out: a closed set is a set of values an operator is *invited* to
+/// pick, so every one of them is held to every position the field reaches.
+#[test]
+fn every_permitted_choice_is_checked_against_every_destination() {
+    let config = r#"
+[[config]]
+name = "zone_id"
+label = "Acme zone"
+help = "The zone this connector is installed for"
+binds = "path.zone_id"
+also_binds = ["header.X-Acme-Zone"]
+
+[[config.choices]]
+value = "primary"
+label = "Primary"
+
+[[config.choices]]
+value = "sécondaire"
+label = "Secondary"
+"#;
+    let error = refuse(&two_pins(config));
+    assert!(
+        error.contains("header") && error.contains("choice"),
+        "a permitted value that is not an HTTP field value must be refused by the header \
+         destination:\n{error}"
+    );
+}
+
+/// **A value that composes a host is held to the host rule, which is the strict one.**
+///
+/// `acme.example@evil.example` passes the path, query and header rules — none of those positions
+/// cares about an `@` — and substituted into an authority it sends the request, and the operator's
+/// own credential, to a host nobody named. So a field binding `endpoint.` is checked against it,
+/// and that is what stops the intersection of a multi-destination field from being the weaker rule.
+#[test]
+fn a_value_that_composes_a_host_is_refused_when_it_could_move_the_authority() {
+    let config = r#"
+[[config]]
+name = "tenant"
+label = "Acme tenant"
+help = "The part of your Acme URL before `.acme.example`"
+example = "widgets.acme.example@evil.example"
+binds = "endpoint.tenant"
+"#;
+    let error = refuse(&fixture(&format!("{config}{USERNAME_AND_TOKEN}")));
+    assert!(
+        error.contains("host character"),
+        "an example that could move the authority must be refused:\n{error}"
+    );
+}
+
+/// The two credential halves the `fixture` needs alongside a varying `tenant` field.
+const USERNAME_AND_TOKEN: &str = r#"
+[[config]]
+name = "email"
+label = "Account email"
+help = "The account the token belongs to"
+example = "you@widgets.com"
+format = "email"
+binds = "username.acme.api_token"
+
+[[config]]
+name = "api_token"
+label = "API token"
+help = "From your Acme account settings"
+format = "token"
+secret = true
+binds = "credential.acme.api_token"
+"#;
+
+/// **The door C-229 must not reopen, from the other side.** Two fields, two slots, one wire
+/// position: the request carries one of two values depending on an order nothing declares.
+///
+/// The C-197 shared-slot refusal does not catch this — the two slots are genuinely different — so it
+/// is its own rule, and it is what a further destination makes newly possible.
+#[test]
+fn two_fields_writing_one_header_are_refused() {
+    let config = r#"
+[[config]]
+name = "zone_id"
+label = "Acme zone"
+help = "The zone this connector is installed for"
+binds = "path.zone_id"
+also_binds = ["header.X-Acme-Scope"]
+
+[[config]]
+name = "account_id"
+label = "Acme account"
+help = "The account this connector is installed for"
+binds = "header.X-Acme-Scope"
+"#;
+    let error = refuse(&two_pins(config));
+    assert!(
+        error.contains("zone_id") && error.contains("account_id") && error.contains("X-Acme-Scope"),
+        "two fields writing one header must be refused naming both:\n{error}"
+    );
+}
+
+/// **A secret cannot acquire a second destination, whichever way round it is declared.**
+///
+/// The line this whole binding exists not to cross: a value that reaches a URL or a header the
+/// emitted module composes is never masked and reaches no redactor. `secret` must agree with what a
+/// field binds, and with `also_binds` it must agree with **every** destination — so a credential
+/// that also claimed a header is a contradiction whichever value `secret` takes.
+#[test]
+fn a_credential_cannot_also_reach_a_request_position() {
+    for secret in ["true", "false"] {
+        let config = format!(
+            r#"
+[[config]]
+name = "leaky"
+label = "Acme token"
+help = "For the refusal test only"
+format = "token"
+secret = {secret}
+binds = "credential.acme.api_token"
+also_binds = ["header.X-Acme-Token"]
+"#
+        );
+        let error = refuse(&two_pins(&config));
+        assert!(
+            error.contains("leaky") && error.contains("That value is"),
+            "a credential that also lands in a header must be refused by the `secret`/`binds` \
+             agreement with `secret = {secret}`, because the two destinations disagree about what \
+             the value is:\n{error}"
+        );
+    }
 }
