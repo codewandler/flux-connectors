@@ -16,14 +16,18 @@
 //! If freshdesk gains a credential — C-16 owns that decision — this file goes red, and correctly:
 //! the evidence it stands on stopped being true.
 //!
-//! # What freshdesk does and does not stand in for
+//! # What freshdesk stands in for, and what it stopped standing in for (C-235)
 //!
 //! Freshdesk declares no credential because its API key occupies the Basic *username* position and
-//! the IR cannot yet mark that secret — `AGENTS.md` records it as an intentional gap. It is
+//! the IR cannot yet mark that secret — `AGENTS.md` records it as an intentional gap. It was
 //! therefore the right fixture for the **shape** (a connector with nothing for an operator to
-//! supply) and the wrong one for the **reason**. The genuinely-public case — C-206's
-//! `auth = []`, declared positively — has not shipped, so it is proved against fixtures in
-//! `api.rs`'s own unit tests, where a mechanism list can be written down rather than waited for.
+//! supply) and the wrong one for the **reason**, and it was served as `no-credential-required`
+//! because the embedded catalogue could not carry the difference.
+//!
+//! It can now, so freshdesk is served as `no-credential` — its own state, and the honest one: there
+//! is nothing to supply *and* the calls do not work. The genuinely-public case — C-206's
+//! `auth = []`, declared positively — has still not shipped, so it is proved against fixtures in
+//! `api.rs`'s own unit tests, where a declaration can be written down rather than waited for.
 
 mod support;
 
@@ -61,12 +65,18 @@ fn operation<'v>(view: &'v serde_json::Value, id: &str) -> &'v serde_json::Value
 /// **The third state is served, and it is not the second one.**
 ///
 /// A connector with nothing for an operator to supply and a connector whose credentials are simply
-/// unset are opposite answers to "is there anything for me to do here?". Before this story they
-/// were the same byte: `connected: false` for both.
+/// unset are opposite answers to "is there anything for me to do here?". Before C-212 they were the
+/// same byte: `connected: false` for both.
 ///
 /// The assertion is deliberately on a field of its own rather than on a difference a consumer would
-/// have to *derive* — the story's second acceptance item is that nobody has to correlate a boolean
-/// with `credentials.length` to recover the state that was collapsed.
+/// have to *derive* — C-212's second acceptance item is that nobody has to correlate a boolean with
+/// `credentials.length` to recover the state that was collapsed.
+///
+/// **C-235 moved freshdesk's token**, from `no-credential-required` to `no-credential`. The
+/// property this test is named for is unchanged and is what is still asserted: a connector with
+/// nothing to supply is not served as one left unset. What changed is that "nothing to supply" is
+/// no longer one state — see
+/// [`a_withheld_credential_is_not_served_as_a_vendor_that_needs_none`].
 #[tokio::test]
 async fn a_connector_needing_no_credential_is_not_served_as_one_left_unset() {
     let idp = Idp::start().await;
@@ -78,7 +88,7 @@ async fn a_connector_needing_no_credential_is_not_served_as_one_left_unset() {
     let something_to_supply = view(&client, &base, &cookie, "anthropic").await;
 
     assert_eq!(
-        nothing_to_supply["wiring"], "no-credential-required",
+        nothing_to_supply["wiring"], "no-credential",
         "a connector whose operations declare no credential must say so positively, in the token \
          C-206 published for exactly this distinction: {nothing_to_supply}"
     );
@@ -89,6 +99,51 @@ async fn a_connector_needing_no_credential_is_not_served_as_one_left_unset() {
     assert_ne!(
         nothing_to_supply["wiring"], something_to_supply["wiring"],
         "the two opposite situations are still served identically"
+    );
+}
+
+/// **C-235, over the real HTTP surface: the reason is served, not inferred.**
+///
+/// Freshdesk's nine operations name no credential, and until this story that was the only thing the
+/// host could see — so it served them as a vendor requiring none, which reads to an operator as
+/// *ready to use*. Every call 401s. The embedded catalogue now carries what the connector declares,
+/// and the host publishes it per operation as well as per connector.
+///
+/// The genuinely-public half of the distinction is not asserted here because no connector ships it;
+/// `api.rs`'s unit tests hold that half against fixtures. What *is* assertable over shipped data is
+/// the half that was being told wrongly, which is the one an operator was meeting.
+#[tokio::test]
+async fn a_withheld_credential_is_not_served_as_a_vendor_that_needs_none() {
+    let idp = Idp::start().await;
+    let base = serve(&idp).await;
+    let client = client();
+    let cookie = sign_in(&base, OPERATOR).await;
+
+    let withheld = view(&client, &base, &cookie, "freshdesk").await;
+
+    assert_eq!(
+        withheld["wiring"], "no-credential",
+        "freshdesk's credential is withheld, not unnecessary — `no-credential-required` told an \
+         operator a connector that 401s on every call was ready: {withheld}"
+    );
+    assert_eq!(
+        operation(&withheld, "freshdesk-ticket-list")["requirement"],
+        "no-credential",
+        "the reason is carried per operation, in the catalogue's own token: {withheld}"
+    );
+    assert_eq!(
+        operation(&withheld, "freshdesk-ticket-list")["requires"],
+        serde_json::json!([]),
+        "and the mechanism list is unchanged — the reason travels beside it, not inside it"
+    );
+    assert_eq!(
+        operation(&withheld, "freshdesk-ticket-list")["callable"],
+        false,
+        "an unauthenticated request to an endpoint that wants a credential is a 401"
+    );
+    assert_eq!(
+        withheld["callable_operations"], 0,
+        "none of freshdesk's operations is callable, and the count must say so: {withheld}"
     );
 }
 
