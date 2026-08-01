@@ -26,6 +26,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **One connector can ingest many vendor documents, one per service** (C-410). One document per
+  provider was never decided, it was assumed: `SpecSource.path` was a single string and
+  `Provider::spec()` returned *the last file by stem*, which for babelforce would have selected the
+  4-operation `user` document over the 356-operation `manager` one. babelforce publishes **five**
+  documents across two API versions and two security models, so the assumption had to go before any
+  of it could be described.
+
+  `[spec]` and `[[spec]]` are one key in two TOML spellings, dispatched by a map-or-seq visitor
+  rather than `#[serde(untagged)]` — untagged discards the `deny_unknown_fields` key list and toml's
+  span, and this loader's error text is a deliverable, not a side effect.
+
+  Each document joins a **declared** service and may not share one, because a service is one name
+  namespace and two documents can publish the same `operationId`. `getUser` genuinely exists in both
+  the manager and user documents; a patch names its service, and the duplicate check widened from
+  `select` to `(service, select)`, so those are two operations rather than a silent collision.
+  Verified end to end at real scale: all five documents in one connector emit five service modules,
+  with both `getUser` operations distinct.
+
+  `Provider::spec()` was **deleted** rather than taught to choose better — which document a connector
+  compiles from is the provider file's decision, and discovery cannot make it correctly at all.
+
+  Provenance is per document, each declared `sha256` checked against its own bytes, so drift can name
+  *which* document moved. `LockEntry` is still single-document shaped and a multi-document connector
+  therefore records no spec hash in the lockfile — stated here rather than discovered later; widening
+  it belongs to C-7/C-14.
+
 - **An operation can be callable without being an LLM tool** (C-413). `expose true` was a hard-coded
   literal in the emitter, so every generated operation reached a model as a tool. That is why
   babelforce ships 9 operations out of 163 — curation was the only lever, and it is the wrong lever

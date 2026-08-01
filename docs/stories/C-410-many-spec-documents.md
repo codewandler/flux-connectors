@@ -2,8 +2,7 @@
 id: C-410
 title: "One connector, many spec documents — a spec per service"
 pillar: Spec
-status: in-progress
-priority: 2
+status: done
 design: docs/designs/spec-front-end.md
 epic: spec-front-end
 areas: [connector-spec, connector-cli]
