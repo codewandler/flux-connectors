@@ -11,6 +11,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
+use connector_spec::{LockEntry, Lockfile};
 
 use crate::artifact;
 use crate::core_catalog;
@@ -100,11 +101,20 @@ pub fn plan_selected(
 ) -> Result<Plan> {
     let providers = discovery::discover(workspace, only)?;
 
+    // A scoped run compiled a subset, so it can produce no whole-catalogue artifact — the lockfile
+    // included. Deciding it once, here, is what keeps the per-provider work below from paying for a
+    // row nothing will read.
+    let whole_catalogue = only.is_none() && service.is_none();
+
     let mut artifacts = Vec::new();
     let mut entries = Vec::new();
     let mut diagnostics = Vec::new();
+    let mut lockfile = Lockfile::new();
     for provider in &providers {
-        let compiled = compile(workspace, provider, service)?;
+        let compiled = compile(workspace, provider, service, whole_catalogue)?;
+        if let Some(entry) = compiled.lock {
+            lockfile.insert(entry);
+        }
         artifacts.extend(compiled.artifacts);
         entries.push(compiled.site);
         diagnostics.extend(compiled.diagnostics);
@@ -116,7 +126,18 @@ pub fn plan_selected(
     // reported stale. `docs/designs/catalog-json.md` records the rule for `catalog.json`; C-104
     // brings `crates/catalog/src/generated.rs` under it, which is what makes a provider-scoped run's
     // write set disjoint from another provider's and so lets provider stories run in parallel.
-    if only.is_none() && service.is_none() {
+    if whole_catalogue {
+        // `connectors.lock` (C-7, written by C-189). One row per provider, so it is whole-catalogue
+        // for exactly the reason the index is: written from a `--provider` run it would drop every
+        // other provider's row, and `check` would then report the catalogue as clean because it no
+        // longer knew those providers existed. That is worse than no lockfile.
+        artifacts.push(planned(
+            workspace.lockfile_path(),
+            lockfile
+                .to_toml()
+                .context("cannot render connectors.lock")?,
+        )?);
+
         artifacts.push(planned(
             workspace.catalog_index_path(),
             crate::catalog::render_index(
@@ -186,6 +207,9 @@ struct Compiled {
     site: ProviderEntry,
     /// What this provider's vendored document got wrong, if it has one (C-4).
     diagnostics: Vec<String>,
+    /// This provider's `connectors.lock` row — `None` on a scoped run, which will not write the
+    /// lockfile and so has no use for it. See [`lock_entry`].
+    lock: Option<LockEntry>,
 }
 
 /// One provider's artifacts, compiled and compared.
@@ -208,7 +232,12 @@ struct Compiled {
 /// on disk — which is a stale catalogue that still compiles, the worst available outcome. So a
 /// `--service` run leaves every provider-unit artifact alone, exactly as a `--provider` run leaves
 /// `catalog.json` alone, and for the same reason: it is not a function of what the run compiled.
-fn compile(workspace: &Workspace, provider: &Provider, service: Option<&str>) -> Result<Compiled> {
+fn compile(
+    workspace: &Workspace,
+    provider: &Provider,
+    service: Option<&str>,
+    lock: bool,
+) -> Result<Compiled> {
     let context = || format!("provider `{}`", provider.name);
 
     let inputs = ProviderInputs::read(provider).with_context(context)?;
@@ -248,11 +277,48 @@ fn compile(workspace: &Workspace, provider: &Provider, service: Option<&str>) ->
             )?);
         }
     }
+    let lock = lock
+        .then(|| lock_entry(workspace, &connector, &artifacts))
+        .transpose()
+        .with_context(context)?;
+
     Ok(Compiled {
         artifacts,
         site,
         diagnostics,
+        lock,
     })
+}
+
+/// One provider's `connectors.lock` row: the hashes of everything that produced its artifacts.
+///
+/// The input hashes come from the IR — `connector-spec` computed them while loading, and verified
+/// each declared `sha256` against the bytes it read. What is added here is what only this layer
+/// knows: the generator's identity, and the hash of each artifact **as the plan would write it**.
+///
+/// Hashing the planned contents rather than the bytes on disk is what makes the lockfile a fixed
+/// point *together with* the artifacts. Hashing what is committed would record a stale artifact's
+/// hash as correct, so a tree with a stale module would produce a lockfile agreeing with it — and
+/// `check` would call the drift clean.
+///
+/// The whole-catalogue artifacts are deliberately absent: a [`LockEntry`] is one provider's row, and
+/// `catalog.json` belongs to no provider. They remain covered transitively — each is a function of
+/// the IR whose `ir_sha256` is recorded here — and directly by
+/// `crates/connector-cli/tests/catalog_artifacts.rs`.
+fn lock_entry(
+    workspace: &Workspace,
+    connector: &seam::Connector,
+    artifacts: &[PlannedArtifact],
+) -> Result<LockEntry> {
+    let mut entry = LockEntry::for_connector(connector, &seam::generator())
+        .context("cannot record the connector in connectors.lock")?;
+    for artifact in artifacts {
+        entry = entry.with_artifact(
+            workspace.artifact_key(&artifact.path),
+            artifact.contents.as_bytes(),
+        );
+    }
+    Ok(entry)
 }
 
 fn planned(path: PathBuf, contents: String) -> Result<PlannedArtifact> {

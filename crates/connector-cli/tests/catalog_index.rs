@@ -1,9 +1,10 @@
 //! **The whole-catalogue artifacts are a function of a full run, and only of a full run** (C-104).
 //!
-//! Four artifacts in this repository describe the catalogue *as a whole* rather than one provider:
+//! Five artifacts in this repository describe the catalogue *as a whole* rather than one provider:
 //! `crates/catalog/src/generated.rs` (the provider module index), `web/public/catalog.json` (the
-//! site's catalogue), `web/public/v1/**` (the published Flux core catalogue) and the README's
-//! rendered SVGs. None can be written honestly from a `--provider` or `--service` run, because such a
+//! site's catalogue), `web/public/v1/**` (the published Flux core catalogue), the README's
+//! rendered SVGs, and `connectors.lock` (the drift record — C-189, one row per provider). None can
+//! be written honestly from a `--provider` or `--service` run, because such a
 //! run compiled a subset — writing one anyway would drop every provider the run did not look at, and
 //! it would do so *successfully*. That is the worst available failure: a green build, a committed
 //! index, and sixteen connectors silently gone.
@@ -11,9 +12,10 @@
 //! **The scoping assertion compares the whole tree, not a list of paths.** An enumerated list is the
 //! obvious way to write this and the wrong one: it silently stops covering a member the moment the
 //! pipeline grows one, which is exactly the drift this file exists to prevent. Comparing full
-//! snapshots means a fifth whole-catalogue artifact is covered the day it is added, by a test nobody
-//! had to remember to update. The named constants below survive only for the *existence* checks,
-//! where naming the file is the point.
+//! snapshots means a sixth whole-catalogue artifact is covered the day it is added, by a test nobody
+//! had to remember to update — and it is what covered `connectors.lock` for free the day C-189
+//! landed it. The named constants below survive only for the *existence* checks, where naming the
+//! file is the point.
 //!
 //! `catalog.json` has always been emitted on a full run only; `docs/designs/catalog-json.md` records
 //! the rule. `generated.rs` reached the same conclusion from the other direction and paid for it by
@@ -141,6 +143,11 @@ fn assert_every_member_was_produced(fixture: &Fixture) {
         !files_under(fixture, SITE_CORE_DIR).is_empty(),
         "a full build must publish {SITE_CORE_DIR}/**; without it this test asserts the scoping \
          property over a member that was never produced"
+    );
+    assert!(
+        fixture.exists(connector_spec::LOCKFILE_NAME),
+        "a full build must write {}; a lockfile nothing produces is the defect C-189 closed",
+        connector_spec::LOCKFILE_NAME
     );
 }
 
