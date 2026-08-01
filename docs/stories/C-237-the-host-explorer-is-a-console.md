@@ -2,7 +2,7 @@
 id: C-237
 title: "The host's explorer fires 30 requests to read three fields, has no search over 53 connectors, and throws away half of what the API returns"
 pillar: Surfaces
-status: blocked
+status: in-progress
 priority: 2
 design: docs/designs/host-explorer.md
 epic: host-explorer
