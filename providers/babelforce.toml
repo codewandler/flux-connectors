@@ -260,27 +260,66 @@ select = "listReportingCalls"
 rename = "babelforce-call-list"
 risk = "low"
 idempotency = "idempotent"
-# **This operation is where the conversion is worse than what it replaced, and the description is
-# doing the work an overlay cannot.**
+description = "List and filter calls from the reporting view"
+
+# **The one endpoint where the vendor's own synonyms would have swamped the tool.**
 #
-# The hand-authored block selected 14 of the document's query parameters and dropped 24 by hand, with
-# a paragraph explaining each drop: 17 `filters.`-prefixed parameters that are exact synonyms of
-# their flat forms ("almost certainly one serializer emitting both bindings"), plus `domain`,
-# `source`, `anonymous`, `parentId` as narrow, plus one of each aliased number pair.
+# The document declares **38** query parameters for this operation; 24 of them are the vendor
+# restating the same 18 filters under a `filters.` prefix, plus four narrow filters and one half of
+# each aliased number pair. Selected raw, this reaches a model as a 38-argument tool of which 18
+# arguments are exact duplicates of 18 others — which is not a tool contract, it is a guessing game.
 #
-# **`ParamPatch` cannot drop a parameter** — it corrects `required`, `description` and `schema` on a
-# parameter the document declares, and refuses a name the document does not. So all 38 travel, and
-# this operation reaches a model as a 38-argument tool of which 17 arguments are exact duplicates of
-# 17 others. That is a real regression against the curated file and it is C-416's headline finding;
-# `docs/stories/C-416-reproduce-the-nine.md` records it and names parameter exclusion as the
-# capability C-6 needs before C-417 widens this to 397 operations.
+# The hand-authored block curated the same 14 by writing them out; this omits the other 24 by name.
+# C-416 measured that gap and C-422 closed it — **this block is the only reason the conversion did
+# not make the shipped connector worse**, and without it the epic's bet fails on this one endpoint
+# while winning everywhere else.
 #
-# One thing the document did settle: the hand-authored file picked `fromNumber`/`toNumber` over
-# `from`/`to` and flagged the choice "**Unconfirmed — worth one question to the API owner**". The
-# vendored document answers it in the opposite direction — it documents `fromNumber` as "Alias of
-# `from`" and `toNumber` as "Alias of `to`", making the short pair canonical. The description below
-# says so, since nothing else can.
-description = "List and filter calls from the reporting view. Prefer the flat parameters: every filter is also declared under a `filters.` prefix with an identical schema, and the two are synonyms. Prefer `from`/`to` over `fromNumber`/`toNumber`, which the vendor documents as aliases of them"
+# Each omission is a decision somebody made, written down, and refused if it stops matching: the
+# loader errors on a name the document does not declare, so a vendor who renames `filters.agentId`
+# breaks the build rather than silently handing the tool a 15th argument.
+#
+#   - the 18 `filters.`-prefixed parameters — every filter is declared twice, flat and prefixed,
+#     with identical schemas. Almost certainly one serializer emitting both bindings; the flat form
+#     is kept.
+#   - `from` / `to`. **The document settles a question the hand-authored file flagged as open.** It
+#     picked `fromNumber`/`toNumber` and noted "*Unconfirmed — worth one question to the API
+#     owner*"; the document answers in the opposite direction, documenting `fromNumber` as "Alias of
+#     `from`" and `toNumber` as "Alias of `to`". So the *short* pair is canonical and the pair this
+#     connector exposes is the alias. **The alias is kept anyway**, deliberately: both are live on
+#     the wire, and `fromNumber`/`toNumber` are the argument names this operation ships today.
+#     Renaming a tool's arguments to gain the canonical spelling is a break for every caller in
+#     exchange for nothing functional. Flip the two lists below if that trade ever changes.
+#   - `parentId`, `domain`, `source`, `anonymous` — real filters, but narrow. Add on demand.
+#
+# `time.start` and `time.end` keep their dotted wire names. That is deliberate and safe: C-8's
+# `Symbols` allocator maps a wire name onto a distinct Flux symbol (`time_start`), because a dotted
+# symbol would reparse as field access rather than fail.
+omit.query = [
+  "parentId",
+  "from",
+  "to",
+  "domain",
+  "source",
+  "anonymous",
+  "filters.sessionId",
+  "filters.conversationId",
+  "filters.id",
+  "filters.parentId",
+  "filters.type",
+  "filters.from",
+  "filters.fromNumber",
+  "filters.to",
+  "filters.toNumber",
+  "filters.time.start",
+  "filters.time.end",
+  "filters.agentId",
+  "filters.q",
+  "filters.state",
+  "filters.domain",
+  "filters.source",
+  "filters.finishReason",
+  "filters.anonymous",
+]
 
 [patch.operations.quirks.pagination]
 page = { page_param = "page", size_param = "max", page_size = 100, max_pages = 20 }
@@ -330,10 +369,27 @@ idempotency = "idempotent"
 # which is what an under-specified schema and a free-form map look like identically. A schema that
 # gained a property is far more often a schema that was completed than an API that changed shape.
 #
-# **What would settle it: one live call.** Nothing offline can — this repository reaches no network
-# during a build, and both shapes are valid JSON against their own document. Send both bodies to a
-# test account and see which one sets the variable. Until someone does, this is a considered choice
-# and not a verified fact, and that is exactly why it is written down here rather than absorbed.
+# **What would settle it: one live call.** This repository reaches no network during a build, and
+# both shapes are valid JSON against their own document. Send both bodies to a test account and see
+# which one sets the variable. Until someone does, this is a considered choice and not a verified
+# fact, and that is exactly why it is written down here rather than absorbed.
+#
+# **The offline evidence was re-examined on 2026-08-01 and it weakened the case, so read the choice
+# above as roughly even rather than settled.** Every *other* session-variable payload in this
+# document is a bare, unwrapped map — six payloads for one concept, and this is the only wrapper:
+# `UpdateSessionVariablesRequest` (`:25854`, the sibling write below), `ConversationSessionVariables`
+# (`:14687`, whose PUT says in prose "the body is a key/value map"), the test-call `session` map
+# (`:11578`), the named component `SessionVariables` (`:23369`), and the read side
+# `SessionResponse_item.data` (`:23367`). A bare `SessionVariables` component already exists and this
+# operation does not `$ref` it. Against that, the wrapper is asserted three times in this operation's
+# own block — but by one author, in one edit, in a block whose prose also claims a response shape
+# (`{ success, item: { id } }`) that its own `SetCallSessionVariablesResponse` does not declare.
+#
+# **Both failure modes are silent**, which is why this needs asking rather than waiting: keys not
+# prefixed `app.` are ignored, so the wrong shape either way is a no-op that still answers
+# `200 {"success": true}`. If the owner cannot confirm quickly, reverting this operation to
+# `body_schema` — the flat map, which is what shipped before this conversion — is the conservative
+# choice and costs three lines. Nothing else in this file depends on it.
 #
 # The `app.` key prefix rule is unenforceable from either schema and remains a C-12 quirk candidate.
 description = "Set session variables on a live call. Pass them as the `variables` map; babelforce applies only keys beginning `app.` and silently ignores the rest, and states that rule only in prose"

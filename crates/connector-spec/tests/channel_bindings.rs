@@ -11,6 +11,9 @@
 
 use connector_spec::{provider, Connector, TimestampFormat, Transport, VerificationScheme};
 
+#[path = "support/shipped_provider.rs"]
+mod shipped_provider;
+
 /// A connector with one reply-shaped operation and one event, ready for a binding to be bolted on.
 /// The `{binding}` placeholder is where each test writes the binding under test.
 fn fixture(binding: &str) -> String {
@@ -604,7 +607,7 @@ fn the_shipped_slack_bindings_describe_both_of_slacks_real_transports() {
             .expect("providers/slack.toml exists"),
     )
     .expect("providers/slack.toml reads");
-    let connector = provider::load("providers/slack.toml", &source)
+    let connector = shipped_provider::load_definition("slack", &source)
         .expect("the shipped slack provider loads")
         .connector;
 

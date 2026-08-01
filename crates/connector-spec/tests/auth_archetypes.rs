@@ -12,12 +12,15 @@
 
 use connector_spec::{provider, AuthScheme, Binding, Connector, Format, Level};
 
+#[path = "support/shipped_provider.rs"]
+mod shipped_provider;
+
 fn shipped(name: &str) -> Connector {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../providers")
         .join(format!("{name}.toml"));
     let source = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path:?}: {e}"));
-    provider::load(&format!("providers/{name}.toml"), &source)
+    shipped_provider::load_definition(name, &source)
         .unwrap_or_else(|e| panic!("providers/{name}.toml must load:\n{e}"))
         .connector
 }

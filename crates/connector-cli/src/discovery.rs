@@ -27,18 +27,19 @@ pub struct Provider {
     pub name: String,
     /// `providers/<name>.toml`.
     pub definition: PathBuf,
-    /// Every vendored spec for this provider, ordered by version.
-    pub specs: Vec<SpecFile>,
-}
-
-impl Provider {
-    /// The spec a build compiles against: the last by version order.
+    /// **Every** vendored spec for this provider, ordered by version — the cache, whole.
     ///
-    /// `None` is normal, not an error — a hand-authored connector such as Ollama has no vendor
+    /// There is deliberately no accessor that picks one of these, and that absence is C-410's whole
+    /// point at this layer. `Provider::spec()` used to return `self.specs.last()` — the highest file
+    /// stem — which for babelforce's five documents selected the four-operation `user-2026-06-25`
+    /// over the 356-operation `manager-2026-07-10`, silently and with exit 0. Discovery cannot make
+    /// that choice correctly because the choice is not discovery's: which documents a connector
+    /// compiles from, and how many, is stated by `[spec]` / `[[spec]]` in the provider file and is
+    /// resolved where those are read (`connector_spec::provider::load_with_spec`).
+    ///
+    /// Empty is normal, not an error — a hand-authored connector such as Ollama has no vendor
     /// document at all. That is the "two front-ends, one IR" requirement.
-    pub fn spec(&self) -> Option<&SpecFile> {
-        self.specs.last()
-    }
+    pub specs: Vec<SpecFile>,
 }
 
 /// Every provider in the workspace, ordered by name; `only` restricts the result to one.

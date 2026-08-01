@@ -16,6 +16,9 @@ use std::path::{Path, PathBuf};
 
 use connector_spec::{provider, Connector};
 
+#[path = "support/shipped_provider.rs"]
+mod shipped_provider;
+
 /// A two-service provider, AWS-shaped: one authority, two API surfaces, one date each.
 const AWS: &str = r#"
 id = "aws"
@@ -377,7 +380,8 @@ fn every_shipped_service_is_spellable_and_a_single_service_provider_declares_non
         let source = std::fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
         let name = path.file_name().unwrap().to_string_lossy().to_string();
-        let connector = provider::load(&format!("providers/{name}"), &source)
+        let id = path.file_stem().unwrap().to_string_lossy().to_string();
+        let connector = shipped_provider::load_definition(&id, &source)
             .unwrap_or_else(|error| panic!("providers/{name} does not load: {error}"))
             .connector;
 

@@ -48,6 +48,9 @@ schema = { type = "integer", format = "uint64", minimum = 1 }
 
 const SPEC: &str = r#"{"openapi":"3.0.0","info":{"title":"Zendesk","version":"1.0.0"}}"#;
 
+/// Where [`SPEC`] sits in the cache, spelled as the two fixtures below spell `[spec] path`.
+const SPEC_PATH: &str = "specs/zendesk/1.0.0.json";
+
 const GENERATOR: &str = "flux-connectors 0.1.0";
 
 /// The committed bytes one build reads, plus the identity of the generator reading them — every
@@ -68,6 +71,19 @@ impl Default for Inputs {
     }
 }
 
+/// The fixture definition, compiled against a cache holding [`SPEC`] at [`SPEC_PATH`].
+fn load(definition: &str) -> connector_spec::LoadedProvider {
+    provider::load_with_spec(
+        "providers/zendesk.toml",
+        definition,
+        &[connector_spec::SpecDocument {
+            path: SPEC_PATH,
+            document: SPEC,
+        }],
+    )
+    .expect("load")
+}
+
 /// A stand-in for `connector-flux`, doing the one thing that matters here: an artifact is a
 /// function of both the IR *and* the generator that emitted it, so a generator bump has to reach
 /// the artifact hash. `crates/connector-cli/src/seam.rs` stamps exactly this header today.
@@ -79,9 +95,14 @@ fn emit(connector: &Connector, generator: &str) -> String {
 }
 
 /// One provider's full trip from committed bytes to a lockfile row, as `connector-cli` will make
-/// it: load the TOML, hash the spec bytes that were read off disk, emit, record.
+/// it: load the TOML **against the spec cache**, hash the spec bytes that were read off disk, emit,
+/// record.
+///
+/// The cache is passed whether or not the definition pins anything, exactly as `seam::load` passes
+/// it — a directory holding a document is not a declaration, and the two fixtures here that *do*
+/// declare `[spec]` are compiled rather than skeletonised (C-421).
 fn entry(inputs: &Inputs) -> LockEntry {
-    let loaded = provider::load("providers/zendesk.toml", &inputs.definition).expect("load");
+    let loaded = load(&inputs.definition);
     let mut connector = loaded.connector;
     connector.provenance.spec_sha256 = inputs.spec.as_ref().map(|spec| sha256_hex(spec.as_bytes()));
 
@@ -162,6 +183,14 @@ fn the_hash_domain_excludes_every_provenance_field() {
         upstream_version: Some("0.7.0".into()),
         fetched_at: Some("2026-07-30T12:00:00Z".into()),
         spec_sha256: Some("a".repeat(64)),
+        // The per-document record C-410 added is provenance too, so it is outside the hash domain
+        // for the same reason the four scalars are: re-vendoring a document must not move
+        // `ir_sha256` unless the compiled meaning moved with it.
+        specs: vec![connector_spec::SpecSource {
+            path: "specs/zendesk/2024-06-01.json".into(),
+            sha256: Some("a".repeat(64)),
+            ..Default::default()
+        }],
         toml_sha256: Some("b".repeat(64)),
     });
 
@@ -303,7 +332,7 @@ fn the_lockfile_records_no_timestamp() {
         definition: format!(
             "{ZENDESK_TOML}\n\
              [spec]\n\
-             path = \"specs/zendesk/1.0.0.json\"\n\
+             path = \"{SPEC_PATH}\"\n\
              upstream_version = \"1.0.0\"\n\
              fetched_at = \"2026-07-30T12:00:00Z\"\n"
         ),
@@ -320,8 +349,7 @@ fn the_lockfile_records_no_timestamp() {
         "the lockfile has no timestamp field at all:\n{rendered}"
     );
     // The provenance itself is untouched — it is still on the connector, where a human can read it.
-    let loaded =
-        provider::load("providers/zendesk.toml", &with_timestamp.definition).expect("load");
+    let loaded = load(&with_timestamp.definition);
     assert_eq!(
         loaded.connector.provenance.fetched_at.as_deref(),
         Some("2026-07-30T12:00:00Z")
@@ -339,6 +367,7 @@ fn the_rendered_shape_is_pinned() {
         fetched_at: Some("2026-07-30T12:00:00Z".into()),
         spec_sha256: Some("a".repeat(64)),
         toml_sha256: Some("b".repeat(64)),
+        ..Provenance::default()
     });
     connector.id = "zendesk".into();
     lockfile.insert(
@@ -482,7 +511,7 @@ fn the_lockfile_carries_no_credential_and_no_endpoint() {
         definition: format!(
             "{ZENDESK_TOML}\n\
              [spec]\n\
-             path = \"specs/zendesk/1.0.0.json\"\n\
+             path = \"{SPEC_PATH}\"\n\
              source_url = \"https://developer.zendesk.com/zendesk/oas.yaml\"\n"
         ),
         ..Inputs::default()

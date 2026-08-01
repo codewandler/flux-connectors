@@ -39,8 +39,11 @@ use std::path::{Path, PathBuf};
 use connector_flux::emit_operation;
 use connector_spec::{
     config::{template_variables, Format, Level},
-    provider, AuthScheme, Binding, Connector, HttpMethod, Idempotency, Risk,
+    AuthScheme, Binding, Connector, HttpMethod, Idempotency, Risk,
 };
+
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
 
 /// The provider under test.
 const PROVIDER: &str = "newrelic";
@@ -93,7 +96,7 @@ fn source() -> String {
 /// The shipped definition, through the real loader — the same route `shipped_modules.rs` takes, so
 /// this file cannot pass against a fixture that drifted from what ships.
 fn load() -> Connector {
-    provider::load(&format!("providers/{PROVIDER}.toml"), &source())
+    shipped_provider::load_definition(PROVIDER, &source())
         .unwrap_or_else(|error| panic!("providers/{PROVIDER}.toml does not load: {error}"))
         .connector
 }
@@ -217,7 +220,7 @@ fn the_closed_set_of_two_hosts_is_not_expressible_and_the_field_admits_any_host(
         let mutated = shipped.replace(&example, &format!("example = \"{accepted}\""));
         assert_ne!(mutated, shipped, "the substitution must actually apply");
         assert!(
-            provider::load(&format!("providers/{PROVIDER}.toml"), &mutated).is_ok(),
+            shipped_provider::load_definition(PROVIDER, &mutated).is_ok(),
             "the connector loads with `{accepted}` as the host operators are shown. For {EU_HOST} \
              that is correct and necessary; for {unrelated} it is the defect, and the two are \
              indistinguishable to every check this repository runs"
@@ -230,7 +233,7 @@ fn the_closed_set_of_two_hosts_is_not_expressible_and_the_field_admits_any_host(
         &example,
         &format!("values = [\"{US_HOST}\", \"{EU_HOST}\"]\n{example}"),
     );
-    let error = provider::load(&format!("providers/{PROVIDER}.toml"), &with_a_closed_set)
+    let error = shipped_provider::load_definition(PROVIDER, &with_a_closed_set)
         .expect_err("`ConfigField` has no way to enumerate the values a field permits");
     assert!(
         error.to_string().contains("values"),

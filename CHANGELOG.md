@@ -24,7 +24,81 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shifted would strand every credential already stored. The ambiguous case — several connections and
   none named — **refuses and lists the uuids that would have worked**, rather than guessing.
 
+### Fixed
+
+- **Loading a provider file means the same thing everywhere** (C-421). `provider::load` took bytes and
+  no spec cache, so a spec-backed provider loaded as a **zero-operation skeleton — successfully, with
+  no error**. 91 files call it and **86 are tests**, so the moment one shipped provider converted to
+  `[spec]`, 53 tests across 17 binaries went red. This blocked every remaining story in the epic.
+
+  The pure entry point now **refuses** rather than answering with a skeleton. The alternative — a
+  `documents` parameter on `load` — looks like it gives "load" one meaning, but every caller without a
+  cache can only pass `&[]`, and `&[]` against a pinned `[spec]` already refuses one layer down. So it
+  buys one signature and two meanings, the second spelled `&[]`, plus a vestigial argument on ~40
+  golden-error tests. All 53 hand-authored providers keep loading byte-identically.
+
+  **The part that makes conversion cheap is the test seam, not the refusal.** There was no shared way
+  to load a shipped provider — 18 test binaries, each with its own loader, so one wrong convention was
+  replicated everywhere. There is now one, reading the definition *and* every document under
+  `specs/<name>/` and passing the whole cache so the pin is resolved where the pin is read.
+  **Consequence: a provider converting to `[spec]` now needs no test change at all**, which is what
+  makes the remaining conversions affordable rather than 53 × 53 test edits.
+
+  47 of the 53 failures are resolved by the seam; three were hand-authored-shape assertions rewritten
+  to hold in **both** front-ends, and the last two are response-schema ratchet constants that move
+  with the conversion itself rather than ahead of it.
+
 ### Added
+
+- **A patch can drop a parameter the vendor declares** (C-422). Measured, not anticipated: converting
+  babelforce to the spec route was cheaper everywhere except one endpoint. The document declares **38
+  query parameters** on `listReportingCalls` — **18 of them `filters.`-prefixed restatements** of
+  names already present — where the hand-authored connector curated 14. Without omission, the one
+  operation the conversion could not curate became a 38-argument tool full of exact synonyms, which is
+  a tool a model has to choose between. This was the single place hand-authoring beat patching.
+
+  `omit` is a **name list grouped by position**, not a flag per parameter: a three-line block per name
+  would have cost 72 lines to remove 24 synonyms — more than the entire 293 → 54 saving the conversion
+  won — and would have told a reviewer the same thing 24 times. It costs 7. Identity is still name
+  *and* position; position became the table key rather than a field.
+
+  Omission is **explicit and never inferred**, which lands the opposite way from `Patch` having no
+  `hide` at the operation level, and deliberately: an operation reaching this point has already been
+  selected, so the author is narrowing a stated intent rather than opting out of review.
+
+  Two refusals beyond what the story asked, both the same sentence pointed elsewhere. A **path**
+  parameter cannot be dropped whatever its `required` flag says — the path template keeps its
+  placeholder, so `/tickets/{id}` with nothing to fill it is a URL nothing can complete. And
+  **corrections apply before omissions**, so requiredness is judged as the *connector* states it: an
+  author who believes the vendor's flag is wrong corrects it — a reviewable statement of its own — and
+  is then free to drop the parameter. Without that ordering, a vendor that wrongly marks a filter
+  required would pin that argument into the tool with no way out.
+
+- **One connector can ingest many vendor documents, one per service** (C-410). One document per
+  provider was never decided, it was assumed: `SpecSource.path` was a single string and
+  `Provider::spec()` returned *the last file by stem*, which for babelforce would have selected the
+  4-operation `user` document over the 356-operation `manager` one. babelforce publishes **five**
+  documents across two API versions and two security models, so the assumption had to go before any
+  of it could be described.
+
+  `[spec]` and `[[spec]]` are one key in two TOML spellings, dispatched by a map-or-seq visitor
+  rather than `#[serde(untagged)]` — untagged discards the `deny_unknown_fields` key list and toml's
+  span, and this loader's error text is a deliverable, not a side effect.
+
+  Each document joins a **declared** service and may not share one, because a service is one name
+  namespace and two documents can publish the same `operationId`. `getUser` genuinely exists in both
+  the manager and user documents; a patch names its service, and the duplicate check widened from
+  `select` to `(service, select)`, so those are two operations rather than a silent collision.
+  Verified end to end at real scale: all five documents in one connector emit five service modules,
+  with both `getUser` operations distinct.
+
+  `Provider::spec()` was **deleted** rather than taught to choose better — which document a connector
+  compiles from is the provider file's decision, and discovery cannot make it correctly at all.
+
+  Provenance is per document, each declared `sha256` checked against its own bytes, so drift can name
+  *which* document moved. `LockEntry` is still single-document shaped and a multi-document connector
+  therefore records no spec hash in the lockfile — stated here rather than discovered later; widening
+  it belongs to C-7/C-14.
 
 - **An operation can be callable without being an LLM tool** (C-413). `expose true` was a hard-coded
   literal in the emitter, so every generated operation reached a model as a tool. That is why

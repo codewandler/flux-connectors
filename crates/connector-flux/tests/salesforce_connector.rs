@@ -31,6 +31,9 @@ use connector_flux::emit_operation;
 use connector_spec::config::template_variables;
 use connector_spec::{AuthScheme, Binding, Connector, HttpMethod, Idempotency, Risk};
 
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
+
 /// The provider under test. Named once so the file reads as being about Salesforce rather than a
 /// string.
 const PROVIDER: &str = "salesforce";
@@ -63,7 +66,7 @@ fn load() -> Connector {
     let path = providers_dir().join(format!("{PROVIDER}.toml"));
     let source = std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-    connector_spec::provider::load(&format!("providers/{PROVIDER}.toml"), &source)
+    shipped_provider::load_definition(PROVIDER, &source)
         .unwrap_or_else(|error| panic!("providers/{PROVIDER}.toml does not load: {error}"))
         .connector
 }

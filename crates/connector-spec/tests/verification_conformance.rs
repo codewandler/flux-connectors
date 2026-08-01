@@ -44,6 +44,9 @@ use connector_spec::{
 };
 use sha2::{Digest as _, Sha256};
 
+#[path = "support/shipped_provider.rs"]
+mod shipped_provider;
+
 // -------------------------------------------------------------------------------------------
 // The reference verifier — driven by `HmacSpec` and nothing else
 // -------------------------------------------------------------------------------------------
@@ -678,7 +681,7 @@ fn shipped_specs() -> Vec<(String, String, HmacSpec)> {
             .to_string();
         let source = std::fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-        let loaded = provider::load(&format!("providers/{name}.toml"), &source)
+        let loaded = shipped_provider::load_definition(&name, &source)
             .unwrap_or_else(|error| panic!("providers/{name}.toml does not load: {error}"));
         for channel in &loaded.connector.channels {
             if let Some(VerificationScheme::Hmac(spec)) = &channel.verification {

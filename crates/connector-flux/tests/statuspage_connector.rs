@@ -58,6 +58,9 @@ use connector_flux::emit_operation;
 use connector_spec::config::template_variables;
 use connector_spec::{AuthScheme, Binding, Connector, HttpMethod, Idempotency, Risk};
 
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
+
 const PROVIDER: &str = "statuspage";
 
 const CREDENTIAL: &str = "statuspage.api_key";
@@ -97,7 +100,7 @@ fn provider_toml_text() -> String {
 /// this file cannot pass against a fixture that drifted from what ships.
 fn load() -> Connector {
     let source = provider_toml_text();
-    connector_spec::provider::load(&format!("providers/{PROVIDER}.toml"), &source)
+    shipped_provider::load_definition(PROVIDER, &source)
         .unwrap_or_else(|error| panic!("providers/{PROVIDER}.toml does not load: {error}"))
         .connector
 }

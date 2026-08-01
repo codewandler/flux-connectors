@@ -65,7 +65,7 @@ static OPERATIONS: &[crate::Operation] = &[
         id: "babelforce-call-list",
         provider: "babelforce",
         service: "default",
-        description: "List and filter calls from the reporting view. Prefer the flat parameters: every filter is also declared under a `filters.` prefix with an identical schema, and the two are synonyms. Prefer `from`/`to` over `fromNumber`/`toNumber`, which the vendor documents as aliases of them",
+        description: "List and filter calls from the reporting view",
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
         credentials: &[&["babelforce.access_token"]],

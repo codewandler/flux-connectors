@@ -31,7 +31,10 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{provider, AuthScheme, Binding, Connector, HttpMethod, Idempotency, Risk};
+use connector_spec::{AuthScheme, Binding, Connector, HttpMethod, Idempotency, Risk};
+
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
 
 /// The provider under test.
 const PROVIDER: &str = "klaviyo";
@@ -97,7 +100,7 @@ fn source() -> String {
 /// The shipped definition, through the real loader — the same route `shipped_modules.rs` takes, so
 /// this file cannot pass against a fixture that drifted from what ships.
 fn load() -> Connector {
-    provider::load(&format!("providers/{PROVIDER}.toml"), &source())
+    shipped_provider::load_definition(PROVIDER, &source())
         .unwrap_or_else(|error| panic!("providers/{PROVIDER}.toml does not load: {error}"))
         .connector
 }

@@ -1545,7 +1545,7 @@
               "name": "page",
               "in": "query",
               "wire": null,
-              "description": "Page number",
+              "description": "1-based page number.",
               "required": false,
               "schema": {
                 "type": "integer"
@@ -1555,7 +1555,7 @@
               "name": "max",
               "in": "query",
               "wire": null,
-              "description": "Page size",
+              "description": "Maximum number of items to return per page.",
               "required": false,
               "schema": {
                 "type": "integer"
@@ -1565,7 +1565,7 @@
               "name": "q",
               "in": "query",
               "wire": null,
-              "description": "Free-text search over agent name and group name",
+              "description": "When specified searches multiples fields at once:\n- name\n- group.name\n- number\n- email\n- sourceId\n- integration.label",
               "required": false,
               "schema": {
                 "type": "string"
@@ -1575,7 +1575,7 @@
               "name": "enabled",
               "in": "query",
               "wire": null,
-              "description": "Filter enabled or disabled agents",
+              "description": "Allows to filter for enabled or disabled Agents",
               "required": false,
               "schema": {
                 "type": "boolean"
@@ -1585,7 +1585,7 @@
               "name": "name",
               "in": "query",
               "wire": null,
-              "description": "Search by agent name",
+              "description": "Search for Agent Name",
               "required": false,
               "schema": {
                 "type": "string"
@@ -1595,7 +1595,7 @@
               "name": "number",
               "in": "query",
               "wire": null,
-              "description": "Filter by the agent's number",
+              "description": "Filter for the Agents Number",
               "required": false,
               "schema": {
                 "type": "string"
@@ -1605,17 +1605,7 @@
               "name": "sourceId",
               "in": "query",
               "wire": null,
-              "description": "Filter by integration source id",
-              "required": false,
-              "schema": {
-                "type": "string"
-              }
-            },
-            {
-              "name": "source",
-              "in": "query",
-              "wire": null,
-              "description": "Filter by source integration",
+              "description": "Filter for Agents having a specified Integration Source-ID",
               "required": false,
               "schema": {
                 "type": "string"
@@ -1625,7 +1615,7 @@
               "name": "state",
               "in": "query",
               "wire": null,
-              "description": "Filter by agent line status",
+              "description": "Filter for Agents State",
               "required": false,
               "schema": {
                 "enum": [
@@ -1642,10 +1632,20 @@
               }
             },
             {
+              "name": "source",
+              "in": "query",
+              "wire": null,
+              "description": "Filter for Agents Source Integration",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
               "name": "groupIds",
               "in": "query",
               "wire": null,
-              "description": "Filter by group id; a single id or a list",
+              "description": "Filter Agents belonging to a certain Group by Group-ID",
               "required": false,
               "schema": {
                 "oneOf": [
@@ -1665,7 +1665,27 @@
               "name": "groups",
               "in": "query",
               "wire": null,
-              "description": "Filter by group name; a single name or a list",
+              "description": "Filter Agents belonging to a certain Group by Group-Name",
+              "required": false,
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "tags",
+              "in": "query",
+              "wire": null,
+              "description": "Filter agents by tags",
               "required": false,
               "schema": {
                 "oneOf": [
@@ -1746,13 +1766,479 @@
                   "wrap-up"
                 ],
                 "type": "string"
+              },
+              "tags": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
               }
             },
             "required": [],
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "example": {
+              "items": [
+                {
+                  "activity": "activity",
+                  "agentSource": "agentSource",
+                  "available": true,
+                  "dateCreated": "2020-04-16T22:21:38Z",
+                  "display_status": "display_status",
+                  "email": "email",
+                  "enabled": true,
+                  "features": [
+                    "webrtc"
+                  ],
+                  "groups": [
+                    {
+                      "dateCreated": "2020-04-16T22:21:38Z",
+                      "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                      "name": "name"
+                    },
+                    {
+                      "dateCreated": "2020-04-16T22:21:38Z",
+                      "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                      "name": "name"
+                    }
+                  ],
+                  "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                  "lastUpdated": "2020-04-16T22:21:38Z",
+                  "name": "name",
+                  "number": "number",
+                  "presence": {
+                    "available": true,
+                    "label": "Busy",
+                    "name": "busy"
+                  },
+                  "sourceId": "sourceId",
+                  "state": null,
+                  "status": {
+                    "activity": "",
+                    "available": true,
+                    "display_status": "display_status",
+                    "enabled": true,
+                    "line_status": null,
+                    "outbound_status": null,
+                    "presence": {
+                      "available": true,
+                      "label": "Busy",
+                      "name": "busy"
+                    }
+                  },
+                  "tags": [
+                    null,
+                    null
+                  ],
+                  "webrtc": true
+                },
+                {
+                  "activity": "activity",
+                  "agentSource": "agentSource",
+                  "available": true,
+                  "dateCreated": "2020-04-16T22:21:38Z",
+                  "display_status": "display_status",
+                  "email": "email",
+                  "enabled": true,
+                  "features": [
+                    "webrtc"
+                  ],
+                  "groups": [
+                    {
+                      "dateCreated": "2020-04-16T22:21:38Z",
+                      "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                      "name": "name"
+                    },
+                    {
+                      "dateCreated": "2020-04-16T22:21:38Z",
+                      "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                      "name": "name"
+                    }
+                  ],
+                  "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                  "lastUpdated": "2020-04-16T22:21:38Z",
+                  "name": "name",
+                  "number": "number",
+                  "presence": {
+                    "available": true,
+                    "label": "Busy",
+                    "name": "busy"
+                  },
+                  "sourceId": "sourceId",
+                  "state": null,
+                  "status": {
+                    "activity": "",
+                    "available": true,
+                    "display_status": "display_status",
+                    "enabled": true,
+                    "line_status": null,
+                    "outbound_status": null,
+                    "presence": {
+                      "available": true,
+                      "label": "Busy",
+                      "name": "busy"
+                    }
+                  },
+                  "tags": [
+                    null,
+                    null
+                  ],
+                  "webrtc": true
+                }
+              ],
+              "pagination": {
+                "current": 1,
+                "max": 5,
+                "maxResults": 5,
+                "next": "next",
+                "pages": 0,
+                "total": 6
+              }
+            },
+            "properties": {
+              "items": {
+                "items": {
+                  "description": "An ACD agent — a person or integration seat that handles calls and conversations and can belong to one or more agent groups.",
+                  "example": {
+                    "activity": "activity",
+                    "agentSource": "agentSource",
+                    "available": true,
+                    "dateCreated": "2020-04-16T22:21:38Z",
+                    "display_status": "display_status",
+                    "email": "email",
+                    "enabled": true,
+                    "features": [
+                      "webrtc"
+                    ],
+                    "groups": [
+                      {
+                        "dateCreated": "2020-04-16T22:21:38Z",
+                        "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                        "name": "name"
+                      },
+                      {
+                        "dateCreated": "2020-04-16T22:21:38Z",
+                        "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                        "name": "name"
+                      }
+                    ],
+                    "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                    "lastUpdated": "2020-04-16T22:21:38Z",
+                    "name": "name",
+                    "number": "number",
+                    "presence": {
+                      "available": true,
+                      "label": "Busy",
+                      "name": "busy"
+                    },
+                    "sourceId": "sourceId",
+                    "state": null,
+                    "status": {
+                      "activity": "",
+                      "available": true,
+                      "display_status": "display_status",
+                      "enabled": true,
+                      "line_status": null,
+                      "outbound_status": null,
+                      "presence": {
+                        "available": true,
+                        "label": "Busy",
+                        "name": "busy"
+                      }
+                    },
+                    "tags": [
+                      null,
+                      null
+                    ],
+                    "webrtc": true
+                  },
+                  "properties": {
+                    "activity": {
+                      "description": "The agent's current activity.",
+                      "type": "string"
+                    },
+                    "agentSource": {
+                      "description": "The Identifier for the external System the Agent was created from",
+                      "type": "string"
+                    },
+                    "available": {
+                      "description": "Whether the agent is currently available to take calls.",
+                      "type": "boolean"
+                    },
+                    "dateCreated": {
+                      "example": "2020-04-16T22:21:38Z",
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "display_status": {
+                      "description": "Human-readable status label for display.",
+                      "type": "string"
+                    },
+                    "email": {
+                      "description": "The Agents Login",
+                      "format": "email",
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "description": "Whether the Agent is able to receive Calls via Queue or not",
+                      "type": "boolean"
+                    },
+                    "features": {
+                      "description": "A List of features which are enabled for that particular Agent",
+                      "example": [
+                        "webrtc"
+                      ],
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "groups": {
+                      "items": {
+                        "example": {
+                          "dateCreated": "2020-04-16T22:21:38Z",
+                          "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                          "name": "name"
+                        },
+                        "properties": {
+                          "dateCreated": {
+                            "example": "2020-04-16T22:21:38Z",
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "id": {
+                            "description": "The unique Identifier (UUID) of the object",
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "name": {
+                            "description": "The Group Name",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ]
+                      },
+                      "type": "array"
+                    },
+                    "id": {
+                      "description": "The unique Identifier (UUID) of the object",
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "lastUpdated": {
+                      "example": "2020-04-16T22:21:38Z",
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "The Agent Name",
+                      "type": "string"
+                    },
+                    "number": {
+                      "description": "The Agents current active Telephone-Number",
+                      "type": "string"
+                    },
+                    "presence": {
+                      "description": "An agent presence state — `available`, or a custom busy reason.",
+                      "example": {
+                        "available": true,
+                        "label": "Busy",
+                        "name": "busy"
+                      },
+                      "properties": {
+                        "available": {
+                          "description": "Whether agents in this presence can take calls.",
+                          "type": "boolean"
+                        },
+                        "label": {
+                          "description": "Human-readable presence label.",
+                          "example": "Busy",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "The presence's unique name/key.",
+                          "example": "busy",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "available",
+                        "label",
+                        "name"
+                      ]
+                    },
+                    "sourceId": {
+                      "description": "The ID of the external System the Agent was created from",
+                      "type": "string"
+                    },
+                    "state": {
+                      "enum": [
+                        "available",
+                        "busy",
+                        "declined",
+                        "unreachable",
+                        "selected",
+                        "ringing",
+                        "in-call",
+                        "wrap-up"
+                      ],
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "An agent's composite status — account, availability, line, and outbound state.",
+                      "example": {
+                        "activity": "",
+                        "available": true,
+                        "display_status": "display_status",
+                        "enabled": true,
+                        "line_status": null,
+                        "outbound_status": null,
+                        "presence": {
+                          "available": true,
+                          "label": "Busy",
+                          "name": "busy"
+                        }
+                      },
+                      "properties": {
+                        "activity": {},
+                        "available": {
+                          "description": "Whether the agent is currently available to take calls.",
+                          "type": "boolean"
+                        },
+                        "display_status": {
+                          "type": "string"
+                        },
+                        "enabled": {
+                          "description": "Whether the agent's account is enabled.",
+                          "type": "boolean"
+                        },
+                        "line_status": {
+                          "enum": [
+                            "available",
+                            "busy",
+                            "declined",
+                            "unreachable",
+                            "selected",
+                            "ringing",
+                            "in-call",
+                            "wrap-up"
+                          ],
+                          "type": "string"
+                        },
+                        "outbound_status": {
+                          "enum": [
+                            "offline",
+                            "online"
+                          ],
+                          "type": "string"
+                        },
+                        "presence": {
+                          "description": "An agent presence state — `available`, or a custom busy reason.",
+                          "example": {
+                            "available": true,
+                            "label": "Busy",
+                            "name": "busy"
+                          },
+                          "properties": {
+                            "available": {
+                              "description": "Whether agents in this presence can take calls.",
+                              "type": "boolean"
+                            },
+                            "label": {
+                              "description": "Human-readable presence label.",
+                              "example": "Busy",
+                              "type": "string"
+                            },
+                            "name": {
+                              "description": "The presence's unique name/key.",
+                              "example": "busy",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "available",
+                            "label",
+                            "name"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "available",
+                        "display_status",
+                        "enabled",
+                        "line_status",
+                        "outbound_status",
+                        "presence"
+                      ]
+                    },
+                    "tags": {
+                      "description": "A List of Tags describing an Object",
+                      "items": {
+                        "description": "A Tag describing an Object",
+                        "example": "foobar",
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "webrtc": {
+                      "description": "Whether WebRTC is enabed for that Agent or not",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ]
+                },
+                "type": "array"
+              },
+              "pagination": {
+                "example": {
+                  "current": 2,
+                  "max": 9,
+                  "maxResults": 7,
+                  "next": "next",
+                  "pages": 5,
+                  "total": 5
+                },
+                "properties": {
+                  "current": {
+                    "type": "integer"
+                  },
+                  "max": {
+                    "type": "integer"
+                  },
+                  "maxResults": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string"
+                  },
+                  "pages": {
+                    "type": "integer"
+                  },
+                  "total": {
+                    "type": "integer"
+                  }
+                }
+              }
+            },
+            "required": [
+              "items",
+              "pagination"
+            ]
+          },
           "credentials": [
             [
               "babelforce.access_token"
@@ -1761,7 +2247,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-agent-list(page: Number, max: Number, q: String, enabled: Bool, name: String, number: String, sourceId: String, source: String, state: String, groupIds: Any, groups: Any) -> Any\n  description \"List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/agents\")\n  sep = \"?\"\n  when page\n    url = fmt(\"{url}{sep}page={page}\")\n    sep = \"&\"\n  when max\n    url = fmt(\"{url}{sep}max={max}\")\n    sep = \"&\"\n  when q\n    url = fmt(\"{url}{sep}q={q}\")\n    sep = \"&\"\n  when enabled\n    url = fmt(\"{url}{sep}enabled={enabled}\")\n    sep = \"&\"\n  when name\n    url = fmt(\"{url}{sep}name={name}\")\n    sep = \"&\"\n  when number\n    url = fmt(\"{url}{sep}number={number}\")\n    sep = \"&\"\n  when sourceId\n    url = fmt(\"{url}{sep}sourceId={sourceId}\")\n    sep = \"&\"\n  when source\n    url = fmt(\"{url}{sep}source={source}\")\n    sep = \"&\"\n  when state\n    url = fmt(\"{url}{sep}state={state}\")\n    sep = \"&\"\n  when groupIds\n    url = fmt(\"{url}{sep}groupIds={groupIds}\")\n    sep = \"&\"\n  when groups\n    url = fmt(\"{url}{sep}groups={groups}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op babelforce-agent-list(page: Number, max: Number, q: String, enabled: Bool, name: String, number: String, sourceId: String, state: String, source: String, groupIds: Any, groups: Any, tags: Any) -> Any\n  description \"List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/agents\")\n  sep = \"?\"\n  when page\n    url = fmt(\"{url}{sep}page={page}\")\n    sep = \"&\"\n  when max\n    url = fmt(\"{url}{sep}max={max}\")\n    sep = \"&\"\n  when q\n    url = fmt(\"{url}{sep}q={q}\")\n    sep = \"&\"\n  when enabled\n    url = fmt(\"{url}{sep}enabled={enabled}\")\n    sep = \"&\"\n  when name\n    url = fmt(\"{url}{sep}name={name}\")\n    sep = \"&\"\n  when number\n    url = fmt(\"{url}{sep}number={number}\")\n    sep = \"&\"\n  when sourceId\n    url = fmt(\"{url}{sep}sourceId={sourceId}\")\n    sep = \"&\"\n  when state\n    url = fmt(\"{url}{sep}state={state}\")\n    sep = \"&\"\n  when source\n    url = fmt(\"{url}{sep}source={source}\")\n    sep = \"&\"\n  when groupIds\n    url = fmt(\"{url}{sep}groupIds={groupIds}\")\n    sep = \"&\"\n  when groups\n    url = fmt(\"{url}{sep}groups={groups}\")\n    sep = \"&\"\n  when tags\n    url = fmt(\"{url}{sep}tags={tags}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -1780,10 +2266,11 @@
                   "name",
                   "number",
                   "sourceId",
-                  "source",
                   "state",
+                  "source",
                   "groupIds",
-                  "groups"
+                  "groups",
+                  "tags"
                 ]
               }
             ],
@@ -1794,7 +2281,7 @@
           "id": "babelforce-agent-get",
           "provider": "babelforce",
           "service": "default",
-          "description": "Get one agent",
+          "description": "Get an agent",
           "risk": "low",
           "idempotency": "idempotent",
           "repeatable_because": null,
@@ -1805,7 +2292,7 @@
               "name": "id",
               "in": "path",
               "wire": null,
-              "description": "The agent id",
+              "description": "The agent's uuid.",
               "required": true,
               "schema": {
                 "type": "string"
@@ -1824,7 +2311,369 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "example": {
+              "item": {
+                "activity": "activity",
+                "agentSource": "agentSource",
+                "available": true,
+                "dateCreated": "2020-04-16T22:21:38Z",
+                "display_status": "display_status",
+                "email": "email",
+                "enabled": true,
+                "features": [
+                  "webrtc"
+                ],
+                "groups": [
+                  {
+                    "dateCreated": "2020-04-16T22:21:38Z",
+                    "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                    "name": "name"
+                  },
+                  {
+                    "dateCreated": "2020-04-16T22:21:38Z",
+                    "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                    "name": "name"
+                  }
+                ],
+                "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                "lastUpdated": "2020-04-16T22:21:38Z",
+                "name": "name",
+                "number": "number",
+                "presence": {
+                  "available": true,
+                  "label": "Busy",
+                  "name": "busy"
+                },
+                "sourceId": "sourceId",
+                "state": null,
+                "status": {
+                  "activity": "",
+                  "available": true,
+                  "display_status": "display_status",
+                  "enabled": true,
+                  "line_status": null,
+                  "outbound_status": null,
+                  "presence": {
+                    "available": true,
+                    "label": "Busy",
+                    "name": "busy"
+                  }
+                },
+                "tags": [
+                  null,
+                  null
+                ],
+                "webrtc": true
+              },
+              "success": true
+            },
+            "properties": {
+              "item": {
+                "description": "An ACD agent — a person or integration seat that handles calls and conversations and can belong to one or more agent groups.",
+                "example": {
+                  "activity": "activity",
+                  "agentSource": "agentSource",
+                  "available": true,
+                  "dateCreated": "2020-04-16T22:21:38Z",
+                  "display_status": "display_status",
+                  "email": "email",
+                  "enabled": true,
+                  "features": [
+                    "webrtc"
+                  ],
+                  "groups": [
+                    {
+                      "dateCreated": "2020-04-16T22:21:38Z",
+                      "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                      "name": "name"
+                    },
+                    {
+                      "dateCreated": "2020-04-16T22:21:38Z",
+                      "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                      "name": "name"
+                    }
+                  ],
+                  "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                  "lastUpdated": "2020-04-16T22:21:38Z",
+                  "name": "name",
+                  "number": "number",
+                  "presence": {
+                    "available": true,
+                    "label": "Busy",
+                    "name": "busy"
+                  },
+                  "sourceId": "sourceId",
+                  "state": null,
+                  "status": {
+                    "activity": "",
+                    "available": true,
+                    "display_status": "display_status",
+                    "enabled": true,
+                    "line_status": null,
+                    "outbound_status": null,
+                    "presence": {
+                      "available": true,
+                      "label": "Busy",
+                      "name": "busy"
+                    }
+                  },
+                  "tags": [
+                    null,
+                    null
+                  ],
+                  "webrtc": true
+                },
+                "properties": {
+                  "activity": {
+                    "description": "The agent's current activity.",
+                    "type": "string"
+                  },
+                  "agentSource": {
+                    "description": "The Identifier for the external System the Agent was created from",
+                    "type": "string"
+                  },
+                  "available": {
+                    "description": "Whether the agent is currently available to take calls.",
+                    "type": "boolean"
+                  },
+                  "dateCreated": {
+                    "example": "2020-04-16T22:21:38Z",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "display_status": {
+                    "description": "Human-readable status label for display.",
+                    "type": "string"
+                  },
+                  "email": {
+                    "description": "The Agents Login",
+                    "format": "email",
+                    "type": "string"
+                  },
+                  "enabled": {
+                    "description": "Whether the Agent is able to receive Calls via Queue or not",
+                    "type": "boolean"
+                  },
+                  "features": {
+                    "description": "A List of features which are enabled for that particular Agent",
+                    "example": [
+                      "webrtc"
+                    ],
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "groups": {
+                    "items": {
+                      "example": {
+                        "dateCreated": "2020-04-16T22:21:38Z",
+                        "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                        "name": "name"
+                      },
+                      "properties": {
+                        "dateCreated": {
+                          "example": "2020-04-16T22:21:38Z",
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "id": {
+                          "description": "The unique Identifier (UUID) of the object",
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "The Group Name",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    },
+                    "type": "array"
+                  },
+                  "id": {
+                    "description": "The unique Identifier (UUID) of the object",
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "lastUpdated": {
+                    "example": "2020-04-16T22:21:38Z",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "The Agent Name",
+                    "type": "string"
+                  },
+                  "number": {
+                    "description": "The Agents current active Telephone-Number",
+                    "type": "string"
+                  },
+                  "presence": {
+                    "description": "An agent presence state — `available`, or a custom busy reason.",
+                    "example": {
+                      "available": true,
+                      "label": "Busy",
+                      "name": "busy"
+                    },
+                    "properties": {
+                      "available": {
+                        "description": "Whether agents in this presence can take calls.",
+                        "type": "boolean"
+                      },
+                      "label": {
+                        "description": "Human-readable presence label.",
+                        "example": "Busy",
+                        "type": "string"
+                      },
+                      "name": {
+                        "description": "The presence's unique name/key.",
+                        "example": "busy",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "available",
+                      "label",
+                      "name"
+                    ]
+                  },
+                  "sourceId": {
+                    "description": "The ID of the external System the Agent was created from",
+                    "type": "string"
+                  },
+                  "state": {
+                    "enum": [
+                      "available",
+                      "busy",
+                      "declined",
+                      "unreachable",
+                      "selected",
+                      "ringing",
+                      "in-call",
+                      "wrap-up"
+                    ],
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "An agent's composite status — account, availability, line, and outbound state.",
+                    "example": {
+                      "activity": "",
+                      "available": true,
+                      "display_status": "display_status",
+                      "enabled": true,
+                      "line_status": null,
+                      "outbound_status": null,
+                      "presence": {
+                        "available": true,
+                        "label": "Busy",
+                        "name": "busy"
+                      }
+                    },
+                    "properties": {
+                      "activity": {},
+                      "available": {
+                        "description": "Whether the agent is currently available to take calls.",
+                        "type": "boolean"
+                      },
+                      "display_status": {
+                        "type": "string"
+                      },
+                      "enabled": {
+                        "description": "Whether the agent's account is enabled.",
+                        "type": "boolean"
+                      },
+                      "line_status": {
+                        "enum": [
+                          "available",
+                          "busy",
+                          "declined",
+                          "unreachable",
+                          "selected",
+                          "ringing",
+                          "in-call",
+                          "wrap-up"
+                        ],
+                        "type": "string"
+                      },
+                      "outbound_status": {
+                        "enum": [
+                          "offline",
+                          "online"
+                        ],
+                        "type": "string"
+                      },
+                      "presence": {
+                        "description": "An agent presence state — `available`, or a custom busy reason.",
+                        "example": {
+                          "available": true,
+                          "label": "Busy",
+                          "name": "busy"
+                        },
+                        "properties": {
+                          "available": {
+                            "description": "Whether agents in this presence can take calls.",
+                            "type": "boolean"
+                          },
+                          "label": {
+                            "description": "Human-readable presence label.",
+                            "example": "Busy",
+                            "type": "string"
+                          },
+                          "name": {
+                            "description": "The presence's unique name/key.",
+                            "example": "busy",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "available",
+                          "label",
+                          "name"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "available",
+                      "display_status",
+                      "enabled",
+                      "line_status",
+                      "outbound_status",
+                      "presence"
+                    ]
+                  },
+                  "tags": {
+                    "description": "A List of Tags describing an Object",
+                    "items": {
+                      "description": "A Tag describing an Object",
+                      "example": "foobar",
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "webrtc": {
+                    "description": "Whether WebRTC is enabed for that Agent or not",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ]
+              },
+              "success": {
+                "description": "Whether the Request was successful or not",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "item",
+              "success"
+            ]
+          },
           "credentials": [
             [
               "babelforce.access_token"
@@ -1833,7 +2682,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-agent-get(id: String) -> Any\n  description \"Get one agent\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/agents/{id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op babelforce-agent-get(id: String) -> Any\n  description \"Get an agent\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/agents/{id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -1851,7 +2700,7 @@
           "id": "babelforce-agent-status-update",
           "provider": "babelforce",
           "service": "default",
-          "description": "Update an agent's status. Supply at least one of enabled or presence.name — the request body's properties are all optional, so an empty PUT is schema-valid and does nothing",
+          "description": "Update an agent's status. Supply at least one of `enabled` or `presence.name` — the request body's properties are all optional, so an empty PUT is schema-valid and does nothing",
           "risk": "medium",
           "idempotency": "idempotent",
           "repeatable_because": null,
@@ -1862,7 +2711,7 @@
               "name": "id",
               "in": "path",
               "wire": null,
-              "description": "The agent id",
+              "description": "The agent's uuid.",
               "required": true,
               "schema": {
                 "type": "string"
@@ -1872,20 +2721,28 @@
               "name": "enabled",
               "in": "body",
               "wire": null,
-              "description": "Enable or disable the agent",
+              "description": "",
               "required": false,
               "schema": {
                 "type": "boolean"
               }
             },
             {
-              "name": "presence_name",
+              "name": "presence",
               "in": "body",
-              "wire": "presence.name",
-              "description": "Presence label to set",
+              "wire": null,
+              "description": "",
               "required": false,
               "schema": {
-                "type": "string"
+                "example": {
+                  "name": "name"
+                },
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
               }
             }
           ],
@@ -1897,8 +2754,16 @@
               "id": {
                 "type": "string"
               },
-              "presence_name": {
-                "type": "string"
+              "presence": {
+                "example": {
+                  "name": "name"
+                },
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
               }
             },
             "required": [
@@ -1907,7 +2772,93 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "description": "An agent's composite status — account, availability, line, and outbound state.",
+            "example": {
+              "activity": "",
+              "available": true,
+              "display_status": "display_status",
+              "enabled": true,
+              "line_status": null,
+              "outbound_status": null,
+              "presence": {
+                "available": true,
+                "label": "Busy",
+                "name": "busy"
+              }
+            },
+            "properties": {
+              "activity": {},
+              "available": {
+                "description": "Whether the agent is currently available to take calls.",
+                "type": "boolean"
+              },
+              "display_status": {
+                "type": "string"
+              },
+              "enabled": {
+                "description": "Whether the agent's account is enabled.",
+                "type": "boolean"
+              },
+              "line_status": {
+                "enum": [
+                  "available",
+                  "busy",
+                  "declined",
+                  "unreachable",
+                  "selected",
+                  "ringing",
+                  "in-call",
+                  "wrap-up"
+                ],
+                "type": "string"
+              },
+              "outbound_status": {
+                "enum": [
+                  "offline",
+                  "online"
+                ],
+                "type": "string"
+              },
+              "presence": {
+                "description": "An agent presence state — `available`, or a custom busy reason.",
+                "example": {
+                  "available": true,
+                  "label": "Busy",
+                  "name": "busy"
+                },
+                "properties": {
+                  "available": {
+                    "description": "Whether agents in this presence can take calls.",
+                    "type": "boolean"
+                  },
+                  "label": {
+                    "description": "Human-readable presence label.",
+                    "example": "Busy",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "The presence's unique name/key.",
+                    "example": "busy",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "available",
+                  "label",
+                  "name"
+                ]
+              }
+            },
+            "required": [
+              "available",
+              "display_status",
+              "enabled",
+              "line_status",
+              "outbound_status",
+              "presence"
+            ]
+          },
           "credentials": [
             [
               "babelforce.access_token"
@@ -1916,7 +2867,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-agent-status-update(id: String, enabled: Bool, presence_name: String) -> Any\n  description \"Update an agent's status. Supply at least one of enabled or presence.name — the request body's properties are all optional, so an empty PUT is schema-valid and does nothing\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/agents/{id}/status\")\n  content_type = \"application/json\"\n  payload = { enabled, presence: { name: presence_name } }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
+          "flux": "op babelforce-agent-status-update(id: String, enabled: Bool, presence: Any) -> Any\n  description \"Update an agent's status. Supply at least one of `enabled` or `presence.name` — the request body's properties are all optional, so an empty PUT is schema-valid and does nothing\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/agents/{id}/status\")\n  content_type = \"application/json\"\n  payload = { enabled, presence }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -1945,7 +2896,7 @@
               "name": "page",
               "in": "query",
               "wire": null,
-              "description": "Page number",
+              "description": "1-based page number to return (default 1).",
               "required": false,
               "schema": {
                 "type": "integer"
@@ -1955,41 +2906,20 @@
               "name": "max",
               "in": "query",
               "wire": null,
-              "description": "Page size",
+              "description": "Maximum number of calls to return per page.",
               "required": false,
               "schema": {
                 "type": "integer"
               }
             },
             {
-              "name": "id",
-              "in": "query",
-              "wire": null,
-              "description": "Filter by call id; a single id or a list",
-              "required": false,
-              "schema": {
-                "oneOf": [
-                  {
-                    "format": "uuid",
-                    "type": "string"
-                  },
-                  {
-                    "items": {
-                      "format": "uuid",
-                      "type": "string"
-                    },
-                    "type": "array"
-                  }
-                ]
-              }
-            },
-            {
               "name": "sessionId",
               "in": "query",
               "wire": null,
-              "description": "Filter by session id",
+              "description": "Filter by call-session uuid.",
               "required": false,
               "schema": {
+                "description": "The unique Identifier (UUID) of the object",
                 "format": "uuid",
                 "type": "string"
               }
@@ -1998,68 +2928,31 @@
               "name": "conversationId",
               "in": "query",
               "wire": null,
-              "description": "Filter by conversation id",
+              "description": "Filter by conversation uuid.",
               "required": false,
               "schema": {
+                "description": "The unique Identifier (UUID) of the object",
                 "format": "uuid",
                 "type": "string"
               }
             },
             {
-              "name": "agentId",
+              "name": "id",
               "in": "query",
               "wire": null,
-              "description": "Filter by agent; a single id or a list",
+              "description": "Filter by one or more call uuids.",
               "required": false,
               "schema": {
                 "oneOf": [
                   {
+                    "description": "The unique Identifier (UUID) of the object",
                     "format": "uuid",
                     "type": "string"
                   },
                   {
                     "items": {
+                      "description": "The unique Identifier (UUID) of the object",
                       "format": "uuid",
-                      "type": "string"
-                    },
-                    "type": "array"
-                  }
-                ]
-              }
-            },
-            {
-              "name": "fromNumber",
-              "in": "query",
-              "wire": null,
-              "description": "Filter by originating number",
-              "required": false,
-              "schema": {
-                "oneOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": "array"
-                  }
-                ]
-              }
-            },
-            {
-              "name": "toNumber",
-              "in": "query",
-              "wire": null,
-              "description": "Filter by destination number",
-              "required": false,
-              "schema": {
-                "oneOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "items": {
                       "type": "string"
                     },
                     "type": "array"
@@ -2071,69 +2964,75 @@
               "name": "type",
               "in": "query",
               "wire": null,
-              "description": "Filter by call direction",
+              "description": "Filter by call type.",
               "required": false,
               "schema": {
-                "enum": [
-                  "inbound",
-                  "outbound"
-                ],
+                "oneOf": [
+                  {
+                    "enum": [
+                      "inbound",
+                      "outbound"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "enum": [
+                        "inbound",
+                        "outbound"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "fromNumber",
+              "in": "query",
+              "wire": null,
+              "description": "Alias of `from` — filter by the caller (origin) number.",
+              "required": false,
+              "schema": {
+                "description": "Filter for Number",
+                "example": "493066665555",
                 "type": "string"
               }
             },
             {
-              "name": "state",
+              "name": "toNumber",
               "in": "query",
               "wire": null,
-              "description": "Filter by call state",
+              "description": "Alias of `to` — filter by the called (destination) number.",
               "required": false,
               "schema": {
-                "enum": [
-                  "init",
-                  "scheduled",
-                  "ringing",
-                  "in-progress",
-                  "queued",
-                  "bridged",
-                  "canceled",
-                  "busy",
-                  "no-answer",
-                  "purged",
-                  "completed",
-                  "failed"
-                ],
-                "type": "string"
-              }
-            },
-            {
-              "name": "finishReason",
-              "in": "query",
-              "wire": null,
-              "description": "Filter by why the call ended",
-              "required": false,
-              "schema": {
-                "enum": [
-                  "unknown",
-                  "passive-hangup",
-                  "system-hangup",
-                  "failed",
-                  "timeout",
-                  "unreachable",
-                  "busy",
-                  "declined",
-                  "canceled",
-                  "transferred"
-                ],
-                "type": "string"
+                "oneOf": [
+                  {
+                    "description": "Filter for Number",
+                    "example": "493066665555",
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "description": "Filter for Number",
+                      "example": "493066665555",
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
               }
             },
             {
               "name": "time.start",
               "in": "query",
               "wire": null,
-              "description": "Window start, as a unix timestamp",
+              "description": "Only include calls at or after this time (Unix timestamp, seconds).",
               "required": false,
               "schema": {
+                "description": "Unix timestamp",
+                "example": 1607904000,
                 "type": "integer"
               }
             },
@@ -2141,20 +3040,153 @@
               "name": "time.end",
               "in": "query",
               "wire": null,
-              "description": "Window end, as a unix timestamp",
+              "description": "Only include calls at or before this time (Unix timestamp, seconds).",
               "required": false,
               "schema": {
+                "description": "Unix timestamp",
+                "example": 1607904000,
                 "type": "integer"
+              }
+            },
+            {
+              "name": "agentId",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by the uuid of the agent who handled the call.",
+              "required": false,
+              "schema": {
+                "oneOf": [
+                  {
+                    "description": "The unique Identifier (UUID) of the object",
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "description": "The unique Identifier (UUID) of the object",
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
               }
             },
             {
               "name": "q",
               "in": "query",
               "wire": null,
-              "description": "Free-text search",
+              "description": "Free-text search across caller/called number, agent and queue name, and conversation/session id.",
               "required": false,
               "schema": {
+                "description": "Free Text Query",
                 "type": "string"
+              }
+            },
+            {
+              "name": "state",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by call state.",
+              "required": false,
+              "schema": {
+                "oneOf": [
+                  {
+                    "description": "One Call State",
+                    "enum": [
+                      "init",
+                      "scheduled",
+                      "ringing",
+                      "in-progress",
+                      "queued",
+                      "bridged",
+                      "canceled",
+                      "busy",
+                      "no-answer",
+                      "purged",
+                      "completed",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "description": "One Call State",
+                      "enum": [
+                        "init",
+                        "scheduled",
+                        "ringing",
+                        "in-progress",
+                        "queued",
+                        "bridged",
+                        "canceled",
+                        "busy",
+                        "no-answer",
+                        "purged",
+                        "completed",
+                        "failed"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "finishReason",
+              "in": "query",
+              "wire": null,
+              "description": "Filter by the reason the call ended.",
+              "required": false,
+              "schema": {
+                "oneOf": [
+                  {
+                    "enum": [
+                      "unknown",
+                      "hangup",
+                      "passive-hangup",
+                      "system-hangup",
+                      "failed",
+                      "timeout",
+                      "unreachable",
+                      "busy",
+                      "declined",
+                      "canceled",
+                      "transferred",
+                      "network-unreachable",
+                      "unallocated-number",
+                      "invalid-number",
+                      "no-answer",
+                      "dropped"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "enum": [
+                        "unknown",
+                        "hangup",
+                        "passive-hangup",
+                        "system-hangup",
+                        "failed",
+                        "timeout",
+                        "unreachable",
+                        "busy",
+                        "declined",
+                        "canceled",
+                        "transferred",
+                        "network-unreachable",
+                        "unallocated-number",
+                        "invalid-number",
+                        "no-answer",
+                        "dropped"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
               }
             }
           ],
@@ -2163,11 +3195,13 @@
               "agentId": {
                 "oneOf": [
                   {
+                    "description": "The unique Identifier (UUID) of the object",
                     "format": "uuid",
                     "type": "string"
                   },
                   {
                     "items": {
+                      "description": "The unique Identifier (UUID) of the object",
                       "format": "uuid",
                       "type": "string"
                     },
@@ -2176,45 +3210,74 @@
                 ]
               },
               "conversationId": {
+                "description": "The unique Identifier (UUID) of the object",
                 "format": "uuid",
                 "type": "string"
               },
               "finishReason": {
-                "enum": [
-                  "unknown",
-                  "passive-hangup",
-                  "system-hangup",
-                  "failed",
-                  "timeout",
-                  "unreachable",
-                  "busy",
-                  "declined",
-                  "canceled",
-                  "transferred"
-                ],
-                "type": "string"
-              },
-              "fromNumber": {
                 "oneOf": [
                   {
+                    "enum": [
+                      "unknown",
+                      "hangup",
+                      "passive-hangup",
+                      "system-hangup",
+                      "failed",
+                      "timeout",
+                      "unreachable",
+                      "busy",
+                      "declined",
+                      "canceled",
+                      "transferred",
+                      "network-unreachable",
+                      "unallocated-number",
+                      "invalid-number",
+                      "no-answer",
+                      "dropped"
+                    ],
                     "type": "string"
                   },
                   {
                     "items": {
+                      "enum": [
+                        "unknown",
+                        "hangup",
+                        "passive-hangup",
+                        "system-hangup",
+                        "failed",
+                        "timeout",
+                        "unreachable",
+                        "busy",
+                        "declined",
+                        "canceled",
+                        "transferred",
+                        "network-unreachable",
+                        "unallocated-number",
+                        "invalid-number",
+                        "no-answer",
+                        "dropped"
+                      ],
                       "type": "string"
                     },
                     "type": "array"
                   }
                 ]
               },
+              "fromNumber": {
+                "description": "Filter for Number",
+                "example": "493066665555",
+                "type": "string"
+              },
               "id": {
                 "oneOf": [
                   {
+                    "description": "The unique Identifier (UUID) of the object",
                     "format": "uuid",
                     "type": "string"
                   },
                   {
                     "items": {
+                      "description": "The unique Identifier (UUID) of the object",
                       "format": "uuid",
                       "type": "string"
                     },
@@ -2229,42 +3292,78 @@
                 "type": "integer"
               },
               "q": {
+                "description": "Free Text Query",
                 "type": "string"
               },
               "sessionId": {
+                "description": "The unique Identifier (UUID) of the object",
                 "format": "uuid",
                 "type": "string"
               },
               "state": {
-                "enum": [
-                  "init",
-                  "scheduled",
-                  "ringing",
-                  "in-progress",
-                  "queued",
-                  "bridged",
-                  "canceled",
-                  "busy",
-                  "no-answer",
-                  "purged",
-                  "completed",
-                  "failed"
-                ],
-                "type": "string"
+                "oneOf": [
+                  {
+                    "description": "One Call State",
+                    "enum": [
+                      "init",
+                      "scheduled",
+                      "ringing",
+                      "in-progress",
+                      "queued",
+                      "bridged",
+                      "canceled",
+                      "busy",
+                      "no-answer",
+                      "purged",
+                      "completed",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "description": "One Call State",
+                      "enum": [
+                        "init",
+                        "scheduled",
+                        "ringing",
+                        "in-progress",
+                        "queued",
+                        "bridged",
+                        "canceled",
+                        "busy",
+                        "no-answer",
+                        "purged",
+                        "completed",
+                        "failed"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
               },
               "time.end": {
+                "description": "Unix timestamp",
+                "example": 1607904000,
                 "type": "integer"
               },
               "time.start": {
+                "description": "Unix timestamp",
+                "example": 1607904000,
                 "type": "integer"
               },
               "toNumber": {
                 "oneOf": [
                   {
+                    "description": "Filter for Number",
+                    "example": "493066665555",
                     "type": "string"
                   },
                   {
                     "items": {
+                      "description": "Filter for Number",
+                      "example": "493066665555",
                       "type": "string"
                     },
                     "type": "array"
@@ -2272,18 +3371,587 @@
                 ]
               },
               "type": {
-                "enum": [
-                  "inbound",
-                  "outbound"
-                ],
-                "type": "string"
+                "oneOf": [
+                  {
+                    "enum": [
+                      "inbound",
+                      "outbound"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "enum": [
+                        "inbound",
+                        "outbound"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
               }
             },
             "required": [],
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "example": {
+              "items": [
+                {
+                  "anonymous": false,
+                  "bridged": {
+                    "id": "4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e",
+                    "name": "Support Agent",
+                    "number": "+493000000099",
+                    "queueId": "2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a",
+                    "queueName": "Support"
+                  },
+                  "conversationId": "9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c",
+                  "dateCreated": "2026-06-24T10:15:02Z",
+                  "dateEstablished": "2026-06-24T10:15:09Z",
+                  "dateFinished": "2026-06-24T10:15:51Z",
+                  "domain": "external",
+                  "duration": 42,
+                  "finishReason": "hangup",
+                  "from": "+493000000000",
+                  "id": "7c3f9a2e4b5d6e8f9a0b1c2d3e4f5a6b",
+                  "sessionId": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+                  "source": "queue",
+                  "state": "completed",
+                  "to": "+493000000001",
+                  "type": "inbound"
+                },
+                {
+                  "anonymous": false,
+                  "bridged": {
+                    "id": "4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e",
+                    "name": "Support Agent",
+                    "number": "+493000000099",
+                    "queueId": "2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a",
+                    "queueName": "Support"
+                  },
+                  "conversationId": "9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c",
+                  "dateCreated": "2026-06-24T10:15:02Z",
+                  "dateEstablished": "2026-06-24T10:15:09Z",
+                  "dateFinished": "2026-06-24T10:15:51Z",
+                  "domain": "external",
+                  "duration": 42,
+                  "finishReason": "hangup",
+                  "from": "+493000000000",
+                  "id": "7c3f9a2e4b5d6e8f9a0b1c2d3e4f5a6b",
+                  "sessionId": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+                  "source": "queue",
+                  "state": "completed",
+                  "to": "+493000000001",
+                  "type": "inbound"
+                }
+              ],
+              "pagination": {
+                "current": 1,
+                "max": 5,
+                "maxResults": 5,
+                "next": "next",
+                "pages": 0,
+                "total": 6
+              }
+            },
+            "properties": {
+              "items": {
+                "items": {
+                  "description": "A single call leg handled by the platform — inbound, outbound or dialer. A call belongs to a call session and a conversation, and may have a parent call when it is a child leg (e.g. a transfer or bridge).",
+                  "example": {
+                    "anonymous": false,
+                    "bridged": {
+                      "id": "4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e",
+                      "name": "Support Agent",
+                      "number": "+493000000099",
+                      "queueId": "2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a",
+                      "queueName": "Support"
+                    },
+                    "conversationId": "9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c",
+                    "dateCreated": "2026-06-24T10:15:02Z",
+                    "dateEstablished": "2026-06-24T10:15:09Z",
+                    "dateFinished": "2026-06-24T10:15:51Z",
+                    "domain": "external",
+                    "duration": 42,
+                    "finishReason": "hangup",
+                    "from": "+493000000000",
+                    "id": "7c3f9a2e4b5d6e8f9a0b1c2d3e4f5a6b",
+                    "sessionId": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+                    "source": "queue",
+                    "state": "completed",
+                    "to": "+493000000001",
+                    "type": "inbound"
+                  },
+                  "properties": {
+                    "anonymous": {
+                      "description": "Whether the caller id was withheld (anonymous call).",
+                      "type": "boolean"
+                    },
+                    "bridged": {
+                      "allOf": [
+                        {
+                          "properties": {
+                            "agent": {
+                              "properties": {
+                                "id": {
+                                  "description": "The unique Identifier (UUID) of the object",
+                                  "format": "uuid",
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "description": "Name of the bridged agent",
+                                  "type": "string"
+                                },
+                                "number": {
+                                  "description": "Number of the bridged agent",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name",
+                                "number"
+                              ]
+                            },
+                            "id": {
+                              "description": "The unique Identifier (UUID) of the object",
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "name": {
+                              "description": "Name of the bridged agent",
+                              "type": "string"
+                            },
+                            "number": {
+                              "description": "Number of the bridged agent",
+                              "type": "string"
+                            },
+                            "queueId": {
+                              "description": "The unique Identifier (UUID) of the object",
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "queueName": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "number",
+                            "queueId",
+                            "queueName"
+                          ]
+                        }
+                      ],
+                      "description": "The agent/queue the call was bridged to, when applicable."
+                    },
+                    "conversationId": {
+                      "allOf": [
+                        {
+                          "description": "The unique Identifier (UUID) of the object",
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      ],
+                      "description": "uuid of the conversation this call is part of."
+                    },
+                    "dateCreated": {
+                      "allOf": [
+                        {
+                          "example": "2020-04-16T22:21:38Z",
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      ],
+                      "description": "When the call record was created (call initiated)."
+                    },
+                    "dateEstablished": {
+                      "allOf": [
+                        {
+                          "example": "2020-04-16T22:21:38Z",
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      ],
+                      "description": "When the call was answered/connected; absent if it never connected."
+                    },
+                    "dateFinished": {
+                      "allOf": [
+                        {
+                          "example": "2020-04-16T22:21:38Z",
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      ],
+                      "description": "When the call ended; absent while the call is still live."
+                    },
+                    "domain": {
+                      "enum": [
+                        "internal",
+                        "external",
+                        "other"
+                      ],
+                      "type": "string"
+                    },
+                    "duration": {
+                      "description": "Total call duration in seconds.",
+                      "example": 42,
+                      "type": "integer"
+                    },
+                    "finishReason": {
+                      "enum": [
+                        "unknown",
+                        "hangup",
+                        "passive-hangup",
+                        "system-hangup",
+                        "failed",
+                        "timeout",
+                        "unreachable",
+                        "busy",
+                        "declined",
+                        "canceled",
+                        "transferred",
+                        "network-unreachable",
+                        "unallocated-number",
+                        "invalid-number",
+                        "no-answer",
+                        "dropped"
+                      ],
+                      "type": "string"
+                    },
+                    "from": {
+                      "description": "The caller (origin) number in E.164 format.",
+                      "example": "+493000000000",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "The unique Identifier (UUID) of the object",
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "lastUpdated": {
+                      "allOf": [
+                        {
+                          "example": "2020-04-16T22:21:38Z",
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      ],
+                      "description": "When the call record was last modified."
+                    },
+                    "parentId": {
+                      "allOf": [
+                        {
+                          "description": "The unique Identifier (UUID) of the object",
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      ],
+                      "description": "uuid of the parent call when this is a child leg (e.g. a transfer or bridged outbound leg); absent for top-level calls."
+                    },
+                    "recordings": {
+                      "description": "Recordings captured during the call, if any.",
+                      "items": {
+                        "description": "A voice recording of a call — its state, stored audio file, duration and the call and agent it belongs to.",
+                        "example": {
+                          "agent": {
+                            "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                            "name": "name",
+                            "number": "number"
+                          },
+                          "call": {
+                            "conversationId": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                            "from": "from",
+                            "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                            "to": "to",
+                            "type": null
+                          },
+                          "duration": 0,
+                          "file": {
+                            "contentType": "contentType",
+                            "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                            "name": "name",
+                            "size": 6,
+                            "state": null
+                          },
+                          "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                          "state": null,
+                          "tags": [
+                            null,
+                            null
+                          ],
+                          "url": "url"
+                        },
+                        "properties": {
+                          "agent": {
+                            "description": "The agent who handled the recorded call.",
+                            "example": {
+                              "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                              "name": "name",
+                              "number": "number"
+                            },
+                            "properties": {
+                              "id": {
+                                "description": "The unique Identifier (UUID) of the object",
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "name": {
+                                "description": "The agent's name.",
+                                "type": "string"
+                              },
+                              "number": {
+                                "description": "The agent's telephone number.",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "number"
+                            ]
+                          },
+                          "call": {
+                            "description": "The call the recording belongs to.",
+                            "example": {
+                              "conversationId": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                              "from": "from",
+                              "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                              "to": "to",
+                              "type": null
+                            },
+                            "properties": {
+                              "conversationId": {
+                                "description": "The unique Identifier (UUID) of the object",
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "from": {
+                                "description": "The calling party's number.",
+                                "type": "string"
+                              },
+                              "id": {
+                                "description": "The unique Identifier (UUID) of the object",
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "to": {
+                                "description": "The called party's number.",
+                                "type": "string"
+                              },
+                              "type": {
+                                "enum": [
+                                  "inbound",
+                                  "outbound"
+                                ],
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "conversationId",
+                              "from",
+                              "id",
+                              "to",
+                              "type"
+                            ]
+                          },
+                          "duration": {
+                            "description": "Duration in Seconds",
+                            "type": "integer"
+                          },
+                          "file": {
+                            "example": {
+                              "contentType": "contentType",
+                              "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                              "name": "name",
+                              "size": 6,
+                              "state": null
+                            },
+                            "properties": {
+                              "contentType": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "description": "The unique Identifier (UUID) of the object",
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "size": {
+                                "type": "integer"
+                              },
+                              "state": {
+                                "enum": [
+                                  "created",
+                                  "storing",
+                                  "stored",
+                                  "failed",
+                                  "deleted",
+                                  "missing"
+                                ],
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "contentType",
+                              "id",
+                              "name",
+                              "size",
+                              "state"
+                            ]
+                          },
+                          "id": {
+                            "description": "The unique Identifier (UUID) of the object",
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "state": {
+                            "description": "Lifecycle state of a recording — from `init`/`recording` through `stored`, or `failed`/`deleted`/`missing`.",
+                            "enum": [
+                              "init",
+                              "recording",
+                              "failed",
+                              "stopped",
+                              "stored",
+                              "deleted",
+                              "missing"
+                            ],
+                            "type": "string"
+                          },
+                          "tags": {
+                            "description": "A List of Tags describing an Object",
+                            "items": {
+                              "description": "A Tag describing an Object",
+                              "example": "foobar",
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "url": {
+                            "description": "Public URL to download the recording's audio file.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "call",
+                          "duration",
+                          "file",
+                          "id",
+                          "tags",
+                          "url"
+                        ]
+                      },
+                      "type": "array"
+                    },
+                    "sessionId": {
+                      "allOf": [
+                        {
+                          "description": "The unique Identifier (UUID) of the object",
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      ],
+                      "description": "uuid of the call session this call belongs to."
+                    },
+                    "source": {
+                      "enum": [
+                        "queue",
+                        "webrtc",
+                        "api",
+                        "dialer",
+                        "dial",
+                        "transfer",
+                        "test",
+                        "conference"
+                      ],
+                      "type": "string"
+                    },
+                    "state": {
+                      "description": "One Call State",
+                      "enum": [
+                        "init",
+                        "scheduled",
+                        "ringing",
+                        "in-progress",
+                        "queued",
+                        "bridged",
+                        "canceled",
+                        "busy",
+                        "no-answer",
+                        "purged",
+                        "completed",
+                        "failed"
+                      ],
+                      "type": "string"
+                    },
+                    "to": {
+                      "description": "The called (destination) number in E.164 format.",
+                      "example": "+493000000001",
+                      "type": "string"
+                    },
+                    "type": {
+                      "enum": [
+                        "inbound",
+                        "outbound"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "domain",
+                    "from",
+                    "id",
+                    "sessionId",
+                    "source",
+                    "state",
+                    "to",
+                    "type"
+                  ]
+                },
+                "type": "array"
+              },
+              "pagination": {
+                "example": {
+                  "current": 2,
+                  "max": 9,
+                  "maxResults": 7,
+                  "next": "next",
+                  "pages": 5,
+                  "total": 5
+                },
+                "properties": {
+                  "current": {
+                    "type": "integer"
+                  },
+                  "max": {
+                    "type": "integer"
+                  },
+                  "maxResults": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string"
+                  },
+                  "pages": {
+                    "type": "integer"
+                  },
+                  "total": {
+                    "type": "integer"
+                  }
+                }
+              }
+            },
+            "required": [
+              "items",
+              "pagination"
+            ]
+          },
           "credentials": [
             [
               "babelforce.access_token"
@@ -2292,7 +3960,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-call-list(page: Number, max: Number, id: Any, sessionId: String, conversationId: String, agentId: Any, fromNumber: Any, toNumber: Any, type: String, state: String, finishReason: String, time_start: Number, time_end: Number, q: String) -> Any\n  description \"List and filter calls from the reporting view\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/calls/reporting\")\n  sep = \"?\"\n  when page\n    url = fmt(\"{url}{sep}page={page}\")\n    sep = \"&\"\n  when max\n    url = fmt(\"{url}{sep}max={max}\")\n    sep = \"&\"\n  when id\n    url = fmt(\"{url}{sep}id={id}\")\n    sep = \"&\"\n  when sessionId\n    url = fmt(\"{url}{sep}sessionId={sessionId}\")\n    sep = \"&\"\n  when conversationId\n    url = fmt(\"{url}{sep}conversationId={conversationId}\")\n    sep = \"&\"\n  when agentId\n    url = fmt(\"{url}{sep}agentId={agentId}\")\n    sep = \"&\"\n  when fromNumber\n    url = fmt(\"{url}{sep}fromNumber={fromNumber}\")\n    sep = \"&\"\n  when toNumber\n    url = fmt(\"{url}{sep}toNumber={toNumber}\")\n    sep = \"&\"\n  when type\n    url = fmt(\"{url}{sep}type={type}\")\n    sep = \"&\"\n  when state\n    url = fmt(\"{url}{sep}state={state}\")\n    sep = \"&\"\n  when finishReason\n    url = fmt(\"{url}{sep}finishReason={finishReason}\")\n    sep = \"&\"\n  when time_start\n    url = fmt(\"{url}{sep}time.start={time_start}\")\n    sep = \"&\"\n  when time_end\n    url = fmt(\"{url}{sep}time.end={time_end}\")\n    sep = \"&\"\n  when q\n    url = fmt(\"{url}{sep}q={q}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op babelforce-call-list(page: Number, max: Number, sessionId: String, conversationId: String, id: Any, type: Any, fromNumber: String, toNumber: Any, time_start: Number, time_end: Number, agentId: Any, q: String, state: Any, finishReason: Any) -> Any\n  description \"List and filter calls from the reporting view\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/calls/reporting\")\n  sep = \"?\"\n  when page\n    url = fmt(\"{url}{sep}page={page}\")\n    sep = \"&\"\n  when max\n    url = fmt(\"{url}{sep}max={max}\")\n    sep = \"&\"\n  when sessionId\n    url = fmt(\"{url}{sep}sessionId={sessionId}\")\n    sep = \"&\"\n  when conversationId\n    url = fmt(\"{url}{sep}conversationId={conversationId}\")\n    sep = \"&\"\n  when id\n    url = fmt(\"{url}{sep}id={id}\")\n    sep = \"&\"\n  when type\n    url = fmt(\"{url}{sep}type={type}\")\n    sep = \"&\"\n  when fromNumber\n    url = fmt(\"{url}{sep}fromNumber={fromNumber}\")\n    sep = \"&\"\n  when toNumber\n    url = fmt(\"{url}{sep}toNumber={toNumber}\")\n    sep = \"&\"\n  when time_start\n    url = fmt(\"{url}{sep}time.start={time_start}\")\n    sep = \"&\"\n  when time_end\n    url = fmt(\"{url}{sep}time.end={time_end}\")\n    sep = \"&\"\n  when agentId\n    url = fmt(\"{url}{sep}agentId={agentId}\")\n    sep = \"&\"\n  when q\n    url = fmt(\"{url}{sep}q={q}\")\n    sep = \"&\"\n  when state\n    url = fmt(\"{url}{sep}state={state}\")\n    sep = \"&\"\n  when finishReason\n    url = fmt(\"{url}{sep}finishReason={finishReason}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -2307,16 +3975,16 @@
                 "scope": "operation",
                 "summary": "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled.",
                 "params": [
-                  "id",
                   "sessionId",
                   "conversationId",
-                  "agentId",
+                  "id",
+                  "type",
                   "fromNumber",
                   "toNumber",
-                  "type",
+                  "agentId",
+                  "q",
                   "state",
-                  "finishReason",
-                  "q"
+                  "finishReason"
                 ]
               }
             ],
@@ -2327,7 +3995,7 @@
           "id": "babelforce-call-get",
           "provider": "babelforce",
           "service": "default",
-          "description": "Get one call",
+          "description": "Get a call",
           "risk": "low",
           "idempotency": "idempotent",
           "repeatable_because": null,
@@ -2338,7 +4006,7 @@
               "name": "id",
               "in": "path",
               "wire": null,
-              "description": "The call id",
+              "description": "The call's uuid.",
               "required": true,
               "schema": {
                 "type": "string"
@@ -2357,7 +4025,500 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "example": {
+              "item": {
+                "anonymous": false,
+                "bridged": {
+                  "id": "4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e",
+                  "name": "Support Agent",
+                  "number": "+493000000099",
+                  "queueId": "2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a",
+                  "queueName": "Support"
+                },
+                "conversationId": "9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c",
+                "dateCreated": "2026-06-24T10:15:02Z",
+                "dateEstablished": "2026-06-24T10:15:09Z",
+                "dateFinished": "2026-06-24T10:15:51Z",
+                "domain": "external",
+                "duration": 42,
+                "finishReason": "hangup",
+                "from": "+493000000000",
+                "id": "7c3f9a2e4b5d6e8f9a0b1c2d3e4f5a6b",
+                "sessionId": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+                "source": "queue",
+                "state": "completed",
+                "to": "+493000000001",
+                "type": "inbound"
+              },
+              "success": true
+            },
+            "properties": {
+              "item": {
+                "description": "A single call leg handled by the platform — inbound, outbound or dialer. A call belongs to a call session and a conversation, and may have a parent call when it is a child leg (e.g. a transfer or bridge).",
+                "example": {
+                  "anonymous": false,
+                  "bridged": {
+                    "id": "4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e",
+                    "name": "Support Agent",
+                    "number": "+493000000099",
+                    "queueId": "2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a",
+                    "queueName": "Support"
+                  },
+                  "conversationId": "9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c",
+                  "dateCreated": "2026-06-24T10:15:02Z",
+                  "dateEstablished": "2026-06-24T10:15:09Z",
+                  "dateFinished": "2026-06-24T10:15:51Z",
+                  "domain": "external",
+                  "duration": 42,
+                  "finishReason": "hangup",
+                  "from": "+493000000000",
+                  "id": "7c3f9a2e4b5d6e8f9a0b1c2d3e4f5a6b",
+                  "sessionId": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+                  "source": "queue",
+                  "state": "completed",
+                  "to": "+493000000001",
+                  "type": "inbound"
+                },
+                "properties": {
+                  "anonymous": {
+                    "description": "Whether the caller id was withheld (anonymous call).",
+                    "type": "boolean"
+                  },
+                  "bridged": {
+                    "allOf": [
+                      {
+                        "properties": {
+                          "agent": {
+                            "properties": {
+                              "id": {
+                                "description": "The unique Identifier (UUID) of the object",
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "name": {
+                                "description": "Name of the bridged agent",
+                                "type": "string"
+                              },
+                              "number": {
+                                "description": "Number of the bridged agent",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "number"
+                            ]
+                          },
+                          "id": {
+                            "description": "The unique Identifier (UUID) of the object",
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "name": {
+                            "description": "Name of the bridged agent",
+                            "type": "string"
+                          },
+                          "number": {
+                            "description": "Number of the bridged agent",
+                            "type": "string"
+                          },
+                          "queueId": {
+                            "description": "The unique Identifier (UUID) of the object",
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "queueName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "number",
+                          "queueId",
+                          "queueName"
+                        ]
+                      }
+                    ],
+                    "description": "The agent/queue the call was bridged to, when applicable."
+                  },
+                  "conversationId": {
+                    "allOf": [
+                      {
+                        "description": "The unique Identifier (UUID) of the object",
+                        "format": "uuid",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "uuid of the conversation this call is part of."
+                  },
+                  "dateCreated": {
+                    "allOf": [
+                      {
+                        "example": "2020-04-16T22:21:38Z",
+                        "format": "date-time",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "When the call record was created (call initiated)."
+                  },
+                  "dateEstablished": {
+                    "allOf": [
+                      {
+                        "example": "2020-04-16T22:21:38Z",
+                        "format": "date-time",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "When the call was answered/connected; absent if it never connected."
+                  },
+                  "dateFinished": {
+                    "allOf": [
+                      {
+                        "example": "2020-04-16T22:21:38Z",
+                        "format": "date-time",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "When the call ended; absent while the call is still live."
+                  },
+                  "domain": {
+                    "enum": [
+                      "internal",
+                      "external",
+                      "other"
+                    ],
+                    "type": "string"
+                  },
+                  "duration": {
+                    "description": "Total call duration in seconds.",
+                    "example": 42,
+                    "type": "integer"
+                  },
+                  "finishReason": {
+                    "enum": [
+                      "unknown",
+                      "hangup",
+                      "passive-hangup",
+                      "system-hangup",
+                      "failed",
+                      "timeout",
+                      "unreachable",
+                      "busy",
+                      "declined",
+                      "canceled",
+                      "transferred",
+                      "network-unreachable",
+                      "unallocated-number",
+                      "invalid-number",
+                      "no-answer",
+                      "dropped"
+                    ],
+                    "type": "string"
+                  },
+                  "from": {
+                    "description": "The caller (origin) number in E.164 format.",
+                    "example": "+493000000000",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "The unique Identifier (UUID) of the object",
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "lastUpdated": {
+                    "allOf": [
+                      {
+                        "example": "2020-04-16T22:21:38Z",
+                        "format": "date-time",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "When the call record was last modified."
+                  },
+                  "parentId": {
+                    "allOf": [
+                      {
+                        "description": "The unique Identifier (UUID) of the object",
+                        "format": "uuid",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "uuid of the parent call when this is a child leg (e.g. a transfer or bridged outbound leg); absent for top-level calls."
+                  },
+                  "recordings": {
+                    "description": "Recordings captured during the call, if any.",
+                    "items": {
+                      "description": "A voice recording of a call — its state, stored audio file, duration and the call and agent it belongs to.",
+                      "example": {
+                        "agent": {
+                          "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                          "name": "name",
+                          "number": "number"
+                        },
+                        "call": {
+                          "conversationId": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                          "from": "from",
+                          "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                          "to": "to",
+                          "type": null
+                        },
+                        "duration": 0,
+                        "file": {
+                          "contentType": "contentType",
+                          "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                          "name": "name",
+                          "size": 6,
+                          "state": null
+                        },
+                        "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                        "state": null,
+                        "tags": [
+                          null,
+                          null
+                        ],
+                        "url": "url"
+                      },
+                      "properties": {
+                        "agent": {
+                          "description": "The agent who handled the recorded call.",
+                          "example": {
+                            "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                            "name": "name",
+                            "number": "number"
+                          },
+                          "properties": {
+                            "id": {
+                              "description": "The unique Identifier (UUID) of the object",
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "name": {
+                              "description": "The agent's name.",
+                              "type": "string"
+                            },
+                            "number": {
+                              "description": "The agent's telephone number.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "number"
+                          ]
+                        },
+                        "call": {
+                          "description": "The call the recording belongs to.",
+                          "example": {
+                            "conversationId": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                            "from": "from",
+                            "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                            "to": "to",
+                            "type": null
+                          },
+                          "properties": {
+                            "conversationId": {
+                              "description": "The unique Identifier (UUID) of the object",
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "from": {
+                              "description": "The calling party's number.",
+                              "type": "string"
+                            },
+                            "id": {
+                              "description": "The unique Identifier (UUID) of the object",
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "to": {
+                              "description": "The called party's number.",
+                              "type": "string"
+                            },
+                            "type": {
+                              "enum": [
+                                "inbound",
+                                "outbound"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "conversationId",
+                            "from",
+                            "id",
+                            "to",
+                            "type"
+                          ]
+                        },
+                        "duration": {
+                          "description": "Duration in Seconds",
+                          "type": "integer"
+                        },
+                        "file": {
+                          "example": {
+                            "contentType": "contentType",
+                            "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                            "name": "name",
+                            "size": 6,
+                            "state": null
+                          },
+                          "properties": {
+                            "contentType": {
+                              "type": "string"
+                            },
+                            "id": {
+                              "description": "The unique Identifier (UUID) of the object",
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "size": {
+                              "type": "integer"
+                            },
+                            "state": {
+                              "enum": [
+                                "created",
+                                "storing",
+                                "stored",
+                                "failed",
+                                "deleted",
+                                "missing"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "contentType",
+                            "id",
+                            "name",
+                            "size",
+                            "state"
+                          ]
+                        },
+                        "id": {
+                          "description": "The unique Identifier (UUID) of the object",
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "state": {
+                          "description": "Lifecycle state of a recording — from `init`/`recording` through `stored`, or `failed`/`deleted`/`missing`.",
+                          "enum": [
+                            "init",
+                            "recording",
+                            "failed",
+                            "stopped",
+                            "stored",
+                            "deleted",
+                            "missing"
+                          ],
+                          "type": "string"
+                        },
+                        "tags": {
+                          "description": "A List of Tags describing an Object",
+                          "items": {
+                            "description": "A Tag describing an Object",
+                            "example": "foobar",
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "url": {
+                          "description": "Public URL to download the recording's audio file.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "call",
+                        "duration",
+                        "file",
+                        "id",
+                        "tags",
+                        "url"
+                      ]
+                    },
+                    "type": "array"
+                  },
+                  "sessionId": {
+                    "allOf": [
+                      {
+                        "description": "The unique Identifier (UUID) of the object",
+                        "format": "uuid",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "uuid of the call session this call belongs to."
+                  },
+                  "source": {
+                    "enum": [
+                      "queue",
+                      "webrtc",
+                      "api",
+                      "dialer",
+                      "dial",
+                      "transfer",
+                      "test",
+                      "conference"
+                    ],
+                    "type": "string"
+                  },
+                  "state": {
+                    "description": "One Call State",
+                    "enum": [
+                      "init",
+                      "scheduled",
+                      "ringing",
+                      "in-progress",
+                      "queued",
+                      "bridged",
+                      "canceled",
+                      "busy",
+                      "no-answer",
+                      "purged",
+                      "completed",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "to": {
+                    "description": "The called (destination) number in E.164 format.",
+                    "example": "+493000000001",
+                    "type": "string"
+                  },
+                  "type": {
+                    "enum": [
+                      "inbound",
+                      "outbound"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "domain",
+                  "from",
+                  "id",
+                  "sessionId",
+                  "source",
+                  "state",
+                  "to",
+                  "type"
+                ]
+              },
+              "success": {
+                "description": "Whether the Request was successful or not",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "item",
+              "success"
+            ]
+          },
           "credentials": [
             [
               "babelforce.access_token"
@@ -2366,7 +4527,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-call-get(id: String) -> Any\n  description \"Get one call\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/calls/{id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op babelforce-call-get(id: String) -> Any\n  description \"Get a call\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/calls/{id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -2384,7 +4545,7 @@
           "id": "babelforce-call-hangup",
           "provider": "babelforce",
           "service": "default",
-          "description": "Hang up a live call",
+          "description": "Hang up a call",
           "risk": "destructive",
           "idempotency": "non_idempotent",
           "repeatable_because": null,
@@ -2395,7 +4556,7 @@
               "name": "id",
               "in": "path",
               "wire": null,
-              "description": "The call id",
+              "description": "The uuid of the call to hang up.",
               "required": true,
               "schema": {
                 "type": "string"
@@ -2414,7 +4575,500 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "example": {
+              "item": {
+                "anonymous": false,
+                "bridged": {
+                  "id": "4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e",
+                  "name": "Support Agent",
+                  "number": "+493000000099",
+                  "queueId": "2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a",
+                  "queueName": "Support"
+                },
+                "conversationId": "9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c",
+                "dateCreated": "2026-06-24T10:15:02Z",
+                "dateEstablished": "2026-06-24T10:15:09Z",
+                "dateFinished": "2026-06-24T10:15:51Z",
+                "domain": "external",
+                "duration": 42,
+                "finishReason": "hangup",
+                "from": "+493000000000",
+                "id": "7c3f9a2e4b5d6e8f9a0b1c2d3e4f5a6b",
+                "sessionId": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+                "source": "queue",
+                "state": "completed",
+                "to": "+493000000001",
+                "type": "inbound"
+              },
+              "success": true
+            },
+            "properties": {
+              "item": {
+                "description": "A single call leg handled by the platform — inbound, outbound or dialer. A call belongs to a call session and a conversation, and may have a parent call when it is a child leg (e.g. a transfer or bridge).",
+                "example": {
+                  "anonymous": false,
+                  "bridged": {
+                    "id": "4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e",
+                    "name": "Support Agent",
+                    "number": "+493000000099",
+                    "queueId": "2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a",
+                    "queueName": "Support"
+                  },
+                  "conversationId": "9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c",
+                  "dateCreated": "2026-06-24T10:15:02Z",
+                  "dateEstablished": "2026-06-24T10:15:09Z",
+                  "dateFinished": "2026-06-24T10:15:51Z",
+                  "domain": "external",
+                  "duration": 42,
+                  "finishReason": "hangup",
+                  "from": "+493000000000",
+                  "id": "7c3f9a2e4b5d6e8f9a0b1c2d3e4f5a6b",
+                  "sessionId": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+                  "source": "queue",
+                  "state": "completed",
+                  "to": "+493000000001",
+                  "type": "inbound"
+                },
+                "properties": {
+                  "anonymous": {
+                    "description": "Whether the caller id was withheld (anonymous call).",
+                    "type": "boolean"
+                  },
+                  "bridged": {
+                    "allOf": [
+                      {
+                        "properties": {
+                          "agent": {
+                            "properties": {
+                              "id": {
+                                "description": "The unique Identifier (UUID) of the object",
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "name": {
+                                "description": "Name of the bridged agent",
+                                "type": "string"
+                              },
+                              "number": {
+                                "description": "Number of the bridged agent",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "number"
+                            ]
+                          },
+                          "id": {
+                            "description": "The unique Identifier (UUID) of the object",
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "name": {
+                            "description": "Name of the bridged agent",
+                            "type": "string"
+                          },
+                          "number": {
+                            "description": "Number of the bridged agent",
+                            "type": "string"
+                          },
+                          "queueId": {
+                            "description": "The unique Identifier (UUID) of the object",
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "queueName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "number",
+                          "queueId",
+                          "queueName"
+                        ]
+                      }
+                    ],
+                    "description": "The agent/queue the call was bridged to, when applicable."
+                  },
+                  "conversationId": {
+                    "allOf": [
+                      {
+                        "description": "The unique Identifier (UUID) of the object",
+                        "format": "uuid",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "uuid of the conversation this call is part of."
+                  },
+                  "dateCreated": {
+                    "allOf": [
+                      {
+                        "example": "2020-04-16T22:21:38Z",
+                        "format": "date-time",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "When the call record was created (call initiated)."
+                  },
+                  "dateEstablished": {
+                    "allOf": [
+                      {
+                        "example": "2020-04-16T22:21:38Z",
+                        "format": "date-time",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "When the call was answered/connected; absent if it never connected."
+                  },
+                  "dateFinished": {
+                    "allOf": [
+                      {
+                        "example": "2020-04-16T22:21:38Z",
+                        "format": "date-time",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "When the call ended; absent while the call is still live."
+                  },
+                  "domain": {
+                    "enum": [
+                      "internal",
+                      "external",
+                      "other"
+                    ],
+                    "type": "string"
+                  },
+                  "duration": {
+                    "description": "Total call duration in seconds.",
+                    "example": 42,
+                    "type": "integer"
+                  },
+                  "finishReason": {
+                    "enum": [
+                      "unknown",
+                      "hangup",
+                      "passive-hangup",
+                      "system-hangup",
+                      "failed",
+                      "timeout",
+                      "unreachable",
+                      "busy",
+                      "declined",
+                      "canceled",
+                      "transferred",
+                      "network-unreachable",
+                      "unallocated-number",
+                      "invalid-number",
+                      "no-answer",
+                      "dropped"
+                    ],
+                    "type": "string"
+                  },
+                  "from": {
+                    "description": "The caller (origin) number in E.164 format.",
+                    "example": "+493000000000",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "The unique Identifier (UUID) of the object",
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "lastUpdated": {
+                    "allOf": [
+                      {
+                        "example": "2020-04-16T22:21:38Z",
+                        "format": "date-time",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "When the call record was last modified."
+                  },
+                  "parentId": {
+                    "allOf": [
+                      {
+                        "description": "The unique Identifier (UUID) of the object",
+                        "format": "uuid",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "uuid of the parent call when this is a child leg (e.g. a transfer or bridged outbound leg); absent for top-level calls."
+                  },
+                  "recordings": {
+                    "description": "Recordings captured during the call, if any.",
+                    "items": {
+                      "description": "A voice recording of a call — its state, stored audio file, duration and the call and agent it belongs to.",
+                      "example": {
+                        "agent": {
+                          "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                          "name": "name",
+                          "number": "number"
+                        },
+                        "call": {
+                          "conversationId": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                          "from": "from",
+                          "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                          "to": "to",
+                          "type": null
+                        },
+                        "duration": 0,
+                        "file": {
+                          "contentType": "contentType",
+                          "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                          "name": "name",
+                          "size": 6,
+                          "state": null
+                        },
+                        "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                        "state": null,
+                        "tags": [
+                          null,
+                          null
+                        ],
+                        "url": "url"
+                      },
+                      "properties": {
+                        "agent": {
+                          "description": "The agent who handled the recorded call.",
+                          "example": {
+                            "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                            "name": "name",
+                            "number": "number"
+                          },
+                          "properties": {
+                            "id": {
+                              "description": "The unique Identifier (UUID) of the object",
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "name": {
+                              "description": "The agent's name.",
+                              "type": "string"
+                            },
+                            "number": {
+                              "description": "The agent's telephone number.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "number"
+                          ]
+                        },
+                        "call": {
+                          "description": "The call the recording belongs to.",
+                          "example": {
+                            "conversationId": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                            "from": "from",
+                            "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                            "to": "to",
+                            "type": null
+                          },
+                          "properties": {
+                            "conversationId": {
+                              "description": "The unique Identifier (UUID) of the object",
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "from": {
+                              "description": "The calling party's number.",
+                              "type": "string"
+                            },
+                            "id": {
+                              "description": "The unique Identifier (UUID) of the object",
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "to": {
+                              "description": "The called party's number.",
+                              "type": "string"
+                            },
+                            "type": {
+                              "enum": [
+                                "inbound",
+                                "outbound"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "conversationId",
+                            "from",
+                            "id",
+                            "to",
+                            "type"
+                          ]
+                        },
+                        "duration": {
+                          "description": "Duration in Seconds",
+                          "type": "integer"
+                        },
+                        "file": {
+                          "example": {
+                            "contentType": "contentType",
+                            "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                            "name": "name",
+                            "size": 6,
+                            "state": null
+                          },
+                          "properties": {
+                            "contentType": {
+                              "type": "string"
+                            },
+                            "id": {
+                              "description": "The unique Identifier (UUID) of the object",
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "size": {
+                              "type": "integer"
+                            },
+                            "state": {
+                              "enum": [
+                                "created",
+                                "storing",
+                                "stored",
+                                "failed",
+                                "deleted",
+                                "missing"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "contentType",
+                            "id",
+                            "name",
+                            "size",
+                            "state"
+                          ]
+                        },
+                        "id": {
+                          "description": "The unique Identifier (UUID) of the object",
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "state": {
+                          "description": "Lifecycle state of a recording — from `init`/`recording` through `stored`, or `failed`/`deleted`/`missing`.",
+                          "enum": [
+                            "init",
+                            "recording",
+                            "failed",
+                            "stopped",
+                            "stored",
+                            "deleted",
+                            "missing"
+                          ],
+                          "type": "string"
+                        },
+                        "tags": {
+                          "description": "A List of Tags describing an Object",
+                          "items": {
+                            "description": "A Tag describing an Object",
+                            "example": "foobar",
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "url": {
+                          "description": "Public URL to download the recording's audio file.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "call",
+                        "duration",
+                        "file",
+                        "id",
+                        "tags",
+                        "url"
+                      ]
+                    },
+                    "type": "array"
+                  },
+                  "sessionId": {
+                    "allOf": [
+                      {
+                        "description": "The unique Identifier (UUID) of the object",
+                        "format": "uuid",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "uuid of the call session this call belongs to."
+                  },
+                  "source": {
+                    "enum": [
+                      "queue",
+                      "webrtc",
+                      "api",
+                      "dialer",
+                      "dial",
+                      "transfer",
+                      "test",
+                      "conference"
+                    ],
+                    "type": "string"
+                  },
+                  "state": {
+                    "description": "One Call State",
+                    "enum": [
+                      "init",
+                      "scheduled",
+                      "ringing",
+                      "in-progress",
+                      "queued",
+                      "bridged",
+                      "canceled",
+                      "busy",
+                      "no-answer",
+                      "purged",
+                      "completed",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "to": {
+                    "description": "The called (destination) number in E.164 format.",
+                    "example": "+493000000001",
+                    "type": "string"
+                  },
+                  "type": {
+                    "enum": [
+                      "inbound",
+                      "outbound"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "domain",
+                  "from",
+                  "id",
+                  "sessionId",
+                  "source",
+                  "state",
+                  "to",
+                  "type"
+                ]
+              },
+              "success": {
+                "description": "Whether the Request was successful or not",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "item",
+              "success"
+            ]
+          },
           "credentials": [
             [
               "babelforce.access_token"
@@ -2423,7 +5077,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-call-hangup(id: String) -> Any\n  description \"Hang up a live call\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/calls/{id}/hangup\")\n  response = http.request(method: \"POST\", url)\n  return response\n",
+          "flux": "op babelforce-call-hangup(id: String) -> Any\n  description \"Hang up a call\"\n  risk \"destructive\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/calls/{id}/hangup\")\n  response = http.request(method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -2441,7 +5095,7 @@
           "id": "babelforce-call-session-set",
           "provider": "babelforce",
           "service": "default",
-          "description": "Set session variables on a live call. Variable keys must start with `app` — babelforce rejects other keys, and states the rule only in prose",
+          "description": "Set session variables on a live call. Pass them as the `variables` map; babelforce applies only keys beginning `app.` and silently ignores the rest, and states that rule only in prose",
           "risk": "medium",
           "idempotency": "idempotent",
           "repeatable_because": null,
@@ -2452,34 +5106,62 @@
               "name": "id",
               "in": "path",
               "wire": null,
-              "description": "The call id",
+              "description": "The uuid of the call whose session variables are set.",
               "required": true,
               "schema": {
                 "type": "string"
+              }
+            },
+            {
+              "name": "variables",
+              "in": "body",
+              "wire": null,
+              "description": "Map of variable name to value. Keys must start with `app.` to take effect.",
+              "required": false,
+              "schema": {
+                "additionalProperties": true,
+                "description": "Map of variable name to value. Keys must start with `app.` to take effect.",
+                "example": {
+                  "app.campaign": "spring",
+                  "app.priority": "high"
+                },
+                "type": "object"
               }
             }
           ],
           "input_schema": {
             "properties": {
-              "body": {
-                "description": "The session variables to set, as a JSON object. Every key must start with `app`",
-                "type": "object"
-              },
               "id": {
                 "type": "string"
+              },
+              "variables": {
+                "additionalProperties": true,
+                "description": "Map of variable name to value. Keys must start with `app.` to take effect.",
+                "example": {
+                  "app.campaign": "spring",
+                  "app.priority": "high"
+                },
+                "type": "object"
               }
             },
             "required": [
-              "id",
-              "body"
+              "id"
             ],
             "type": "object"
           },
-          "body_schema": {
-            "description": "The session variables to set, as a JSON object. Every key must start with `app`",
-            "type": "object"
+          "body_schema": null,
+          "response_schema": {
+            "description": "Confirms that the requested session variables were applied.",
+            "example": {
+              "success": true
+            },
+            "properties": {
+              "success": {
+                "description": "Whether the variables were set successfully.",
+                "type": "boolean"
+              }
+            }
           },
-          "response_schema": null,
           "credentials": [
             [
               "babelforce.access_token"
@@ -2488,7 +5170,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-call-session-set(id: String, body: Any) -> Any\n  description \"Set session variables on a live call. Variable keys must start with `app` — babelforce rejects other keys, and states the rule only in prose\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/calls/{id}/session/set\")\n  content_type = \"application/json\"\n  payload = parse(body, as: \"json\")\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
+          "flux": "op babelforce-call-session-set(id: String, variables: Any) -> Any\n  description \"Set session variables on a live call. Pass them as the `variables` map; babelforce applies only keys beginning `app.` and silently ignores the rest, and states that rule only in prose\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/calls/{id}/session/set\")\n  content_type = \"application/json\"\n  payload = { variables }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -2506,7 +5188,7 @@
           "id": "babelforce-session-get",
           "provider": "babelforce",
           "service": "default",
-          "description": "Get the IVR variables for a session",
+          "description": "Get a session's variables",
           "risk": "low",
           "idempotency": "idempotent",
           "repeatable_because": null,
@@ -2517,7 +5199,7 @@
               "name": "id",
               "in": "path",
               "wire": null,
-              "description": "The session id",
+              "description": "The call session's uuid.",
               "required": true,
               "schema": {
                 "type": "string"
@@ -2536,7 +5218,58 @@
             "type": "object"
           },
           "body_schema": null,
-          "response_schema": null,
+          "response_schema": {
+            "description": "A call session with its metadata and variables.",
+            "example": {
+              "item": {
+                "created": 0.8008281904610115,
+                "data": "{}",
+                "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                "last_access": 6.027456183070403,
+                "valid": true
+              },
+              "success": true
+            },
+            "properties": {
+              "item": {
+                "description": "The call session.",
+                "example": {
+                  "created": 0.8008281904610115,
+                  "data": "{}",
+                  "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                  "last_access": 6.027456183070403,
+                  "valid": true
+                },
+                "properties": {
+                  "created": {
+                    "description": "When the session was created",
+                    "type": "number"
+                  },
+                  "data": {
+                    "description": "Property containing session variables as key-value pairs",
+                    "type": "object"
+                  },
+                  "id": {
+                    "description": "The call session's uuid.",
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "last_access": {
+                    "description": "When the session was last accessed",
+                    "type": "number"
+                  },
+                  "valid": {
+                    "description": "Whether the session is still valid (not expired).",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              },
+              "success": {
+                "type": "boolean"
+              }
+            }
+          },
           "credentials": [
             [
               "babelforce.access_token"
@@ -2545,7 +5278,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-session-get(id: String) -> Any\n  description \"Get the IVR variables for a session\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/sessions/{id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op babelforce-session-get(id: String) -> Any\n  description \"Get a session's variables\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/sessions/{id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -2563,7 +5296,7 @@
           "id": "babelforce-session-update",
           "provider": "babelforce",
           "service": "default",
-          "description": "Update the user-scoped variables of a session",
+          "description": "Update the user-scoped variables of a session. The body is the variable map itself",
           "risk": "medium",
           "idempotency": "idempotent",
           "repeatable_because": null,
@@ -2574,7 +5307,7 @@
               "name": "id",
               "in": "path",
               "wire": null,
-              "description": "The session id",
+              "description": "The call session's uuid.",
               "required": true,
               "schema": {
                 "type": "string"
@@ -2584,7 +5317,12 @@
           "input_schema": {
             "properties": {
               "body": {
-                "description": "The user-scoped session variables to update, as a JSON object",
+                "additionalProperties": true,
+                "description": "A key/value map of variables to set on the call session's user scope.",
+                "example": {
+                  "customerTier": "gold",
+                  "lastOrderId": "ord-10293"
+                },
                 "type": "object"
               },
               "id": {
@@ -2598,10 +5336,66 @@
             "type": "object"
           },
           "body_schema": {
-            "description": "The user-scoped session variables to update, as a JSON object",
+            "additionalProperties": true,
+            "description": "A key/value map of variables to set on the call session's user scope.",
+            "example": {
+              "customerTier": "gold",
+              "lastOrderId": "ord-10293"
+            },
             "type": "object"
           },
-          "response_schema": null,
+          "response_schema": {
+            "description": "A call session with its metadata and variables.",
+            "example": {
+              "item": {
+                "created": 0.8008281904610115,
+                "data": "{}",
+                "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                "last_access": 6.027456183070403,
+                "valid": true
+              },
+              "success": true
+            },
+            "properties": {
+              "item": {
+                "description": "The call session.",
+                "example": {
+                  "created": 0.8008281904610115,
+                  "data": "{}",
+                  "id": "046b6c7f-0b8a-43b9-b35d-6489e6daee91",
+                  "last_access": 6.027456183070403,
+                  "valid": true
+                },
+                "properties": {
+                  "created": {
+                    "description": "When the session was created",
+                    "type": "number"
+                  },
+                  "data": {
+                    "description": "Property containing session variables as key-value pairs",
+                    "type": "object"
+                  },
+                  "id": {
+                    "description": "The call session's uuid.",
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "last_access": {
+                    "description": "When the session was last accessed",
+                    "type": "number"
+                  },
+                  "valid": {
+                    "description": "Whether the session is still valid (not expired).",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              },
+              "success": {
+                "type": "boolean"
+              }
+            }
+          },
           "credentials": [
             [
               "babelforce.access_token"
@@ -2610,7 +5404,7 @@
           "hosts": [
             "services.babelforce.com"
           ],
-          "flux": "op babelforce-session-update(id: String, body: Any) -> Any\n  description \"Update the user-scoped variables of a session\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/sessions/{id}\")\n  content_type = \"application/json\"\n  payload = parse(body, as: \"json\")\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
+          "flux": "op babelforce-session-update(id: String, body: Any) -> Any\n  description \"Update the user-scoped variables of a session. The body is the variable map itself\"\n  risk \"medium\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://services.babelforce.com\"\n  url = fmt(\"{base}/api/v2/sessions/{id}\")\n  content_type = \"application/json\"\n  payload = parse(body, as: \"json\")\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"PUT\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [

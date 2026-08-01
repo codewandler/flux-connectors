@@ -80,20 +80,87 @@ idempotency = "idempotent"
 auth = []
 "#;
 
+/// The repository-relative path [`spec_pointer`] pins, spelled as `[spec] path` spells it.
+const SPEC_PATH: &str = "specs/babelforce/manager-0.7.0.openapi.json";
+
+/// A two-operation stand-in for the document [`spec_pointer`] pins.
+///
+/// **This fixture arrived with C-421 and the tests below did not have one before.** They used to go
+/// through plain `provider::load`, which answered a spec-backed file with a skeleton and never read
+/// a document at all — so `select = "listAgents"` was accepted while matching nothing. Now that the
+/// pure loader refuses that input, the pointer is compiled the way a build compiles it, and the two
+/// selections have to name operations that exist. That is a strictly stronger fixture: the patch set
+/// these tests assert on is now one that actually applied.
+///
+/// Deliberately small. What is under test here is how the *file* declares a spec and a patch set;
+/// ingest itself is `openapi_ingest.rs`, and the join is `spec_backed_provider.rs`, both of which
+/// read the committed Zendesk excerpt off disk.
+const SPEC_DOCUMENT: &str = r#"{
+  "openapi": "3.0.3",
+  "info": { "title": "Babelforce Manager (fixture)", "version": "0.7.0" },
+  "servers": [{ "url": "https://services.babelforce.com" }],
+  "paths": {
+    "/api/v2/agents": {
+      "get": {
+        "operationId": "listAgents",
+        "summary": "List agents.",
+        "responses": { "200": { "description": "The agents." } }
+      }
+    },
+    "/api/v2/calls/{id}/hangup": {
+      "post": {
+        "operationId": "hangupCall",
+        "summary": "Hang up a call.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The call.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "204": { "description": "Hung up." } }
+      }
+    }
+  }
+}
+"#;
+
+/// The spec cache holding exactly [`SPEC_DOCUMENT`], at the path the pointer names.
+fn cache() -> Vec<connector_spec::SpecDocument<'static>> {
+    vec![connector_spec::SpecDocument {
+        path: SPEC_PATH,
+        document: SPEC_DOCUMENT,
+    }]
+}
+
+/// [`spec_pointer`], compiled against [`cache`].
+fn load_pointer(definition: &str) -> connector_spec::LoadedProvider {
+    provider::load_with_spec("providers/babelforce.toml", definition, &cache())
+        .expect("a spec-pointer provider file must load against its cache")
+}
+
 /// Babelforce as a pointer at its vendored spec, plus the patch set C-6 will apply.
-const SPEC_POINTER: &str = r#"
+///
+/// A function rather than a `const` because the declared `sha256` has to be the fixture document's
+/// real hash: `load_with_spec` checks it against the bytes it ingests, which is what keeps
+/// `Provenance::spec_sha256` a measurement rather than a claim the file makes about itself.
+fn spec_pointer() -> String {
+    format!(
+        r#"
 id = "babelforce"
 vendor = "Babelforce"
 # Stated explicitly: the vendor document's servers[0] is staging, so a positional default would
 # point the connector at the dev environment.
 base_url = "https://services.babelforce.com"
-default_auth = [{ credentials = ["babelforce.access_token"] }]
+default_auth = [{{ credentials = ["babelforce.access_token"] }}]
 
 [spec]
-path = "specs/babelforce/manager-0.7.0.openapi.json"
+path = "{SPEC_PATH}"
 source_url = "https://example.invalid/manager.openapi.json"
 upstream_version = "0.7.0"
-sha256 = "6a79679409787c4ab1716936bca987226aacdc28eeff19039c0ea5ea34285421"
+sha256 = "{}"
 fetched_at = "2026-07-30T09:00:00Z"
 
 [[auth]]
@@ -109,7 +176,7 @@ risk = "low"
 idempotency = "idempotent"
 
 [patch.operations.quirks.pagination]
-page = { page_param = "page", size_param = "max", page_size = 100, max_pages = 20 }
+page = {{ page_param = "page", size_param = "max", page_size = 100, max_pages = 20 }}
 
 [[patch.operations]]
 select = "hangupCall"
@@ -119,15 +186,18 @@ risk = "destructive"
 idempotency = "non_idempotent"
 # The spec's root `security` offers the deprecated X-Auth-Access-Id / X-Auth-Access-Token pair as
 # an alternative. Ingest must keep seeing it; the overlay is the only place it may be removed.
-auth = [{ credentials = ["babelforce.access_token"] }]
+auth = [{{ credentials = ["babelforce.access_token"] }}]
 
 [[patch.operations.params]]
 name = "id"
 position = "path"
 required = true
 description = "Call id"
-schema = { type = "string", format = "uuid" }
-"#;
+schema = {{ type = "string", format = "uuid" }}
+"#,
+        connector_spec::sha256_hex(SPEC_DOCUMENT.as_bytes())
+    )
+}
 
 /// A hand-authored TOML with no vendor spec present at all produces a complete, valid `Connector`.
 #[test]
@@ -273,14 +343,21 @@ fn the_provider_file_hash_is_recorded_and_is_a_function_of_the_bytes() {
 /// A file that only points at a spec plus patches parses into the patch set C-6 consumes.
 #[test]
 fn a_spec_pointer_file_produces_the_patch_set() {
-    let loaded = provider::load("providers/babelforce.toml", SPEC_POINTER)
-        .expect("a spec-pointer provider file must load");
+    let loaded = load_pointer(&spec_pointer());
 
     assert!(!loaded.is_hand_authored());
 
-    let spec = loaded.spec.as_ref().expect("the spec pointer is present");
+    // A single `[spec]` table is the one-element case of `[[spec]]` — C-410.
+    assert_eq!(loaded.specs.len(), 1);
+    let spec = loaded.specs.first().expect("the spec pointer is present");
     assert_eq!(spec.path, "specs/babelforce/manager-0.7.0.openapi.json");
     assert_eq!(spec.upstream_version.as_deref(), Some("0.7.0"));
+    assert_eq!(
+        spec.service(),
+        connector_spec::DEFAULT_SERVICE,
+        "a document that names no service joins the reserved one, exactly as it did before the key \
+         existed"
+    );
 
     // `[spec]` folds into provenance, so drift-check (C-14) and the lockfile (C-7) read one place.
     let provenance = &loaded.connector.provenance;
@@ -291,10 +368,21 @@ fn a_spec_pointer_file_produces_the_patch_set() {
         Some("2026-07-30T09:00:00Z")
     );
     assert!(provenance.toml_sha256.is_some());
+    // And the per-document record carries the same document — one entry, not one per connector.
+    assert_eq!(provenance.specs, loaded.specs);
 
-    // The connector carries no operations of its own: ingest fills them in and the overlay patches
-    // them. That the file is still valid with an empty operation list is the point of this role.
-    assert!(loaded.connector.operations.is_empty());
+    // The connector declares no operations of its own: every one it publishes arrived through the
+    // document, renamed by the overlay. That the file is valid with an empty `[[operations]]` list
+    // is the point of this role.
+    assert_eq!(
+        loaded
+            .connector
+            .operations
+            .iter()
+            .map(|operation| operation.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["babelforce.agent.list", "babelforce.call.hangup"]
+    );
 
     // The patch set itself.
     assert_eq!(loaded.patch.operations.len(), 2);
@@ -340,7 +428,7 @@ fn a_spec_pointer_file_produces_the_patch_set() {
 /// field and must not move a stated one.
 #[test]
 fn unstated_patch_overrides_stay_distinguishable_from_stated_ones() {
-    let loaded = provider::load("providers/babelforce.toml", SPEC_POINTER).expect("loads");
+    let loaded = load_pointer(&spec_pointer());
 
     let agents = &loaded.patch.operations[0];
     assert_eq!(agents.auth, None, "auth was not stated for this operation");
@@ -355,7 +443,7 @@ fn unstated_patch_overrides_stay_distinguishable_from_stated_ones() {
 #[test]
 fn a_file_may_point_at_a_spec_and_still_declare_operations_inline() {
     let source = format!(
-        "{SPEC_POINTER}
+        "{}
 [[operations]]
 id = \"babelforce.health\"
 method = \"GET\"
@@ -363,11 +451,25 @@ path = \"/health\"
 risk = \"low\"
 idempotency = \"idempotent\"
 auth = []
-"
+",
+        spec_pointer()
     );
 
-    let loaded = provider::load("providers/babelforce.toml", &source).expect("loads");
-    assert_eq!(loaded.connector.operations.len(), 1);
+    let loaded = load_pointer(&source);
+    // The inline operation first, then the two the patch set selected — one connector, both roles.
+    assert_eq!(
+        loaded
+            .connector
+            .operations
+            .iter()
+            .map(|operation| operation.id.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "babelforce.health",
+            "babelforce.agent.list",
+            "babelforce.call.hangup"
+        ]
+    );
     assert_eq!(loaded.patch.operations.len(), 2);
 }
 

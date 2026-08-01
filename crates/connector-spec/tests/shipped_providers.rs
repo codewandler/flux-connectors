@@ -13,6 +13,9 @@ use std::path::{Path, PathBuf};
 
 use connector_spec::{provider, AuthScheme};
 
+#[path = "support/shipped_provider.rs"]
+mod shipped_provider;
+
 /// `<repo root>/providers`, derived from this crate's manifest directory so the test is independent
 /// of the working directory a runner happens to use.
 fn providers_dir() -> PathBuf {
@@ -56,7 +59,7 @@ fn load(name: &str) -> provider::LoadedProvider {
     let path = providers_dir().join(format!("{name}.toml"));
     let source = std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-    provider::load(&format!("providers/{name}.toml"), &source)
+    shipped_provider::load_definition(name, &source)
         .unwrap_or_else(|error| panic!("providers/{name}.toml does not load: {error}"))
 }
 

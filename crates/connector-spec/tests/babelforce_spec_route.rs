@@ -23,9 +23,10 @@
 //! either, for the reason `shipped_providers.rs` does: a copy here would be the thing under test
 //! drifting away from the thing that ships.
 
-use std::path::{Path, PathBuf};
+use connector_spec::{HttpMethod, LoadedProvider};
 
-use connector_spec::{provider, HttpMethod, SpecDocument};
+#[path = "support/shipped_provider.rs"]
+mod shipped_provider;
 
 /// The document `[spec] path` must pin, spelled as the provider file spells it.
 const PINNED: &str = "specs/babelforce/manager-2026-07-10.openapi.yaml";
@@ -75,54 +76,20 @@ const SHIPPED: [(&str, HttpMethod, &str); 9] = [
     ),
 ];
 
-fn repo() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
 fn read(relative: &str) -> String {
-    let path = repo().join(relative);
+    let path = shipped_provider::root().join(relative);
     std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()))
 }
 
-/// The five vendored babelforce documents, named one by one.
-///
-/// A literal rather than a directory read, for the same reason `vendored_specs.rs` spells its own
-/// set out: the claim is "these five, and the pin picks the manager one", which a walk of the
-/// directory could not make — it would agree with whatever is in there. It also keeps this file
-/// inside C-230's rule, which `crates/connector-cli/tests/per_provider_test_scope.rs` enforces
-/// textually on `read_dir` in any per-provider test file.
-const CACHE: [&str; 5] = [
-    "specs/babelforce/auth-2026-06-25.openapi.yaml",
-    "specs/babelforce/manager-2026-07-10.openapi.yaml",
-    "specs/babelforce/task-automation-2026-06-25.openapi.yaml",
-    "specs/babelforce/task-schedule-2026-06-25.openapi.yaml",
-    "specs/babelforce/user-2026-06-25.openapi.yaml",
-];
-
 /// The shipped provider file, compiled against the whole vendored babelforce spec cache.
 ///
-/// The **cache**, not the pinned document alone: which of the five is compiled is `[spec] path`'s
-/// decision, and handing the loader one file would be this test making it instead.
-fn load() -> provider::LoadedProvider {
-    let cache: Vec<(String, String)> = CACHE
-        .iter()
-        .map(|path| ((*path).to_owned(), read(path)))
-        .collect();
-    let documents: Vec<SpecDocument<'_>> = cache
-        .iter()
-        .map(|(path, document)| SpecDocument {
-            path: path.as_str(),
-            document: document.as_str(),
-        })
-        .collect();
-
-    provider::load_with_spec(
-        "providers/babelforce.toml",
-        &read("providers/babelforce.toml"),
-        &documents,
-    )
-    .unwrap_or_else(|error| panic!("providers/babelforce.toml does not load: {error}"))
+/// Through C-421's shared seam rather than a cache assembled here. That is the point of the seam:
+/// it passes **every** document under `specs/babelforce/` and lets `[spec] path` resolve the pin,
+/// so this file states nothing about which of the five is compiled — which is the only way the
+/// claims below stay claims about the provider rather than about a cache the test picked.
+fn load() -> LoadedProvider {
+    shipped_provider::load("babelforce")
 }
 
 /// **The story's first acceptance bullet.** The connector is compiled from the vendored document,
@@ -131,29 +98,35 @@ fn load() -> provider::LoadedProvider {
 fn babelforce_is_compiled_from_the_vendored_manager_document() {
     let loaded = load();
 
-    let spec = loaded.spec.as_ref().unwrap_or_else(|| {
-        panic!(
-            "providers/babelforce.toml declares no `[spec]` block, so it is still hand-authored. \
-             C-415 vendored the document it was waiting for; the file's own header says that is \
-             when it becomes `[spec]` plus a `[[patch.operations]]` selection"
-        )
-    });
+    // Exactly one, and it is the manager document. C-410 made `specs` a list, so "which documents
+    // does this connector compile from" is now a claim worth stating rather than a shape the type
+    // guarantees: the other four vendored babelforce documents are in the cache this was loaded
+    // against, and none of them may reach the connector until a story selects out of it.
+    let pinned: Vec<&str> = loaded.specs.iter().map(|spec| spec.path.as_str()).collect();
     assert_eq!(
-        spec.path, PINNED,
-        "`[spec] path` pins a different document than the manager one the nine operations come from"
+        pinned,
+        vec![PINNED],
+        "providers/babelforce.toml does not pin exactly the manager document. If it declares no \
+         `[spec]` at all it is still hand-authored — C-415 vendored the document it was waiting \
+         for, and the file's own header says that is when it becomes `[spec]` plus a \
+         `[[patch.operations]]` selection"
     );
 
-    // Not merely declared — *ingested*. `load_with_spec` resolves the pin against the cache and
+    // Not merely declared — *ingested*. `load_with_spec` resolves each pin against the cache and
     // checks the declared `sha256` against the bytes it actually read, so a populated `ingested`
     // is the evidence that the pin resolved and the hash agreed.
-    let ingested = loaded.ingested.as_ref().unwrap_or_else(|| {
-        panic!("`[spec]` is declared but no document was ingested, so the pin resolved to nothing")
-    });
+    let [document] = loaded.ingested.as_slice() else {
+        panic!(
+            "expected exactly one ingested document, got {}",
+            loaded.ingested.len()
+        )
+    };
+    assert_eq!(document.path, PINNED);
     assert!(
-        ingested.operations.len() > 300,
+        document.ingested.operations.len() > 300,
         "the manager document declares 356 operations and ingest read only {}; the pin is \
          resolving to some other document",
-        ingested.operations.len()
+        document.ingested.operations.len()
     );
 }
 
@@ -227,10 +200,9 @@ fn selection_stays_opt_in_and_names_exactly_nine() {
 #[test]
 fn the_documents_identity_is_recorded_and_checked() {
     let loaded = load();
-    let spec = loaded
-        .spec
-        .as_ref()
-        .expect("babelforce is spec-backed; the previous test says so first");
+    let [spec] = loaded.specs.as_slice() else {
+        panic!("babelforce pins exactly one document; the previous test says so first")
+    };
 
     let declared = spec.sha256.as_deref().unwrap_or_else(|| {
         panic!(

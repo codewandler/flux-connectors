@@ -578,22 +578,31 @@ fn a_required_query_parameter_opens_the_string_and_optional_ones_follow() {
 /// A free-form body reaches the vendor whole, whether the caller spells it as a record or as JSON
 /// text. Both spellings are why the emitter re-binds it through `parse(…, as: "json")` rather than
 /// passing it straight to `http.request`.
+///
+/// **`babelforce-session-update`, not `babelforce-call-session-set`** (C-421). This test is about the
+/// *emitter's* treatment of an opaque body, and it needs an operation whose body is opaque for
+/// reasons that will not move. `babelforce-call-session-set`'s is not: the vendored 2026-07-10
+/// document declares `SetCallSessionVariablesRequest` as a wrapper with one `variables` property,
+/// where the older 0.7.0 reading the connector was hand-authored from had no `properties` at all —
+/// so which body that operation sends is an open question about babelforce's wire contract (C-416
+/// Progress §(a)), and this assertion has no stake in the answer. `babelforce-session-update`'s body
+/// *is* the variable map, in both readings and both front-ends.
 #[test]
 fn a_free_form_body_travels_whole_in_either_spelling() {
     let as_record = request(
-        "babelforce-call-session-set",
-        json!({"id": "c-1", "body": {"appFoo": "bar"}}),
+        "babelforce-session-update",
+        json!({"id": "s-1", "body": {"appFoo": "bar"}}),
     );
     let as_text = request(
-        "babelforce-call-session-set",
-        json!({"id": "c-1", "body": "{\"appFoo\": \"bar\"}"}),
+        "babelforce-session-update",
+        json!({"id": "s-1", "body": "{\"appFoo\": \"bar\"}"}),
     );
 
     assert_eq!(as_record.body.as_deref(), Some(r#"{"appFoo":"bar"}"#));
     assert_eq!(as_record.body, as_text.body);
     assert_eq!(
         as_record.url,
-        "https://services.babelforce.com/api/v2/calls/c-1/session/set"
+        "https://services.babelforce.com/api/v2/sessions/s-1"
     );
 }
 
