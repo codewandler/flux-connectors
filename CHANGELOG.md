@@ -7,6 +7,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A service says what kind of thing it is, so 54 providers can be filtered by domain** (C-153).
+  `Tag` is a closed 27-value vocabulary on a service, beside `roles` — `telephony` for babelforce and
+  twilio, `payments` for stripe, and `email`/`scheduling`/`storage` split across google's three
+  services, which is why the field hangs off a service and the provider's is derived. The vocabulary
+  was read off all 54 shipped providers rather than designed ahead of them, and the clustering is
+  recorded in [provider-roles.md](docs/designs/provider-roles.md) — including why seven singletons
+  were kept rather than folded into parents that describe them worse.
+
+  **A tag is deliberately not a role.** A role answers "can this service *do* X, checkably?" and
+  carries required members the loader verifies; a tag answers "what kind of thing is this?" and
+  carries nothing, because no operation makes a service `storage`. The vocabulary is closed anyway: a
+  typo'd tag never matches a filter and nothing downstream can notice.
+
+  Landed as **partial** — the declaration ships, the consumer does not. Tags reach no artifact yet,
+  and neither has `roles` since C-120; both are now C-442, because building a tag-only path would
+  have left `roles` dead beside it and pre-empted the mapping `connector-surfaces.md` owns.
+
+### Fixed
+
+- **`connector-cli`'s scaffold would have mistaken a tagged single-surface provider for a
+  multi-service one** (C-153). `declares_services` asked `!services.is_empty()` when it meant "declares
+  a *named* service". Once a provider carries a `default` entry to hold its tags, that reads as a
+  named service and the scaffold emits a blocked note naming a service that does not exist. It now
+  asks `is_default_only()`. Three tests spelled the same claim the same wrong way and were corrected
+  with it.
+
 ## [0.10.1] — 2026-08-01
 
 ### Fixed
