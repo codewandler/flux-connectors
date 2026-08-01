@@ -208,3 +208,74 @@ wrong about, but not free.
 
 **The misread to design against**: a UI that filters by tag invites the inference "this category means
 these capabilities". It does not. Keep tags and roles distinguishable wherever both are rendered.
+
+### The vocabulary, derived 2026-08-02 from all 54 shipped providers
+
+C-153's acceptance required the set be read off what ships rather than designed ahead of it. It was,
+and the clustering is recorded here so the next person to add a tag argues against evidence rather
+than against taste. Twenty-seven values, every one populated:
+
+| tag | services carrying it |
+|---|---|
+| `ai` | anthropic (`models`, `admin`), openai, openrouter |
+| `email` | postmark (`server`), resend, sendgrid, google (`gmail`), microsoft_graph (`mail`) |
+| `storage` | box, dropbox, google (`drive`), microsoft_graph (`files`) |
+| `support` | zendesk, freshdesk, intercom, front |
+| `infrastructure` | cloudflare, fly (`machines`), vercel, supabase |
+| `observability` | datadog, newrelic, sentry |
+| `project-management` | asana, clickup, trello, jira |
+| `scheduling` | calendly, google (`calendar`), microsoft_graph (`calendar`), zoom |
+| `source-control` | github, gitlab, bitbucket |
+| `issue-tracking` | jira, github, gitlab |
+| `telephony` | babelforce (all four services), twilio |
+| `messaging` | slack, discord, twilio |
+| `cms` | contentful (`delivery`, `management`), webflow |
+| `crm` | hubspot, salesforce |
+| `marketing` | klaviyo, mailchimp |
+| `knowledge-base` | confluence, notion |
+| `design` | figma, miro |
+| `database` | airtable, supabase |
+| `incident-response` | pagerduty, statuspage |
+| `developer-tools` | launchdarkly, vercel |
+| `search` | algolia |
+| `payments` | stripe |
+| `ecommerce` | shopify |
+| `identity` | okta |
+| `e-signature` | docusign |
+| `forms` | typeform |
+| `video-conferencing` | zoom |
+
+**Seven singletons, kept rather than folded.** The last seven rows have one service each today. The
+argument for folding them is that a one-member bucket is a weak filter; the argument against — which
+won — is that every available parent describes the member worse. `algolia` under `developer-tools`
+and `stripe` under `infrastructure` are both false in the way that matters to someone browsing. A
+singleton is an honest answer to "what kind of thing is this?" and it stops being a singleton the
+moment a second vendor of that kind ships.
+
+**Two multi-tag cases, and they are the ones that prove the model.** `twilio` is one `default` service
+that is genuinely both `telephony` and `messaging` — its own description says *"programmable messaging
+and voice"* — which is why a service carries a set rather than a value. `google` and
+`microsoft_graph` each span three domains across three services, which is why the field is on a
+service and the provider's is derived.
+
+### The cost this actually carried, recorded because it was not predicted
+
+C-153's acceptance promised the field would be free: `skip_serializing_if` so "a service declaring
+none hashes exactly as before". True as written, and it did not cover the real case. **Forty-seven of
+the 54 providers have only the implicit `default` service, so the only place to put their tag is a
+`[[services]]` entry naming `default`** — the path C-120 opened for `roles` and nobody had yet
+written. Every one of those providers' `ir_sha256` therefore moved, and `connectors.lock` churned by
+108 lines.
+
+That churn is correct: those providers were edited and now declare a fact they did not before. But it
+collided with three assertions that spelled "no addressing surface" as `services.is_empty()` —
+`services.rs`'s single-surface invariant, and the `resend` and `typeform` floor tests. All three were
+relaxed to `is_default_only()` plus an explicit check that the entry reaches for no `base_url`,
+`api_version` or `description`, which is the property they were standing in for. **No address, no
+filename and no emitted `.flux` byte moved**; `connector-cli -- build` reported `1 written`, the
+lockfile.
+
+The same spelling hid a real defect in `crates/connector-cli/src/scaffold.rs`, where
+`declares_services` gated the one-document-many-services branch on `!services.is_empty()`. A tagged
+single-surface provider would have been read as declaring a named service and emitted a blocked note
+naming a service that does not exist. Fixed to `is_default_only()`.

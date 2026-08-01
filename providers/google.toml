@@ -222,6 +222,7 @@ default_auth = [{ credentials = ["google.access_token"] }]
 
 [[services]]
 name = "gmail"
+tags = ["email"]
 description = "Gmail: read a message, send a message, list a mailbox's labels"
 # Gmail's current documented endpoint. Calls to `www.googleapis.com/gmail/v1` are still answered, but
 # the vendor's reference is what a reviewer checks this file against, and it names this host.
@@ -230,11 +231,13 @@ api_version = "v1"
 
 [[services]]
 name = "calendar"
+tags = ["scheduling"]
 description = "Google Calendar: read a calendar and its events, create an event"
 api_version = "v3"
 
 [[services]]
 name = "drive"
+tags = ["storage"]
 description = "Google Drive: read and rename a file's metadata"
 api_version = "v3"
 

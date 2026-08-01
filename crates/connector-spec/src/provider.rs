@@ -59,7 +59,7 @@ use crate::lock::sha256_hex;
 use crate::{
     response_location_exists, AuthMethod, AuthRequirement, AuthScheme, Connector, HttpMethod,
     Idempotency, JsonSchema, Operation, Param, ParamSet, Provenance, Quirks, Risk, Role, Runtime,
-    Service, DEFAULT_SERVICE, MIN_REPEATABILITY_CONDITION,
+    Service, Tag, DEFAULT_SERVICE, MIN_REPEATABILITY_CONDITION,
 };
 
 /// The documented JSON Schema for `providers/<name>.toml`.
@@ -3955,6 +3955,31 @@ fn validate_services(connector: &Connector, problems: &mut Vec<String>) {
         }
 
         validate_service_roles(connector, service, problems);
+        validate_service_tags(service, problems);
+    }
+}
+
+/// Checks that every tag a service declares is stated once — C-153.
+///
+/// There is no satisfaction check here and there deliberately cannot be one: a [`Tag`] carries no
+/// required members, because no operation makes a service `storage`. The unknown-name case is not
+/// here either — `serde` refuses it first at the parse, since [`Tag`] is a closed enum — so the only
+/// thing left to refuse is a repeat.
+fn validate_service_tags(service: &Service, problems: &mut Vec<String>) {
+    let name = service.name.as_str();
+    let mut seen: Vec<Tag> = Vec::new();
+
+    for tag in &service.tags {
+        let word = tag.word();
+        if seen.contains(tag) {
+            problems.push(format!(
+                "service {name:?} declares tag {word:?} more than once. A tag is a label, and a set \
+                 that tolerates repeats is a list pretending to be a set. Known tags: {}",
+                Tag::known_set()
+            ));
+            continue;
+        }
+        seen.push(*tag);
     }
 }
 
@@ -3964,13 +3989,14 @@ fn validate_services(connector: &Connector, problems: &mut Vec<String>) {
 /// belongs to when it names none, so declaring it is a second definition of something that already
 /// exists, and the two could disagree about a base URL or a version.
 ///
-/// Roles are the one thing that argument does not cover, and only for **a provider with a single API
-/// surface**, which has no other service to attach a role to. The exception is scoped to exactly that
-/// case, along two axes:
+/// Roles and tags are the one thing that argument does not cover, and only for **a provider with a
+/// single API surface**, which has no other service to attach either to. The exception is scoped to
+/// exactly that case, along two axes:
 ///
-/// 1. **What the entry may carry.** `roles` and nothing else. `roles` has no connector-level
-///    spelling, so it has nothing to contradict, while `base_url`, `api_version` and `description`
-///    all do.
+/// 1. **What the entry may carry.** `roles` and `tags`, and nothing else. Neither has a
+///    connector-level spelling, so neither has anything to contradict, while `base_url`,
+///    `api_version` and `description` all do. `tags` joined the exception with C-153, which is what
+///    makes the *forty-seven* single-surface providers taggable at all.
 /// 2. **Whether the provider has any other service.** A `default` entry beside a named one would
 ///    hand back the implicit `default` that a multi-service provider must not have — and the harm is
 ///    concrete, not doctrinal: [`validate_operation_service`] refuses an operation that omits
@@ -3995,12 +4021,13 @@ fn validate_default_service_entry(
         problems.push(format!(
             "`[[services]]` declares {DEFAULT_SERVICE:?} beside the named service {:?}. \
              {DEFAULT_SERVICE:?} may be declared only by a provider whose *only* API surface it is, \
-             and only to carry `roles` — which a single-surface provider has nowhere else to put. \
+             and only to carry `roles` and `tags` — which a single-surface provider has nowhere else \
+             to put. \
              A provider that declares named services has no implicit {DEFAULT_SERVICE:?} for an \
              operation to fall into, and declaring one here would hand it back: an operation that \
              omitted `service` would become legal and be emitted into a \
-             `<provider>-{DEFAULT_SERVICE}.flux` nobody asked for. Declare the roles on the service \
-             that actually has them",
+             `<provider>-{DEFAULT_SERVICE}.flux` nobody asked for. Declare the roles and tags on the \
+             service that actually has them",
             other.name
         ));
         return;
@@ -4021,18 +4048,18 @@ fn validate_default_service_entry(
         problems.push(format!(
             "`[[services]]` declares {DEFAULT_SERVICE:?} with `{}`. {DEFAULT_SERVICE:?} is \
              reserved — it is the service an operation belongs to when it names none, and it is \
-             elided from every published address — so the entry may carry `roles` and nothing else. \
-             A role attaches to a service and a single-surface provider has nowhere else to put one; \
-             everything else is already stated at connector level, and a second definition could \
-             disagree with it",
+             elided from every published address — so the entry may carry `roles` and `tags`, and \
+             nothing else. A role and a tag attach to a service and a single-surface provider has \
+             nowhere else to put either; everything else is already stated at connector level, and a \
+             second definition could disagree with it",
             overreaching.join("`, `")
         ));
-    } else if service.roles.is_empty() {
+    } else if service.roles.is_empty() && service.tags.is_empty() {
         problems.push(format!(
             "`[[services]]` declares {DEFAULT_SERVICE:?} and nothing else. {DEFAULT_SERVICE:?} is \
              reserved: it is the service an operation belongs to when it names none, and a provider \
-             with one API surface declares no services at all. The one reason to write the entry is \
-             to carry `roles`"
+             with one API surface declares no services at all. The two reasons to write the entry \
+             are to carry `roles` and to carry `tags`"
         ));
     }
 }

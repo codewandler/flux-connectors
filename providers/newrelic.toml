@@ -194,6 +194,15 @@ description = "New Relic User API key, authorizing REST v2 calls as the New Reli
 # indexes the response directly gets nothing and no error.
 # ---------------------------------------------------------------------------------------------
 
+[[services]]
+# C-153. `default` is the reserved implicit service, and a provider with one API surface
+# declares no services at all — so this entry exists for exactly one reason: a tag attaches
+# to a service, and there is no other service here to attach it to. It carries `tags` and
+# nothing else, which is what keeps `default` implicit and this file emitting the same
+# `newrelic.flux` it emitted before.
+name = "default"
+tags = ["observability"]
+
 [[operations]]
 id = "newrelic-application-list"
 method = "GET"

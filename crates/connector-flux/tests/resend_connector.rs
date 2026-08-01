@@ -240,10 +240,26 @@ fn no_configuration_surface_is_declared_and_the_connector_still_holds() {
         "the floor declares no configuration field: the only thing a human supplies is the \
          credential, which `[[auth]]` already names"
     );
+    // One API surface, so the implicit `default` service is the whole connector. Since C-153 the
+    // floor does carry a `[[services]]` entry — but only to hold a `tags` value, which a
+    // single-surface provider has nowhere else to put. What must stay true is that the entry adds no
+    // *addressing* surface: `is_default_only` still holds, so nothing about where this connector is
+    // emitted or how it is addressed differs from the pre-tags shape, and the entry reaches for no
+    // `base_url`, `api_version` or `description` (which the loader refuses on `default` anyway —
+    // asserted here so a widening of that rule cannot pass this test silently).
     assert!(
-        connector.services.is_empty(),
+        connector.is_default_only(),
         "one API surface, so the implicit `default` service is the whole connector"
     );
+    for service in &connector.services {
+        assert!(
+            service.base_url.is_none()
+                && service.api_version.is_none()
+                && service.description.is_empty(),
+            "the floor's `default` entry exists only to carry metadata; it must add no addressing \
+             surface, but {service:?} does"
+        );
+    }
     assert!(
         connector.events.is_empty() && connector.channels.is_empty(),
         "no inbound half: Resend does publish webhooks, and declaring one means also declaring how \

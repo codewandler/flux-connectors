@@ -213,6 +213,15 @@ description = "Intercom access token sent as a bearer — an OAuth app token or 
 # alphanumerics, `_` and `-` only, so `op intercom.contact.get` is undeclarable (C-8, C-23).
 # ---------------------------------------------------------------------------------------------
 
+[[services]]
+# C-153. `default` is the reserved implicit service, and a provider with one API surface
+# declares no services at all — so this entry exists for exactly one reason: a tag attaches
+# to a service, and there is no other service here to attach it to. It carries `tags` and
+# nothing else, which is what keeps `default` implicit and this file emitting the same
+# `intercom.flux` it emitted before.
+name = "default"
+tags = ["support"]
+
 [[operations]]
 id = "intercom-contact-get"
 method = "GET"
