@@ -1,22 +1,23 @@
-# Babelforce manager API — hand-authored.
+# Babelforce manager API — **spec-backed** (C-416).
 #
-# Transcribed from `docs/designs/provider-operation-inventory.md` §5, which curates 9 operations out
-# of the 163 the manager document declares. 163 generated ops would be 163 LLM tools, most of them
-# destructive admin CRUD (§5.3).
+# This file was hand-authored from C-17 until 2026-08-01, and its header carried five paragraphs
+# explaining why: the one authoritative description of this API embedded a credential-shaped example
+# block for a real test account, and this repository is public. C-415 resolved that — the five
+# documents are vendored under `specs/babelforce/` as a declared, tested scrub — so the sentence that
+# header ended on is now executed rather than promised:
 #
-# WHY THIS IS NOT A `[spec]` POINTER, even though a real OpenAPI 3.0.3 document exists.
-# `specs/babelforce/manager-0.7.0.openapi.json` is **not vendored in this repository**, and it is not
-# an oversight: inventory §1.3 records that the upstream document embeds a credential-shaped example
-# block (an accessId, an accessToken and a stream token for a `Testers Inc.` account) and that this
-# repository is public. Vendoring is blocked on confirm-and-rotate with the babelforce API owners
-# and then an explicit vendoring policy — neither of which an implementing agent may decide. Until
-# that is resolved the connector is written out inline, which is the same IR by a different
-# front-end. When the spec lands, this file becomes `[spec]` plus a `[[patch.operations]]` selection
-# and the operation set below is the selection to reproduce.
+# > When the spec lands, this file becomes `[spec]` plus a `[[patch.operations]]` selection and the
+# > operation set below is the selection to reproduce.
 #
-# SCHEMA GAP: provenance is only reachable through `[spec]`. There is no way to record "derived from
-# manager.openapi.json 0.7.0, sha256 6a79679…" for a hand-authored connector, so the upstream
-# identity survives only in this comment and in the inventory. Reported with C-17.
+# The nine operations below are that selection. `docs/stories/C-416-reproduce-the-nine.md` records
+# what the conversion cost, what it changed, and the four places the document and the hand-authored
+# file disagreed — because the point of converting a connector whose output was already known-good
+# was to find those, not to skip past them.
+#
+# **Selection is opt-in.** The manager document declares 356 operations; an operation reaches this
+# connector only through a `[[patch.operations]]` block, so the 342 not named below are not tools,
+# not catalogue entries, and not anything. That is the property that lets a 356-operation document
+# be pointed at safely, and it is why `Patch` has no `hide`.
 
 id = "babelforce"
 vendor = "Babelforce"
@@ -42,10 +43,21 @@ authority = "com.babelforce.api"
 # only the authority and deliberately carries no version, so a token survives the vendor's next one.
 api_version = "v2"
 
-# Production, stated explicitly. The document's `servers[0]` is **staging**
-# (`https://latest.dev.babelforce.com`), so a positional "take servers[0]" ingest would silently
-# point the connector at the dev environment (§1.1, §6.5). Staging remains reachable through the
-# operator's `BABELFORCE_URL` override.
+# Production, stated explicitly — and still stated explicitly now that a document is pointed at.
+#
+# **The reason changed on 2026-08-01 and the declaration did not.** This line used to say the
+# document's `servers[0]` is staging (`https://latest.dev.babelforce.com`), so a positional "take
+# servers[0]" ingest would silently compile the connector against the dev environment. That is no
+# longer true of the *vendored* bytes: C-415's pull normalizes `servers:` to the public production
+# host before anything is committed, and `manager-2026-07-10.openapi.yaml:26283-26285` now declares
+# exactly one server, `https://services.babelforce.com`, described as `Production`. The staging URL
+# appears nowhere in the five documents.
+#
+# It stays declared here anyway, because agreeing with the document today is not the same as
+# deferring to it. `Ingested::base_url()` is advisory by construction and the loader refuses an empty
+# `base_url` precisely so that a vendor who reorders `servers` — or a re-vendor that skips the
+# normalization — moves a reviewable line in this file instead of moving every request silently.
+# Staging remains reachable through the operator's `BABELFORCE_URL` override.
 #
 # SCHEMA GAP: as with the other two providers, nothing here declares that `BABELFORCE_URL` overrides
 # this value; `base_url` is a plain string.
@@ -57,9 +69,41 @@ description = "Babelforce voice platform: agent availability, live and reported 
 # verification operation"*; this is that sentence made machine-readable.
 verify = "babelforce-agent-list"
 
-# The document declares `security` once at the root and **zero of its 163 operations override it**,
-# so one connector-wide default is the whole auth model (§5.1.1).
+# The document declares `security` once at the root and **zero of its 356 operations override it**,
+# so one connector-wide default is the whole auth model
+# (`manager-2026-07-10.openapi.yaml:26280-26282`).
+#
+# Every selected operation therefore inherits this and none of them states `auth`. That is a
+# decision, not an omission: `OperationPatch::auth` exists so an overlay can narrow an operation's
+# alternatives, and narrowing to the one alternative the document already declares would be nine
+# copies of a fact stated once.
 default_auth = [{ credentials = ["babelforce.access_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# The vendored document
+# ---------------------------------------------------------------------------------------------
+#
+# `sha256` is **checked against the bytes ingested**, not copied past them: `load_with_spec` hashes
+# the resolved document and refuses a build whose declaration disagrees. That is what closes the
+# `SCHEMA GAP` this file's header used to carry — "there is no way to record 'derived from
+# manager.openapi.json 0.7.0, sha256 6a79679…' for a hand-authored connector, so the upstream
+# identity survives only in this comment". It no longer survives only in a comment; it is a
+# measurement that reaches `connectors.lock`, and the comment is deleted rather than updated.
+#
+# `source_url` is **absent deliberately**. The only URL there is to record points at an internal
+# GitLab host, and `AGENTS.md` ("the pulled bytes come here, the configuration that pulled them does
+# not") makes that omission the rule rather than an oversight. Identity is the pull date in the file
+# name plus this hash; `specs/babelforce.provenance.toml` carries both, and the `upstream_sha256`
+# there keeps C-14's drift detectable even though nothing here can re-fetch.
+#
+# `upstream_version` is the useless string the document actually declares. Recorded as-is rather than
+# corrected: `info.version` is `0.0.0-dev` on three of the five documents, and writing a version the
+# vendor does not publish would be inventing provenance.
+[spec]
+path = "specs/babelforce/manager-2026-07-10.openapi.yaml"
+upstream_version = "0.0.0-dev"
+fetched_at = "2026-07-10T12:24:21Z"
+sha256 = "5728cd62a637e4b3fdd5fa1d376c0ebb478ad0c966922a9dd3fb0608918d739c"
 
 # ---------------------------------------------------------------------------------------------
 # Credentials
@@ -71,23 +115,39 @@ scheme = "bearer"
 env = ["BABELFORCE_ACCESS_TOKEN"]
 description = "SSO-issued babelforce access token, minted outside flux and supplied through the environment"
 
-# 🚫 EXCLUDED, DELIBERATELY: `X-Auth-Access-Id` / `X-Auth-Access-Token`.
+# `X-Auth-Access-Id` / `X-Auth-Access-Token`: **not declared by this document, so there is nothing
+# here to exclude.**
 #
-# The vendored document's `securitySchemes` declares a second option — two `apiKey` headers that
-# travel together as an AND-set — and offers it in the root `security` array as an alternative to
-# oauth2. **It is deprecated and is being scrubbed from the API by the babelforce maintainers**
-# (§5.1.3). It is not modelled here and must not be emitted.
+# This block used to be a five-paragraph exclusion notice, and the premise under it did not survive
+# contact with the vendored bytes. It said the document's `securitySchemes` offered a second option —
+# two `apiKey` headers travelling as an AND-set — that was deprecated, being scrubbed upstream, and
+# must not be emitted; and it instructed a future implementor that "ingest must keep *seeing* the
+# pair" so drift-check keeps reporting on it, with the exclusion expressed as an explicit per-operation
+# `auth`.
 #
-# To a future reader: its absence is not a bug and not a gap in ingest. Do not "fix" this connector
-# by adding it back, and do not treat a regenerated spec that still lists it as evidence it is
-# supported — the document carries **zero** `deprecated` markers in 17 281 lines, so the deprecation
-# is recorded only in the inventory and here. Beyond the maintainers' decision: it is a static,
-# long-lived credential pair with no expiry and no rotation story, and both halves are secrets sent
-# as raw headers, doubling the surface to gate and redact for no benefit over one bearer.
+# C-415 measured it. `manager-2026-07-10.openapi.yaml:26270-26279` declares `securitySchemes` holding
+# **`oauth2` alone**, and the same is true of all five documents. There is no header pair in the
+# document for an overlay to remove, no per-operation `auth` to write, and nothing for drift-check to
+# report on — so the instruction that block left behind is not satisfiable against this spec version,
+# and following it would have produced nine `auth` lines defending against a scheme that is not there.
 #
-# When the spec is vendored, ingest must keep *seeing* the pair — otherwise drift-check (C-14) stops
-# reporting on it — and the exclusion becomes an overlay decision expressed as an explicit
-# `auth = [{ credentials = ["babelforce.access_token"] }]` on each selected operation.
+# Two readings fit and this repository cannot choose between them from the bytes: either the
+# maintainers finished the scrubbing the inventory recorded as under way between the 0.7.0 document
+# §5.1.3 was written against and the 2026-07-10 pull, or the documents §5.1.3 described were never
+# these. **Confirm which with the babelforce API owners.** The distinction matters for exactly one
+# reason: if the pair is still accepted on the wire but merely undocumented, then a *future* document
+# that re-declares it is a re-declaration and not a new feature, and this comment is what tells that
+# reviewer so.
+#
+# What does not depend on the answer: the pair stays unmodelled. It is a static, long-lived credential
+# pair with no expiry and no rotation story, and both halves are secrets sent as raw headers, doubling
+# the surface to gate and redact for no benefit over one bearer. If a future pull re-declares it,
+# `OperationPatch::auth` is where the refusal goes, and it is still a refusal.
+#
+# Note that `accessId`/`accessToken` **do** still appear in the vendored documents, and that is a
+# different thing: they are properties of an account payload schema, which
+# `crates/connector-spec/tests/vendored_specs.rs::the_declarations_survive_the_scrub` asserts survive.
+# A schema property is not a security scheme; do not read the one as evidence of the other.
 
 # JWT is planned, and lands here without reshaping. A minted JWT still reaches the wire as
 # `Authorization: Bearer <token>`, so `scheme` stays `bearer`; what changes is the token's
@@ -95,439 +155,210 @@ description = "SSO-issued babelforce access token, minted outside flux and suppl
 # `jwt` block would go (§5.1.2, `crates/connector-spec/src/auth.rs:60-69`). Nothing in this file
 # would change.
 #
-# The spec models the bearer as OAuth2 with a **password grant** at `/oauth/token`. We do not
-# implement it: it would require flux to hold a babelforce user password in order to mint tokens,
-# which is strictly worse than holding the token (§5.1.4). Revisit only if babelforce publishes a
-# client-credentials flow.
+# The document models the bearer as OAuth2 with a **password grant** at `/oauth/token`
+# (`manager-2026-07-10.openapi.yaml:26271-26279`), and we still do not implement it: it would require
+# flux to hold a babelforce user password in order to mint tokens, which is strictly worse than
+# holding the token (§5.1.4). Pointing at the document did not change this — ingest extracts no
+# per-operation auth at all today (C-5 is where that lands), so the refusal is expressed by
+# `[[auth]]` above declaring a plain bearer and by no `[[patch.operations]]` naming the grant.
+# Revisit only if babelforce publishes a client-credentials flow.
 
 # ---------------------------------------------------------------------------------------------
-# Operations — 9 of 163 (inventory §5.2).
+# Operations — 9 selected of the 356 the document declares.
 #
-# Selection principle: include only what a support flow executes at runtime, and exclude everything
-# that is account administration performed in the babelforce UI. What survives is agents (who is
-# available), calls (what is happening, and acting on it) and sessions (the variable bag a flow
-# reads and writes) — the three groups that pair naturally with a Zendesk or Freshdesk ticket.
+# Selection principle, unchanged from the hand-authored file: include only what a support flow
+# executes at runtime, and exclude everything that is account administration performed in the
+# babelforce UI. What survives is agents (who is available), calls (what is happening, and acting on
+# it) and sessions (the variable bag a flow reads and writes) — the three groups that pair naturally
+# with a Zendesk or Freshdesk ticket. Widening past this set is C-417's, and `expose` (C-413) is the
+# axis that makes widening survivable.
 #
-# Op ids are hyphen-separated — flux-lang admits alphanumerics, `_` and `-` only (C-8).
+# Op ids are hyphen-separated — flux-lang admits alphanumerics, `_` and `-` only (C-8) — and are a
+# **public contract**, which is why every block states `rename` rather than letting the vendor's
+# `operationId` become one. The loader refuses a selection that does not.
+#
+# `risk` and `idempotency` are stated on every block for the same reason: no OpenAPI document
+# publishes either, and the loader refuses a selection that states neither rather than inferring
+# from the HTTP method. The values below are the hand-authored file's, carried across unchanged.
+#
+# `description` is stated only where the document's own summary loses something. The vendor writes a
+# terse noun phrase ("List agents"); where the hand-authored file's sentence carried operational
+# knowledge the document does not — a precondition, a caveat, which of two synonymous parameters to
+# use — that sentence is kept, because it is what reaches a model as the tool contract.
 # ---------------------------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------------------------
-# NO OPERATION HERE DECLARES A `response_schema`, AND THAT IS THE HONEST ANSWER (C-126).
+# RESPONSE SCHEMAS NOW EXIST, AND THAT IS THE CONVERSION'S LARGEST SINGLE EFFECT (C-126).
 #
-# C-126 raised response-shape coverage across the catalogue and put a floor under it
-# (`crates/connector-spec/tests/response_schema_coverage.rs`). All nine operations below are among the
-# eighteen it leaves absent, and babelforce is the largest single block — so the reason belongs in the
-# file rather than only in a story.
+# All nine operations previously declared **no** `response_schema`, and babelforce was the largest
+# single absent block in `crates/connector-spec/tests/response_schema_coverage.rs`. The file used to
+# argue that at length and the argument had one load-bearing premise: "there is no offline source to
+# derive one from … the one authoritative description is `manager.openapi.json`, which is not
+# vendored here". That premise is gone. The document publishes a 2xx JSON schema for all nine, ingest
+# reads the lowest 2xx, and the schemas below are therefore **derived, not authored** — which is
+# exactly the resolution that comment named: "then these schemas are *derived* from its response
+# objects rather than authored at all — the same `[spec]` + `[[patch.operations]]` route the header
+# describes."
 #
-# **There is no offline source to derive one from.** The other eighteen connectors were written against
-# a vendor reference anyone can read: zendesk's and freshdesk's public developer sites, GitHub's and
-# Jira's machine-readable schemas, Google's per-method resource pages. Babelforce publishes no public
-# API reference. The one authoritative description is `manager.openapi.json`, which **is not vendored
-# here** for the reason the header records at length: §1.3 of the inventory found it embeds a
-# credential-shaped example block for a real test account, and this repository is public. Worse for
-# this particular purpose, that block *is* the response documentation — the response `example`s are
-# where those values live. So the document that would supply these schemas is precisely the document
-# that cannot be quoted from until it is cleared and rotated.
-#
-# The alternatives were considered and refused. Writing shapes from memory of the platform would be a
-# guess wearing the same syntax as the eighty-nine derived schemas beside it, and C-126's rule is that
-# a guessed schema is worse than none: it looks authoritative and is not. Declaring `{}` or
-# `{"type": "object"}` on all nine would move the coverage figure from 92/110 to 101/110 while telling
-# a consumer nothing whatsoever, which is the exact gaming the floor test's
-# `no_operation_publishes_a_permissive_response_schema` refuses.
-#
-# WHAT UNBLOCKS THIS, in order: clear and rotate the example credentials with the babelforce API
-# owners, vendor the document under `specs/babelforce/`, and then these schemas are *derived* from its
-# response objects rather than authored at all — the same `[spec]` + `[[patch.operations]]` route the
-# header describes. Until then the coverage table reads `babelforce 0 / 9`, which is a true statement
-# about what this repository knows.
+# So the coverage table moves from `babelforce 0 / 9` to `9 / 9`, and no schema here was guessed.
+# This changes `connectors/babelforce.flux` and every artifact downstream of it, deliberately: C-416
+# chose the derived schemas over byte-identity with the old artifacts, on the grounds that
+# byte-identity would have meant deleting real vendor-published response shapes in order to keep a
+# hash stable. The story records that decision.
 # ---------------------------------------------------------------------------------------------
 
-[[operations]]
-id = "babelforce-agent-list"
-method = "GET"
-path = "/api/v2/agents"
-description = "List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint"
+[[patch.operations]]
+select = "listAgents"
+rename = "babelforce-agent-list"
 risk = "low"
 idempotency = "idempotent"
+# The document's summary is "List agents", which loses the reason this operation is `verify`.
+description = "List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint"
 
-[[operations.params.query]]
-name = "page"
-description = "Page number"
-required = false
-schema = { type = "integer" }
-
-[[operations.params.query]]
-name = "max"
-description = "Page size"
-required = false
-schema = { type = "integer" }
-
-[[operations.params.query]]
-name = "q"
-description = "Free-text search over agent name and group name"
-required = false
-schema = { type = "string" }
-
-[[operations.params.query]]
-name = "enabled"
-description = "Filter enabled or disabled agents"
-required = false
-schema = { type = "boolean" }
-
-[[operations.params.query]]
-name = "name"
-description = "Search by agent name"
-required = false
-schema = { type = "string" }
-
-[[operations.params.query]]
-name = "number"
-description = "Filter by the agent's number"
-required = false
-schema = { type = "string" }
-
-[[operations.params.query]]
-name = "sourceId"
-description = "Filter by integration source id"
-required = false
-schema = { type = "string" }
-
-[[operations.params.query]]
-name = "source"
-description = "Filter by source integration"
-required = false
-schema = { type = "string" }
-
-[[operations.params.query]]
-name = "state"
-description = "Filter by agent line status"
-required = false
-schema = { type = "string", enum = [
-  "available",
-  "busy",
-  "declined",
-  "unreachable",
-  "selected",
-  "ringing",
-  "in-call",
-  "wrap-up",
-] }
-
-# The document types these as `oneOf` scalar-or-array (§6.5). JSON Schema is carried verbatim in the
-# IR, so the vendor's own shape survives instead of collapsing to a string.
-[[operations.params.query]]
-name = "groupIds"
-description = "Filter by group id; a single id or a list"
-required = false
-schema = { oneOf = [
-  { type = "string" },
-  { type = "array", items = { type = "string" } },
-] }
-
-[[operations.params.query]]
-name = "groups"
-description = "Filter by group name; a single name or a list"
-required = false
-schema = { oneOf = [
-  { type = "string" },
-  { type = "array", items = { type = "string" } },
-] }
-
-[operations.quirks.pagination]
+# Not in any spec, so stated here. The manager document paginates uniformly on `page`/`max`;
+# attaching that per operation is a repetition C-415's per-service quirks are meant to end.
+[patch.operations.quirks.pagination]
 page = { page_param = "page", size_param = "max", page_size = 100, max_pages = 20 }
 
 # ---------------------------------------------------------------------------------------------
 
-[[operations]]
-id = "babelforce-agent-get"
-method = "GET"
-path = "/api/v2/agents/{id}"
-description = "Get one agent"
+# The hand-authored block for this operation was 11 lines plus 11 query-parameter blocks; the
+# document supplies all 11 with better descriptions than the transcription had, plus a twelfth
+# (`tags`) the transcription predates.
+[[patch.operations]]
+select = "getAgent"
+rename = "babelforce-agent-get"
 risk = "low"
 idempotency = "idempotent"
 
-[[operations.params.path]]
-name = "id"
-description = "The agent id"
-required = true
-schema = { type = "string" }
-
 # ---------------------------------------------------------------------------------------------
 
-[[operations]]
-id = "babelforce-agent-status-update"
-method = "PUT"
-path = "/api/v2/agents/{id}/status"
-description = "Update an agent's status. Supply at least one of enabled or presence.name — the request body's properties are all optional, so an empty PUT is schema-valid and does nothing"
+[[patch.operations]]
+select = "updateAgentStatus"
+rename = "babelforce-agent-status-update"
 risk = "medium"
 idempotency = "idempotent"
-
-# SCHEMA GAP, still open: `UpdateAgentStatusRequest` is declared `required: false` with every
-# property optional (§6.5), which is the same class of problem as Zendesk's empty update, and
-# `Quirks` has no precondition field to record it in — so the constraint lives in the description
-# above.
+# SCHEMA GAP, still open and unchanged by the conversion: `UpdateAgentStatusRequest` declares every
+# property optional (`manager-2026-07-10.openapi.yaml:25810-25820`), so an empty PUT is schema-valid
+# and does nothing. That is the same class of problem as Zendesk's empty update, and `Quirks` still
+# has no precondition field to record it in — so the constraint lives in this sentence.
 #
-# The presence label is a *nested* body field, and it declares its JSON path with `wire` (C-29).
-# Emitted flat it would be the literal key `"presence.name"`, which babelforce accepts and ignores.
-[[operations.params.path]]
-name = "id"
-description = "The agent id"
-required = true
-schema = { type = "string" }
-
-[[operations.params.body]]
-name = "enabled"
-description = "Enable or disable the agent"
-required = false
-schema = { type = "boolean" }
-
-[[operations.params.body]]
-name = "presence_name"
-wire = "presence.name"
-description = "Presence label to set"
-required = false
-schema = { type = "string" }
+# **The body shape changed with the front-end, and the document's is the correct one.** The
+# hand-authored file flattened the vendor's nesting: it declared a scalar `presence_name` carrying
+# `wire = "presence.name"`, on the reasoning that emitted flat it would otherwise be the literal key
+# `"presence.name"` (C-29). Ingest deliberately expands only the *top* level of a request body, so
+# the document's `presence` arrives as one object-typed parameter instead. Both reach the wire as
+# `{"presence": {"name": …}}`, which is what `UpdateAgentStatusRequest_presence` declares; the
+# difference is that a caller now passes an object rather than a string. The description names the
+# nested field so a model can still find it.
+description = "Update an agent's status. Supply at least one of `enabled` or `presence.name` — the request body's properties are all optional, so an empty PUT is schema-valid and does nothing"
 
 # ---------------------------------------------------------------------------------------------
 
-[[operations]]
-id = "babelforce-call-list"
-method = "GET"
-path = "/api/v2/calls/reporting"
-description = "List and filter calls from the reporting view"
+[[patch.operations]]
+select = "listReportingCalls"
+rename = "babelforce-call-list"
 risk = "low"
 idempotency = "idempotent"
-
-# The document declares **40** query parameters for this operation; 13 are selected (§5.2).
-# Dropped deliberately:
-#   - all 20 `filters.*` parameters. Every filter is declared twice, flat and `filters.`-prefixed,
-#     with identical schemas — almost certainly one serializer emitting both bindings. Generating
-#     both would double the tool surface with exact synonyms (§6.5). The flat form is kept.
-#   - `from` / `to`, which share `ReportingNumberFilter` with `fromNumber` / `toNumber` and appear
-#     to be legacy aliases. Which pair is canonical is stated nowhere in the document; the explicit
-#     pair is taken. **Unconfirmed — worth one question to the API owner.**
-#   - `agent.id`, a dotted alias of `agentId`.
-#   - `domain`, `source`, `anonymous`, `parentId` — real filters, but narrow. Add on demand.
+# **This operation is where the conversion is worse than what it replaced, and the description is
+# doing the work an overlay cannot.**
 #
-# `time.start` and `time.end` keep their dotted wire names. That is deliberate and safe: C-8's
-# `Symbols` allocator maps a wire name onto a distinct Flux symbol (`time_start`), because a dotted
-# symbol would reparse as field access rather than fail.
-[[operations.params.query]]
-name = "page"
-description = "Page number"
-required = false
-schema = { type = "integer" }
+# The hand-authored block selected 14 of the document's query parameters and dropped 24 by hand, with
+# a paragraph explaining each drop: 17 `filters.`-prefixed parameters that are exact synonyms of
+# their flat forms ("almost certainly one serializer emitting both bindings"), plus `domain`,
+# `source`, `anonymous`, `parentId` as narrow, plus one of each aliased number pair.
+#
+# **`ParamPatch` cannot drop a parameter** — it corrects `required`, `description` and `schema` on a
+# parameter the document declares, and refuses a name the document does not. So all 38 travel, and
+# this operation reaches a model as a 38-argument tool of which 17 arguments are exact duplicates of
+# 17 others. That is a real regression against the curated file and it is C-416's headline finding;
+# `docs/stories/C-416-reproduce-the-nine.md` records it and names parameter exclusion as the
+# capability C-6 needs before C-417 widens this to 397 operations.
+#
+# One thing the document did settle: the hand-authored file picked `fromNumber`/`toNumber` over
+# `from`/`to` and flagged the choice "**Unconfirmed — worth one question to the API owner**". The
+# vendored document answers it in the opposite direction — it documents `fromNumber` as "Alias of
+# `from`" and `toNumber` as "Alias of `to`", making the short pair canonical. The description below
+# says so, since nothing else can.
+description = "List and filter calls from the reporting view. Prefer the flat parameters: every filter is also declared under a `filters.` prefix with an identical schema, and the two are synonyms. Prefer `from`/`to` over `fromNumber`/`toNumber`, which the vendor documents as aliases of them"
 
-[[operations.params.query]]
-name = "max"
-description = "Page size"
-required = false
-schema = { type = "integer" }
-
-[[operations.params.query]]
-name = "id"
-description = "Filter by call id; a single id or a list"
-required = false
-schema = { oneOf = [
-  { type = "string", format = "uuid" },
-  { type = "array", items = { type = "string", format = "uuid" } },
-] }
-
-[[operations.params.query]]
-name = "sessionId"
-description = "Filter by session id"
-required = false
-schema = { type = "string", format = "uuid" }
-
-[[operations.params.query]]
-name = "conversationId"
-description = "Filter by conversation id"
-required = false
-schema = { type = "string", format = "uuid" }
-
-[[operations.params.query]]
-name = "agentId"
-description = "Filter by agent; a single id or a list"
-required = false
-schema = { oneOf = [
-  { type = "string", format = "uuid" },
-  { type = "array", items = { type = "string", format = "uuid" } },
-] }
-
-[[operations.params.query]]
-name = "fromNumber"
-description = "Filter by originating number"
-required = false
-schema = { oneOf = [
-  { type = "string" },
-  { type = "array", items = { type = "string" } },
-] }
-
-[[operations.params.query]]
-name = "toNumber"
-description = "Filter by destination number"
-required = false
-schema = { oneOf = [
-  { type = "string" },
-  { type = "array", items = { type = "string" } },
-] }
-
-[[operations.params.query]]
-name = "type"
-description = "Filter by call direction"
-required = false
-schema = { type = "string", enum = ["inbound", "outbound"] }
-
-[[operations.params.query]]
-name = "state"
-description = "Filter by call state"
-required = false
-schema = { type = "string", enum = [
-  "init",
-  "scheduled",
-  "ringing",
-  "in-progress",
-  "queued",
-  "bridged",
-  "canceled",
-  "busy",
-  "no-answer",
-  "purged",
-  "completed",
-  "failed",
-] }
-
-[[operations.params.query]]
-name = "finishReason"
-description = "Filter by why the call ended"
-required = false
-schema = { type = "string", enum = [
-  "unknown",
-  "passive-hangup",
-  "system-hangup",
-  "failed",
-  "timeout",
-  "unreachable",
-  "busy",
-  "declined",
-  "canceled",
-  "transferred",
-] }
-
-[[operations.params.query]]
-name = "time.start"
-description = "Window start, as a unix timestamp"
-required = false
-schema = { type = "integer" }
-
-[[operations.params.query]]
-name = "time.end"
-description = "Window end, as a unix timestamp"
-required = false
-schema = { type = "integer" }
-
-[[operations.params.query]]
-name = "q"
-description = "Free-text search"
-required = false
-schema = { type = "string" }
-
-[operations.quirks.pagination]
+[patch.operations.quirks.pagination]
 page = { page_param = "page", size_param = "max", page_size = 100, max_pages = 20 }
 
 # ---------------------------------------------------------------------------------------------
 
-[[operations]]
-id = "babelforce-call-get"
-method = "GET"
-path = "/api/v2/calls/{id}"
-description = "Get one call"
+[[patch.operations]]
+select = "getCall"
+rename = "babelforce-call-get"
 risk = "low"
 idempotency = "idempotent"
 
-[[operations.params.path]]
-name = "id"
-description = "The call id"
-required = true
-schema = { type = "string" }
-
 # ---------------------------------------------------------------------------------------------
 
-[[operations]]
-id = "babelforce-call-hangup"
-method = "POST"
-path = "/api/v2/calls/{id}/hangup"
-description = "Hang up a live call"
+[[patch.operations]]
+select = "hangupCall"
+rename = "babelforce-call-hangup"
 # The only destructive operation in the selected set, and the only one that affects a live caller.
-# It must never be marked read-only.
+# It must never be marked read-only, and no document will ever say so — which is why the loader
+# refuses a selection that leaves `risk` unstated rather than defaulting it from the method.
 risk = "destructive"
 idempotency = "non_idempotent"
 
-[[operations.params.path]]
-name = "id"
-description = "The call id"
-required = true
-schema = { type = "string" }
-
 # ---------------------------------------------------------------------------------------------
 
-[[operations]]
-id = "babelforce-call-session-set"
-method = "PUT"
-path = "/api/v2/calls/{id}/session/set"
-description = "Set session variables on a live call. Variable keys must start with `app` — babelforce rejects other keys, and states the rule only in prose"
+[[patch.operations]]
+select = "setCallSessionVariables"
+rename = "babelforce-call-session-set"
 risk = "medium"
 idempotency = "idempotent"
-
-# `SetCallSessionVariablesRequest` is `{"type": "object"}` with **no properties** — a free-form map
-# (§6.5). `body_schema` says "the body *is* this schema" rather than "the body is these named
-# fields" (C-29); without it the operation declared no body at all and emitted a bodiless PUT,
-# which is indistinguishable from a write that legitimately sends nothing. The `app` key prefix rule
-# is unenforceable from the schema and is a C-12 quirk candidate; for now it is in the description.
-[operations.params]
-body_schema = { type = "object", description = "The session variables to set, as a JSON object. Every key must start with `app`" }
-
-[[operations.params.path]]
-name = "id"
-description = "The call id"
-required = true
-schema = { type = "string" }
+# **The document and the hand-authored file disagree about this request body, and the disagreement is
+# on the wire rather than in the schema's precision.** Recorded in
+# `docs/stories/C-416-reproduce-the-nine.md` before it was resolved.
+#
+# The hand-authored file declared `body_schema = { type = "object" }` — "the body *is* a free-form
+# map" — citing inventory §6.5's reading of the 0.7.0 document, in which
+# `SetCallSessionVariablesRequest` was `{"type": "object"}` with no properties. It therefore sends
+# `{"app.priority": "high"}`. The vendored 2026-07-10 document declares that same schema name as a
+# **wrapper**: an object with one property, `variables`, itself the map
+# (`manager-2026-07-10.openapi.yaml:23376-23390`), so the body is `{"variables": {"app.priority":
+# "high"}}`. These are different requests and at most one of them works.
+#
+# **The document is taken**, for three reasons, and the choice is reversible in one line if it is
+# wrong. It is the newer description of the two by fifteen months; it is internally consistent — the
+# operation's own `requestBody.example` shows the wrapper, and the response schema it pairs with is
+# new in the same document; and the hand-authored reading descends from a *missing* `properties` key,
+# which is what an under-specified schema and a free-form map look like identically. A schema that
+# gained a property is far more often a schema that was completed than an API that changed shape.
+#
+# **What would settle it: one live call.** Nothing offline can — this repository reaches no network
+# during a build, and both shapes are valid JSON against their own document. Send both bodies to a
+# test account and see which one sets the variable. Until someone does, this is a considered choice
+# and not a verified fact, and that is exactly why it is written down here rather than absorbed.
+#
+# The `app.` key prefix rule is unenforceable from either schema and remains a C-12 quirk candidate.
+description = "Set session variables on a live call. Pass them as the `variables` map; babelforce applies only keys beginning `app.` and silently ignores the rest, and states that rule only in prose"
 
 # ---------------------------------------------------------------------------------------------
 
-[[operations]]
-id = "babelforce-session-get"
-method = "GET"
-path = "/api/v2/sessions/{id}"
-description = "Get the IVR variables for a session"
+[[patch.operations]]
+select = "getSessionVariables"
+rename = "babelforce-session-get"
 risk = "low"
 idempotency = "idempotent"
 
-[[operations.params.path]]
-name = "id"
-description = "The session id"
-required = true
-schema = { type = "string" }
-
 # ---------------------------------------------------------------------------------------------
 
-[[operations]]
-id = "babelforce-session-update"
-method = "PUT"
-path = "/api/v2/sessions/{id}"
-description = "Update the user-scoped variables of a session"
+[[patch.operations]]
+select = "updateSessionVariables"
+rename = "babelforce-session-update"
 risk = "medium"
 idempotency = "idempotent"
-
-# Same free-form body as `babelforce-call-session-set`: `UpdateSessionVariablesRequest` is
-# `{"type": "object"}` with no properties. Two of the nine selected operations have completely
-# untyped bodies, and both are declared with `body_schema`.
-[operations.params]
-body_schema = { type = "object", description = "The user-scoped session variables to update, as a JSON object" }
-
-[[operations.params.path]]
-name = "id"
-description = "The session id"
-required = true
-schema = { type = "string" }
+# Genuinely free-form, and the document agrees with the hand-authored reading here:
+# `UpdateSessionVariablesRequest` is `{"type": "object", "additionalProperties": true}` with no
+# properties (`manager-2026-07-10.openapi.yaml:25854-25860`), so ingest carries it as `body_schema` —
+# "the body *is* this schema" (C-29) — rather than as named fields. Without that the operation would
+# emit a bodiless PUT, indistinguishable from a write that legitimately sends nothing.
+#
+# This is the one of the two untyped bodies that stayed untyped; `babelforce-call-session-set` above
+# is the one that did not.
+description = "Update the user-scoped variables of a session. The body is the variable map itself"

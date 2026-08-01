@@ -1,5 +1,5 @@
 op babelforce-call-get(id: String) -> Any
-  description "Get one call"
+  description "Get a call"
   risk "low"
   idempotency "idempotent"
   effects ["network"]

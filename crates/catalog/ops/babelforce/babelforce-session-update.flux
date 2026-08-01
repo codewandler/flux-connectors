@@ -1,5 +1,5 @@
 op babelforce-session-update(id: String, body: Any) -> Any
-  description "Update the user-scoped variables of a session"
+  description "Update the user-scoped variables of a session. The body is the variable map itself"
   risk "medium"
   idempotency "idempotent"
   effects ["network"]
