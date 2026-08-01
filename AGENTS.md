@@ -455,8 +455,16 @@ refresh tokens, or perform session login. The host resolves the credential, perf
 acquisition such as OAuth2, applies the placement scheme, and registers values with its redactor.
 Putting acquisition in Flux would expose raw tokens in model-visible symbols.
 
-**An authentication endpoint is never a connector operation** (owner-stated 2026-08-01). `/oauth/token`,
-`/oauth/authorize`, `/oauth/revoke` and their equivalents describe **how to authenticate**. That is a
+> **AMENDED the same day, by the same owner, and the amendment is the current rule.** A token
+> exchange **should** be a connector function — *"it needs to be marked somehow as returning sensitive
+> information"* — because flux 0.47.1's credential boundary **refuses** an unmarked credential-shaped
+> response outright rather than redacting it, so an unmarked exchange does not leak, it **fails**. The
+> paragraph below still holds for `authorize` and `revoke`; it over-reached on `token`.
+> [C-432](docs/stories/C-432-mark-a-response-as-carrying-a-credential.md) reconciles the three
+> artifacts written under the wider reading.
+
+**An authentication endpoint is never a connector operation** (owner-stated 2026-08-01). `/oauth/authorize`,
+`/oauth/revoke` and their equivalents describe **how to authenticate**. That is a
 property of the connector's authentication surface — `OAuth2Spec`, the grant, the redirect — and it is
 what the *host* performs, per the paragraph above. It is not something a caller invokes and reads a
 result from. A vendor document that publishes them as paths does not make them operations, and

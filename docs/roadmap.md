@@ -394,3 +394,34 @@ Design: [designs/generated-connector-tests.md](designs/generated-connector-tests
 provider file, how many are already covered fleet-wide, how many are reasoned claims that stay — and
 then either the mechanical bucket is gone or the measurement says it was never the boilerplate it
 looked like, written down so nobody re-opens it on a hunch.
+
+### A connector's security posture — publish the facts, and be careful about the grade
+
+Owner-asked on 2026-08-01: *"it would be great to have something like a security rating over a
+connector — e.g. I could imagine Twilio's HMAC is quite safe compared to something using static tokens
+which cannot easily be changed or rotated."* The intuition is right and the gap is larger than the
+example. Measured the same day across 54 providers: the catalogue can say exactly **where** a
+credential is placed — 31 bearer, 15 header, 3 basic, 1 **query** — and can say nothing at all about
+**how long it lives, whether it can be rotated, or whether it can be revoked**. `Acquisition` has two
+variants and its own documentation says `Minted` read as placement *is* `Static`, so a 30-day rotating
+token and a permanent one are the same declaration. The axis the request turns on is the one axis that
+does not exist.
+
+The epic's first commitment is therefore **not** the rating. A grade computed from declarations
+inherits the defect this repository keeps finding — C-430's Zoom and Postmark documented their hazard
+precisely and returned the field anyway — and adds three of its own: it reads as a measurement while
+being an opinion with arithmetic on top, it conflates inbound and outbound axes that a single letter
+cannot separate, and it is gameable in the direction that improves the grade without improving the
+connector. So the facts are published per axis, each traceable to a declaration the loader enforces,
+and whether a composed grade ships is decided in the open once those facts exist.
+
+One axis turned out to be load-bearing at runtime rather than descriptive: flux 0.47.1's credential
+boundary **refuses** a response carrying credential-shaped material instead of redacting it, so an
+operation that returns a token and does not say so does not leak — it fails.
+
+Design: [designs/connector-security-posture.md](designs/connector-security-posture.md).
+
+**Done looks like:** the catalogue answers, per connector and per credential, how long this credential
+lives, whether it can be rotated, where it is placed, and whether inbound events are verified — each
+distinguishing *unstated* from *stated poorly*, and nothing published claiming to describe a
+connector's actual security rather than what it declares.

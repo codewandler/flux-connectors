@@ -60,6 +60,12 @@ _A connector is more than a set of callable operations. It also has **schemas** 
 - [C-88 — Prove OAuth2 on one provider — the operator level is currently unexercised](C-88-prove-oauth2.md) · Spec · OAuth2Spec is a landed type NO shipped provider uses, so half the configuration model is proven only by a fixture. tests/auth_archetypes.rs asserts that gap and fails the day this lands
 - [C-89 — The hosted OAuth redirect has no home — OAuthRedirect is loopback-only](C-89-hosted-oauth-redirect.md) · Bridge · OAuthRedirect is {port, path} — a CLI shape. A hosted callback is https://app.example.com/oauth/callback, supplied by the host, and often must be pre-registered in the vendor's dashboard before the flow works at all
 
+### a connector's security posture — publish the facts, and be careful about the grade
+_Owner-stated 2026-08-01: *"it would be great to have something like a security rating over a_
+- [C-432 — A token endpoint is a connector function that marks its response — not an operation we refuse](C-432-mark-a-response-as-carrying-a-credential.md) · Spec · OWNER RULING 2026-08-01, superseding the one recorded that morning: a token endpoint SHOULD be a connector function, marked as returning sensitive information. flux 0.47.1's credential_boundary REFUSES such a response outright when it is unmarked, so an unmarked one does not merely leak — the exchange fails
+- [C-433 — A credential cannot say how long it lives or whether it can be rotated](C-433-credential-lifetime-and-rotation.md) · Spec · the axis the owner's example turns on, and the one the catalogue does not carry at all. `Acquisition` has two variants and its own docs say `Minted` read as placement IS `Static` — so a 30-day rotating token and a permanent one are indistinguishable across all 54 providers
+- [C-434 — Publish where a credential is placed and whether inbound events are verified](C-434-publish-placement-and-verification-posture.md) · Build · both facts are already declared and neither is published as a posture. trello puts its credential in a QUERY STRING — proxy logs, browser history — and nothing says so. Only 2 of 54 providers declare an inbound channel at all, which is a third state, not a bad score
+
 ### `connectors-api` — the multi-tenant host
 - [C-200 — connectors-api — a multi-tenant connector host (epic)](C-200-connectors-api-epic.md) · Bridge · EPIC — owner-directed 2026-07-31: a deployed service with accounts, Google sign-in, per-tenant credentials, OAuth2 connect flows and an operation playground. Supersedes the loopback narrowing in connectors-app.md and requires the vision.md charter amendment in C-201
 - [C-203 — The connectors-api service, the tenancy model, and one live call](C-203-connectors-api-skeleton.md) · Bridge · the vertical slice: paste a token, pick an operation, get a real vendor response. No sign-in, no OAuth, no UI beyond what proves it
@@ -171,6 +177,10 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 _A connector is more than a set of callable operations. It also has **schemas** (what goes in, what_
 - [C-40 — Ship provider icons as bundle assets](C-40-provider-icons.md) · Build · alongside the .flux, never inside it
 - [C-41 — Move build output to a per-provider bundle directory](C-41-bundle-layout.md) · Build · breaking layout change — C-13, C-27 and C-33 all assume the flat shape
+
+### a connector's security posture — publish the facts, and be careful about the grade
+_Owner-stated 2026-08-01: *"it would be great to have something like a security rating over a_
+- [C-435 — Decide whether a composed security grade ships at all](C-435-decide-whether-a-grade-ships.md) · Spec · DECISION, deliberately not assumed. A grade reads as a measurement and is an opinion with arithmetic on top — and this repo already found the defect class: Zoom documented its hazard precisely and returned the field anyway. Describing a property is not having it
 
 ### Connectors v1 — spec to Flux
 _Prove the whole thesis on two real providers, end to end against a live flux._
