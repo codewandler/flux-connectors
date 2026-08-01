@@ -24,6 +24,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shifted would strand every credential already stored. The ambiguous case — several connections and
   none named — **refuses and lists the uuids that would have worked**, rather than guessing.
 
+### Fixed
+
+- **Loading a provider file means the same thing everywhere** (C-421). `provider::load` took bytes and
+  no spec cache, so a spec-backed provider loaded as a **zero-operation skeleton — successfully, with
+  no error**. 91 files call it and **86 are tests**, so the moment one shipped provider converted to
+  `[spec]`, 53 tests across 17 binaries went red. This blocked every remaining story in the epic.
+
+  The pure entry point now **refuses** rather than answering with a skeleton. The alternative — a
+  `documents` parameter on `load` — looks like it gives "load" one meaning, but every caller without a
+  cache can only pass `&[]`, and `&[]` against a pinned `[spec]` already refuses one layer down. So it
+  buys one signature and two meanings, the second spelled `&[]`, plus a vestigial argument on ~40
+  golden-error tests. All 53 hand-authored providers keep loading byte-identically.
+
+  **The part that makes conversion cheap is the test seam, not the refusal.** There was no shared way
+  to load a shipped provider — 18 test binaries, each with its own loader, so one wrong convention was
+  replicated everywhere. There is now one, reading the definition *and* every document under
+  `specs/<name>/` and passing the whole cache so the pin is resolved where the pin is read.
+  **Consequence: a provider converting to `[spec]` now needs no test change at all**, which is what
+  makes the remaining conversions affordable rather than 53 × 53 test edits.
+
+  47 of the 53 failures are resolved by the seam; three were hand-authored-shape assertions rewritten
+  to hold in **both** front-ends, and the last two are response-schema ratchet constants that move
+  with the conversion itself rather than ahead of it.
+
 ### Added
 
 - **A patch can drop a parameter the vendor declares** (C-422). Measured, not anticipated: converting

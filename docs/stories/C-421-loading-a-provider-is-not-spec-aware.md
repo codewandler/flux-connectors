@@ -2,8 +2,7 @@
 id: C-421
 title: "No shipped provider can become spec-backed, because loading one is not spec-aware"
 pillar: Spec
-status: in-progress
-priority: 1
+status: done
 design: docs/designs/spec-front-end.md
 epic: spec-front-end
 areas: [connector-spec, connector-cli]
