@@ -17,7 +17,13 @@ Show the declared resources and the mark where a person actually chooses a conne
 individualises rather than repeating a name in 54 rows.
 
 ## Acceptance
-- [ ] The public explorer renders a connector's resources and, if C-437 lands one, its mark.
+- [ ] The public explorer renders a connector's resources.
+- [ ] **The mark is a generated monogram, and both surfaces derive it from one function.**
+      [C-437](C-437-decide-the-logo.md) decided no vendor mark is vendored and no `logo_url` is
+      declared, so a listing individualises a connector with a deterministic glyph from the published
+      `vendor` and a hue from `id`. **`web/` and `crates/connectors-api` must reach the same function**
+      — implementing it twice is exactly the drift [C-236](C-236-host-explorer-epic.md) exists to
+      close, and it would show as two different colours for one connector across two pages.
 - [ ] The host's operator console renders the same facts from the same document. Two surfaces read
       this catalogue — `web/` and `crates/connectors-api` — and a fact rendered in one and not the
       other is the drift [C-236](C-236-host-explorer-epic.md) exists to close.

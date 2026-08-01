@@ -34,7 +34,28 @@ verification, generated subscription ops, and a polling fallback, without making
       error response).
 
 ## Progress
-- (not started)
+
+- **"(not started)" was false and stood for months.** Corrected 2026-08-01 against the tree, not
+  against a recollection. Measured this session:
+  - **Five children are `done`:** C-60 (verification conformance), C-64 (the flux-side seam design),
+    C-141, C-151, C-188.
+  - **The inbound IR ships.** `crates/connector-spec/src/inbound.rs` declares **13 public types**
+    (`grep -c "pub struct\|pub enum"` → 13): `Transport`, `FieldSource`, `Digest`, `Encoding`,
+    `Selector`, `TimestampFormat`, `HmacSpec`, `VerificationScheme`, `EventDecl`, `Reply`,
+    `Subscription`, `ManualSetup`, `ChannelBinding`.
+  - **Three providers declare inbound surfaces** — `slack`, `stripe`, `twilio`
+    (`grep -l "^\[\[events\]\]" providers/*.toml`) — and **8 events and 4 channels reach
+    `web/public/catalog.json`**.
+- **The epic's shape changed under it, which is why the log drifted.** Acceptance bullet 1 names an
+  `[inbound]` section; what shipped is the `[[events]]` and `[[channels]]` **member kinds** under
+  C-82's channel-bindings model. Same capability, different spelling — see C-59's own Progress.
+- **Still genuinely open:** C-61 and C-62 (codegen — manifest/catalogue entries and subscription
+  ops), C-63 (the `poll` transport), C-65 (two vendors end to end against a live flux). All four are
+  `backlog`. The epic stays `ready` because of these, not because nothing has happened.
+- **Read this before dispatching anyone at this epic.** Its Acceptance describes a design that was
+  partly superseded; an implementor taking bullets 1–2 as unstarted work would rebuild what
+  `inbound.rs` already holds. That is the `AGENTS.md` §Dispatching failure mode — acceptance must not
+  assert a mechanism nobody has re-verified.
 
 ## Notes
 - **The blocking fact, verified in flux at the time of writing:** `channel webhook` authenticates with

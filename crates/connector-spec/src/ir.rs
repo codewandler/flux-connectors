@@ -645,6 +645,182 @@ fn fills_slot(member: &str, slot: &str) -> bool {
     member.len() >= slot.len() && member[member.len() - slot.len()..] == slot[..]
 }
 
+/// **What kind of thing a [`Service`] is**, so a catalogue can be filtered by domain — C-153.
+///
+/// Fifty-four providers and sixty-three services, and nothing said which of them are telephony and
+/// which are payments. A tag is that missing label.
+///
+/// # A tag is not a [`Role`], and the distinction is the point
+///
+/// | | [`Role`] | `Tag` |
+/// |---|---|---|
+/// | answers | "can this service **do** X, checkably?" | "what **kind** of thing is this?" |
+/// | carries | required members, verified at load | nothing |
+/// | refuses | an unknown name **and** a claim the members do not satisfy | an unknown name only |
+///
+/// They are two fields on purpose. Giving `storage` a required-member list would be meaningless — no
+/// operation makes a service storage — and letting a role carry no members would turn every role into
+/// an unchecked assertion, which is exactly what [`Role`]'s closed set exists to prevent.
+///
+/// **The misread to design against:** a UI filtering by tag invites the inference "this category
+/// means these capabilities". It does not. A tag is evidence of *kind*, never of what is callable.
+///
+/// # Why it is closed anyway
+///
+/// A tag carries no members, so nothing downstream can notice that `telephny` is not `telephony` —
+/// it simply never matches a filter, and a service that looks tagged is invisible to the one query it
+/// was tagged for. That silent-nothing failure is cheaper to be wrong about than a typo'd role, but
+/// it is not free, so the vocabulary is closed and an unknown word is refused at the parse.
+///
+/// # The vocabulary is derived, not invented
+///
+/// Every variant below is populated by at least one shipped service; the set was read off all 54
+/// providers rather than designed ahead of them. Seven are **singletons** today — [`Search`](Self::Search),
+/// [`ESignature`](Self::ESignature), [`Ecommerce`](Self::Ecommerce), [`Payments`](Self::Payments),
+/// [`Identity`](Self::Identity), [`Forms`](Self::Forms) and
+/// [`VideoConferencing`](Self::VideoConferencing) — kept rather than folded because each names a
+/// domain a reader would actually filter for, and folding them would put `algolia` under a label that
+/// describes it worse. The clustering is recorded in
+/// [`docs/designs/provider-roles.md`](../../../docs/designs/provider-roles.md).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Tag {
+    /// Model catalogues and inference APIs — `anthropic`, `openai`, `openrouter`.
+    Ai,
+    /// Headless content management — `contentful`, `webflow`.
+    Cms,
+    /// Customer relationship management — `hubspot`, `salesforce`.
+    Crm,
+    /// Structured data stores addressed as a product — `airtable`, `supabase`.
+    Database,
+    /// Design and whiteboard surfaces — `figma`, `miro`.
+    Design,
+    /// Tooling aimed at engineers that is not source control — `launchdarkly`, `vercel`.
+    DeveloperTools,
+    /// Electronic signature — `docusign`.
+    ESignature,
+    /// Online storefronts and their orders — `shopify`.
+    Ecommerce,
+    /// Sending and reading mail — `postmark`, `resend`, `sendgrid`, `google`'s `gmail`.
+    Email,
+    /// Form and survey collection — `typeform`.
+    Forms,
+    /// Directory, identity and access management — `okta`.
+    Identity,
+    /// On-call, incident response and status communication — `pagerduty`, `statuspage`.
+    IncidentResponse,
+    /// Compute, networking and hosting — `cloudflare`, `fly`, `vercel`, `supabase`.
+    Infrastructure,
+    /// Issue and bug tracking — `jira`, `github`, `gitlab`.
+    IssueTracking,
+    /// Wikis and long-form internal knowledge — `confluence`, `notion`.
+    KnowledgeBase,
+    /// Campaigns, audiences and lifecycle marketing — `klaviyo`, `mailchimp`.
+    Marketing,
+    /// Human-to-human chat — `slack`, `discord`, `twilio`.
+    Messaging,
+    /// Metrics, traces and error tracking — `datadog`, `newrelic`, `sentry`.
+    Observability,
+    /// Money movement — `stripe`.
+    Payments,
+    /// Tasks, boards and project planning — `asana`, `clickup`, `trello`, `jira`.
+    ProjectManagement,
+    /// Calendars and booking — `calendly`, `google`'s `calendar`, `zoom`.
+    Scheduling,
+    /// Search as a product — `algolia`.
+    Search,
+    /// Repositories, branches and pull requests — `github`, `gitlab`, `bitbucket`.
+    SourceControl,
+    /// Files and objects — `box`, `dropbox`, `google`'s `drive`.
+    Storage,
+    /// Customer support and shared inboxes — `zendesk`, `freshdesk`, `intercom`, `front`.
+    Support,
+    /// Voice, calls and contact centres — `babelforce`, `twilio`.
+    Telephony,
+    /// Meetings and video — `zoom`.
+    VideoConferencing,
+}
+
+impl Tag {
+    /// Every tag there is, in the order an error message lists them.
+    ///
+    /// A `const` rather than a derived iterator, for the reason [`Role::ALL`] is one: the set a
+    /// refusal prints and the set the loader accepts are the same value, and a variant added without
+    /// extending this fails the exhaustive `match` in [`word`](Self::word) rather than silently going
+    /// unlisted.
+    pub const ALL: [Self; 27] = [
+        Self::Ai,
+        Self::Cms,
+        Self::Crm,
+        Self::Database,
+        Self::Design,
+        Self::DeveloperTools,
+        Self::ESignature,
+        Self::Ecommerce,
+        Self::Email,
+        Self::Forms,
+        Self::Identity,
+        Self::IncidentResponse,
+        Self::Infrastructure,
+        Self::IssueTracking,
+        Self::KnowledgeBase,
+        Self::Marketing,
+        Self::Messaging,
+        Self::Observability,
+        Self::Payments,
+        Self::ProjectManagement,
+        Self::Scheduling,
+        Self::Search,
+        Self::SourceControl,
+        Self::Storage,
+        Self::Support,
+        Self::Telephony,
+        Self::VideoConferencing,
+    ];
+
+    /// The token this tag serializes as, for error text.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Ai => "ai",
+            Self::Cms => "cms",
+            Self::Crm => "crm",
+            Self::Database => "database",
+            Self::Design => "design",
+            Self::DeveloperTools => "developer-tools",
+            Self::ESignature => "e-signature",
+            Self::Ecommerce => "ecommerce",
+            Self::Email => "email",
+            Self::Forms => "forms",
+            Self::Identity => "identity",
+            Self::IncidentResponse => "incident-response",
+            Self::Infrastructure => "infrastructure",
+            Self::IssueTracking => "issue-tracking",
+            Self::KnowledgeBase => "knowledge-base",
+            Self::Marketing => "marketing",
+            Self::Messaging => "messaging",
+            Self::Observability => "observability",
+            Self::Payments => "payments",
+            Self::ProjectManagement => "project-management",
+            Self::Scheduling => "scheduling",
+            Self::Search => "search",
+            Self::SourceControl => "source-control",
+            Self::Storage => "storage",
+            Self::Support => "support",
+            Self::Telephony => "telephony",
+            Self::VideoConferencing => "video-conferencing",
+        }
+    }
+
+    /// Every tag's word, comma-separated — the "known set" a refusal names.
+    pub fn known_set() -> String {
+        Self::ALL
+            .iter()
+            .map(|tag| tag.word())
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+}
+
 /// **How a connector executes** — flux's runtime axis, declared rather than derived (C-405).
 ///
 /// The vocabulary mirrors `docs/designs/ecosystem.md` in the flux repository, which replaces the old
@@ -784,6 +960,21 @@ pub struct Service {
     /// `ir_sha256` in the repository and churns `connectors.lock` for a provider nobody edited.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub roles: Vec<Role>,
+    /// What **kind** of thing this service is — see [`Tag`].
+    ///
+    /// Unlike [`roles`](Self::roles) this carries no required members and the loader verifies no
+    /// claim beyond the name being one that exists: a tag answers "what kind of thing is this?", not
+    /// "what can it do?". The two are deliberately separate fields with separate guarantees.
+    ///
+    /// A **provider's** tags are the union of its services' ([`Connector::tags`]) and are never
+    /// authored, for the reason `roles` follows the same rule — and because it is the wrong *level*:
+    /// `google` is not one kind of thing, its `gmail` is email and its `drive` is storage.
+    ///
+    /// `skip_serializing_if` for the reason every optional field on this struct carries it: a service
+    /// declaring no tag must hash to what it hashed before tags existed, or landing C-153 moves every
+    /// `ir_sha256` in the repository and churns `connectors.lock` for a provider nobody edited.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<Tag>,
 }
 
 /// **The shortest stated condition that counts as one**, in characters after trimming.
@@ -973,6 +1164,14 @@ pub struct Operation {
     /// to mint a credential: return a handle, not the secret. When either lands, this field is what
     /// they are declared through; the refusal below is what changes, not the declaration.
     ///
+    /// # This field or [`produces_credential`](Self::produces_credential), never both (C-432)
+    ///
+    /// The two state one fact and prescribe opposite dispositions, so declaring both is refused —
+    /// see `validate_one_credential_disposition`. **The discriminator is purpose, not shape:** this
+    /// field is for a credential that arrives *incidentally*, beside the result the operation exists
+    /// to deliver, where diverting the whole result would delete the answer. When the credential
+    /// **is** the answer, the operation is a mint and declares `produces_credential` instead.
+    ///
     /// # Empty for every shipped connector, deliberately
     ///
     /// Because an operation carrying one cannot be selected. `skip_serializing_if` keeps the encoded
@@ -992,6 +1191,13 @@ pub struct Operation {
     /// This one says *"a credential arrives here and it is to be diverted into the store"*, which is
     /// an operation that can ship: the value travels from the response into the bound
     /// `CredentialStore` and the caller receives the **handle**.
+    ///
+    /// **An operation declares one or the other, never both** (C-432), and the loader refuses the
+    /// pair — see `validate_one_credential_disposition`. Nothing about the pointer, the schema or
+    /// the field's name distinguishes them, because the discriminator is **purpose**: declare this
+    /// field when the credential *is* the answer, and `credential_response` when it arrives
+    /// *incidentally* beside the answer, where diverting the result would delete what the caller
+    /// asked for.
     ///
     /// # The declared output is the handle, not the vendor's body
     ///
@@ -1493,6 +1699,25 @@ impl Connector {
         for role in self.services.iter().flat_map(|service| &service.roles) {
             if !union.contains(role) {
                 union.push(*role);
+            }
+        }
+        union
+    }
+
+    /// The provider's tags: the union of its services', deduplicated, in declaration order — C-153.
+    ///
+    /// **Derived, never authored**, exactly as [`roles`](Self::roles) is, and for the same two
+    /// reasons. An author who could state it could state it wrongly, leaving two sources of truth to
+    /// disagree; and it is the wrong level, because a multi-service provider is usually several kinds
+    /// of thing at once — `google`'s `gmail` is email while its `drive` is storage.
+    ///
+    /// A `Vec` rather than a set type: the order is declaration order, which is what a catalogue and
+    /// a UI want, and the loader has already refused a repeat within one service.
+    pub fn tags(&self) -> Vec<Tag> {
+        let mut union: Vec<Tag> = Vec::new();
+        for tag in self.services.iter().flat_map(|service| &service.tags) {
+            if !union.contains(tag) {
+                union.push(*tag);
             }
         }
         union

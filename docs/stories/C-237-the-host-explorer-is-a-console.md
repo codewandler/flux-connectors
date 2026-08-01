@@ -108,3 +108,37 @@ and is unreachable from the page. An operator can store a credential and cannot 
 - The configuration binder is a raw four-input row that requires the operator to know the field name,
   seeded only from the first `{var}` in `base_url`. C-225 is the story that makes it a choice — worth
   reading before touching it.
+
+## Progress
+- **2026-08-01 — parked mid-flight, work preserved on `impl/C-237` at `37ba8f7`.** The implementor was
+  stopped by the operator while running the full gate (its last words: *"62 GB free again. Running the
+  full gate."*), so the diff is **committed but neither reviewed nor gated** — the coordinator
+  committed its working tree so it could not be lost to a later cleanup, and makes no claim about it.
+- What is on the branch: **1,497 insertions across 8 files** — `crates/connectors-api/src/{api,exec,lib}.rs`,
+  `src/index.html`, a rewritten `ui/test/host-page.test.mjs` (+612), and two new integration tests,
+  `tests/catalogue_response.rs` (183) and `tests/dry_run.rs` (145).
+- **To resume:** merge `main` into `impl/C-237` first — it is behind C-437 and whatever else has
+  landed — then run the gate it never finished. Do not assume the diff is complete; the story's
+  acceptance asks for a measured before/after request count, and no such measurement was reported.
+- Deliberately **not** merged into the release that follows. An unreviewed, ungated diff touching the
+  host's request path is not something to carry into a published version on the strength of it
+  probably being fine.
+- **2026-08-01, from the implementor after it was resumed — worse than the parking note knew.**
+  - **There is no `BASE_PROOF` at all.** No failing-first run at the merge base was recorded.
+  - **`crates/connectors-api/src/index.html` grew by 457 lines and its only test suite never ran.**
+    `node --test` failed with `MODULE_NOT_FOUND` because a fresh worktree has no `node_modules`.
+    Not a code failure, and **not a pass**.
+  - The constraints that suite guards are the safety-relevant ones: `textContent` never
+    `innerHTML`, POST-not-link for an auth change, and the dev button only under `status.dev`.
+    **All three are unproven in this diff.**
+  - Four Rust tests do pass — `tests/dry_run.rs` (2) and `tests/catalogue_response.rs` (2) — so the
+    rail-data and dry-run half is real. The N+1 fix, the search, the credential removal and the
+    layout work are not claimed by anything that ran.
+- **Coordinator error, recorded because it cost something.** I reclaimed the implementor's worktree
+  on the reasoning that committing to `impl/C-237` preserved the work. The *content* was preserved —
+  `37ba8f7` is intact — but the agent was still resumable, and deleting the worktree ended its
+  ability to finish. The rule I was applying (reclaim only what is integrated or branch-preserved)
+  does not distinguish a live agent from a finished one, and it should have.
+- **To resume:** fresh worktree, `git merge --no-ff main` (it is behind C-437 and C-432),
+  `npm ci` in `crates/connectors-api/ui` **before** claiming any gate, then the base proof the story
+  never had.

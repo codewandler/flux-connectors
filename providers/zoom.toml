@@ -94,12 +94,16 @@
 # `start_url` from `response_schema` would move it out of the published contract and not out of the
 # payload — strictly worse than the state it replaced.
 #
-# **What brings them back.** C-136: an operation that legitimately produces a credential returns a
-# *handle*, not the secret. C-79's response-redaction declaration is the narrower answer for an
-# operation like `zoom-meeting-get`, which is otherwise a legitimate read that happens to carry one
-# hazardous field — it needs the host to redact the location before the value reaches a
-# model-visible symbol, which is host work no part of this repository does today. Restore these two
-# in the same commit that deletes their entries from
+# **What brings them back — and it is C-79, not C-136.** Both of these are reads that happen to
+# carry one hazardous field: `start_url` arrives *beside* the meeting the call exists to return.
+# C-136's diversion lifts the whole result of an operation that exists *to* mint a credential and
+# answers with a handle, so applying it here would hand back an address instead of the meeting —
+# deleting the answer rather than the exposure. C-432 settled that as the standing rule: the
+# discriminator between the two declarations is **purpose, not shape**, and a credential arriving
+# incidentally is `credential_response`'s case. So **neither C-136 nor C-432 restores these two.**
+# C-79's response-redaction declaration is the mechanism — the host redacting the location before
+# the value reaches a model-visible symbol, which is host work no part of this repository does
+# today. Restore these two in the same commit that deletes their entries from
 # `crates/connector-spec/tests/credential_response.rs`.
 #
 # ---------------------------------------------------------------------------------------------
@@ -266,6 +270,15 @@ description = "Zoom server-to-server OAuth access token, sent as a bearer. Minte
 # direction is fail-closed: flux forgoes a safe retry rather than replaying a write.
 # ---------------------------------------------------------------------------------------------
 
+
+[[services]]
+# C-153. `default` is the reserved implicit service, and a provider with one API surface
+# declares no services at all — so this entry exists for exactly one reason: a tag attaches
+# to a service, and there is no other service here to attach it to. It carries `tags` and
+# nothing else, which is what keeps `default` implicit and this file emitting the same
+# `zoom.flux` it emitted before.
+name = "default"
+tags = ["video-conferencing", "scheduling"]
 
 [[operations]]
 id = "zoom-meeting-delete"

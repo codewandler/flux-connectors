@@ -149,6 +149,53 @@ proves the seams end to end, and keep the fleet growing in parallel waves.
 An **epic** is a themed group of stories with a shared design doc. Stories join an epic via the
 `epic: <slug>` frontmatter field, where `<slug>` matches a design doc at `docs/designs/<slug>.md`.
 
+### Anthropic Managed Agents — the first vendor that declares both transports and its own event set
+
+The `channel-bindings` and `inbound-events` epics built a model for the reverse call direction and the
+catalogue has barely exercised it: measured 2026-08-02, three providers declare an inbound surface and
+the whole fleet publishes **8 events and 4 channel bindings**, with `slack` the only `socket` binding
+there is. Anthropic's Managed Agents API is the first vendor in reach that would exercise the entire
+model at once, and from a vendor's own document rather than from our curation — a `socket` transport
+(the SSE session-event stream), a `webhook` transport (HMAC-signed, Console-registered), a closed
+event vocabulary on each, and a real reply endpoint for the socket half, which is exactly what a
+`ChannelBinding` demands.
+
+**Two things gate it, and both are honest gates rather than sequencing.** The first is a charter
+question: the management plane (agents, environments, vaults, memory stores) is ordinary SaaS, but a
+*session* runs an agent loop and bills inference, and flux has `flux-agent` and `flux-orchestrate` of
+its own — the same "strictly worse second implementation" argument that shaped C-123. The second is
+conformance: the vendor signs webhooks with three headers including a delivery id, and `HmacSpec`
+models one signature header over a closed placeholder set. Finding it an axis short would be a
+successful outcome, in the shape C-141 and C-188 already established.
+
+Done looks like: the charter question answered in writing whichever way it goes, an inventory that
+says carry-or-withhold-and-why for every endpoint, and a verdict on whether the signature is
+expressible — before any provider TOML is written. See
+[anthropic-managed-agents.md](designs/anthropic-managed-agents.md).
+
+### Balance is not one contract — settled funds, prepaid credit, and metered usage
+
+The generalized-provider vocabulary names what a service *is* or *holds* — a secret store, a model
+catalogue, a payments surface. "How much is left?" is a different axis, and it is already populated:
+measured 2026-08-02, three shipped vendors answer it and **no two mean the same thing**.
+`stripe-balance-get` returns settled funds as a per-currency list in minor units; `openrouter-credits-get`
+returns two cumulative totals of which **neither is the balance**; `babelforce-task-usage` returns a
+time series of task counts with no monetary dimension at all. It is also the first candidate contract
+that cuts *across* tags — `payments`, `ai`, `telephony` — which is the clearest evidence yet that
+roles and tags are genuinely different axes rather than one idea filed twice.
+
+The epic's transferable result is a limit, not a variant. OpenRouter documents its balance as
+`total_credits - total_usage`, a subtraction, and this repository has no arithmetic — `AGENTS.md`
+refuses formulas outright and generates every Flux expression itself. Conformance work so far maps
+**inputs**: a slot names an operation, a mapping renames a parameter or pins a default. Nothing
+addresses the output side, so a contract requiring a value the vendor does not return directly is
+unsatisfiable, and no design says so.
+
+Done looks like: a decision on how many contracts "balance" actually is, and a general statement — in
+the substitution design, not here — of whether a contract may require a derived value at all. No
+`Role` variant lands in this epic; defining contracts ahead of the mechanism is still refused. See
+[balance-contract.md](designs/balance-contract.md).
+
 ### The connectors datasource — the catalogue, queryable from a session
 
 A flux session cannot ask "which connector can do this?". The catalogue is published and unreachable

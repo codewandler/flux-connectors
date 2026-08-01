@@ -268,16 +268,19 @@ verify = "microsoft_graph-calendar-calendar-get"
 
 [[services]]
 name = "mail"
+tags = ["email"]
 description = "Outlook Mail: read a message, reply to one, list mail folders"
 api_version = "v1.0"
 
 [[services]]
 name = "calendar"
+tags = ["scheduling"]
 description = "Outlook Calendar: read an event, create one, read the signed-in user's default calendar"
 api_version = "v1.0"
 
 [[services]]
 name = "files"
+tags = ["storage"]
 description = "OneDrive: read and rename a file's metadata"
 api_version = "v1.0"
 

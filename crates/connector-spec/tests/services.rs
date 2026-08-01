@@ -365,9 +365,30 @@ fn a_default_only_connector_hashes_no_service_fields() {
 ///   the hostile spellings); this is the claim over what ships. It also refuses the reserved name and
 ///   requires that a declared service actually own operations, so no provider can ship a service that
 ///   emits an empty module.
-/// - **A single-service provider still declares nothing at all**, which is the byte-identity property
-///   the reshape rests on: eleven of the twelve shipped providers encode no `services`, no `service`,
-///   and therefore hash exactly what they hashed before services existed.
+/// - **A single-service provider declares no *addressing* facts**, which is the property the reshape
+///   actually rests on: it encodes no `service` key on any operation and no `services` entry carrying
+///   a `base_url`, an `api_version` or a `description`, so nothing about where it is emitted or how it
+///   is addressed can differ from the pre-services shape.
+///
+/// # The relaxation C-153 forced, and what it does not give up
+///
+/// This claim used to be the stronger "encodes **no** `services` key at all", justified by hash
+/// churn: an entry appearing for a provider nobody edited moves its `ir_sha256` and its lockfile
+/// line. That justification does not reach the case C-153 introduces, and the two rules had never
+/// met — C-120 opened a `default` entry carrying `roles` for a single-surface provider, and no
+/// shipped provider had ever written one, so this test was the only thing standing between that
+/// designed path and the catalogue.
+///
+/// C-153 tags all 54 providers, and 47 of them have nowhere but a `default` entry to put a tag. Their
+/// hashes move — and **that churn is correct**: those providers *were* edited, and they now declare a
+/// fact they did not declare before. The rule this test exists for is "no churn for a provider nobody
+/// edited", not "no churn ever".
+///
+/// So a **metadata-only** `default` entry — `name` plus `roles` and/or `tags`, and nothing else — is
+/// admitted and stripped before the walk. Everything the walk was built to catch it still catches: a
+/// `service` key on an operation, and a `default` entry that reaches for `base_url`, `api_version` or
+/// `description`. [`Connector::is_default_only`](connector_spec::Connector::is_default_only) stays
+/// true either way, so no address, no filename and no emitted `.flux` byte moves.
 ///
 /// Derived from the directory rather than a hard-coded list, and it fails when *no* provider declares
 /// services: without a multi-service one shipping, the first half of this test would pass vacuously
@@ -387,13 +408,16 @@ fn every_shipped_service_is_spellable_and_a_single_service_provider_declares_non
 
         if connector.is_default_only() {
             let encoded = connector.canonical_json().expect("the IR encodes");
-            let document: serde_json::Value =
+            let mut document: serde_json::Value =
                 serde_json::from_str(&encoded).expect("the canonical encoding is JSON");
+            strip_metadata_only_default_service(&mut document);
             if let Some(position) = service_key_outside_a_schema(&document, "$") {
                 panic!(
-                    "providers/{name} has one API surface, so it must encode no service key — \
-                     otherwise its lockfile entry and every artifact keyed by it churn for a \
-                     provider nobody edited. Found one at {position}:\n{encoded}"
+                    "providers/{name} has one API surface, so it must encode no addressing service \
+                     key — otherwise its lockfile entry and every artifact keyed by it churn for a \
+                     provider nobody edited. A `default` entry carrying only `roles`/`tags` is \
+                     admitted (C-120, C-153) and was stripped before this walk, so what remains \
+                     reaches for something it must not. Found one at {position}:\n{encoded}"
                 );
             }
             continue;
@@ -582,6 +606,38 @@ const SCHEMA_KEYS: [&str; 3] = ["schema", "response_schema", "body_schema"];
 /// It deliberately does **not** take a list of known IR positions: a new IR struct carrying a
 /// `service` would then be unchecked until somebody remembered to add it here, which is the failure
 /// mode this test was written to avoid in the first place.
+/// Remove a top-level `services` array that carries only metadata about the reserved `default`
+/// service, so the walk below can keep asserting the addressing property — C-153.
+///
+/// Admitted keys are exactly `name`, `roles` and `tags`: the two a `default` entry may carry
+/// (`validate_default_service_entry` refuses the rest at load) plus the name itself. An entry holding
+/// anything else is **left in place on purpose** — the walk then finds it and fails, so a widening of
+/// what `default` may carry cannot slip past this test by being invisible to it.
+fn strip_metadata_only_default_service(document: &mut serde_json::Value) {
+    const METADATA_KEYS: [&str; 3] = ["name", "roles", "tags"];
+
+    let Some(fields) = document.as_object_mut() else {
+        return;
+    };
+    let Some(services) = fields.get("services").and_then(serde_json::Value::as_array) else {
+        return;
+    };
+
+    let metadata_only = services.iter().all(|service| {
+        service.as_object().is_some_and(|entry| {
+            entry.get("name").and_then(serde_json::Value::as_str)
+                == Some(connector_spec::DEFAULT_SERVICE)
+                && entry
+                    .keys()
+                    .all(|key| METADATA_KEYS.contains(&key.as_str()))
+        })
+    });
+
+    if metadata_only {
+        fields.remove("services");
+    }
+}
+
 fn service_key_outside_a_schema(value: &serde_json::Value, path: &str) -> Option<String> {
     match value {
         serde_json::Value::Object(fields) => {

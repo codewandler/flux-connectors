@@ -152,11 +152,13 @@ description = "Contentful Content Management API (CMA) access token, sent as a b
 
 [[services]]
 name = "delivery"
+tags = ["cms"]
 description = "Content Delivery API (CDA): read-only access to this space's published content. Authenticates with the delivery token; the management token cannot reach this surface"
 base_url = "https://cdn.contentful.com/spaces/{space_id}/environments/{environment_id}"
 
 [[services]]
 name = "management"
+tags = ["cms"]
 description = "Content Management API (CMA): create and publish entries. Authenticates with the management token; the delivery token cannot reach this surface"
 base_url = "https://api.contentful.com/spaces/{space_id}/environments/{environment_id}"
 

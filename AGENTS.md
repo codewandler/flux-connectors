@@ -455,13 +455,50 @@ refresh tokens, or perform session login. The host resolves the credential, perf
 acquisition such as OAuth2, applies the placement scheme, and registers values with its redactor.
 Putting acquisition in Flux would expose raw tokens in model-visible symbols.
 
-> **AMENDED the same day, by the same owner, and the amendment is the current rule.** A token
-> exchange **should** be a connector function — *"it needs to be marked somehow as returning sensitive
-> information"* — because flux 0.47.1's credential boundary **refuses** an unmarked credential-shaped
-> response outright rather than redacting it, so an unmarked exchange does not leak, it **fails**. The
-> paragraph below still holds for `authorize` and `revoke`; it over-reached on `token`.
-> [C-432](docs/stories/C-432-mark-a-response-as-carrying-a-credential.md) reconciles the three
-> artifacts written under the wider reading.
+> **AMENDED the same day, by the same owner. The owner's *intent* is the current rule; the
+> mechanism the amendment assumed does not exist.** A token exchange **should** be a connector
+> function — *"it needs to be marked somehow as returning sensitive information"*. The amendment
+> justified that by saying flux 0.47.1's credential boundary would **refuse** an unmarked
+> credential-shaped response, so an unmarked exchange would not leak but **fail**. C-432 checked
+> that against the vendored source and **it is not so** — see *What flux actually keys on* below.
+> The intent stands and is unfinished; the paragraph below still holds for `authorize` and `revoke`,
+> and holds for `token` on the narrower ground stated below rather than on the flux-refusal ground.
+> [C-432](docs/stories/C-432-mark-a-response-as-carrying-a-credential.md) records the finding and
+> settles which of the two credential declarations governs.
+
+### What flux actually keys on (verified against the vendored source, C-432)
+
+`codewandler-flux-plugin-0.47.1/src/host/credential_boundary.rs` is real and does refuse
+credential-shaped responses — but **not on any path this repository's artifacts travel**, and
+**there is no marking that makes such a response ship**. Both halves matter, and each is enough on
+its own:
+
+- **The vocabulary is `PlatformSourcing`, and it is not a permit.** It is a three-state enum in
+  `codewandler-flux-plugin-protocol` — `None` (the default), `Operation`, `Activation`. `None` means
+  the boundary **does not apply**; `Operation` and `Activation` **opt in to refusal**. There is no
+  fourth value meaning *"this response carries a credential, allow it"*. The module's only exemption
+  is `secret.read`, a flux-internal host op reached through `EndpointBroker`, which no plugin
+  manifest can declare. So marking an operation in flux's own vocabulary would **cause** the refusal
+  the owner wants to avoid, not prevent it.
+- **The boundary is on the plugin seam, which this repository is not on.** `refuse_response` is
+  applied to a plugin `OperationSpec` response arriving over the NDJSON plugin protocol. This
+  workspace pins `flux-lang`, `flux-core`, `flux-runtime`, `flux-spec`, `flux-web`, `flux-system`
+  and `flux-credentials` — **not** `flux-plugin` or `flux-plugin-protocol`. What this repository
+  emits is a `.flux` module and a `<connector>.connector.toml` manifest, and that manifest carries no
+  `platform`, `secret_purposes`, `redact_fields` or `reaches` field. The boundary's own docs say as
+  much: *"therefore `PlatformSourcing::None`, so on every plugin in this repository the check is a
+  no-op"*.
+
+**The consequence for the token half.** An unmarked token exchange does **not** fail the way the
+amendment assumed — so the reason to withhold it is not flux's refusal. It is the older and still
+unrefuted one in the paragraph above: an emitted module ends `response = http.request(…)` /
+`return response`, flux has no handle on a credential store, and so a module carrying a login binds
+the **raw token to a model-visible symbol**. That is why `connector-flux` still refuses to emit an
+operation declaring `produces_credential`. Making the owner's ruling real needs a mechanism this
+repository does not yet have — a credential-store port on the flux side, or an operation that lives
+on the `connector-pack` path without being emitted into a module — and neither is C-432's to invent.
+**Do not add a marking on the strength of the amendment's reasoning.** A marking flux does not read
+is worse than none: it reads as safety while changing nothing.
 
 **An authentication endpoint is never a connector operation** (owner-stated 2026-08-01). `/oauth/authorize`,
 `/oauth/revoke` and their equivalents describe **how to authenticate**. That is a
@@ -494,6 +531,23 @@ Three consequences, each of which has already been got wrong once:
   The rule stands unchanged; only the story that closes it moved. It is withheld
   because the host's redactor holds only values the host itself resolved and cannot know a secret
   minted by the very call returning it.
+
+**Two declarations, one disposition each, and never both on one operation** (C-432). The repository
+carries two fields stating the same fact — a credential arrives in this response — with opposite
+consequences: `credential_response` (C-430) **withholds** the operation, `produces_credential`
+(C-136) **ships** it and hands back a handle. Declaring both is refused at the loader
+(`validate_one_credential_disposition`), and the refusal carries the rule for choosing, because it
+is the one thing neither field's own documentation can supply:
+
+- **The discriminator is purpose, not shape.** No inspection of the pointer, the schema or the field
+  name can separate them — only what the operation is *for*.
+- The credential **is** the answer (a token exchange, a login) → `produces_credential`. Diverting it
+  costs the caller nothing, because the handle is what they wanted.
+- The credential arrives **incidentally**, beside the answer → `credential_response`. Diverting the
+  whole result would delete the answer rather than the exposure, so the operation waits for C-79.
+
+Note this is a rule about *which declaration to write*, and it does not by itself make a token
+exchange shippable — see *What flux actually keys on* above for what still blocks that.
 
 **The build enforces that second test, and it enforces it on a *declaration*** (C-430). An operation
 declares `credential_response = ["/Servers/*/ApiTokens"]` — one JSON Pointer per location, `*` for
@@ -836,6 +890,16 @@ cargo test --workspace --no-fail-fast
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
+
+**Two Node suites are part of CI and are not part of that block** — `crates/connectors-api/ui`
+(the host page) and `web/` (the public site). `ci.yml` runs `npm ci && npm test` in each, pinned.
+
+⚠ **In a fresh worktree neither has `node_modules`, so `npm test` fails with `MODULE_NOT_FOUND`
+rather than running** — which is not a pass and is easy to report as one. Measured 2026-08-01: a
+C-237 implementor grew `crates/connectors-api/src/index.html` by 457 lines, reported the Rust gate
+green, and its only test suite had never executed. CI would have caught it; the implementor's own
+report would not have. **If your change touches `crates/connectors-api/ui/` or `web/`, run
+`npm ci && npm test` there and quote the output** — a suite that cannot run is green by absence.
 
 Read `cargo test --workspace` correctly: it stops at the first failing test binary. A count of green
 summaries does not prove the remaining binaries ran. As a diagnostic, this must print nothing:

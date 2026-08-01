@@ -338,7 +338,12 @@ fn documents(
         .map(|loaded| loaded.specs.iter().collect())
         .unwrap_or_default();
     let single = inputs.specs.len() == 1;
-    let declares_services = loaded.is_some_and(|loaded| !loaded.connector.services.is_empty());
+    // "Declares a **named** service", which is not the same as "declares a `[[services]]` entry".
+    // Since C-153 a single-surface provider carries one entry for the reserved `default` service to
+    // hold its `tags`, and reading that as a named service would send all 47 of them down the
+    // one-document-many-services branch below — emitting a blocked note claiming a named service
+    // that does not exist. `is_default_only` is the predicate that survives the tag.
+    let declares_services = loaded.is_some_and(|loaded| !loaded.connector.is_default_only());
 
     // The file's order first, because that is the order a reviewer is diffing against.
     let mut order: Vec<&SpecInput> = Vec::new();
@@ -1510,6 +1515,12 @@ impl Plan {
     /// the *narrowed* connector may no longer satisfy — the loader checks every role against the
     /// members that implement it, so carrying one into a smaller selection refuses the build over a
     /// line nobody wrote. Re-claiming it is a decision, and the report says so.
+    ///
+    /// **`tags` is carried, and the asymmetry is the role/tag distinction doing its job** (C-153). A
+    /// tag is checked against nothing — it says what *kind* of thing a service is, not what it can
+    /// do — so narrowing the selection cannot invalidate one. A `stripe` cut down to three operations
+    /// is still `payments`, and dropping the tag would lose a true fact to protect an invariant that
+    /// only `roles` has.
     fn selected_services(&self, notes: &mut Notes) -> Vec<Service> {
         if let Some(connector) = &self.existing {
             if !connector.services.is_empty() {
@@ -1544,6 +1555,7 @@ impl Plan {
                 base_url: None,
                 api_version: None,
                 roles: Vec::new(),
+                tags: Vec::new(),
             })
             .collect()
     }

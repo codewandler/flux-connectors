@@ -650,8 +650,48 @@
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/role" },
           "description": "The capability shapes this service claims to implement, each checked at load: a service declaring a role whose required members it does not have is refused, naming the missing one.\n\nRoles attach HERE and not to the provider. `openai`'s model-listing surface and its chat surface are different capabilities of one vendor, and a provider-level role would smear them together — so a provider's roles are derived as the union of its services', and a provider-level `roles` key is an error."
+        },
+        "tags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/tag" },
+          "description": "What KIND of thing this service is, so a catalogue of 54 providers can be filtered by domain rather than scrolled.\n\nA tag is deliberately NOT a role. A role answers `can this service do X, checkably?` and carries required members the loader verifies; a tag answers `what kind of thing is this?` and carries nothing — no operation makes a service `storage`. The misread to design against is a UI inferring `this category means these capabilities`. It does not.\n\nTags attach HERE for the same reason roles do, and the case is sharper: `google` is not one kind of thing — its `gmail` is email while its `drive` is storage. A provider's tags are derived as the union of its services', and a provider-level `tags` key is an error.\n\nA service carries a SET: `twilio` is messaging and telephony at once."
         }
       }
+    },
+
+    "tag": {
+      "title": "What kind of thing a service is",
+      "description": "A closed set, for the reason a role's is closed but with a quieter failure: a tag carries no members, so nothing downstream can notice that `telephny` is not `telephony` — it simply never matches a filter, and a service that looks tagged is invisible to the one query it was tagged for.\n\nThe vocabulary is DERIVED, not invented: every value below is populated by at least one shipped service, read off all 54 providers rather than designed ahead of them. Seven are singletons today (`search`, `e-signature`, `ecommerce`, `payments`, `identity`, `forms`, `video-conferencing`), kept rather than folded because each names a domain a reader would actually filter for.",
+      "enum": [
+        "ai",
+        "cms",
+        "crm",
+        "database",
+        "design",
+        "developer-tools",
+        "e-signature",
+        "ecommerce",
+        "email",
+        "forms",
+        "identity",
+        "incident-response",
+        "infrastructure",
+        "issue-tracking",
+        "knowledge-base",
+        "marketing",
+        "messaging",
+        "observability",
+        "payments",
+        "project-management",
+        "scheduling",
+        "search",
+        "source-control",
+        "storage",
+        "support",
+        "telephony",
+        "video-conferencing"
+      ]
     },
 
     "role": {

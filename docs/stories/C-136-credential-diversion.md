@@ -182,3 +182,30 @@ concludes that the category should default to operator level with a model-trigge
 deliberate exception. The exception, on this reading, is one nobody has yet justified.
 
 Until the owner rules, **the operation-shaped arrangement is refused at emission** — see below.
+
+### The owner ruled, and the refusal still stands (C-432, 2026-08-01)
+
+The owner ruled **against** the reading above: a token endpoint *should* be a connector function,
+*"marked somehow as returning sensitive information"*. [C-432](C-432-mark-a-response-as-carrying-a-credential.md)
+was dispatched to implement the marking and found the ruling's stated mechanism does not exist.
+
+The ruling rested on flux 0.47.1 refusing an unmarked credential-shaped response, which would make
+the emitted-but-unmarked arrangement *fail* rather than leak. Checked against the vendored source:
+`credential_boundary.rs`'s refusal is keyed on `PlatformSourcing`, a three-state enum in
+`codewandler-flux-plugin-protocol` whose default `None` means **the boundary does not apply**, and
+whose other two states **opt in to refusal**. There is no value meaning *"carries a credential,
+allow it"*. And the boundary sits on the plugin seam — this workspace does not depend on
+`flux-plugin` or `flux-plugin-protocol` at all, and the `<connector>.connector.toml` it emits has no
+field the boundary could read.
+
+So `check_credential_diversion` was **not** removed. Its justification was never the flux boundary;
+it is the one recorded above — an emitted `op` ends `return response`, flux holds no handle on the
+credential store, so a module carrying a login binds the raw token to a model-visible symbol. That
+is unchanged by the ruling, and removing the refusal on the strength of a premise that does not hold
+would have regressed a declared safety invariant.
+
+**What the ruling still needs**, and what C-432 could not supply: a mechanism that makes a token
+exchange shippable — a credential-store port on the flux side, or an operation that lives on the
+`connector-pack` path without being emitted into a module (which the "one rendering" argument above
+rejects in its current form). Note the second alternative rejected above is exactly the shape the
+owner's ruling wants, so that argument is the one a follow-up has to reopen first.

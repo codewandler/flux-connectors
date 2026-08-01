@@ -59,7 +59,7 @@ use crate::lock::sha256_hex;
 use crate::{
     response_location_exists, AuthMethod, AuthRequirement, AuthScheme, Connector, HttpMethod,
     Idempotency, JsonSchema, Operation, Param, ParamSet, Provenance, Quirks, Risk, Role, Runtime,
-    Service, DEFAULT_SERVICE, MIN_REPEATABILITY_CONDITION,
+    Service, Tag, DEFAULT_SERVICE, MIN_REPEATABILITY_CONDITION,
 };
 
 /// The documented JSON Schema for `providers/<name>.toml`.
@@ -3955,6 +3955,31 @@ fn validate_services(connector: &Connector, problems: &mut Vec<String>) {
         }
 
         validate_service_roles(connector, service, problems);
+        validate_service_tags(service, problems);
+    }
+}
+
+/// Checks that every tag a service declares is stated once — C-153.
+///
+/// There is no satisfaction check here and there deliberately cannot be one: a [`Tag`] carries no
+/// required members, because no operation makes a service `storage`. The unknown-name case is not
+/// here either — `serde` refuses it first at the parse, since [`Tag`] is a closed enum — so the only
+/// thing left to refuse is a repeat.
+fn validate_service_tags(service: &Service, problems: &mut Vec<String>) {
+    let name = service.name.as_str();
+    let mut seen: Vec<Tag> = Vec::new();
+
+    for tag in &service.tags {
+        let word = tag.word();
+        if seen.contains(tag) {
+            problems.push(format!(
+                "service {name:?} declares tag {word:?} more than once. A tag is a label, and a set \
+                 that tolerates repeats is a list pretending to be a set. Known tags: {}",
+                Tag::known_set()
+            ));
+            continue;
+        }
+        seen.push(*tag);
     }
 }
 
@@ -3964,13 +3989,14 @@ fn validate_services(connector: &Connector, problems: &mut Vec<String>) {
 /// belongs to when it names none, so declaring it is a second definition of something that already
 /// exists, and the two could disagree about a base URL or a version.
 ///
-/// Roles are the one thing that argument does not cover, and only for **a provider with a single API
-/// surface**, which has no other service to attach a role to. The exception is scoped to exactly that
-/// case, along two axes:
+/// Roles and tags are the one thing that argument does not cover, and only for **a provider with a
+/// single API surface**, which has no other service to attach either to. The exception is scoped to
+/// exactly that case, along two axes:
 ///
-/// 1. **What the entry may carry.** `roles` and nothing else. `roles` has no connector-level
-///    spelling, so it has nothing to contradict, while `base_url`, `api_version` and `description`
-///    all do.
+/// 1. **What the entry may carry.** `roles` and `tags`, and nothing else. Neither has a
+///    connector-level spelling, so neither has anything to contradict, while `base_url`,
+///    `api_version` and `description` all do. `tags` joined the exception with C-153, which is what
+///    makes the *forty-seven* single-surface providers taggable at all.
 /// 2. **Whether the provider has any other service.** A `default` entry beside a named one would
 ///    hand back the implicit `default` that a multi-service provider must not have — and the harm is
 ///    concrete, not doctrinal: [`validate_operation_service`] refuses an operation that omits
@@ -3995,12 +4021,13 @@ fn validate_default_service_entry(
         problems.push(format!(
             "`[[services]]` declares {DEFAULT_SERVICE:?} beside the named service {:?}. \
              {DEFAULT_SERVICE:?} may be declared only by a provider whose *only* API surface it is, \
-             and only to carry `roles` — which a single-surface provider has nowhere else to put. \
+             and only to carry `roles` and `tags` — which a single-surface provider has nowhere else \
+             to put. \
              A provider that declares named services has no implicit {DEFAULT_SERVICE:?} for an \
              operation to fall into, and declaring one here would hand it back: an operation that \
              omitted `service` would become legal and be emitted into a \
-             `<provider>-{DEFAULT_SERVICE}.flux` nobody asked for. Declare the roles on the service \
-             that actually has them",
+             `<provider>-{DEFAULT_SERVICE}.flux` nobody asked for. Declare the roles and tags on the \
+             service that actually has them",
             other.name
         ));
         return;
@@ -4021,18 +4048,18 @@ fn validate_default_service_entry(
         problems.push(format!(
             "`[[services]]` declares {DEFAULT_SERVICE:?} with `{}`. {DEFAULT_SERVICE:?} is \
              reserved — it is the service an operation belongs to when it names none, and it is \
-             elided from every published address — so the entry may carry `roles` and nothing else. \
-             A role attaches to a service and a single-surface provider has nowhere else to put one; \
-             everything else is already stated at connector level, and a second definition could \
-             disagree with it",
+             elided from every published address — so the entry may carry `roles` and `tags`, and \
+             nothing else. A role and a tag attach to a service and a single-surface provider has \
+             nowhere else to put either; everything else is already stated at connector level, and a \
+             second definition could disagree with it",
             overreaching.join("`, `")
         ));
-    } else if service.roles.is_empty() {
+    } else if service.roles.is_empty() && service.tags.is_empty() {
         problems.push(format!(
             "`[[services]]` declares {DEFAULT_SERVICE:?} and nothing else. {DEFAULT_SERVICE:?} is \
              reserved: it is the service an operation belongs to when it names none, and a provider \
-             with one API surface declares no services at all. The one reason to write the entry is \
-             to carry `roles`"
+             with one API surface declares no services at all. The two reasons to write the entry \
+             are to carry `roles` and to carry `tags`"
         ));
     }
 }
@@ -4596,8 +4623,14 @@ fn validate_operations(connector: &Connector, problems: &mut Vec<String>) {
         }
 
         validate_repeatability_condition(operation, problems);
-        validate_credential_response(operation, problems);
-        validate_produces_credential(connector, operation, problems);
+        // The two credential declarations are checked as a pair before either is checked alone:
+        // when both are present the operation is incoherent at the root, and the rules downstream
+        // of each would render two contradicting instructions for one fact. See
+        // `validate_one_credential_disposition`, which returns whether it took the decision.
+        if !validate_one_credential_disposition(operation, problems) {
+            validate_credential_response(operation, problems);
+            validate_produces_credential(connector, operation, problems);
+        }
 
         if let Some(alternatives) = &operation.auth {
             validate_requirements(
@@ -4703,6 +4736,52 @@ fn bool_word(value: bool) -> &'static str {
     } else {
         "false"
     }
+}
+
+/// **One fact, one disposition** — C-432's reconciliation of C-430 and C-136.
+///
+/// [`Operation::credential_response`] and [`Operation::produces_credential`] state the same fact —
+/// a credential arrives in this operation's response — and prescribe opposite outcomes. C-430's
+/// field withholds the operation; C-136's ships it and returns a handle. Declared together they ask
+/// for both, and before this story the loader obliged: `credential_response`'s stock refusal told
+/// the author to withhold an operation the sibling declaration says ships, with nothing stating
+/// which governs. Two rules in one repository is the thing C-432 exists to remove.
+///
+/// **The discriminator is purpose, not shape.** Both fields point at a credential in a response; no
+/// inspection of the pointer, the schema or the field name can tell them apart, because the
+/// difference is what the operation is *for*:
+///
+/// - the credential **is** the answer — a token exchange, a login — so diverting it into the store
+///   and returning the handle costs the caller nothing. That is `produces_credential`.
+/// - the credential arrives **incidentally**, beside the meeting or the server the operation exists
+///   to deliver. Diverting the whole result would delete the answer, so the operation is withheld
+///   until the value can be redacted where it sits — `credential_response`, and C-79.
+///
+/// That sentence is what the refusal has to carry, because it is the one thing an author cannot
+/// re-derive by reading either field's own documentation.
+///
+/// Returns `true` when it refused, and the pair-wise check is then the *only* thing said about this
+/// operation's credential declarations: the per-field rules downstream are all conditioned on a
+/// disposition this operation has not yet chosen, so running them would bury the choice under
+/// consequences of both branches.
+fn validate_one_credential_disposition(operation: &Operation, problems: &mut Vec<String>) -> bool {
+    if operation.credential_response.is_empty() || operation.produces_credential.is_none() {
+        return false;
+    }
+    let id = operation.id.as_str();
+    problems.push(format!(
+        "operation {id:?} declares both `credential_response` (at {}) and `produces_credential`, \
+         which state one fact — a credential arrives in this response — and prescribe opposite \
+         dispositions. Exactly one governs, and which one is a question about the operation's \
+         **purpose**, not about the shape of the value: if the credential *is* the answer, as a \
+         token exchange's is, declare only `produces_credential` and the value is diverted into the \
+         bound `CredentialStore` with the caller receiving the handle. If the credential arrives \
+         **incidentally**, beside the result the operation exists to deliver, declare only \
+         `credential_response` — diverting the whole result would delete the answer, so the \
+         operation is withheld until the value can be redacted where it sits (C-79)",
+        quoted(&operation.credential_response)
+    ));
+    true
 }
 
 /// **No operation returns a secret** (C-430) — the gate, reading the declaration that says one does.

@@ -216,6 +216,7 @@ binds = "credential.anthropic.admin_key"
 
 [[services]]
 name = "models"
+tags = ["ai"]
 description = "The live model catalogue: list available models, and retrieve one by id"
 # C-121: the capability shape `openai` and `openrouter` already claim. Filling it costs no reshaping
 # — `anthropic-models-list` already ends in the `list` segment the role's slot matches on
@@ -225,6 +226,7 @@ roles = ["llm_catalogue"]
 
 [[services]]
 name = "admin"
+tags = ["ai"]
 description = "Admin API: organization info, workspaces, and API keys — read-only"
 
 # ---------------------------------------------------------------------------------------------

@@ -32,6 +32,7 @@ verify = "fly-regions-list"
 
 [[services]]
 name = "machines"
+tags = ["infrastructure"]
 description = "Fly Machines lifecycle and event history"
 api_version = "v1"
 

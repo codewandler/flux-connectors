@@ -14,6 +14,14 @@
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-08-01
+
+### Improved
+
+- **A connector can no longer make two contradictory claims about one response.** Saying "this reply
+  contains a credential, so do not offer this call" and "this reply contains a credential, so hand
+  back a reference instead" at the same time is now refused, with a message saying which one applies.
+
 ## [0.10.0] — 2026-08-01
 
 ### New
