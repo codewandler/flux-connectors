@@ -2,11 +2,11 @@
 id: C-164
 title: Ship the Algolia connector
 pillar: Spec
-status: blocked
+status: done
 design:
 epic: provider-fleet-2
 areas: [providers]
-note: "blocked, and re-measured after C-187 — the original blocker half lifted. C-187 shipped `Binding::Request { position: Position::Header }`, a non-secret connection-level destination (config.rs:237, is_secret at :426-438), so a `[[config]]` field now reaches a header without the false `secret = true` an `[[auth]]` credential forced. What still blocks is narrower: one declared value cannot occupy the hostname *and* the header. All three unifying shapes are measured in crates/connector-flux/tests/algolia_connector.rs — spelling both with one name is refused by validate_pin's C-197 shared-slot pass (provider.rs:795-820), a header pin does not bind a `base_url` variable (provider.rs:831-855), and two differently-named fields load but ship two host-side slots with one answer. Needs a config surface that can declare one value reaching two positions."
+note: "unblocked and shipped by C-229, which made the declaration writable: `ConfigField::also_binds` lets one collected value reach more than one request position. `providers/algolia.toml` declares the application id once — `binds = \"endpoint.app_id\"`, `also_binds = [\"header.X-Algolia-Application-Id\"]` — so one question, one host-side slot, one answer reaches the hostname and the header, and the emitted module carries `{app_id}` in both. Five curated operations, all with response schemas. C-164's two boundary measurements are kept as tripwires in crates/connector-flux/tests/algolia_connector.rs rather than deleted: two *fields* under one name are still refused as a shared slot, and a header pin still does not bind a `base_url` variable."
 ---
 
 # Ship the Algolia connector
@@ -35,42 +35,79 @@ The application id is **not** a secret, so `secret` must disagree with the API k
 
 ## Acceptance
 
-- [ ] `providers/algolia.toml`, hand-authored and **curated** — a small set of operations this pipeline
-      can express honestly, not every endpoint the vendor documents. **Not done, deliberately** — see
-      `## Progress`. Every curated operation needs `X-Algolia-Application-Id` on the wire, and no
-      declared value can reach both that header and the `{app_id}-dsn.algolia.net` hostname honestly
-      with today's config surface. **Updated after C-187:** the header itself is now expressible
-      without mislabelling a public identifier as a secret, so the remaining reason is only the
-      second one — shipping the TOML would ask an operator for the same value twice, in two
-      host-side slots, with no guard against a mismatch. The declaration that would avoid that is
-      refused by the loader's own shared-slot rule.
-- [ ] Declared `risk`, `idempotency` and effects per operation, and a `description` on each written for
-      a *model* to read rather than as UI copy. **N/A** — no operations authored, for the same reason.
-- [ ] A `[[config]]` surface with `label` and `help` on every field, and `secret` agreeing with `binds`.
-      **N/A** — same reason.
-- [ ] A `verify` operation that is a read and runs unattended. **N/A** — same reason.
+- [x] `providers/algolia.toml`, hand-authored and **curated** — a small set of operations this pipeline
+      can express honestly, not every endpoint the vendor documents. **Done, once C-229 made the
+      declaration writable.** Five operations: `algolia-index-list`, `algolia-index-search`,
+      `algolia-object-get`, `algolia-object-save`, `algolia-object-delete`. The application id is one
+      `[[config]]` field reaching both destinations — `binds = "endpoint.app_id"`, `also_binds =
+      ["header.X-Algolia-Application-Id"]` — so an operator answers one question and the emitted
+      module carries `{app_id}` in the hostname *and* in the header literal.
+- [x] Declared `risk`, `idempotency` and effects per operation, and a `description` on each written for
+      a *model* to read rather than as UI copy. The delete is `destructive` and claims no repeat
+      guarantee; the save is a `PUT` declared `conditional` with `repeatable_because` stated, because
+      the write is asynchronous and a stored result must never stand in for running it.
+- [x] A `[[config]]` surface with `label` and `help` on every field, and `secret` agreeing with `binds`.
+      Two fields: the API key (`secret = true`, `credential.algolia.api_key`) and the application id
+      (non-secret, two destinations).
+- [x] A `verify` operation that is a read and runs unattended — `algolia-index-list`, a plain `GET`
+      with no required parameters, which exercises exactly the application-id/key pair this
+      connector's configuration is about.
 - [x] `crates/connector-flux/tests/algolia_connector.rs` — a per-provider contract test asserting the
-      thing *this* connector is about (see the archetype above), not that the file parses. **Done, in
-      the shape the answer actually took**: it asserts the two-position question directly (the closed
-      `Binding` enum, the credential route's forced `secret = true`, and the caller-supplied header
-      parameter's disconnection from `[[config]]`) rather than loading a `providers/algolia.toml` that
-      does not exist.
-- [ ] **Failing-first test:** the contract test must fail before `providers/algolia.toml` exists. **Not
-      applicable in its literal form** — there is no `providers/algolia.toml` to gate on. The nearest
-      honest equivalent: at `$(git merge-base main HEAD)` the test file itself does not exist (`cargo
-      test -p connector-flux --test algolia_connector` errors `no test target named
-      algolia_connector`); see `BASE_PROOF` in the report.
+      thing *this* connector is about (see the archetype above), not that the file parses. **Rewritten
+      by C-229 around the shipped provider**: `the_application_id_is_one_question_reaching_two_positions`
+      and `the_two_destinations_carry_one_placeholder_into_the_emitted_module` are the acceptance
+      assertions. C-164's two boundary measurements were **updated deliberately rather than deleted** —
+      `one_name_for_both_destinations_is_refused_as_a_shared_slot` and
+      `a_header_pin_does_not_bind_the_hostname_template` both still refuse, each now with the
+      contrasting `also_binds` declaration beside it.
+- [x] **Failing-first test:** the contract test must fail before `providers/algolia.toml` exists.
+      **Satisfied by C-229's own failing-first test**, which is the declaration this connector needed:
+      `one_field_declares_two_destinations_and_one_value_reaches_both`
+      (`crates/connector-spec/tests/config_fields.rs`) does not compile at the merge base, because
+      `also_binds`, `ConfigField::bindings`, `::slot`, `::pins` and `Pin` do not exist there. See
+      C-229's `BASE_PROOF`.
 - [x] The scoped gate is green: `build --provider algolia`, `diff --provider algolia` reporting no drift,
       `cargo build --workspace`, `cargo test --workspace --no-fail-fast`,
-      `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all --check`. See `GATE` in
-      the report — `build`/`diff --provider algolia` correctly refuse (no such provider), everything
-      else is green including the new test.
-- [ ] **Exactly eight tests are red and reported, not silenced.** **Does not apply, and that is the
-      finding**: no provider, service or operation was added to `providers/`, so the whole-catalogue
-      staleness checks stay green. Zero new red tests, not eight, is the correct count for a story that
-      shipped no provider.
+      `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all --check`.
+- [x] **Exactly eight tests are red and reported, not silenced.** **Four were red, not eight, and each
+      is named in C-229's report with what was decided about it** — the whole-catalogue staleness
+      checks went green again on `cargo run -p connector-cli -- build`, which C-229 ran and committed.
+      The four: `every_shipped_configuration_variable_is_placed` (predicted in `Slot::Unplaced`'s own
+      doc comment and decided there), `every_declared_operation_composes_a_request_from_its_declared_configuration`
+      (its "headers never move" clause predates C-187 and is now "only where the provider file declares
+      a pin"), `the_known_rfc_idempotent_divergence_from_flux_has_not_grown` (answered by declaring the
+      save `conditional` rather than growing the divergence), and this file's own
+      `no_provider_toml_was_shipped_for_this_probe`, deleted because the finding it recorded is
+      overturned.
 
 ## Progress
+
+- **2026-08-01 — shipped, by C-229.** The second attempt's `## What would unblock it` was written as a
+  new story and that story landed: `ConfigField::also_binds` lets one collected value reach more than
+  one request position, keeping one field, one `name`, one host-side slot and one question — which is
+  exactly what the shared-slot rule protects and what this connector needs.
+
+  The narrow shape the second attempt proposed is the one that shipped, and the design interaction it
+  flagged — *"`Position`'s `name` is deliberately the placeholder **and** the wire spelling, so a
+  multi-destination field needs a story about which placeholder the emitted module carries"* — was
+  settled rather than discovered late: **the emitted module carries `binds`' own target everywhere**,
+  and a further destination contributes only the spelling the vendor sees. `providers/algolia.toml`'s
+  emitted operations bind `X_Algolia_Application_Id = "{app_id}"` and send it as
+  `"X-Algolia-Application-Id"`, beside `base = "https://{app_id}.algolia.net"` — one variable, two
+  positions, one value a host resolves.
+
+  Two things this file settled that the second attempt did not anticipate:
+
+  - **One service, on `{app_id}.algolia.net`, not two.** Algolia's `-dsn` host is a read-optimised
+    replica, and splitting reads onto it would need a second `[[services]]` — and therefore a second
+    application-id `[[config]]` field, because a field belongs to exactly one service. That is the
+    same two-slot defect one layer up, on the same value, so the file ships one service on the
+    primary host and says so.
+  - **`algolia-object-save` is `conditional`, not `idempotent`.** Algolia's `PUT` is idempotent in
+    effect, but the write is asynchronous and every call answers with a fresh `taskID`, so a stored
+    result must never be served in place of running it. Declaring flat `idempotent` would also have
+    grown the `PUT`/`DELETE` population that diverges from flux's I3 coherence rule, which is a filed
+    conflict this file had no reason to join.
 
 - **2026-07-31 (second attempt, after C-187 landed) — the block half lifted, and the story is still
   blocked on the half that remains.** Re-measured against the loader, not re-read off the note.

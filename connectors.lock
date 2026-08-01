@@ -19,6 +19,22 @@ ir_sha256 = "d5e3240f7b41245e6bd64ce27947648f23a3c6eebe6116a2b0c815a79ced5ad5"
 "crates/catalog/src/generated/airtable.rs" = "c350435f39f309f01122a194d331c1bdf74bfd16d05b5e098285a4305b693cdf"
 
 [[provider]]
+id = "algolia"
+generator = "flux-connectors 0.9.1"
+toml_sha256 = "1fe53f1801a901ee4d6bc5cb76d6c2c39da9ce0e70b879528473ced13dd7d2a1"
+ir_sha256 = "8fa16686ab119b233f7f463e4ab0e3c284a0cd1f7af40320939e0fafcfe431f9"
+
+[provider.artifacts]
+"connectors/algolia.connector.toml" = "270a445c1bd2d63b46d3361bfec7a787f3d96ce7db425a8c0fc3215c8d943ac7"
+"connectors/algolia.flux" = "f203eae74e871d02e328ccacf344b4f5cac22da1e7817a17240eda27157e3b04"
+"crates/catalog/ops/algolia/algolia-index-list.flux" = "eaa0870849eb528807dd8d9e2e2152481c41fd2df8fc85922791c808b3a0bec3"
+"crates/catalog/ops/algolia/algolia-index-search.flux" = "2b8827b71e2e79c384a3e10c25d5058f0daf4800351d5dc31f0ea44c6828b18c"
+"crates/catalog/ops/algolia/algolia-object-delete.flux" = "2663491bf599ea87e5aec2082dd820a9484677ff224699feabeb3ce9593098ed"
+"crates/catalog/ops/algolia/algolia-object-get.flux" = "a8a0273772e480acf8ff36a95db67be9973b9d1e04a6132eeb71ffefc17a1eab"
+"crates/catalog/ops/algolia/algolia-object-save.flux" = "843cb9cbe5b8dad1388df771f98b8e25fa1235b362228e670bbc4f6a480dc541"
+"crates/catalog/src/generated/algolia.rs" = "515c114af0747dd6850ab51613c8fca6fa9e66ad39df7413bf11a8356968222a"
+
+[[provider]]
 id = "anthropic"
 generator = "flux-connectors 0.9.1"
 toml_sha256 = "ef94c218b0d19bf5f95e5956f8ac429ba083744c106d8985726937e9e12a8a7b"

@@ -537,27 +537,34 @@ pub(crate) enum Slot {
     /// A request header value — a `Position::Header` pin. No shipped provider declares one; C-164
     /// will be the first, which is why the guard is proved against a fixture.
     Header,
-    /// **A placeholder this derivation could not place.**
+    /// **A placeholder this derivation could not place in exactly one position** — either because
+    /// the emitter produced a shape it does not model, or because the value genuinely lands in more
+    /// than one (C-229).
     ///
-    /// Not reachable for anything the current emitter produces — every brace-carrying literal in the
-    /// shipped catalogue is either a full URL with a `://` or a sole placeholder, and
-    /// [`tests::every_shipped_configuration_variable_is_placed`] is the tripwire that keeps it that
-    /// way. It exists so that an emitter which grows a shape this does not model degrades into
-    /// *more* refusal rather than into none, which is the same choice [`Error::Unbuildable`] makes
-    /// for the evaluator, applied to the guard.
+    /// It exists so that an emitter which grows a shape this does not model degrades into *more*
+    /// refusal rather than into none, which is the same choice [`Error::Unbuildable`] makes for the
+    /// evaluator, applied to the guard. Its rule is therefore the **intersection of every position's
+    /// rule**, the host's included, and it does not encode: an encoding is only safe where the
+    /// position is known.
     ///
-    /// Being unreachable is exactly why its rule has to be right on inspection: nothing executing
-    /// will ever tell anyone it is wrong.
+    /// # C-229 made it reachable, deliberately, and this is the decision rather than an inheritance
     ///
-    /// **C-229 will make it reachable, and deliberately so.** That story lets one collected value
-    /// reach more than one position — Algolia's application id must be both the `{app_id}` of
-    /// `{app_id}-dsn.algolia.net` and the `X-Algolia-Application-Id` header — and [`record`] already
-    /// collapses a variable seen in two slots to this one. That is the right answer rather than a
-    /// degradation: a value living in two positions must satisfy both rules, and this arm is their
-    /// intersection. What will *not* survive is
-    /// [`tests::every_shipped_configuration_variable_is_placed`], which asserts nothing lands here.
-    /// It is meant to fail then, so that whoever lands C-229 decides this on purpose instead of
-    /// inheriting it.
+    /// `providers/algolia.toml` declares one `[[config]]` field whose value is both the `{app_id}`
+    /// of `https://{app_id}.algolia.net` and the `X-Algolia-Application-Id` header on every call, so
+    /// [`record`] sees one variable in two positions and collapses it here. **That is the right
+    /// answer rather than a degradation**, and it is the answer the story asks for in as many words:
+    /// a value reaching a hostname and a header must satisfy *both* predicates, the host predicate
+    /// is the strict one, and a value legal in a header and illegal in a hostname is refused rather
+    /// than encoded differently per destination. This arm is exactly that — every rule at once, one
+    /// substituted string.
+    ///
+    /// The name is now half a description: `algolia/app_id` is not unplaceable, it is *multiply*
+    /// placed. Renaming it to something like `Everywhere` was weighed and left alone, because the
+    /// two cases share one rule and one reason for it, and a second variant carrying the identical
+    /// arm would be two spellings of one answer — the defect this repository keeps writing stories
+    /// about. What the two cases do not share is how they are audited, and that is
+    /// [`tests::every_shipped_configuration_variable_is_placed`]'s job: it names the multiply-placed
+    /// variables explicitly, so an *accidental* arrival here is still a red test.
     Unplaced,
 }
 
@@ -1553,31 +1560,54 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    /// **Every configuration variable in the shipped catalogue is placed** (C-214).
+    /// **Every configuration variable in the shipped catalogue is placed** (C-214) — **or is one of
+    /// the few that are deliberately placed in more than one position** (C-229).
     ///
     /// [`Slot::Unplaced`] is the fail-closed default, and a fail-closed default that the shipped
-    /// catalogue actually lands on is not a default — it is the behaviour, and it would refuse
-    /// values the vendor accepts. This asserts the derivation covers what ships, so `Unplaced`
-    /// stays what it is meant to be: the answer for an emitter shape that does not exist yet.
+    /// catalogue lands on *by accident* is not a default — it is the behaviour, and it would refuse
+    /// values the vendor accepts. So the exemption is a **named list**, not a relaxation: a variable
+    /// arriving here because the emitter grew a shape this module does not model is still red, and
+    /// says which operation.
+    ///
+    /// `algolia/app_id` is the whole list today. Its field binds `endpoint.app_id` and also_binds
+    /// `header.X-Algolia-Application-Id`, so one value composes the authority *and* travels as a
+    /// header, and [`Slot::Unplaced`] is the intersection of the two rules rather than the absence
+    /// of either — see that variant's own documentation for why that is the answer C-229 wanted.
     ///
     /// It also pins the placement itself. Getting `zone_id` wrong in the *lenient* direction —
     /// calling a path segment a query value — would encode a `/` instead of refusing it, which is
     /// the silent 404 this story argues against.
     #[test]
     fn every_shipped_configuration_variable_is_placed() {
+        // Deliberately multiply placed, and therefore held to every position's rule at once.
+        const EVERY_POSITION: &[&str] = &["algolia/app_id"];
+
         let mut unplaced = Vec::new();
+        let mut multiple = std::collections::BTreeSet::new();
         let mut seen = std::collections::BTreeMap::new();
         for entry in catalog::operations() {
             let declaration = crate::spec::declaration_of(entry.id, entry.flux)
                 .unwrap_or_else(|error| panic!("`{}`: {error}", entry.id));
             let slots = endpoint_slots(&declaration);
             for variable in endpoint_variables(&declaration) {
+                let named = format!("{}/{variable}", entry.provider);
                 match slots.get(&variable) {
+                    _ if EVERY_POSITION.contains(&named.as_str()) => {
+                        assert_eq!(
+                            slots.get(&variable),
+                            Some(&Slot::Unplaced),
+                            "`{}`: `{variable}` is listed as reaching every position, but this \
+                             operation places it in exactly one — so either the list is stale or \
+                             the field stopped binding two destinations",
+                            entry.id
+                        );
+                        multiple.insert(named);
+                    }
                     Some(Slot::Unplaced) | None => {
                         unplaced.push(format!("`{}`: `{variable}`", entry.id))
                     }
                     Some(slot) => {
-                        seen.insert(format!("{}/{variable}", entry.provider), *slot);
+                        seen.insert(named, *slot);
                     }
                 }
             }
@@ -1586,6 +1616,12 @@ mod tests {
             unplaced.is_empty(),
             "these shipped configuration variables could not be placed, so every value bound to \
              them is held to all three positions at once: {unplaced:#?}"
+        );
+        assert_eq!(
+            multiple.iter().map(String::as_str).collect::<Vec<_>>(),
+            EVERY_POSITION,
+            "a variable listed as reaching every position no longer ships. Remove it here in the \
+             same commit, so the exemption cannot outlive what earned it"
         );
 
         // The nine templated hosts, the path segments beside them, and C-187's two pins.

@@ -1,0 +1,359 @@
+# Algolia Search API v1 — hand-authored, curated to the surface this pipeline can express honestly.
+#
+# WHY THIS IS NOT A `[spec]` POINTER. Algolia publishes OpenAPI descriptions for its clients
+# (`github.com/algolia/api-clients-automation`), but nothing is vendored under `specs/` for it and
+# the Search API document covers the whole surface — settings, synonyms, rules, batching, multi-index
+# queries, the whole indexing pipeline. Pointing at it without a selection mechanism would be
+# pointing several dozen LLM tools at an index. The five operations below are the selection to
+# reproduce when that lands, by method and path:
+#
+#   GET     /1/indexes
+#   GET     /1/indexes/{indexName}
+#   GET     /1/indexes/{indexName}/{objectID}
+#   PUT     /1/indexes/{indexName}/{objectID}
+#   DELETE  /1/indexes/{indexName}/{objectID}
+#
+# ---------------------------------------------------------------------------------------------
+# THE DECLARATION THIS CONNECTOR EXISTS TO FORCE, AND THE ONE THAT BLOCKED IT FOR TWO ATTEMPTS:
+# **ONE COLLECTED VALUE REACHING TWO POSITIONS ON THE SAME REQUEST** (C-229).
+# ---------------------------------------------------------------------------------------------
+#
+# Algolia's application id is required in two places at once, on every single call:
+#
+#   the hostname   `https://{app_id}.algolia.net` — the id *is* the tenant's cluster
+#   a header       `X-Algolia-Application-Id: {app_id}` — sent alongside the API key
+#
+# It is also **not a secret**: Algolia documents it as safe to embed in client-side code beside a
+# search-only key, and it is exactly the kind of value an operator has to be able to read back off a
+# settings page.
+#
+# C-164 twice refused to ship this file rather than declare it dishonestly, and both refusals were
+# right. What each attempt measured, and what removed it:
+#
+#  - **A `[[config]]` field could not reach a header at all.** The only route into an arbitrary
+#    request header was an `[[auth]]`-declared credential, whose `Binding::is_secret` is
+#    unconditionally `true` — so shipping meant labelling a public identifier a secret. **C-187
+#    removed this**: `binds = "header.<name>"` is a non-secret, connection-level destination, and
+#    this file's `also_binds` below is that destination.
+#  - **One declared value could not reach two positions.** The hostname and the header were two
+#    `[[config]]` fields with two host-side slots and one answer, so an operator typed the
+#    application id twice with nothing keeping the two in step — and the second field had no honest
+#    `help`, its only truthful text being "type the same value again". Spelling both destinations
+#    with *one* name was refused by the loader's shared-slot rule, correctly: two questions that
+#    share an answer are one question. **C-229 removed this**, by making the one question writable.
+#
+# So the field below is the whole point of this connector, and it is worth reading as the thing it
+# is: **one field, one `name`, one `label`, one `help`, one row in a connect form, and one value a
+# host stores** — reaching the hostname through `binds` and the header through `also_binds`. The
+# emitted module carries `{app_id}` in both positions, because the placeholder every destination
+# carries is `binds`' own target and the header's name is only what the vendor sees. A value that is
+# legal in a header and illegal in a hostname is refused rather than encoded differently per
+# destination: `connector-pack` sees one variable in two positions and holds it to every rule at
+# once, the host rule included, which is the strict one.
+#
+# `crates/connector-flux/tests/algolia_connector.rs` asserts that shape directly, and keeps C-164's
+# two boundary measurements alive beside it: two *fields* under one name are still refused as a
+# shared slot, and a header pin alone still does not bind a hostname.
+#
+# ---------------------------------------------------------------------------------------------
+# ONE HOST, NOT TWO — AND THAT IS THE SAME DECISION, TAKEN AGAIN
+# ---------------------------------------------------------------------------------------------
+#
+# Algolia publishes two hostnames per application: `{app_id}.algolia.net`, which serves reads and
+# writes, and `{app_id}-dsn.algolia.net`, a geo-routed read replica with a stronger search SLA. The
+# faster shape would be two `[[services]]` — searches on the DSN host, writes on the primary.
+#
+# This file ships **one** service on the primary host, deliberately. A `[[config]]` field belongs to
+# exactly one service (`ConfigField::service`), so two services would need two application-id fields,
+# two host-side slots and two questions with one answer — precisely the defect C-229 exists to
+# remove, reintroduced one layer up on the same value. The DSN host is a latency optimisation; the
+# primary host answers every call in this file correctly. Splitting it is a follow-on that belongs
+# with whatever makes a configuration value reachable across services, not a trade made here.
+#
+# Algolia's own retry strategy (`{app_id}-1.algolianet.com` and friends) is likewise absent: this
+# pipeline emits one URL per operation and declares no fallback host list, so a connector claiming
+# Algolia's retry semantics would be claiming behaviour it does not implement.
+#
+# ---------------------------------------------------------------------------------------------
+# WHAT IS DELIBERATELY EXCLUDED
+# ---------------------------------------------------------------------------------------------
+#
+#  - **Index settings, synonyms, rules and replicas.** Each is its own surface with its own failure
+#    modes, and none of them belongs in a first curated set built around one workflow: find an index,
+#    search it, read a record, write one, delete one.
+#  - **`POST /1/indexes/{indexName}/query`.** Algolia's own preferred search route, and it takes its
+#    search parameters as a URL-encoded string inside a JSON body (`{"params": "query=x&page=0"}`).
+#    That is a request this file would be composing by hand out of caller values with nothing
+#    encoding them, which is the shape AGENTS.md refuses. The `GET` route below takes the same
+#    parameters as ordinary query parameters and is declared instead.
+#  - **`POST /1/indexes/{indexName}` (add object without an id).** It generates an `objectID`, so
+#    calling it twice creates two records; `algolia-object-save` below takes the id and is therefore
+#    genuinely idempotent, which is the safer of the two to put in front of a model.
+#  - **Batching, `deleteByQuery`, `clear`.** Each deletes or rewrites an unbounded number of records
+#    from one call, with no per-record confirmation. Out of scope for a curated set.
+#  - **Paging beyond Algolia's own default on `algolia-index-list`.** The vendor returns its first
+#    page and this file declares no paging parameters for it; a known incompleteness, not a silent
+#    truncation.
+
+id = "algolia"
+vendor = "Algolia"
+
+# The reverse-DNS authority this connector publishes under (C-92). It leads every rendered address
+# and every credential path — `tenants/<tenant>/com.algolia.api/<credential>`.
+#
+# Derived from `algolia.com`, the vendor's own primary domain, in reverse-DNS form, with the trailing
+# `api` label the already-shipped authorities carry (`com.slack.api`, `com.cloudflare.api`).
+#
+# **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused").
+authority = "com.algolia.api"
+
+# Algolia versions its REST API in the path — every route below starts `/1/`. Recorded here so a
+# `gid` renders (`com.algolia.api:1`); a credential path deliberately carries no version, so a key
+# survives the vendor's next one.
+api_version = "1"
+
+# **The two-position value, in the position it is hardest to fake.** `{app_id}` is bound by the
+# `[[config]]` field below, which *also* binds the `X-Algolia-Application-Id` header — one question,
+# one answer, one slot. See the header comment.
+base_url = "https://{app_id}.algolia.net"
+
+description = "Algolia search: list an application's indices, search one, and read, save or delete a single record by its object id"
+
+# The "Test connection" button: list the application's indices. A plain `GET` with no required
+# parameters, so pressing it can only prove that the application id and the API key resolve together
+# — which is exactly the pair this connector's configuration is about.
+verify = "algolia-index-list"
+
+# Every operation authenticates with one API key, sent in Algolia's own header. The application id
+# travels beside it as configuration rather than as a second credential — see the header comment for
+# why that distinction is the whole story of this file.
+default_auth = [{ credentials = ["algolia.api_key"] }]
+
+# ---------------------------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------------------------
+
+[[auth]]
+name = "algolia.api_key"
+scheme = { header = { name = "X-Algolia-API-Key" } }
+# The sole secret. Gated and registered with flux's redactor by the host; its value is never read
+# here and never reaches a generated artifact.
+env = ["ALGOLIA_API_KEY"]
+description = "An Algolia API key with the ACLs this connector needs: `search` and `browse` for the reads, `addObject` and `deleteObject` for the writes. Scope it to the indices this connection should reach rather than using the Admin key"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a human supplies before any of this runs
+#
+# Two fields, and the second is why this connector exists. A key says *what this connector may do*;
+# the application id says *whose data it does it to*, and it says it in two places at once.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "api_key"
+label = "Algolia API key"
+help = "Create one under API Keys in the Algolia dashboard, with the search, browse, addObject and deleteObject ACLs restricted to the indices this connection should reach. Algolia shows the full key in the dashboard; the Admin key is deliberately not what this asks for"
+# No `example`, deliberately, and the loader refuses one on a secret field (C-231): an Algolia key is
+# 32 lowercase hex characters, a shape secret scanners match on alphabet and length alone.
+format = "token"
+secret = true
+docs_url = "https://dashboard.algolia.com/account/api-keys/"
+binds = "credential.algolia.api_key"
+
+# **The field this connector was blocked on for two attempts.** One value, two destinations:
+# `binds` puts it in the hostname, `also_binds` puts it in the header Algolia requires on every call.
+# One question, one host-side slot, one answer — see the header comment for the three shapes that
+# were measured and refused before this one existed.
+#
+# `format` is left at `text` rather than declared, for the reason `providers/cloudflare.toml` gives
+# its `zone_id`: an Algolia application id is ten uppercase alphanumerics, and the closed `Format`
+# enum has no variant that says so. `subdomain` would be the nearest, and it is wrong in the
+# direction that matters — it requires lowercase, so it would reject every real application id in a
+# renderer while claiming to validate it. The shape stays in `help` and in `example`, and the
+# substitution guard independently refuses any value that could move the authority or forge a header.
+[[config]]
+name = "app_id"
+label = "Algolia application id"
+help = "The ten-character application id shown at the top of the API Keys page in your Algolia dashboard, e.g. B1G2GM9NG0. It identifies your Algolia application, forms the hostname every call goes to, and is sent as a header on every request — you supply it once here and this connector puts it in both places. It is not a secret; Algolia publishes it in client-side code"
+example = "B1G2GM9NG0"
+docs_url = "https://dashboard.algolia.com/account/api-keys/"
+binds = "endpoint.app_id"
+also_binds = ["header.X-Algolia-Application-Id"]
+
+# ---------------------------------------------------------------------------------------------
+# Operations — 5: list indices, search an index, and get/save/delete one record.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "algolia-index-list"
+method = "GET"
+path = "/1/indexes"
+description = "List the indices in this Algolia application, with each index's record count and size. This is the call that discovers the index names every other operation here takes"
+risk = "low"
+idempotency = "idempotent"
+
+[operations.response_schema]
+type = "object"
+required = ["items"]
+properties = { items = { type = "array", description = "The application's indices", items = { type = "object", required = ["name"], properties = { name = { type = "string", description = "The index name — what every other operation here passes as `index_name`" }, entries = { type = "integer", description = "How many records the index holds" }, dataSize = { type = "integer", description = "The size of the index's records in bytes" }, fileSize = { type = "integer", description = "The size of the index on disk in bytes, records plus internal structures" }, lastBuildTimeS = { type = "integer", description = "How long the index's last build took, in seconds" }, numberOfPendingTasks = { type = "integer", description = "Indexing operations accepted but not yet applied. Non-zero means a recent write is not visible to search yet" }, pendingTask = { type = "boolean", description = "Whether any indexing operation is still pending" }, createdAt = { type = "string", format = "date-time" }, updatedAt = { type = "string", format = "date-time" }, primary = { type = "string", description = "For a replica index, the name of the index it replicates. Absent on a primary" }, replicas = { type = "array", description = "The names of this index's replicas, if it has any", items = { type = "string" } } } } }, nbPages = { type = "integer", description = "How many pages of indices exist. This connector requests only the first" } }
+
+[operations.quirks.error_envelope]
+# Algolia answers a failure with `{"message": …, "status": …}`. The status repeats the HTTP code
+# rather than carrying a machine-readable error code of its own, so there is no `code_pointer`.
+message_pointer = "/message"
+
+# ---------------------------------------------------------------------------------------------
+[[operations]]
+id = "algolia-index-search"
+method = "GET"
+path = "/1/indexes/{index_name}"
+description = "Search one index and return the matching records. Algolia ranks results by its own configured relevance, so the order is the index's, not this connector's; `hits_per_page` and `page` walk the result set, and `filters` narrows it with Algolia's filter syntax over the index's own attributes"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "index_name"
+description = "The index to search, from algolia-index-list's `name` field"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.query]]
+name = "query"
+description = "The search text. An empty string matches every record in the index, ranked by the index's own ranking rules — which is how this operation browses rather than searches"
+required = true
+schema = { type = "string" }
+
+[[operations.params.query]]
+name = "hits_per_page"
+wire = "hitsPerPage"
+description = "How many records to return per page. Algolia's own default is 20 and its maximum is 1000"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 1000 }
+
+[[operations.params.query]]
+name = "page"
+description = "Which page of results to return, counting from 0"
+required = false
+schema = { type = "integer", minimum = 0 }
+
+[[operations.params.query]]
+name = "filters"
+description = "An Algolia filter expression over this index's own attributes, e.g. `category:book AND price < 20`. The attribute names are the index's content and are not knowable here; an index that has not declared an attribute as filterable answers a filter on it with a 400"
+required = false
+schema = { type = "string" }
+
+[operations.response_schema]
+type = "object"
+required = ["hits", "nbHits"]
+properties = { hits = { type = "array", description = "The matching records, in Algolia's ranked order. Each hit is the stored record itself — its attributes are this index's own content and are not knowable at build time — plus `objectID` and Algolia's `_highlightResult` annotations", items = { type = "object", required = ["objectID"], properties = { objectID = { type = "string", description = "The record's own id — what algolia-object-get, -save and -delete address it by" } } } }, nbHits = { type = "integer", description = "How many records matched in total, which may exceed what this page returned" }, page = { type = "integer", description = "The page that was returned, counting from 0" }, nbPages = { type = "integer", description = "How many pages the result set has at this `hitsPerPage`" }, hitsPerPage = { type = "integer" }, exhaustiveNbHits = { type = "boolean", description = "False when `nbHits` is an approximation, which Algolia does for very large result sets" }, processingTimeMS = { type = "integer", description = "How long Algolia spent on the query, in milliseconds" }, query = { type = "string", description = "Echoes the search text" }, params = { type = "string", description = "Echoes the search parameters Algolia actually applied, URL-encoded" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+
+# ---------------------------------------------------------------------------------------------
+[[operations]]
+id = "algolia-object-get"
+method = "GET"
+path = "/1/indexes/{index_name}/{object_id}"
+description = "Read one record from an index by its object id. Returns the stored record as it is; its attributes are this index's own content model, so nothing here can name them"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.path]]
+name = "index_name"
+description = "The index the record is in, from algolia-index-list's `name` field"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "object_id"
+description = "The record's own id — Algolia's `objectID`, from a search hit or from whatever wrote the record"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["objectID"]
+description = "The stored record. Every attribute other than `objectID` is this index's own content and is not knowable at build time"
+properties = { objectID = { type = "string", description = "The record's own id, echoed back" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+
+# ---------------------------------------------------------------------------------------------
+[[operations]]
+id = "algolia-object-save"
+method = "PUT"
+path = "/1/indexes/{index_name}/{object_id}"
+description = "Save one record at a known object id, creating it if it does not exist and REPLACING it wholesale if it does. This is not a partial update: attributes absent from the body are removed from the stored record. Algolia applies the write asynchronously, so the response's `taskID` is an acknowledgement of acceptance rather than of visibility, and a search run immediately afterwards may still return the old record"
+risk = "high"
+# `PUT` is idempotent under RFC 9110 §9.2.2 and Algolia's is too in effect — the body is the record's
+# whole content rather than a delta, so re-sending it leaves the same record however many times it
+# runs. That is what makes it the safer of Algolia's two write routes to declare; the `POST` that
+# generates an `objectID` creates a second record on a repeat, which is why it is excluded (see the
+# header comment).
+#
+# `conditional` rather than `idempotent`, and the distinction is the one `providers/cloudflare.toml`
+# draws for its purge: the write is asynchronous and every call returns a **fresh `taskID`**, so a
+# stored result must never be served in place of running it. Flat `idempotent` on a `PUT` is what
+# flux's own I3 coherence rule refuses for exactly that reason (`crates/connector-pack/tests/
+# metadata_coherence.rs` pins the population of operations already diverging from it), and this file
+# has no reason to join them: `conditional` states the true property and states the condition.
+idempotency = "conditional"
+repeatable_because = "the body carries the record's whole content as an absolute value rather than a delta, so re-sending it leaves the record in the state the caller asked for, however many times it runs. Conditional rather than idempotent because Algolia applies the write asynchronously and answers each call with a fresh `taskID`, so a stored result must never be served in place of running it"
+
+[[operations.params.path]]
+name = "index_name"
+description = "The index to write to, from algolia-index-list's `name` field. Algolia creates an index that does not exist on first write"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "object_id"
+description = "The id to store the record under. An existing record at this id is replaced in full"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.params]
+body_schema = { type = "object", description = "The record to store, as a flat or nested JSON object. Its attributes are this index's own content model and are not knowable at build time — see the header comment for why this is one opaque schema rather than named fields. An `objectID` inside the body is redundant with the one in the path and Algolia takes the path's" }
+
+[operations.response_schema]
+type = "object"
+required = ["objectID", "taskID"]
+properties = { objectID = { type = "string", description = "The id the record was stored under, echoed back" }, taskID = { type = "integer", description = "Algolia's own id for the asynchronous indexing task. The write is accepted when this returns and visible to search some time after; this connector declares no operation that waits on it" }, updatedAt = { type = "string", format = "date-time", description = "When Algolia accepted the write" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"
+
+# ---------------------------------------------------------------------------------------------
+[[operations]]
+id = "algolia-object-delete"
+method = "DELETE"
+path = "/1/indexes/{index_name}/{object_id}"
+description = "Delete one record from an index by its object id. The record is gone with no undo route in the API — restoring it means re-indexing it from the source of truth. Algolia applies the delete asynchronously, so the `taskID` acknowledges acceptance rather than visibility"
+risk = "destructive"
+# `DELETE` is idempotent in effect under RFC 9110 §9.2.2 — the record is absent either way — but
+# Algolia accepts a delete for an id that does not exist and answers `200` with a fresh `taskID`
+# rather than repeating the first response, and documents no idempotency guarantee. This file does
+# not mark a write idempotent on a claim it cannot back; `providers/cloudflare.toml` records the same
+# call for its own record delete.
+idempotency = "non_idempotent"
+
+[[operations.params.path]]
+name = "index_name"
+description = "The index the record is in, from algolia-index-list's `name` field"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "object_id"
+description = "The record's own id — Algolia's `objectID`. The record at this id is deleted"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["taskID"]
+properties = { taskID = { type = "integer", description = "Algolia's own id for the asynchronous delete task. The delete is accepted when this returns and visible to search some time after" }, deletedAt = { type = "string", format = "date-time", description = "When Algolia accepted the delete" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/message"

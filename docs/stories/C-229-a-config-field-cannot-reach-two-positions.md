@@ -2,7 +2,7 @@
 id: C-229
 title: "A configuration field cannot declare one value reaching two positions, and it is the only thing still blocking Algolia"
 pillar: Spec
-status: ready
+status: in-progress
 priority: 2
 design: docs/designs/connector-configuration.md
 epic:
@@ -58,26 +58,46 @@ why those ship and this does not.
 
 ## Acceptance
 
-- [ ] **Failing-first test:** one configuration field declares two destinations and one collected
-      value reaches both. It cannot be declared today. Name it.
-- [ ] The shape keeps **one field, one `name`, one host-side slot, one question** — that is what the
+- [x] **Failing-first test:** one configuration field declares two destinations and one collected
+      value reaches both. It cannot be declared today. Name it. →
+      `one_field_declares_two_destinations_and_one_value_reaches_both`
+      (`crates/connector-spec/tests/config_fields.rs`). At the merge base it does not compile:
+      `also_binds` is an unknown key, and `ConfigField::bindings`, `::slot`, `::pins` and `Pin` do not
+      exist.
+- [x] The shape keeps **one field, one `name`, one host-side slot, one question** — that is what the
       shared-slot rule protects, and a fix that reintroduces two slots has solved nothing. A `binds`
-      list, or an `also_binds`, are the candidates; record why the chosen one wins.
-- [ ] **Settle which placeholder the emitted module carries when the two destinations spell the value
-      differently.** `Position`'s `name` is deliberately both the placeholder *and* the wire
-      spelling, so a multi-destination field forces this question. It is the design interaction most
-      likely to be discovered late.
-- [ ] The shared-slot refusal at `provider.rs:795-820` still fires for genuinely distinct fields that
-      collide. Widening it into a hole is the failure mode; C-164's two boundary tests
-      (`one_name_for_both_destinations_is_refused_as_a_shared_slot`,
-      `a_header_pin_does_not_bind_the_hostname_template`) are the tripwires and must be updated
-      deliberately, not deleted.
-- [ ] `providers/algolia.toml` ships, C-164 closes, and its `status` moves off `blocked`. If it still
-      cannot ship after this lands, that is a third measurement and belongs in C-164's Progress.
-- [ ] Interaction with [C-214](C-214-a-pinned-value-reaches-the-wire-unvalidated.md) is stated: one
+      list, or an `also_binds`, are the candidates; record why the chosen one wins. → `also_binds`
+      won, and the argument is recorded in `config.rs`'s module docs and in the design doc's
+      `also_binds` section: **a list of peers has no head, and this declaration needs one.** With a
+      head the placeholder rule is unconditional (the emitted module carries `binds`' target), the
+      slot is provably one, and `binding()`/`level()`/the stored `(kind, name)` address stay exactly
+      what they were for every field that existed before.
+- [x] **Settle which placeholder the emitted module carries when the two destinations spell the value
+      differently.** → The **head's**: `ConfigField::slot()` is `binds`' own target, and a further
+      destination contributes only the spelling the vendor sees. `connector_spec::Pin` carries the
+      two apart (`name` is the wire spelling, `variable` is the placeholder) so an emitter cannot
+      pick the wrong one by accident. Asserted against the artifact in
+      `the_two_destinations_carry_one_placeholder_into_the_emitted_module`.
+- [x] The shared-slot refusal still fires for genuinely distinct fields that collide. Widening it into
+      a hole is the failure mode; C-164's two boundary tests are the tripwires and must be updated
+      deliberately, not deleted. → Both kept, both still refusing, each now with the contrasting
+      `also_binds` declaration asserted beside it. The rule now compares **slots**
+      (`validate_slot_is_not_shared`), which is what it always meant, and gained a second clause for
+      the hole a further destination opens: two fields with two slots writing one wire position
+      (`two_fields_writing_one_header_are_refused`).
+- [x] `providers/algolia.toml` ships, C-164 closes, and its `status` moves off `blocked`. → Shipped,
+      five curated operations, `945 artifacts up to date (54 providers checked)`. C-164 is `done` with
+      every acceptance item ticked and a Progress note recording the two things it settled that its
+      own second attempt did not anticipate.
+- [x] Interaction with [C-214](C-214-a-pinned-value-reaches-the-wire-unvalidated.md) is stated: one
       value reaching a hostname *and* a header must satisfy **both** position predicates, and the
-      host predicate is the strict one. A value legal in a header and illegal in a hostname must be
-      refused, not encoded differently per destination.
+      host predicate is the strict one. → `config::validate_host_value` is the host predicate at the
+      loader, `Binding::validate_value` dispatches over every destination, and the loader applies it
+      to the `example` and to every choice **once per destination**. At runtime `connector-pack`'s
+      `Slot::Unplaced` is the intersection of every rule at once, host included, and substitutes the
+      value unchanged — so nothing is encoded differently per destination. Both directions are pinned:
+      `a_host_value_is_refused_for_what_no_request_position_would_catch` shows
+      `acme.example@evil.example` passing all three request rules and failing the host rule.
 
 ## Notes
 
@@ -88,3 +108,50 @@ why those ship and this does not.
   change could serve two, and three separate spellings would be the defect they each describe.
 - C-164 is a **second documented refusal** and that is a successful outcome, not a failure. It now
   refuses with the space closed rather than surveyed, which is what makes this story writable.
+
+## Progress
+
+- **2026-08-01 — landed. Algolia ships.** `ConfigField::also_binds` is the declaration: `binds` names
+  one destination and stays the head, `also_binds` names the further request positions, and the field
+  keeps one `name`, one `label`, one `help`, one row in a form and one host-side slot.
+
+  **The rule the story was written to protect survives, and was sharpened rather than widened.** The
+  C-197 shared-slot pass moved out of `validate_pin` into `validate_slot_is_not_shared`, run once per
+  field rather than once per pin, and it now compares `ConfigField::slot()` — which is what "one
+  host-side slot" always meant. For every field that existed before this landed the comparison is
+  byte-for-byte the one it replaced, because a single-destination field's slot *is* its binding
+  target. C-164's `one_name_for_both_destinations_is_refused_as_a_shared_slot` still refuses, with
+  the same message, and now asserts the contrasting `also_binds` declaration loads in the same test.
+
+  A further destination opened one hole the old rule could not see — two fields, two *different*
+  slots, one wire position — so the function gained a second clause for it. That is a request
+  carrying one of two values depending on an order nothing declares; `connector-flux` already refused
+  the emitted shape (`Error::HeaderConflict`), and this is the declaration-level half that names the
+  two fields rather than an operation.
+
+  **Four tests went red on the shipped provider, and each was decided rather than adjusted:**
+
+  1. `connector_pack::request::tests::every_shipped_configuration_variable_is_placed` — predicted, by
+     name, in `Slot::Unplaced`'s own doc comment, which asked whoever landed this story to decide it
+     on purpose. Decision: `Unplaced` is the right arm — it is the intersection of every position's
+     rule, host included, and does not encode — and the test now carries a **named list** of the
+     variables that reach every position, so an *accidental* arrival there is still red, and a listed
+     variable that stops being multiply placed is red too.
+  2. `connector_pack::tests::request::every_declared_operation_composes_a_request_from_its_declared_configuration`
+     — its "headers never move when configuration does" clause predates C-187 and was already
+     asserting the opposite of a declared feature; no shipped provider had exercised it. It is now
+     "no header moves except one the provider file declares as a pin", derived from the provider file
+     rather than listed, *and* the pinned header is asserted to move rather than merely permitted to.
+  3. `connector_pack::tests::metadata_coherence::the_known_rfc_idempotent_divergence_from_flux_has_not_grown`
+     — `algolia-object-save` is a `PUT`, and declaring it flat `idempotent` would have grown a filed
+     conflict with flux's I3 from nine operations to ten. Answered in the provider file instead:
+     `conditional` with `repeatable_because` stated, which is the truer claim anyway because the write
+     is asynchronous and every call answers with a fresh `taskID`. The pinned population is untouched.
+  4. `algolia_connector::no_provider_toml_was_shipped_for_this_probe` — deleted, because the finding
+     it recorded is overturned and the file it named now exists.
+
+  **Not done here, and named rather than done quietly:** `Format` still has no variant for "ten
+  uppercase alphanumerics", so `providers/algolia.toml`'s application id is `format = "text"` with the
+  shape in `help` — the same call `providers/cloudflare.toml` records for its 32-hex `zone_id`, and
+  the missing `pattern` escape hatch `config.rs` has always declined to add without a vendor behind
+  it. Algolia is now the second vendor behind it.

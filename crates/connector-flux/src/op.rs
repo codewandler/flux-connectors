@@ -240,8 +240,16 @@ struct ConstantHeader<'a> {
 struct Pinned<'a> {
     /// Where on the request it lands.
     position: Position,
-    /// The placeholder the literal carries, and the name the vendor sees for a query or header pin.
+    /// The name the vendor sees: the path template variable, the query parameter, the header.
     name: &'a str,
+    /// **The placeholder the literal carries** — the field's one host-side slot.
+    ///
+    /// The same string as [`name`](Self::name) for every field binding one destination, which is
+    /// why `Binding::Request` carries only one. A field that also binds its service's `base_url`
+    /// variable (C-229) breaks the coincidence — Algolia's application id is `{app_id}` in the host
+    /// and `X-Algolia-Application-Id` on the wire — and the *slot's* spelling is the one a host
+    /// resolves, so it is the one the literal must carry in every position the value reaches.
+    variable: &'a str,
     symbol: String,
 }
 
@@ -360,18 +368,22 @@ fn bind_pins<'a>(
 ) -> Result<Vec<Pinned<'a>>> {
     connector
         .config_of(&operation.service)
-        .filter_map(|field| field.pin())
-        .filter(|(position, name)| match position {
+        .flat_map(|field| field.pins())
+        .filter(|pin| match pin.position {
             Position::Path => {
-                connector_spec::config::template_variables(&operation.path).contains(&{ *name })
+                connector_spec::config::template_variables(&operation.path).contains(&pin.name)
             }
             Position::Query | Position::Header => true,
         })
-        .map(|(position, name)| {
+        .map(|pin| {
             Ok(Pinned {
-                position,
-                name,
-                symbol: symbols.allocate(&operation.id, name)?,
+                position: pin.position,
+                name: pin.name,
+                variable: pin.variable,
+                // Allocated from the **wire** name rather than the slot, so a field that grows a
+                // second destination does not rename the symbol its first one already emitted, and
+                // two destinations of one field get two symbols rather than colliding on one.
+                symbol: symbols.allocate(&operation.id, pin.name)?,
             })
         })
         .collect()
@@ -898,8 +910,13 @@ fn request_body(
     // Bound between the base URL and the URL that reads them, and bound to a **literal holding the
     // placeholder** rather than to a value: a host substitutes into literals only, which is what
     // keeps a caller's parameter from ever being substituted into. See `Pinned`.
+    //
+    // The placeholder is the field's **slot**, not the pin's wire name. For every single-destination
+    // field the two are the same string; for one that also composes its host (C-229) they differ,
+    // and it is the slot a host resolves — so a pin carrying its own spelling would ask for a value
+    // nobody was asked to supply, beside a `base_url` asking for the one they were.
     for pin in pinned {
-        body.push(bind_string(&pin.symbol, &format!("{{{}}}", pin.name)));
+        body.push(bind_string(&pin.symbol, &format!("{{{}}}", pin.variable)));
     }
     body.push(bind_fmt(URL, template));
 
