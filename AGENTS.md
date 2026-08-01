@@ -436,6 +436,33 @@ refresh tokens, or perform session login. The host resolves the credential, perf
 acquisition such as OAuth2, applies the placement scheme, and registers values with its redactor.
 Putting acquisition in Flux would expose raw tokens in model-visible symbols.
 
+**An authentication endpoint is never a connector operation** (owner-stated 2026-08-01). `/oauth/token`,
+`/oauth/authorize`, `/oauth/revoke` and their equivalents describe **how to authenticate**. That is a
+property of the connector's authentication surface — `OAuth2Spec`, the grant, the redirect — and it is
+what the *host* performs, per the paragraph above. It is not something a caller invokes and reads a
+result from. A vendor document that publishes them as paths does not make them operations, and
+ingest selecting them is a selection error rather than a coverage win.
+
+Look at what they are and the rule stops needing defence. An authorize endpoint is a **browser
+redirect** — babelforce's takes `code_challenge` and `redirect_uri`, and there is no result to
+return to a program. A revoke endpoint takes a **`client_secret` as a plain argument**, which is
+auth-flow material travelling as an operation parameter. A token endpoint's **response body is a
+credential**, so it also fails the separate test below.
+
+Three consequences, each of which has already been got wrong once:
+
+- **Excluding them is not a coverage gap.** State them as named exclusions with the reason, and make
+  the reason this rule. babelforce's canonical accounting is `emitted + inexpressible + auth-flow
+  withheld`, three categories rather than two, precisely so an exclusion of this kind cannot read as
+  something missing.
+- **`expose = false` is not the mechanism.** Withholding a tool from a model does not withhold the
+  operation: `connector_pack::resolve` admits any named operation regardless of exposure, by design
+  (C-413), and `connectors-api`'s execute route goes through it. The operation must not be *selected*.
+- **A credential-producing response is a second, independent test.** Any operation whose declared
+  response carries a token — not only an OAuth one — is withheld until C-136's diversion lands,
+  because the host's redactor holds only values the host itself resolved and cannot know a secret
+  minted by the very call returning it.
+
 Flux's four existing `AuthScheme` variants are presets of the three-axis model. A connector using
 only those presets must serialize exactly what flux already understands.
 
