@@ -25,10 +25,70 @@ This repository uses the **track** framework. Every unit of work is a Markdown s
 6. **Close the work.** `/track:done <ID>` sets the story to `done`, adds the changelog entry, and
    regenerates the board. Confirm the acceptance checklist and the final diff before reporting.
 
+**Two sections below are not optional reading.** [Before you assert
+anything](#before-you-assert-anything) is the failure mode this repository keeps hitting — every
+number and every claim about a file is produced by a command in the same session. [Release
+process](#release-process) is what cutting a release means here, including that it is autonomous
+work and that pushing the tag publishes to crates.io.
+
 Never hand-edit the generated region between `BEGIN track:board` and `END track:board`. After any
 change to a story's `status`, `priority`, `title`, `epic`, or `note`, run `/track:board`. Optional
 `areas: [subsystem]` tags affect queries only; they do not create board sections.
 <!-- END track:agents -->
+
+## Before you assert anything
+
+Written after a session on 2026-08-01 that produced **eight wrong claims of a single kind**. Every one
+was stated without running the command that would have settled it, or quoted from a secondary source
+that was stale. Every one reached a story, a dispatch brief or a report, and three of them sent an
+implementor after a defect that did not exist.
+
+| The claim | What the file said |
+|---|---|
+| `babelforce-call-session-set` is a `POST`/`PUT` conflict | `providers/babelforce.toml:477` says `PUT`; so does the document. Hand-typed into a script instead of read. |
+| `connector-flux/tests` is 22,455 lines | 22,595. |
+| `babelforce-call-list` curates 11 query parameters | 14. |
+| `connector-cli -- diff` subsumes assertions about emitted text | It pins text against the committed rendering and says nothing about its properties. |
+| `algolia_connector.rs` is fixture drift | No `providers/algolia.toml` exists; it is a deliberate negative-result probe. |
+| `connector-spec` is "a 4000-line IR" | 11,832 lines, 128 public items. Quoted from a story note written before C-406. |
+| `CARGO_REGISTRY_TOKEN` is not configured | It is an **org** secret shared with this repo. Only repo-level secrets were checked. |
+| `cargo publish` is the operator's to run | [§ Publishing contract](#publishing-contract) forbids it by hand, and has since before the session. |
+
+The rules that follow are the whole of the fix. They are cheap; the errors were not.
+
+- **A number or a claim about a file is produced by a command in the same session, and the command
+  travels with it.** This applies to a story, a design doc, a dispatch brief, a commit body and a
+  report to the user. `wc -l`, `grep -c`, `cargo run -p connector-cli -- diff` — one line, quoted.
+- **A measurement in a story note, a design doc or another agent's report is a timestamped claim, not
+  a fact.** Every one of them was true when written. Re-measure before quoting, and say you did. The
+  caveat already on `## Current project boundary` is this rule stated for one paragraph; it applies
+  everywhere.
+- **Before asserting what this repository does about anything, grep this file for it.** Four of the
+  eight above are contradicted by text that was already here. `grep -n -i "<topic>" AGENTS.md` costs
+  nothing and would have caught them.
+- **A dispatch brief's "measured, do not re-derive" block is the most dangerous text you will
+  write.** An implementor takes it as settled and spends its budget on it. Anything in that block is
+  a command's output, or it is not in that block.
+- **When an implementor's finding contradicts you, it is probably right** — it is holding the file
+  open and you are holding a recollection. Verify, then say plainly which of you was wrong and where.
+
+## Dispatching work to implementors
+
+The coordinator failures from the same session, and each of them cost a rework round or a conflict.
+
+- **Two stories that write the same file never share a wave.** `C-421` and `C-422` were dispatched
+  together and both rewrote `crates/connector-spec/src/provider.rs`. Predict the write set from the
+  Acceptance; when you cannot predict it, it is the whole module.
+- **State the commit each implementor must branch from**, read with `git rev-parse HEAD` *after* your
+  last commit. A worktree is not guaranteed to sit at your `HEAD`: three agents were dispatched from a
+  tree that predated the commit creating their story files, and one, forbidden from switching
+  branches, wrote a substitute story from its brief.
+- **Acceptance must not assert a mechanism nobody has verified exists.** `C-413` was dispatched with
+  "callable, only the `ToolSpec` projection is withheld" when this workspace had **no call path
+  separate from the tool registry**. The implementor reasoned correctly from a false premise and
+  shipped an operation that was catalogued, documented as reachable, and unreachable.
+- **Report against the goal, not against the wave.** A wave finishing is not the objective being met;
+  say which one you are claiming, and what distance remains.
 
 ## Current project boundary
 
@@ -792,6 +852,55 @@ version number is burned, and a wrong `description`, `readme` or `keywords` is f
 See [docs/designs/crates-io-publishing.md](docs/designs/crates-io-publishing.md) for the reasoning
 and [C-190](docs/stories/C-190-publish-catalog-pack-secrets.md) for *when* the first publish
 happens. This contract is only about *how*.
+
+## Release process
+
+Owner-stated 2026-08-01, after a coordinator handed the tag push back three times. **Cutting a
+release is autonomous work.** Nothing here waits for a human, and the operator does not run commands
+on the agent's behalf. There is no `cut-release.sh` in this repository yet — the steps below are done
+by hand, in order, and a script that does them is worth filing.
+
+**The bump.** Cargo pre-1.0 SemVer, the same rule flux uses: for `0.y.z` the **minor** position is
+the breaking signal. Scan `[Unreleased]` and the commits since the last tag — any breaking change is
+a minor, additive and fixes only is a patch. Never use the patch position as a rolling counter.
+
+**Two changelogs, two audiences**, and every release touches both:
+
+- `CHANGELOG.md` — the **engineering** log. Story IDs, crate names, file paths, the reasoning behind
+  a decision. This is where a future implementor looks to find out why.
+- `WHATS-NEW.md` — the **customer** log, and it is not a summary of the other one. Plain language,
+  feature-first: what a user can now do or what behaves differently, never how it is implemented. No
+  story IDs, no crate names, no internal jargon. Sections, only the ones that apply: `### New`,
+  `### Improved`, `### Fixed`, `### Action needed`. Its header comment carries these rules; read it.
+  An internal-only release may legally have an empty customer section — a *user-visible* change
+  missing one is the defect this file exists to prevent.
+
+Then, in order:
+
+1. **Polish both changelogs and check them against the diff**, not against memory. Promote
+   `[Unreleased]` to `## [X.Y.Z] — <date>` in each.
+2. **Bump the version** in `[workspace.package]` and `README.md`, then **regenerate every artifact**:
+   `cargo run -p connector-cli -- build`. This is not optional bookkeeping — 120 generated manifests
+   carry `generator = "flux-connectors <version>"`, and `connectors.lock` hashes them, so a bump that
+   does not regenerate leaves the tree inconsistent with itself and `diff` red.
+3. **Gate green**, all of it, then commit — `Release vX.Y.Z`, matching the shape of previous release
+   commits.
+4. **Annotated tag** `vX.Y.Z`, with a body: a one-line headline, then what changed. `git show v0.8.0`
+   is the model.
+5. **Push `main`, then push the tag.** Pushing the tag **is** the crates.io publication — see
+   [§ Publishing contract](#publishing-contract). It is not a reversible step and it is still the
+   agent's to take.
+6. **Watch the CI run** (`gh run watch`, `gh run list --workflow=crates.io`). The workflow is
+   idempotent and skips anything already live, because crates.io rate-limits *new* crates to a burst
+   and then roughly one per ten minutes — a first release of several crates is **expected** to need a
+   `workflow_dispatch` resume. Resuming is part of cutting the release, not a follow-up someone else
+   does.
+7. **Only once the publish is actually green**, `gh release create vX.Y.Z` with notes derived from
+   the changelog entries — headed `## Release Notes` and using the customer voice, as flux's releases
+   do. A release announcing crates that failed to upload is worse than a late one.
+
+**What is genuinely not the agent's**: `cargo publish` by hand, in any form other than `--dry-run`.
+That is CI's, and the contract below says why.
 
 ## Relationship to flux
 
