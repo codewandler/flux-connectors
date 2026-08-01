@@ -173,6 +173,29 @@ says carry-or-withhold-and-why for every endpoint, and a verdict on whether the 
 expressible — before any provider TOML is written. See
 [anthropic-managed-agents.md](designs/anthropic-managed-agents.md).
 
+### Balance is not one contract — settled funds, prepaid credit, and metered usage
+
+The generalized-provider vocabulary names what a service *is* or *holds* — a secret store, a model
+catalogue, a payments surface. "How much is left?" is a different axis, and it is already populated:
+measured 2026-08-02, three shipped vendors answer it and **no two mean the same thing**.
+`stripe-balance-get` returns settled funds as a per-currency list in minor units; `openrouter-credits-get`
+returns two cumulative totals of which **neither is the balance**; `babelforce-task-usage` returns a
+time series of task counts with no monetary dimension at all. It is also the first candidate contract
+that cuts *across* tags — `payments`, `ai`, `telephony` — which is the clearest evidence yet that
+roles and tags are genuinely different axes rather than one idea filed twice.
+
+The epic's transferable result is a limit, not a variant. OpenRouter documents its balance as
+`total_credits - total_usage`, a subtraction, and this repository has no arithmetic — `AGENTS.md`
+refuses formulas outright and generates every Flux expression itself. Conformance work so far maps
+**inputs**: a slot names an operation, a mapping renames a parameter or pins a default. Nothing
+addresses the output side, so a contract requiring a value the vendor does not return directly is
+unsatisfiable, and no design says so.
+
+Done looks like: a decision on how many contracts "balance" actually is, and a general statement — in
+the substitution design, not here — of whether a contract may require a derived value at all. No
+`Role` variant lands in this epic; defining contracts ahead of the mechanism is still refused. See
+[balance-contract.md](designs/balance-contract.md).
+
 ### The connectors datasource — the catalogue, queryable from a session
 
 A flux session cannot ask "which connector can do this?". The catalogue is published and unreachable

@@ -53,6 +53,11 @@ _Authentication is currently something the **host** does *around* a connector: `
 - [C-129 — babelforce IVR v2 — atomics, not call modules (epic)](C-129-babelforce-ivr-epic.md) · Spec · EPIC — simpleMenu is audioplayer + read + switchnode welded together, so publishing call modules would freeze combinations instead of exposing parts. But an IVR flow's flowEndApplication is a GOTO, and C-94's graph refuses cycles because Flux has none
 - [C-132 — Decide: do composed IVR templates belong here, and in what execution model?](C-132-decide-ivr-templates.md) · Spec · DECISION — an IVR flow's edges are gotos and C-94's graph refuses cycles because Flux has none. And an IVR flow runs in the VENDOR's engine, a third case 'this repo compiles, flux executes' does not cover
 
+### Balance is not one contract — settled funds, prepaid credit, and metered usage
+_The generalized-provider vocabulary so far names things a service *is* or *holds* — a secret store, a_
+- [C-447 — Decide: is `balance` one contract, or is money separate from metered usage?](C-447-decide-balance-shape.md) · Spec · measured: three vendors already answer 'how much is left' and no two mean the same thing — settled funds (stripe, per-currency list in minor units), prepaid credit (openrouter, a subtraction), metered counts (babelforce, a time series). Splitting is cheap now
+- [C-448 — A contract cannot require a derived value, and nothing says so](C-448-a-contract-cannot-require-a-derived-value.md) · Spec · found via openrouter: its balance is `total_credits - total_usage`, arithmetic this repository has no way to express — AGENTS.md refuses formulas outright. Conformance can map INPUTS; nothing can derive an OUTPUT, and no design records the limit
+
 ### channel bindings — generalize a flux `channel` over a connector
 _[inbound-events.md](inbound-events.md) models an **event** — the vendor calls us — and stops there._
 - [C-85 — The delivery envelope — flux's Event carries no id, source or verified flag](C-85-delivery-envelope.md) · Bridge · flux_app::Event is {label, payload} and nothing else, so 'delivery id in the payload' stuffs envelope into payload — and seed_payload binds every top-level payload field as a flow symbol, so a vendor key can silently shadow it
