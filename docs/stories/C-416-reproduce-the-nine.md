@@ -2,8 +2,7 @@
 id: C-416
 title: "Reproduce babelforce's nine operations through the spec route, byte-identical"
 pillar: Spec
-status: backlog
-priority: 3
+status: blocked
 design: docs/designs/spec-front-end.md
 epic: spec-front-end
 areas: [providers, connector-spec]
@@ -40,7 +39,31 @@ hand-authoring.
       before it is resolved. A silent correction here is the one outcome that would waste the test.
 
 ## Progress
-- (not started)
+- 2026-08-01 — **Implemented and BLOCKED, not abandoned.** The conversion itself is done and lives on
+  branch `impl/C-416`: `providers/babelforce.toml` points at the vendored manager document and selects
+  the nine. **The cost bet is won decisively** — operation blocks went 293 → 54 declaration lines
+  (32.6 → 6.0 per operation), whole file 533 → 364, with **zero parameter patches needed**. That is
+  C-6's central question answered with a number.
+- **Blocked on [C-421](C-421-loading-a-provider-is-not-spec-aware.md)**, which the conversion exposed:
+  `provider::load` takes no spec cache, so a spec-backed provider loads as a zero-operation skeleton
+  for the 86 test files that call it directly. 53 tests across 18 binaries go red the moment one
+  shipped provider converts. The branch is the reproduction; do not delete it.
+- **Byte-identity was deliberately refused**, as this story's Notes invited. `connectors/babelforce.flux`
+  grows 135 lines because the document publishes response schemas for all nine operations where the
+  hand-authored file had none — the exact gap C-126 recorded babelforce as the largest block of.
+  `connectors/babelforce.connector.toml` is byte-identical.
+- **Four disagreements found, recorded before resolution.** The real one is the request body of
+  `babelforce-call-session-set`: hand-authored sends `{"app.priority": "high"}`, the document declares
+  a wrapper `{"variables": {…}}`. The document was taken — newer by 15 months, internally consistent
+  with its own example and response, and the old reading descends from a *missing* `properties` key.
+  **One live call would settle it; nothing offline can.** Reversible in one line.
+- **Two premises this story shipped with were false, and the implementor disproved both.** There is no
+  POST/PUT conflict on `babelforce-call-session-set` — the file says `PUT` (line 477) and so does the
+  document; the coordinator asserted otherwise from a hand-typed list. And `servers[0]` is Production,
+  not staging: C-415's pull normalizes it and the staging URL appears zero times across all five
+  documents, so the `base_url` comment's stated reason was wrong and is rewritten.
+- **The vendor settles `from`/`to` against us**: it documents `fromNumber`/`toNumber` as aliases *of*
+  `from`/`to`, the opposite of the hand-authored guess.
 
 ## Notes
 - **This is the go/no-go for the epic.** `docs/stories/C-6-overlay-layer.md` states the bet: "if
