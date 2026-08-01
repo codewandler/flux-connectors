@@ -861,6 +861,7 @@ mod tests {
             risk: Risk::Destructive,
             idempotency: Idempotency::NonIdempotent,
             repeatable_because: None,
+            expose: true,
             auth: None,
             params: ParamSet {
                 query: vec![Param {

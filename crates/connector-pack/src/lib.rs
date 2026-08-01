@@ -199,8 +199,9 @@ pub use credentials::{Credentials, DEFAULT_SERVICE};
 pub use dry_run::{CredentialReference, DryRun, DryRunTransport, Transport};
 pub use name::{dotted_name, NameError};
 pub use rehearsal::Rehearsal;
+// `resolve` is defined in this module; re-listed here only so the two seams read together.
 pub use request::{Request, DEFAULT_USER_AGENT};
-pub use spec::project;
+pub use spec::{is_exposed, project};
 pub use tool::{Egress, Operation};
 
 // The credential vocabulary, re-exported rather than redefined — the same posture
@@ -768,18 +769,33 @@ fn install(
             available: catalog::providers().len(),
         })?;
 
-    let tools = entry
-        .operations
-        .iter()
-        .map(|operation| {
-            Ok(Arc::new(Operation::project(
-                operation,
-                http.clone(),
-                credentials.clone(),
-                configuration.clone(),
-            )?) as Arc<dyn Tool>)
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
+    // **The one place an operation stops being a tool** (C-413). `expose` separates two claims the
+    // emitter used to fuse: that an operation exists and can be called, and that it reaches a model
+    // as a tool. Everything else about an unexposed operation is unchanged — it is in this `entry`,
+    // in the manifest, in `catalog.json`, and `Operation::project` still builds it into something
+    // `build_request` and `Rehearsal` drive.
+    //
+    // **A caller that names an unexposed operation still runs it — through `resolve`, not through
+    // here.** That separation is load-bearing and not obvious: a `ToolRegistry` is both the
+    // advertisement surface (`specs`, which a host hands a model) and the resolution surface
+    // (`get`, which an execute route reads), so filtering it withholds the *call* as a side effect
+    // of withholding the *tool*. `resolve` is the caller-facing seam precisely so that this filter
+    // can stay strictly about what a model is offered.
+    //
+    // Filtered here rather than inside `Operation::project` for the same reason: projection is what
+    // makes an operation callable, so refusing there would withhold the call along with the tool.
+    let mut tools: Vec<Arc<dyn Tool>> = Vec::new();
+    for operation in entry.operations {
+        if !spec::is_exposed(operation)? {
+            continue;
+        }
+        tools.push(Arc::new(Operation::project(
+            operation,
+            http.clone(),
+            credentials.clone(),
+            configuration.clone(),
+        )?) as Arc<dyn Tool>);
+    }
 
     registry.try_register_all_from(source_label(entry.id), tools)
 }
@@ -790,6 +806,63 @@ fn install(
 /// connector that contributed the colliding operation rather than "the connector pack".
 fn source_label(provider: &str) -> String {
     format!("connector-pack:{provider}")
+}
+
+/// **One operation, resolved for execution — exposed or not** (C-413).
+///
+/// This is the *caller-facing* seam, and [`pack`] is the *model-facing* one. The distinction is the
+/// whole of C-413 and the two must not be served by one function:
+///
+/// - [`pack`] installs what a host **advertises**. It withholds unexposed operations, because
+///   `expose = false` means exactly "do not offer this to a model".
+/// - `resolve` answers a caller that **names** an operation. It withholds nothing, because
+///   "unexposed" says a model is not offered the operation — never that nobody may run it.
+///
+/// Collapsing them is the mistake this function exists to prevent, and it is an easy one: a
+/// `ToolRegistry` serves both roles at once, since [`ToolRegistry::specs`] is what a host advertises
+/// to a model and [`ToolRegistry::get`] is what an execute route resolves through. Filtering the
+/// registry therefore withholds the *call* as a side effect of withholding the *tool*, which would
+/// leave a full-coverage connector with several hundred operations that are catalogued, documented,
+/// manifest-listed — and unreachable. That is not the feature; it is the feature inverted.
+///
+/// # Why it still goes through a registry
+///
+/// Registering a single tool and reading it straight back looks like ceremony, and is not.
+/// [`ToolRegistry::try_register_all_from`] applies flux's own admission checks — a non-empty name,
+/// and an authority contract validated against the tool's real
+/// [`permission_subjects`](Tool::permission_subjects) rather than against an empty set — and those
+/// are the checks a packed tool passes before a host can call it. An execute path that skipped them
+/// would run operations under weaker admission than the ones a model can reach, which is precisely
+/// the wrong way round.
+///
+/// # Errors
+///
+/// Whatever [`Operation::project`] refuses, plus flux's refusal if the projected tool is one it will
+/// not admit.
+pub fn resolve(
+    operation: &'static catalog::Operation,
+    http: Egress,
+    credentials: Credentials,
+    configuration: Configuration,
+) -> flux_core::Result<Arc<dyn Tool>> {
+    let tool = Arc::new(Operation::project(
+        operation,
+        http,
+        credentials,
+        configuration,
+    )?) as Arc<dyn Tool>;
+    let name = tool.spec().name.clone();
+
+    let mut registry = ToolRegistry::new();
+    registry.try_register_all_from(source_label(operation.provider), vec![tool])?;
+
+    registry.get(&name).ok_or_else(|| {
+        Error::Unregistrable {
+            operation: operation.id.to_owned(),
+            message: format!("`{name}` registered and did not resolve"),
+        }
+        .into()
+    })
 }
 
 #[cfg(test)]

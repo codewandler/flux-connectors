@@ -112,6 +112,42 @@ pub fn project(operation: &catalog::Operation) -> Result<ToolSpec, Error> {
     project_declaration(operation.id, &declaration)
 }
 
+/// **Whether this catalogue operation reaches a model as an LLM tool** (C-413).
+///
+/// The catalogue states this **positively**, on every operation, in the `expose` line of the embedded
+/// Flux — flux's formatter writes `expose true` or `expose false` and never elides either
+/// (`flux_lang::format`). So a consumer asking this question gets an answer rather than an inference
+/// from an absence, which is the distinction
+/// [C-235](../../../docs/stories/C-235-the-catalogue-cannot-say-an-operation-is-public.md) records as
+/// missing for credentials and the reason this is a function here rather than a `bool` a caller
+/// derives for itself.
+///
+/// **Unexposed is not uncatalogued.** An operation this returns `false` for is still in the
+/// manifest's `operations` list, still in `catalog.json`, still in the embedded catalogue, and
+/// [`crate::Operation::project`] still builds it into something [`crate::Operation::build_request`]
+/// and [`Rehearsal`](crate::Rehearsal) can drive. The single consequence is that [`crate::pack`]
+/// does not register it, so no model is handed it as a tool.
+///
+/// # Errors
+///
+/// [`Error::Unparsable`], [`Error::NotOneOperation`] or [`Error::Mismatched`] for an entry whose
+/// embedded Flux is not the single `op` declaration a catalogue rendering is — the same corrupt-input
+/// cases [`project`] reports, and unreachable for a catalogue this repository generated.
+pub fn is_exposed(operation: &catalog::Operation) -> Result<bool, Error> {
+    declares_exposure(operation.id, operation.flux)
+}
+
+/// [`is_exposed`], over the id and Flux rather than the entry.
+///
+/// The split is the one [`declaration_of`] already documents and takes for the same reason:
+/// `catalog::Operation` is `#[non_exhaustive]`, so no synthetic entry can be built outside the
+/// `catalog` crate, and nothing shipped is unexposed yet. **This is the exact predicate
+/// [`crate::pack`] branches on**, so testing it here is testing that branch — which is otherwise
+/// unreachable until a provider declares `expose = false`.
+pub(crate) fn declares_exposure(id: &str, flux: &str) -> Result<bool, Error> {
+    Ok(declaration_of(id, flux)?.meta.expose)
+}
+
 /// [`project`], over a declaration already parsed.
 ///
 /// The split exists because [`crate::Operation`] needs the declaration itself — C-115 builds the
@@ -421,5 +457,46 @@ mod tests {
             declaration_of("zendesk-ticket-hide", entry.flux),
             Err(Error::Mismatched { .. })
         ));
+    }
+
+    /// **The predicate [`crate::pack`] branches on, in both directions** (C-413).
+    ///
+    /// Nothing shipped declares `expose = false`, so the `false` arm of that branch is unreachable
+    /// from the real catalogue and would otherwise be untested until a provider first used the
+    /// feature — a filter nobody had ever seen remove anything. The entry's own emitted Flux is
+    /// edited here rather than a fixture being invented, so what is tested is a real rendering with
+    /// one token changed.
+    #[test]
+    fn declares_exposure_reads_both_states_from_the_rendering() {
+        let entry = operation("zendesk-ticket-show");
+        assert!(
+            entry.flux.contains("expose true"),
+            "the shipped rendering must state its exposure for this test to change it"
+        );
+
+        assert!(declares_exposure(entry.id, entry.flux).expect("it reads"));
+
+        let unexposed = entry.flux.replace("expose true", "expose false");
+        assert!(!declares_exposure(entry.id, &unexposed).expect("it reads"));
+    }
+
+    /// A rendering that states no `expose` at all reads as **exposed**, because flux's
+    /// `CompositeOpMeta::default()` is `true`.
+    ///
+    /// This is the failure direction that matters: the one way this can go wrong by accident is a
+    /// rendering losing its `expose` line, and the consequence of that is a tool staying visible
+    /// rather than silently vanishing from every host that installs it.
+    #[test]
+    fn a_rendering_stating_no_exposure_fails_open() {
+        let entry = operation("zendesk-ticket-show");
+        let silent: String = entry
+            .flux
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("expose "))
+            .map(|line| format!("{line}\n"))
+            .collect();
+
+        assert!(!silent.contains("expose"), "the fixture must drop the line");
+        assert!(declares_exposure(entry.id, &silent).expect("it reads"));
     }
 }

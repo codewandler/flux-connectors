@@ -228,6 +228,7 @@ fn operation(method: HttpMethod, idempotency: Idempotency, condition: Option<&st
         risk: Risk::High,
         idempotency,
         repeatable_because: condition.map(str::to_owned),
+        expose: true,
         auth: None,
         params: ParamSet::default(),
         response_schema: None,

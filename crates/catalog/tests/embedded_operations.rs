@@ -167,6 +167,15 @@ fn every_embedded_operation_is_a_fixed_point_of_the_flux_formatter() {
 ///
 /// Parsing is not enough — a module that parsed but did not load would publish no ops at all, and
 /// a consumer handing it to flux would get silence rather than an error.
+///
+/// **Exposure is asserted as readable, not as universally true** (C-413). This test used to require
+/// `meta.expose` of every embedded operation, which was accurate while the emitter hard-coded it and
+/// became a rule *forbidding the feature* the moment `expose` became a declaration: the first
+/// provider to ship `expose = false` would have failed here, in a crate its story never touches, for
+/// doing exactly what the field is for. What is worth pinning is that the flag survives the
+/// round-trip into the artifact a host links against — so the assertion is that the loaded value
+/// **agrees with the emitted text**, which is a claim about this crate's renderings rather than about
+/// anybody's curation choices.
 #[test]
 fn every_embedded_operation_loads_as_a_composite_op() {
     for operation in all() {
@@ -184,10 +193,21 @@ fn every_embedded_operation_loads_as_a_composite_op() {
             program.ops.len()
         );
         assert_eq!(program.ops[0].name, operation.id);
+
+        // flux's formatter writes `expose true` or `expose false` and elides neither, so the text
+        // and the loaded flag are two statements of one fact and must not disagree — that agreement
+        // is what lets `connector-pack` decide registration by reading the embedded Flux.
+        let declared = if program.ops[0].meta.expose {
+            "expose true"
+        } else {
+            "expose false"
+        };
         assert!(
-            program.ops[0].meta.expose,
-            "`{}` must be exposed to the model as a tool",
-            operation.id
+            operation.flux.contains(declared),
+            "`{}` loads as `{declared}`, which its own embedded Flux does not state — the artifact \
+             and the value a host reads from it disagree:\n{}",
+            operation.id,
+            operation.flux
         );
     }
 }

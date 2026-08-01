@@ -445,6 +445,21 @@ pub struct Graph {
     /// What the emitted op returns.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<PortRef>,
+    /// **Whether the emitted op reaches a model as an LLM tool** — see
+    /// [`Operation::expose`](crate::Operation::expose), which this mirrors exactly, default included.
+    ///
+    /// **Authored, not derived**, which is where it parts company with the `risk` and `idempotency`
+    /// the same emitted metadata block carries. Those two *are* derived from the operations the flow
+    /// calls, because a flow that deletes must not inherit the `low` of the reads it also makes.
+    /// Exposure has no such floor to respect, and deriving it would make the shape this field exists
+    /// for inexpressible: a **curated flow over uncurated operations** — one tool a model can see,
+    /// composed from members that individually stay callable and unexposed — which is the single most
+    /// valuable use of the whole distinction.
+    #[serde(
+        default = "crate::ir::exposed",
+        skip_serializing_if = "crate::ir::is_exposed"
+    )]
+    pub expose: bool,
     /// The nodes.
     pub nodes: Vec<GraphNode>,
     /// The connections.
@@ -575,6 +590,7 @@ mod tests {
             description: String::new(),
             inputs: Vec::new(),
             output: None,
+            expose: true,
             nodes,
             edges,
         }

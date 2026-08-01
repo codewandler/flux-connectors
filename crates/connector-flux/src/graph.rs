@@ -1179,7 +1179,11 @@ impl<'a> Lowering<'a> {
             } else {
                 vec![crate::op::from_tag("network")?]
             },
-            expose: true,
+            // Authored, unlike the `risk` and `idempotency` above it: those are derived from the
+            // called set because a flow that deletes must not inherit the `low` of its reads, but a
+            // curated flow over uncurated operations is exactly the shape C-413 exists to allow, so
+            // deriving exposure from the called set would forbid it.
+            expose: self.graph.expose,
             ..CompositeOpMeta::default()
         })
     }

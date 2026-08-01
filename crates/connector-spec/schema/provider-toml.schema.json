@@ -254,6 +254,12 @@
           "$ref": "#/$defs/portRef",
           "description": "What the emitted op returns."
         },
+        "expose": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the emitted op reaches a model as an LLM tool. Defaults to `true`, and means exactly what `expose` means on an operation.\n\nAuthored, unlike the `risk` and `idempotency` the emitted op also carries — those are derived from the operations the flow calls, because a flow that deletes must not inherit the `low` of the reads it also makes. Exposure has no such floor: a CURATED FLOW OVER UNCURATED OPERATIONS — one tool a model sees, composed from members that individually stay callable and unexposed — is the shape this key exists for, and deriving it from the called set would forbid exactly that.",
+          "examples": [false]
+        },
         "nodes": {
           "type": "array",
           "items": { "$ref": "#/$defs/graphNode" }
@@ -952,6 +958,12 @@
           "type": "string",
           "minLength": 24,
           "description": "The condition under which repeating this write is safe. Required whenever a state-changing method (POST, PUT, PATCH, DELETE) declares `idempotency = \"conditional\"`, and refused anywhere else.\n\n`conditional` is flux's escape hatch for a write that really is replay-safe — flux's own wording is \"genuinely safe to repeat under STATED conditions\" — and this is where the condition is stated. Say what the vendor does on a repeat: that the body carries a target state rather than a delta, that an idempotency key deduplicates, that a second call returns the first result. Not the conclusion (\"it is idempotent\"), the mechanism.\n\nRefused in three cases, each a different mistake: on GET, HEAD or OPTIONS, which change nothing and so have no repeat hazard to condition; beside an `idempotency` that is not `conditional`, where the prose contradicts its own field; and when it is shorter than 24 characters after trimming, because an escape hatch that costs nothing is a deleted guard rather than a qualified one.\n\nIt does NOT permit `idempotency = \"idempotent\"` on a POST or PATCH; that stays refused unconditionally. `idempotent` licenses flux's op cache to serve a stored result INSTEAD of running the call, which is a stronger claim than \"repeating is safe\".\n\nPublished in `web/public/catalog.json` beside the claim it licenses, so a reader auditing a retry-safety claim on a write can see what it rests on."
+        },
+        "expose": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether this operation reaches a model as an LLM tool. Defaults to `true`; set it to `false` for an operation that should stay callable without spending a tool slot.\n\nThese are two different claims, and before this key they were one. CATALOGUED AND CALLABLE is unconditional: every operation appears in the manifest's `operations` list, in `catalog.json` and in the embedded catalogue, and `connector-pack` builds a request for it either way. EXPOSED is this key, and it is the only thing withheld when it is false — `connector-pack` does not register the operation, so no model is handed it as a tool.\n\nWhy it matters: a connector covering a whole API is several hundred operations, and several hundred tools is not a catalogue but a denial of service against the model's context window. That is the reason full-coverage connectors historically shipped a curated handful instead. `expose = false` is how coverage stops costing context — the whole API stays reachable by a caller that names an operation, and only the operations worth a model's attention are advertised to one.\n\nThis is NOT a way to exclude an operation from the build. Nothing here decides which operations are compiled; it says what happens to one that already is.",
+          "examples": [false]
         },
         "auth": {
           "type": "array",

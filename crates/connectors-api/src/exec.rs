@@ -7,8 +7,7 @@
 use std::sync::Arc;
 
 use catalog::{OperationKey, ProviderKey};
-use connector_pack::{dotted_name, pack, Configuration};
-use flux_runtime::ToolRegistry;
+use connector_pack::{dotted_name, resolve, Configuration};
 use serde_json::Value;
 
 use crate::state::App;
@@ -55,7 +54,9 @@ pub async fn execute(
 ) -> anyhow::Result<Outcome> {
     let entry = catalog::operation(OperationKey::id(operation_id))
         .ok_or_else(|| anyhow::anyhow!("no operation `{operation_id}` in this catalogue"))?;
-    let provider = catalog::provider(ProviderKey::id(entry.provider)).ok_or_else(|| {
+    // Checked here rather than left to the projection, so a catalogue naming a provider it does not
+    // carry is diagnosed against the operation the caller actually asked for.
+    catalog::provider(ProviderKey::id(entry.provider)).ok_or_else(|| {
         anyhow::anyhow!(
             "`{operation_id}` names provider `{}`, which this catalogue does not carry",
             entry.provider
@@ -70,15 +71,22 @@ pub async fn execute(
         tenant,
     )?;
 
-    // A fresh registry per request. It is cheap — projection parses the operation's Flux — and it is
-    // what keeps one tenant's resolved configuration from outliving the request it was read for.
-    let mut registry = ToolRegistry::new();
-    pack(&[provider.id], app.egress(), credentials, configuration)(&mut registry)?;
-
+    // **Resolved by name, not looked up in the model's registry** (C-413).
+    //
+    // This route serves a caller that has *named* an operation, which is a different question from
+    // "what may a model be offered". `pack` answers the second and withholds operations declaring
+    // `expose = false`; a `ToolRegistry` is both the advertisement surface and the resolution
+    // surface, so resolving through one packed here would make an unexposed operation unreachable —
+    // catalogued, documented, manifest-listed and uncallable, which is the feature inverted.
+    // `resolve` is the caller-facing seam and withholds nothing, under the identical admission
+    // checks a packed tool passes.
+    //
+    // Projected per request for the reason the registry was built per request before it: it is what
+    // keeps one tenant's resolved configuration from outliving the request it was read for. It is
+    // also strictly less work — this projects the one operation asked for, where `pack` projected
+    // and parsed every operation the provider ships.
+    let tool = resolve(entry, app.egress(), credentials, configuration)?;
     let tool_name = dotted_name(entry.id)?;
-    let tool = registry.get(&tool_name).ok_or_else(|| {
-        anyhow::anyhow!("`{tool_name}` did not register, though its provider installed")
-    })?;
 
     // The same `ctx` travels into `http.request`, so the redactor the credential was registered with
     // a moment ago is the one the response is rendered through below.

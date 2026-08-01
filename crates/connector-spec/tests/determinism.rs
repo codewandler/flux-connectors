@@ -65,6 +65,7 @@ fn connector(reversed: bool) -> Connector {
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
             repeatable_because: None,
+            expose: true,
             auth: None,
             params: ParamSet {
                 query: vec![Param {

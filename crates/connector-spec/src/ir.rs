@@ -819,6 +819,54 @@ pub struct Operation {
     /// `tests/ir_roundtrip.rs`, not merely claimed here.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repeatable_because: Option<String>,
+    /// **Whether this operation reaches a model as an LLM tool.**
+    ///
+    /// Two claims were fused before C-413, because the emitter hard-coded `expose: true`: that an
+    /// operation **exists and can be called**, and that it **reaches a model as a tool**. They are not
+    /// the same claim, and conflating them prices coverage in context. A connector covering the
+    /// babelforce manager document is 397 operations; 397 tools is not a catalogue but a denial of
+    /// service against the model's context window, and it is the entire reason
+    /// `docs/designs/provider-operation-inventory.md` §5.2 shipped 9 of 163 rather than all of them.
+    ///
+    /// Curation was the right answer while the connector was the only surface. It is the wrong answer
+    /// for a connector that must serve every caller a vendor SDK served. So the claims separate:
+    ///
+    /// - **catalogued and callable** — the operation exists, `connectors-api` will run it, it appears
+    ///   in the manifest's `operations` list, in `catalog.json` and in the embedded catalogue, and
+    ///   `connector-pack` will build a request for it. True of *every* operation, unconditionally.
+    /// - **exposed** — it additionally reaches a model as a tool. That is this field, and it is the
+    ///   only thing withheld when it is `false`.
+    ///
+    /// Keeping the first of those true takes a deliberate seam, because a `ToolRegistry` is *both*
+    /// what a host advertises to a model and what an execute route resolves through: filtering it
+    /// withholds the **call** as a side effect of withholding the **tool**. So `connector_pack::pack`
+    /// is model-facing and withholds an unexposed operation, while `connector_pack::resolve` is
+    /// caller-facing and withholds nothing — and `connectors-api`'s execute route goes through the
+    /// second. Without that split this field would make several hundred operations catalogued,
+    /// documented, manifest-listed and unreachable, which is the feature inverted.
+    ///
+    /// # Why the default is `true`
+    ///
+    /// This is a **widening, not a loosening**: `false` is a state no author could express before, and
+    /// the default keeps today's behaviour exactly. That is not only a compatibility courtesy — an
+    /// operation whose exposure was decided by a default that *hides* it would be a safety-shaped
+    /// decision made by silence, which is the failure mode [`Risk`] refuses a `Default` for. Silence
+    /// here means "nothing was decided", and nothing-decided must mean what the repository already
+    /// does.
+    ///
+    /// `skip_serializing_if` is what makes the default cost nothing: an operation that says nothing
+    /// hashes exactly as it did before this field existed, so landing C-413 moved no `ir_sha256`, no
+    /// `connectors.lock` entry, and none of the 557 generated artifacts. Asserted by
+    /// `tests/ir_roundtrip.rs`, not merely claimed here — the same precedent
+    /// [`Operation::repeatable_because`] and [`Service::roles`] record, and for the same reason.
+    ///
+    /// # What this is not
+    ///
+    /// It is **not a curation mechanism in the loader**. Nothing here decides *which* operations a
+    /// build compiles; that is selection, it stays opt-in, and it belongs to C-411. This field says
+    /// what happens to an operation that was already selected.
+    #[serde(default = "exposed", skip_serializing_if = "is_exposed")]
+    pub expose: bool,
     /// Which auth this operation requires, as a set of **alternatives** (OR); each alternative is
     /// an [`AuthRequirement`] — one mechanism — whose credentials must all be satisfied together
     /// (AND).
@@ -1070,6 +1118,28 @@ pub(crate) fn default_service() -> String {
 /// `connectors.lock` from churning for a connector nobody edited.
 pub(crate) fn is_default_service(service: &str) -> bool {
     service == DEFAULT_SERVICE
+}
+
+/// `serde(default)` for [`Operation::expose`] and [`Graph::expose`](crate::Graph::expose).
+///
+/// A free function rather than `bool::default`, which is `false` — the wrong way round here, and
+/// wrong in the direction that matters: a field defaulting to unexposed would hide every operation
+/// that said nothing, which is a decision made by silence rather than by an author.
+pub(crate) fn exposed() -> bool {
+    true
+}
+
+/// `skip_serializing_if` for the two `expose` fields, so that omitting the key and writing
+/// `expose = true` produce **identical bytes**.
+///
+/// One meaning, one encoding — the rule [`is_default_service`] already follows, and the reason
+/// landing C-413 moved no `ir_sha256` and regenerated none of the 557 committed artifacts.
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's `skip_serializing_if` calls this with a reference to the field"
+)]
+pub(crate) fn is_exposed(expose: &bool) -> bool {
+    *expose
 }
 
 impl Connector {

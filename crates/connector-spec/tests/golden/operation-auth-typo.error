@@ -2,4 +2,4 @@ providers/operation-auth-typo.toml: TOML parse error at line 19, column 1
    |
 19 | authh = []
    | ^^^^^
-unknown field `authh`, expected one of `id`, `service`, `method`, `path`, `description`, `risk`, `idempotency`, `repeatable_because`, `auth`, `params`, `response_schema`, `quirks`
+unknown field `authh`, expected one of `id`, `service`, `method`, `path`, `description`, `risk`, `idempotency`, `repeatable_because`, `expose`, `auth`, `params`, `response_schema`, `quirks`

@@ -115,6 +115,16 @@ impl Rehearsal {
         &self.spec
     }
 
+    /// **Whether a host would register that contract at all** (C-413).
+    ///
+    /// [`Self::spec`] answers what the operation *would* be registered as; this answers whether it
+    /// is. The two are separate because unexposed does not mean uncallable — [`Self::request`] still
+    /// composes this operation's request either way, and [`crate::pack`] consults exactly this
+    /// answer when deciding what to hand a model.
+    pub fn is_exposed(&self) -> bool {
+        self.declaration.meta.expose
+    }
+
     /// The configuration variables this operation's URL carries, in stable order — the same answer
     /// [`crate::Operation::endpoint_variables`] gives for a shipped one.
     pub fn endpoint_variables(&self) -> &[String] {

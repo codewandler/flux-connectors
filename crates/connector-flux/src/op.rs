@@ -787,8 +787,12 @@ fn metadata(operation: &Operation) -> Result<CompositeOpMeta> {
         idempotency: from_tag(idempotency_tag(operation.idempotency))?,
         // Every generated op makes an HTTP request; nothing else it does is an effect flux tracks.
         effects: vec![from_tag("network")?],
-        // `expose true` is what surfaces the op to the model as an LLM tool.
-        expose: true,
+        // `expose true` is what surfaces the op to the model as an LLM tool — and it was a literal
+        // here until C-413, which fused "this operation can be called" with "this operation is a
+        // tool". Reading the declaration instead is what lets a connector cover a whole API without
+        // spending 397 tool slots on it: an unexposed operation is still catalogued, still in the
+        // manifest, and `connector-pack` still builds a request for it. Only this line is withheld.
+        expose: operation.expose,
         ..CompositeOpMeta::default()
     })
 }
@@ -1392,6 +1396,7 @@ mod tests {
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
             repeatable_because: None,
+            expose: true,
             auth: None,
             params: ParamSet {
                 path: path_params,
