@@ -82,7 +82,7 @@ mod shipped_provider;
 // went 0/9 -> 9/9 response schemas, because the vendor's document publishes a 2xx schema for 352 of
 // its 356 operations. Measured coverage is 277 of 299; the ratchet turns in the direction it is
 // allowed to turn, and this records the new floor rather than leaving 27 operations of slack in it.
-const COVERED_FLOOR: usize = 277;
+const COVERED_FLOOR: usize = 611;
 
 /// The other half of the same measurement: operations that ship **without** a response shape. This
 /// is the half that notices a connector arriving with no response shapes at all.
@@ -124,7 +124,7 @@ const COVERED_FLOOR: usize = 277;
 // Lowered 33 -> 24 at C-416's integration, the same event and the same cause: absence fell from 31
 // to 22 of 299 when babelforce's nine gained the schemas its document already published. 24 is the
 // value that satisfies both directions of the ratchet at the measured figure.
-const ABSENCE_CEILING: usize = 24;
+const ABSENCE_CEILING: usize = 71;
 
 /// How far [`ABSENCE_CEILING`] may sit above the measured absence. This is the guard's resolution,
 /// and the only number in this file that was chosen rather than read off the catalogue, so it is the
@@ -371,23 +371,14 @@ fn no_operation_publishes_a_permissive_response_schema() {
 
 /// Whether a schema admits every document it could be checked against — an empty object, or a type
 /// with no stated members.
+///
+/// **`connector_spec::constrains_nothing`, not a copy of it** (C-417). This was a local twenty-line
+/// predicate until ingest needed the same judgement: a vendor document that publishes
+/// `{"type": "object"}` for its deletes must not have that laundered into coverage, and 24 of
+/// babelforce's do. Two copies of one rule with only one of them enforced is the defect this
+/// repository files stories about, so the rule moved into the library and this reads it — which
+/// also means a keyword added to the informative list tightens the gate and the ingest refusal
+/// together, in one edit.
 fn is_permissive(schema: &JsonSchema) -> bool {
-    let Some(object) = schema.as_object() else {
-        // A bare `true` is the JSON Schema spelling of "anything".
-        return schema.as_bool() == Some(true);
-    };
-    if object.is_empty() {
-        return true;
-    }
-    const INFORMATIVE: [&str; 8] = [
-        "properties",
-        "items",
-        "required",
-        "$ref",
-        "oneOf",
-        "anyOf",
-        "allOf",
-        "const",
-    ];
-    !INFORMATIVE.iter().any(|key| object.contains_key(*key))
+    connector_spec::constrains_nothing(schema)
 }

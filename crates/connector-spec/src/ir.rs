@@ -55,6 +55,47 @@ use crate::inbound::{ChannelBinding, EventDecl};
 /// future dependency turns that feature on.
 pub type JsonSchema = serde_json::Value;
 
+/// **Whether a schema admits every document it could be checked against** — C-126, C-417.
+///
+/// An empty object, a bare `true`, or a schema stating a `type` and no members: each of these
+/// counts as "declares a response schema" while telling a consumer exactly what absence tells them.
+/// That makes a placeholder *worse* than nothing, because absence is reviewable and a placeholder
+/// is indistinguishable from a real declaration.
+///
+/// # One predicate, two callers, and that is the point
+///
+/// `crates/connector-spec/tests/response_schema_coverage.rs` refuses an operation whose published
+/// schema satisfies this, and [`openapi::ingest`](crate::openapi) refuses to *derive* one — a
+/// vendor's placeholder must not become this repository's coverage any more than an author's may.
+/// Those are the same judgement about the same shapes, and two copies of it would be two statements
+/// of one fact with only one of them machine-checked, which is the duplication
+/// [`MIN_REPEATABILITY_CONDITION`] documents this crate legislating against.
+///
+/// The keyword list is what *narrows* a document rather than what describes one: `properties`,
+/// `items`, `required` and `$ref` name members; `oneOf`/`anyOf`/`allOf` compose schemas that do;
+/// `const` pins a value. A schema carrying none of them has a name for its type and nothing else.
+pub fn constrains_nothing(schema: &JsonSchema) -> bool {
+    let Some(object) = schema.as_object() else {
+        // A bare `true` is the JSON Schema spelling of "anything".
+        return schema.as_bool() == Some(true);
+    };
+    if object.is_empty() {
+        return true;
+    }
+
+    const INFORMATIVE: [&str; 8] = [
+        "properties",
+        "items",
+        "required",
+        "$ref",
+        "oneOf",
+        "anyOf",
+        "allOf",
+        "const",
+    ];
+    !INFORMATIVE.iter().any(|key| object.contains_key(*key))
+}
+
 /// The HTTP method an operation issues.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]

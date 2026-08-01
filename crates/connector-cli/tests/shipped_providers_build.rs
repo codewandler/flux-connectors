@@ -103,6 +103,15 @@ fn manifest_file(provider: &str, service: &str) -> String {
     file_name(workspace().service_manifest_path(provider, service))
 }
 
+/// The babelforce service the nine curated operations live in — C-417.
+///
+/// They used to live in `connectors/babelforce.flux`, because a connector with no `[[services]]`
+/// entry publishes one unnamed unit. Widening to the whole manager-sdk surface made babelforce a
+/// five-document, five-service connector, so the installable unit that carries agents, calls and
+/// sessions is `connectors/babelforce-manager.flux`. Named once here rather than spelled in each
+/// test, because it is the same fact three times.
+const MANAGER: &str = "manager";
+
 fn file_name(path: PathBuf) -> String {
     path.file_name()
         .expect("an artifact path names a file")
@@ -200,8 +209,16 @@ fn every_shipped_operation_reaches_its_module() {
                 if other.service == service {
                     continue;
                 }
+                // **The same two delimiters the positive check uses, and for the same reason.**
+                // A bare `op {id}` prefix-matches every longer id that starts with this one, so
+                // babelforce's `op babelforce-authorize-integration(` — a manager operation — read
+                // as the `auth` service's `babelforce-authorize` leaking into the manager module.
+                // That was a false accusation of the one defect this assertion exists to catch,
+                // and it only became reachable once a provider shipped enough operations for two
+                // of its ids to be prefixes of each other.
                 assert!(
-                    !module.contains(&format!("op {}", other.id)),
+                    !module.contains(&format!("op {}(", other.id))
+                        && !module.contains(&format!("op {} ", other.id)),
                     "connectors/{} declares `{}`, which belongs to service `{}`",
                     module_file(provider, service),
                     other.id,
@@ -256,7 +273,7 @@ fn zendesk_writes_a_nested_body() {
 /// the mistake this test exists to catch, and the one the vendor would accept and ignore — fails it.
 #[test]
 fn babelforce_nests_the_presence_label() {
-    let module = planned("babelforce", "babelforce.flux");
+    let module = planned("babelforce", &module_file("babelforce", MANAGER));
     let payload = payload_of(&module, "babelforce-agent-status-update");
 
     assert_eq!(
@@ -284,7 +301,7 @@ fn babelforce_nests_the_presence_label() {
 /// made this test's verdict depend on that open question; it does not, and now it does not say so.
 #[test]
 fn babelforce_sends_its_free_form_session_bodies() {
-    let module = planned("babelforce", "babelforce.flux");
+    let module = planned("babelforce", &module_file("babelforce", MANAGER));
     let payload = payload_of(&module, "babelforce-session-update");
 
     assert_eq!(
@@ -460,6 +477,20 @@ fn google_publishes_one_host_per_service_and_no_credential_value() {
     /// The prefixes a real Google credential carries: an OAuth2 access token, an API key, and the
     /// client-secret key name that a leaked OAuth client would travel under.
     const VALUE_SHAPES: [&str; 3] = ["ya29.", "AIza", "client_secret"];
+    /// The subset of [`VALUE_SHAPES`] that is a **value**, and therefore worth scanning artifacts
+    /// no Google story owns.
+    ///
+    /// `ya29.` and `AIza` are prefixes of secrets: a string carrying either is a leaked credential
+    /// whichever provider emitted it, so the catalogue-wide scan below keeps them. `client_secret`
+    /// is a **key name**, and a key name is only evidence about the file it appears in. C-417 is
+    /// where that distinction started mattering: babelforce's `auth` document declares `/oauth/token`
+    /// and `/oauth/revoke`, whose form bodies take a parameter the vendor calls `client_secret`, and
+    /// those operations publish `payload = fmt("{payload}&client_secret={client_secret}")` — a
+    /// parameter binding with no value in it. Scanning the whole catalogue for the key name accused
+    /// babelforce of leaking a *Google* credential, which is a false positive that would recur for
+    /// every provider whose vendor documents an OAuth exchange. The per-artifact loop above still
+    /// holds Google's own module and manifest to all three shapes, which is where the claim belongs.
+    const LEAKED_VALUE_SHAPES: [&str; 2] = ["ya29.", "AIza"];
 
     let connector = load("google");
     assert!(
@@ -505,7 +536,7 @@ fn google_publishes_one_host_per_service_and_no_credential_value() {
 
     let catalogue = std::fs::read_to_string(workspace().root().join("web/public/catalog.json"))
         .expect("the committed public catalogue is readable");
-    for shape in VALUE_SHAPES {
+    for shape in LEAKED_VALUE_SHAPES {
         assert!(
             !catalogue.contains(shape),
             "the published catalogue carries something shaped like a Google credential (`{shape}`)"

@@ -236,13 +236,24 @@ fn every_shipped_provider_emits_the_pair_its_shape_calls_for() {
             );
         }
     }
+    // **Scoped to `connectors/`, because that is the only namespace where a `-default` suffix means
+    // the reserved service.** An installable unit is `connectors/<provider>-<service>.flux`, so
+    // `connectors/x-default.flux` would be the reserved name leaking into a file name — which is
+    // what this refuses. The per-operation renderings under `crates/catalog/ops/<provider>/` are
+    // named after the *operation*, and babelforce ships two whose ids legitimately end in
+    // `-default`: `babelforce-get-settings-for-audit-default` and its update sibling, from the
+    // vendor's own `/api/v2/settings/audit/default`. Matching those was a false positive that would
+    // have grown with every provider that widens, and refusing them would mean refusing an
+    // operation for the name the vendor gave its endpoint.
     let suffixed: Vec<&String> = paths
         .iter()
+        .filter(|path| path.starts_with("connectors/"))
         .filter(|path| path.contains("-default."))
         .collect();
     assert!(
         suffixed.is_empty(),
-        "the reserved `default` service must not reach a file name: {suffixed:?}"
+        "the reserved `default` service must not reach an installable unit's file name: \
+         {suffixed:?}"
     );
 }
 

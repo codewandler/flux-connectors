@@ -122,10 +122,19 @@ fn every_shipped_operation_reloads_as_a_composite_op() {
                 .unwrap_or_else(|| panic!("`{}` is not a program", operation.id));
             assert_eq!(program.ops.len(), 1);
             assert_eq!(program.ops[0].name, operation.id);
-            assert!(
-                program.ops[0].meta.expose,
-                "`{}` must be exposed to the model as a tool",
-                operation.id
+            // **The IR's `expose`, reproduced — not `true`** (C-413, C-417).
+            //
+            // This asserted `true` while every shipped operation was exposed, and as a gate that
+            // was the wrong shape: it did not check that the emitter *carried* the field, it
+            // checked that no provider had used it yet. babelforce now emits 391 operations and
+            // exposes nine, so the honest claim is that what the IR says survives the round trip
+            // through emitted Flux and flux-lang's loader — in **both** directions, since a
+            // rendering that lost its `expose` line would read back as exposed and put 382
+            // operations in front of a model.
+            assert_eq!(
+                program.ops[0].meta.expose, operation.expose,
+                "`{}` declares `expose = {}` in the IR and reloads as `{}`",
+                operation.id, operation.expose, program.ops[0].meta.expose
             );
         }
     }
