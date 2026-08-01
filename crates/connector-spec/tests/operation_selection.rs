@@ -72,8 +72,9 @@ const REACHABLE: usize = 388;
 
 /// The five manager operations ingest cannot express, by path.
 ///
-/// **C-426 established these are not this repository's to close.** flux 0.46 cannot carry a
-/// multipart body at all: `http.request`'s `body` parameter is declared `{"type": "string"}` and
+/// **C-426 established these are not this repository's to close.** flux 0.47 cannot carry a
+/// multipart body at all — re-verified against the 0.47.1 sources at the C-431 bump, where
+/// `http.request`'s `body` parameter is declared `{"type": "string"}` and
 /// read with `Value::as_str`, and `parse`'s `as_type` is a closed list of six — `f64`, `i64`,
 /// `bool`, `json`, `string`, `form` — the analyzer rejects anything outside
 /// (`flux_lang::analyze`). There is no part list, no per-part filename, no per-part content type

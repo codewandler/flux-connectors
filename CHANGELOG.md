@@ -57,6 +57,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The flux engine line moves to 0.47, and nothing in this repository changed with it** (C-431).
+  The successor [C-428](docs/stories/C-428-move-the-flux-pin-to-0-46.md) wrote out when it deferred
+  0.47 during a release cut. All six pins move together — `flux-lang`, `flux-core`, `flux-runtime`,
+  `flux-web`, `flux-system`, `flux-credentials`, plus `ENGINE_LINE`, where the line is recorded once;
+  `SPEC_LINE` stays `1.3`, because the wire vocabulary a guest plugin compiles against is a different
+  promise. `cargo update --workspace` moved all eleven `codewandler-flux-*` packages 0.46.0 → 0.47.1
+  and nothing else.
+
+  The reason is compatibility, not a fix. `connector-pack` hands a host
+  `Arc<dyn flux_runtime::Tool>`, and a `0.x` requirement is `>=0.N.0, <0.N+1.0` to cargo — so a pack
+  built on 0.46 and a host on 0.47 are **two unrelated traits in one graph**. Staying a minor behind
+  is not the conservative option; it is the unlinkable one.
+
+  **What 0.47 changed at this boundary was measured, not read off a changelog.** flux 0.47.0 fixed
+  the credential boundary for a host-dispatched plugin response and gated three ungated analyzer
+  doors; 0.47.1 only re-shipped binaries a broken release workflow had dropped. A `diff -rq` over the
+  vendored sources cargo resolved reports **no file differing** in any of the six engine crates, nor
+  in `flux-provider`, `flux-config`, `flux-skill` or `flux-markdown`. Across the whole resolved
+  closure exactly two files move, both in `flux-plugin`: a fixture binary, and 39 lines of *comment*
+  in `src/host/credential_boundary.rs`. The executable halves live in flux's own binary, which
+  nothing here links.
+
+  So the three green results are explained rather than merely observed: 1490 tests pass,
+  `diff` reports `937 artifacts up to date (53 providers checked)`, and `flux-lang` 0.47.1 emits
+  byte-identical Flux because it *is* `flux-lang` 0.46.0. The multipart impossibility C-426
+  established was re-verified against the 0.47.1 sources at the same time and still holds:
+  `http.request`'s `body` is `{"type": "string"}` and `parse`'s `as_type` is the same closed list of
+  six.
+
 - **The babelforce auth-flow endpoints are withheld, and multipart is established as impossible**
   (C-426). Four operations that shipped in v0.9.0 no longer do: `babelforce-authorize`,
   `babelforce-revoke`, `babelforce-get-user-customer`, and — already withheld in v0.9.0 —
