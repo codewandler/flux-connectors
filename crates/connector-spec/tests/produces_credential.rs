@@ -219,6 +219,36 @@ fn a_produces_credential_operation_naming_no_secret_field_is_refused() {
     }
 }
 
+/// **A location naming more than one value is refused too**, and it is the same rule read from the
+/// other end.
+///
+/// `credential_response` admits `*` for every element of an array — postmark's
+/// `Servers[]/ApiTokens` is a real array of live tokens, which is why that extension exists. A mint
+/// is one call storing one value at one address, so `*` would name several secrets with nothing to
+/// say which is the credential. Refusing at load is also what stops a published crate's
+/// documentation from asserting a runtime behaviour it does not have: the diversion resolves the
+/// location with `serde_json::Value::pointer`, which has no wildcard, so a `*` this validator let
+/// through would load, cross-check, and then refuse at every single call.
+#[test]
+fn a_produces_credential_location_naming_every_element_of_an_array_is_refused() {
+    let source = provider(&login(
+        "acme-oauth-token",
+        "/tokens/*/value",
+        "acme.access_token",
+        "",
+    ));
+
+    let error = refusal(&source);
+    assert!(
+        error.contains("acme-oauth-token") && error.contains("/tokens/*/value"),
+        "the refusal must name the operation and the location: {error}"
+    );
+    assert!(
+        error.contains("exactly one value") || error.contains("one value at exactly one address"),
+        "the refusal must say why one location is required: {error}"
+    );
+}
+
 /// **Refusal 3 — a login declared `idempotent`.**
 ///
 /// Minting a token is a write: some vendors invalidate the previous one, so a repeat is not the

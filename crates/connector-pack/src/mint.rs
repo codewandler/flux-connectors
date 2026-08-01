@@ -35,10 +35,11 @@
 //! it can never read**. There is no policy to configure and no redaction pattern to maintain,
 //! because no code path returns the value.
 //!
-//! # Nothing derived from the vendor's answer leaves this module, on any path
+//! # Nothing derived from the vendor's answer leaves this module, on any path through it
 //!
 //! That is the sentence to check this file against, and it is stronger than "the success path
-//! returns a handle". The story's second named test is the failure path: *a login that errors after
+//! returns a handle". Read the scope note below before quoting it: it is a claim about the host
+//! path, and the module path is closed by a refusal rather than covered by this guarantee. The story's second named test is the failure path: *a login that errors after
 //! the token arrives must not surface it in the error*, which is exactly the case redaction cannot
 //! cover. So [`divert`] consumes the transport's result and either mints — answering with the
 //! handle — or refuses with [`Error::CredentialNotMinted`], which carries the operation, the
@@ -49,6 +50,28 @@
 //! The cost is stated rather than hidden: an operator debugging a failing login gets a status and
 //! not the vendor's reason. The request is in the host's evidence log; the answer is withheld
 //! because this is the one operation shape where the answer is the credential.
+//!
+//! # The scope of that sentence: **this is the host path, and it is the only path**
+//!
+//! Said precisely, because the unqualified version of it was wrong when this module was first
+//! written and a reviewer was right to catch it. What is guaranteed here is the `connector-pack`
+//! path — a host binding the transport, the credential store and the configuration port, and calling
+//! a projected [`Operation`]. This repository has a **second** execution surface: the emitted
+//! `connectors/<provider>.flux` module, which a flux runtime lifts and runs directly, and which
+//! nothing in this crate is on.
+//!
+//! There is no diversion there and there cannot be. An emitted `op` ends `response =
+//! http.request(…)` / `return response`, and Flux has no handle on the credential store — so a
+//! module carrying a login would perform it and bind the raw token to a model-visible symbol, which
+//! is what `AGENTS.md` § Authentication contract has forbidden since before this story
+//! (*"must not … perform session login"*).
+//!
+//! **So the module path is closed rather than covered.** `connector_flux::Error::CredentialProducingOperation`
+//! refuses to emit any operation declaring `produces_credential`, which means such a connector does
+//! not build at all — the guarantee this module makes is not being asked to stretch over a surface
+//! it cannot reach. Whether a credential-producing operation should exist as an *operation* is the
+//! open question in `docs/stories/C-136-credential-diversion.md`; the diversion itself is
+//! indifferent to how it is triggered.
 //!
 //! # The store is the port the host bound
 //!
@@ -79,8 +102,14 @@ use crate::Error;
 pub(crate) struct Minting {
     /// The credential the minted value is stored as. Its `leaf` is the last segment of the address.
     pub(crate) credential: &'static catalog::Credential,
-    /// Where the secret arrives in the vendor's response body — a JSON Pointer into the response
-    /// value.
+    /// Where the secret arrives in the vendor's response body — one plain JSON Pointer into the
+    /// response value, resolved by [`serde_json::Value::pointer`].
+    ///
+    /// **No wildcard, and the loader is what guarantees it.** `credential_response`'s vocabulary
+    /// admits `*` for every element of an array; `produces_credential` refuses it, because a mint
+    /// stores one value at one address. So the resolver here needs no extension — and if a `*` ever
+    /// reached this field it would resolve to nothing and the call would refuse, which is the
+    /// fail-closed direction.
     pub(crate) from: &'static str,
 }
 

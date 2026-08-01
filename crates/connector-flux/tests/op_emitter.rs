@@ -1215,3 +1215,61 @@ fn a_header_alias_travels_under_its_wire_name() {
         "the op declares the caller-facing name:\n{emitted}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// C-136 — an operation that mints a credential cannot be emitted at all
+// ---------------------------------------------------------------------------
+
+/// **The module would perform the login and return the raw token, so the emitter refuses.**
+///
+/// C-136 diverts a minted credential on the **host** path: `connector_pack::mint` lifts the secret
+/// out of the transport's answer, writes it through a bound `CredentialStore`, and answers with
+/// `{ "credential": "tenants/…" }`. None of that is expressible here. Every body this emitter builds
+/// ends `response = http.request(…)` / `return response`, so a module carrying a login would bind
+/// the raw token to a **model-visible symbol** — while the same operation's published
+/// `response_schema` promised a handle. Two artifacts disagreeing, and the executable one wrong.
+///
+/// `AGENTS.md` § Authentication contract is the invariant, and it predates the diversion: generated
+/// Flux *"must not … perform session login. … Putting acquisition in Flux would expose raw tokens in
+/// model-visible symbols."*
+///
+/// The control is the first assertion: the identical operation with the declaration removed emits
+/// exactly the body described above. Without it this test would pass against an emitter that refused
+/// the fixture for some unrelated reason, and it is also the demonstration that the hazard is real
+/// rather than argued — that text is what a `produces_credential` operation would otherwise ship.
+#[test]
+fn an_operation_that_mints_a_credential_is_refused_rather_than_emitted() {
+    let mut connector = headered_operation();
+
+    let emitted = emit_only_operation(&connector);
+    assert!(
+        emitted.contains("response = http.request(") && emitted.contains("return response"),
+        "the emitter must bind and return the vendor's response, or this test asserts nothing \
+         about what a login would ship:\n{emitted}"
+    );
+
+    connector.operations[0].produces_credential = Some(connector_spec::ProducedCredential {
+        secret: "/access_token".to_string(),
+        credential: "vendor.access_token".to_string(),
+    });
+
+    let err = emit_operation(&connector, &connector.operations[0]).expect_err(
+        "this repository's execution format cannot express a credential-producing call",
+    );
+    let message = err.to_string();
+    assert!(
+        message.contains("vendor-thing-create")
+            && message.contains("vendor.access_token")
+            && message.contains("/access_token"),
+        "the refusal must name the operation, the credential and the location: {message}"
+    );
+    assert!(
+        message.contains("session login"),
+        "the refusal must name the invariant it enforces, not merely decline: {message}"
+    );
+    assert!(
+        message.contains("expose = false"),
+        "the refusal must close off the wrong fix — an unexposed operation is still emitted \
+         (C-413): {message}"
+    );
+}

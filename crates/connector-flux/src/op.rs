@@ -428,6 +428,7 @@ fn lower(connector: &Connector, operation: &Operation) -> Result<CompositeOpDecl
         });
     }
     check_write_metadata(operation)?;
+    check_credential_diversion(operation)?;
 
     // Kept whole rather than destructured: `request_body` needs every group, and passing them one
     // slice at a time is how a lowering grows an argument list nobody can read.
@@ -720,6 +721,35 @@ fn mutates(method: HttpMethod) -> bool {
 /// replay-safe, and it was already permitted on every method here with nothing asked of it. Six
 /// operations used it before C-186 with the condition recorded nowhere. A mutating `conditional`
 /// must now state its condition, and the condition is refused where it means nothing.
+/// **A credential-producing operation is refused rather than emitted** (C-136).
+///
+/// The body this module builds ends in `response = http.request(…)` / `return response`. For an
+/// operation whose whole purpose is to mint a credential, that is a module that performs the login
+/// and binds the raw token to a symbol a model can read — precisely what `AGENTS.md`
+/// § Authentication contract forbids, and it would ship *beside* a `web/public/catalog.json` entry
+/// promising the caller a handle. The executable artifact would be the wrong one of the two.
+///
+/// The diversion exists on the **host** path only: `connector_pack::mint` writes the secret through
+/// a bound `CredentialStore` and returns the address. Flux has no such port, so there is no body
+/// this function could produce instead — which is why this is a refusal and not a different
+/// lowering.
+///
+/// Checked on the IR rather than only at the loader, for the reason [`check_write_metadata`] is:
+/// **an IR assembled in memory never passes through `provider::load`**, and this is the guard that
+/// must not be walkable-past. It is deliberately the *only* place the arrangement is refused —
+/// putting it in the loader as well would make this one unreachable, and the emitter is where the
+/// hazard actually is.
+fn check_credential_diversion(operation: &Operation) -> Result<()> {
+    let Some(produced) = &operation.produces_credential else {
+        return Ok(());
+    };
+    Err(Error::CredentialProducingOperation {
+        operation: operation.id.clone(),
+        credential: produced.credential.clone(),
+        secret: produced.secret.clone(),
+    })
+}
+
 fn check_write_metadata(operation: &Operation) -> Result<()> {
     // Checked ahead of the `mutates` gate, because the methods this refuses are exactly the ones the
     // gate returns early on. A condition on a `GET` is where the field is most tempting and least

@@ -342,9 +342,15 @@ pub enum Acquisition {
     Minted {
         /// The [`Operation::id`] whose call mints this credential.
         by: &'static str,
-        /// Where the secret arrives in that operation's response body — a JSON Pointer into the
-        /// response value, `*` for every element of an array. The same vocabulary
-        /// `connector_spec::response_location_exists` resolves.
+        /// Where the secret arrives in that operation's response body — **one** JSON Pointer into
+        /// the response value, `/access_token`.
+        ///
+        /// Exactly one location, and the loader refuses anything else. `credential_response`'s
+        /// sibling vocabulary admits `*` for every element of an array because it describes where
+        /// credentials *appear*; a mint stores one value at one address, so there would be nothing
+        /// to say which element it was. That is also what keeps this field's documented behaviour
+        /// and the runtime's the same thing: the diversion resolves it with
+        /// `serde_json::Value::pointer`, which has no wildcard.
         from: &'static str,
     },
     /// `base64(<user><user_suffix>:<secret>)` — HTTP Basic, composed rather than pre-composed.

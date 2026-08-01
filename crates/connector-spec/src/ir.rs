@@ -1039,6 +1039,14 @@ pub struct ProducedCredential {
     /// The same vocabulary as [`Operation::credential_response`], deliberately: two spellings of
     /// "a location in a response" would be two resolvers to keep in step, and the pair of fields
     /// describes one thing from two sides.
+    ///
+    /// **Minus the `*`.** That extension names every element of an array, which
+    /// `credential_response` needs because it describes where credentials *appear* — postmark's
+    /// `Servers[].ApiTokens` is a real array of them. A **mint** is one call storing one value at
+    /// one address, so `*` would name several secrets with nothing to say which is the credential.
+    /// The loader refuses it, which also keeps this field's documented behaviour and the runtime's
+    /// the same thing: `connector_pack::mint` resolves the location with
+    /// `serde_json::Value::pointer`, which has no wildcard.
     pub secret: String,
     /// **Which declared credential the value is stored as** — an [`AuthMethod::name`], e.g.
     /// `babelforce.access_token`.

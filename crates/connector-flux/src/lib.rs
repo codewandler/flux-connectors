@@ -289,6 +289,56 @@ pub enum Error {
         encoding: &'static str,
     },
 
+    /// **An operation that mints a credential cannot be emitted as Flux** — C-136.
+    ///
+    /// The diversion this repository ships is a **host** mechanism: `connector_pack::mint` takes the
+    /// secret out of the transport's answer, writes it through the bound `CredentialStore`, and
+    /// hands the caller `{ "credential": "tenants/…" }`. Nothing on that path is expressible here.
+    /// An emitted `op` binds `response = http.request(…)` and returns it — so a module carrying a
+    /// login would perform the login and bind the **raw token to a model-visible symbol**, while the
+    /// same operation's published `response_schema` promised a handle. Two artifacts disagreeing,
+    /// with the executable one wrong.
+    ///
+    /// `AGENTS.md` § Authentication contract states the invariant this enforces, and it is not a
+    /// consequence of the diversion but older than it: *"Generated Flux names a credential and
+    /// nothing more. It must not add prefixes, base64-encode pairs, refresh tokens, or perform
+    /// session login. … Putting acquisition in Flux would expose raw tokens in model-visible
+    /// symbols."*
+    ///
+    /// # Why this is a refusal and not an exclusion
+    ///
+    /// "Emit it into the catalogue but not into the module" is the tempting answer and it is not
+    /// available: `emit_operation` produces **one** rendering, and `connector-cli`'s seam feeds that
+    /// same text to the module, to the per-operation `.flux` file and to `web/public/catalog.json`
+    /// — deliberately, so that module-and-catalogue agreement is a property rather than a
+    /// coincidence. Splitting it would put a login's Flux in the public catalogue anyway, and would
+    /// break the three coherence checks that currently make the split unnecessary.
+    ///
+    /// So the honest statement is the one this variant makes: **this repository's execution format
+    /// cannot express a credential-producing operation.** The declaration, the derived handle output
+    /// and the host-side diversion all exist; what does not exist is a way to emit one, and until
+    /// there is, declaring one does not build. See `docs/stories/C-136-credential-diversion.md`
+    /// § Open question — the resolution may well be that the trigger belongs on `OAuth2Spec` and
+    /// that no such operation should exist at all.
+    #[error(
+        "operation `{operation}`: it declares `produces_credential` (minting `{credential}` from \
+         `{secret}`), and this repository's execution format cannot express that. An emitted `op` \
+         binds `response = http.request(…)` and returns it, so the module would perform the login \
+         and put the raw token in a model-visible symbol — `AGENTS.md` § Authentication contract: \
+         generated Flux \"must not … perform session login\". The diversion is a host mechanism \
+         (`connector_pack::mint`) and the module cannot reach the credential store. Withhold the \
+         operation until C-136's open question is settled; `expose = false` is not the mechanism, \
+         since an unexposed operation is still emitted (C-413)"
+    )]
+    CredentialProducingOperation {
+        /// The operation id.
+        operation: String,
+        /// The credential it declares it mints.
+        credential: String,
+        /// The response location the secret was to be diverted from.
+        secret: String,
+    },
+
     /// A request-changing method declared the risk of a read.
     ///
     /// flux's approval gate reads `risk`, and `low` is the tier that passes without a human. A

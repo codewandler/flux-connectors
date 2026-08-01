@@ -4668,7 +4668,26 @@ fn validate_produces_credential(
             "operation {id:?} declares `produces_credential` with `secret = {:?}`, which names no \
              field of the vendor's response. The extractor would not know what to divert, so the \
              operation would return the vendor's body — state a location as `credential_response` \
-             spells one, `/access_token`, with `*` for every element of an array",
+             spells one: a JSON Pointer into the response body, `/access_token`",
+            produced.secret
+        ));
+    }
+
+    // **And it names exactly one value.** `credential_response`'s vocabulary admits `*` for every
+    // element of an array, because that field describes *where credentials appear* and an array of
+    // them is a real shape — postmark's `Servers[].ApiTokens` is the case that forced it. A **mint**
+    // is the other question: one call, one value, one address. `*` here would name several secrets
+    // for one credential with nothing to say which is stored, so it is refused at load rather than
+    // left to fail at every call. Refusing is also what keeps the runtime honest — the diversion
+    // resolves the location with `serde_json::Value::pointer`, which has no wildcard, so a `*` this
+    // validator admitted would be a documented behaviour the code does not have.
+    if produced.secret.contains('*') {
+        problems.push(format!(
+            "operation {id:?} declares `produces_credential` at {:?}, which uses `*`. A `*` names \
+             every element of an array and a mint stores exactly one value at exactly one address, \
+             so there would be nothing to say which element is the credential. That spelling \
+             belongs to `credential_response`, which describes where credentials *appear*; name a \
+             single location here",
             produced.secret
         ));
     }

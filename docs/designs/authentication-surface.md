@@ -91,17 +91,58 @@ connector declares. An enum variant costs nothing until something uses it. It al
 its own axis — acquisition answers "how does stored material become the value that is placed", and
 for a minted credential the answer is "one of this connector's own calls put it there".
 
-**Nothing derived from the vendor's answer is returned, on any path** — which is more than "the
-success path returns a handle", and is the half that took the design work. A login whose call fails
-after the token arrived cannot quote its own response, because for this one operation shape the
-response *is* the credential: several vendors answer a failed grant with `200` and a body still
-carrying a token for another scope, and a `401` body is where the rest put their explanation. So the
-refusal carries the operation, the credential and at most the HTTP status. The cost is real and is
-accepted deliberately: an operator debugging a failing login reads a status rather than a vendor's
-reason, and the request — never the answer — is in the host's evidence log.
+**Nothing derived from the vendor's answer is returned, on any path through the host** — which is
+more than "the success path returns a handle", and is the half that took the design work. A login
+whose call fails after the token arrived cannot quote its own response, because for this one
+operation shape the response *is* the credential: several vendors answer a failed grant with `200`
+and a body still carrying a token for another scope, and a `401` body is where the rest put their
+explanation. So the refusal carries the operation, the credential and at most the HTTP status. The
+cost is real and is accepted deliberately: an operator debugging a failing login reads a status
+rather than a vendor's reason, and the request — never the answer — is in the host's evidence log.
+
+**"Through the host" is a real qualifier, and the first version of this sentence did not carry it.**
+The diversion is a `connector-pack` mechanism, and this repository has a second execution surface:
+the emitted `connectors/<provider>.flux` module a flux runtime lifts and runs. There is no diversion
+there and there cannot be — an emitted `op` ends `response = http.request(…)` / `return response`,
+and Flux holds no handle on the credential store, so a module carrying a login would perform it and
+bind the raw token to a model-visible symbol. That is the thing `AGENTS.md` § Authentication contract
+has forbidden since long before this epic: *"Generated Flux names a credential and nothing more. It
+must not … perform session login. … Putting acquisition in Flux would expose raw tokens in
+model-visible symbols."*
+
+**So the module path is closed, not covered.** `connector-flux` refuses to emit any operation
+declaring `produces_credential` (`Error::CredentialProducingOperation`), so such a connector does not
+build. Three answers were available and two were rejected:
+
+- *Teach the emitter* — forbidden by the invariant above, and unimplementable regardless: the
+  diversion is a write to a bound port and Flux has none.
+- *Emit into the catalogue but withhold from the module* — not available. `emit_operation` produces
+  **one** rendering, and `connector-cli`'s seam feeds that same text to the module, to the
+  per-operation `.flux` file and to `web/public/catalog.json`, deliberately, so that
+  module-and-catalogue agreement is a property rather than a coincidence. Splitting it would publish
+  a login's Flux in the public catalogue anyway, and would break the three coherence checks that make
+  the split unnecessary.
+- *Refuse* — what landed. It states the true thing: **this repository's execution format cannot
+  express a credential-producing operation.** The declaration, the derived handle output and the
+  host-side diversion all exist and are tested; what does not exist is a way to emit one.
+
+That refusal is not a placeholder for "teach the emitter later". Read alongside the open question
+below, the likely resolution is that no such **operation** should exist at all — the trigger belongs
+on `OAuth2Spec`, where the host performs the acquisition and nothing is emitted, and the refusal
+becomes permanent rather than temporary.
+
+**The open question, recorded here because it decides the paragraph above.** `AGENTS.md`
+§ Authentication contract says, owner-stated, that an authentication endpoint is **never** a
+connector operation — and calls the credential-response rule a *"second, independent test"*. So
+C-136 clears one of two gates and leaves the other standing, and this epic's `oauth2.login(…)` ask
+sits on the wrong side of it. The reading argued in
+[C-136](../stories/C-136-credential-diversion.md) § Open question is that the rule should stand and
+the **trigger** should move to `OAuth2Spec`: the host performs the acquisition, as the contract
+already requires, nothing is emitted, and the diversion built here is reused unchanged with `by`
+naming a declared grant rather than an operation id. That is with the owner.
 
 **The four withheld operations are not all unblocked by this.** babelforce's `POST /oauth/token` is
-the shape this mechanism is for. `zoom-meeting-get`, `zoom-meeting-create`, `postmark-server-get` and
+the shape this mechanism is for — subject to that open question. `zoom-meeting-get`, `zoom-meeting-create`, `postmark-server-get` and
 `postmark-server-list` return a credential *incidentally*, alongside the meeting or the server that
 is the operation's actual result — diverting the field would delete the answer. Those are C-79's.
 

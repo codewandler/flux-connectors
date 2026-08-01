@@ -1155,7 +1155,7 @@
         "secret": {
           "type": "string",
           "pattern": "^/",
-          "description": "Where the secret arrives in the vendor's response body — a JSON Pointer into the response value, with `*` for every element of an array, exactly as `credential_response` spells one (`/access_token`)."
+          "description": "Where the secret arrives in the vendor's response body — one JSON Pointer into the response value (`/access_token`). Exactly one location: a mint stores one value at one address, so `credential_response`'s `*` (every element of an array) is refused here — that spelling describes where credentials APPEAR, which is a different question."
         },
         "credential": {
           "type": "string",
