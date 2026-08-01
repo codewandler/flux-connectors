@@ -9,6 +9,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **One collected value can reach more than one request position, and Algolia ships** (C-229). Algolia
+  wants its application id in **two** places — the hostname and a header on every call — and a
+  configuration field could bind only one. The loader was right to refuse the alternative by name
+  (*"Two questions that share an answer are one question"*), so the C-164 implementor refused to ship
+  rather than ask a person the same question twice. That refusal still fires; what is new is the other
+  half.
+
+  `also_binds` is a **head plus destinations**, not a list of peers, and the reason is load-bearing: a
+  list has no head, so the placeholder rule would be conditional and the slot would not provably be
+  one. With a head, `binds`' own target is the slot everywhere, and every field that existed before is
+  byte-for-byte unchanged.
+
+  The value is validated against **each** destination it reaches and substituted unencoded — the
+  intersection of every position's rule, host rule included. A value that passes as a path, a query and
+  a header but is not a safe hostname is refused, which is the case no single position would catch.
+
+  **Algolia is the 54th provider**: five curated operations, 937 → 945 artifacts.
+
+### Added
+
 - **A credential-producing operation returns a handle, never the secret** (C-136). An operation's
   result becomes a session value a model can read and a log can print, so a login that *returns* its
   token has already lost — and redaction cannot save it, because the host's redactor holds only values

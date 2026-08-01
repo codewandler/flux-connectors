@@ -32,7 +32,7 @@ ir_sha256 = "8fa16686ab119b233f7f463e4ab0e3c284a0cd1f7af40320939e0fafcfe431f9"
 "crates/catalog/ops/algolia/algolia-object-delete.flux" = "2663491bf599ea87e5aec2082dd820a9484677ff224699feabeb3ce9593098ed"
 "crates/catalog/ops/algolia/algolia-object-get.flux" = "a8a0273772e480acf8ff36a95db67be9973b9d1e04a6132eeb71ffefc17a1eab"
 "crates/catalog/ops/algolia/algolia-object-save.flux" = "843cb9cbe5b8dad1388df771f98b8e25fa1235b362228e670bbc4f6a480dc541"
-"crates/catalog/src/generated/algolia.rs" = "515c114af0747dd6850ab51613c8fca6fa9e66ad39df7413bf11a8356968222a"
+"crates/catalog/src/generated/algolia.rs" = "cc21c54177a62cb6ec3289d43d3cfb4d601be7a7a63a5144ff37228f61028d69"
 
 [[provider]]
 id = "anthropic"

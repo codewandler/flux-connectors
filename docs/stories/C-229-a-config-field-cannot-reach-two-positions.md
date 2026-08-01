@@ -2,8 +2,7 @@
 id: C-229
 title: "A configuration field cannot declare one value reaching two positions, and it is the only thing still blocking Algolia"
 pillar: Spec
-status: in-progress
-priority: 2
+status: done
 design: docs/designs/connector-configuration.md
 epic:
 areas: [connector-spec]

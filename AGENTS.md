@@ -49,7 +49,7 @@ implementor after a defect that did not exist.
 | `connector-flux/tests` is 22,455 lines | 22,595. |
 | `babelforce-call-list` curates 11 query parameters | 14. |
 | `connector-cli -- diff` subsumes assertions about emitted text | It pins text against the committed rendering and says nothing about its properties. |
-| `algolia_connector.rs` is fixture drift | No `providers/algolia.toml` exists; it is a deliberate negative-result probe. |
+| `algolia_connector.rs` is fixture drift | No `providers/algolia.toml` existed; it was a deliberate negative-result probe. **C-229 shipped that provider on 2026-08-01**, so the row records what the claim was worth when it was made, not the tree today. |
 | `connector-spec` is "a 4000-line IR" | 11,832 lines, 128 public items. Quoted from a story note written before C-406. |
 | `CARGO_REGISTRY_TOKEN` is not configured | It is an **org** secret shared with this repo. Only repo-level secrets were checked. |
 | `cargo publish` is the operator's to run | [§ Publishing contract](#publishing-contract) forbids it by hand, and has since before the session. |
