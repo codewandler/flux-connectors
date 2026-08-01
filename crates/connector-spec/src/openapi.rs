@@ -602,6 +602,37 @@ fn read_operation(
             return;
         }
     };
+    // **A vendor's placeholder does not become this repository's coverage** — C-417.
+    //
+    // `response_schema_coverage.rs` has refused an authored `{}` or a bare `{"type": "object"}`
+    // since C-126, on the grounds that a schema admitting every document tells a consumer no more
+    // than absence does while counting as a declaration. Everything it guarded was hand-written
+    // until babelforce started deriving 392 schemas from five documents — and 24 of those
+    // documents' 2xx bodies are exactly that placeholder, almost all of them deletes answering
+    // `{"type": "object"}` with no properties.
+    //
+    // Carrying one through would launder a vendor's non-statement into a coverage number, which is
+    // the precise defect that gate exists to catch; it would just have been committed by ingest
+    // rather than by an author. So the schema is dropped and the operation publishes an **honest
+    // absence**, which is a reviewable answer, and the drop is diagnosed rather than silent.
+    //
+    // Zero shipped operations were affected when this landed — the gate was green — so this changes
+    // no existing provider's output. What it changes is the direction a future one can drift.
+    let response_schema = match response_schema {
+        Some(schema) if crate::constrains_nothing(&schema) => {
+            ingested.diagnostics.push(Diagnostic {
+                location,
+                problem: format!(
+                    "the lowest 2xx response declares `{schema}`, which admits every document and \
+                     so states nothing the absence of a schema does not. It was dropped rather \
+                     than published, because a schema that constrains nothing counts as coverage \
+                     while carrying none"
+                ),
+            });
+            None
+        }
+        schema => schema,
+    };
 
     ingested.operations.push(SpecOperation {
         operation_id: operation_id.to_owned(),

@@ -86,30 +86,75 @@ fn segments_contain(haystack: &str, needle: &str) -> bool {
         .any(|window| window == module.as_slice())
 }
 
+/// The five services babelforce publishes, one per vendored document — C-410, C-417.
+///
+/// The split was **not** speculative and it is not C-130's `ivr`. It arrived because the connector
+/// compiles from five documents, and a document joins a service: the partition is what lets
+/// `getUser` mean two different requests without either being compiled by accident. The address
+/// cost `AGENTS.md` warns about was paid for a surface that exists, which is the distinction the
+/// old comment here drew.
+const SERVICES: &[&str] = &[
+    "manager",
+    "auth",
+    "user",
+    "task-automation",
+    "task-schedule",
+];
+
 #[test]
-fn babelforce_publishes_the_nine_curated_operations_under_one_default_service() {
+fn babelforce_publishes_the_nine_curated_operations_across_five_named_services() {
     let connector = load();
     assert_eq!(connector.id, PROVIDER);
     assert_eq!(connector.vendor, "Babelforce");
     assert_eq!(connector.base_url, BASE_URL);
     assert_eq!(connector.verify.as_deref(), Some("babelforce-agent-list"));
+
+    // **The nine lead, and they are the nine that reach a model.** C-417 widened this connector to
+    // the whole manager-sdk surface, so the published set is no longer nine — but the nine are a
+    // public contract, they still publish first and in this order because a `[[patch.operations]]`
+    // block outranks a selector, and they are the only exposed operations in a set of 392.
     assert_eq!(
         connector
             .operations
             .iter()
+            .take(OPERATIONS.len())
             .map(|operation| operation.id.as_str())
             .collect::<Vec<_>>(),
         OPERATIONS
     );
+    assert_eq!(
+        connector
+            .operations
+            .iter()
+            .filter(|operation| operation.expose)
+            .map(|operation| operation.id.as_str())
+            .collect::<Vec<_>>(),
+        OPERATIONS,
+        "the curated nine are the exposed set; the rest are callable without being tools"
+    );
 
-    // No `[[services]]` entry, so all nine sit in the implicit `default` service. C-130 would have
-    // added `ivr` and split these into named surfaces; it is blocked, and the split is deliberately
-    // not done speculatively — naming a service renames the emitted artifacts and mints a new
-    // address, and `AGENTS.md`'s service contract is that an address, once published, is never
-    // reused. Paying that once is right; paying it for a service that never arrives is not.
-    assert!(connector.services.is_empty());
+    // Five named services, and **nothing in the reserved `default`**: every operation arrived
+    // through a `[[spec]]` entry that names the service its document joins, so an operation left in
+    // `default` would be one that reached the connector by some other route.
+    assert_eq!(connector.service_names(), SERVICES);
     for operation in &connector.operations {
-        assert_eq!(operation.service, "default", "{}", operation.id);
+        assert!(
+            SERVICES.contains(&operation.service.as_str()),
+            "`{}` lands in service `{}`, which no `[[services]]` entry declares",
+            operation.id,
+            operation.service
+        );
+    }
+    for id in OPERATIONS {
+        let operation = connector
+            .operations
+            .iter()
+            .find(|operation| operation.id == *id)
+            .expect("a curated operation");
+        assert_eq!(
+            operation.service, "manager",
+            "the curated nine all come from the manager document"
+        );
     }
 }
 

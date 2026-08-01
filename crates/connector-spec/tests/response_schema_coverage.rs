@@ -371,23 +371,14 @@ fn no_operation_publishes_a_permissive_response_schema() {
 
 /// Whether a schema admits every document it could be checked against — an empty object, or a type
 /// with no stated members.
+///
+/// **`connector_spec::constrains_nothing`, not a copy of it** (C-417). This was a local twenty-line
+/// predicate until ingest needed the same judgement: a vendor document that publishes
+/// `{"type": "object"}` for its deletes must not have that laundered into coverage, and 24 of
+/// babelforce's do. Two copies of one rule with only one of them enforced is the defect this
+/// repository files stories about, so the rule moved into the library and this reads it — which
+/// also means a keyword added to the informative list tightens the gate and the ingest refusal
+/// together, in one edit.
 fn is_permissive(schema: &JsonSchema) -> bool {
-    let Some(object) = schema.as_object() else {
-        // A bare `true` is the JSON Schema spelling of "anything".
-        return schema.as_bool() == Some(true);
-    };
-    if object.is_empty() {
-        return true;
-    }
-    const INFORMATIVE: [&str; 8] = [
-        "properties",
-        "items",
-        "required",
-        "$ref",
-        "oneOf",
-        "anyOf",
-        "allOf",
-        "const",
-    ];
-    !INFORMATIVE.iter().any(|key| object.contains_key(*key))
+    connector_spec::constrains_nothing(schema)
 }

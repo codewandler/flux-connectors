@@ -116,13 +116,35 @@ fn every_provider() -> Vec<&'static str> {
         .collect()
 }
 
-/// A registry holding the whole catalogue.
+/// A registry holding the whole catalogue **as a model sees it** — the exposed operations only.
+///
+/// Kept for the one assertion that is about what a host advertises. Every assertion about what a
+/// *call* does goes through [`tool_for`] instead; see its docs for why the difference is the whole
+/// point of this file.
 fn whole_catalogue() -> ToolRegistry {
     let providers = every_provider();
     let mut registry = ToolRegistry::new();
     connector_pack::pack(&providers, http(), credentials(), configuration())(&mut registry)
         .expect("the shipped catalogue installs");
     registry
+}
+
+/// **The projected tool for one catalogued operation, exposed or not** — C-413, C-417.
+///
+/// This used to read out of [`whole_catalogue`], and that was correct for exactly as long as every
+/// shipped operation was exposed. It no longer is: babelforce publishes 392 operations of which
+/// nine reach a model, so `pack` withholds 383 of them from the registry — and reading the gate out
+/// of the registry would have quietly stopped asserting it for **97% of the catalogue**, while the
+/// file's own header claims it covers "every shipped operation rather than a sampled one".
+///
+/// `resolve` is the seam that does not filter, and it is the right one here on the merits rather
+/// than as a repair: unexposed withholds the *tool*, never the *call*, so an unexposed operation
+/// still reaches the vendor through `Executor::dispatch` and still bypasses `http.request`'s own
+/// `permission_subjects`. An operation a model cannot see but a caller can run is exactly the one
+/// whose network gate nobody would think to check.
+fn tool_for(entry: &'static catalog::Operation) -> Arc<dyn Tool> {
+    connector_pack::resolve(entry, http(), credentials(), configuration())
+        .unwrap_or_else(|error| panic!("`{}` does not resolve: {error}", entry.id))
 }
 
 /// A plausible value for every parameter the tool declares, taken from its own input schema.
@@ -163,15 +185,27 @@ fn params_for(tool: &dyn Tool) -> Value {
 /// free, and it is indistinguishable from a considered answer at every other layer.
 #[test]
 fn every_tool_declares_the_host_it_reaches() {
+    // The dotted name every exposed operation registers under, asserted once here so the switch to
+    // `resolve` does not quietly stop covering registration itself.
     let registry = whole_catalogue();
-    let mut checked = 0usize;
-
     for entry in catalog::operations() {
         let dotted = connector_pack::dotted_name(entry.id)
             .unwrap_or_else(|error| panic!("`{}` has no dotted tool name: {error}", entry.id));
-        let tool = registry
-            .get(&dotted)
-            .unwrap_or_else(|| panic!("`{}` is not registered as `{dotted}`", entry.id));
+        if connector_pack::is_exposed(entry)
+            .unwrap_or_else(|error| panic!("`{}` does not state its exposure: {error}", entry.id))
+        {
+            assert!(
+                registry.get(&dotted).is_some(),
+                "`{}` is exposed and is not registered as `{dotted}`",
+                entry.id
+            );
+        }
+    }
+
+    let mut checked = 0usize;
+
+    for entry in catalog::operations() {
+        let tool = tool_for(entry);
 
         let subjects = tool.permission_subjects(&params_for(tool.as_ref()));
         assert!(
@@ -211,11 +245,8 @@ fn every_tool_declares_the_host_it_reaches() {
 /// never consults it, so the projected Tool must raise it itself.
 #[test]
 fn every_tool_raises_a_network_fetch_intent() {
-    let registry = whole_catalogue();
-
     for entry in catalog::operations() {
-        let dotted = connector_pack::dotted_name(entry.id).expect("a dotted tool name");
-        let tool = registry.get(&dotted).expect("the operation is registered");
+        let tool = tool_for(entry);
         let intents = tool.intents(&params_for(tool.as_ref()));
 
         assert!(
@@ -280,12 +311,10 @@ fn a_tool_still_declares_its_host_when_the_request_cannot_be_built() {
 /// connectors are the ones nobody would think to check twice.
 #[test]
 fn a_templated_host_is_never_declared_as_a_permission_subject() {
-    let registry = whole_catalogue();
     let mut templated = 0usize;
 
     for entry in catalog::operations() {
-        let dotted = connector_pack::dotted_name(entry.id).expect("a dotted tool name");
-        let tool = registry.get(&dotted).expect("the operation is registered");
+        let tool = tool_for(entry);
         if entry.hosts.iter().any(|host| host.contains('{')) {
             templated += 1;
         }

@@ -82,10 +82,14 @@ fn every_shipped_provider_loads() {
     }
 }
 
-/// Selection is curated, not exhaustive. Babelforce's manager document carries 163 operations
-/// (`docs/designs/provider-operation-inventory.md` §5.2); 163 generated ops would be 163 LLM tools,
-/// most of them destructive admin CRUD. The upper bound is what this asserts — the exact counts the
-/// inventory selected are asserted next to it.
+/// Selection is curated, not exhaustive — **for every provider but one**, and the exception is what
+/// the exposure tier bought.
+///
+/// The rule this list was written under was that generated ops *are* LLM tools, so a curated count
+/// was the only thing standing between a vendor's several-hundred-operation document and a model's
+/// context. C-413 split those two claims and C-417 spent the split: babelforce now emits 392
+/// operations and exposes **nine**, so its number here is a coverage claim rather than a curation
+/// one. Every other entry still means what it always meant.
 ///
 /// **This list stays explicit, and is not the duplication C-54 removed.** A count per provider is an
 /// inventory claim: someone read the vendor's surface, chose these operations, and wrote the number
@@ -97,7 +101,14 @@ fn operation_selection_stays_curated() {
     let expected = [
         ("zendesk", 7),
         ("freshdesk", 9),
-        ("babelforce", 9),
+        // **Not a curated count — a coverage one.** C-417 widened babelforce to the whole surface
+        // `manager-sdk` covers: the five vendored documents declare 398 operations, the canonical
+        // scope is 397 (less `POST /api/v1/webhook/zendesk`, a receiver), and 392 of those reach
+        // the IR — the five that do not are `multipart/form-data` uploads ingest cannot express,
+        // and C-426 closes that. Nine of the 392 are exposed. The accounting lives in
+        // `babelforce_coverage.rs`, which refuses a gap with no reason string; this line is the
+        // number that makes a silent collapse of the selectors visible from here too.
+        ("babelforce", 392),
         // C-111 curates the generally available Machines lifecycle surface: regions, list/get/event
         // history and create/start/stop/restart/delete. Optional filters, force deletion and signal
         // bodies wait for C-30/C-56, and the event history is not misrepresented as a channel.

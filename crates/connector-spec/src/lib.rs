@@ -114,9 +114,9 @@ pub use inbound::{
     Selector, Subscription, TimestampFormat, Transport, VerificationScheme,
 };
 pub use ir::{
-    BodyEncoding, Connector, ErrorEnvelope, HttpMethod, Idempotency, JsonSchema, Operation,
-    Pagination, Param, ParamSet, Provenance, Quirks, RateLimit, Risk, Role, Runtime, Service,
-    DEFAULT_SERVICE, FREE_FORM_BODY, MIN_REPEATABILITY_CONDITION,
+    constrains_nothing, BodyEncoding, Connector, ErrorEnvelope, HttpMethod, Idempotency,
+    JsonSchema, Operation, Pagination, Param, ParamSet, Provenance, Quirks, RateLimit, Risk, Role,
+    Runtime, Service, DEFAULT_SERVICE, FREE_FORM_BODY, MIN_REPEATABILITY_CONDITION,
 };
 pub use lock::{sha256_hex, LockEntry, LockSpec, Lockfile, LOCKFILE_NAME, LOCKFILE_VERSION};
 pub use openapi::{Diagnostic, Ingested, Server, ServerVariable, SpecOperation};

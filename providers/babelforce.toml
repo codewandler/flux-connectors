@@ -1,23 +1,45 @@
-# Babelforce manager API — **spec-backed** (C-416).
+# Babelforce — **the canonical manager-sdk surface**, selected (C-417).
 #
-# This file was hand-authored from C-17 until 2026-08-01, and its header carried five paragraphs
-# explaining why: the one authoritative description of this API embedded a credential-shaped example
-# block for a real test account, and this repository is public. C-415 resolved that — the five
-# documents are vendored under `specs/babelforce/` as a declared, tested scrub — so the sentence that
-# header ended on is now executed rather than promised:
+# This file was hand-authored from C-17 until 2026-08-01, then converted to `[spec]` plus nine
+# `[[patch.operations]]` blocks by C-416, and now selects the whole surface manager-sdk covers.
+# The sentence its first header ended on is executed rather than promised:
 #
 # > When the spec lands, this file becomes `[spec]` plus a `[[patch.operations]]` selection and the
 # > operation set below is the selection to reproduce.
 #
-# The nine operations below are that selection. `docs/stories/C-416-reproduce-the-nine.md` records
-# what the conversion cost, what it changed, and the four places the document and the hand-authored
-# file disagreed — because the point of converting a connector whose output was already known-good
-# was to find those, not to skip past them.
+# **The scope is manager-sdk's, and nothing wider.** Owner-stated, 2026-08-01: *"only include things
+# which are also included in manager-sdk itself"*. The five vendored documents declare **398**
+# operations; the canonical surface is **397**, the 398 less `POST /api/v1/webhook/zendesk`
+# (`operationId` `zendesk`), which is a receiver babelforce exposes for Zendesk to call rather than a
+# call anyone here makes. It is excluded by *stating the prefix that holds its 30 siblings* rather
+# than by listing it, so what this file says is what is wanted rather than what is not.
 #
-# **Selection is opt-in.** The manager document declares 356 operations; an operation reaches this
-# connector only through a `[[patch.operations]]` block, so the 342 not named below are not tools,
-# not catalogue entries, and not anything. That is the property that lets a 356-operation document
-# be pointed at safely, and it is why `Patch` has no `hide`.
+# **392 of those 397 are emitted, and the other five are named.** Ingest skips an operation whose
+# request body is `multipart/form-data`, with a diagnostic, rather than publishing it without its
+# body — `BodyEncoding` is `Json | Form` and this IR has no third value. Five manager operations are
+# file uploads. So `392 + 5 = 397`, and that accounting is checked rather than asserted:
+# `crates/connector-spec/tests/babelforce_coverage.rs` reads the five documents, counts what they
+# declare, compares it against what this connector emits, and **refuses a gap that carries no
+# reason**. Closing the multipart gap is C-426's.
+#
+# # What makes 397 operations a file a human reads
+#
+# Four declarations, and they are the whole epic's thesis:
+#
+#   * `[[spec]]` — five documents, one per service, each hash-checked against its own bytes (C-410).
+#   * `[patch.naming]` — one rule, so 392 `rename =` lines become one line plus the nine pins that
+#     hold a shipped op id still (C-412).
+#   * `[[patch.select]]` — one statement per (document, method class), because `risk` is a damage
+#     claim and the reads and the deletes under one prefix are not one claim (C-411, C-414).
+#   * `[[patch.operations]]` — **the exceptions, and only the exceptions**: the nine curated
+#     operations that reach a model, and the one `operationId` two documents both declare.
+#
+# # Exposure is what makes widening survivable
+#
+# `expose = false` on every selector. All 392 are catalogued, addressable and callable; **nine**
+# reach a model as tools. 392 LLM tools is not a catalogue, it is a denial of service against a
+# model's context, and C-413's field exists precisely so that the number of callable operations and
+# the number of tools stop being the same number.
 
 id = "babelforce"
 vendor = "Babelforce"
@@ -38,72 +60,145 @@ vendor = "Babelforce"
 # under this path.
 authority = "com.babelforce.api"
 
-# The vendor's own spelling, taken from the operations below — every one of their paths begins
-# `/api/v2/`. Recorded here so a `gid` renders (`com.babelforce.api:v2`); a credential path needs
-# only the authority and deliberately carries no version, so a token survives the vendor's next one.
+# The connector-wide default, and it stays `v2` — which is now a *decision* rather than the
+# observation it used to be.
+#
+# This line used to say `v2` was "taken from the operations below — every one of their paths begins
+# `/api/v2/`". That was true of nine operations and is not true of 392: `task-automation` and
+# `task-schedule` are both `/api/v3`, and each states its own `api_version` below, which is what
+# `Service::api_version` exists for. What is left here is the version of the surface this connector
+# already published an address under, and it does not move: `com.babelforce.api:v2` is a rendered
+# gid, and re-spelling it would deprecate every address a tenant has provisioned against.
+#
+# `auth` inherits it and is the one imperfect fit — `/oauth/token` carries no version segment at all.
+# Inheriting is preferred to inventing a spelling the vendor does not publish.
 api_version = "v2"
 
-# Production, stated explicitly — and still stated explicitly now that a document is pointed at.
+# Production, stated explicitly — and still stated explicitly now that five documents are pointed at.
 #
-# **The reason changed on 2026-08-01 and the declaration did not.** This line used to say the
-# document's `servers[0]` is staging (`https://latest.dev.babelforce.com`), so a positional "take
-# servers[0]" ingest would silently compile the connector against the dev environment. That is no
-# longer true of the *vendored* bytes: C-415's pull normalizes `servers:` to the public production
-# host before anything is committed, and `manager-2026-07-10.openapi.yaml:26283-26285` now declares
-# exactly one server, `https://services.babelforce.com`, described as `Production`. The staging URL
-# appears nowhere in the five documents.
+# C-415's pull normalizes `servers:` to the public production host before anything is committed, and
+# `manager-2026-07-10.openapi.yaml:26283-26285` declares exactly one server,
+# `https://services.babelforce.com`, described as `Production`. The staging URL
+# (`https://latest.dev.babelforce.com`) appears nowhere in the five documents.
 #
 # It stays declared here anyway, because agreeing with the document today is not the same as
 # deferring to it. `Ingested::base_url()` is advisory by construction and the loader refuses an empty
 # `base_url` precisely so that a vendor who reorders `servers` — or a re-vendor that skips the
 # normalization — moves a reviewable line in this file instead of moving every request silently.
-# Staging remains reachable through the operator's `BABELFORCE_URL` override.
+# **That argument got 392 times stronger with this story**: one wrong host is now one wrong host for
+# the entire surface. Staging remains reachable through the operator's `BABELFORCE_URL` override.
+#
+# All five documents agree on this host, so no service declares its own `base_url`.
 #
 # SCHEMA GAP: as with the other two providers, nothing here declares that `BABELFORCE_URL` overrides
 # this value; `base_url` is a plain string.
 base_url = "https://services.babelforce.com"
 
-description = "Babelforce voice platform: agent availability, live and reported calls, and the session variables a flow reads and writes"
+# **What a model reads, so it describes the nine exposed tools and says the rest exist.** The
+# catalogue blurb is not an inventory: naming 392 operations here would spend a model's attention on
+# a surface it cannot call as tools anyway, and the operations it *can* call are the sentence.
+description = "Babelforce voice platform: agent availability, live and reported calls, and the session variables a flow reads and writes. The full manager-sdk surface — agents, calls, sessions, outbound, phonebook, reporting, task automation and scheduling — is catalogued and callable; the operations above are the ones a model drives directly"
 
 # The "Test connection" operation. Its own description already says it *"doubles as the
 # verification operation"*; this is that sentence made machine-readable.
 verify = "babelforce-agent-list"
 
-# The document declares `security` once at the root and **zero of its 356 operations override it**,
-# so one connector-wide default is the whole auth model
-# (`manager-2026-07-10.openapi.yaml:26280-26282`).
+# The manager document declares `security` once at the root and **zero of its 356 operations
+# override it**, so one connector-wide default is the whole auth model
+# (`manager-2026-07-10.openapi.yaml:26280-26282`), and the same holds for the other four.
 #
 # Every selected operation therefore inherits this and none of them states `auth`. That is a
 # decision, not an omission: `OperationPatch::auth` exists so an overlay can narrow an operation's
-# alternatives, and narrowing to the one alternative the document already declares would be nine
-# copies of a fact stated once.
+# alternatives, and narrowing to the one alternative the documents already declare would be 392
+# copies of a fact stated once. **Selection made that argument decisive** — it was nine copies
+# before.
 default_auth = [{ credentials = ["babelforce.access_token"] }]
 
 # ---------------------------------------------------------------------------------------------
-# The vendored document
+# Services — one per vendored document (C-410)
+#
+# A document is not a declaration of a service; it *joins* one, and these are the five it joins.
+# The partition is what makes five documents one connector rather than five: it is what lets
+# `getUser` mean two different requests without either of them being compiled by accident.
+# ---------------------------------------------------------------------------------------------
+
+[[services]]
+name = "manager"
+description = "The manager API: agents, calls, sessions, outbound, phonebook, reporting and account administration"
+
+[[services]]
+name = "auth"
+description = "OAuth token endpoints — minting and revoking an access token"
+
+[[services]]
+name = "user"
+description = "The signed-in user and the accounts they can reach"
+
+[[services]]
+name = "task-automation"
+description = "Task automation: submission, scripts, secrets and metrics"
+# `/api/v3`, not the connector's `v2`. Stated rather than inherited, because the gid a caller sees
+# for this service should be the version the vendor actually serves it under.
+api_version = "v3"
+
+[[services]]
+name = "task-schedule"
+description = "Scheduled tasks: creating, listing and cancelling a schedule"
+api_version = "v3"
+
+# ---------------------------------------------------------------------------------------------
+# The vendored documents — five, each provenanced on its own (C-410)
 # ---------------------------------------------------------------------------------------------
 #
 # `sha256` is **checked against the bytes ingested**, not copied past them: `load_with_spec` hashes
-# the resolved document and refuses a build whose declaration disagrees. That is what closes the
-# `SCHEMA GAP` this file's header used to carry — "there is no way to record 'derived from
-# manager.openapi.json 0.7.0, sha256 6a79679…' for a hand-authored connector, so the upstream
-# identity survives only in this comment". It no longer survives only in a comment; it is a
-# measurement that reaches `connectors.lock`, and the comment is deleted rather than updated.
+# each resolved document and refuses a build whose declaration disagrees. **Per document**, which is
+# the reason this is a list of five and not one hash for the connector: the five were pulled on two
+# different dates and three of them publish `info.version = "0.0.0-dev"`, so one hash could not say
+# which of them moved — which is the only question a drift check is ever asked.
 #
-# `source_url` is **absent deliberately**. The only URL there is to record points at an internal
-# GitLab host, and `AGENTS.md` ("the pulled bytes come here, the configuration that pulled them does
-# not") makes that omission the rule rather than an oversight. Identity is the pull date in the file
-# name plus this hash; `specs/babelforce.provenance.toml` carries both, and the `upstream_sha256`
-# there keeps C-14's drift detectable even though nothing here can re-fetch.
+# `source_url` is **absent deliberately** on all five. The only URL there is to record points at an
+# internal GitLab host, and `AGENTS.md` ("the pulled bytes come here, the configuration that pulled
+# them does not") makes that omission the rule rather than an oversight. Identity is the pull date in
+# each file name plus its hash; `specs/babelforce.provenance.toml` carries both, and the
+# `upstream_sha256` there keeps C-14's drift detectable even though nothing here can re-fetch.
 #
-# `upstream_version` is the useless string the document actually declares. Recorded as-is rather than
-# corrected: `info.version` is `0.0.0-dev` on three of the five documents, and writing a version the
-# vendor does not publish would be inventing provenance.
-[spec]
+# `upstream_version` is the string each document actually declares, recorded as-is rather than
+# corrected. Writing a version the vendor does not publish would be inventing provenance.
+
+[[spec]]
 path = "specs/babelforce/manager-2026-07-10.openapi.yaml"
+service = "manager"
 upstream_version = "0.0.0-dev"
 fetched_at = "2026-07-10T12:24:21Z"
 sha256 = "5728cd62a637e4b3fdd5fa1d376c0ebb478ad0c966922a9dd3fb0608918d739c"
+
+[[spec]]
+path = "specs/babelforce/auth-2026-06-25.openapi.yaml"
+service = "auth"
+upstream_version = "0.0.0-dev"
+fetched_at = "2026-06-25T09:37:13Z"
+sha256 = "0f1c947bae5b930925480a82a5902ab4f710e188e33c335cf95c6c2022a2f93f"
+
+[[spec]]
+path = "specs/babelforce/user-2026-06-25.openapi.yaml"
+service = "user"
+upstream_version = "0.0.0-dev"
+fetched_at = "2026-06-25T09:37:13Z"
+sha256 = "0f98b94f138f52afb2030bc82a69fad7ace437c8d07fc47fb274d635a977ccd2"
+
+[[spec]]
+path = "specs/babelforce/task-automation-2026-06-25.openapi.yaml"
+service = "task-automation"
+upstream_version = "3.63.10"
+fetched_at = "2026-06-25T09:37:14Z"
+sha256 = "2d827090e3ec35e73cf0108f9b0b5c7f7ec5e335a5804b7e7d87fff15dcca989"
+
+[[spec]]
+path = "specs/babelforce/task-schedule-2026-06-25.openapi.yaml"
+service = "task-schedule"
+upstream_version = "3.63.10"
+fetched_at = "2026-06-25T09:37:14Z"
+sha256 = "031327359000bd70d6b2ab012868971cc834812e5f61f5157531e7cb5daa4d85"
 
 # ---------------------------------------------------------------------------------------------
 # Credentials
@@ -115,8 +210,8 @@ scheme = "bearer"
 env = ["BABELFORCE_ACCESS_TOKEN"]
 description = "SSO-issued babelforce access token, minted outside flux and supplied through the environment"
 
-# `X-Auth-Access-Id` / `X-Auth-Access-Token`: **not declared by this document, so there is nothing
-# here to exclude.**
+# `X-Auth-Access-Id` / `X-Auth-Access-Token`: **not declared by any of the five documents, so there
+# is nothing here to exclude.**
 #
 # This block used to be a five-paragraph exclusion notice, and the premise under it did not survive
 # contact with the vendored bytes. It said the document's `securitySchemes` offered a second option —
@@ -127,9 +222,9 @@ description = "SSO-issued babelforce access token, minted outside flux and suppl
 #
 # C-415 measured it. `manager-2026-07-10.openapi.yaml:26270-26279` declares `securitySchemes` holding
 # **`oauth2` alone**, and the same is true of all five documents. There is no header pair in the
-# document for an overlay to remove, no per-operation `auth` to write, and nothing for drift-check to
+# documents for an overlay to remove, no per-operation `auth` to write, and nothing for drift-check to
 # report on — so the instruction that block left behind is not satisfiable against this spec version,
-# and following it would have produced nine `auth` lines defending against a scheme that is not there.
+# and following it would have produced 392 `auth` lines defending against a scheme that is not there.
 #
 # Two readings fit and this repository cannot choose between them from the bytes: either the
 # maintainers finished the scrubbing the inventory recorded as under way between the 0.7.0 document
@@ -155,68 +250,231 @@ description = "SSO-issued babelforce access token, minted outside flux and suppl
 # `jwt` block would go (§5.1.2, `crates/connector-spec/src/auth.rs:60-69`). Nothing in this file
 # would change.
 #
-# The document models the bearer as OAuth2 with a **password grant** at `/oauth/token`
+# The documents model the bearer as OAuth2 with a **password grant** at `/oauth/token`
 # (`manager-2026-07-10.openapi.yaml:26271-26279`), and we still do not implement it: it would require
 # flux to hold a babelforce user password in order to mint tokens, which is strictly worse than
-# holding the token (§5.1.4). Pointing at the document did not change this — ingest extracts no
-# per-operation auth at all today (C-5 is where that lands), so the refusal is expressed by
-# `[[auth]]` above declaring a plain bearer and by no `[[patch.operations]]` naming the grant.
+# holding the token (§5.1.4). Note that widening to the full surface makes `/oauth/token` itself a
+# *selected, callable operation* — that is not the same thing as flux performing the grant, and the
+# two must not be confused: an operator may call it, and nothing in this connector does. It is
+# `expose = false` like everything else the `auth` selector matches, so no model can reach for it.
 # Revisit only if babelforce publishes a client-credentials flow.
 
 # ---------------------------------------------------------------------------------------------
-# Operations — 9 selected of the 356 the document declares.
+# Naming — one rule, nine pins (C-412)
 #
-# Selection principle, unchanged from the hand-authored file: include only what a support flow
-# executes at runtime, and exclude everything that is account administration performed in the
-# babelforce UI. What survives is agents (who is available), calls (what is happening, and acting on
-# it) and sessions (the variable bag a flow reads and writes) — the three groups that pair naturally
-# with a Zendesk or Freshdesk ticket. Widening past this set is C-417's, and `expose` (C-413) is the
-# axis that makes widening survivable.
+# The rule derives `listReportingCalls` into `babelforce-list-reporting-calls`, so a public op id
+# exists for all 392 operations without 392 lines saying so. Collisions refuse rather than
+# last-write-wins, and a derived id that is not a legal flux `decl_name` is reported by name.
 #
-# Op ids are hyphen-separated — flux-lang admits alphanumerics, `_` and `-` only (C-8) — and are a
-# **public contract**, which is why every block states `rename` rather than letting the vendor's
-# `operationId` become one. The loader refuses a selection that does not.
+# **The nine pins are the compatibility contract, and they are the reason this block is a pin table
+# rather than a comment.** Those ids are what users and models already call; a rule arriving
+# underneath them must not move them. `crates/connector-spec/tests/babelforce_spec_route.rs` holds
+# each of the nine to its id, method, path, risk and idempotency, so this table cannot quietly stop
+# being load-bearing.
 #
-# `risk` and `idempotency` are stated on every block for the same reason: no OpenAPI document
-# publishes either, and the loader refuses a selection that states neither rather than inferring
-# from the HTTP method. The values below are the hand-authored file's, carried across unchanged.
+# A pin is keyed by `operationId` alone, which is unique inside one document and nowhere else. All
+# nine are the manager document's and no other document declares any of these ids, so nine pins are
+# nine unambiguous statements. The one id two documents *do* share is handled below, by the only
+# construct that can name a service.
+# ---------------------------------------------------------------------------------------------
+
+[patch.naming]
+rule = "kebab"
+prefix = "babelforce"
+
+[patch.naming.pin]
+listAgents = "babelforce-agent-list"
+getAgent = "babelforce-agent-get"
+updateAgentStatus = "babelforce-agent-status-update"
+listReportingCalls = "babelforce-call-list"
+getCall = "babelforce-call-get"
+hangupCall = "babelforce-call-hangup"
+setCallSessionVariables = "babelforce-call-session-set"
+getSessionVariables = "babelforce-session-get"
+updateSessionVariables = "babelforce-session-update"
+
+# ---------------------------------------------------------------------------------------------
+# Selection — thirteen statements for 392 operations (C-411, C-414)
+#
+# Split by method class rather than by resource, because what a selector *states* is a damage claim:
+# `risk = "destructive"` over the DELETEs is one reviewable line, and the same line over the reads
+# beside them would be a lie. Reads state nothing at all — a method that changes nothing has no
+# damage claim to get wrong, and takes `low`/`idempotent`, which are the only values a read can have.
+#
+# **Silence on a write refuses the build, by name.** No OpenAPI document publishes `risk` or
+# `idempotency`, so someone has to state both for every mutating operation here; a default derived
+# from the HTTP method would turn a couple of hundred unmade decisions into a couple of hundred
+# claims a host reads as a licence. That is why every write-side selector below carries both.
+#
+# **`risk = "high"` on the writes is deliberately blunt, and it is the conservative direction.** One
+# statement cannot distinguish `POST /api/v2/calls/{id}/hangup` from `POST /api/v2/phonebook`, so it
+# claims the worse of the two. An operation that deserves less says so in its own block below —
+# which is a change that *lowers* a claim, and therefore one a reviewer is looking at on purpose.
+#
+# `expose = false` throughout. See the header: 392 catalogued and callable, nine reaching a model.
+#
+# The prefixes are stated on whole segments, so `/api/v2/agents` reaches `/api/v2/agents/{id}` and
+# never `/api/v2/agentsummary`. A prefix that matched half a segment would select by spelling
+# accident, which is the opposite of a statement.
+# ---------------------------------------------------------------------------------------------
+
+[[patch.select]]
+service = "manager"
+path_prefix = "/api/v2"
+methods = ["GET"]
+expose = false
+
+[[patch.select]]
+service = "manager"
+path_prefix = "/api/v2"
+methods = ["POST", "PUT", "PATCH"]
+risk = "high"
+idempotency = "non_idempotent"
+expose = false
+
+[[patch.select]]
+service = "manager"
+path_prefix = "/api/v2"
+methods = ["DELETE"]
+risk = "destructive"
+idempotency = "non_idempotent"
+expose = false
+
+[[patch.select]]
+service = "auth"
+path_prefix = "/oauth"
+methods = ["GET"]
+expose = false
+
+# `POST /oauth/token` mints a credential and `POST /oauth/revoke` destroys one; neither is a call a
+# model makes, and both are stated rather than swept in with the manager writes.
+[[patch.select]]
+service = "auth"
+path_prefix = "/oauth"
+methods = ["POST"]
+risk = "high"
+idempotency = "non_idempotent"
+expose = false
+
+[[patch.select]]
+service = "user"
+path_prefix = "/api/v2/user"
+methods = ["GET"]
+expose = false
+
+[[patch.select]]
+service = "user"
+path_prefix = "/api/v2/user"
+methods = ["POST"]
+risk = "high"
+idempotency = "non_idempotent"
+expose = false
+
+# **`/api/v3` and not the whole document, and this is where the scope constraint is enforced.**
+# `POST /api/v1/webhook/zendesk` is a receiver Zendesk calls *into* babelforce, not a call anyone
+# makes out of flux, and manager-sdk does not cover it. Its 30 siblings are all under `/api/v3`, so
+# stating that prefix says what is wanted rather than listing what is not — and a future `/api/v1`
+# receiver is excluded by the same line, without anyone remembering to exclude it.
+[[patch.select]]
+service = "task-automation"
+path_prefix = "/api/v3"
+methods = ["GET"]
+expose = false
+
+[[patch.select]]
+service = "task-automation"
+path_prefix = "/api/v3"
+methods = ["POST", "PUT", "PATCH"]
+risk = "high"
+idempotency = "non_idempotent"
+expose = false
+
+[[patch.select]]
+service = "task-automation"
+path_prefix = "/api/v3"
+methods = ["DELETE"]
+risk = "destructive"
+idempotency = "non_idempotent"
+expose = false
+
+[[patch.select]]
+service = "task-schedule"
+path_prefix = "/api/v3"
+methods = ["GET"]
+expose = false
+
+[[patch.select]]
+service = "task-schedule"
+path_prefix = "/api/v3"
+methods = ["POST"]
+risk = "high"
+idempotency = "non_idempotent"
+expose = false
+
+[[patch.select]]
+service = "task-schedule"
+path_prefix = "/api/v3"
+methods = ["DELETE"]
+risk = "destructive"
+idempotency = "non_idempotent"
+expose = false
+
+# ---------------------------------------------------------------------------------------------
+# The exceptions — ten blocks, and every one says something a selector cannot
+# ---------------------------------------------------------------------------------------------
+#
+# Nine are the curated operations that reach a model as tools. They are the set the hand-authored
+# file shipped, chosen on a principle that has not changed: **include what a support flow executes
+# at runtime**, and leave account administration to the babelforce UI. What survives is agents (who
+# is available), calls (what is happening, and acting on it) and sessions (the variable bag a flow
+# reads and writes) — the three groups that pair naturally with a Zendesk or Freshdesk ticket.
+#
+# The tenth breaks a collision: `getUser` is declared by `manager-2026-07-10` **and** by
+# `user-2026-06-25`, as two different requests, and a `[patch.naming.pin]` is keyed by `operationId`
+# alone. So the one that has to move is named by the only construct that can state a `service`.
+#
+# **Each of the nine restates its shipped `risk` and `idempotency`, and that is not redundancy.**
+# The selector above claims `high`/`non_idempotent` for every manager write, which is the right
+# blunt claim for a set of ~200 and the wrong claim for these three: `updateAgentStatus`,
+# `setCallSessionVariables` and `updateSessionVariables` ship as `medium`/`idempotent`, and those
+# values reach a host's approval gate and its retry decision. Taking the selector's value here would
+# have been a silent behavioural change to three shipped tools, dressed as a refactor. A block
+# overrides a selector field by field, which is exactly what that mechanism is for.
 #
 # `description` is stated only where the document's own summary loses something. The vendor writes a
 # terse noun phrase ("List agents"); where the hand-authored file's sentence carried operational
 # knowledge the document does not — a precondition, a caveat, which of two synonymous parameters to
 # use — that sentence is kept, because it is what reaches a model as the tool contract.
-# ---------------------------------------------------------------------------------------------
+#
+# **The unexposed 383 need no description, and 23 of them have none.** 23 operations across the five
+# documents declare neither `summary` nor `description`. A tool contract with no sentence in it does
+# not ship — but an *unexposed* operation is not a tool contract, it is a catalogue entry, and none
+# of the 23 is among the nine. `babelforce_coverage.rs::every_exposed_operation_carries_a_sentence`
+# holds that line: the day one of them is exposed, it needs a `description` here or the build fails.
 
 # ---------------------------------------------------------------------------------------------
-# RESPONSE SCHEMAS NOW EXIST, AND THAT IS THE CONVERSION'S LARGEST SINGLE EFFECT (C-126).
+# RESPONSE SCHEMAS ARE DERIVED, NOT AUTHORED (C-126, C-416).
 #
-# All nine operations previously declared **no** `response_schema`, and babelforce was the largest
-# single absent block in `crates/connector-spec/tests/response_schema_coverage.rs`. The file used to
-# argue that at length and the argument had one load-bearing premise: "there is no offline source to
-# derive one from … the one authoritative description is `manager.openapi.json`, which is not
-# vendored here". That premise is gone. The document publishes a 2xx JSON schema for all nine, ingest
-# reads the lowest 2xx, and the schemas below are therefore **derived, not authored** — which is
-# exactly the resolution that comment named: "then these schemas are *derived* from its response
-# objects rather than authored at all — the same `[spec]` + `[[patch.operations]]` route the header
-# describes."
-#
-# So the coverage table moves from `babelforce 0 / 9` to `9 / 9`, and no schema here was guessed.
-# This changes `connectors/babelforce.flux` and every artifact downstream of it, deliberately: C-416
-# chose the derived schemas over byte-identity with the old artifacts, on the grounds that
-# byte-identity would have meant deleting real vendor-published response shapes in order to keep a
-# hash stable. The story records that decision.
+# All nine of these previously declared **no** `response_schema`, and babelforce was the largest
+# single absent block in `crates/connector-spec/tests/response_schema_coverage.rs`. The documents
+# publish a 2xx JSON schema for all nine, ingest reads the lowest 2xx, and no schema here was
+# guessed. Widening to 392 operations moves that table by an order of magnitude in the same
+# direction, and the same way: every schema arrives from a document rather than from an author.
 # ---------------------------------------------------------------------------------------------
 
 [[patch.operations]]
+service = "manager"
 select = "listAgents"
-rename = "babelforce-agent-list"
 risk = "low"
 idempotency = "idempotent"
+expose = true
 # The document's summary is "List agents", which loses the reason this operation is `verify`.
 description = "List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint"
 
 # Not in any spec, so stated here. The manager document paginates uniformly on `page`/`max`;
-# attaching that per operation is a repetition C-415's per-service quirks are meant to end.
+# attaching that per operation is a repetition C-415's per-service quirks are meant to end, and
+# widening to 392 operations makes the case for a service-level `quirks` block considerably louder —
+# it is stated on two operations here and would be true of well over a hundred.
 [patch.operations.quirks.pagination]
 page = { page_param = "page", size_param = "max", page_size = 100, max_pages = 20 }
 
@@ -226,22 +484,26 @@ page = { page_param = "page", size_param = "max", page_size = 100, max_pages = 2
 # document supplies all 11 with better descriptions than the transcription had, plus a twelfth
 # (`tags`) the transcription predates.
 [[patch.operations]]
+service = "manager"
 select = "getAgent"
-rename = "babelforce-agent-get"
 risk = "low"
 idempotency = "idempotent"
+expose = true
 
 # ---------------------------------------------------------------------------------------------
 
 [[patch.operations]]
+service = "manager"
 select = "updateAgentStatus"
-rename = "babelforce-agent-status-update"
+# `medium`/`idempotent`, against the manager write selector's `high`/`non_idempotent`. Setting an
+# agent's presence is a small, repeatable write, and this is the value it has shipped with.
 risk = "medium"
 idempotency = "idempotent"
-# SCHEMA GAP, still open and unchanged by the conversion: `UpdateAgentStatusRequest` declares every
-# property optional (`manager-2026-07-10.openapi.yaml:25810-25820`), so an empty PUT is schema-valid
-# and does nothing. That is the same class of problem as Zendesk's empty update, and `Quirks` still
-# has no precondition field to record it in — so the constraint lives in this sentence.
+expose = true
+# SCHEMA GAP, still open: `UpdateAgentStatusRequest` declares every property optional
+# (`manager-2026-07-10.openapi.yaml:25810-25820`), so an empty PUT is schema-valid and does nothing.
+# That is the same class of problem as Zendesk's empty update, and `Quirks` still has no precondition
+# field to record it in — so the constraint lives in this sentence.
 #
 # **The body shape changed with the front-end, and the document's is the correct one.** The
 # hand-authored file flattened the vendor's nesting: it declared a scalar `presence_name` carrying
@@ -256,10 +518,11 @@ description = "Update an agent's status. Supply at least one of `enabled` or `pr
 # ---------------------------------------------------------------------------------------------
 
 [[patch.operations]]
+service = "manager"
 select = "listReportingCalls"
-rename = "babelforce-call-list"
 risk = "low"
 idempotency = "idempotent"
+expose = true
 description = "List and filter calls from the reporting view"
 
 # **The one endpoint where the vendor's own synonyms would have swamped the tool.**
@@ -290,6 +553,11 @@ description = "List and filter calls from the reporting view"
 #     Renaming a tool's arguments to gain the canonical spelling is a break for every caller in
 #     exchange for nothing functional. Flip the two lists below if that trade ever changes.
 #   - `parentId`, `domain`, `source`, `anonymous` — real filters, but narrow. Add on demand.
+#
+# **This is the only operation of the 392 that omits anything, and that is on purpose.** Omission is
+# a per-operation judgement about a tool contract, and 383 of these operations are not tool
+# contracts. An unexposed operation carrying a vendor's redundant parameter costs a caller who
+# passes it nothing and costs a model nothing at all, because no model sees it.
 #
 # `time.start` and `time.end` keep their dotted wire names. That is deliberate and safe: C-8's
 # `Symbols` allocator maps a wire name onto a distinct Flux symbol (`time_start`), because a dotted
@@ -327,29 +595,33 @@ page = { page_param = "page", size_param = "max", page_size = 100, max_pages = 2
 # ---------------------------------------------------------------------------------------------
 
 [[patch.operations]]
+service = "manager"
 select = "getCall"
-rename = "babelforce-call-get"
 risk = "low"
 idempotency = "idempotent"
+expose = true
 
 # ---------------------------------------------------------------------------------------------
 
 [[patch.operations]]
+service = "manager"
 select = "hangupCall"
-rename = "babelforce-call-hangup"
-# The only destructive operation in the selected set, and the only one that affects a live caller.
+# The only destructive operation in the exposed set, and the only one that affects a live caller.
 # It must never be marked read-only, and no document will ever say so — which is why the loader
-# refuses a selection that leaves `risk` unstated rather than defaulting it from the method.
+# refuses a selection that leaves `risk` unstated rather than defaulting it from the method, and why
+# the manager write selector's `high` is *raised* here rather than accepted.
 risk = "destructive"
 idempotency = "non_idempotent"
+expose = true
 
 # ---------------------------------------------------------------------------------------------
 
 [[patch.operations]]
+service = "manager"
 select = "setCallSessionVariables"
-rename = "babelforce-call-session-set"
 risk = "medium"
 idempotency = "idempotent"
+expose = true
 # **The document and the hand-authored file disagree about this request body, and the disagreement is
 # on the wire rather than in the schema's precision.** Recorded in
 # `docs/stories/C-416-reproduce-the-nine.md` before it was resolved.
@@ -397,18 +669,20 @@ description = "Set session variables on a live call. Pass them as the `variables
 # ---------------------------------------------------------------------------------------------
 
 [[patch.operations]]
+service = "manager"
 select = "getSessionVariables"
-rename = "babelforce-session-get"
 risk = "low"
 idempotency = "idempotent"
+expose = true
 
 # ---------------------------------------------------------------------------------------------
 
 [[patch.operations]]
+service = "manager"
 select = "updateSessionVariables"
-rename = "babelforce-session-update"
 risk = "medium"
 idempotency = "idempotent"
+expose = true
 # Genuinely free-form, and the document agrees with the hand-authored reading here:
 # `UpdateSessionVariablesRequest` is `{"type": "object", "additionalProperties": true}` with no
 # properties (`manager-2026-07-10.openapi.yaml:25854-25860`), so ingest carries it as `body_schema` —
@@ -418,3 +692,19 @@ idempotency = "idempotent"
 # This is the one of the two untyped bodies that stayed untyped; `babelforce-call-session-set` above
 # is the one that did not.
 description = "Update the user-scoped variables of a session. The body is the variable map itself"
+
+# ---------------------------------------------------------------------------------------------
+
+# **The collision, broken.** Both `manager-2026-07-10` and `user-2026-06-25` declare `getUser`, as
+# two different requests. The naming rule derives `babelforce-get-user` for both, and a collision
+# refuses the build rather than silently making one of them unreachable under a name the other
+# answers to. A `[patch.naming.pin]` cannot break the tie because it is keyed by `operationId`
+# alone; a `[[patch.operations]]` block can, because it states a `service` — so the *user*
+# document's one moves and the manager document's keeps the derived spelling.
+#
+# The `user` one moves rather than the manager one because it is the more specific of the two: it
+# reads the signed-in user, not an arbitrary user by id, and `-me-` says so.
+[[patch.operations]]
+service = "user"
+select = "getUser"
+rename = "babelforce-user-me-get"
