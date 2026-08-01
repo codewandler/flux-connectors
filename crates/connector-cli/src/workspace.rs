@@ -13,6 +13,18 @@ pub const PROVIDERS_DIR: &str = "providers";
 /// Committed deliberately — it is what makes a build hermetic, offline and reviewable years later.
 pub const SPECS_DIR: &str = "specs";
 
+/// How a vendored spec spells itself in a provider file: `specs/<provider>/<file>`.
+///
+/// Derived from the provider name and the file name rather than by stripping a workspace root, so it
+/// is the same string no matter where the repository is checked out — which matters because it is
+/// compared for equality against `[spec] path`, a value an author typed by hand (C-4).
+pub fn spec_path(provider: &str, file: &Path) -> String {
+    format!(
+        "{SPECS_DIR}/{provider}/{}",
+        file.file_name().unwrap_or_default().to_string_lossy()
+    )
+}
+
 /// Generated, committed artifacts: `connectors/<name>.flux` and `<name>.connector.toml`.
 pub const ARTIFACTS_DIR: &str = "connectors";
 

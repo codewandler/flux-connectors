@@ -426,10 +426,11 @@ fn a_comment_only_edit_moves_the_toml_hash_alone() {
     assert_eq!(before.artifacts, after.artifacts);
 }
 
-/// A new vendored spec moves the spec hash. Nothing else moves *here* only because ingest (C-4)
-/// does not exist yet, so today's IR is built from the TOML alone; once ingest lands, a spec change
-/// that touches a selected operation will move `ir_sha256` too, which is correct and is what the
-/// separate columns are for.
+/// A new vendored spec moves the spec hash. Nothing else moves *here* because this fixture builds
+/// its IR from the TOML alone — the two columns are independent by construction. Now that ingest
+/// exists (C-4), a spec change that touches a **selected** operation moves `ir_sha256` too, which is
+/// correct and is exactly what the separate columns are for: a document that moved and an IR that
+/// did not is a vendor edit nothing this connector selected.
 #[test]
 fn a_changed_spec_moves_the_spec_hash() {
     let before = entry(&Inputs::default());

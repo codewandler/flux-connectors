@@ -1,0 +1,132 @@
+# A trimmed excerpt of Anthropic's published API document, vendored as an ingest fixture for C-4.
+#
+# It is NOT a full vendoring: only the endpoints that exercise a distinct ingest path are kept, and
+# `providers/anthropic.toml` remains hand-authored and points at no `[spec]`.
+#
+# It is deliberately **YAML and OpenAPI 3.1**, because both are load-bearing and neither is covered
+# by the Zendesk excerpt beside it:
+#
+#   - every babelforce document is YAML, and `responses:` keys are written as YAML *integers*, which
+#     no JSON object can carry until they are coerced back to strings;
+#   - 3.1 schemas are JSON Schema 2020-12, so `type: [string, "null"]` replaces 3.0's `nullable` and
+#     must travel into the IR verbatim rather than being interpreted.
+openapi: 3.1.0
+info:
+  title: Anthropic API (excerpt)
+  version: 2023-06-01
+
+servers:
+  - url: https://api.anthropic.com
+
+paths:
+  /v1/messages:
+    post:
+      operationId: messages_post
+      summary: Send a structured list of input messages and get the model's next turn.
+      parameters:
+        - name: anthropic-version
+          in: header
+          required: true
+          description: The API version this request is written against.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model, messages, max_tokens]
+              properties:
+                model:
+                  type: string
+                  description: The model that will complete the prompt.
+                messages:
+                  type: array
+                  description: The conversation so far.
+                  items:
+                    $ref: '#/components/schemas/InputMessage'
+                max_tokens:
+                  type: integer
+                  minimum: 1
+                system:
+                  type: [string, 'null']
+                  description: A system prompt, or null for none.
+      responses:
+        200:
+          description: The model's reply.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /v1/models:
+    get:
+      operationId: models_list
+      summary: List the models this account can call.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        200:
+          description: A page of models.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Model'
+
+components:
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      description: How many models to return.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+
+  schemas:
+    InputMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+
+    ContentBlock:
+      type: object
+      properties:
+        type:
+          type: string
+        text:
+          type: string
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+        model:
+          type: string
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContentBlock'
+        stop_reason:
+          type: [string, 'null']
+
+    Model:
+      type: object
+      properties:
+        id:
+          type: string
+        display_name:
+          type: string

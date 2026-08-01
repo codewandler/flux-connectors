@@ -57,6 +57,13 @@ pub struct Plan {
     pub providers: Vec<String>,
     /// Every artifact, ordered by path so output is stable across runs and platforms.
     pub artifacts: Vec<PlannedArtifact>,
+    /// What the vendored spec documents got wrong — C-4.
+    ///
+    /// In the plan rather than printed where it was found, because a plan is what both `build` and
+    /// `diff` render and neither should have to re-compile to say the same thing. Empty for every
+    /// hand-authored connector, which is why no committed artifact and no existing CLI output moves
+    /// when this is empty.
+    pub diagnostics: Vec<String>,
 }
 
 impl Plan {
@@ -95,10 +102,12 @@ pub fn plan_selected(
 
     let mut artifacts = Vec::new();
     let mut entries = Vec::new();
+    let mut diagnostics = Vec::new();
     for provider in &providers {
         let compiled = compile(workspace, provider, service)?;
         artifacts.extend(compiled.artifacts);
         entries.push(compiled.site);
+        diagnostics.extend(compiled.diagnostics);
     }
 
     // **The whole-catalogue artifacts.** Each covers every provider at once, so each is a function
@@ -136,6 +145,7 @@ pub fn plan_selected(
     Ok(Plan {
         providers: providers.into_iter().map(|p| p.name).collect(),
         artifacts,
+        diagnostics,
     })
 }
 
@@ -174,6 +184,8 @@ struct Compiled {
     artifacts: Vec<PlannedArtifact>,
     /// This provider's entry in `site/catalog.json`, which only a full run assembles (C-42).
     site: ProviderEntry,
+    /// What this provider's vendored document got wrong, if it has one (C-4).
+    diagnostics: Vec<String>,
 }
 
 /// One provider's artifacts, compiled and compared.
@@ -200,7 +212,9 @@ fn compile(workspace: &Workspace, provider: &Provider, service: Option<&str>) ->
     let context = || format!("provider `{}`", provider.name);
 
     let inputs = ProviderInputs::read(provider).with_context(context)?;
-    let mut connector = seam::load(&inputs).with_context(context)?;
+    let loaded = seam::load_reported(&inputs).with_context(context)?;
+    let diagnostics = loaded.diagnostics;
+    let mut connector = loaded.connector;
     if let Some(selector) = service {
         connector = seam::select_service(&connector, selector).with_context(context)?;
     }
@@ -234,7 +248,11 @@ fn compile(workspace: &Workspace, provider: &Provider, service: Option<&str>) ->
             )?);
         }
     }
-    Ok(Compiled { artifacts, site })
+    Ok(Compiled {
+        artifacts,
+        site,
+        diagnostics,
+    })
 }
 
 fn planned(path: PathBuf, contents: String) -> Result<PlannedArtifact> {

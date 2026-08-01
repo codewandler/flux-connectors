@@ -7,9 +7,12 @@
 //!    document to ingest. This is the role that matters most today, because it is the shortest route
 //!    to an executable `.flux` module.
 //! 2. **Spec pointer** — the file names a vendored spec under `specs/` and carries a *patch set*
-//!    that selects and corrects operations from it. Ingest (C-4) pre-fills the IR; the overlay
-//!    (C-6) applies the patches this loader parses. Neither of those exists yet, so the patch set is
-//!    parsed and validated here and consumed later.
+//!    that selects and corrects operations from it. [`load_with_spec`] is that path: ingest (C-4)
+//!    turns the document into every operation the vendor declares, and the patch set says which of
+//!    them this connector publishes and what it corrects about each. **Selection is opt-in**, so a
+//!    pointer with no patch is a connector with no operations. Widening what one statement can
+//!    select — a path-prefix selector, a naming rule, risk stated for a whole set — is C-411, C-412
+//!    and C-414, and none of it changes that.
 //!
 //! Both roles produce the same [`LoadedProvider`], which is what "two front-ends, one IR" means in
 //! practice.
@@ -61,18 +64,31 @@ pub const PROVIDER_TOML_JSON_SCHEMA: &str = include_str!("../schema/provider-tom
 
 /// A parsed and validated `providers/<name>.toml`.
 ///
-/// The [`connector`](Self::connector) is complete and ready for codegen when the file is
-/// hand-authored. When the file points at a spec it is a *skeleton* — id, base URL, credentials,
-/// provenance, plus any operations written inline — that C-4's ingest fills in and C-6's overlay
-/// patches.
+/// The [`connector`](Self::connector) is complete and ready for codegen either way. A
+/// hand-authored file describes it inline; a spec-backed one loaded through [`load_with_spec`] has
+/// had ingest fill it in from the vendored document. Loaded through plain [`load`], a spec-backed
+/// file is still the *skeleton* it always was — id, base URL, credentials, provenance, plus any
+/// operations written inline — because no document was supplied to ingest.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoadedProvider {
     /// The connector this file describes.
     pub connector: Connector,
     /// The vendor spec the file points at, if any. `None` for a fully hand-authored connector.
     pub spec: Option<SpecSource>,
-    /// The patch set C-6 applies over the ingested spec. Empty for a hand-authored connector.
+    /// The patch set applied over the ingested spec. Empty for a hand-authored connector.
     pub patch: Patch,
+    /// What the vendored document said, when one was supplied to [`load_with_spec`] — C-4.
+    ///
+    /// The **whole** ingest, not just the part that was published: it carries every operation the
+    /// document declares, including the ones no patch selected, plus the servers it names and every
+    /// [`Diagnostic`](crate::openapi::Diagnostic) the document earned. That is what makes "ingest
+    /// makes everything *available* to patch" inspectable rather than merely claimed — and it is
+    /// what a future `flux-connectors check` reads to tell an author which operations they could
+    /// have selected.
+    ///
+    /// `None` for a hand-authored connector, and also for a spec-backed one loaded through plain
+    /// [`load`], which is given no document to ingest.
+    pub ingested: Option<crate::openapi::Ingested>,
 }
 
 impl LoadedProvider {
@@ -80,6 +96,17 @@ impl LoadedProvider {
     /// nothing to overlay.
     pub fn is_hand_authored(&self) -> bool {
         self.spec.is_none()
+    }
+
+    /// Everything wrong with the vendored document that did not stop the ingest.
+    ///
+    /// Empty for a hand-authored connector. A real vendor document is never fully well-formed, so
+    /// this being non-empty is the normal case, not a failure — see [`crate::openapi`].
+    pub fn diagnostics(&self) -> &[crate::openapi::Diagnostic] {
+        self.ingested
+            .as_ref()
+            .map(|ingested| ingested.diagnostics.as_slice())
+            .unwrap_or_default()
     }
 }
 
@@ -286,6 +313,83 @@ struct ProviderFile {
 /// does not match the schema, and [`Error::InvalidProvider`](crate::Error::InvalidProvider) — with
 /// *every* problem found, not just the first — when it parses but is not a valid connector.
 pub fn load(name: &str, source: &str) -> crate::Result<LoadedProvider> {
+    load_inner(name, source, None)
+}
+
+/// One vendored document available to a provider, as the spec cache holds it.
+///
+/// The [`path`](Self::path) is what makes this a document rather than a pile of bytes: `[spec] path`
+/// names exactly one file, and the loader resolves the pin against these rather than trusting a
+/// caller to have picked the right one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpecDocument<'a> {
+    /// The repository-relative path, spelled exactly as `[spec] path` spells it —
+    /// `specs/babelforce/manager-2026-07-10.yaml`.
+    pub path: &'a str,
+    /// The document's bytes as text.
+    pub document: &'a str,
+}
+
+/// The same, with the vendored documents the provider's spec cache holds — C-4.
+///
+/// This is the whole spec front-end in one call: **spec -> patch -> validate**, in that fixed order.
+/// [`openapi::ingest`] turns the document into every operation it declares, the file's
+/// `[[patch.operations]]` says which of them this connector publishes and what it corrects about
+/// each, and the result is validated by exactly the same pass a hand-authored file goes through — so
+/// a selected operation is held to every rule an inline one is.
+///
+/// # The pin decides which document is read, and it is resolved here
+///
+/// `documents` is the **cache**, not a choice already made: every file under `specs/<provider>/`,
+/// and this function picks the one `[spec] path` names. That is deliberate and it is load-bearing.
+/// The cache ordinarily holds more than one file — `specs/zendesk/2024-06-01.json` beside a later
+/// `2025-01-01.json` is what versioning a vendored document *looks* like — so a caller that picked
+/// one and passed it alone would be deciding, silently, something only the provider file may decide.
+/// A build that compiled `getUser` out of a document the file never named would emit plausible,
+/// wrong Flux and exit 0.
+///
+/// A pin naming a file the cache does not hold is refused, listing what is there.
+///
+/// # The declared `sha256` is checked against the bytes, not copied past them
+///
+/// [`SpecSource::sha256`] reaches [`Provenance::spec_sha256`] and from there `connectors.lock`. If
+/// nothing compared it against the document actually ingested, provenance would be a claim the file
+/// makes about itself — and the lockfile would record a hash for bytes it never saw. So a declared
+/// hash that disagrees with the document is a refusal here. (Comparing against *upstream* is
+/// different and is C-14's; this is the local claim against the local bytes.)
+///
+/// # The file decides whether any document is read at all
+///
+/// A provider with no `[spec]` block ignores the cache entirely. `specs/<provider>/` holding a file
+/// is not a declaration; `[spec] path` is.
+///
+/// # Ingest selects nothing
+///
+/// A file that points at a 398-operation document and names none of them loads to a connector with
+/// **no operations**. That is not a degenerate case to be worked around, it is the property that
+/// keeps a vendor catalogue from becoming 398 LLM tools by default — see [`Patch`].
+///
+/// # Errors
+///
+/// The two [`load`] returns, plus an [`Error::InvalidProvider`](crate::Error::InvalidProvider)
+/// naming the spec path when the pin resolves to nothing, when the declared hash disagrees with the
+/// bytes, when the document is not an OpenAPI 3.x document at all, or when a patch selects an
+/// operation the document does not declare. A document's *narrower* problems — one endpoint with an
+/// unresolvable `$ref`, one parameter with no schema — are not errors: they arrive as
+/// [`LoadedProvider::diagnostics`].
+pub fn load_with_spec(
+    name: &str,
+    source: &str,
+    documents: &[SpecDocument<'_>],
+) -> crate::Result<LoadedProvider> {
+    load_inner(name, source, Some(documents))
+}
+
+fn load_inner(
+    name: &str,
+    source: &str,
+    documents: Option<&[SpecDocument<'_>]>,
+) -> crate::Result<LoadedProvider> {
     let file: ProviderFile = match toml::from_str(source) {
         Ok(file) => file,
         // `deny_unknown_fields` has already reported `roles` as an unknown top-level key and listed
@@ -311,9 +415,32 @@ pub fn load(name: &str, source: &str) -> crate::Result<LoadedProvider> {
     // Kept before `assemble` distributes it, so a provider-level constant header is reported once
     // rather than once per operation that inherited it.
     let provider_headers = file.const_headers.clone();
-    let loaded = assemble(file, source);
+    let mut loaded = assemble(file, source);
 
-    let problems = validate(&loaded, &provider_headers);
+    // The ids the file writes out **inline**, captured before selection appends to them. C-6's
+    // `validate_patch` asks whether a `rename` collides with one, and after selection every rename
+    // is trivially present — so the question has to be asked of the set that existed first.
+    let inline: Vec<String> = loaded
+        .connector
+        .operations
+        .iter()
+        .map(|operation| operation.id.clone())
+        .collect();
+
+    // **spec -> patch -> validate**, in that order, so a selected operation is validated by exactly
+    // the pass a hand-authored one is rather than by a second, weaker one.
+    let mut problems = Vec::new();
+    if loaded.spec.is_some() {
+        if let Some(documents) = documents {
+            ingest_spec(&mut loaded, documents, &mut problems);
+            // Re-run, because selection appended operations after `assemble` distributed. The pass
+            // only fills a header an operation does not already carry, so a second run over the
+            // inline ones changes nothing.
+            distribute_const_headers(&provider_headers, &mut loaded.connector.operations);
+        }
+    }
+
+    problems.extend(validate(&loaded, &provider_headers, &inline));
     if !problems.is_empty() {
         return Err(crate::Error::InvalidProvider {
             name: name.to_owned(),
@@ -322,6 +449,238 @@ pub fn load(name: &str, source: &str) -> crate::Result<LoadedProvider> {
     }
 
     Ok(loaded)
+}
+
+/// Ingest the vendored document and publish the operations the patch set selects.
+///
+/// Everything here is a *statement the author made*: which operations to publish, what to call each
+/// one, how risky it is. Nothing is inferred from the document, because the three fields an
+/// `Operation` needs that a specification never carries — the op id, [`Risk`] and [`Idempotency`] —
+/// are the three this repository refuses to decide by silence.
+fn ingest_spec(
+    loaded: &mut LoadedProvider,
+    documents: &[SpecDocument<'_>],
+    problems: &mut Vec<String>,
+) {
+    let Some(spec) = loaded.spec.clone() else {
+        return;
+    };
+    let path = spec.path.clone();
+
+    // **The pin, resolved.** `specs/<provider>/` ordinarily holds several files — versions of one
+    // document — and only `[spec] path` says which of them this connector is compiled from. Reading
+    // whichever happened to sort last would compile an operation out of a document the provider file
+    // never named, successfully and silently.
+    let Some(found) = documents
+        .iter()
+        .find(|candidate| candidate.path == path.trim())
+    else {
+        problems.push(format!(
+            "`[spec] path = {path:?}` names no vendored document. {}",
+            describe_cache(documents)
+        ));
+        return;
+    };
+    let document = found.document;
+
+    // **Provenance is checked, not copied.** `sha256` travels from here into `connectors.lock`; a
+    // value nothing compared against the ingested bytes would be the file's claim about itself,
+    // recorded as though it were a measurement. Checking upstream drift is a different question and
+    // is C-14's — this is the local claim against the local bytes.
+    if let Some(declared) = spec
+        .sha256
+        .as_deref()
+        .map(str::trim)
+        .filter(|hash| !hash.is_empty())
+    {
+        let measured = sha256_hex(document.as_bytes());
+        if !declared.eq_ignore_ascii_case(&measured) {
+            problems.push(format!(
+                "`[spec] sha256` declares {declared:?}, but {path} hashes to {measured:?}. The \
+                 declared value reaches `connectors.lock`, so a build that ignored the difference \
+                 would record a hash for bytes it never read — re-vendor the document or correct \
+                 the declaration"
+            ));
+            return;
+        }
+    }
+
+    let ingested = match crate::openapi::ingest(document) {
+        Ok(ingested) => ingested,
+        Err(error) => {
+            problems.push(format!("`[spec] path = {path:?}`: {error}"));
+            return;
+        }
+    };
+
+    let mut selected = Vec::new();
+    for patch in &loaded.patch.operations {
+        if let Some(operation) = select(&ingested, patch, &path, problems) {
+            selected.push(operation);
+        }
+    }
+    loaded.connector.operations.extend(selected);
+    loaded.ingested = Some(ingested);
+}
+
+/// One `[[patch.operations]]` block against the ingested document, or a problem saying why not.
+///
+/// Returns `None` on every failure rather than short-circuiting the caller, so a file with five bad
+/// patches reports five lines — the same "every problem at once" contract the rest of this loader
+/// keeps.
+fn select(
+    ingested: &crate::openapi::Ingested,
+    patch: &OperationPatch,
+    path: &str,
+    problems: &mut Vec<String>,
+) -> Option<Operation> {
+    let select = patch.select.as_str();
+    let Some(spec) = ingested.operation(select) else {
+        // Loud rather than a silent no-op, because a `select` that quietly matches nothing is how a
+        // patch set rots underneath a vendor's rename: the operation disappears from the connector
+        // and the build stays green.
+        problems.push(format!(
+            "`[[patch.operations]] select = {select:?}` names no `operationId` in {path}. {}",
+            nearest(ingested, select)
+        ));
+        return None;
+    };
+
+    // `rename` is required, and this is the one place the requirement is stated. An op id is a
+    // public contract users and models call by name, and `operationId` is a volatile vendor field —
+    // promoting one to the other silently is exactly what `docs/designs/connector-pipeline.md`'s "Op
+    // naming is a public contract" refuses. C-412 replaces the per-operation `rename` with a naming
+    // rule declared once; until it lands, an author states each one.
+    let Some(id) = patch.rename.clone() else {
+        problems.push(format!(
+            "patch for {select:?} states no `rename`. An op id is a public name that users and \
+             models call, and `operationId` is a volatile vendor field, so ingest will not promote \
+             one into one — state `rename`"
+        ));
+        return None;
+    };
+    let (Some(risk), Some(idempotency)) = (patch.risk, patch.idempotency) else {
+        problems.push(format!(
+            "patch for {select:?} states no {}. No OpenAPI document publishes either, so a \
+             selected operation states both or is not published; guessing on the operation's \
+             behalf is how a `retry` turns one charge into three and how a delete is waved through \
+             an approval gate",
+            match (patch.risk, patch.idempotency) {
+                (None, Some(_)) => "`risk`",
+                (Some(_), None) => "`idempotency`",
+                _ => "`risk` and no `idempotency`",
+            }
+        ));
+        return None;
+    };
+
+    let mut params = spec.params.clone();
+    for correction in &patch.params {
+        correct(&mut params, correction, select, problems);
+    }
+
+    Some(Operation {
+        id,
+        service: crate::DEFAULT_SERVICE.to_owned(),
+        method: spec.method,
+        path: spec.path.clone(),
+        description: patch
+            .description
+            .clone()
+            .unwrap_or_else(|| spec.description.clone()),
+        risk,
+        idempotency,
+        repeatable_because: None,
+        auth: patch.auth.clone(),
+        params,
+        response_schema: spec.response_schema.clone(),
+        quirks: patch.quirks.clone().unwrap_or_default(),
+    })
+}
+
+/// Apply one [`ParamPatch`] to a selected operation's parameters.
+///
+/// A correction that matches nothing is a problem, not a no-op: it is the same rot a `select`
+/// naming an absent operation is, one level down — the vendor renamed a field and the correction
+/// that used to fix its type silently stopped applying.
+fn correct(
+    params: &mut ParamSet,
+    correction: &ParamPatch,
+    select: &str,
+    problems: &mut Vec<String>,
+) {
+    let group = match correction.position {
+        ParamPosition::Path => &mut params.path,
+        ParamPosition::Query => &mut params.query,
+        ParamPosition::Header => &mut params.header,
+        ParamPosition::Body => &mut params.body,
+    };
+    let Some(param) = group.iter_mut().find(|param| param.name == correction.name) else {
+        problems.push(format!(
+            "patch for {select:?} corrects a `{:?}` parameter named {:?}, which the vendored spec \
+             does not declare there",
+            correction.position, correction.name
+        ));
+        return;
+    };
+    if let Some(required) = correction.required {
+        param.required = required;
+    }
+    if let Some(description) = &correction.description {
+        param.description = description.clone();
+    }
+    if let Some(schema) = &correction.schema {
+        param.schema = schema.clone();
+    }
+}
+
+/// What the spec cache actually holds, for a refusal about a pin that resolved to nothing.
+///
+/// The paths, not a count: an author who mistyped a pin needs to see the spelling that would have
+/// worked, and one who vendored nothing needs to be told that rather than left comparing a number
+/// against a directory listing.
+fn describe_cache(documents: &[SpecDocument<'_>]) -> String {
+    if documents.is_empty() {
+        "The spec cache holds no document for this provider at all — the cache is committed, so a \
+         pointer at a file that is not there is a connector that cannot be built rather than one \
+         that builds empty"
+            .to_owned()
+    } else {
+        format!(
+            "The cache holds {}",
+            documents
+                .iter()
+                .map(|document| document.path)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
+/// What to say after "names no `operationId`" — the closest spellings, or how many there were.
+///
+/// A document with 356 operations cannot have them all listed in a refusal, and a bare count helps
+/// nobody. A prefix match catches the overwhelmingly common cause, which is a typo or a vendor's
+/// casing change.
+fn nearest(ingested: &crate::openapi::Ingested, select: &str) -> String {
+    let folded = select.to_lowercase();
+    let near: Vec<&str> = ingested
+        .operation_ids()
+        .into_iter()
+        .filter(|id| {
+            let id = id.to_lowercase();
+            id.starts_with(&folded) || folded.starts_with(&id) || id.contains(&folded)
+        })
+        .take(5)
+        .collect();
+    if near.is_empty() {
+        format!(
+            "The document declares {} operations, none of them by that name",
+            ingested.operations.len()
+        )
+    } else {
+        format!("Did you mean {}?", near.join(", "))
+    }
 }
 
 /// The refusal for a provider-level `roles` key — C-120.
@@ -385,6 +744,8 @@ fn assemble(file: ProviderFile, source: &str) -> LoadedProvider {
         },
         spec,
         patch: file.patch,
+        // Filled by `ingest_spec` when a document was supplied; assembling reads the TOML alone.
+        ingested: None,
     }
 }
 
@@ -426,7 +787,11 @@ fn distribute_const_headers(provider: &BTreeMap<String, String>, operations: &mu
 /// its credentials, then its operations, then the patch set.
 ///
 /// Returning a `Vec` rather than short-circuiting is deliberate — see the module docs.
-fn validate(loaded: &LoadedProvider, provider_headers: &BTreeMap<String, String>) -> Vec<String> {
+fn validate(
+    loaded: &LoadedProvider,
+    provider_headers: &BTreeMap<String, String>,
+    inline: &[String],
+) -> Vec<String> {
     let mut problems = Vec::new();
     let connector = &loaded.connector;
 
@@ -476,7 +841,7 @@ fn validate(loaded: &LoadedProvider, provider_headers: &BTreeMap<String, String>
     validate_verify(connector, &mut problems);
     validate_graphs(connector, &mut problems);
     validate_member_namespace(connector, &mut problems);
-    validate_patch(loaded, &mut problems);
+    validate_patch(loaded, inline, &mut problems);
 
     problems
 }
@@ -2763,7 +3128,7 @@ fn validate_requirements(
 }
 
 /// Checks the patch set the overlay (C-6) will consume.
-fn validate_patch(loaded: &LoadedProvider, problems: &mut Vec<String>) {
+fn validate_patch(loaded: &LoadedProvider, inline: &[String], problems: &mut Vec<String>) {
     let mut selected: Vec<&str> = Vec::new();
     let mut renamed: Vec<&str> = Vec::new();
 
@@ -2790,7 +3155,10 @@ fn validate_patch(loaded: &LoadedProvider, problems: &mut Vec<String>) {
                     "`[[patch.operations]]` renames two operations to {rename:?}; the op id is a \
                      public name and must be unique"
                 ));
-            } else if loaded.connector.operation(rename).is_some() {
+            // Asked of the **inline** ids, not of the connector's — after selection every rename is
+            // among the connector's operations by construction, which would make this fire on every
+            // successful patch (C-4).
+            } else if inline.iter().any(|id| id == rename) {
                 problems.push(format!(
                     "patch for {select:?} renames to {rename:?}, which an inline `[[operations]]` \
                      block already declares"
