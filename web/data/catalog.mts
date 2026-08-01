@@ -117,10 +117,31 @@ export interface Operation {
   description: string
   risk: string
   idempotency: string
+  /**
+   * **Why repeating this write is safe** — `null` for every operation that does not declare
+   * `idempotency: 'conditional'`, which is almost all of them (C-186).
+   *
+   * A value and not an absence, for the reason `verified` is: `conditional` without a stated
+   * condition is a claim with no evidence, and a consumer must be able to read the evidence rather
+   * than infer that there is none.
+   */
+  repeatable_because: string | null
   /** The request shape. `Published` because a source that describes no HTTP call omits both. */
   method: Published<string>
   path: Published<string>
   parameters: Parameter[]
+  /**
+   * **One schema for everything the operation receives**, composed from the parameters and the body.
+   *
+   * The sibling of `parameters` and not a replacement for it: that one is the authoring view, which
+   * keeps each parameter's request position and wire spelling, and this is the calling view — the
+   * single object a caller passes. Composed once by the emitter precisely so that consumers cannot
+   * each disagree at the corners (C-125).
+   *
+   * Never `null`: an operation that takes nothing composes an empty object schema, because "takes
+   * nothing" is an answer.
+   */
+  input_schema: Record<string, unknown>
   body_schema: Record<string, unknown> | null
   response_schema: Record<string, unknown> | null
   /**
@@ -263,6 +284,16 @@ export interface Provider {
   authority: string | null
   vendor: string
   description: string
+  /**
+   * **How this connector executes** — `http`, `socket`, `process`, `container`, `plugin` or
+   * `remote`, flux's runtime axis mirrored (C-405).
+   *
+   * Deliberately not `Published`, and it is the one field on which that would be a mistake: this is
+   * what says whether the fields that *are* `Published` — `base_url`, and an operation's `method`
+   * and `path` — were omitted because the connector describes no HTTP call at all. A discriminator
+   * a source may omit discriminates nothing.
+   */
+  runtime: string
   /** The vendor's API root. A source that describes no HTTP call publishes none. */
   base_url: Published<string>
   api_version: string | null
