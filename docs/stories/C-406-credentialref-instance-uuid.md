@@ -2,8 +2,7 @@
 id: C-406
 title: "CredentialRef gains an optional instance uuid, required when a tenant holds more than one"
 pillar: Bridge
-status: ready
-priority: 2
+status: done
 note: "owner-directed 2026-08-01. Two Zendesk instances for one tenant render ONE address today, so the second connection silently overwrites the first and calls go to whichever credential survived — a 200 from the wrong instance, not a refusal. flux-exchange X-14 is the same fact from the host side"
 ---
 

@@ -7,6 +7,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A credential address can name which connection it belongs to** (C-406). Two Zendesk subdomains
+  for one tenant rendered **one address**, so the second connection silently overwrote the first and
+  every later call resolved whichever credential survived — a `200` from the wrong account, with no
+  compile signal and no runtime error. The grammar gains an optional instance level,
+  `tenants/<tenant>/<authority>[/@instances/<uuid>][/<service>]/<credential>`.
+
+  The `@` in `@instances` is the argument, not decoration: a uuid is a well-formed service name, so
+  a bare `…/<authority>/<uuid>/<credential>` would be two addresses wearing one spelling. No
+  component grammar admits `@`, so the level cannot be forged and no vendor name is reserved away.
+
+  Additive by construction — a tenant holding one connection renders **byte-identically** to before,
+  asserted against a written-out literal rather than against the renderer, because an address that
+  shifted would strand every credential already stored. The ambiguous case — several connections and
+  none named — **refuses and lists the uuids that would have worked**, rather than guessing.
+
 ### Added
 
 - **The catalogue publishes each connector's runtime** (C-405). `http`, `socket`, `process`,
