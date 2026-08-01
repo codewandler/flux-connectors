@@ -43,8 +43,19 @@ transformation.
   attributes and gradient `<defs>`. Keep it that way or the marks render black.
 - The dark tile is deliberate: one asset that works on both themes beats two that drift.
 
-## Not covered
+## Not covered — and now decided
 
-Vendor logos (Zendesk, Freshdesk, babelforce) are **not** here and are not ours to ship — that is the
-trademark question parked in [C-40](../../docs/stories/C-40-provider-icons.md). These assets are for
-flux-connectors itself only.
+Vendor logos (Zendesk, Freshdesk, babelforce) are **not** here and are not ours to ship. That was the
+trademark question parked in [C-40](../../docs/stories/C-40-provider-icons.md), and
+[C-437](../../docs/stories/C-437-decide-the-logo.md) answered it: **no vendor mark lands in this
+repository, and no `logo_url` is declared either.** The reasoning is in
+[docs/designs/connector-presentation.md](../../docs/designs/connector-presentation.md) § *The logo
+decision*; the short version is that this repository is offered under MIT **or** Apache-2.0, both of
+which grant every recipient the right to copy, modify and sublicense everything in it — rights no
+vendor's brand guideline gives us to pass on, and which `git` history would make unwithdrawable.
+
+A listing individualises a connector with a **generated monogram** derived from the published `vendor`
+and `id`, or with an asset pack it obtains under its own terms. These assets are for flux-connectors
+itself only, and that is not going to change per vendor except by a written, transferable, irrevocable
+grant — the one door the design leaves open, with `assets/vendor/` and `assets/vendor.provenance.toml`
+as its shape.
