@@ -2,8 +2,7 @@
 id: C-419
 title: "A helper writes the patch set, so referencing a spec is cheaper than hand-authoring"
 pillar: Build
-status: in-progress
-priority: 1
+status: done
 design: docs/designs/spec-front-end.md
 epic: spec-front-end
 areas: [connector-cli]

@@ -42,6 +42,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`connector-cli scaffold` writes the patch set from a vendored document** (C-419). The manifest side
+  of the spec front-end was done — a selector, a naming rule, risk by selector, omission, exposure —
+  but a human still had to *write* those statements. This writes them, to **stdout**, so pointing a
+  connector at a spec is a review of generated text rather than an authoring job.
+
+  **The design decision that matters is not in the story: a claim a human already made is carried
+  forward; a claim nobody has made is a hole.** A `[[patch.select]]` restates `risk`/`idempotency`
+  only when every operation it matches is already published *and* they agree; one unclaimed operation
+  and it states neither, while every claimed sibling keeps its own block and the loader refuses over
+  the gap alone. Nothing is ever derived from an HTTP method. Without that, converting the other 52
+  providers would have thrown away **254 reviewed safety claims** and become a re-authoring job.
+
+  It refuses to propose an authentication endpoint at all, applying the ruling recorded the same day —
+  `/oauth`, `/oauth2`, `/openid`, `/.well-known` are withheld by not being selected, since
+  `expose = false` is not the mechanism. A path merely *ending* on `token` or `authorize` is
+  **reported and not withheld**: only the vendor's prose settles it, and a heuristic deciding what a
+  connector offers is what this repository does not do.
+
+  `--diff` reports the document against the connector as it stands — `2 added, 0 removed, 2 changed,
+  389 unchanged` for babelforce — which is what makes a re-build repeatable rather than a migration.
+  Every run ends with what it could not carry, counted: 5 multipart uploads dropped, 23 operations
+  with no description, 3 auth-flow endpoints withheld and 1 ambiguous one reported for a human.
+
 - **The published crates are proved consumable from outside the workspace** (C-190). The claim that a
   consumer writes `use catalog::…` and `use connector_pack::…` rather than the `codewandler-` package
   names had never been exercised from outside; nor had the engine-line coupling. A scratch crate
