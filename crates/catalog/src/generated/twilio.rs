@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Twilio",
     description: "Twilio programmable messaging and voice: read messages, calls and the authenticated account",
     authority: Some("com.twilio.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.twilio.com/2010-04-01",
     auth: AUTH,
     operations: OPERATIONS,

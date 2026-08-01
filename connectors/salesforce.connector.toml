@@ -4,6 +4,7 @@ generator = "flux-connectors 0.8.0"
 connector = "salesforce"
 vendor = "Salesforce"
 description = "Salesforce REST API: read the authenticated identity, read/create/update an SObject record, and describe an SObject's schema"
+runtime = "http"
 base_url = "https://{instance}.my.salesforce.com"
 module = "salesforce.flux"
 operations = ["salesforce-whoami", "salesforce-record-get", "salesforce-record-create", "salesforce-record-update", "salesforce-sobject-describe"]

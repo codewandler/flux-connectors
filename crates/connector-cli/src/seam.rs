@@ -385,6 +385,15 @@ fn manifest(connector: &Connector, service: &str) -> Result<String> {
         vendor: &'a str,
         #[serde(skip_serializing_if = "str::is_empty")]
         description: &'a str,
+        /// **How this connector executes** (C-405) — `http`, `socket`, `process`, `container`,
+        /// `plugin` or `remote`.
+        ///
+        /// Never skipped, unlike the optional fields around it, and that is the whole point of the
+        /// field: a host serving more than one tenant refuses a locally-executing runtime, and a
+        /// manifest that stated the runtime only when it was unusual would leave that host inferring
+        /// `http` from an absence — which is exactly the derivation this replaces. So every manifest
+        /// says it, including the 53 that say `http`.
+        runtime: &'static str,
         /// **This service's** base URL, never the union of the provider's. A service's egress surface
         /// is its own; C-10's `http_hosts` allowlist derives from exactly this value.
         base_url: &'a str,
@@ -408,6 +417,7 @@ fn manifest(connector: &Connector, service: &str) -> Result<String> {
         gid: connector.gid_of(service).map(|gid| gid.to_string()),
         vendor: &connector.vendor,
         description: &connector.description,
+        runtime: connector.runtime.word(),
         base_url: connector.base_url_of(service),
         api_version: connector.api_version_of(service),
         module: format!(

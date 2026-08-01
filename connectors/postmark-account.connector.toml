@@ -5,6 +5,7 @@ connector = "postmark"
 service = "account"
 vendor = "Postmark"
 description = "Postmark transactional email: send a message, read delivery stats and bounces. Account: list and inspect servers, authenticated separately from sending"
+runtime = "http"
 base_url = "https://api.postmarkapp.com"
 module = "postmark-account.flux"
 operations = ["postmark-server-list", "postmark-server-get"]

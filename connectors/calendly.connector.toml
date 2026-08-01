@@ -4,6 +4,7 @@ generator = "flux-connectors 0.8.0"
 connector = "calendly"
 vendor = "Calendly"
 description = "Calendly scheduling: read the authenticated user, event types, scheduled events and their invitees"
+runtime = "http"
 base_url = "https://api.calendly.com"
 module = "calendly.flux"
 operations = ["calendly-user-me", "calendly-event-type-list", "calendly-scheduled-event-list", "calendly-scheduled-event-get", "calendly-invitee-list"]

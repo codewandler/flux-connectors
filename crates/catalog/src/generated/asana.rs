@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Asana",
     description: "Asana work management: read tasks and projects, create and update tasks, comment on a task",
     authority: Some("com.asana.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://app.asana.com",
     auth: AUTH,
     operations: OPERATIONS,

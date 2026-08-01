@@ -4,6 +4,7 @@ generator = "flux-connectors 0.8.0"
 connector = "resend"
 vendor = "Resend"
 description = "Resend transactional email: send a message, read what happened to it, and list or inspect the domains a key may send from"
+runtime = "http"
 base_url = "https://api.resend.com"
 module = "resend.flux"
 operations = ["resend-email-send", "resend-email-get", "resend-domain-list", "resend-domain-get"]

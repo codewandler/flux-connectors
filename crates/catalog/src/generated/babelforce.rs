@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Babelforce",
     description: "Babelforce voice platform: agent availability, live and reported calls, and the session variables a flow reads and writes",
     authority: Some("com.babelforce.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://services.babelforce.com",
     auth: AUTH,
     operations: OPERATIONS,

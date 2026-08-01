@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Salesforce",
     description: "Salesforce REST API: read the authenticated identity, read/create/update an SObject record, and describe an SObject's schema",
     authority: Some("com.salesforce.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://{instance}.my.salesforce.com",
     auth: AUTH,
     operations: OPERATIONS,

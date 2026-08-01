@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Miro",
     description: "Miro boards and board items: discover boards, read items of any type, and create, update and delete sticky notes",
     authority: Some("com.miro.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.miro.com/v2",
     auth: AUTH,
     operations: OPERATIONS,

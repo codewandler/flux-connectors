@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Contentful",
     description: "Contentful headless CMS: read published content from the Content Delivery API, and create and publish entries through the Content Management API — two different hosts and two different tokens for one vendor",
     authority: Some("com.contentful.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.contentful.com",
     auth: AUTH,
     operations: OPERATIONS,

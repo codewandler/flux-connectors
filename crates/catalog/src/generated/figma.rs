@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Figma",
     description: "Figma REST API: read a file, specific nodes, rendered images, a project's files and a file's comments — a read-only design surface",
     authority: Some("com.figma.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.figma.com",
     auth: AUTH,
     operations: OPERATIONS,

@@ -29,6 +29,7 @@ fn connector(reversed: bool) -> Connector {
     Connector {
         id: "b".into(),
         authority: None,
+        runtime: connector_spec::Runtime::Http,
         api_version: None,
         services: Vec::new(),
         vendor: "Babelforce".into(),

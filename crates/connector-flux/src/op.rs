@@ -1440,6 +1440,7 @@ mod tests {
         Connector {
             id: "vendor".to_string(),
             authority: None,
+            runtime: connector_spec::Runtime::Http,
             api_version: None,
             services: Vec::new(),
             vendor: String::new(),

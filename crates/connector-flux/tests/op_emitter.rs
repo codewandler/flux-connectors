@@ -74,6 +74,7 @@ fn connector(id: &str, base_url: &str, operation: Operation) -> Connector {
     Connector {
         id: id.to_string(),
         authority: None,
+        runtime: connector_spec::Runtime::Http,
         api_version: None,
         services: Vec::new(),
         vendor: String::new(),

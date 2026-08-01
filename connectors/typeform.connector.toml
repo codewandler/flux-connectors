@@ -4,6 +4,7 @@ generator = "flux-connectors 0.8.0"
 connector = "typeform"
 vendor = "Typeform"
 description = "Typeform: read the authenticated account, forms and their responses, and delete responses"
+runtime = "http"
 base_url = "https://api.typeform.com"
 module = "typeform.flux"
 operations = ["typeform-user-me", "typeform-form-list", "typeform-form-get", "typeform-response-list", "typeform-response-delete"]

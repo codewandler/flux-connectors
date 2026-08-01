@@ -93,6 +93,16 @@ pub struct ProviderEntry {
     vendor: String,
     /// What the connector is for, in one line.
     description: String,
+    /// **How this connector executes** (C-405): `http`, `socket`, `process`, `container`, `plugin`
+    /// or `remote` — flux's runtime axis, mirrored.
+    ///
+    /// Always present and never null, unlike [`authority`](Self::authority) and
+    /// [`api_version`](Self::api_version): the IR always names a runtime, so the published document
+    /// always does too. A consumer refusing a locally-executing connector — a host serving more than
+    /// one tenant must, because process, container and raw-socket execution consume the host's own
+    /// identity and network position — reads this rather than deriving `http` from the fact that
+    /// every connector shipped so far happens to be one.
+    runtime: String,
     /// The API base URL, templating included. A service may override it; see
     /// [`ServiceEntry::base_url`].
     base_url: String,
@@ -528,6 +538,7 @@ pub fn provider_entry(
         authority: connector.authority.clone(),
         vendor: connector.vendor.clone(),
         description: connector.description.clone(),
+        runtime: connector.runtime.word().to_owned(),
         base_url: connector.base_url.clone(),
         api_version: connector.api_version.clone(),
         hosts,
@@ -870,6 +881,7 @@ mod tests {
         Connector {
             id: "acme".to_string(),
             authority: None,
+            runtime: connector_spec::Runtime::Http,
             api_version: None,
             services: Vec::new(),
             vendor: "Acme".to_string(),

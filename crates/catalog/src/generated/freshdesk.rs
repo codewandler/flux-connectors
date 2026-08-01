@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Freshdesk",
     description: "Freshdesk ticketing: list, read, create and update tickets and the contacts they belong to",
     authority: Some("com.freshdesk.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://{domain}/api/v2",
     auth: AUTH,
     operations: OPERATIONS,

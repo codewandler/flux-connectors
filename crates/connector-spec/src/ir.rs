@@ -589,6 +589,97 @@ fn fills_slot(member: &str, slot: &str) -> bool {
     member.len() >= slot.len() && member[member.len() - slot.len()..] == slot[..]
 }
 
+/// **How a connector executes** — flux's runtime axis, declared rather than derived (C-405).
+///
+/// The vocabulary mirrors `docs/designs/ecosystem.md` in the flux repository, which replaces the old
+/// plugin-versus-connector dichotomy with a single axis: *a plugin is one runtime kind a connector
+/// may declare*. The invariant that survives the generalization is the one that makes it reviewable:
+///
+/// > **The runtime is declared by the connector, never chosen by the caller.** A caller who can pick
+/// > the runtime is a caller who can pick an effect. The manifest names; the operator grants.
+///
+/// # Why it is closed, and why it is never silently defaulted
+///
+/// The same reason [`Role`] is closed, with a sharper consequence. HTTP is easy to multi-tenant
+/// because the effect leaves the machine; process spawning, container exec and raw sockets do not —
+/// they consume the host's own identity, network position, filesystem and descriptors. So a hosted
+/// deployment serving more than one tenant **refuses** a locally-executing connector, mechanically,
+/// by reading this field. An open string set could not be checked; a typo that fell back to
+/// [`Http`](Self::Http) would be how a `process` connector ends up served by a multi-tenant host.
+/// The loader therefore refuses an unrecognised word at the parse — see [`Runtime::ALL`].
+///
+/// # Why the default is `http` anyway
+///
+/// Every connector this repository generates is an HTTP call to a vendor's SaaS API; that is the
+/// charter boundary (`AGENTS.md`), not an accident of the current fleet. Requiring all 53 shipped
+/// providers to restate it would be ceremony, and a *default* is not a *derivation*: the value is
+/// still a declared fact of the IR, published verbatim into every artifact, and the only way to get
+/// a non-`http` value is to write one.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Runtime {
+    /// A guarded HTTP request — flux-web's `http.request`. Every connector generated here.
+    #[default]
+    Http,
+    /// A guarded dial: TCP, UDP or ICMP against a declared target. **Locally executing.**
+    Socket,
+    /// A guarded, argv-only spawn under a sandbox backend. **Locally executing.**
+    Process,
+    /// A spawn inside docker or kubernetes. **Locally executing.**
+    Container,
+    /// The flux plugin protocol over stdio — a special case of [`Process`](Self::Process), and the
+    /// reason this axis exists at all: a plugin is a runtime kind, not a rival of a connector.
+    /// **Locally executing.**
+    Plugin,
+    /// Delegation to another substrate — a remote executor. Not locally executing: the effect leaves
+    /// the machine exactly as an HTTP call does.
+    Remote,
+}
+
+impl Runtime {
+    /// Every runtime there is, in the order flux's own table lists them — which is also the order an
+    /// error message lists them.
+    ///
+    /// A `const` rather than a derived iterator, for the reason [`Role::ALL`] is one: the set the
+    /// loader accepts and the set a refusal prints are the same value, and a variant added without
+    /// extending this fails the exhaustive `match` in [`word`](Self::word) rather than going
+    /// silently unlisted. `crates/connector-spec/tests/runtime_vocabulary.rs` reads it, so the
+    /// published JSON schema cannot drift from it either.
+    pub const ALL: [Self; 6] = [
+        Self::Http,
+        Self::Socket,
+        Self::Process,
+        Self::Container,
+        Self::Plugin,
+        Self::Remote,
+    ];
+
+    /// The token this runtime serializes as, in a provider file and in every artifact.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Http => "http",
+            Self::Socket => "socket",
+            Self::Process => "process",
+            Self::Container => "container",
+            Self::Plugin => "plugin",
+            Self::Remote => "remote",
+        }
+    }
+}
+
+/// `skip_serializing_if` for [`Connector::runtime`], so that omitting the key and writing
+/// `runtime = "http"` produce **identical bytes**.
+///
+/// The same property [`is_default_service`] holds, for the same reason: the IR encoding of every
+/// connector shipped before C-405 must be unchanged, or landing this moves every `ir_sha256` in the
+/// repository and `connectors.lock` churns for a provider nobody edited. Note that this is a
+/// property of the *hash domain and the canonical JSON*, not of the published artifacts — the
+/// manifest and `catalog.json` state `http` explicitly, because a consumer inferring an absent
+/// field is precisely the derivation this story removes.
+pub(crate) fn is_default_runtime(runtime: &Runtime) -> bool {
+    matches!(runtime, Runtime::Http)
+}
+
 /// One API surface of a provider: the unit you address, version, select and install.
 ///
 /// `s3` and `bedrock-runtime` under AWS; `support` under Zendesk. A service is the middle level of
@@ -874,6 +965,14 @@ pub struct Connector {
     /// oip, and an address missing its authority is not an address. See [`crate::address`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authority: Option<String>,
+    /// **How this connector executes** — see [`Runtime`]. `http` unless the file says otherwise.
+    ///
+    /// Not an `Option`: "unset" and "http" would be two spellings of one meaning, which is the
+    /// objection [`Operation::service`] already records. The absence lives in the *file*, where it
+    /// deserializes to [`Runtime::Http`]; the IR always names a runtime, and so does every artifact
+    /// compiled from it.
+    #[serde(default, skip_serializing_if = "is_default_runtime")]
+    pub runtime: Runtime,
     /// The vendor's API version for this connector, as the *default* for its services.
     ///
     /// A multi-service provider overrides it per [`Service`]; a single-surface provider states it
@@ -1326,7 +1425,7 @@ impl Connector {
     ///
     /// # What is in it
     ///
-    /// The connector's *compiled meaning*: `id`, `authority`, `api_version`, `services`, `vendor`,
+    /// The connector's *compiled meaning*: `id`, `authority`, `runtime`, `api_version`, `services`, `vendor`,
     /// `base_url`, `description`, `auth`, `default_auth`, `operations`, `events`, `channels` — and,
     /// inside each member, its `service`. Change any of those and a generated artifact changes, so
     /// the hash must move. C-49's service fields are in for exactly this reason: a service owns the
@@ -1388,6 +1487,12 @@ struct HashDomain<'a> {
     id: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     authority: &'a Option<String>,
+    /// In the domain, and not arguably: the runtime decides *how the effect happens*, so a connector
+    /// whose runtime moved from `http` to `process` is a different connector even if every operation
+    /// is byte-identical. It carries `skip_serializing_if` for the reason the fields below it do —
+    /// a connector that declares no runtime must hash to what it hashed before C-405 existed.
+    #[serde(skip_serializing_if = "is_default_runtime")]
+    runtime: &'a Runtime,
     #[serde(skip_serializing_if = "Option::is_none")]
     api_version: &'a Option<String>,
     #[serde(skip_serializing_if = "<[Service]>::is_empty")]
@@ -1431,6 +1536,7 @@ impl<'a> HashDomain<'a> {
         let Connector {
             id,
             authority,
+            runtime,
             api_version,
             services,
             vendor,
@@ -1453,6 +1559,7 @@ impl<'a> HashDomain<'a> {
         Self {
             id,
             authority,
+            runtime,
             api_version,
             services,
             vendor,

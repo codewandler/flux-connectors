@@ -4,6 +4,7 @@ generator = "flux-connectors 0.8.0"
 connector = "pagerduty"
 vendor = "PagerDuty"
 description = "PagerDuty incident response: read incidents, services and who is on call, and acknowledge or resolve an incident"
+runtime = "http"
 base_url = "https://api.pagerduty.com"
 module = "pagerduty.flux"
 operations = ["pagerduty-incident-list", "pagerduty-incident-get", "pagerduty-service-list", "pagerduty-oncall-list", "pagerduty-incident-acknowledge", "pagerduty-incident-resolve"]

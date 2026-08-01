@@ -1,0 +1,20 @@
+# C-405: `Runtime` is a closed enum, so an unknown word is serde's rejection — and serde's is the
+# right one: it quotes what was written, lists every runtime that exists, and points at the line.
+#
+# This refusal is load-bearing in a way the role one is not. A hosted deployment serving more than
+# one tenant refuses a locally-executing connector, because process, container and raw-socket
+# execution consume the host's own identity and network position. If `procces` fell back to the
+# `http` default, that connector would be published as an HTTP connector and served — which is
+# exactly the case the refusal exists to catch. Never silently defaulted.
+id = "acme"
+vendor = "Acme"
+base_url = "https://api.acme.example"
+runtime = "procces"
+
+[[operations]]
+id = "acme-thing-get"
+method = "GET"
+path = "/v1/things"
+description = "List the things."
+risk = "low"
+idempotency = "idempotent"

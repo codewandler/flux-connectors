@@ -4,6 +4,7 @@ generator = "flux-connectors 0.8.0"
 connector = "front"
 vendor = "Front"
 description = "Front shared inbox: read and reply to conversations, and tag them"
+runtime = "http"
 base_url = "https://api2.frontapp.com"
 module = "front.flux"
 operations = ["front-verify", "front-conversation-list", "front-conversation-get", "front-conversation-message-list", "front-conversation-reply", "front-conversation-tag-add"]

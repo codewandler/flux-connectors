@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Datadog",
     description: "Datadog monitoring: list and inspect monitors, list and inspect incidents. Authenticates every request with an API key and an Application key together",
     authority: Some("com.datadoghq.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.datadoghq.com",
     auth: AUTH,
     operations: OPERATIONS,

@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Mailchimp",
     description: "Mailchimp Marketing API: check connectivity, read audiences and their contacts, add or update a contact, and list campaigns. Authenticates with a single API key sent as a bearer token, against a host whose datacentre label the operator supplies",
     authority: Some("com.mailchimp.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://{dc}.api.mailchimp.com/3.0",
     auth: AUTH,
     operations: OPERATIONS,

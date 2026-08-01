@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Discord",
     description: "Discord bot API v10: read the bot's own identity, list the guilds it has joined, read one guild and its channels, read a channel's recent messages, and post a message. Every request authenticates as a bot — `Authorization: Bot <token>`, never `Bearer`, which is Discord's scheme word for a different credential with different reach. Every Discord id is a snowflake and is carried as a string, because a 64-bit id does not survive a JSON number. Discord rate-limits per route and answers 429 with a `Retry-After` header instead of queueing: honour it rather than retrying immediately",
     authority: Some("com.discord.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://discord.com/api/v10",
     auth: AUTH,
     operations: OPERATIONS,

@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "New Relic",
     description: "New Relic APM and alerting over the REST v2 API: list the applications an account is monitoring and read one in detail, read the account's alert policies and its current violations, and list or record deployment markers against an application. The account's region host is configured once, not chosen per call",
     authority: Some("com.newrelic.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://{host}/v2",
     auth: AUTH,
     operations: OPERATIONS,

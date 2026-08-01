@@ -4,6 +4,7 @@ generator = "flux-connectors 0.8.0"
 connector = "intercom"
 vendor = "Intercom"
 description = "Intercom contacts and conversations: read and create contacts, read a conversation, reply to it, and note it"
+runtime = "http"
 base_url = "https://api.intercom.io"
 module = "intercom.flux"
 operations = ["intercom-contact-get", "intercom-contact-create", "intercom-conversation-get", "intercom-conversation-reply", "intercom-contact-note-create"]

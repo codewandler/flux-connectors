@@ -4,6 +4,7 @@ generator = "flux-connectors 0.8.0"
 connector = "datadog"
 vendor = "Datadog"
 description = "Datadog monitoring: list and inspect monitors, list and inspect incidents. Authenticates every request with an API key and an Application key together"
+runtime = "http"
 base_url = "https://api.datadoghq.com"
 module = "datadog.flux"
 operations = ["datadog-monitor-list", "datadog-monitor-get", "datadog-incident-list", "datadog-incident-get"]

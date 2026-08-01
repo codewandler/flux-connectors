@@ -5,6 +5,7 @@ connector = "contentful"
 service = "delivery"
 vendor = "Contentful"
 description = "Contentful headless CMS: read published content from the Content Delivery API, and create and publish entries through the Content Management API — two different hosts and two different tokens for one vendor"
+runtime = "http"
 base_url = "https://cdn.contentful.com/spaces/{space_id}/environments/{environment_id}"
 module = "contentful-delivery.flux"
 operations = ["contentful-entry-get", "contentful-entries-list", "contentful-asset-get"]

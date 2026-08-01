@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Bitbucket",
     description: "Bitbucket Cloud repositories and pull requests for one pinned workspace: list the workspace's repositories, read one, list and read its open pull requests, open a pull request, comment on one, and approve one",
     authority: Some("org.bitbucket.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.bitbucket.org/2.0",
     auth: AUTH,
     operations: OPERATIONS,

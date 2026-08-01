@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Slack",
     description: "Slack messaging: post messages, read conversation history, look up users, react",
     authority: Some("com.slack.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://slack.com",
     auth: AUTH,
     operations: OPERATIONS,

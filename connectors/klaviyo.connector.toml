@@ -4,6 +4,7 @@ generator = "flux-connectors 0.8.0"
 connector = "klaviyo"
 vendor = "Klaviyo"
 description = "Klaviyo marketing platform: read the account a key belongs to, read and create customer profiles, read lists, and post an event that can trigger a flow. Every request carries a dated API revision the vendor requires"
+runtime = "http"
 base_url = "https://a.klaviyo.com/api"
 module = "klaviyo.flux"
 operations = ["klaviyo-account-list", "klaviyo-profile-list", "klaviyo-profile-get", "klaviyo-profile-create", "klaviyo-list-list", "klaviyo-event-create"]

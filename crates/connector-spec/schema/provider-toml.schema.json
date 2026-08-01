@@ -19,6 +19,11 @@
           "type": "string",
           "description": "The reverse-DNS authority this provider publishes under, e.g. `com.amazonaws`. The leading component of every service address (`com.amazonaws/s3:2006-03-01`). Optional: a provider that declares none simply has no rendered address yet."
         },
+        "runtime": {
+          "enum": ["http", "socket", "process", "container", "plugin", "remote"],
+          "default": "http",
+          "description": "HOW this connector executes — flux's runtime axis. `http` is a guarded request, `socket` a guarded dial, `process` a guarded argv-only spawn, `container` a spawn inside docker or kubernetes, `plugin` the flux plugin protocol over stdio, and `remote` delegation to another substrate.\n\nOmit it and the connector is `http`, which is every connector this repository generates. The set is closed and an unrecognised word is refused at load rather than defaulted: a hosted deployment serving more than one tenant refuses a locally-executing runtime — process, container and raw-socket execution consume the host's own identity and network position — and a typo that quietly became `http` is exactly how a `process` connector would end up served by one.\n\nThe runtime is declared by the connector and never chosen by a caller. A caller who can pick the runtime is a caller who can pick an effect."
+        },
         "api_version": {
           "type": "string",
           "description": "The vendor's API version, as the DEFAULT for this provider's services. A single-surface provider states it once here; a multi-service provider overrides it per `[[services]]`, because AWS dates `s3` at `2006-03-01` and `bedrock-runtime` at `2023-09-30`. This is the vendor's version, never ours."
