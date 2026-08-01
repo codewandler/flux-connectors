@@ -519,11 +519,40 @@ where
 /// The connector's [`Provenance::toml_sha256`] is computed from `source` on the way through, which
 /// is what lets `connectors.lock` (C-7) detect an edited provider file without re-reading it.
 ///
+/// # A file that pins a `[spec]` is refused here — C-421
+///
+/// A spec-backed connector's operations are a function of the file's bytes **and** of the vendored
+/// documents it pins. This entry point is handed only the first, so on that input it is being asked
+/// a question it does not have the material to answer. Use [`load_with_spec`], which takes the cache.
+///
+/// Until C-421 it answered anyway. It returned `Ok` with a *skeleton* — the id, the base URL, the
+/// credentials, the provenance, and **zero operations** — and every caller in this workspace treated
+/// that as a compiled connector. Ninety-one files call this function and eighty-six of them are
+/// tests, so the first shipped provider to convert to `[spec]` would have turned the whole
+/// catalogue-wide suite into a set of assertions passing vacuously over a connector they believed
+/// they had checked. `AGENTS.md`'s "a loud compile-time refusal is better than plausible but
+/// incorrect Flux" decides that case, and it decides it against the skeleton.
+///
+/// **Why the signature did not grow a `documents` parameter instead.** The alternative considered was
+/// folding [`load_with_spec`] into this function, so that "load" had one meaning everywhere. It was
+/// rejected on what it does to the callers who have no cache — the majority, and every unit test
+/// that authors its own TOML. The only argument they could pass is an empty slice, and an empty
+/// slice against a pinned `[spec]` already refuses one layer down, in `ingest_specs`, with a message
+/// about a pin that resolves to nothing. So the parameter would not give "load" one meaning; it
+/// would give it one signature and two meanings, the second spelled `&[]`, and it would put a
+/// vestigial argument on roughly forty golden-error tests that will never own a document. Keeping
+/// the pure entry point pure and making it *say* what it is missing costs one refusal and no
+/// argument, and it leaves the fifty-three hand-authored providers loading byte-identically.
+///
+/// The split callers face is therefore one sentence: **bytes you read from `providers/` go through
+/// [`load_with_spec`] with that provider's cache; TOML you authored yourself goes through here.**
+///
 /// # Errors
 ///
 /// [`Error::ParseProvider`](crate::Error::ParseProvider) when the file is not well-formed TOML or
 /// does not match the schema, and [`Error::InvalidProvider`](crate::Error::InvalidProvider) — with
-/// *every* problem found, not just the first — when it parses but is not a valid connector.
+/// *every* problem found, not just the first — when it parses but is not a valid connector, or when
+/// it pins a `[spec]` and so cannot be compiled without one.
 pub fn load(name: &str, source: &str) -> crate::Result<LoadedProvider> {
     load_inner(name, source, None)
 }
@@ -655,12 +684,17 @@ fn load_inner(
     // the pass a hand-authored one is rather than by a second, weaker one.
     let mut problems = Vec::new();
     if !loaded.specs.is_empty() {
-        if let Some(documents) = documents {
-            ingest_specs(&mut loaded, documents, &mut problems);
-            // Re-run, because selection appended operations after `assemble` distributed. The pass
-            // only fills a header an operation does not already carry, so a second run over the
-            // inline ones changes nothing.
-            distribute_const_headers(&provider_headers, &mut loaded.connector.operations);
+        match documents {
+            Some(documents) => {
+                ingest_specs(&mut loaded, documents, &mut problems);
+                // Re-run, because selection appended operations after `assemble` distributed. The
+                // pass only fills a header an operation does not already carry, so a second run over
+                // the inline ones changes nothing.
+                distribute_const_headers(&provider_headers, &mut loaded.connector.operations);
+            }
+            // **No cache was supplied at all, so this file cannot be compiled here** — C-421. See
+            // [`load`] for why this is a refusal rather than the skeleton it used to be.
+            None => problems.push(no_spec_cache(&loaded.specs)),
         }
     }
 
@@ -673,6 +707,35 @@ fn load_inner(
     }
 
     Ok(loaded)
+}
+
+/// The refusal [`load`] answers a spec-backed file with — C-421.
+///
+/// Written to be actionable from the message alone, because the reader is as likely to be an author
+/// wondering why their connector is empty as a caller who picked the wrong function: it names every
+/// document the file pins, so the cache to assemble is legible, and it names [`load_with_spec`], so
+/// the fix is one identifier away.
+fn no_spec_cache(specs: &[SpecSource]) -> String {
+    let many = specs.len() > 1;
+    let pinned: Vec<String> = specs
+        .iter()
+        .map(|spec| format!("{:?}", spec.path.trim()))
+        .collect();
+
+    format!(
+        "`{}` pins {}, so this connector's operations are a function of {} as well as of this file \
+         — and `provider::load` was given no spec cache to resolve {} against. Load a spec-backed \
+         provider with `provider::load_with_spec`, handing it every document under \
+         `specs/<provider>/`.",
+        block(many),
+        pinned.join(", "),
+        if many {
+            "those documents"
+        } else {
+            "that document"
+        },
+        if many { "them" } else { "it" },
+    )
 }
 
 /// Ingest every vendored document the file pins and publish the operations the patch set selects.

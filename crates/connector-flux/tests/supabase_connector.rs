@@ -44,7 +44,10 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{provider, AuthScheme, Connector, Format, HttpMethod, Idempotency, Risk};
+use connector_spec::{AuthScheme, Connector, Format, HttpMethod, Idempotency, Risk};
+
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
 
 /// The provider under test.
 const PROVIDER: &str = "supabase";
@@ -85,7 +88,7 @@ fn load() -> Connector {
     let path = provider_path();
     let source = std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-    provider::load(&format!("providers/{PROVIDER}.toml"), &source)
+    shipped_provider::load_definition(PROVIDER, &source)
         .unwrap_or_else(|error| panic!("providers/{PROVIDER}.toml does not load: {error}"))
         .connector
 }

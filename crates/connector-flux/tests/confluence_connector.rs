@@ -68,9 +68,12 @@ use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
 use connector_spec::{
-    provider, AuthScheme, Connector, CredentialRef, HttpMethod, Idempotency, Layout, Risk,
-    TenantInstances, TenantLayout,
+    AuthScheme, Connector, CredentialRef, HttpMethod, Idempotency, Layout, Risk, TenantInstances,
+    TenantLayout,
 };
+
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
 
 /// The provider under test.
 const PROVIDER: &str = "confluence";
@@ -114,7 +117,7 @@ fn load_provider(id: &str) -> Connector {
     let path = providers_dir().join(format!("{id}.toml"));
     let source = std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-    provider::load(&format!("providers/{id}.toml"), &source)
+    shipped_provider::load_definition(id, &source)
         .unwrap_or_else(|error| panic!("providers/{id}.toml does not load: {error}"))
         .connector
 }

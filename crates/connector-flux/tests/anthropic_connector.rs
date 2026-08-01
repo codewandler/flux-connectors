@@ -14,7 +14,10 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{provider, Connector, HttpMethod, Role};
+use connector_spec::{Connector, HttpMethod, Role};
+
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
 
 /// The version this connector is pinned to. Anthropic versions its API by date in this header, and
 /// the value is a property of the *connector* — never a caller's to supply.
@@ -37,7 +40,7 @@ fn anthropic() -> Connector {
             path.display()
         )
     });
-    provider::load("providers/anthropic.toml", &source)
+    shipped_provider::load_definition("anthropic", &source)
         .expect("providers/anthropic.toml does not load")
         .connector
 }

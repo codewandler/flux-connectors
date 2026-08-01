@@ -22,6 +22,9 @@ use std::path::{Path, PathBuf};
 use connector_cli::pipeline::{self, PlannedArtifact};
 use connector_cli::workspace::Workspace;
 
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
+
 /// The repository root, derived from this crate's manifest directory so the test is independent of
 /// the working directory a runner happens to use.
 fn workspace() -> Workspace {
@@ -72,7 +75,7 @@ fn load(provider: &str) -> connector_spec::Connector {
     let source =
         std::fs::read_to_string(workspace().providers_dir().join(format!("{provider}.toml")))
             .expect("the shipped provider file is readable");
-    connector_spec::provider::load(&format!("providers/{provider}.toml"), &source)
+    shipped_provider::load_definition(provider, &source)
         .expect("the shipped provider file loads")
         .connector
 }
@@ -238,31 +241,115 @@ fn zendesk_writes_a_nested_body() {
     );
 }
 
-/// babelforce's agent-status update writes `presence.name`. This is the refusal quoted in the story:
-/// it is the operation that stopped the whole build, and it is loud rather than silent only because
-/// the dotted spelling happened to be visible in the field's `name`.
+/// babelforce's agent-status update writes `presence.name`, and the label is **nested** — it never
+/// reaches the root of the body. This is the refusal quoted in the story: it is the operation that
+/// stopped the whole build, and it is loud rather than silent only because the dotted spelling
+/// happened to be visible in the field's `name`.
+///
+/// **Asserted as the body's root key set rather than as one payload line** (C-421). The two
+/// front-ends spell the same wire body differently and both are correct: hand-authored, the label is
+/// a scalar `presence_name` carrying `wire = "presence.name"`, and the emitter builds the nesting
+/// (`payload = { enabled, presence: { name: presence_name } }`); through the spec route, ingest
+/// expands only the top level of a request body, so `presence` arrives as one object-typed parameter
+/// and the caller supplies the nesting (`payload = { enabled, presence }`). Either way the vendor
+/// receives `{"enabled": …, "presence": {"name": …}}`, and either way a *flat* `name` at the root —
+/// the mistake this test exists to catch, and the one the vendor would accept and ignore — fails it.
 #[test]
 fn babelforce_nests_the_presence_label() {
     let module = planned("babelforce", "babelforce.flux");
-    assert!(
-        module.contains("payload = { enabled, presence: { name: presence_name } }"),
-        "`babelforce-agent-status-update` must nest `presence.name`:\n{module}"
+    let payload = payload_of(&module, "babelforce-agent-status-update");
+
+    assert_eq!(
+        root_keys(&payload),
+        vec!["enabled", "presence"],
+        "`babelforce-agent-status-update` must send the presence label under `presence`, never at \
+         the root of the body — a root `name` is a request babelforce answers without applying:\n\
+         {payload}"
     );
 }
 
-/// A free-form object body — babelforce's two session-variable writes — reaches the request. Before
-/// `ParamSet::body_schema` existed these declared no body parameter at all and emitted a `PUT` with
-/// no body, which is indistinguishable from a legitimately bodiless write.
+/// A free-form object body reaches the request whole. Before `ParamSet::body_schema` existed
+/// `babelforce-session-update` declared no body parameter at all and emitted a `PUT` with no body,
+/// which is indistinguishable from a legitimately bodiless write.
+///
+/// **Scoped to `babelforce-session-update`, which is the operation that is free-form in both
+/// front-ends** (C-421). It used to count two such bodies, the second being
+/// `babelforce-call-session-set` — and that operation's shape is a *vendor* question this repository
+/// cannot settle offline, not a property of the emitter. The hand-authored file declared its body as
+/// a bare free-form map (`{"app.priority": "high"}`) from the 0.7.0 document, in which
+/// `SetCallSessionVariablesRequest` carried no `properties`; the 2026-07-10 document declares that
+/// same schema as a wrapper with one `variables` property, so the body is
+/// `{"variables": {"app.priority": "high"}}`. At most one of those is the request babelforce
+/// applies, and only a live call can say which — see C-416's Progress §(a). Counting them together
+/// made this test's verdict depend on that open question; it does not, and now it does not say so.
 #[test]
 fn babelforce_sends_its_free_form_session_bodies() {
     let module = planned("babelforce", "babelforce.flux");
+    let payload = payload_of(&module, "babelforce-session-update");
+
     assert_eq!(
-        module
-            .matches("payload = parse(body, as: \"json\")")
-            .count(),
-        2,
-        "both session-variable operations must send the caller's body:\n{module}"
+        payload, "parse(body, as: \"json\")",
+        "`babelforce-session-update` must send the caller's body whole rather than re-describing \
+         it:\n{module}"
     );
+}
+
+/// The `payload = …` expression one operation's emitted `op` declaration binds.
+///
+/// Read out of the module by walking forward from the declaration, so a second operation's payload
+/// cannot answer for the one being asked about — which a `module.contains(…)` cannot promise and
+/// which is the whole difference between the two assertions above and the literal matches they
+/// replaced.
+fn payload_of(module: &str, operation: &str) -> String {
+    let start = module
+        .find(&format!("op {operation}("))
+        .or_else(|| module.find(&format!("op {operation} ")))
+        .unwrap_or_else(|| panic!("the module declares `{operation}`:\n{module}"));
+    let rest = &module[start..];
+    let end = rest[1..]
+        .find("\nop ")
+        .map_or(rest.len(), |offset| offset + 1);
+
+    rest[..end]
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("payload = "))
+        .unwrap_or_else(|| panic!("`{operation}` binds no payload:\n{}", &rest[..end]))
+        .trim()
+        .to_owned()
+}
+
+/// The keys a record-literal payload writes at its **root**, in the order it writes them.
+///
+/// `{ enabled, presence: { name: presence_name } }` and `{ enabled, presence }` both answer
+/// `["enabled", "presence"]`: the point is what the vendor sees at the top of the body, not how the
+/// value under each key was assembled.
+fn root_keys(payload: &str) -> Vec<&str> {
+    let inner = payload
+        .strip_prefix('{')
+        .and_then(|rest| rest.strip_suffix('}'))
+        .unwrap_or_else(|| panic!("not a record literal: {payload}"));
+
+    let mut keys = Vec::new();
+    let mut depth = 0usize;
+    let mut field_start = 0usize;
+    for (index, character) in inner.char_indices() {
+        match character {
+            '{' | '[' | '(' => depth += 1,
+            '}' | ']' | ')' => depth -= 1,
+            ',' if depth == 0 => {
+                keys.push(&inner[field_start..index]);
+                field_start = index + 1;
+            }
+            _ => {}
+        }
+    }
+    keys.push(&inner[field_start..]);
+
+    keys.into_iter()
+        // `key: value` is a binding under `key`; a bare `key` is shorthand for `key: key`.
+        .map(|field| field.split(':').next().unwrap_or(field).trim())
+        .filter(|key| !key.is_empty())
+        .collect()
 }
 
 /// **Slack's arguments travel in the body, and nothing reaches the URL.** The mirror image of the

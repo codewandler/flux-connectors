@@ -19,7 +19,10 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{provider, Connector, HttpMethod, Param};
+use connector_spec::{Connector, HttpMethod, Param};
+
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
 
 /// `<repo root>/providers/box.toml`, derived from this crate's manifest directory so the test is
 /// independent of the working directory a runner happens to use.
@@ -38,7 +41,7 @@ fn box_connector() -> Connector {
             path.display()
         )
     });
-    provider::load("providers/box.toml", &source)
+    shipped_provider::load_definition("box", &source)
         .expect("providers/box.toml does not load")
         .connector
 }

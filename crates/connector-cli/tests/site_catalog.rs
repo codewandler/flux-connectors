@@ -27,6 +27,9 @@ mod common;
 
 use common::Fixture;
 
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
+
 /// The document's path, relative to the repository root. Chosen by C-42, moved into the site's own
 /// `public/` tree by C-44, and named here so a change to it is a change to a test rather than a
 /// silent break of whatever reads it.
@@ -173,10 +176,9 @@ fn every_shipped_operation_carries_its_metadata_and_its_flux() {
             .join("providers")
             .join(format!("{provider}.toml"));
         let source = std::fs::read_to_string(&path).expect("a shipped provider definition");
-        let connector =
-            connector_spec::provider::load(&format!("providers/{provider}.toml"), &source)
-                .expect("a shipped provider loads")
-                .connector;
+        let connector = shipped_provider::load_definition(provider, &source)
+            .expect("a shipped provider loads")
+            .connector;
 
         for declared in &connector.operations {
             let entry = operation(&document, &declared.id);
@@ -495,7 +497,7 @@ fn every_shipped_event_and_binding_reaches_the_document() {
     for name in shipped() {
         let path = repo_root().join("providers").join(format!("{name}.toml"));
         let source = std::fs::read_to_string(&path).expect("a shipped provider definition");
-        let connector = connector_spec::provider::load(&format!("providers/{name}.toml"), &source)
+        let connector = shipped_provider::load_definition(&name, &source)
             .expect("a shipped provider loads")
             .connector;
 

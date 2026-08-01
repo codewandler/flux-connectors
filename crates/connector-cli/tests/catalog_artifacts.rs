@@ -21,6 +21,9 @@ use connector_cli::pipeline;
 use connector_cli::workspace::Workspace;
 use connector_spec::Connector;
 
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
+
 /// The repository root, derived from this crate's manifest directory so the test is independent of
 /// the working directory a runner happens to use.
 fn repo_root() -> PathBuf {
@@ -76,7 +79,7 @@ fn load(provider: &str) -> Connector {
         .join(format!("{provider}.toml"));
     let source = std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-    connector_spec::provider::load(&format!("providers/{provider}.toml"), &source)
+    shipped_provider::load_definition(provider, &source)
         .unwrap_or_else(|error| panic!("providers/{provider}.toml does not load: {error}"))
         .connector
 }

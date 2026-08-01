@@ -30,7 +30,10 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{provider, Connector, HttpMethod, Idempotency, Risk};
+use connector_spec::{Connector, HttpMethod, Idempotency, Risk};
+
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
 
 /// `<repo root>/providers/dropbox.toml`, derived from this crate's manifest directory so the test is
 /// independent of the working directory a runner happens to use.
@@ -49,7 +52,7 @@ fn dropbox() -> Connector {
             path.display()
         )
     });
-    provider::load("providers/dropbox.toml", &source)
+    shipped_provider::load_definition("dropbox", &source)
         .expect("providers/dropbox.toml does not load")
         .connector
 }

@@ -20,9 +20,10 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{
-    provider, Binding, Connector, HttpMethod, Idempotency, Level, Position, Risk,
-};
+use connector_spec::{Binding, Connector, HttpMethod, Idempotency, Level, Position, Risk};
+
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
 
 const PROVIDER: &str = "vercel";
 const BASE_URL: &str = "https://api.vercel.com";
@@ -52,7 +53,7 @@ fn vercel() -> Connector {
             path.display()
         )
     });
-    provider::load(&format!("providers/{PROVIDER}.toml"), &source)
+    shipped_provider::load_definition(PROVIDER, &source)
         .unwrap_or_else(|error| panic!("providers/{PROVIDER}.toml does not load: {error}"))
         .connector
 }

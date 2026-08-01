@@ -42,9 +42,12 @@
 
 use std::path::{Path, PathBuf};
 
-use connector_spec::{provider, AuthScheme, Connector, HttpMethod, Idempotency, Risk};
+use connector_spec::{AuthScheme, Connector, HttpMethod, Idempotency, Risk};
 
 use connector_flux::emit_operation;
+
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
 
 /// The provider under test. Named once so the file reads as being about OpenRouter rather than about
 /// a string.
@@ -92,7 +95,7 @@ fn load() -> Connector {
             path.display()
         )
     });
-    provider::load(&format!("providers/{PROVIDER}.toml"), &source)
+    shipped_provider::load_definition(PROVIDER, &source)
         .unwrap_or_else(|error| panic!("providers/{PROVIDER}.toml does not load: {error}"))
         .connector
 }

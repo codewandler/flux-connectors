@@ -29,7 +29,10 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{provider, Connector, HttpMethod};
+use connector_spec::{Connector, HttpMethod};
+
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
 
 /// The version Notion pins this connector to. Notion's API is versioned by date in this header, and
 /// the value is a property of the *connector* — the request shapes below are the ones this version
@@ -53,7 +56,7 @@ fn notion() -> Connector {
             path.display()
         )
     });
-    provider::load("providers/notion.toml", &source)
+    shipped_provider::load_definition("notion", &source)
         .expect("providers/notion.toml does not load")
         .connector
 }

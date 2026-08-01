@@ -25,6 +25,9 @@ use std::path::{Path, PathBuf};
 use common::Fixture;
 use connector_cli::{pipeline, workspace::Workspace};
 
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
+
 /// Run the CLI the way `main` does, returning whatever it printed.
 fn run(args: &[&str]) -> anyhow::Result<String> {
     let invocation = connector_cli::cli::parse(args.iter().map(|a| a.to_string()))?;
@@ -63,7 +66,7 @@ fn load(provider: &str) -> connector_spec::Connector {
         .join(format!("{provider}.toml"));
     let source = std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-    connector_spec::provider::load(&format!("providers/{provider}.toml"), &source)
+    shipped_provider::load_definition(provider, &source)
         .unwrap_or_else(|error| panic!("providers/{provider}.toml does not load: {error}"))
         .connector
 }
