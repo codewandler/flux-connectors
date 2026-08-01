@@ -1111,7 +1111,7 @@ pub(crate) fn build(
 /// [docs/designs/host-identity.md](../../../docs/designs/host-identity.md).
 ///
 /// **Not the host.** `connectors-api` constructs no request of its own — `AGENTS.md`'s ownership
-/// table forbids it, and every route ends in `connector_pack::pack`. Its only lever is the client it
+/// table forbids it, and every route ends in `connector_pack`'s `pack` or `resolve`. Its only lever is the client it
 /// builds, and `codewandler-flux-web` 0.41.0 exposes none: neither `Client::builder()` site in
 /// `egress.rs` calls `ClientBuilder::user_agent` and `WebOptions` carries no field for one. Even
 /// granting the upstream field, a header set on the *client* is invisible to [`crate::DryRunTransport`],

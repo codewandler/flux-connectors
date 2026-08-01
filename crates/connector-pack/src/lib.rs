@@ -199,7 +199,6 @@ pub use credentials::{Credentials, DEFAULT_SERVICE};
 pub use dry_run::{CredentialReference, DryRun, DryRunTransport, Transport};
 pub use name::{dotted_name, NameError};
 pub use rehearsal::Rehearsal;
-// `resolve` is defined in this module; re-listed here only so the two seams read together.
 pub use request::{Request, DEFAULT_USER_AGENT};
 pub use spec::{is_exposed, project};
 pub use tool::{Egress, Operation};
@@ -688,7 +687,13 @@ impl From<Error> for flux_core::Error {
     }
 }
 
-/// **The pack.** Install every operation of each named provider into a host's registry.
+/// **The pack.** Install every **exposed** operation of each named provider into a host's registry.
+///
+/// This is the **model-facing** seam, and the word `exposed` is the whole of C-413: an operation
+/// declaring `expose = false` is deliberately withheld here, so a host handing this registry to a
+/// model advertises only what the connector meant to advertise. It is still callable — by name,
+/// through [`resolve`], under the identical admission checks. A caller that needs *any* declared
+/// operation wants `resolve`; a caller assembling a model's toolset wants this.
 ///
 /// The returned value is `FnOnce(&mut ToolRegistry) -> flux_core::Result<()>` — exactly what
 /// `flux_sdk::ClientBuilder::try_register_pack` takes, and equally callable against a bare

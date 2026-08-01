@@ -70,7 +70,7 @@ the canonical lie.
 `connectors-api` was the intuitive home and it loses on two independent grounds, either sufficient.
 
 1. **It constructs no request.** `AGENTS.md`'s ownership table forbids it — *"Must never: construct a
-   request of its own; every route ends in `connector_pack::pack`"*. Its only lever is the client it
+   request of its own; every route ends in `connector_pack::pack`"* — since C-413, `pack` **or** `resolve`, both in `connector-pack`.* Its only lever is the client it
    builds, and flux-web 0.41.0 exposes no `user_agent` setting to build it with. A host-side fix is
    therefore either an upstream change or the host reaching into an assembled `Request`, which is the
    ownership boundary itself.

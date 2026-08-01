@@ -47,7 +47,7 @@ direction, so it is stated first.
 | tenancy | many | the tenant is a **parameter of every port**, with one value bound |
 | credential store | per tenant, persistent | per tenant, **a `0600` file by default** (C-207) — selected by `CONNECTORS_CREDENTIAL_STORE`, refusing a bad value rather than falling back to memory |
 | transport | flux's | `flux_web::http::HttpRequestTool`, `PrivateNetAllow::None` |
-| request construction | none of its own | none of its own — every route ends in `connector_pack::pack` |
+| request construction | none of its own | none of its own — every route ends in `connector-pack`: `pack` (model-facing) or `resolve` (one named operation, C-413) |
 
 So the host is, at the moment of writing, still loopback-only and single-valued. **What the charter
 amendment buys is not a deployment; it is permission to build toward one**, plus the obligation to

@@ -595,6 +595,14 @@ fn select(
         params,
         response_schema: spec.response_schema.clone(),
         quirks: patch.quirks.clone().unwrap_or_default(),
+        // Resolved at integration: C-4 built this literal and C-413 added the field, and neither
+        // branch could see the other. `exposed()` rather than a bare `true` so an ingested operation
+        // takes the same default a hand-authored one does from serde, in one place — and so a spec
+        // route that silently diverged from the file route would fail here rather than in a
+        // catalogue nobody re-reads. Declaring exposure *per selector* is C-411's, not ingest's:
+        // `OperationPatch` carries no `expose` key today, so silence here means the connector-wide
+        // default and never a decision ingest made on an author's behalf.
+        expose: crate::ir::exposed(),
     })
 }
 

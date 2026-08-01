@@ -26,6 +26,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **An operation can be callable without being an LLM tool** (C-413). `expose true` was a hard-coded
+  literal in the emitter, so every generated operation reached a model as a tool. That is why
+  babelforce ships 9 operations out of 163 — curation was the only lever, and it is the wrong lever
+  for a connector that has to serve every caller. Two claims now come apart: **catalogued and
+  callable**, and **advertised to a model**.
+
+  The field defaults to exposed, so nothing shipped moved: all 557 artifacts stayed byte-identical
+  and every `ir_sha256` is where it was.
+
+  **What review caught, and it was the whole story inverted.** A `ToolRegistry` is both the
+  advertisement surface a host hands a model and the resolution surface an execute route reads, so
+  filtering the registry withheld the *call* as a side effect of withholding the *tool* — and
+  `connectors-api`'s execute path is the only one in the workspace. An unexposed operation was
+  catalogued, manifest-listed, documented as reachable by the published provider schema, and
+  unreachable in fact. The answer is a second seam: `connector_pack::resolve` admits **one named
+  operation regardless of exposure**, under the identical flux admission checks a packed tool passes
+  — verified by an independent reviewer building a catalogue that contains an unexposed operation and
+  proving both directions at runtime. `pack` stays model-facing.
+
+  Three existing tests asserted that *every* embedded operation is exposed. They passed only because
+  nothing had used the feature yet, and would have turned red together on the first provider that
+  did; each now tests a durable invariant instead — the registered set is exactly the exposed set,
+  and every operation resolves whether or not it is exposed.
+
+  The predicate **fails open**: a rendering stating no `expose` reads as exposed, so the accidental
+  failure mode is a tool staying visible rather than one silently vanishing.
+
 - **A provider can point at a vendored OpenAPI document instead of writing every operation out**
   (C-4). The `[spec]` front-end was designed in C-2 and never built: `SpecSource` and `Patch` landed
   with C-3 and sat unused, and `connector-cli` refused every spec-backed provider with "spec ingest

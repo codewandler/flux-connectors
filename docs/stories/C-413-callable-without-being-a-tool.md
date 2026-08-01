@@ -2,8 +2,7 @@
 id: C-413
 title: "An operation can be callable without being an LLM tool"
 pillar: Spec
-status: in-progress
-priority: 1
+status: done
 design: docs/designs/spec-front-end.md
 epic: spec-front-end
 areas: [connector-spec, connector-flux, connector-cli]
