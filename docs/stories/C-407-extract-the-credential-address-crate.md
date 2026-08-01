@@ -3,8 +3,8 @@ id: C-407
 title: "Extract the credential address vocabulary so the compiler leaves the publish closure"
 pillar: Build
 status: ready
-priority: 3
-note: "connector-secrets re-exports CredentialRef from connector-spec, which drags the whole compiler IR crate into the publish closure. A 387-line address module is in a published API; a 4000-line IR is shipped to make it resolve"
+priority: 1
+note: "OWNER-DECIDED 2026-08-01: this lands BEFORE the v0.9.0 tag, so codewandler-connector-spec never becomes a published surface. Its own figures were stale — the module is 726 lines, not 387, and the crate it drags in is 11,832 lines with 128 public items, not 4,000"
 ---
 
 # Extract the credential address vocabulary
@@ -16,9 +16,24 @@ crates.io closure.
 
 ## The leak, measured
 
-- `CredentialRef` lives in `crates/connector-spec/src/credential.rs` — **387 lines**, self-contained.
-- `connector-secrets/src/lib.rs:100` re-exports `validate_tenant`, `CredentialRef`, `Layout`,
-  `TenantLayout`, `MAX_TENANT`, `TENANTS_ROOT` from it, putting them in a **published public API**.
+> **Re-measured by the coordinator 2026-08-01, before dispatch. Both of this story's original
+> figures were understated, and the extraction is about twice the size it claims.**
+>
+> | | this story said | measured now |
+> |---|---|---|
+> | `credential.rs` | 387 lines | **726** (C-406 added instance addressing since) |
+> | the crate it drags in | "a 4000-line IR" | **11,832 lines, 128 top-level `pub` items** |
+>
+> `crates/connector-spec/src/address.rs` is a further **370 lines** and may need to travel with it —
+> decide, and say which way. And the edge does **not** simply disappear: `connector-spec` itself
+> names `CredentialRef` in `ir.rs` (4 references), so the dependency inverts rather than vanishes.
+
+- `CredentialRef` lives in `crates/connector-spec/src/credential.rs` — **726 lines**, self-contained.
+- `connector-secrets/src/lib.rs:101` re-exports **nine** names — `validate_instance`,
+  `validate_tenant`, `CredentialRef`, `InstanceId`, `Layout`, `TenantInstances`, `TenantLayout`,
+  `INSTANCES_SEGMENT`, `MAX_TENANT`, `TENANTS_ROOT` — putting them in a **published public API**. Its
+  own comment gives the reason: *"a consumer of this crate should never need to name both crates to
+  spell one address."*
 - `connector-secrets` uses **nothing else** from `connector-spec`: every reference is
   `connector_spec::credential::…`.
 - `connector-spec` is the connector IR, provider loading, validation and the lockfile. It is the
