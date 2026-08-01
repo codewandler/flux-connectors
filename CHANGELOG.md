@@ -7,6 +7,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The embedded catalogue can say *why* an operation names no credential** (C-235). It emitted `[]`
+  for both a positively-public operation and one whose credential is deliberately withheld, so no host
+  linking the catalogue could tell them apart. `CredentialRequirement` now distinguishes `Declared`,
+  `Withheld` and public, rendered from a **single** classifier both backends read — the two words are
+  C-206's published vocabulary rather than a third spelling of the same idea.
+
+  **The half that was actually wrong was the host, not the published document.** `status::of` has gated
+  the freshdesk wording correctly since C-206 landed; what a person met was `connectors-api` serving
+  freshdesk as `no-credential-required` — "nothing to supply", which an operator reads as *ready* —
+  while every call 401s. That is now a state of its own, recorded in `providers/freshdesk.toml`.
+
+  **`is_callable` stops treating an empty mechanism list as "callable by anyone".** Freshdesk's nine
+  operations move from `callable: true` to `false`, because an unauthenticated request to an endpoint
+  that wants a credential is a 401 — the old value was a lie in the same family as the one this story
+  is about.
+
+  `web/public/catalog.json` and the catalogue index are **byte-identical**; the 53 per-provider tables
+  and the lockfile carry the new fact, and the artifact count is unmoved at 937.
+
 ### Added
 
 - **A signature can cover the request URL and its reassembled form fields** (C-188). `HmacSpec::signed`

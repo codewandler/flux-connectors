@@ -2,8 +2,7 @@
 id: C-235
 title: "The embedded catalogue emits `[]` for both a withheld and a positively-public operation, so no host reading it can tell them apart — and that is now a user-facing surface"
 pillar: Bridge
-status: in-progress
-priority: 1
+status: done
 design:
 epic: connectors-api
 areas: [codegen, bridge, host]
