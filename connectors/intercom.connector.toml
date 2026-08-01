@@ -5,6 +5,24 @@ connector = "intercom"
 vendor = "Intercom"
 description = "Intercom contacts and conversations: read and create contacts, read a conversation, reply to it, and note it"
 runtime = "http"
-base_url = "https://api.intercom.io"
+base_url = "https://{host}"
 module = "intercom.flux"
 operations = ["intercom-contact-get", "intercom-contact-create", "intercom-conversation-get", "intercom-conversation-reply", "intercom-contact-note-create"]
+
+[[config_choices]]
+field = "host"
+label = "Intercom region"
+kind = "endpoint"
+name = "host"
+
+[[config_choices.choices]]
+value = "api.intercom.io"
+label = "United States"
+
+[[config_choices.choices]]
+value = "api.eu.intercom.io"
+label = "European Union"
+
+[[config_choices.choices]]
+value = "api.au.intercom.io"
+label = "Australia"

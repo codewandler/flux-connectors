@@ -375,6 +375,54 @@ pub struct Provider {
     /// Every operation, in the order the provider declares them — which is also the order they
     /// appear in `connectors/<id>.flux`.
     pub operations: &'static [Operation],
+    /// **Every configuration field whose value comes from a closed set** — C-225.
+    ///
+    /// Empty for most connectors. Present for the ones whose value is a *choice* rather than a
+    /// string the operator knows: New Relic's two region hosts, Intercom's three.
+    ///
+    /// This is deliberately **not** the whole configuration surface — labels, help text, `binds` and
+    /// the derived level are C-87's, and that story is a breaking change to `catalog.json`'s OAuth
+    /// key. What is here is the part a closed set is useless without: a form that cannot see the
+    /// choices renders a text box, which moves the declaration without moving the benefit.
+    pub config_choices: &'static [ConfigChoices],
+}
+
+/// One configuration field that permits a closed set of values, and the set — C-225.
+///
+/// Addressed the way the runtime configuration port addresses a stored value: by
+/// `(service, kind, name)`, where `kind` is `endpoint`, `path`, `query`, `header`, `username` or
+/// `oauth` and `name` is the binding target within it. `field` is the declaration's own name, which
+/// is what a form labels the row with and what an error message quotes.
+///
+/// Not `#[non_exhaustive]`: a consumer builds one in a test to prove its own rendering, exactly as
+/// it does with [`Credential`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfigChoices {
+    /// The service whose configuration this is. Written out, `default` included, because a consumer
+    /// grouping by service needs a name in every row (C-197).
+    pub service: &'static str,
+    /// The declared field name — `host`. The key a host stores the collected value under.
+    pub field: &'static str,
+    /// The form label — `New Relic API host`.
+    pub label: &'static str,
+    /// Where the value goes: `endpoint`, `path`, `query`, `header`, `username` or `oauth`.
+    pub kind: &'static str,
+    /// The name within `kind` — the base-URL `{variable}`, the pinned wire name, the credential.
+    pub name: &'static str,
+    /// The permitted values, in the vendor's own order.
+    pub choices: &'static [Choice],
+}
+
+/// One permitted value of a [`ConfigChoices`] set, and the text a renderer shows for it.
+///
+/// The label is what makes the set usable: an operator knows their account is in Frankfurt and does
+/// not know that `api.eu.newrelic.com` is what that means.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Choice {
+    /// The value itself — what a host stores and what substitution puts on the request.
+    pub value: &'static str,
+    /// The human name for it — `European Union`.
+    pub label: &'static str,
 }
 
 impl Provider {
@@ -392,6 +440,23 @@ impl Provider {
     /// needs it preserved.
     pub fn credential(&self, name: &str) -> Option<&'static Credential> {
         self.auth.iter().find(|credential| credential.name == name)
+    }
+
+    /// The closed set governing one configuration slot, addressed exactly as the runtime port
+    /// addresses a stored value — `(service, kind, name)`.
+    ///
+    /// `None` means the slot is open, **not** that the value is unconstrained by anything: a field
+    /// still has a `format`, which this surface does not publish (C-87). A caller uses this to
+    /// decide between a select and an input, and to refuse a value it was not offered.
+    pub fn choices_for(
+        &self,
+        service: &str,
+        kind: &str,
+        name: &str,
+    ) -> Option<&'static ConfigChoices> {
+        self.config_choices
+            .iter()
+            .find(|entry| entry.service == service && entry.kind == kind && entry.name == name)
     }
 }
 

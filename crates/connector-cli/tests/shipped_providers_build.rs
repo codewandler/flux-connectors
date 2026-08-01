@@ -402,38 +402,60 @@ fn slack_sends_its_arguments_in_the_body_and_nothing_in_the_url() {
     );
 }
 
-/// **Intercom's egress host is exactly `api.intercom.io`, and its credential never leaves the
-/// manifest as anything but a name** (C-73).
+/// **Intercom's egress host is one of three enumerated regions, and its credential never leaves the
+/// manifest as anything but a name** (C-73, C-225).
 ///
 /// Two claims that the IR-level test in `crates/connector-flux/tests/intercom_connector.rs` cannot
 /// make, because both are properties of what the *pipeline* derives rather than of what the provider
 /// file declares:
 ///
 /// - `http_hosts` is derived from `base_url` by `catalog::host_of` and is published to consumers in
-///   `web/public/catalog.json`. A widened entry — a second host, or a `*` — would enlarge the egress
-///   allow-list of every operation at once, and nothing else in the tree would notice. Intercom's
-///   regional hosts (`api.eu.intercom.io`, `api.au.intercom.io`) are exactly the tempting second
-///   entry, and `providers/intercom.toml` records why they are a separate connector instead.
+///   `web/public/catalog.json`. A widened entry — an unlisted host, or a `*` — would enlarge the
+///   egress allow-list of every operation at once, and nothing else in the tree would notice. Until
+///   C-225 the base URL was the literal `api.intercom.io` and this test pinned that string;
+///   Intercom's other regions (`api.eu.intercom.io`, `api.au.intercom.io`) were the tempting second
+///   entry and the file recorded why they were a separate connector instead. They are now the
+///   declared **closed set** of a `{host}` field, which is narrower than a widened list in the way
+///   that matters: the set of reachable hosts is still enumerable from the artifacts, and
+///   `uploads.intercom.io` and the app hosts are in neither the set nor the manifest.
 /// - **The generated module names no credential at all.** Not the value, which does not exist in this
 ///   repository, and not even the environment variable: the bearer is applied by the host at the
 ///   `$auth` seam (`docs/designs/auth-seam.md`), so `INTERCOM_ACCESS_TOKEN` belongs in the manifest's
 ///   credential *reference* and must never appear in Flux a model can read. Asserting the name is
 ///   present in the manifest is what keeps the absence check from passing vacuously.
 #[test]
-fn intercom_publishes_one_host_and_no_credential_in_its_module() {
+fn intercom_publishes_a_closed_set_of_hosts_and_no_credential_in_its_module() {
     const TOKEN_ENV: &str = "INTERCOM_ACCESS_TOKEN";
+    const REGIONS: [&str; 3] = [
+        "api.intercom.io",
+        "api.eu.intercom.io",
+        "api.au.intercom.io",
+    ];
 
     let connector = load("intercom");
     let module = planned("intercom", "intercom.flux");
     let manifest = planned("intercom", "intercom.connector.toml");
 
     assert_eq!(
-        connector.base_url, "https://api.intercom.io",
+        connector.base_url, "https://{host}",
         "the base URL is what the host is derived from, so widening it widens the allow-list"
     );
     assert!(
-        module.contains(r#"base = "https://api.intercom.io""#),
-        "every Intercom request must address `api.intercom.io`:\n{module}"
+        module.contains(r#"base = "https://{host}""#),
+        "every Intercom request must address the region the operator bound:\n{module}"
+    );
+    // The set is published, not merely declared: the manifest is where a host reads which three
+    // values that `{host}` may take, and a set that reached no artifact would leave a consumer
+    // rendering a text box and accepting anything.
+    for region in REGIONS {
+        assert!(
+            manifest.contains(region),
+            "the manifest must publish `{region}` as a permitted host:\n{manifest}"
+        );
+    }
+    assert!(
+        !manifest.contains("uploads.intercom.io"),
+        "the upload host is not reachable from any operation and must not be offered:\n{manifest}"
     );
     assert!(
         !module.contains('*') && !manifest.contains('*'),

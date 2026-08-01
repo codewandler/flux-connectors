@@ -5,7 +5,7 @@ op intercom-conversation-get(conversation_id: String) -> Any
   effects ["network"]
   expose true
 
-  base = "https://api.intercom.io"
+  base = "https://{host}"
   url = fmt("{base}/conversations/{conversation_id}")
   response = http.request(method: "GET", url)
   return response

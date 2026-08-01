@@ -14,6 +14,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://slack.com",
     auth: AUTH,
     operations: OPERATIONS,
+    config_choices: CONFIG_CHOICES,
 };
 
 #[rustfmt::skip]
@@ -30,6 +31,10 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Inbound,
     },
+];
+
+#[rustfmt::skip]
+static CONFIG_CHOICES: &[crate::ConfigChoices] = &[
 ];
 
 #[rustfmt::skip]

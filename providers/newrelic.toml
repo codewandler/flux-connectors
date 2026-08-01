@@ -10,10 +10,9 @@
 # 2026-07-31 and is cited where it is not obvious.
 #
 # ---------------------------------------------------------------------------------------------
-# C-220'S QUESTION: THE OPERATOR CHOOSES BETWEEN TWO **VENDOR-OWNED** HOSTS, AND THE CREDENTIAL DOES
-# NOT SAY WHICH ONE IT BELONGS TO. CAN THE IR SAY "ONE OF THESE TWO"? MEASURED, AND THE ANSWER IS
-# **NO** — IT SHIPS ANYWAY, WITH THE GAP WRITTEN DOWN HERE AND ASSERTED IN A TEST RATHER THAN
-# SMOOTHED OVER WITH `help` TEXT.
+# THE OPERATOR CHOOSES BETWEEN TWO **VENDOR-OWNED** HOSTS, AND THE CREDENTIAL DOES NOT SAY WHICH ONE
+# IT BELONGS TO. C-220 MEASURED THAT THE IR COULD NOT SAY "ONE OF THESE TWO" AND SHIPPED THE GAP
+# WRITTEN DOWN; C-225 CLOSED IT. THE TWO HOSTS ARE NOW A DECLARED CLOSED SET.
 # ---------------------------------------------------------------------------------------------
 #
 # **The vendor shape.** New Relic serves one REST v2 API from two hosts: `api.newrelic.com` for an
@@ -24,77 +23,39 @@
 # `401 Unauthorized`, because the EU host has never heard of that key. **The credential is the thing
 # the failure names, and the credential is not the thing that is wrong.**
 #
-# **What this repository already had.** Nine shipped connectors template their host, and eight of
-# them template a label the *operator* owns — `{subdomain}.zendesk.com` (zendesk), `{site}`.
-# atlassian.net (jira), `{shop}.myshopify.com` (shopify), `{instance}.my.salesforce.com`
-# (salesforce), `{domain}` (freshdesk, okta). Those are free text with an unbounded answer set, and
-# `format = "subdomain"` is exactly the right thing to say about them.
+# **What the `host` field says now.** `choices` (C-225) enumerates both hosts with a label each, so
+# the two answers are in the *declaration* rather than only in the `help` prose:
 #
-# **The one near-precedent, named rather than ignored: `providers/docusign.toml`'s `account_host`.**
-# That is also a vendor-owned host bound through `endpoint.` with `format = "hostname"`, so this
-# connector is not the first to put a whole vendor host behind a `[[config]]` field. The difference
-# is what an operator does when they do not know the answer: DocuSign's value is **discoverable** —
-# it is a field of the OAuth UserInfo response, and the help text tells you which field to read, so
-# a wrong answer is a transcription error. New Relic's is a **choice from two**, made before any
-# call succeeds, with no endpoint that will tell you which one is yours until you have already
-# guessed right. `providers/intercom.toml` records the identical vendor shape
-# (`api.intercom.io` / `api.eu.intercom.io` / `api.au.intercom.io`) as an unclosed SCHEMA GAP and
-# ships US-only; this is the first connector in the catalogue to actually bind such a host, and
-# binding it is what turns the gap from "not attempted" into "attempted and measured".
+# - a renderer draws a two-item select — "United States" / "European Union" — instead of a text box,
+#   and `api.not-new-relic.example` is not offered and is refused where it is entered;
+# - `format = "hostname"` stays, and stays load-bearing: it is the shape every choice is validated
+#   against at load, and the input a renderer falls back to. Shape and membership are different
+#   questions and collapsing them would throw the first away;
+# - `example` is now checked against membership as well as against shape, so the placeholder is one
+#   of the two answers by construction.
 #
-# **The measurement, and it is the story's finding.** Nothing in the IR expresses a closed set of
-# *values*:
+# **The distinction this connector is the evidence for**, kept because it is what makes a closed set
+# the right expression here and the wrong one elsewhere: `providers/docusign.toml`'s `account_host`
+# is *also* a vendor-owned host bound through `endpoint.` with `format = "hostname"`, and it stays
+# free text. DocuSign's value is **discoverable** — it is a field of the OAuth UserInfo response,
+# and the help text says which field to read, so a wrong answer is a transcription error the
+# operator can check. New Relic's is a **choice from two**, made before any call succeeds, with no
+# endpoint that discloses which one is yours until you have already guessed right. A closed set
+# helps most exactly where the value cannot be discovered.
 #
-# - `Format` (`crates/connector-spec/src/config.rs:104-123`) is a closed enum of value **shapes** —
-#   `text`, `subdomain`, `hostname`, `url`, `email`, `token`. Its own doc comment says why it is
-#   closed ("a renderer given `^[a-z0-9]...$` can reject a value and cannot explain why") and every
-#   variant answers "what does a well-formed value look like", never "which values are permitted".
-#   `hostname` is the nearest fit and it admits every syntactically valid host on the internet.
-# - There is no second field for it. `ConfigField` (`config.rs:501-551`) carries `name`, `service`,
-#   `label`, `help`, `example`, `format`, `required`, `secret`, `docs_url` and `binds`, and it is
-#   `#[serde(deny_unknown_fields)]` — so a `values = [...]` key an author would reach for is a load
-#   error rather than a key quietly accepted and ignored. That refusal is the honest one, and
-#   `crates/connector-flux/tests/newrelic_connector.rs::the_closed_set_of_two_hosts_is_not_
-#   expressible_and_the_field_admits_any_host` asserts it against this very file, so the gap cannot
-#   be closed by accident and cannot be reopened by editing a comment.
-# - `Binding::Request` / `Position` (C-187) do not help. They pin a *request component* — a path
-#   segment, a query parameter, a header — and constrain the value's **characters** so it cannot
-#   reshape the request (`Position::validate_value`). The region is not a request component, and
-#   the hazard here is not a reshaped request: it is a perfectly well-formed request sent to a real
-#   server that does not hold this account.
+# **The alternative expressions are still worse, and that is why the set is the answer rather than a
+# reshaped URL.** Templating only the varying label — `https://api.{region}newrelic.com/v2` with
+# `region` of `""` or `"eu."` — does not work: the US host is `api.newrelic.com` and *not*
+# `api.us.newrelic.com`, so the two hosts share no common template with one varying label, and
+# `Format::validate` refuses an empty value so the US case has no spelling at all. Declaring two
+# `[[services]]`, one per region, would duplicate all six operations across a partition that is not
+# a partition of the *API* — services partition an operation set by surface (`AGENTS.md`, Service
+# contract), and a region is the same surface twice.
 #
-# **So the honest statement of what ships:** an operator can type any hostname into `host`, the
-# loader will accept it, a form will accept it, and this connector will send an account's API key
-# to it. Two answers work; the rest produce a `401` that reads as a bad key. The only mitigation in
-# this file is prose — the `help` text names both hosts and tells the operator to read the region
-# off the URL they log in at — and prose is not a constraint.
-#
-# **Why it ships anyway, as a judgement rather than a discovery.** Three things weigh in:
-#
-# 1. **The alternative expressions are worse, not merely unavailable.** Templating only the varying
-#    label — `https://api.{region}newrelic.com/v2` with `region` of `""` or `"eu."` — does not work:
-#    the US host is `api.newrelic.com` and *not* `api.us.newrelic.com`, so the two hosts share no
-#    common template with one varying label, and `Format::validate` refuses an empty value
-#    (`config.rs:146-147`) so the US case has no spelling at all. Declaring two `[[services]]`, one
-#    per region, would duplicate all six operations across a partition that is not a partition of
-#    the *API* — services partition an operation set by surface (`AGENTS.md`, Service contract), and
-#    a region is the same surface twice. Shipping two connector files would double the maintenance
-#    of every path and schema below to encode one boolean.
-# 2. **The blast radius is bounded and stated.** The field reaches `base_url` and nothing else, so
-#    the worst a wrong answer does is send an authenticated request to the wrong host. It cannot
-#    reach a path segment, a query parameter or a header, and it is not a secret in either
-#    direction. That is a smaller surface than the hazard `providers/trello.toml` accepted for
-#    C-159 §2, and it is the whole of it.
-# 3. **Refusing here would not close the gap.** The gap is in `ConfigField`, and a connector that
-#    declined to bind its host would leave the model exactly as it is, minus the evidence that a
-#    real vendor needs the expression. `providers/intercom.toml` has been that evidence in comment
-#    form since it shipped, and the model did not grow.
-#
-# **What has to change before this is not a footgun**, in the terms a story can pick up: a closed
-# value set on `ConfigField` — an enumerated list of permitted values with a `label` per value, so a
-# renderer shows a two-item dropdown rather than a text box, and the loader can check `example`
-# against membership rather than against shape. Filed as this story's finding; see
-# `docs/stories/C-220-provider-newrelic.md` §Progress.
+# **The blast radius, stated as before.** The field reaches `base_url` and nothing else. It cannot
+# reach a path segment, a query parameter or a header, and it is not a secret in either direction.
+# What has changed is that the set of hosts an account key can be sent to is now two rather than
+# every syntactically valid host on the internet.
 #
 # ---------------------------------------------------------------------------------------------
 # WHAT SHIPS: 6 operations — 5 reads, 1 write. Applications: list, get one. Alerts: policies,
@@ -417,19 +378,26 @@ properties = { deployment = { type = "object", required = [
 # bind — every New Relic account is its own tenant, in its own region, and there is no
 # operator-level registration this connector needs.
 #
-# **The `host` field is the story's subject and the header comment is its full account.** It is
-# free text with `format = "hostname"` because that is the closest the model gets; exactly two
-# values work; the loader, a form and this repository can all only check the shape. The `help` text
-# below is where the two answers are written down, and it gives an operator a way to find their own
-# region that does not require guessing — the URL they log in at.
+# **The `host` field is the story's subject and the header comment is its full account.** It carries
+# a `choices` set (C-225): exactly two values work, and now exactly two values load. `format` stays
+# `hostname` because shape and membership are different questions — the format is what each choice
+# is validated against at load, and what a renderer falls back to. The `help` text still tells an
+# operator how to find their own region without guessing, because a select they cannot answer is no
+# better than a text box they cannot answer.
 # ---------------------------------------------------------------------------------------------
 
 [[config]]
 name = "host"
 label = "New Relic API host"
-help = "Which region this New Relic account lives in, as a host without the https:// prefix. Enter api.newrelic.com for a US account or api.eu.newrelic.com for an EU one — those are the only two values that work. If you are not sure, look at the URL you log in at: one.newrelic.com is the US region and one.eu.newrelic.com is the EU region. Getting this wrong returns 401 on every call, exactly as a bad key would, so check it before you rotate anything"
+help = "Which region this New Relic account lives in. Pick United States for an account on api.newrelic.com or European Union for one on api.eu.newrelic.com — those are the only two, and an account is in exactly one of them from the day it was created. If you are not sure, look at the URL you log in at: one.newrelic.com is the US region and one.eu.newrelic.com is the EU region. Getting this wrong returns 401 on every call, exactly as a bad key would, so check it before you rotate anything"
 example = "api.newrelic.com"
 format = "hostname"
+# The two regions, in New Relic's own order. A label per value because "United States" is what an
+# operator knows about their account; the hostname is what the request needs and nobody memorises.
+choices = [
+  { value = "api.newrelic.com", label = "United States" },
+  { value = "api.eu.newrelic.com", label = "European Union" },
+]
 docs_url = "https://docs.newrelic.com/docs/apis/rest-api-v2/get-started/introduction-new-relic-rest-api-v2/"
 binds = "endpoint.host"
 

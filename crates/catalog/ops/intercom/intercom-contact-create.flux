@@ -5,7 +5,7 @@ op intercom-contact-create(role: String, email: String) -> Any
   effects ["network"]
   expose true
 
-  base = "https://api.intercom.io"
+  base = "https://{host}"
   url = fmt("{base}/contacts")
   content_type = "application/json"
   payload = { email, role }

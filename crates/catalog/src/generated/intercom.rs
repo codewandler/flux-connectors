@@ -11,9 +11,10 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     description: "Intercom contacts and conversations: read and create contacts, read a conversation, reply to it, and note it",
     authority: Some("com.intercom.api"),
     runtime: crate::Runtime::Http,
-    base_url: "https://api.intercom.io",
+    base_url: "https://{host}",
     auth: AUTH,
     operations: OPERATIONS,
+    config_choices: CONFIG_CHOICES,
 };
 
 #[rustfmt::skip]
@@ -27,6 +28,22 @@ static AUTH: &[crate::Credential] = &[
 ];
 
 #[rustfmt::skip]
+static CONFIG_CHOICES: &[crate::ConfigChoices] = &[
+    crate::ConfigChoices {
+        service: "default",
+        field: "host",
+        label: "Intercom region",
+        kind: "endpoint",
+        name: "host",
+        choices: &[
+            crate::Choice { value: "api.intercom.io", label: "United States" },
+            crate::Choice { value: "api.eu.intercom.io", label: "European Union" },
+            crate::Choice { value: "api.au.intercom.io", label: "Australia" },
+        ],
+    },
+];
+
+#[rustfmt::skip]
 static OPERATIONS: &[crate::Operation] = &[
     crate::Operation {
         id: "intercom-contact-get",
@@ -36,7 +53,7 @@ static OPERATIONS: &[crate::Operation] = &[
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
         credentials: &[&["intercom.access_token"]],
-        hosts: &["api.intercom.io"],
+        hosts: &["{host}"],
         flux: include_str!("../../ops/intercom/intercom-contact-get.flux"),
     },
     crate::Operation {
@@ -47,7 +64,7 @@ static OPERATIONS: &[crate::Operation] = &[
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
         credentials: &[&["intercom.access_token"]],
-        hosts: &["api.intercom.io"],
+        hosts: &["{host}"],
         flux: include_str!("../../ops/intercom/intercom-contact-create.flux"),
     },
     crate::Operation {
@@ -58,7 +75,7 @@ static OPERATIONS: &[crate::Operation] = &[
         risk: crate::Risk::Low,
         idempotency: crate::Idempotency::Idempotent,
         credentials: &[&["intercom.access_token"]],
-        hosts: &["api.intercom.io"],
+        hosts: &["{host}"],
         flux: include_str!("../../ops/intercom/intercom-conversation-get.flux"),
     },
     crate::Operation {
@@ -69,7 +86,7 @@ static OPERATIONS: &[crate::Operation] = &[
         risk: crate::Risk::High,
         idempotency: crate::Idempotency::NonIdempotent,
         credentials: &[&["intercom.access_token"]],
-        hosts: &["api.intercom.io"],
+        hosts: &["{host}"],
         flux: include_str!("../../ops/intercom/intercom-conversation-reply.flux"),
     },
     crate::Operation {
@@ -80,7 +97,7 @@ static OPERATIONS: &[crate::Operation] = &[
         risk: crate::Risk::Medium,
         idempotency: crate::Idempotency::NonIdempotent,
         credentials: &[&["intercom.access_token"]],
-        hosts: &["api.intercom.io"],
+        hosts: &["{host}"],
         flux: include_str!("../../ops/intercom/intercom-contact-note-create.flux"),
     },
 ];

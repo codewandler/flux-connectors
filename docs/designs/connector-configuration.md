@@ -97,6 +97,61 @@ A free-form `pattern` escape hatch is deliberately **absent**. No shipped provid
 would mean a `regex` dependency in a crate that has six. It lands when a real provider needs something
 the enum cannot say.
 
+### `choices` is a closed set of **values**, and it narrows `format` rather than replacing it (C-225)
+
+`format` answers *what shape is this value*. `choices` answers *which values are legal*. Two vendors
+measured the difference in one wave, and the failure mode is the expensive kind:
+
+| vendor | the set | what a wrong answer does |
+|---|---|---|
+| `newrelic` | `api.newrelic.com`, `api.eu.newrelic.com` | `401` on every call, indistinguishable from a bad key |
+| `intercom` | `api.intercom.io`, `api.eu.intercom.io`, `api.au.intercom.io` | the same, and the file recorded it as an open `SCHEMA GAP` from the day it shipped |
+
+`format = "hostname"` accepts every syntactically valid host on the internet, so before this the
+connector, the loader, any form built from it and this repository all accepted
+`api.not-new-relic.example` without complaint. The operator's first move on a `401` is to rotate the
+credential, which changes nothing, and no signal anywhere points at the host.
+
+```toml
+[[config]]
+name    = "host"
+label   = "New Relic API host"
+help    = "Which region this New Relic account lives in…"
+example = "api.newrelic.com"
+format  = "hostname"
+choices = [
+  { value = "api.newrelic.com",    label = "United States" },
+  { value = "api.eu.newrelic.com", label = "European Union" },
+]
+binds   = "endpoint.host"
+```
+
+**The label is mandatory**, which is why a choice is a table and not a string: an operator knows
+their account is in Frankfurt and does not know that `api.eu.newrelic.com` is what that means.
+
+**`format` stays, and stays load-bearing.** Collapsing the two is tempting and wrong in three
+concrete ways: the format is what every choice is validated against at load (so a set cannot widen
+the field past its own rule), it is the input type a renderer falls back to, and it is what an
+`example` still answers to. `example` now answers to both — shape *and* membership.
+
+**Deliberately not a constraint language.** A closed list of values with labels is the whole of it.
+Ranges, patterns and conditionals are each their own argument, and the same call `format`'s missing
+`pattern` already makes applies.
+
+**A stored value that later leaves the set keeps working.** Membership is checked where a value is
+*supplied* — `ConfigField::permits`, called by whatever accepts a value from a human, which in this
+repository is `connectors-api`'s `PUT /v1/config/…` — and never where a stored value is read back
+and substituted. A vendor adding a region must not brick a connection configured before it existed;
+the next edit of that field is where the operator is asked to pick again. Refusing at read time would
+turn a catalogue update into an outage on connections that were never wrong.
+
+**The set is published**, in `connectors/<id>.connector.toml` as `[[config_choices]]`, in
+`catalog.json` as `config_choices`, and in `catalog::Provider::config_choices`. That is *not* C-87
+landing early: it is the set alone, addressed by `(service, kind, name)`, because a closed set a
+renderer cannot see is a text box with extra steps. The rest of the surface — labels for every field,
+help, `format`, `binds`, the derived level, `verify`, subscription and setup — is still C-87's, and
+so is the breaking `auth.oauth2` flattening.
+
 ## Invariants — all refusals
 
 1. **A connector asks for everything it needs.** Every `{var}` in every service base URL is bound by
@@ -126,6 +181,14 @@ the enum cannot say.
    `destructive` one is refused, because a connection test runs unattended whenever someone opens a
    settings page.
 9. **Config names join the shared member namespace** of their service.
+10. **A closed set is checked against the field it narrows** (C-225). Every choice satisfies the
+    field's own `format`; a set has at least two values, because a set of one is a constant and
+    belongs in the base URL rather than in front of a human; every choice has a non-empty label and
+    no value or label repeats, because each of those makes a form that cannot be answered; a `secret`
+    declares none, which is invariant 7 in its stronger form (an example is one credential-shaped
+    literal, a set is all of them); the `example` is one of the choices; and where the field pins a
+    request position, every choice satisfies that position too — a permitted value that escaped its
+    path segment would be a *sanctioned* way to address another resource.
 
 ## Webhooks as a full exposure
 

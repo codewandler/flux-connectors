@@ -9,7 +9,7 @@ op intercom-contact-get(contact_id: String) -> Any
   effects ["network"]
   expose true
 
-  base = "https://api.intercom.io"
+  base = "https://{host}"
   url = fmt("{base}/contacts/{contact_id}")
   response = http.request(method: "GET", url)
   return response
@@ -21,7 +21,7 @@ op intercom-contact-create(role: String, email: String) -> Any
   effects ["network"]
   expose true
 
-  base = "https://api.intercom.io"
+  base = "https://{host}"
   url = fmt("{base}/contacts")
   content_type = "application/json"
   payload = { email, role }
@@ -35,7 +35,7 @@ op intercom-conversation-get(conversation_id: String) -> Any
   effects ["network"]
   expose true
 
-  base = "https://api.intercom.io"
+  base = "https://{host}"
   url = fmt("{base}/conversations/{conversation_id}")
   response = http.request(method: "GET", url)
   return response
@@ -47,7 +47,7 @@ op intercom-conversation-reply(conversation_id: String, message_type: String, ad
   effects ["network"]
   expose true
 
-  base = "https://api.intercom.io"
+  base = "https://{host}"
   url = fmt("{base}/conversations/{conversation_id}/reply")
   content_type = "application/json"
   type = "admin"
@@ -62,7 +62,7 @@ op intercom-contact-note-create(contact_id: String, body: String, admin_id: Stri
   effects ["network"]
   expose true
 
-  base = "https://api.intercom.io"
+  base = "https://{host}"
   url = fmt("{base}/contacts/{contact_id}/notes")
   content_type = "application/json"
   payload = { admin_id, body }

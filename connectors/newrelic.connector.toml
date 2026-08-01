@@ -10,3 +10,17 @@ base_url = "https://{host}/v2"
 api_version = "2"
 module = "newrelic.flux"
 operations = ["newrelic-application-list", "newrelic-application-get", "newrelic-alert-policy-list", "newrelic-alert-violation-list", "newrelic-deployment-list", "newrelic-deployment-create"]
+
+[[config_choices]]
+field = "host"
+label = "New Relic API host"
+kind = "endpoint"
+name = "host"
+
+[[config_choices.choices]]
+value = "api.newrelic.com"
+label = "United States"
+
+[[config_choices.choices]]
+value = "api.eu.newrelic.com"
+label = "European Union"

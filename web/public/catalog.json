@@ -523,7 +523,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "anthropic",
@@ -1012,7 +1013,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "asana",
@@ -1475,7 +1477,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "babelforce",
@@ -128820,7 +128823,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "bitbucket",
@@ -129931,7 +129935,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "box",
@@ -130508,7 +130513,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "calendly",
@@ -131277,7 +131283,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "clickup",
@@ -132239,7 +132246,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "cloudflare",
@@ -132920,7 +132928,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "confluence",
@@ -133911,7 +133920,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "contentful",
@@ -134526,7 +134536,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "datadog",
@@ -134928,7 +134939,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "discord",
@@ -135835,7 +135847,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "docusign",
@@ -136625,7 +136638,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "dropbox",
@@ -137162,7 +137176,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "figma",
@@ -137807,7 +137822,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "fly",
@@ -138595,7 +138611,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "freshdesk",
@@ -140703,7 +140720,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "front",
@@ -141381,7 +141399,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "github",
@@ -142322,7 +142341,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "gitlab",
@@ -143459,7 +143479,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "google",
@@ -144461,7 +144482,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "hubspot",
@@ -145042,7 +145064,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "intercom",
@@ -145050,18 +145073,18 @@
       "vendor": "Intercom",
       "description": "Intercom contacts and conversations: read and create contacts, read a conversation, reply to it, and note it",
       "runtime": "http",
-      "base_url": "https://api.intercom.io",
+      "base_url": "https://{host}",
       "api_version": null,
       "hosts": [
-        "api.intercom.io"
+        "{host}"
       ],
       "services": [
         {
           "name": "default",
           "description": "",
-          "base_url": "https://api.intercom.io",
+          "base_url": "https://{host}",
           "hosts": [
-            "api.intercom.io"
+            "{host}"
           ],
           "api_version": null,
           "gid": null,
@@ -145246,9 +145269,9 @@
             ]
           ],
           "hosts": [
-            "api.intercom.io"
+            "{host}"
           ],
-          "flux": "op intercom-contact-get(contact_id: String) -> Any\n  description \"Get one Intercom contact by id — its role, email, name, custom attributes, tags and the companies it belongs to. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.intercom.io\"\n  url = fmt(\"{base}/contacts/{contact_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op intercom-contact-get(contact_id: String) -> Any\n  description \"Get one Intercom contact by id — its role, email, name, custom attributes, tags and the companies it belongs to. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{host}\"\n  url = fmt(\"{base}/contacts/{contact_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -145257,6 +145280,14 @@
                 "scope": "catalog",
                 "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {host} value before it has a valid destination URL.",
+                "params": [
+                  "host"
+                ]
               }
             ],
             "notes": []
@@ -145402,9 +145433,9 @@
             ]
           ],
           "hosts": [
-            "api.intercom.io"
+            "{host}"
           ],
-          "flux": "op intercom-contact-create(role: String, email: String) -> Any\n  description \"Create an email-identified Intercom contact. A contact created here is visible to every teammate in the workspace and is counted against its contact quota; creating one twice creates two contacts unless the workspace deduplicates on email. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.intercom.io\"\n  url = fmt(\"{base}/contacts\")\n  content_type = \"application/json\"\n  payload = { email, role }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "flux": "op intercom-contact-create(role: String, email: String) -> Any\n  description \"Create an email-identified Intercom contact. A contact created here is visible to every teammate in the workspace and is counted against its contact quota; creating one twice creates two contacts unless the workspace deduplicates on email. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{host}\"\n  url = fmt(\"{base}/contacts\")\n  content_type = \"application/json\"\n  payload = { email, role }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -145413,6 +145444,14 @@
                 "scope": "catalog",
                 "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {host} value before it has a valid destination URL.",
+                "params": [
+                  "host"
+                ]
               }
             ],
             "notes": []
@@ -145561,9 +145600,9 @@
             ]
           ],
           "hosts": [
-            "api.intercom.io"
+            "{host}"
           ],
-          "flux": "op intercom-conversation-get(conversation_id: String) -> Any\n  description \"Get one conversation by id, with its state, the contacts on it and its message parts in Intercom's default rendering. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.intercom.io\"\n  url = fmt(\"{base}/conversations/{conversation_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op intercom-conversation-get(conversation_id: String) -> Any\n  description \"Get one conversation by id, with its state, the contacts on it and its message parts in Intercom's default rendering. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{host}\"\n  url = fmt(\"{base}/conversations/{conversation_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -145572,6 +145611,14 @@
                 "scope": "catalog",
                 "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {host} value before it has a valid destination URL.",
+                "params": [
+                  "host"
+                ]
               }
             ],
             "notes": []
@@ -145767,9 +145814,9 @@
             ]
           ],
           "hosts": [
-            "api.intercom.io"
+            "{host}"
           ],
-          "flux": "op intercom-conversation-reply(conversation_id: String, message_type: String, admin_id: String, body: String) -> Any\n  description \"Reply to a conversation as an admin. With message_type `comment` the reply is delivered to the end user by email or in-app message and cannot be un-sent; with `note` it is an internal comment only teammates see. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.intercom.io\"\n  url = fmt(\"{base}/conversations/{conversation_id}/reply\")\n  content_type = \"application/json\"\n  type = \"admin\"\n  payload = { admin_id, body, message_type, type }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "flux": "op intercom-conversation-reply(conversation_id: String, message_type: String, admin_id: String, body: String) -> Any\n  description \"Reply to a conversation as an admin. With message_type `comment` the reply is delivered to the end user by email or in-app message and cannot be un-sent; with `note` it is an internal comment only teammates see. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{host}\"\n  url = fmt(\"{base}/conversations/{conversation_id}/reply\")\n  content_type = \"application/json\"\n  type = \"admin\"\n  payload = { admin_id, body, message_type, type }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -145778,6 +145825,14 @@
                 "scope": "catalog",
                 "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {host} value before it has a valid destination URL.",
+                "params": [
+                  "host"
+                ]
               }
             ],
             "notes": []
@@ -145889,9 +145944,9 @@
             ]
           ],
           "hosts": [
-            "api.intercom.io"
+            "{host}"
           ],
-          "flux": "op intercom-contact-note-create(contact_id: String, body: String, admin_id: String) -> Any\n  description \"Add an internal note to a contact, visible to teammates in the workspace and never to the contact. Adding the same note twice adds two notes. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.intercom.io\"\n  url = fmt(\"{base}/contacts/{contact_id}/notes\")\n  content_type = \"application/json\"\n  payload = { admin_id, body }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "flux": "op intercom-contact-note-create(contact_id: String, body: String, admin_id: String) -> Any\n  description \"Add an internal note to a contact, visible to teammates in the workspace and never to the contact. Adding the same note twice adds two notes. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body.\"\n  risk \"medium\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://{host}\"\n  url = fmt(\"{base}/contacts/{contact_id}/notes\")\n  content_type = \"application/json\"\n  payload = { admin_id, body }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -145900,6 +145955,14 @@
                 "scope": "catalog",
                 "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
                 "params": []
+              },
+              {
+                "code": "unbound-base-url-template",
+                "scope": "provider",
+                "summary": "This connector needs an operator-supplied {host} value before it has a valid destination URL.",
+                "params": [
+                  "host"
+                ]
               }
             ],
             "notes": []
@@ -145907,7 +145970,30 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": [
+        {
+          "service": "default",
+          "field": "host",
+          "label": "Intercom region",
+          "kind": "endpoint",
+          "name": "host",
+          "choices": [
+            {
+              "value": "api.intercom.io",
+              "label": "United States"
+            },
+            {
+              "value": "api.eu.intercom.io",
+              "label": "European Union"
+            },
+            {
+              "value": "api.au.intercom.io",
+              "label": "Australia"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "jira",
@@ -146664,7 +146750,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "klaviyo",
@@ -147658,7 +147745,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "launchdarkly",
@@ -148451,7 +148539,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "mailchimp",
@@ -149563,7 +149652,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "microsoft_graph",
@@ -150773,7 +150863,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "miro",
@@ -151847,7 +151938,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "newrelic",
@@ -152610,7 +152702,26 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": [
+        {
+          "service": "default",
+          "field": "host",
+          "label": "New Relic API host",
+          "kind": "endpoint",
+          "name": "host",
+          "choices": [
+            {
+              "value": "api.newrelic.com",
+              "label": "United States"
+            },
+            {
+              "value": "api.eu.newrelic.com",
+              "label": "European Union"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "notion",
@@ -153129,7 +153240,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "okta",
@@ -153787,7 +153899,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "openai",
@@ -154303,7 +154416,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "openrouter",
@@ -154718,7 +154832,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "pagerduty",
@@ -155822,7 +155937,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "postmark",
@@ -156427,7 +156543,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "resend",
@@ -157034,7 +157151,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "salesforce",
@@ -157638,7 +157756,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "sendgrid",
@@ -158136,7 +158255,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "sentry",
@@ -158940,7 +159060,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "shopify",
@@ -159723,7 +159844,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "slack",
@@ -160442,7 +160564,8 @@
             ]
           }
         }
-      ]
+      ],
+      "config_choices": []
     },
     {
       "id": "statuspage",
@@ -161241,7 +161364,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "stripe",
@@ -162309,7 +162433,8 @@
           }
         }
       ],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "supabase",
@@ -162635,7 +162760,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "trello",
@@ -163474,7 +163600,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "twilio",
@@ -164585,7 +164712,8 @@
           }
         }
       ],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "typeform",
@@ -165407,7 +165535,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "vercel",
@@ -165941,7 +166070,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "webflow",
@@ -166591,7 +166721,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "zendesk",
@@ -167686,7 +167817,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     },
     {
       "id": "zoom",
@@ -167975,7 +168107,8 @@
         }
       ],
       "events": [],
-      "channels": []
+      "channels": [],
+      "config_choices": []
     }
   ],
   "core": {

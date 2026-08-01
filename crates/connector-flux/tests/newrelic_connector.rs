@@ -157,8 +157,9 @@ fn the_region_host_is_operator_bound_and_neither_region_is_baked_in() {
     );
     assert!(
         field.help.contains(US_HOST) && field.help.contains(EU_HOST),
-        "the two valid answers are unspellable in the declaration, so the help text is the only \
-         place they are written down — and that is the whole finding. Got: {}",
+        "the help still names both hosts. They are in the declaration now (C-225), but an operator \
+         who has to map `European Union` back to a hostname needs the mapping written down \
+         somewhere they can read without a form. Got: {}",
         field.help
     );
     assert!(
@@ -167,77 +168,82 @@ fn the_region_host_is_operator_bound_and_neither_region_is_baked_in() {
     );
 }
 
-/// **Finding 2, and the story's whole purpose: the closed set of two hosts cannot be declared.**
+/// **Finding 2, and the story's whole purpose: the closed set of two hosts is declared** — C-220
+/// measured that it could not be, C-225 closed it, and this is the same claim inverted.
 ///
-/// New Relic's host is not free text that happens to have two common answers — it has *exactly*
-/// two answers, and every third one is wrong. Nothing in the IR says so:
+/// New Relic's host is not free text that happens to have two common answers — it has *exactly* two
+/// answers, and every third one is wrong. Three properties, each asserted against the shipped file:
 ///
-/// - [`Format`] is a closed enum of value *shapes*, not of values. `hostname` is the nearest, and
-///   it accepts any syntactically valid host, so the loader is content with a host that has
-///   nothing to do with New Relic. Measured below on the shipped file itself, via the one lever
-///   this crate gives a test: the loader validates `example` against `format`, so an `example`
-///   naming an unrelated host is a load the connector should refuse and does not.
-/// - The declaration an author reaches for next — a list of permitted values on the field — is not
-///   a field. `ConfigField` is `#[serde(deny_unknown_fields)]`, so adding one is a load error
-///   rather than a key that is quietly accepted and ignored. That refusal is what makes this a gap
-///   in the model rather than an omission in this file.
+/// - **the two hosts are in the declaration**, each with a label, so a form draws a two-item select
+///   rather than a text box an operator can put anything into;
+/// - **`format` is still `hostname` and still load-bearing.** Shape and membership are different
+///   questions: the format is what each choice is validated against at load, so a set cannot widen
+///   the field past its own rule, and it is what a renderer falls back to;
+/// - **a host with no relationship to the vendor is refused**, by a message that names the field and
+///   lists what is permitted. `Format::Hostname` still accepts it — that is the point of keeping the
+///   two questions apart — and the closed set is what refuses it.
 ///
-/// **The consequence, stated plainly:** an operator who picks the wrong host gets a `401` on every
-/// call, and that `401` is indistinguishable from a bad key. Nothing in this repository can catch
-/// it, nothing in a form can catch it, and the only mitigation shipped here is prose in `help`. It
-/// is filed rather than papered over — see the story's Progress note.
+/// The failure this prevents: an operator who picks the wrong host gets a `401` on every call,
+/// indistinguishable from a bad key, so their first move is to rotate a credential that was never
+/// wrong.
 #[test]
-fn the_closed_set_of_two_hosts_is_not_expressible_and_the_field_admits_any_host() {
-    // Both documented answers satisfy the field. Neither is privileged by the declaration.
+fn the_closed_set_of_two_hosts_is_declared_and_any_other_host_is_refused() {
+    let connector = load();
+    let field = connector
+        .config_field(HOST_FIELD)
+        .unwrap_or_else(|| panic!("newrelic declares `{HOST_FIELD}`"));
+
+    assert!(field.is_closed(), "the region is a choice, not free text");
+    assert_eq!(
+        field
+            .choices
+            .iter()
+            .map(|choice| (choice.value.as_str(), choice.label.as_str()))
+            .collect::<Vec<_>>(),
+        [(US_HOST, "United States"), (EU_HOST, "European Union")],
+        "both hosts, each with the name an operator knows their account by"
+    );
+
+    // Membership narrows the format; it does not replace it. Both remain true of every choice.
+    assert_eq!(field.format, Format::Hostname);
     for host in [US_HOST, EU_HOST] {
-        assert_eq!(
-            Format::Hostname.validate(host),
-            Ok(()),
-            "{host} is one of the two answers this connector accepts"
-        );
+        assert_eq!(Format::Hostname.validate(host), Ok(()), "{host}");
+        assert_eq!(field.permits(host), Ok(()), "{host}");
     }
 
-    // And so does a host with no relationship to the vendor at all. This is the gap: a value that
-    // is well-formed, accepted, and wrong.
+    // The value C-220 could not refuse. It is still a well-formed hostname — which is exactly why
+    // `format` could never have caught it — and it is now refused, by name and with the answers.
     let unrelated = "api.not-new-relic.example";
     assert_eq!(
         Format::Hostname.validate(unrelated),
         Ok(()),
-        "`hostname` constrains the shape of a host, never which host — there is no format, and no \
-         other field, that says `one of these two`"
+        "`hostname` constrains the shape of a host, never which host; the set is what does that"
     );
+    let refusal = field
+        .permits(unrelated)
+        .expect_err("a host with nothing to do with New Relic is not one of the two answers");
+    for named in [HOST_FIELD, US_HOST, EU_HOST, unrelated] {
+        assert!(
+            refusal.contains(named),
+            "the refusal must name the field, the answers and the value given: {refusal}"
+        );
+    }
 
+    // And the loader holds the shipped file to it: an `example` outside the set is the same class of
+    // defect as one that fails its own `format`, and both are refused at load.
     let shipped = source();
     let example = format!("example = \"{US_HOST}\"");
     assert!(
         shipped.contains(&example),
-        "the shipped file must carry `{example}` for the substitutions below to prove anything"
+        "the shipped file must carry `{example}` for the substitution below to prove anything"
     );
-
-    // The loader checks `example` against `format` (`Format::validate`, applied at load), so this
-    // is the one place a test can watch the field's own validation run against a value.
-    for accepted in [EU_HOST, unrelated] {
-        let mutated = shipped.replace(&example, &format!("example = \"{accepted}\""));
-        assert_ne!(mutated, shipped, "the substitution must actually apply");
-        assert!(
-            shipped_provider::load_definition(PROVIDER, &mutated).is_ok(),
-            "the connector loads with `{accepted}` as the host operators are shown. For {EU_HOST} \
-             that is correct and necessary; for {unrelated} it is the defect, and the two are \
-             indistinguishable to every check this repository runs"
-        );
-    }
-
-    // The declaration that would close it does not exist. `deny_unknown_fields` turns the guess
-    // into a load error, which is the honest answer — an accepted-and-ignored key would be worse.
-    let with_a_closed_set = shipped.replace(
-        &example,
-        &format!("values = [\"{US_HOST}\", \"{EU_HOST}\"]\n{example}"),
-    );
-    let error = shipped_provider::load_definition(PROVIDER, &with_a_closed_set)
-        .expect_err("`ConfigField` has no way to enumerate the values a field permits");
+    let mutated = shipped.replace(&example, &format!("example = \"{unrelated}\""));
+    assert_ne!(mutated, shipped, "the substitution must actually apply");
+    let error = shipped_provider::load_definition(PROVIDER, &mutated)
+        .expect_err("a placeholder nobody may enter is a placeholder that misleads");
     assert!(
-        error.to_string().contains("values"),
-        "expected an unknown-field refusal naming `values`, got: {error}"
+        error.to_string().contains("choices"),
+        "expected a refusal about the example's membership, got: {error}"
     );
 }
 

@@ -120,16 +120,26 @@
 # than guessed.
 #
 # ---------------------------------------------------------------------------------------------
-# SCHEMA GAP: the regional hosts are not selectable.
+# THE REGIONAL HOSTS ARE SELECTABLE — the gap this file recorded from the day it shipped is closed.
 # ---------------------------------------------------------------------------------------------
 #
 # A workspace hosted in the EU or Australia is served from `api.eu.intercom.io` or
-# `api.au.intercom.io`; the paths and payloads are identical, only the authority differs. `base_url`
-# is a plain string and nothing in the IR declares "this part is chosen by the operator", which is the
-# same missing binding `providers/zendesk.toml` records for `{subdomain}` → `ZENDESK_URL` (C-17). The
-# US host is declared, because it is the one a template variable would otherwise leave unbound —
-# `status.rs` would flag every operation with `unbound-base-url-template` — and an EU workspace needs
-# a second connector or C-17's binding rather than a widened host list.
+# `api.au.intercom.io`; the paths and payloads are identical, only the authority differs. This file
+# used to carry a `SCHEMA GAP:` note here saying so, because `base_url` was a plain string and
+# nothing in the IR could declare "this part is chosen by the operator, out of exactly these three".
+# US-only shipped, and an EU workspace needed a second connector.
+#
+# C-225 added `choices` to `[[config]]`, and the note is gone rather than left describing a gap that
+# closed. The `host` field near the bottom of this file enumerates all three hosts with a label each,
+# so:
+#
+# - **the egress claim is still closed, and still auditable.** It moved from one literal host to one
+#   of three enumerated ones — which is a set a reviewer can read off the declaration, not a
+#   widened `*.intercom.io`. `uploads.intercom.io` and the app hosts remain unreachable;
+# - **a wrong region is refused where it is entered.** Before, an EU workspace's token against the
+#   US host returned `401` on every call, indistinguishable from a bad token;
+# - **it is a required value now.** An operator who previously needed nothing beyond a token must
+#   pick a region — see the field's own comment for why that is the honest trade.
 
 id = "intercom"
 vendor = "Intercom"
@@ -144,8 +154,9 @@ vendor = "Intercom"
 # `io.fly.api`).
 #
 # Intercom serves the same API from `api.intercom.io`, `api.eu.intercom.io` and
-# `api.au.intercom.io`, and the comment below already treats the choice between them as an
-# operator's binding. Those are three *hosts* for one API, and one API is one authority.
+# `api.au.intercom.io`, and the `host` field below binds the choice between them. Those are three
+# *hosts* for one API, and one API is one authority — the authority does not vary by region, which
+# is why a workspace changing region would not change where its credential is stored.
 #
 # **Never repointed once published** (`AGENTS.md`: "an address, once published, is not reused"). A
 # different spelling mints a new address and deprecates this one, because tenants provision secrets
@@ -157,13 +168,13 @@ authority = "com.intercom.api"
 # so there is nothing the file itself spells and nothing to record without asserting a vendor fact
 # from outside it. A `pid` and a credential path render without one; only a `gid` needs both halves.
 
-# One host, no tenant templating: every workspace in the US region is served from `api.intercom.io`,
-# so unlike zendesk there is no `{subdomain}` for an operator to bind and this connector already has a
-# valid destination URL. `http_hosts` derives from this single value and is therefore exactly
-# `api.intercom.io`, and must never be widened — `uploads.intercom.io` and the `*.intercom.io` app
-# hosts are not reachable from the operations below. The manifest's real `http_hosts` field lands in
-# C-10; today the host is derived from this URL (`crates/connector-cli/src/catalog.rs`, `host_of`).
-base_url = "https://api.intercom.io"
+# **One `{host}`, chosen from three** (C-225). Unlike zendesk's `{subdomain}` this is not a tenant
+# label an operator invents — it is a region Intercom assigned the workspace, and the `host` field
+# below enumerates every value it may take. `http_hosts` derives from this URL
+# (`crates/connector-cli/src/catalog.rs`, `host_of`), so what a consumer reads is the template; the
+# closed set is what bounds it, and `uploads.intercom.io` and the `*.intercom.io` app hosts are in
+# neither. The manifest's real `http_hosts` field lands in C-10.
+base_url = "https://{host}"
 
 description = "Intercom contacts and conversations: read and create contacts, read a conversation, reply to it, and note it"
 
@@ -471,3 +482,37 @@ properties = { type = { const = "note" }, id = { type = "string", description = 
 [operations.quirks.error_envelope]
 message_pointer = "/errors/0/message"
 code_pointer = "/errors/0/code"
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — what a product asks a human for before any of the above can run.
+#
+# One field: the workspace's region host. Connection level, derived from what it binds — a region is
+# a property of one workspace, not of whoever runs the product, and two tenants of one deployment
+# may sit in two of them.
+#
+# **This is a required value where none was required before, and it is a deliberate trade.** Until
+# now this connector shipped US-only with a literal `api.intercom.io`: an EU or AU workspace could
+# not be connected at all, and the only remedy this file recorded was "a second connector". Asking
+# every operator one question they can answer from their own login URL is strictly better than
+# serving one region and failing the other two as `401`.
+#
+# `format = "hostname"` stays alongside the set: it is the shape each choice is validated against at
+# load, and the input a renderer falls back to. Shape and membership answer different questions.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "host"
+label = "Intercom region"
+help = "Which region this Intercom workspace is hosted in. Pick United States, European Union or Australia — Intercom assigns the region when the workspace is created and it does not change. If you are not sure, look at the URL you use Intercom at: app.intercom.com is the US region, app.eu.intercom.com the EU one and app.au.intercom.com the Australian one. A token issued for one region returns 401 against another, exactly as a revoked token would"
+example = "api.intercom.io"
+format = "hostname"
+# Intercom's own order — the US host is the one the vendor documents first and the one this
+# connector shipped with. A label per value: an operator knows their workspace is in the EU, and
+# does not know that `api.eu.intercom.io` is what that means.
+choices = [
+  { value = "api.intercom.io", label = "United States" },
+  { value = "api.eu.intercom.io", label = "European Union" },
+  { value = "api.au.intercom.io", label = "Australia" },
+]
+docs_url = "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/"
+binds = "endpoint.host"

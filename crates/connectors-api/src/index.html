@@ -203,16 +203,50 @@ async function show(id) {
                                    el('option', { value: 'username' }, 'username'));
     const service = el('input', { value: 'default', placeholder: 'service' });
     const field = el('input', { value: tpl[0] ?? '', placeholder: 'field name' });
-    const value = el('input', { placeholder: 'value' });
     const out = el('span', { className: 'muted' });
     const set = el('button', {}, 'Bind');
+
+    // --- a closed set renders as a choice, not as a text box (C-225) --------
+    //
+    // The catalogue publishes the permitted values for a slot whose answer an operator cannot
+    // discover — New Relic's two region hosts, Intercom's three. Rendering those as free text is
+    // the whole defect: a wrong region is a 401 on every call, indistinguishable from a bad key,
+    // so the operator rotates a credential that was never wrong. The server refuses a value
+    // outside the set too; this is the half that stops it being entered.
+    const choicesFor = () => (c.config_choices ?? []).find(e =>
+      e.service === service.value && e.kind === kind.value && e.name === field.value);
+    const text = el('input', { placeholder: 'value' });
+    const select = el('select', {});
+    const slot = el('div', { style: 'flex:1' });
+    let value = text;
+    const drawValue = () => {
+      const closed = choicesFor();
+      if (closed) {
+        // Labelled, because `api.eu.newrelic.com` is not what an operator knows about their
+        // account — "European Union" is. The value is what reaches the wire.
+        select.replaceChildren(...closed.choices.map(ch => el('option', { value: ch.value }, ch.label)));
+        value = select;
+      } else {
+        value = text;
+      }
+      slot.replaceChildren(value);
+      hint.textContent = closed
+        ? `${closed.label} — one of ${closed.choices.length}; anything else is refused`
+        : '';
+    };
+    const hint = el('span', { className: 'muted', style: 'font-size:.75rem' });
+    for (const control of [kind, service, field]) control.oninput = drawValue;
+    kind.onchange = drawValue;
+
     set.onclick = async () => {
       try {
         await api('PUT', `/v1/config/${c.id}/${service.value}/${kind.value}/${field.value}`, { value: value.value });
         out.textContent = 'bound'; out.className = 'ok'; show(c.id);
       } catch (e) { out.textContent = e.message; out.className = 'err'; }
     };
-    cfg.append(el('div', { className: 'row' }, kind, service, field, value, set, out));
+    drawValue();
+    cfg.append(el('div', { className: 'row' }, kind, service, field, slot, set, out),
+               el('div', { className: 'row' }, hint));
     if (c.settings.length) {
       cfg.append(el('table', {}, el('tbody', {}, ...c.settings.map(([k, v]) =>
         el('tr', {}, el('td', { className: 'mono' }, k), el('td', { className: 'mono' }, v))))));

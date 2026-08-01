@@ -110,6 +110,41 @@ never a tuple or a positional array.
 | `auth` | Auth | See below. |
 | `operation_count` | number | So a provider list renders without walking `operations`. |
 | `operations` | array\<Operation\> | In the order the provider declares them, which is the order `connectors/<id>.flux` carries them. |
+| `config_choices` | array\<ConfigChoices\> | The configuration fields whose value comes from a **closed set** (C-225). `[]` for nearly every provider. Added without a `schema_version` bump, per the rule above. |
+
+### ConfigChoices
+
+One configuration field that permits a closed set of values, and the set —
+[C-225](../stories/C-225-a-config-field-cannot-declare-a-closed-set-of-values.md).
+
+It is here because a set that reached no artifact would be a declaration a product cannot act on: a
+form that cannot see the choices renders a text box, and a wrong New Relic region is a `401` on
+every call that reads exactly like a bad key.
+
+**This is deliberately not the whole configuration surface.** Labels, help text, `format`, `binds`
+and the derived level are [C-87](../stories/C-87-configuration-codegen.md)'s, and that story carries
+a breaking change to `auth.oauth2` which this one must not drag in. What is published here is the
+part a closed set is worthless without.
+
+| Field | Type | Notes |
+|---|---|---|
+| `service` | string | The `Service.name` this field configures. Written out, `default` included. |
+| `field` | string | The declared field name — `host`. The key a host stores the value under. |
+| `label` | string | The form label — `New Relic API host`. |
+| `kind` | string | Where the value goes: `endpoint`, `path`, `query`, `header`, `username` or `oauth`. |
+| `name` | string | The name within `kind` — the base-URL `{variable}`, or a pinned wire name. |
+| `choices` | array\<Choice\> | The permitted values, in the vendor's own order. |
+
+`(service, kind, name)` is the same address `connector-pack`'s configuration port stores a value
+under, so a consumer joins on it rather than re-parsing a `binds` string this document does not
+carry yet.
+
+### Choice
+
+| Field | Type | Notes |
+|---|---|---|
+| `value` | string | What a host stores and what substitution puts on the request. |
+| `label` | string | The human name — `European Union`, not `api.eu.newrelic.com`. Mandatory: a dropdown of bare hostnames is one nobody can answer. |
 
 ### Service
 

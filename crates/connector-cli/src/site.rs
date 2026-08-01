@@ -144,6 +144,47 @@ pub struct ProviderEntry {
     /// here is a URL, a schedule or a secret: the endpoint is the operator's deployment detail and
     /// every credential is a name the host resolves.
     channels: Vec<ChannelEntry>,
+    /// **Every configuration field whose value comes from a closed set** (C-225). `[]` for the
+    /// connectors that declare none, which is nearly all of them.
+    ///
+    /// An **additive** key, so no `SCHEMA_VERSION` bump: nothing existing changes type or meaning.
+    /// And deliberately *not* the whole configuration surface — labels, help, `binds`, `format` and
+    /// the derived level are C-87's, and that story carries a breaking change to the `auth.oauth2`
+    /// flattening which this one must not drag in. What is published here is the part a closed set
+    /// is worthless without: a product that cannot see the choices renders a text box, and the
+    /// declaration has moved without the benefit.
+    config_choices: Vec<ConfigChoicesEntry>,
+}
+
+/// One configuration field that permits a closed set of values, and the set (C-225).
+///
+/// Addressed by `(service, kind, name)` — the same address `connector-pack`'s configuration port
+/// stores a value under — so a consumer joins on it rather than re-parsing a `binds` string it
+/// cannot see yet.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+struct ConfigChoicesEntry {
+    /// The [`ServiceEntry::name`] this field configures — written out, `default` included.
+    service: String,
+    /// The declared field name, e.g. `host`. The key a host stores the collected value under.
+    field: String,
+    /// The form label, e.g. `New Relic API host`.
+    label: String,
+    /// Where the value goes: `endpoint`, `path`, `query`, `header`, `username` or `oauth`.
+    kind: &'static str,
+    /// The name within `kind` — the base-URL `{variable}`, or the pinned wire name.
+    name: String,
+    /// The permitted values, in the vendor's own order.
+    choices: Vec<ChoiceEntry>,
+}
+
+/// One permitted value, and the text a renderer shows for it.
+///
+/// The label is the whole reason this is an object rather than a string: a dropdown of hostnames is
+/// a dropdown nobody can answer.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+struct ChoiceEntry {
+    value: String,
+    label: String,
 }
 
 /// One event a vendor sends, with the vendor's own spelling and its schema intact.
@@ -555,6 +596,31 @@ pub fn provider_entry(
             .channels
             .iter()
             .map(|channel| channel_entry(connector, channel))
+            .collect(),
+        config_choices: connector
+            .config
+            .iter()
+            .filter_map(config_choices_entry)
+            .collect(),
+    })
+}
+
+/// One configuration field's closed set, or `None` when the field is open (C-225).
+fn config_choices_entry(field: &connector_spec::ConfigField) -> Option<ConfigChoicesEntry> {
+    let binding = field.binding().filter(|_| field.is_closed())?;
+    Some(ConfigChoicesEntry {
+        service: field.service.clone(),
+        field: field.name.clone(),
+        label: field.label.clone(),
+        kind: binding.kind(),
+        name: binding.target().to_owned(),
+        choices: field
+            .choices
+            .iter()
+            .map(|choice| ChoiceEntry {
+                value: choice.value.clone(),
+                label: choice.label.clone(),
+            })
             .collect(),
     })
 }

@@ -84,9 +84,11 @@ pub fn render(connector: &Connector, renderings: &[OperationRendering]) -> Resul
     out.push_str(&format!("    base_url: {},\n", string(&connector.base_url)));
     out.push_str("    auth: AUTH,\n");
     out.push_str("    operations: OPERATIONS,\n");
+    out.push_str("    config_choices: CONFIG_CHOICES,\n");
     out.push_str("};\n\n");
 
     out.push_str(&render_auth(connector)?);
+    out.push_str(&render_config_choices(connector));
 
     out.push_str("#[rustfmt::skip]\n");
     out.push_str("static OPERATIONS: &[crate::Operation] = &[\n");
@@ -424,6 +426,46 @@ fn render_auth(connector: &Connector) -> Result<String> {
     }
     out.push_str("];\n\n");
     Ok(out)
+}
+
+/// **The closed sets a connector's configuration fields declare** — C-225.
+///
+/// Only the fields that *have* one, so the common connector emits an empty slice and the diff of a
+/// provider adopting a set is one block. This is not the whole configuration surface: labels, help,
+/// `binds` and the derived level are C-87's, and this publishes exactly the part a closed set is
+/// worthless without. A renderer that cannot see the choices draws a text box, which is the state
+/// the story exists to leave.
+///
+/// The row is keyed by `(service, kind, name)` — the same address `connector-pack`'s configuration
+/// port stores a value under — so a consumer joins on it without re-parsing `binds`. A field whose
+/// binding is malformed contributes nothing, which cannot happen on a loaded connector: `binds` is
+/// validated at load, and this runs on the IR.
+fn render_config_choices(connector: &Connector) -> String {
+    let mut out = String::from("#[rustfmt::skip]\n");
+    out.push_str("static CONFIG_CHOICES: &[crate::ConfigChoices] = &[\n");
+    for field in &connector.config {
+        let Some(binding) = field.binding().filter(|_| field.is_closed()) else {
+            continue;
+        };
+        out.push_str("    crate::ConfigChoices {\n");
+        out.push_str(&format!("        service: {},\n", string(&field.service)));
+        out.push_str(&format!("        field: {},\n", string(&field.name)));
+        out.push_str(&format!("        label: {},\n", string(&field.label)));
+        out.push_str(&format!("        kind: {},\n", string(binding.kind())));
+        out.push_str(&format!("        name: {},\n", string(binding.target())));
+        out.push_str("        choices: &[\n");
+        for choice in &field.choices {
+            out.push_str(&format!(
+                "            crate::Choice {{ value: {}, label: {} }},\n",
+                string(&choice.value),
+                string(&choice.label)
+            ));
+        }
+        out.push_str("        ],\n");
+        out.push_str("    },\n");
+    }
+    out.push_str("];\n\n");
+    out
 }
 
 /// The acquisition axis: how stored material becomes the value that is placed.

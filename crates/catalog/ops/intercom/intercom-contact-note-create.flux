@@ -5,7 +5,7 @@ op intercom-contact-note-create(contact_id: String, body: String, admin_id: Stri
   effects ["network"]
   expose true
 
-  base = "https://api.intercom.io"
+  base = "https://{host}"
   url = fmt("{base}/contacts/{contact_id}/notes")
   content_type = "application/json"
   payload = { admin_id, body }

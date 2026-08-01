@@ -84,20 +84,43 @@ fn load() -> Connector {
 }
 
 /// The connector exists, loads through the real loader, and is the one C-73 specifies: a bearer
-/// access token over `api.intercom.io`, with the curated operation set.
+/// access token over one of Intercom's three regional hosts, with the curated operation set.
 #[test]
 fn the_intercom_connector_loads_and_authenticates_with_a_bearer_access_token() {
     let connector = load();
 
     assert_eq!(connector.id, PROVIDER);
     assert_eq!(connector.vendor, "Intercom");
-    // One tenant-independent host, so unlike zendesk there is no `{subdomain}` for an operator to
-    // bind and the connector already has a valid destination URL. `http_hosts` derives from this one
-    // value and is therefore exactly `api.intercom.io`, never widened.
+    // **The host is a `{host}` bound to a closed set** (C-225). Unlike zendesk's `{subdomain}` this
+    // is not a label an operator invents: it is one of three values Intercom assigns, and this file
+    // used to record its absence as a `SCHEMA GAP` while shipping US-only. The egress claim is still
+    // closed — three enumerated hosts rather than one literal — and it is still auditable from the
+    // declaration, which is what a widened `*.intercom.io` would not be.
     assert_eq!(
-        connector.base_url, "https://api.intercom.io",
-        "the host is `api.intercom.io` and is never widened"
+        connector.base_url, "https://{host}",
+        "the host is the operator's region and nothing else is templated"
     );
+    let host = connector
+        .config_field("host")
+        .expect("intercom declares the `host` config field");
+    assert_eq!(
+        host.choices
+            .iter()
+            .map(|choice| choice.value.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "api.intercom.io",
+            "api.eu.intercom.io",
+            "api.au.intercom.io"
+        ],
+        "exactly Intercom's three regional hosts, in the vendor's own order — never widened"
+    );
+    for wrong in ["uploads.intercom.io", "app.intercom.com", "intercom.io"] {
+        assert!(
+            host.permits(wrong).is_err(),
+            "{wrong} is not one of the three, so the connector must refuse it where it is entered"
+        );
+    }
     assert!(
         !connector.operations.is_empty(),
         "a connector with no operations compiles to an empty module"

@@ -391,6 +391,11 @@
           "description": "A realistic example, rendered as a placeholder. Never a default, and validated against `format` so it cannot mislead — a placeholder that would fail the field's own validation is worse than none, because a user copies it.\n\nA `secret` field declares NONE, and the loader refuses one. A token-shaped literal in a committed file has tripped GitHub push protection and blocked a release here, and one that is a real token is a disclosed credential. Put the shape of the value in `help` instead."
         },
         "format": { "$ref": "#/$defs/format" },
+        "choices": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/choice" },
+          "description": "The closed set of values this field permits, in the vendor's own order. Omit it for a field that is free text.\n\nA NARROWING of `format`, not an alternative to it: `format` says what shape a value has, `choices` says which values are legal, and every choice is validated against the field's own format at load. The `example` must be one of them, a `secret` field may declare none, and a set of one is refused because a constant is not a choice.\n\nWhat it is for: a vendor with two API hosts and nothing pre-auth that discloses which. A wrong region returns 401 on every call, indistinguishable from a bad key, so the operator rotates a credential that was never wrong.\n\nMembership is checked where a value is SUPPLIED, never where a stored one is read back — a vendor adding a region must not brick a connection configured before it existed."
+        },
         "required": {
           "type": "boolean",
           "description": "Whether the connector cannot function without it. Defaults to true: a connector declaring a field it does not need is the rarer case, and the safe default is to ask."
@@ -406,6 +411,24 @@
         "binds": {
           "type": "string",
           "description": "Where the collected value goes. One of `endpoint.<variable>` (a `{variable}` in the service's base URL), `credential.<name>` (the secret half of a declared credential), `username.<name>` (the username half of a `basic` credential), `oauth.client_id`, or `oauth.client_secret`.\n\nThe username half is a separate prefix rather than a `.user` suffix because credential names contain dots (`zendesk.api_token`), which would make a suffix ambiguous."
+        }
+      }
+    },
+
+    "choice": {
+      "type": "object",
+      "title": "One permitted value of a closed set",
+      "description": "The value itself and the text a renderer shows for it. The label is mandatory and is the whole reason a choice is a table rather than a string: a dropdown offering `api.newrelic.com` and `api.eu.newrelic.com` to someone who knows their account is in Frankfurt has moved the declaration without moving the benefit.",
+      "additionalProperties": false,
+      "required": ["value", "label"],
+      "properties": {
+        "value": {
+          "type": "string",
+          "description": "The value itself — what a host stores and what substitution puts on the request."
+        },
+        "label": {
+          "type": "string",
+          "description": "The human name for it — `United States`, not `api.newrelic.com`. Sentence case, no trailing colon."
         }
       }
     },
