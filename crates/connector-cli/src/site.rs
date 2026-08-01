@@ -292,7 +292,10 @@ struct HmacEntry {
     header: String,
     /// A literal prefix the header value carries before the digest (`v0=`), or `null`.
     prefix: Option<String>,
-    /// The string that is signed, as a template over `{body}` and `{timestamp}`.
+    /// The string that is signed, as a template over `{body}`, `{sorted_form}`, `{timestamp}` and
+    /// `{url}` — `connector_spec::inbound::SIGNED_PLACEHOLDERS`, which is the closed set a consumer
+    /// must be able to fill. `{sorted_form}` and `{url}` are the two a consumer cannot fill by
+    /// splicing something it was handed: see the IR's `HmacSpec::signed` for what each derives.
     signed: String,
     /// Where the `{timestamp}` is read from. Present exactly when `signed` interpolates one.
     timestamp: Option<SelectorEntry>,

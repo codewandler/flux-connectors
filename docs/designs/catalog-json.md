@@ -324,6 +324,29 @@ each of its operations, because `Connector::default_auth` is a plain list — `d
 omitted key decode identically, so the connector cannot make the statement once. Making it able to is
 a `connector-spec` change and is not part of C-206.
 
+#### The same two words travel into the embedded catalogue (C-235)
+
+This document describes `web/public/catalog.json`, whose audience is a machine. The **embedded**
+catalogue — `crates/catalog`, the Rust table a host links — carried only the flattened mechanism
+list, so `catalog::Operation::credentials` was `&[]` for both meanings and the distinction above
+stopped at the crate boundary. C-235 carries it across as
+`catalog::Operation::credential_requirement`, and it is **the same derivation**:
+`connector_cli::status::credential_requirement` classifies once and both backends render its answer,
+so this document and the embedded table cannot disagree about an operation.
+
+The tokens are these ones, unchanged and unrenamed —
+`catalog::CredentialRequirement::as_str` returns `no-credential-required` and `no-credential`
+character for character, and `connectors_api::api::Wiring` serializes them onward to the operator
+page. The third state, `declared`, is the ordinary case and has no *status* code here because there
+is nothing to report about it: the operation names its mechanisms, and what it carries instead is
+`credential-not-injected`, which is about the emitter rather than about the operation.
+
+**What a consumer must do**: nothing, unless it switches on the host's `wiring` field. No code in
+the table above changed meaning and none was renamed; `no-credential` gained a second surface with
+its existing sense. A consumer of `connectors-api` that enumerates `wiring` states must add
+`no-credential` — freshdesk moved onto it, from `no-credential-required` — and the safe fallback is
+to treat an unknown token as *not ready*, which is what the operator page does.
+
 #### A public operation reports `works: true`, deliberately
 
 `works` is `issues.length === 0` and a note is not an issue, so a declared-public operation with a

@@ -311,6 +311,14 @@ fn entry(connector: &Connector, operation: &Operation, host: &str) -> String {
         "        credentials: {},\n",
         credentials(connector, operation)
     ));
+    // Why that list is what it is — the distinction an empty slice cannot make (C-235). Emitted
+    // beside the list rather than folded into it: `Operation::credentials`'s type is the catalog
+    // crate's published API, and a consumer already matching on the mechanism shape must keep
+    // working.
+    out.push_str(&format!(
+        "        credential_requirement: {},\n",
+        credential_requirement(connector, operation)
+    ));
     out.push_str(&format!("        hosts: &[{}],\n", string(host)));
     // Escaped like every other literal here rather than interpolated raw. An id that reaches this
     // point is already constrained — the emitter refuses anything Flux cannot declare — but the
@@ -365,6 +373,25 @@ pub(crate) fn credential_mechanisms<'a>(
         .iter()
         .map(|mechanism| mechanism.iter().map(String::as_str).collect())
         .collect()
+}
+
+/// `crate::status::CredentialRequirement` as the catalog's own mirror of it — C-235.
+///
+/// Exhaustive for the same reason [`risk`] is, and with the same two-sided guarantee: a state added
+/// to the classification is a compile error here until someone names its counterpart, and naming a
+/// counterpart `catalog::CredentialRequirement` does not have fails to compile in `crates/catalog`.
+///
+/// The classification itself lives in [`crate::status`], which is also what turns it into
+/// `catalog.json`'s [`Issue`](crate::status::Issue) or [`Note`](crate::status::Note). One
+/// derivation, two renderings — the published catalogue and the embedded one cannot answer this
+/// question differently, which is the drift C-206 and C-212 each closed one surface at a time.
+fn credential_requirement(connector: &Connector, operation: &Operation) -> &'static str {
+    use crate::status::CredentialRequirement;
+    match crate::status::credential_requirement(connector, operation) {
+        CredentialRequirement::Declared => "crate::CredentialRequirement::Declared",
+        CredentialRequirement::NoneRequired => "crate::CredentialRequirement::NoneRequired",
+        CredentialRequirement::Withheld => "crate::CredentialRequirement::Withheld",
+    }
 }
 
 /// The host a call reaches, taken from the connector's base URL with its templating intact.
@@ -804,6 +831,96 @@ mod tests {
         connector.operations[0].auth = Some(vec![]);
         let rendered = render(&connector, &renderings()).unwrap();
         assert!(rendered.contains("credentials: &[],"), "{rendered}");
+    }
+
+    /// **The three states reach the table** — C-235.
+    ///
+    /// The mechanism list is unchanged in all three; what moves is the field beside it, which is
+    /// the whole of the story: `credentials: &[]` had two opposite meanings and the table said
+    /// neither of them.
+    #[test]
+    fn the_table_says_why_an_operation_names_no_credential() {
+        let mut connector = connector();
+
+        // Authenticated: the connector's default applies.
+        assert!(render(&connector, &renderings())
+            .unwrap()
+            .contains("credential_requirement: crate::CredentialRequirement::Declared,"));
+
+        // Positively public: the operation declares that the vendor needs nothing.
+        let mut public = connector.clone();
+        public.operations[0].auth = Some(vec![]);
+        let public = render(&public, &renderings()).unwrap();
+        assert!(
+            public.contains("credential_requirement: crate::CredentialRequirement::NoneRequired,"),
+            "{public}"
+        );
+
+        // Withheld: nothing is declared, and nothing declares that nothing is needed. Freshdesk.
+        connector.auth.clear();
+        connector.default_auth.clear();
+        let withheld = render(&connector, &renderings()).unwrap();
+        assert!(
+            withheld.contains("credential_requirement: crate::CredentialRequirement::Withheld,"),
+            "{withheld}"
+        );
+
+        // And the two empty ones are told apart while naming the same (absent) credentials.
+        assert_ne!(public, withheld);
+        for rendered in [&public, &withheld] {
+            assert!(rendered.contains("credentials: &[],"), "{rendered}");
+        }
+    }
+
+    /// **One derivation, two renderings.** The table's requirement is `crate::status`'s
+    /// classification and not a second walk of the same two fields, so the embedded catalogue and
+    /// `catalog.json` cannot answer this question differently — which is the drift C-206 closed on
+    /// one surface and C-212 on another.
+    #[test]
+    fn the_table_and_the_published_status_read_the_same_classification() {
+        use crate::status::{self, CredentialRequirement, NO_CREDENTIAL, NO_CREDENTIAL_REQUIRED};
+
+        let mut connector = connector();
+        connector.auth.clear();
+        connector.default_auth.clear();
+
+        let withheld = &connector.operations[0];
+        assert_eq!(
+            status::credential_requirement(&connector, withheld),
+            CredentialRequirement::Withheld
+        );
+        // The credential codes only: this fixture's base URL is templated, so it also carries
+        // `unbound-base-url-template`, which is a different rule and not what is under test.
+        assert!(
+            status::of(&connector, withheld)
+                .issues
+                .iter()
+                .any(|issue| issue.code == NO_CREDENTIAL),
+            "the published issue and the emitted requirement must name the same state"
+        );
+
+        let mut public = connector.clone();
+        public.operations[0].auth = Some(vec![]);
+        assert_eq!(
+            status::credential_requirement(&public, &public.operations[0]),
+            CredentialRequirement::NoneRequired
+        );
+        assert_eq!(
+            status::of(&public, &public.operations[0])
+                .notes
+                .iter()
+                .map(|note| note.code)
+                .collect::<Vec<_>>(),
+            vec![NO_CREDENTIAL_REQUIRED]
+        );
+
+        // And the classification carries the published codes rather than restating them.
+        assert_eq!(
+            CredentialRequirement::NoneRequired.code(),
+            Some(NO_CREDENTIAL_REQUIRED)
+        );
+        assert_eq!(CredentialRequirement::Withheld.code(), Some(NO_CREDENTIAL));
+        assert_eq!(CredentialRequirement::Declared.code(), None);
     }
 
     #[test]

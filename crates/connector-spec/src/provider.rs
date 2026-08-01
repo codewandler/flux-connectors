@@ -53,7 +53,7 @@ use crate::graph::{Graph, GraphNode, NodeKind, PortRef};
 use crate::inbound::{
     parse_tolerance, signed_placeholders, validate_path, validate_symbol, ChannelBinding,
     EventDecl, FieldSource, HmacSpec, ManualSetup, Reply, Selector, Subscription, Transport,
-    VerificationScheme, SIGNED_PLACEHOLDERS,
+    VerificationScheme, PAYLOAD_PLACEHOLDERS, SIGNED_PLACEHOLDERS,
 };
 use crate::lock::sha256_hex;
 use crate::{
@@ -2923,6 +2923,20 @@ fn validate_channel_verification(
     }
 }
 
+/// [`SIGNED_PLACEHOLDERS`] as an author reads them, so the refusal lists what it will accept rather
+/// than only what it rejected. Derived from the list rather than restated beside it — a hand-written
+/// copy is how an error message comes to name a vocabulary that has since moved.
+fn fillable_placeholders() -> String {
+    let names: Vec<String> = SIGNED_PLACEHOLDERS
+        .iter()
+        .map(|name| format!("{{{name}}}"))
+        .collect();
+    match names.split_last() {
+        Some((last, rest)) if !rest.is_empty() => format!("{} and {last}", rest.join(", ")),
+        _ => names.join(""),
+    }
+}
+
 /// The HMAC matrix's own consistency: a fillable template, a bounded replay window, and a secret that
 /// resolves to a credential declared for exactly this purpose.
 fn validate_hmac(
@@ -2943,24 +2957,33 @@ fn validate_hmac(
         if !SIGNED_PLACEHOLDERS.contains(&placeholder.as_str()) {
             problems.push(format!(
                 "channel binding {channel:?} has `signed = {:?}`, which interpolates \
-                 {{{placeholder}}}; the host can fill only {{body}} and {{timestamp}}",
-                hmac.signed
+                 {{{placeholder}}}; the host can fill only {}",
+                hmac.signed,
+                fillable_placeholders()
             ));
         }
     }
 
-    // **The rule this whole struct rests on.** A template that never interpolates {body} signs a
-    // string the payload never enters, so a signature captured from one delivery verifies *any*
-    // forged payload — bounded only by the tolerance, and by nothing at all without one. It is the
-    // same defect as the unterminated brace `signed_placeholders` reports, except that reaching it
-    // needs no typo: `signed = "{timestamp}"` is well formed, and every other check here passes on
-    // it. Refusing an empty template is not enough, because the hole is not emptiness.
-    if !placeholders.iter().any(|p| p == "body") {
+    // **The rule this whole struct rests on.** A template that puts no payload into the signed
+    // string signs something the request never enters, so a signature captured from one delivery
+    // verifies *any* forged payload — bounded only by the tolerance, and by nothing at all without
+    // one. It is the same defect as the unterminated brace `signed_placeholders` reports, except
+    // that reaching it needs no typo: `signed = "{timestamp}"` is well formed, and every other check
+    // here passes on it. Refusing an empty template is not enough, because the hole is not emptiness.
+    //
+    // The test is `PAYLOAD_PLACEHOLDERS`, not the literal `{body}`, and C-188 is why: `{url}` is a
+    // per-endpoint constant, so `signed = "{url}"` is this exact hole under a placeholder that
+    // *looks* request-specific — and a URL-signing vendor carries no timestamp, so there is not even
+    // a window bounding it.
+    if !placeholders
+        .iter()
+        .any(|p| PAYLOAD_PLACEHOLDERS.contains(&p.as_str()))
+    {
         problems.push(format!(
-            "channel binding {channel:?} has `signed = {:?}`, which never interpolates {{body}}. \
-             The signed string must cover the request body, or a signature captured from one \
-             delivery verifies every forged payload that follows it — the signature would prove \
-             only that somebody, once, held the secret",
+            "channel binding {channel:?} has `signed = {:?}`, which never interpolates {{body}} or \
+             {{sorted_form}}. The signed string must cover the request payload, or a signature \
+             captured from one delivery verifies every forged payload that follows it — the \
+             signature would prove only that somebody, once, held the secret",
             hmac.signed
         ));
     }

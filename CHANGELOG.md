@@ -7,6 +7,55 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The embedded catalogue can say *why* an operation names no credential** (C-235). It emitted `[]`
+  for both a positively-public operation and one whose credential is deliberately withheld, so no host
+  linking the catalogue could tell them apart. `CredentialRequirement` now distinguishes `Declared`,
+  `Withheld` and public, rendered from a **single** classifier both backends read — the two words are
+  C-206's published vocabulary rather than a third spelling of the same idea.
+
+  **The half that was actually wrong was the host, not the published document.** `status::of` has gated
+  the freshdesk wording correctly since C-206 landed; what a person met was `connectors-api` serving
+  freshdesk as `no-credential-required` — "nothing to supply", which an operator reads as *ready* —
+  while every call 401s. That is now a state of its own, recorded in `providers/freshdesk.toml`.
+
+  **`is_callable` stops treating an empty mechanism list as "callable by anyone".** Freshdesk's nine
+  operations move from `callable: true` to `false`, because an unauthenticated request to an endpoint
+  that wants a credential is a 401 — the old value was a lie in the same family as the one this story
+  is about.
+
+  `web/public/catalog.json` and the catalogue index are **byte-identical**; the 53 per-provider tables
+  and the lockfile carry the new fact, and the artifact count is unmoved at 937.
+
+### Added
+
+- **A signature can cover the request URL and its reassembled form fields** (C-188). `HmacSpec::signed`
+  admitted `{body}` and `{timestamp}` and nothing else, so Twilio — which signs the **URL** plus its
+  sorted, percent-decoded form fields — shipped its events with **no channel binding at all**. That was
+  the honest outcome and it is now closed: the shipped `providers/twilio.toml` binding, read through the
+  real loader, reproduces Twilio's own published signature `L/OH5YylLD5NRKLltdqwSvS0BnU=` from its
+  documented URL, body and auth token, with no vendor branch anywhere in the verifier.
+
+  **The template gained the name of a derivation, not the ability to perform one.** `{sorted_form}` is a
+  closed placeholder the host resolves; the template still has no operator, no repetition and no
+  ordering primitive. Twilio's file kept its original objection — that a template cannot re-sort N form
+  fields — because it is still true.
+
+  **C-141's failure mode is now structurally impossible rather than merely unlikely.** The rule is that
+  a signed template must cover a *payload* placeholder, not that it must contain the literal `{body}`,
+  and two tests demonstrate the forgery first and then refuse it: a template covering only the URL, and
+  one omitting the body, each verify a forged payload before the guard rejects them.
+
+  A **repeated form field name is refused rather than guessed** — `a=1&a=2` has no defined answer, and
+  Twilio's own helpers build a map, so the winner is language-dependent. The verifier reports that it
+  cannot verify instead of picking one.
+
+  **Known limit, stated rather than implied:** flux's `verify` block does not know these placeholders
+  yet, so Twilio's binding is correctly declared and not yet actionable by a host. And `{url}` carries a
+  deployment hazard — behind a proxy the host sees a rewritten URL while the signature covers the
+  configured one.
+
 ## [0.9.1] — 2026-08-01
 
 ### Added

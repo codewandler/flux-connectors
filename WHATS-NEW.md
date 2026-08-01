@@ -14,6 +14,13 @@
 
 ## [Unreleased]
 
+### New
+
+- **Twilio's webhooks can now be checked for authenticity.** Twilio signs its callbacks differently from
+  most services — over the address it called plus the form fields, rather than the raw message — and
+  that shape could not be described here, so Twilio's events shipped with no verification at all. It is
+  described now, and checked against Twilio's own published example signature.
+
 ## [0.9.1] — 2026-08-01
 
 ### Action needed

@@ -112,6 +112,71 @@ pub const UNBOUND_BASE_URL_TEMPLATE: &str = "unbound-base-url-template";
 /// carries it still.
 pub const NO_CREDENTIAL_REQUIRED: &str = "no-credential-required";
 
+/// **Which of three states an operation's credential requirement is in** — the classification both
+/// catalogue backends read (C-235).
+///
+/// It exists because the answer was being derived twice from the same two facts and published in
+/// two shapes: this module turned it into an [`Issue`] or a [`Note`] for `catalog.json`, and
+/// [`crate::catalog`] flattened it into a mechanism list for the embedded table — where the two
+/// empty cases became one empty slice and the distinction stopped at the crate boundary.
+///
+/// Deriving it once is what makes the two surfaces unable to disagree. [`code`](Self::code) is the
+/// link to the published vocabulary: it returns the constants above rather than restating them, so
+/// a fourth state cannot be invented here with a fifth spelling.
+///
+/// `catalog::CredentialRequirement` mirrors this enum for the embedded table, exactly as
+/// `catalog::Risk` mirrors [`connector_spec::Risk`] — the `catalog` crate has no dependencies, and
+/// the mapping in [`crate::catalog`] is exhaustive, so a state added here is a compile error there
+/// rather than a silent omission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CredentialRequirement {
+    /// The operation authenticates: its effective auth names at least one mechanism.
+    Declared,
+    /// The vendor requires none, **declared positively** by the operation (`auth = []`).
+    NoneRequired,
+    /// A credential is withheld: nothing is declared, and nothing declares that nothing is needed.
+    Withheld,
+}
+
+impl CredentialRequirement {
+    /// The published code this state carries, or `None` for the ordinary case.
+    ///
+    /// [`Declared`](Self::Declared) has none because there is nothing to report about it — the
+    /// operation names its credentials, and that is the whole statement. What it does carry is
+    /// [`CREDENTIAL_NOT_INJECTED`], which is about the *emitter* rather than about the operation's
+    /// requirement, and which disappears for every operation at once when C-10 lands.
+    pub const fn code(self) -> Option<&'static str> {
+        match self {
+            CredentialRequirement::Declared => None,
+            CredentialRequirement::NoneRequired => Some(NO_CREDENTIAL_REQUIRED),
+            CredentialRequirement::Withheld => Some(NO_CREDENTIAL),
+        }
+    }
+}
+
+/// Classify one operation's credential requirement — **the one derivation** (C-235).
+///
+/// Both halves of [`Operation::auth`] are read, and that is C-206's correction: the *resolved* list
+/// says whether a credential applies, and the *declaration* says whether its absence was chosen.
+/// [`Connector::effective_auth`] alone answers only the first, so freshdesk — a credential withheld
+/// because the IR cannot hold it safely — and a genuine ping endpoint came out identical.
+///
+/// **Declared, never inferred.** Treating "no credential field anywhere" as evidence of a public
+/// endpoint would put the guess back with more steps, and it would guess wrong on the one connector
+/// already shipping in that shape.
+pub fn credential_requirement(
+    connector: &Connector,
+    operation: &Operation,
+) -> CredentialRequirement {
+    if declares_no_credential_is_needed(operation) {
+        CredentialRequirement::NoneRequired
+    } else if connector.effective_auth(operation).is_empty() {
+        CredentialRequirement::Withheld
+    } else {
+        CredentialRequirement::Declared
+    }
+}
+
 /// How far an issue reaches — what a consumer needs in order to tell "this operation is broken"
 /// from "nothing can run yet".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -193,28 +258,20 @@ pub fn of(connector: &Connector, operation: &Operation) -> Status {
     let mut issues = Vec::new();
     let mut notes = Vec::new();
 
-    // 1. Credentials. Three states over one axis, so exactly one of the arms fires.
-    //
-    // Both halves of `Operation::auth` are read, and that is the correction C-206 made: the
-    // *resolved* list says whether a credential applies, and the *declaration* says whether its
-    // absence was chosen. `effective_auth` alone answers only the first, so freshdesk — a credential
-    // withheld because the IR cannot hold it safely — and a genuine ping endpoint came out
-    // identical, and the endpoint was published as disabled for the reader's protection.
-    //
-    // Declared, never inferred. Treating "no credential field anywhere" as evidence of a public
-    // endpoint would put the guess back with more steps, and it would guess wrong on the one
-    // connector already shipping in that shape.
-    if declares_no_credential_is_needed(operation) {
-        notes.push(Note {
+    // 1. Credentials. Three states over one axis, so exactly one of the arms fires — and the
+    //    classification is [`credential_requirement`]'s rather than this function's, because the
+    //    embedded catalogue derives the same three states and two derivations of one fact is how
+    //    two surfaces come to disagree (C-235).
+    match credential_requirement(connector, operation) {
+        CredentialRequirement::NoneRequired => notes.push(Note {
             code: NO_CREDENTIAL_REQUIRED,
             scope: Scope::Operation,
             summary: format!(
                 "{} requires no credential for this operation, and none is withheld: the unauthenticated call is the correct one.",
                 connector.id
             ),
-        });
-    } else if connector.effective_auth(operation).is_empty() {
-        issues.push(Issue {
+        }),
+        CredentialRequirement::Withheld => issues.push(Issue {
             code: NO_CREDENTIAL,
             scope: Scope::Provider,
             story: "C-17",
@@ -223,16 +280,19 @@ pub fn of(connector: &Connector, operation: &Operation) -> Status {
                 connector.id
             ),
             params: Vec::new(),
-        });
-    } else if !CREDENTIALS_REACH_THE_REQUEST {
-        issues.push(Issue {
-            code: CREDENTIAL_NOT_INJECTED,
-            scope: Scope::Catalog,
-            story: "C-10",
-            summary: "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls."
-                .to_string(),
-            params: Vec::new(),
-        });
+        }),
+        CredentialRequirement::Declared => {
+            if !CREDENTIALS_REACH_THE_REQUEST {
+                issues.push(Issue {
+                    code: CREDENTIAL_NOT_INJECTED,
+                    scope: Scope::Catalog,
+                    story: "C-10",
+                    summary: "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls."
+                        .to_string(),
+                    params: Vec::new(),
+                });
+            }
+        }
     }
 
     // 2. Query values reach the wire raw.

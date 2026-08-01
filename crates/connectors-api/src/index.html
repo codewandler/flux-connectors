@@ -38,13 +38,16 @@
   .conn.on { background: var(--panel); box-shadow: inset 3px 0 0 var(--accent); }
   .conn .name { font-weight: 550; }
   .conn .count { color: var(--muted); font-size: .8rem; margin-left: auto; }
-  /* The three states an operator can be in, and a fourth for "some of it". A connector with
+  /* The four states an operator can be in, and a fifth for "some of it". A connector with
      nothing to supply must not look like one that has been left unconfigured forever, so
-     `no-credential-required` gets a filled mark of its own rather than the empty one. */
+     `no-credential-required` gets a filled mark of its own rather than the empty one — and
+     `no-credential` (C-235), where there is equally nothing to supply and the connector does not
+     work either, gets a hollow one, so it reads as neither of its two neighbours. */
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); flex: none; }
   .dot.wired { background: var(--accent); }
   .dot.partly-wired { background: var(--accent); opacity: .45; }
   .dot.no-credential-required { background: var(--muted); }
+  .dot.no-credential { background: transparent; border: 1px solid var(--warn); }
   .state { font-size: .78rem; }
   .op.uncallable .id { opacity: .55; }
   .op .needs { font-size: .7rem; color: var(--warn); margin-left: .4rem; }
@@ -113,15 +116,23 @@ const api = async (method, path, body) => {
 
 let connectors = [], current = null;
 
-// The three answers to "is there anything for me to do here?", plus the partial one. Keyed by the
-// server's own `wiring` token — the same vocabulary the published catalogue uses for the third
-// state (`no-credential-required`, C-206), so the two surfaces cannot drift into two spellings.
+// The four answers to "is there anything for me to do here?", plus the partial one. Keyed by the
+// server's own `wiring` token — the same vocabulary the published catalogue uses for the two
+// no-credential states (`no-credential-required` and `no-credential`, C-206), so the two surfaces
+// cannot drift into two spellings.
 //
-// The one this page exists for is the third: before C-212 a connector whose vendor needs no
-// credential was drawn exactly like one nobody had configured, so an operator went looking for a
-// token that does not exist.
+// The one this page exists for is `no-credential-required`: before C-212 a connector whose vendor
+// needs no credential was drawn exactly like one nobody had configured, so an operator went looking
+// for a token that does not exist.
+//
+// `no-credential` is C-235's, and it is the pair's other half. The two tokens differ by one word
+// and mean opposite things about whether the connector works, which is why the *sentences* below
+// carry the difference rather than the tokens being re-spelled to look less alike — one vocabulary
+// across the catalogue and the host is worth more than a UI-local rename.
 const WIRING = {
   'no-credential-required': c => ['ok', 'Nothing to supply — this connector needs no credential.'],
+  'no-credential': c => ['muted', 'Nothing to supply, and nothing to do — this connector\'s credential '
+                              + 'cannot be held safely here yet, so its calls are refused by the vendor.'],
   'wired':       c => ['ok',    `Ready — all ${c.operation_count} operations are callable.`],
   'partly-wired':c => ['muted', `${c.callable_operations} of ${c.operation_count} operations are callable. `
                               + `The rest need a credential you have not supplied.`],
@@ -164,12 +175,15 @@ async function show(id) {
   // --- credentials -------------------------------------------------------
   const creds = el('section', {}, el('h3', {}, 'Credentials'));
   if (!c.credentials.length) {
-    // Which is the whole point of the third state: "declares none" is a fact about the connector,
-    // and on its own it does not tell an operator whether that is good news.
-    creds.append(el('p', { className: c.wiring === 'no-credential-required' ? 'ok' : 'muted' },
-      c.wiring === 'no-credential-required'
-        ? 'This connector declares none, and needs none. There is nothing for you to supply.'
-        : 'This connector declares none.'));
+    // Which is the whole point of the two no-credential states: "declares none" is a fact about the
+    // connector, and on its own it does not tell an operator whether that is good news. C-235 is
+    // what lets this say which — before it, the host could not tell either.
+    const declaresNone = {
+      'no-credential-required': ['ok', 'This connector declares none, and needs none. There is nothing for you to supply.'],
+      'no-credential': ['muted', 'This connector declares none because its credential cannot be held safely here yet. '
+                               + 'There is nothing for you to supply, and its calls will be refused until that changes.'],
+    }[c.wiring] ?? ['muted', 'This connector declares none.'];
+    creds.append(el('p', { className: declaresNone[0] }, declaresNone[1]));
   }
   for (const cr of c.credentials) {
     const input = el('input', { type: 'password', placeholder: cr.stored ? '•••••••• stored' : 'paste value' });

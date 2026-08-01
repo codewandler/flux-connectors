@@ -84,6 +84,20 @@ verify = "freshdesk-test"
 #
 # and set `default_auth = [{ credentials = ["freshdesk.api_key"] }]`. The constant `X` is not a
 # credential and must never be stored in an environment variable pretending to be one.
+#
+# WHAT THIS CONNECTOR IS, AS A STATE (C-235) — decided, not inherited.
+#
+# It is `no-credential` — *withheld* — and **not** `no-credential-required`. Declaring nothing here
+# is the right thing to do and it is not the same statement as `auth = []` on an operation, which
+# would say the vendor needs nothing. Freshdesk's vendor needs a great deal; this repository is what
+# will not carry it.
+#
+# The distinction used to stop at the embedded catalogue, so `connectors-api` served freshdesk as
+# `no-credential-required` — "nothing to supply" — which reads to an operator as *ready to use* and
+# was wrong on every call. It now carries the reason, so the honest answer reaches the page:
+# nothing to supply, nothing to do, and the calls are refused until C-16 lands. **Do not** add
+# `auth = []` to these operations to make a check go green; that would state the opposite of what
+# the block above spent forty lines establishing.
 
 # ---------------------------------------------------------------------------------------------
 # Operations — 9 of 16 (inventory §4.2). Selection is ticket-centric, plus the contact operations

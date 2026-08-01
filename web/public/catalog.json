@@ -164712,7 +164712,103 @@
           }
         }
       ],
-      "channels": [],
+      "channels": [
+        {
+          "name": "message-status-callback",
+          "service": "default",
+          "oip": "com.twilio.api:2010-04-01#message-status-callback",
+          "description": "Message delivery-status callbacks. Twilio POSTs form-encoded to the StatusCallback URL supplied when a message is created, signing the URL and the parameters with the Auth Token",
+          "transport": "webhook",
+          "events": [
+            "message.status_callback"
+          ],
+          "verification": {
+            "kind": "hmac",
+            "verified": true,
+            "hmac": {
+              "algorithm": "sha1",
+              "encoding": "base64",
+              "header": "X-Twilio-Signature",
+              "prefix": null,
+              "signed": "{url}{sorted_form}",
+              "timestamp": null,
+              "timestamp_format": null,
+              "secret": "twilio.webhook_signing_secret",
+              "tolerance": null
+            }
+          },
+          "discriminator": null,
+          "delivery_id": null,
+          "payload": {
+            "error_code": "ErrorCode",
+            "message_sid": "MessageSid",
+            "sender": "From",
+            "status": "MessageStatus",
+            "to": "To"
+          },
+          "reply": null,
+          "cursor": null,
+          "interval": null,
+          "subscription": null,
+          "setup": {
+            "docs_url": "https://www.twilio.com/docs/messaging/guides/track-outbound-message-status",
+            "steps": [
+              "Open console.twilio.com and choose the phone number or Messaging Service this connection sends from",
+              "Paste the Request URL shown above into its status-callback field, exactly as shown — the signature covers the URL, so a redirect or a rewritten host breaks every delivery",
+              "Or, if messages are created by another system, have it pass the same URL as the `StatusCallback` parameter",
+              "Copy the Auth Token from the console into this connection's signing secret field — it is the same value as the Auth Token above"
+            ]
+          }
+        },
+        {
+          "name": "call-status-callback",
+          "service": "default",
+          "oip": "com.twilio.api:2010-04-01#call-status-callback",
+          "description": "Call status callbacks. Twilio POSTs form-encoded to the StatusCallback URL configured for the call or the answering number, signed exactly as the messaging callback is",
+          "transport": "webhook",
+          "events": [
+            "call.status_callback"
+          ],
+          "verification": {
+            "kind": "hmac",
+            "verified": true,
+            "hmac": {
+              "algorithm": "sha1",
+              "encoding": "base64",
+              "header": "X-Twilio-Signature",
+              "prefix": null,
+              "signed": "{url}{sorted_form}",
+              "timestamp": null,
+              "timestamp_format": null,
+              "secret": "twilio.webhook_signing_secret",
+              "tolerance": null
+            }
+          },
+          "discriminator": null,
+          "delivery_id": null,
+          "payload": {
+            "call_sid": "CallSid",
+            "caller": "From",
+            "direction": "Direction",
+            "duration": "CallDuration",
+            "status": "CallStatus",
+            "to": "To"
+          },
+          "reply": null,
+          "cursor": null,
+          "interval": null,
+          "subscription": null,
+          "setup": {
+            "docs_url": "https://www.twilio.com/docs/voice/twiml/number#attributes-statusCallback",
+            "steps": [
+              "Open console.twilio.com and choose the phone number this connection answers or dials on",
+              "Paste the Request URL shown above into its call status-callback field, exactly as shown — the signature covers the URL",
+              "Select the call events to report: initiated, ringing, answered, completed",
+              "Copy the Auth Token from the console into this connection's signing secret field"
+            ]
+          }
+        }
+      ],
       "config_choices": []
     },
     {

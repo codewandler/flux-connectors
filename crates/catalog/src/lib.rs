@@ -125,6 +125,60 @@ impl Idempotency {
     }
 }
 
+/// **Why an operation names the credentials it does** — and, when it names none, which of the two
+/// opposite reasons that is (C-235).
+///
+/// [`Operation::credentials`] is an empty slice in two situations that mean the reverse of each
+/// other, and a consumer reading only that slice gets one value for both. This field is what a
+/// connector *declares*, carried across rather than left to be inferred from an absence — the trap
+/// C-206 closed in the published catalogue and this closes in the embedded one.
+///
+/// # The vocabulary is C-206's
+///
+/// The two named states are the two codes `web/public/catalog.json` already publishes for the same
+/// distinction (`docs/designs/catalog-json.md`), and [`as_str`](Self::as_str) returns those tokens
+/// character for character. A host restating them in words of its own is how two surfaces
+/// describing one fact come to disagree, so this crate restates nothing:
+/// `connectors_api::api::Wiring` serializes these tokens directly.
+///
+/// [`Declared`](Self::Declared) is the ordinary case and has no published *status* code, because
+/// there is nothing to report about it — the operation names its mechanisms and the slice beside
+/// this field is them. It is given a token anyway so that every state has one name rather than two
+/// having names and one being "the other one".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CredentialRequirement {
+    /// The operation authenticates: [`Operation::credentials`] names at least one mechanism.
+    Declared,
+    /// **The vendor requires no credential**, declared positively by the connector (`auth = []` on
+    /// the operation). Nothing is withheld and nothing is missing: the unauthenticated call is the
+    /// correct working call.
+    NoneRequired,
+    /// **A credential is withheld.** Nothing is declared and nothing declares that nothing is
+    /// needed, so the request would go out unauthenticated — the fail-closed outcome, not a working
+    /// one. `freshdesk` is the shipped case: its API key occupies the Basic *username* position,
+    /// which this repository's model treats as non-secret config, so declaring it would route a
+    /// live key outside the secret gate (`AGENTS.md`, Intentional gaps).
+    ///
+    /// The operator-facing consequence is the part worth carrying: there is nothing for an operator
+    /// to supply *and* the operation does not work, which is neither of the other two states.
+    Withheld,
+}
+
+impl CredentialRequirement {
+    /// The token this state travels as — C-206's published spellings for the two it named.
+    ///
+    /// `no-credential-required` is `connector_cli::status::NO_CREDENTIAL_REQUIRED` and
+    /// `no-credential` is `connector_cli::status::NO_CREDENTIAL`, both of which are published
+    /// contract tokens that are extended but never renamed once shipped.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            CredentialRequirement::Declared => "declared",
+            CredentialRequirement::NoneRequired => "no-credential-required",
+            CredentialRequirement::Withheld => "no-credential",
+        }
+    }
+}
+
 /// One operation: its Flux source, and what a caller needs in order to decide whether to use it.
 ///
 /// `#[non_exhaustive]` because C-37 adds the global address to this struct and C-10 adds the
@@ -181,7 +235,24 @@ pub struct Operation {
     ///
     /// The names are credential *references*. No secret, and no environment variable's value, is
     /// ever in this crate — flux resolves the reference and applies the scheme.
+    ///
+    /// **An empty outer slice does not say why**, which is what [`credential_requirement`] is for.
+    ///
+    /// [`credential_requirement`]: Self::credential_requirement
     pub credentials: &'static [&'static [&'static str]],
+    /// **Why [`credentials`](Self::credentials) is what it is** — and, when it is empty, which of
+    /// the two opposite reasons that is (C-235). See [`CredentialRequirement`].
+    ///
+    /// It is a separate field rather than a richer `credentials` because the type of that field is
+    /// this crate's published API: a consumer already matching on the mechanism list keeps working,
+    /// and one that needs the reason reads a field that was not there before. `Operation` is
+    /// `#[non_exhaustive]` precisely so that is additive.
+    ///
+    /// The invariant, held at emission and pinned by
+    /// `tests/embedded_operations.rs::the_declared_requirement_agrees_with_the_mechanism_list`:
+    /// this is [`Declared`](CredentialRequirement::Declared) exactly when `credentials` is
+    /// non-empty.
+    pub credential_requirement: CredentialRequirement,
     /// The hosts a call reaches, as the connector's base URL spells them — templating included, so
     /// Zendesk is `{subdomain}.zendesk.com` rather than a tenant nobody has chosen yet. What a
     /// caller does with this is decide whether their egress policy admits the call.
