@@ -149,6 +149,30 @@ proves the seams end to end, and keep the fleet growing in parallel waves.
 An **epic** is a themed group of stories with a shared design doc. Stories join an epic via the
 `epic: <slug>` frontmatter field, where `<slug>` matches a design doc at `docs/designs/<slug>.md`.
 
+### Anthropic Managed Agents — the first vendor that declares both transports and its own event set
+
+The `channel-bindings` and `inbound-events` epics built a model for the reverse call direction and the
+catalogue has barely exercised it: measured 2026-08-02, three providers declare an inbound surface and
+the whole fleet publishes **8 events and 4 channel bindings**, with `slack` the only `socket` binding
+there is. Anthropic's Managed Agents API is the first vendor in reach that would exercise the entire
+model at once, and from a vendor's own document rather than from our curation — a `socket` transport
+(the SSE session-event stream), a `webhook` transport (HMAC-signed, Console-registered), a closed
+event vocabulary on each, and a real reply endpoint for the socket half, which is exactly what a
+`ChannelBinding` demands.
+
+**Two things gate it, and both are honest gates rather than sequencing.** The first is a charter
+question: the management plane (agents, environments, vaults, memory stores) is ordinary SaaS, but a
+*session* runs an agent loop and bills inference, and flux has `flux-agent` and `flux-orchestrate` of
+its own — the same "strictly worse second implementation" argument that shaped C-123. The second is
+conformance: the vendor signs webhooks with three headers including a delivery id, and `HmacSpec`
+models one signature header over a closed placeholder set. Finding it an axis short would be a
+successful outcome, in the shape C-141 and C-188 already established.
+
+Done looks like: the charter question answered in writing whichever way it goes, an inventory that
+says carry-or-withhold-and-why for every endpoint, and a verdict on whether the signature is
+expressible — before any provider TOML is written. See
+[anthropic-managed-agents.md](designs/anthropic-managed-agents.md).
+
 ### The connectors datasource — the catalogue, queryable from a session
 
 A flux session cannot ask "which connector can do this?". The catalogue is published and unreachable
