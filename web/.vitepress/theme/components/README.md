@@ -88,6 +88,37 @@ Two rules this tier exists to hold:
 - **Replace, never push.** A pushed history entry per filter change means the back button walks back
   through every keystroke of a search instead of leaving the explorer.
 
+## What a component may say about a field it was not given
+
+Since C-408 the components are mounted over catalogues this repository does not generate, and such a
+source may publish a **thinner** document — no `auth`, no `credentials`, no `method`/`path`, no
+`flux`, no `base_url`. Every one of those absences used to render as a statement about the
+**connector**: a red "not configured" on every card, "live calls are disabled" on every operation,
+two empty chips.
+
+So `[]` and *absent* are no longer the same thing. `data/catalog.mts` types such a field
+`Published<T>`, and `published(value)` is the only place an absence is read:
+
+```ts
+const auth = computed(() => providerAuth(props.provider))
+```
+
+Three outcomes, and the middle one is the reason this is not a softening:
+
+| the document says | it means | it renders |
+|---|---|---|
+| `auth.schemes` non-empty | the connector authenticates with these | the schemes |
+| `auth.schemes` empty | the connector declares none | **"not configured"**, in `--vp-c-danger-1` |
+| no `auth` at all | *this source does not publish auth* | `UNPUBLISHED`, muted |
+
+A withheld credential is a safety property worth showing in red and **must keep rendering as one**;
+"this catalogue does not carry that field" is a statement about the document and is muted. Do not
+merge the two branches back together to make a template shorter — that is the bug, not the tidy.
+
+Note what this deliberately is *not*: no component learns which source it is rendering. The
+distinction is a property of the document, so it arrives with the data that was already there — no
+new prop, no new injection, and the import rule above is untouched.
+
 ## And the rule that outranks all three
 
 **No hand-written catalogue data, in any tier.** No component names a provider, a vendor, a service,

@@ -1629,3 +1629,237 @@ test('the operation page says what to supply from the catalogue, and claims noth
     )
   }
 })
+
+// ---------------------------------------------------------------------------------------------
+// C-408. What a component may say about a field it was not given.
+//
+// A second consumer mounts these components over a *thinner* document than `public/catalog.json` —
+// one that publishes no `auth`, no `credentials`, no `method`/`path`, no `flux` and no `base_url`.
+// Every one of those absences used to render as a statement about the **connector**: a red "not
+// configured" on every card, "live calls are disabled" on every operation, two empty chips.
+//
+// Read off the component sources and off the built pages, never by mounting a component: the site
+// has exactly one dependency and a test that imported Vue to render an SFC would add one it does
+// not declare. So the *decision* lives in `data/catalog.mts`, where it is a pure function a fixture
+// can pin, and these tests assert that each component routes through it.
+// ---------------------------------------------------------------------------------------------
+
+/** One component's source, as text. */
+function component(name) {
+  return readFileSync(path.join(webRoot, '.vitepress', 'theme', 'components', name), 'utf-8')
+}
+
+/** A component's `<template>` block — the half a reader sees. */
+function markup(source) {
+  const match = source.match(/<template>([\s\S]*)<\/template>/)
+  assert.ok(match, 'a component with no template')
+  return match[1]
+}
+
+/** The declarations of one CSS rule of a component, by selector. */
+function rule(source, selector) {
+  const style = source.match(/<style[^>]*>([\s\S]*?)<\/style>/)
+  assert.ok(style, 'a component with no style block')
+  const match = style[1].match(new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`))
+  assert.ok(match, `the component no longer has a \`${selector}\` rule`)
+  return match[1]
+}
+
+/**
+ * The `v-if` / `v-else-if` / `v-else` on the element that renders `needle`.
+ *
+ * The guard is the whole question here: a false sentence is not fixed by deleting it — it is still
+ * true of the connector it was written for — but by firing it only when the source said so.
+ */
+function guard(source, needle) {
+  const template = markup(source)
+  const at = template.indexOf(needle)
+  assert.notEqual(at, -1, `no element renders \`${needle}\` any more`)
+  const open = template.lastIndexOf('<', at)
+  const tag = template.slice(open, template.indexOf('>', open) + 1)
+  const match = tag.match(/\sv-(if|else-if|else)(?:="([^"]*)")?/)
+  assert.ok(match, `the element rendering \`${needle}\` is not guarded at all: ${tag}`)
+  return { kind: match[1], expression: match[2] ?? '' }
+}
+
+test('a field a source did not publish is told apart from one the connector does not have', () => {
+  // The predicate. An empty collection is a *published* answer — the connector has none — and only
+  // an absent or null field means the source declined to say.
+  assert.equal(selectors.published([]), true)
+  assert.equal(selectors.published(''), true)
+  assert.equal(selectors.published(0), true)
+  assert.equal(selectors.published(null), false)
+  assert.equal(selectors.published(undefined), false)
+
+  const provider = (fields) => ({ id: 'fixture', ...fields })
+  const operation = (fields) => ({ id: 'fixture', ...fields })
+  const auth = (schemes) => ({ schemes, credentials: [], default: [] })
+
+  // Auth: three outcomes where a bare `schemes.length` had two.
+  assert.deepEqual(selectors.providerAuth(provider({ auth: auth(['fixture']) })).schemes, [
+    'fixture',
+  ])
+  assert.deepEqual(selectors.providerAuth(provider({ auth: auth([]) })).schemes, [])
+  assert.equal(selectors.providerAuth(provider({ auth: null })), null)
+  assert.equal(selectors.providerAuth(provider({})), null)
+
+  // Credentials: the same three, and the middle one is the fact worth stating in full.
+  assert.deepEqual(selectors.operationCredentials(operation({ credentials: [['fixture']] })), [
+    ['fixture'],
+  ])
+  assert.deepEqual(selectors.operationCredentials(operation({ credentials: [] })), [])
+  assert.equal(selectors.operationCredentials(operation({ credentials: null })), null)
+  assert.equal(selectors.operationCredentials(operation({})), null)
+
+  // And the signature, which reads the first line of the Flux: an unpublished module has no first
+  // line, and asking for one used to throw rather than render nothing.
+  assert.equal(
+    selectors.signature(operation({ flux: 'fn fixture() -> Any {\n}\n' })),
+    'fn fixture() -> Any {'
+  )
+  assert.equal(selectors.signature(operation({})), null)
+
+  // The sentence is site vocabulary in one place, so four components cannot drift into four of them.
+  assert.ok(selectors.UNPUBLISHED.length > 0)
+})
+
+test('a catalogue that omits auth does not put a red claim on every connector card', () => {
+  const card = component('ProviderCard.vue')
+
+  // The claim that must survive untouched: a connector whose catalogue publishes auth and lists no
+  // scheme really is not configured, and that is worth showing in the danger colour.
+  const configured = guard(card, 'not configured')
+  assert.equal(
+    configured.kind,
+    'else-if',
+    'the danger-coloured "not configured" is no longer a branch of a three-way choice'
+  )
+  assert.match(
+    configured.expression,
+    /\bauth\b/,
+    'the card still says "not configured" without first asking whether the source published auth'
+  )
+  assert.match(rule(card, '.card__warn'), /--vp-c-danger-1/, 'the real claim has been softened')
+
+  // The branch this story adds: nothing about the connector, and not in red.
+  const unpublished = guard(card, 'UNPUBLISHED')
+  assert.equal(unpublished.kind, 'else')
+  assert.doesNotMatch(
+    rule(card, '.card__unpublished'),
+    /danger/,
+    'a field the source did not publish is still painted as a defect'
+  )
+
+  // The card reads the guarded auth, never the raw field — an unpublished `auth` has no `schemes`
+  // to take a length of, so the old expression did not merely mislead, it threw.
+  assert.doesNotMatch(
+    markup(card),
+    /provider\.auth/,
+    'the card still reaches into `provider.auth` directly'
+  )
+  assert.match(card, /providerAuth\(/, 'the card no longer resolves its auth through the catalogue')
+})
+
+test('an operation a source publishes no credentials for is not told live calls are disabled', () => {
+  const detail = component('OperationDetail.vue')
+
+  // Same shape as the card: the sentence is correct for a withheld credential and stays, but only
+  // for a document that published the credential set at all.
+  const disabled = guard(detail, 'No safe credential configuration')
+  assert.match(
+    disabled.expression,
+    /^credentials &&/,
+    'the page still claims live calls are disabled for a source that published no credentials'
+  )
+  assert.match(
+    detail,
+    /operationCredentials\(/,
+    'the page no longer resolves its credentials through the catalogue'
+  )
+  assert.doesNotMatch(
+    markup(detail),
+    /operation\.credentials/,
+    'the page still reaches into `operation.credentials` directly'
+  )
+
+  // And it says which of the two it is looking at.
+  assert.match(markup(detail), /UNPUBLISHED/, 'the page renders no unpublished branch at all')
+})
+
+test('a request shape a source did not publish is omitted rather than rendered as an empty chip', () => {
+  for (const name of ['OperationDetail.vue', 'OperationRow.vue']) {
+    const source = component(name)
+    for (const field of ['method', 'path']) {
+      const chip = guard(source, `operation.${field} }}`)
+      assert.equal(chip.kind, 'if', `${name} renders \`${field}\` unconditionally`)
+      assert.match(
+        chip.expression,
+        new RegExp(`published\\(operation\\.${field}\\)`),
+        `${name} renders \`${field}\` without asking whether the source published it`
+      )
+    }
+  }
+
+  // The list's search reads the path too, and a needle typed against an unpublished one must match
+  // nothing rather than throw.
+  assert.doesNotMatch(
+    component('OperationList.vue'),
+    /operation\.path\.toLowerCase/,
+    'the search still calls a method on a path the source may not have published'
+  )
+})
+
+test('the full catalogue renders exactly what it publishes and says nothing about a source', () => {
+  // The additive half. `public/catalog.json` publishes every field, so nothing in this build takes
+  // an unpublished branch — and the two sentences that were conflated still appear exactly as often
+  // as the catalogue's own data says they should.
+  const document = catalog()
+  const explorer = text(page('explorer.html'))
+
+  const configured = document.providers.filter((provider) => provider.auth.schemes.length === 0)
+  assert.ok(configured.length > 0, 'no connector publishes an empty scheme list, so the case is stale')
+  assert.equal(
+    [...explorer.matchAll(/not configured/g)].length,
+    configured.length,
+    `"not configured" is rendered for a different number of connectors than the ${configured.length} the catalogue publishes no scheme for`
+  )
+  for (const provider of document.providers) {
+    if (provider.auth.schemes.length) {
+      assert.ok(
+        explorer.includes(provider.auth.schemes.join(', ')),
+        `the card for \`${provider.id}\` no longer states the schemes the catalogue publishes`
+      )
+    }
+  }
+
+  const withheld = operations(document).filter(
+    (operation) => operation.credentials.length === 0 && selectors.notes(operation).length === 0
+  )
+  assert.ok(withheld.length > 0, 'no operation withholds a credential, so this case is untested')
+  for (const operation of withheld) {
+    assert.ok(
+      text(page('operations', `${operation.id}.html`)).includes(
+        'No safe credential configuration is available'
+      ),
+      `\`${operation.id}\` withholds a credential and the page no longer says so`
+    )
+  }
+
+  // And no page in the built site claims a field was not published, because every one of them was.
+  const pages = []
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir)) {
+      const full = path.join(dir, entry)
+      if (statSync(full).isDirectory()) walk(full)
+      else if (full.endsWith('.html')) pages.push(full)
+    }
+  }
+  walk(distDir)
+  assert.ok(pages.length > 0, 'the site was not built — run `npm run build` before `npm test`')
+  for (const file of pages) {
+    assert.ok(
+      !text(readFileSync(file, 'utf-8')).includes(selectors.UNPUBLISHED),
+      `${path.relative(distDir, file)} says a field was not published, of a catalogue that publishes every one`
+    )
+  }
+})

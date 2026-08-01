@@ -13,11 +13,14 @@
 
 import { computed } from 'vue'
 import {
+  UNPUBLISHED,
   defectCount,
   hasInboundSurface,
   namedServices,
   providerAddress,
+  providerAuth,
   providerIssues,
+  published,
   serviceApiVersion,
   type Provider,
 } from '../../../data/catalog.mts'
@@ -30,6 +33,16 @@ const defects = computed(() => defectCount(props.provider.operations))
 const issues = computed(() => providerIssues(props.provider))
 const services = computed(() => namedServices(props.provider))
 const address = computed(() => providerAddress(props.provider))
+
+/**
+ * The auth this source published, or `null` when it published none (C-408).
+ *
+ * The three-way branch on the card is the whole of the fix. A connector that publishes auth and
+ * lists no scheme is genuinely not configured and still says so in the danger colour; a source that
+ * carries no auth at all says only that, in the muted tone a statement about a *document* deserves.
+ * Reading `provider.auth.schemes.length` did both at once, and on such a source it threw.
+ */
+const auth = computed(() => providerAuth(props.provider))
 
 /**
  * The provider's headline status, derived so it flips on its own.
@@ -70,12 +83,14 @@ const headline = computed(() => {
       </div>
       <div>
         <dt>Auth</dt>
-        <dd v-if="provider.auth.schemes.length">{{ provider.auth.schemes.join(', ') }}</dd>
-        <dd v-else class="card__warn">not configured</dd>
+        <dd v-if="auth && auth.schemes.length">{{ auth.schemes.join(', ') }}</dd>
+        <dd v-else-if="auth" class="card__warn">not configured</dd>
+        <dd v-else class="card__unpublished">{{ UNPUBLISHED }}</dd>
       </div>
       <div>
         <dt>Base URL</dt>
-        <dd><code>{{ provider.base_url }}</code></dd>
+        <dd v-if="published(provider.base_url)"><code>{{ provider.base_url }}</code></dd>
+        <dd v-else class="card__unpublished">{{ UNPUBLISHED }}</dd>
       </div>
       <div>
         <dt>Hosts</dt>
@@ -286,6 +301,14 @@ const headline = computed(() => {
 .card__warn {
   color: var(--vp-c-danger-1);
   font-weight: 600;
+}
+
+/* C-408. A field this source did not publish is not a defect and must not be dressed as one: the
+   muted text colour, no weight, no danger. The tone is the difference between "this connector has
+   no auth" and "this document does not carry auth", which is the whole story. */
+.card__unpublished {
+  color: var(--vp-c-text-3);
+  font-style: italic;
 }
 
 .card__ok {
