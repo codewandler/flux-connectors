@@ -7,6 +7,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Four operations that returned a secret are withheld, and a declaration now gates it** (C-430).
+  Each was condemned by its own connector's description. Postmark's `ApiTokens` is *"ACCOUNT-PRIVILEGED.
+  This server's own live Server Token(s), **in plaintext** — the Account API's own mechanism for
+  retrieving one"*; Zoom's `start_url` *"embeds the host's ZAK token: anyone holding this URL starts
+  the meeting as its host"*. Both connectors documented the hazard precisely and returned the field
+  anyway. **Describing a credential is not withholding it.**
+
+  **Stripping the field was considered and is strictly worse**, which is the finding worth keeping:
+  the emitter returns the response whole and the pack hands back what the transport produced, so
+  removing a location from the published schema deletes the *disclosure* and leaves the *exposure*.
+  The operation is withheld instead, until C-136's diversion can return a handle rather than a secret.
+
+  The gate reads a **declaration**, never a field name. A catalogue-wide scan of 31 name-shaped hits
+  had 28 false positives — Klaviyo's `public_api_key` (*"Public by design"*), Typeform's `token`
+  (*"This response's own opaque id"*), Okta's `credentials` (*"Never carries a password or a secret
+  value"*), Anthropic's `max_input_tokens` — every one correctly documented by its connector. A regex
+  would fail all of them and teach authors to fight the gate. Its resolver walks `properties` **and**
+  `items`, because the Postmark pair was missed by a one-level scan and only found on a second pass:
+  `/Servers/*/ApiTokens` resolves, `/ApiTokens` does not.
+
+  Postmark loses its whole `account` service with them — they were its only two operations, and with
+  the service goes the credential it needed and the configuration field that asked a human for it. A
+  connector asks for everything it needs and nothing it cannot use.
+
+  Operations 678 → 674, artifacts 943 → 937, response-schema coverage floor 610 → 606.
+
 ### Changed
 
 - **The babelforce auth-flow endpoints are withheld, and multipart is established as impossible**

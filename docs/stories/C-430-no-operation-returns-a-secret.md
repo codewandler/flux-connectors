@@ -2,8 +2,7 @@
 id: C-430
 title: "No operation returns a secret — and three shipped in v0.9.0 that do"
 pillar: Spec
-status: in-progress
-priority: 1
+status: done
 areas: [providers, connector-spec, connector-cli]
 note: "owner-stated 2026-08-01. A SECOND, deeper scan found worse than the first: postmark-server-get and -list return `ApiTokens` — the server's live tokens IN PLAINTEXT, by the vendor's own description. With zoom's start_url that is four operations live in v0.9.0. babelforce's was withheld by C-426"
 ---

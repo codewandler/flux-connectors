@@ -16,6 +16,16 @@
 
 ### Action needed
 
+- **Four operations that handed you a credential have been withdrawn, across Zoom and Postmark.**
+  Creating or reading a Zoom meeting returned a start link that embeds the host's own token — anyone
+  holding it starts the meeting as the host. Reading a Postmark server returned that server's live API
+  tokens in plain text. Both are gone.
+
+  They will come back when the platform can hand you a *reference* to a secret instead of the secret
+  itself. Postmark's account-level surface goes with them, along with the account token it asked you
+  to supply — there is nothing left that needs it, and a connector should not ask for a credential it
+  cannot use.
+
 - **Four babelforce operations have been withdrawn, and one class of them will keep being withdrawn.**
   The three OAuth endpoints and the account-details call are gone. The OAuth ones describe *how to log
   in* — that is something the platform does for you, not an operation you call — and the account call
