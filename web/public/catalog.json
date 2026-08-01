@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generator": "flux-connectors 0.9.1",
+  "generator": "flux-connectors 0.10.0",
   "providers": [
     {
       "id": "airtable",

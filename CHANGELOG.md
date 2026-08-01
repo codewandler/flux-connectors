@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-08-01
+
 ### Added
 
 - **One collected value can reach more than one request position, and Algolia ships** (C-229). Algolia

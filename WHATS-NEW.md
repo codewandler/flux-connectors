@@ -14,6 +14,8 @@
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-08-01
+
 ### New
 
 - **Twilio's webhooks can now be checked for authenticity.** Twilio signs its callbacks differently from
