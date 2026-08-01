@@ -21,16 +21,18 @@
 //!   phone number, or `<`/`>` in a parameter *name*, is exactly the class of defect
 //!   `zendesk-ticket-search` (C-29) carries. [`no_twilio_query_parameter_is_unshippable`] pins the
 //!   safe subset that is declared instead.
-//! - **No `[[channels]]` webhook binding**, even though `[[events]]` are declared. Twilio signs a
-//!   status callback over the request URL plus its sorted, reassembled form fields — not a template
-//!   over `{body}`/`{timestamp}`, which is all `HmacSpec::signed` accepts — so verification cannot be
-//!   declared honestly yet. [`twilio_declares_no_channel_binding_for_its_events`] is the same shape of
-//!   assertion `stripe_connector.rs` makes for `Stripe-Signature`.
+//! - **Two `[[channels]]` webhook bindings, one per callback URL.** Twilio signs a status callback
+//!   over the request URL plus its sorted, reassembled form fields, which `HmacSpec::signed` could
+//!   not express until C-188 widened its vocabulary with `{url}` and `{sorted_form}` — so this file
+//!   used to assert the *absence* of a binding. [`twilio_binds_its_status_callbacks_over_a_verified_webhook`]
+//!   replaced that assertion. There are two bindings and not one because a status callback carries
+//!   no field naming its own type, and Twilio's callbacks are configured per resource anyway.
 
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{AuthScheme, Connector, HttpMethod, Idempotency, Risk};
+use connector_spec::inbound::{Transport, VerificationScheme};
+use connector_spec::{AuthScheme, Connector, Digest, Encoding, HttpMethod, Idempotency, Risk};
 
 #[path = "../../connector-spec/tests/support/shipped_provider.rs"]
 mod shipped_provider;
@@ -44,8 +46,7 @@ const CREDENTIAL: &str = "twilio.basic_auth";
 const AUTH_TOKEN_ENV: &str = "TWILIO_AUTH_TOKEN";
 /// The non-secret identity half: the Account SID.
 const ACCOUNT_SID_ENV: &str = "TWILIO_ACCOUNT_SID";
-/// The `signing`-scheme credential declared for status-callback verification, unreferenced by any
-/// channel today — see the module docs.
+/// The `signing`-scheme credential both status-callback bindings verify with — see the module docs.
 const SIGNING_CREDENTIAL: &str = "twilio.webhook_signing_secret";
 
 /// The curated operations, in the order `providers/twilio.toml` declares them. All five are reads.
@@ -316,14 +317,19 @@ fn no_twilio_operation_declares_a_body() {
     }
 }
 
-/// `[[events]]` are declared for status callbacks, but `[[channels]]` is empty.
+/// Both status-callback events reach flux over a **verified** webhook — C-188.
 ///
-/// The same shape of assertion `stripe_connector.rs` makes for `Stripe-Signature`: Twilio signs a
-/// status callback over the request URL plus its sorted, reassembled form fields, which is not a
-/// template over `{body}`/`{timestamp}` — the only two placeholders `HmacSpec::signed` accepts — so
-/// no `[[channels]]` binding can verify it honestly yet.
+/// This test used to assert the opposite, and the inversion is the story's whole outcome: Twilio's
+/// events shipped with no `[[channels]]` binding at all because `HmacSpec::signed` admitted `{body}`
+/// and `{timestamp}` and nothing else, and a binding that could not verify would have been worse
+/// than none. The assertion that matters here is the negative one at the end — no binding of this
+/// connector is unverified, and none says it cannot be.
+///
+/// That the declared scheme reproduces Twilio's *own published signature* is checked separately, by
+/// `connector-spec`'s `verification_conformance.rs`, against the vendor's worked example. Without
+/// that half this test would only show that something was written down.
 #[test]
-fn twilio_declares_no_channel_binding_for_its_events() {
+fn twilio_binds_its_status_callbacks_over_a_verified_webhook() {
     let connector = load();
 
     let event_names: Vec<&str> = connector
@@ -336,11 +342,74 @@ fn twilio_declares_no_channel_binding_for_its_events() {
         ["message.status_callback", "call.status_callback"]
     );
 
-    assert!(
-        connector.channels.is_empty(),
-        "twilio declares a `[[channels]]` binding, but its signature scheme (URL + sorted form \
-         fields) cannot be expressed by `HmacSpec` — see the provider file's block comment"
+    // One binding per callback URL, each carrying exactly one event. A status callback carries no
+    // discriminator field — a message callback is known by carrying `MessageSid` — and Twilio
+    // configures the messaging and voice callback URLs separately, so one binding per URL is the
+    // shape the vendor actually offers.
+    let bindings: Vec<(&str, &[String])> = connector
+        .channels
+        .iter()
+        .map(|channel| (channel.name.as_str(), channel.events.as_slice()))
+        .collect();
+    assert_eq!(
+        bindings,
+        [
+            (
+                "message-status-callback",
+                ["message.status_callback".to_owned()].as_slice()
+            ),
+            (
+                "call-status-callback",
+                ["call.status_callback".to_owned()].as_slice()
+            ),
+        ]
     );
+
+    for channel in &connector.channels {
+        assert_eq!(
+            channel.transport,
+            Transport::Webhook,
+            "`{}` terminates a vendor POST",
+            channel.name
+        );
+        let Some(VerificationScheme::Hmac(hmac)) = &channel.verification else {
+            panic!(
+                "binding `{}` must verify with an HMAC scheme — an open endpoint that presents an \
+                 unverified event as a trusted one is the outcome C-188 exists to remove",
+                channel.name
+            );
+        };
+
+        // Twilio's own parameters. SHA-1 and base64 are the vendor's; it publishes no alternative.
+        assert_eq!(hmac.algorithm, Digest::Sha1);
+        assert_eq!(hmac.encoding, Encoding::Base64);
+        assert_eq!(hmac.header, "X-Twilio-Signature");
+        assert_eq!(hmac.signed, "{url}{sorted_form}");
+        assert_eq!(
+            hmac.secret, SIGNING_CREDENTIAL,
+            "the `signing`-scheme credential this file has always asserted is declared is now \
+             actually referenced"
+        );
+        assert_eq!(
+            (hmac.timestamp.as_ref(), hmac.tolerance.as_deref()),
+            (None, None),
+            "Twilio signs no timestamp, so it declares no selector and no window. That is the \
+             vendor's scheme, not an unfinished declaration — and it means a captured signature \
+             for one URL and body does not expire"
+        );
+
+        // Every binding says how a human finishes wiring it: Twilio has no subscription API for a
+        // status callback, so it is `[channels.setup]` rather than `[channels.subscription]`.
+        assert!(
+            channel.subscription.is_none(),
+            "a `StatusCallback` URL is supplied per message or configured on a number; neither is \
+             an operation this connector ships"
+        );
+        assert!(channel
+            .setup
+            .as_ref()
+            .is_some_and(|setup| !setup.steps.is_empty()));
+    }
 }
 
 /// The configuration surface asks for the Account SID once — bound to the credential's username,

@@ -525,7 +525,7 @@
         },
         "signed": {
           "type": "string",
-          "description": "The string that is signed, as a template over `{body}` and `{timestamp}`. Any other placeholder is an error: a template the host cannot fill would fail open or fail confusingly, and neither is acceptable on an authentication path.\n\n`{body}` is mandatory. A template that omits it signs a string the payload never enters, so one captured signature verifies every forged payload for as long as the window lasts — `signed = \"{timestamp}\"` is a well-formed template that does exactly that."
+          "description": "The string that is signed, as a template over a closed vocabulary: `{body}` (the raw request bytes), `{sorted_form}` (the body read as `application/x-www-form-urlencoded`, each field percent-decoded, sorted by name, and re-joined name-onto-value with no delimiter anywhere — Twilio), `{timestamp}` (the value the `timestamp` selector reads) and `{url}` (the full request URL the vendor was configured to call, supplied by the transport and never carried in a connector). Any other placeholder is an error: a template the host cannot fill would fail open or fail confusingly, and neither is acceptable on an authentication path.\n\nThe template must interpolate `{body}` or `{sorted_form}`. One that covers no payload signs a string the request never enters, so one captured signature verifies every forged payload for as long as the window lasts — `signed = \"{timestamp}\"` and `signed = \"{url}\"` are both well-formed templates that do exactly that, and `{url}` is worse because it is a per-endpoint constant and its vendors carry no window at all."
         },
         "timestamp": {
           "$ref": "#/$defs/selector",

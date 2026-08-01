@@ -136,6 +136,12 @@ pub enum TimestampFormat {
 /// | Stripe | `Stripe-Signature` | sha256 | hex | `{timestamp}.{body}` | tolerance |
 /// | Slack | `X-Slack-Signature` | sha256 | hex, `v0=` | `v0:{timestamp}:{body}` | 5m |
 /// | Zendesk | `X-Zendesk-Webhook-Signature` | sha256 | base64 | `{timestamp}{body}` | tolerance |
+/// | Twilio | `X-Twilio-Signature` | sha1 | base64 | `{url}{sorted_form}` | — |
+///
+/// Twilio is the row that cost this struct a widened vocabulary rather than a new field (C-188). It
+/// signs neither the raw bytes nor any constant: the request URL, then the POST parameters decoded,
+/// sorted by name and re-joined. Its shape was the argument for the axes being right — every other
+/// axis fits unchanged — and against `signed` being a template over two names.
 ///
 /// **Nothing here verifies anything.** The comparison runs in flux, over the raw request bytes,
 /// before any parsing — verifying a re-serialized body fails on byte-identical-but-reordered JSON,
@@ -153,18 +159,44 @@ pub struct HmacSpec {
     /// A literal prefix the header value carries before the digest, e.g. `sha256=` or `v0=`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prefix: Option<String>,
-    /// The string that is signed, as a template over `{body}` and `{timestamp}`.
+    /// The string that is signed, as a template over the closed vocabulary
+    /// [`SIGNED_PLACEHOLDERS`] names.
     ///
-    /// `{body}` is the raw request bytes. `{timestamp}` is the value [`timestamp`](Self::timestamp)
-    /// selects. Any other placeholder is a loader error — a template the host cannot fill would fail
-    /// open or fail confusingly, and neither is acceptable on an authentication path.
+    /// - **`{body}`** — the raw request bytes, spliced in exactly as they arrived.
+    /// - **`{sorted_form}`** — the body read as `application/x-www-form-urlencoded`, each field
+    ///   percent-decoded, the fields sorted by name, and every name concatenated straight onto its
+    ///   value with **no delimiter** anywhere. Twilio's scheme, and the one placeholder that is a
+    ///   *derivation* rather than a splice.
+    /// - **`{timestamp}`** — the value [`timestamp`](Self::timestamp) selects, spelled as
+    ///   [`timestamp_format`](Self::timestamp_format) says.
+    /// - **`{url}`** — the full request URL the vendor was configured to call, query string
+    ///   included. Supplied by the transport at request time; **never** carried in this repository,
+    ///   which ships no endpoint address for the reason the module docs state.
     ///
-    /// **`{body}` is mandatory, and it is the load-bearing rule of this struct.** A template that
-    /// omits it signs a string the payload never enters, so one captured signature verifies every
-    /// forged payload — for the whole [`tolerance`](Self::tolerance) window, or forever without one.
-    /// `signed = "{timestamp}"` is a perfectly well-formed template that does exactly that, which is
+    /// Any other placeholder is a loader error — a template the host cannot fill would fail open or
+    /// fail confusingly, and neither is acceptable on an authentication path.
+    ///
+    /// **The template must interpolate one of [`PAYLOAD_PLACEHOLDERS`], and that is the
+    /// load-bearing rule of this struct.** A template that covers no payload signs a string the
+    /// request never enters, so one captured signature verifies every forged payload — for the whole
+    /// [`tolerance`](Self::tolerance) window, or forever without one. `signed = "{timestamp}"` and
+    /// `signed = "{url}"` are both perfectly well-formed templates that do exactly that, which is
     /// why the rule is stated here rather than left to the shape of the template: the defect needs no
     /// typo, and everything else about such a declaration reads as correct.
+    ///
+    /// # Two things `{sorted_form}` is not
+    ///
+    /// It is **not a nesting convention.** `BodyEncoding::Form` refuses a nested *outbound* body
+    /// because vendors disagree about how to spell one (`metadata[key]`, `a[b]`, `a[b][]`), and the
+    /// form encoder that would settle it is upstream flux work. None of that reaches here: a form
+    /// body on the wire is already a flat sequence of `name=value` pairs, and this derivation reads
+    /// that sequence rather than producing one. The two gaps run in opposite directions and do not
+    /// touch.
+    ///
+    /// It is **not a licence to sort, join or transform in the template.** The template still only
+    /// concatenates literal text around named values. What sorts is one function in the host, the
+    /// same one for every vendor that names the placeholder — which is the difference between
+    /// declaring a derivation and shipping a per-vendor script.
     pub signed: String,
     /// Where the `{timestamp}` in [`signed`](Self::signed) is read from — Slack's
     /// `X-Slack-Request-Timestamp`.
@@ -476,7 +508,52 @@ fn is_true(value: &bool) -> bool {
 }
 
 /// The placeholders [`HmacSpec::signed`] may interpolate.
-pub const SIGNED_PLACEHOLDERS: [&str; 2] = ["body", "timestamp"];
+///
+/// # The decision this list records: a widened vocabulary, not a named set of vendor schemes
+///
+/// C-188 had two defensible shapes to choose between, and the choice is recorded here because the
+/// list is where a future author meets it. The alternative was a closed set of *named* schemes —
+/// `verification.twilio_v1`, `verification.stripe_v1` — with the derivation living in the verifier
+/// under that name.
+///
+/// The template won, on three grounds:
+///
+/// 1. **A closed set of named schemes is a `match vendor`, spelled as data.**
+///    `tests/verification_conformance.rs`'s first rule is that the reference verifier contains no
+///    per-vendor branch, "and there cannot be one: a per-vendor branch here would prove that four
+///    schemes can be verified by four implementations, which nobody doubted." `twilio_v1` is that
+///    branch. It also moves the vendor's *parameters* — the digest, the encoding, the header — out
+///    of the connector and into the verifier, where a drift check cannot see them.
+/// 2. **This list is already the closed set.** The expressiveness objection to a template is that an
+///    author can write a derivation the verifier does not compute — and the loader refuses exactly
+///    that, by name, at load. The template has no operators, no repetition and no ordering
+///    primitive; the only thing it composes is literal text, which is where the vendors genuinely
+///    differ (Slack's `v0:`, Stripe's `.`, Twilio's nothing-at-all).
+/// 3. **A named set refuses the unknown vendor**, which sounds like the safe default and is not.
+///    Refusing at load is only valuable when the alternative was a *wrong* verification; a vendor
+///    whose axes are already in this vocabulary would be refused for having no name, and the honest
+///    workaround — declare no binding — is the unverified endpoint the story is closing.
+///
+/// What keeps (1)–(3) from being a licence to keep adding names is [`PAYLOAD_PLACEHOLDERS`]: a
+/// placeholder may be added only if the loader can still tell whether the payload enters the signed
+/// string. That is the rule the whole struct rests on, and it is stated as a property of the
+/// vocabulary rather than of any one name.
+pub const SIGNED_PLACEHOLDERS: [&str; 4] = ["body", "sorted_form", "timestamp", "url"];
+
+/// The placeholders through which the **request payload** enters the signed string.
+///
+/// [`HmacSpec::signed`] must interpolate at least one of these, and this list — rather than the word
+/// `{body}` — is the load-bearing rule of the struct. The distinction became real the moment the
+/// vocabulary widened: `{url}` is a *per-endpoint constant*, so `signed = "{url}"` signs the same
+/// string for every delivery that endpoint will ever receive. That is C-141's `signed = "{timestamp}"`
+/// with a longer constant and, since a URL-signing vendor carries no timestamp, no
+/// [`tolerance`](HmacSpec::tolerance) to bound the replay either. It would have loaded the moment
+/// `{url}` became fillable, under a rule that read as though it still said what it used to say.
+///
+/// `{sorted_form}` is here and `{url}` is not because the test is not "does the placeholder vary" but
+/// "does the *payload* reach the digest". A reassembled form is the payload, rearranged; a URL is the
+/// address it was sent to.
+pub const PAYLOAD_PLACEHOLDERS: [&str; 2] = ["body", "sorted_form"];
 
 /// The placeholder names `signed` actually interpolates, in order of appearance.
 ///
@@ -617,7 +694,39 @@ mod tests {
             signed_placeholders("v0:{timestamp}:{body}"),
             vec!["timestamp", "body"]
         );
+        assert_eq!(
+            signed_placeholders("{url}{sorted_form}"),
+            vec!["url", "sorted_form"],
+            "Twilio's scheme: two placeholders and not one character of literal text between them"
+        );
         assert!(signed_placeholders("nothing here").is_empty());
+    }
+
+    /// Every way of covering the payload is a placeholder the host can fill, and the two lists must
+    /// not drift apart.
+    ///
+    /// A name in [`PAYLOAD_PLACEHOLDERS`] but not in [`SIGNED_PLACEHOLDERS`] is the worst outcome
+    /// available here: the loader would accept it as covering the payload while the template check
+    /// refused it as unfillable, so the two rules would contradict each other on the same
+    /// declaration. Cheap to assert, and not otherwise checked anywhere.
+    #[test]
+    fn every_payload_placeholder_is_one_the_host_can_fill() {
+        for name in PAYLOAD_PLACEHOLDERS {
+            assert!(
+                SIGNED_PLACEHOLDERS.contains(&name),
+                "{{{name}}} covers the payload but is not fillable"
+            );
+        }
+        assert!(
+            !PAYLOAD_PLACEHOLDERS.contains(&"url"),
+            "the request URL is the same for every delivery to one endpoint, so a signature over it \
+             alone proves nothing about the payload — see PAYLOAD_PLACEHOLDERS' own docs"
+        );
+        assert!(
+            !PAYLOAD_PLACEHOLDERS.contains(&"timestamp"),
+            "C-141's hole: a timestamped signature over no payload verifies every forgery in the \
+             window"
+        );
     }
 
     #[test]

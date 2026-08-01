@@ -319,6 +319,85 @@ fn a_timestamped_scheme_without_a_timestamp_selector_is_refused() {
     );
 }
 
+/// Twilio's scheme, written as an author would write it — **the story's failing-first test.**
+///
+/// `X-Twilio-Signature` is base64(HMAC-SHA1(AuthToken, url + sorted form fields)), and before C-188
+/// every one of those axes but the digest and the encoding was unwritable: `signed` admitted `{body}`
+/// and `{timestamp}` and nothing else, so `providers/twilio.toml` shipped its events with **no
+/// `[[channels]]` binding at all** and a test asserted that absence. This is the assertion that the
+/// file an author writes now loads.
+///
+/// It is a declarability test and deliberately stops there. That the declaration *reproduces
+/// Twilio's own published signature* is a different claim and lives in
+/// `verification_conformance.rs`, which checks it against the vendor's worked example — because a
+/// scheme that loads and verifies nothing is the outcome this story exists to avoid, not achieve.
+#[test]
+fn twilios_url_and_sorted_form_scheme_is_declarable() {
+    let connector = load(&fixture(
+        r#"
+[[channels]]
+name = "hook"
+transport = "webhook"
+events = ["thing.created"]
+
+[channels.verification.hmac]
+algorithm = "sha1"
+encoding = "base64"
+header = "X-Twilio-Signature"
+signed = "{url}{sorted_form}"
+secret = "acme.webhook_secret"
+
+[channels.setup]
+steps = ["Paste the Request URL into the Acme dashboard"]
+"#,
+    ));
+    let Some(VerificationScheme::Hmac(hmac)) =
+        &connector.channel("hook").expect("loads").verification
+    else {
+        panic!("the binding verifies with an HMAC scheme");
+    };
+    assert_eq!(hmac.signed, "{url}{sorted_form}");
+    assert_eq!(
+        hmac.timestamp, None,
+        "Twilio signs no timestamp, so it declares no selector and no window — the vendor's own \
+         scheme, not an omission"
+    );
+    assert_eq!(hmac.tolerance, None);
+}
+
+/// `{sorted_form}` covers the payload, so it satisfies the rule `{body}` used to be the only way to
+/// satisfy — and `{url}` does not, because it is a per-endpoint constant.
+///
+/// The pairing is the point. Widening the placeholder set is exactly the change that could have
+/// turned "the signed string must cover the body" into a rule that no longer means what it said,
+/// and `verification_conformance.rs` demonstrates the forgery `signed = "{url}"` would ship.
+#[test]
+fn a_signed_template_covering_only_the_url_is_refused() {
+    let error = refuse(&fixture(
+        r#"
+[[channels]]
+name = "hook"
+transport = "webhook"
+events = ["thing.created"]
+
+[channels.verification.hmac]
+algorithm = "sha1"
+encoding = "base64"
+header = "X-Twilio-Signature"
+signed = "{url}"
+secret = "acme.webhook_secret"
+
+[channels.setup]
+steps = ["Paste the Request URL into the Acme dashboard"]
+"#,
+    ));
+    assert!(
+        error.contains("never interpolates {body}") && error.contains("{sorted_form}"),
+        "the request URL is the same for every delivery to one endpoint, so a signature over it \
+         alone verifies every forged payload forever:\n{error}"
+    );
+}
+
 #[test]
 fn a_signed_template_the_host_cannot_fill_is_refused() {
     let error = refuse(&fixture(

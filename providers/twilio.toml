@@ -366,35 +366,122 @@ group = "Voice"
 schema = { type = "object", required = ["CallSid", "CallStatus"], properties = { CallSid = { type = "string" }, CallStatus = { type = "string", enum = ["queued", "ringing", "in-progress", "completed", "busy", "failed", "no-answer", "canceled"] }, To = { type = "string", description = "The called party" }, From = { type = "string", description = "The calling party" }, Direction = { type = "string", enum = ["inbound", "outbound-api", "outbound-dial"] }, CallDuration = { type = "string", description = "Seconds, sent as a numeric string; present only once the call has ended" }, Timestamp = { type = "string", description = "RFC 2822, not ISO 8601" }, ApiVersion = { type = "string" } } }
 
 # ---------------------------------------------------------------------------------------------
-# THERE IS NO `[[channels]]` BINDING, AND THAT IS THE FINDING RATHER THAN AN OMISSION — the same
-# shape of finding `providers/stripe.toml` records for `Stripe-Signature`.
+# Channels — the status-callback bindings. This file used to say, at length, that there could be
+# no `[[channels]]` here; C-188 closed the gap it named, and the record of what it cost is worth
+# keeping because the objection was a good one.
 # ---------------------------------------------------------------------------------------------
 #
 # Twilio signs a status callback with `X-Twilio-Signature`: base64(HMAC-SHA1(AuthToken, signed)),
 # where `signed` is the **full request URL** with every POST parameter's name and value — sorted by
 # name, no delimiter between a pair or between pairs — appended directly after it
-# (twilio.com/docs/usage/security#validating-requests). Every one of `HmacSpec`'s axes
-# (`crates/connector-spec/src/inbound.rs`) is checked against that and fails:
+# (twilio.com/docs/usage/security#validating-requests). Two objections stood in the way, and only
+# the first was really about the placeholder set:
 #
-#  1. **The signed string is not a template over `{body}` and `{timestamp}`** — the only two
-#     placeholders `HmacSpec::signed` accepts. It is the request URL concatenated with the **parsed,
-#     re-sorted, re-joined** form fields, not the raw bytes that arrived. `{body}` names the raw
-#     request bytes verified *before* parsing (`inbound.rs`'s own load-bearing rule); Twilio's scheme
-#     needs the opposite — parse first, discard the original byte order, reassemble sorted — which is
-#     not expressible as a template over raw bytes at all, let alone with `{url}` absent from the
-#     placeholder set entirely.
-#  2. **Even granting a hypothetical `{url}` placeholder does not save it.** A `signed` template
-#     concatenates fixed strings around two named values; it cannot re-sort N form fields whose count
-#     and names vary per delivery. That is exactly the class of defect this repository's north star
-#     refuses a solution for: a per-vendor expression capable of resorting a field list is the
-#     connector-specific DSL principle 2 exists to keep out, not a gap in this one struct.
+#  1. **`{url}` was absent from the vocabulary**, and `{body}` names the raw request bytes verified
+#     *before* parsing. Adding `{url}` is an ordinary widening — the URL is a fact the transport
+#     supplies at request time, exactly as the body and the headers are, and no endpoint address
+#     enters this repository.
+#  2. **"A `signed` template concatenates fixed strings around two named values; it cannot re-sort N
+#     form fields whose count and names vary per delivery."** That objection is correct and still
+#     stands: the template sorts nothing. What the template gained is the *name* of a derivation —
+#     `{sorted_form}` — that one function in the host performs identically for every vendor that
+#     names it. The distinction is the whole of C-188: naming a derivation is a declaration, while
+#     an expression capable of performing one would be the connector-specific DSL principle 2 keeps
+#     out. `SIGNED_PLACEHOLDERS` stays a closed set, so an author still cannot write a derivation
+#     nobody computes — the loader refuses the name.
 #
-# So the credential is declared above, named, and ready — an operator terminating Twilio status
-# callbacks needs precisely `twilio.webhook_signing_secret` — and the events ship, because they are
-# correct today and are what a trigger would match on. The binding waits for a verification model
-# that can express "sign the sorted, reassembled parameters", which is a gap in `HmacSpec` itself
-# (a C-60-adjacent finding, parallel to Stripe's composite-header gap C-141 owns) rather than
-# something this file can work around.
+# What did not need solving: the outbound form **encoder** gap (upstream flux `L-101`, and
+# `BodyEncoding::Form`'s refusal of a nested body). That is about producing a form body from a
+# nested structure with no agreed convention for the nesting. A callback arrives as a flat sequence
+# of `name=value` pairs and this derivation only reads it. Opposite directions; they do not touch.
+#
+# Two bindings rather than one, because Twilio has no event discriminator to write. A status
+# callback carries no field naming its own type — a message callback is recognised by carrying
+# `MessageSid`, a call callback by carrying `CallSid` — and `[[channels]] discriminator` addresses
+# one field, not a disjunction. It is not a gap: Twilio's callbacks are configured **per resource**,
+# so the messaging `StatusCallback` URL and the voice one are separate URLs an operator wires
+# separately. One binding per URL is what the vendor actually offers, and each carries exactly one
+# event, so nothing needs discriminating.
+
+[[channels]]
+name = "message-status-callback"
+transport = "webhook"
+description = "Message delivery-status callbacks. Twilio POSTs form-encoded to the StatusCallback URL supplied when a message is created, signing the URL and the parameters with the Auth Token"
+events = ["message.status_callback"]
+# No `delivery_id`. Twilio sends no per-delivery identifier on a status callback, and the tempting
+# stand-in is wrong: `MessageSid` identifies the *message*, so deduping on it would collapse the
+# `queued` → `sent` → `delivered` sequence into one event. Twilio does retry, so a flow that must
+# not act twice dedupes on `(MessageSid, MessageStatus)` itself; declaring a `delivery_id` that
+# cannot do the job would read as though redelivery had been handled.
+
+# Twilio's own published parameters (twilio.com/docs/usage/security). SHA-1 and base64 are the
+# vendor's, not a choice — Twilio publishes no SHA-256 alternative for this header.
+[channels.verification.hmac]
+algorithm = "sha1"
+encoding = "base64"
+header = "X-Twilio-Signature"
+# The URL Twilio was configured to call, query string included, then the POST parameters decoded,
+# sorted by name and re-joined with no delimiter anywhere. `{sorted_form}` is what covers the
+# payload here — `{body}` would not reproduce it, because the signed string carries `To+18005551212`
+# where the wire carries `To=%2B18005551212`.
+signed = "{url}{sorted_form}"
+# No `timestamp` and therefore no `tolerance`: Twilio signs no timestamp and publishes no replay
+# window. Stated here because its absence is the vendor's scheme rather than an unfinished
+# declaration — a captured signature for a given URL and body stays valid, which is a property of
+# `X-Twilio-Signature` an operator should know and cannot learn from silence.
+secret = "twilio.webhook_signing_secret"
+
+# Flat form fields, so every path is a top-level name.
+[channels.payload]
+message_sid = "MessageSid"
+status = "MessageStatus"
+to = "To"
+sender = "From"
+error_code = "ErrorCode"
+
+# No subscription API to name: a `StatusCallback` URL is supplied per message, or configured on a
+# phone number, and both are writes this connector does not ship (see the header comment). So the
+# operator wires it, the same posture `providers/slack.toml`'s Events API binding takes.
+[channels.setup]
+docs_url = "https://www.twilio.com/docs/messaging/guides/track-outbound-message-status"
+steps = [
+  "Open console.twilio.com and choose the phone number or Messaging Service this connection sends from",
+  "Paste the Request URL shown above into its status-callback field, exactly as shown — the signature covers the URL, so a redirect or a rewritten host breaks every delivery",
+  "Or, if messages are created by another system, have it pass the same URL as the `StatusCallback` parameter",
+  "Copy the Auth Token from the console into this connection's signing secret field — it is the same value as the Auth Token above",
+]
+
+# ---------------------------------------------------------------------------------------------
+
+[[channels]]
+name = "call-status-callback"
+transport = "webhook"
+description = "Call status callbacks. Twilio POSTs form-encoded to the StatusCallback URL configured for the call or the answering number, signed exactly as the messaging callback is"
+events = ["call.status_callback"]
+
+[channels.verification.hmac]
+algorithm = "sha1"
+encoding = "base64"
+header = "X-Twilio-Signature"
+signed = "{url}{sorted_form}"
+secret = "twilio.webhook_signing_secret"
+
+[channels.payload]
+call_sid = "CallSid"
+status = "CallStatus"
+to = "To"
+caller = "From"
+direction = "Direction"
+duration = "CallDuration"
+
+[channels.setup]
+docs_url = "https://www.twilio.com/docs/voice/twiml/number#attributes-statusCallback"
+steps = [
+  "Open console.twilio.com and choose the phone number this connection answers or dials on",
+  "Paste the Request URL shown above into its call status-callback field, exactly as shown — the signature covers the URL",
+  "Select the call events to report: initiated, ringing, answered, completed",
+  "Copy the Auth Token from the console into this connection's signing secret field",
+]
 
 # ---------------------------------------------------------------------------------------------
 # Configuration — what a product asks a human for before any operation above can run
