@@ -1,36 +1,43 @@
-//! Postmark (C-180) is the epic's clean probe for **two credentials partitioned by service rather
+//! Postmark (C-180) was this epic's clean probe for **two credentials partitioned by service rather
 //! than sent together**: `X-Postmark-Server-Token` authenticates sending and message history;
-//! `X-Postmark-Account-Token` authenticates account-wide server administration. Unlike babelforce's
-//! `access_id`/`access_token` pair (`providers/babelforce.toml`), which travel *together* as one
-//! mechanism, Postmark's two tokens are never accepted on the same request at all.
+//! `X-Postmark-Account-Token` authenticated account-wide server administration, and unlike
+//! babelforce's `access_id`/`access_token` pair (`providers/babelforce.toml`), which travel
+//! *together* as one mechanism, Postmark's two tokens were never accepted on the same request at
+//! all.
 //!
-//! This file measures the question `providers/postmark.toml`'s header comment poses: is a
-//! per-service credential already addressable, and if so, by what mechanism?
+//! **C-430 withheld the Account API surface and the probe went with it.** `postmark-server-list` and
+//! `postmark-server-get` returned `ApiTokens` — that server's own live Server Token(s) in plaintext
+//! — and an operation whose declared response carries a token is withheld until C-136's diversion
+//! lands (`AGENTS.md` § Authentication contract). They were the only two operations in the `account`
+//! service, a service with no operations is refused, and a credential nothing can use is not asked
+//! for: so the service, `postmark.account_token` and its config field went too. What this file
+//! measured on a live two-service connector is therefore recorded below as a **finding, not a
+//! measurement**, and the tests that remain are the ones a single-credential connector can still
+//! prove. C-136 is what restores both the operations and the probe.
 //!
-//! 1. **The connector declares exactly two credentials**, each on its own custom header, each
+//! The finding, as it was measured before the withholding, in the terms
+//! `providers/postmark.toml`'s header comment poses it:
+//!
+//! 1. **The connector declared exactly two credentials**, each on its own custom header, each
 //!    resolving from its own environment variable — no scheme in common beyond both being
-//!    `AuthScheme::Header`.
+//!    `AuthScheme::Header`. One survives, and [`the_postmark_connector_declares_one_header_credential`]
+//!    still measures its half.
 //! 2. **Every `server`-service operation resolves, through [`Connector::effective_auth`], to the
-//!    server token and only the server token.** Every `account`-service operation resolves to the
-//!    account token and only the account token. No operation's effective requirement ever names
-//!    both — that is what "never sent together" means at the IR level, since flux has not yet grown
-//!    the `$auth` seam that would put a header on the wire at all
-//!    (`AGENTS.md`'s Intentional gaps: "No provider can make a live call"). `server` is a *named*
-//!    service, not the elided `default`: this provider declares two named services, and
-//!    `AGENTS.md`'s service contract refuses an implicit default the moment any named service exists.
-//! 3. **The partition is enforced by a mechanism that already shipped**: per-operation `auth`
-//!    overriding `default_auth` (`crates/connector-spec/src/ir.rs:652-669`), the same override
-//!    babelforce's `[[patch.operations]] auth = [...]` overlay entry already uses on a different
-//!    axis. No change to `connector-spec` was needed.
-//! 4. **The measured, separate finding**: `Connector::credential_ref_for`
-//!    (`crates/connector-spec/src/ir.rs:1166-1178`) still renders both credentials' tenant paths
-//!    under the reserved default service — it does not thread an operation's or credential's
-//!    `service` through at all. The two paths are nonetheless distinct, because they differ in leaf
-//!    name (`server_token` vs `account_token`), exactly as that function's own doc comment predicts
-//!    ("credential names are unique within a provider and already distinguish the case",
-//!    `ir.rs:1159-1160`). A [`CredentialRef`] *can* carry an arbitrary service segment
-//!    (`credential.rs`'s `CredentialRef::new`) — that headroom is real — but nothing in this
-//!    connector's path exercises it, and this test measures that rather than asserting it in prose.
+//!    server token and only the server token.** Every `account`-service operation resolved to the
+//!    account token and only the account token; no operation's effective requirement ever named
+//!    both — that is what "never sent together" meant at the IR level. The surviving half is still
+//!    asserted, and `server` is still a *named* service rather than the elided `default`.
+//! 3. **The partition was enforced by a mechanism that already shipped**: per-operation `auth`
+//!    overriding `default_auth`, the same override babelforce's `[[patch.operations]] auth = [...]`
+//!    overlay entry uses on a different axis. No change to `connector-spec` was needed for it, and
+//!    none is needed to undo it — the withheld operations carried their own `auth` and took it with
+//!    them.
+//! 4. **The measured, separate finding, and the one that survives intact**:
+//!    `Connector::credential_ref_for` renders a credential's tenant path under the reserved default
+//!    service — it does not thread an operation's or credential's `service` through at all. A
+//!    [`CredentialRef`] *can* carry an arbitrary service segment (`credential.rs`'s
+//!    `CredentialRef::new`) — that headroom is real — but nothing in this connector's path exercises
+//!    it, and this file measures that rather than asserting it in prose.
 
 use std::path::{Path, PathBuf};
 
@@ -51,32 +58,29 @@ const SERVER_HEADER: &str = "X-Postmark-Server-Token";
 /// A variable *name*; no credential value appears in this repository.
 const SERVER_TOKEN_ENV: &str = "POSTMARK_SERVER_TOKEN";
 
-/// The account-administration credential — never valid for sending, and never sent alongside
-/// [`SERVER_TOKEN`] on the same request.
-const ACCOUNT_TOKEN: &str = "postmark.account_token";
-/// The header `ACCOUNT_TOKEN` travels in.
-const ACCOUNT_HEADER: &str = "X-Postmark-Account-Token";
-/// A variable *name*; no credential value appears in this repository.
-const ACCOUNT_TOKEN_ENV: &str = "POSTMARK_ACCOUNT_TOKEN";
-
 /// The service every sending/message-history operation belongs to. A *named* service, not the
-/// elided `default` — see the module docs.
+/// elided `default` — see the module docs. It is the only service left; `account` was withheld with
+/// the two operations that were all it carried.
 const SERVER_SERVICE: &str = "server";
-/// The service every account-administration operation belongs to.
-const ACCOUNT_SERVICE: &str = "account";
+
+/// A service name this connector no longer declares, kept because
+/// [`credential_ref_for_elides_the_service`] uses it to build the *hypothetical* service-scoped
+/// reference that shows the headroom on [`CredentialRef::new`] is real — which is a claim about the
+/// address type, not about Postmark, and so outlives the surface that motivated it.
+const HYPOTHETICAL_SERVICE: &str = "account";
 
 const BASE_URL: &str = "https://api.postmarkapp.com";
 
-/// The four Server Token operations, in the order `providers/postmark.toml` declares them.
+/// The four Server Token operations, in the order `providers/postmark.toml` declares them — and now
+/// the whole connector. `postmark-server-list` and `postmark-server-get` stood beside them under the
+/// `account` service until C-430 withheld both; `crates/connector-spec/tests/credential_response.rs`
+/// is where that exclusion is recorded and checked.
 const SERVER_OPERATIONS: &[&str] = &[
     "postmark-email-send",
     "postmark-deliverystats-get",
     "postmark-bounce-list",
     "postmark-bounce-get",
 ];
-
-/// The two Account Token operations.
-const ACCOUNT_OPERATIONS: &[&str] = &["postmark-server-list", "postmark-server-get"];
 
 fn providers_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -99,10 +103,15 @@ fn load() -> Connector {
         .connector
 }
 
-/// **Finding 1: two credentials, two headers, two environment variables — no more shared between
-/// them than the fact both are custom headers.**
+/// **Finding 1, in the half that survives: one credential on its own custom header, resolving from
+/// its own environment variable.**
+///
+/// The Account Token stood beside it until C-430 and is asserted *absent* here rather than merely
+/// unmentioned — a credential a withheld surface left behind would be a connector asking a human for
+/// a token nothing it declares can use, which the configuration contract forbids and which no other
+/// test in this repository would catch.
 #[test]
-fn the_postmark_connector_declares_two_independent_header_credentials() {
+fn the_postmark_connector_declares_one_header_credential() {
     let connector = load();
 
     assert_eq!(connector.id, PROVIDER);
@@ -111,9 +120,9 @@ fn the_postmark_connector_declares_two_independent_header_credentials() {
 
     assert_eq!(
         connector.auth.len(),
-        2,
-        "Postmark authenticates sending and account administration with two independent \
-         credentials, never a shared one"
+        1,
+        "Postmark's account-administration credential went with the Account API surface C-430 \
+         withheld; nothing this connector declares can use one"
     );
 
     let server = connector
@@ -128,41 +137,37 @@ fn the_postmark_connector_declares_two_independent_header_credentials() {
     );
     assert_eq!(server.env, [SERVER_TOKEN_ENV]);
 
-    let account = connector
-        .auth_method(ACCOUNT_TOKEN)
-        .unwrap_or_else(|| panic!("postmark declares `{ACCOUNT_TOKEN}`"));
-    assert_eq!(
-        account.scheme,
-        AuthScheme::Header {
-            name: ACCOUNT_HEADER.to_string(),
-            prefix: String::new(),
-        }
+    assert!(
+        connector.auth_method("postmark.account_token").is_none(),
+        "the Account Token is withheld with the operations that used it — a credential nothing can \
+         use is a form the operator fills in for nothing"
     );
-    assert_eq!(account.env, [ACCOUNT_TOKEN_ENV]);
-
-    assert_ne!(
-        server.env, account.env,
-        "the two credentials must never resolve from the same variable"
+    assert!(
+        connector
+            .config
+            .iter()
+            .all(|field| field.name != "account_token"),
+        "the config field asking a human for the Account Token must go with the credential"
     );
 
     assert_eq!(
         connector.default_auth,
         vec![connector_spec::AuthRequirement::single(SERVER_TOKEN)],
-        "sending is the connector default; account administration must override it explicitly"
+        "sending is the connector default, and now the only thing to default to"
     );
 }
 
-/// **Finding 2 and 3: the two tokens are never sent together, and the partition already runs on a
-/// mechanism this repository shipped before Postmark — per-operation `auth` overriding
-/// `default_auth`.**
+/// **Finding 2 and 3, in the half that survives: every operation resolves through
+/// [`Connector::effective_auth`] to the server token and only the server token.**
 ///
-/// Every operation's *effective* auth (`Connector::effective_auth`, which resolves the
-/// inherit-or-override rule) names exactly one credential, and that credential agrees with the
-/// operation's own service: `default` operations resolve to the server token, `account` operations
-/// resolve to the account token. No [`connector_spec::AuthRequirement`] anywhere in this connector
-/// ever names both tokens in the same alternative.
+/// The partition ran on a mechanism this repository shipped before Postmark — per-operation `auth`
+/// overriding `default_auth` — and the withheld operations carried their own override and took it
+/// with them, so what remains is a connector where every operation inherits. That is a weaker claim
+/// than the one this test used to make, and it is stated as the weaker claim rather than dressed up:
+/// the "never sent together" property is no longer demonstrable here, because there is no longer a
+/// second token to send.
 #[test]
-fn no_operation_ever_requires_both_tokens_and_each_resolves_to_its_own_services_token() {
+fn every_operation_resolves_to_the_one_service_token() {
     let connector = load();
 
     let declared: Vec<&str> = connector
@@ -170,17 +175,14 @@ fn no_operation_ever_requires_both_tokens_and_each_resolves_to_its_own_services_
         .iter()
         .map(|operation| operation.id.as_str())
         .collect();
-    let mut expected: Vec<&str> = SERVER_OPERATIONS.to_vec();
-    expected.extend_from_slice(ACCOUNT_OPERATIONS);
-    assert_eq!(declared, expected);
+    assert_eq!(declared, SERVER_OPERATIONS);
 
     for operation in &connector.operations {
         let effective = connector.effective_auth(operation);
         assert_eq!(
             effective.len(),
             1,
-            "`{}` must have exactly one auth alternative — Postmark offers no OR choice between \
-             the two tokens",
+            "`{}` must have exactly one auth alternative — Postmark offers no OR choice of token",
             operation.id
         );
         let requirement = &effective[0];
@@ -188,25 +190,19 @@ fn no_operation_ever_requires_both_tokens_and_each_resolves_to_its_own_services_
         assert_eq!(
             requirement.len(),
             1,
-            "`{}`'s one alternative must name exactly one credential — the whole point of this \
-             connector is that the two tokens are never an AND-group on the same request",
+            "`{}`'s one alternative must name exactly one credential; two would be an AND-group on \
+             one request, which this vendor never accepts",
             operation.id
         );
 
-        let expected_credential = if operation.service == ACCOUNT_SERVICE {
-            ACCOUNT_TOKEN
-        } else {
-            assert_eq!(
-                operation.service, SERVER_SERVICE,
-                "`{}` belongs to a service this test does not expect",
-                operation.id
-            );
-            SERVER_TOKEN
-        };
+        assert_eq!(
+            operation.service, SERVER_SERVICE,
+            "`{}` belongs to a service this connector no longer declares",
+            operation.id
+        );
         assert!(
-            requirement.contains(expected_credential),
-            "`{}` (service {:?}) must resolve to `{expected_credential}`, not to the other \
-             service's token",
+            requirement.contains(SERVER_TOKEN),
+            "`{}` (service {:?}) must resolve to `{SERVER_TOKEN}`",
             operation.id,
             operation.service
         );
@@ -219,78 +215,60 @@ fn no_operation_ever_requires_both_tokens_and_each_resolves_to_its_own_services_
         .map(|operation| operation.id.as_str())
         .collect();
     assert_eq!(server_ids, SERVER_OPERATIONS);
-
-    let account_ids: Vec<&str> = connector
-        .operations
-        .iter()
-        .filter(|operation| operation.service == ACCOUNT_SERVICE)
-        .map(|operation| operation.id.as_str())
-        .collect();
-    assert_eq!(account_ids, ACCOUNT_OPERATIONS);
 }
 
 /// **Finding 4, measured rather than asserted: `credential_ref_for` does not thread a per-credential
 /// service through, even though [`CredentialRef`] can carry one.**
 ///
-/// Both credentials render under the elided default service — telling them apart by leaf name
-/// alone, exactly as `Connector::credential_ref_for`'s own doc comment (`ir.rs:1159-1160`) predicts.
-/// This is the fact that makes the connector correct *without* that headroom, not a defect this
-/// story fixes: nothing here needs `credential_ref_for` to change, because nothing today asks two
-/// *same-named* credentials in different services to coexist.
+/// The credential renders under the elided default service — identified by leaf name alone, exactly
+/// as `Connector::credential_ref_for`'s own doc comment predicts. This is the fact that made the
+/// connector correct *without* that headroom, not a defect any story fixes: nothing here needs
+/// `credential_ref_for` to change, because nothing today asks two *same-named* credentials in
+/// different services to coexist.
+///
+/// It measured **both** tokens eliding the service until C-430 withheld the surface the second one
+/// authenticated. The claim is unchanged and its evidence is now one credential wide, which is worth
+/// saying rather than quietly narrowing the assertion: `server` is a **named** service and its own
+/// credential still renders no service segment, so the elision is a property of `credential_ref_for`
+/// rather than of a connector that happened to have only a default service.
 #[test]
-fn credential_ref_for_elides_the_service_and_the_two_tokens_still_never_collide() {
+fn credential_ref_for_elides_the_service() {
     let connector = load();
 
     let server_ref = connector
         .credential_ref_for("9f3a4b2c", SERVER_TOKEN, TenantInstances::sole())
         .expect("a valid tenant id and a declared credential must resolve")
         .expect("postmark declares an authority, so a reference must render");
-    let account_ref = connector
-        .credential_ref_for("9f3a4b2c", ACCOUNT_TOKEN, TenantInstances::sole())
-        .expect("a valid tenant id and a declared credential must resolve")
-        .expect("postmark declares an authority, so a reference must render");
 
     assert!(
-        server_ref.is_default_service() && account_ref.is_default_service(),
-        "credential_ref_for renders every credential under the elided default service today — \
-         both tokens, not just one — which is the measured finding this test exists to pin"
-    );
-    assert_ne!(
-        server_ref, account_ref,
-        "the two credentials must still be distinct addresses even though neither carries a \
-         service segment — they differ by leaf name, `server_token` vs `account_token`"
+        server_ref.is_default_service(),
+        "credential_ref_for renders every credential under the elided default service today, even \
+         one whose operations belong to a *named* service — the measured finding this test pins"
     );
     assert_eq!(server_ref.credential(), "server_token");
-    assert_eq!(account_ref.credential(), "account_token");
 
     let rendered_server = TenantLayout.render(&server_ref);
-    let rendered_account = TenantLayout.render(&account_ref);
     assert_eq!(
         rendered_server,
         "tenants/9f3a4b2c/com.postmarkapp.api/server_token"
     );
-    assert_eq!(
-        rendered_account,
-        "tenants/9f3a4b2c/com.postmarkapp.api/account_token"
-    );
-    // Four segments each (`tenants/<tenant>/<authority>/<credential>`), not the five a
-    // service-scoped path would carry (`tenants/<tenant>/<authority>/<service>/<credential>`) — the
-    // headroom on `CredentialRef::new` exists, but this connector's path through
-    // `credential_ref_for` does not reach it, for either credential.
+    // Four segments (`tenants/<tenant>/<authority>/<credential>`), not the five a service-scoped
+    // path would carry (`tenants/<tenant>/<authority>/<service>/<credential>`) — the headroom on
+    // `CredentialRef::new` exists, but this connector's path through `credential_ref_for` does not
+    // reach it.
     assert_eq!(rendered_server.split('/').count(), 4);
-    assert_eq!(rendered_account.split('/').count(), 4);
 
     // The headroom itself is real, even though nothing on this connector's resolution path uses
     // it: a host is free to construct a service-scoped reference directly.
     let hypothetical = CredentialRef::new(
         "9f3a4b2c",
         "com.postmarkapp.api",
-        ACCOUNT_SERVICE,
-        "account_token",
+        HYPOTHETICAL_SERVICE,
+        "server_token",
     )
     .expect("CredentialRef::new accepts an arbitrary service — the headroom is real");
     assert_ne!(
-        hypothetical, account_ref,
+        hypothetical, server_ref,
         "a hand-built service-scoped reference differs from what credential_ref_for actually \
          produces today, which is the gap this test measures rather than closes"
     );

@@ -243,6 +243,15 @@ somewhere to go". Naming them now is cheaper than discovering them at the migrat
    every `form` body non-functional. The three affected operations are the OAuth token endpoints,
    which is to say **the login flow is the thing that is blocked**. That connects to C-135/C-136:
    a credential-producing operation must return a handle, not the token.
+
+   The encoder is not what actually blocks those three, and a reader of this list should not infer
+   that landing `L-101` unblocks them. They are **withheld by rule**, and the rule is stated once, in
+   [`AGENTS.md`](../../AGENTS.md) § Authentication contract: an authentication endpoint is never a
+   connector operation, and — separately and more generally — an operation whose declared response
+   carries a token is withheld until C-136's diversion lands. C-430 made that second test something
+   the build enforces, reading an operation's own `credential_response` declaration rather than
+   guessing from a field name; that section is the statement of the rule and this paragraph does not
+   restate it.
 3. **23 operations have no description.** A tool contract with no sentence in it is not a tool
    contract. Either the overlay supplies them or those operations stay unexposed.
 

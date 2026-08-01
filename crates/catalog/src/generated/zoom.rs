@@ -8,7 +8,7 @@
 pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "zoom",
     vendor: "Zoom",
-    description: "Zoom meeting scheduling: read, create and delete a meeting, and read a user",
+    description: "Zoom meeting administration: cancel a meeting, and read a user. Reading and creating a meeting are withheld — both return the host's ZAK token in `start_url` (C-430)",
     authority: Some("us.zoom.api"),
     runtime: crate::Runtime::Http,
     base_url: "https://api.zoom.us",
@@ -28,28 +28,6 @@ static AUTH: &[crate::Credential] = &[
 
 #[rustfmt::skip]
 static OPERATIONS: &[crate::Operation] = &[
-    crate::Operation {
-        id: "zoom-meeting-get",
-        provider: "zoom",
-        service: "default",
-        description: "Get one meeting — its topic, start time, duration, timezone, join URL and settings. The response also carries `start_url`, which starts the meeting as its host for anyone holding it",
-        risk: crate::Risk::Low,
-        idempotency: crate::Idempotency::Idempotent,
-        credentials: &[&["zoom.access_token"]],
-        hosts: &["api.zoom.us"],
-        flux: include_str!("../../ops/zoom/zoom-meeting-get.flux"),
-    },
-    crate::Operation {
-        id: "zoom-meeting-create",
-        provider: "zoom",
-        service: "default",
-        description: "Schedule a one-off meeting for a user at a fixed time. Nobody is invited and nobody is notified — the meeting appears on the host's own Zoom schedule and the returned `join_url` is how anyone else learns of it. The response also carries `start_url`, which starts the meeting as its host for anyone holding it",
-        risk: crate::Risk::Medium,
-        idempotency: crate::Idempotency::NonIdempotent,
-        credentials: &[&["zoom.access_token"]],
-        hosts: &["api.zoom.us"],
-        flux: include_str!("../../ops/zoom/zoom-meeting-create.flux"),
-    },
     crate::Operation {
         id: "zoom-meeting-delete",
         provider: "zoom",

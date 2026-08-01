@@ -1,16 +1,17 @@
-//! The Zoom connector, and the two things that make it different from every other shipped provider:
+//! The Zoom connector, and the two things that made it different from every other shipped provider:
 //! **a meeting's options live in a nested `settings` object**, and **the credential expires**.
 //!
 //! `shipped_modules.rs` next door asserts that every provider's operations emit, parse, analyze and
 //! are canonical. This file adds the claims that are specific to Zoom, because they are the reason
 //! C-78 exists and the reason a later reader must not "simplify" the file:
 //!
-//! - `POST /v2/users/{userId}/meetings` takes a meeting's access control inside `settings`, not next
+//! - `POST /v2/users/{userId}/meetings` took a meeting's access control inside `settings`, not next
 //!   to its topic. A flat `{"waiting_room": true}` is a top-level member Zoom does not define: it is
 //!   *ignored*, the meeting is created with whatever the account default is, and the API answers
-//!   `201`. That is zendesk's failure mode rather than asana's — a success and a wrong meeting — so
-//!   [`the_meeting_settings_object_is_declared_through_wire_paths`] asserts the nesting on the IR
-//!   *and* on the emitted `$payload` text.
+//!   `201`. That is zendesk's failure mode rather than asana's — a success and a wrong meeting.
+//!   **C-430 withheld that operation** (its response carried `start_url`, the host's ZAK token in a
+//!   URL), so [`no_body_field_escapes_the_settings_wire_path_rule`] keeps the IR-level rule and can
+//!   no longer assert the emitted `$payload` text — see its own comment for what that costs.
 //! - The credential is a **server-to-server OAuth access token** with a one-hour life. Minting it is
 //!   effectful acquisition, which is C-21's business and the host's, never generated Flux's
 //!   (AGENTS.md's authentication contract). [`no_zoom_module_performs_a_token_exchange`] is what
@@ -49,13 +50,13 @@ const CREDENTIAL: &str = "zoom.access_token";
 /// See [`CREDENTIAL`]. A variable *name*; no credential value appears in this repository.
 const TOKEN_ENV: &str = "ZOOM_ACCESS_TOKEN";
 
-/// The four curated operations, in the order `providers/zoom.toml` declares them.
-const OPERATIONS: &[&str] = &[
-    "zoom-meeting-get",
-    "zoom-meeting-create",
-    "zoom-meeting-delete",
-    "zoom-user-get",
-];
+/// The curated operations, in the order `providers/zoom.toml` declares them.
+///
+/// **Two of the four C-78 curated are withheld** — `zoom-meeting-get` and `zoom-meeting-create`,
+/// both of which returned `start_url`, a URL embedding the host's ZAK token. The exclusion is
+/// recorded and checked in `crates/connector-spec/tests/credential_response.rs`; C-136 is what
+/// restores them, and this list grows again in the same commit.
+const OPERATIONS: &[&str] = &["zoom-meeting-delete", "zoom-user-get"];
 
 /// The nested object a meeting's options live in, and the one option declared inside it. One
 /// constant each because they are asserted from two directions: the `wire` path of the body field,
@@ -65,9 +66,10 @@ const SETTINGS: &str = "settings";
 /// waits to be admitted.
 const SETTING_FIELD: &str = "waiting_room";
 
-/// The two writes. Neither is `low` risk and neither is idempotent: a meeting created or deleted is
-/// something people see on their calendars, and `zoom-meeting-delete` cannot be undone.
-const WRITES: &[&str] = &["zoom-meeting-create", "zoom-meeting-delete"];
+/// The one write left. It is not `low` risk and it is not idempotent: a meeting deleted is something
+/// people see disappear from their calendars, and `zoom-meeting-delete` cannot be undone.
+/// `zoom-meeting-create` stood beside it until C-430 withheld it.
+const WRITES: &[&str] = &["zoom-meeting-delete"];
 
 fn providers_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -169,21 +171,28 @@ fn the_zoom_connector_declares_one_expiring_bearer() {
     }
 }
 
-/// **The headline claim: a meeting's options travel inside `settings`.**
+/// **The headline claim was that a meeting's options travel inside `settings`, and C-430 withheld
+/// the only operation that had a body at all.**
 ///
-/// Stated over the IR and over the emitted text, because they fail differently. A body field that
-/// lost its `wire` path is an IR-level flattening; an emitter change that stopped assembling the
-/// nested record would leave the IR intact and still send Zoom a body whose access-control member
-/// sits at the root, where Zoom does not define one. Zoom ignores an undefined top-level member and
-/// answers `201`, so the meeting is created with the *account's* default waiting-room setting and
-/// nothing anywhere reports a problem. Both are the same bug from a caller's point of view — the
-/// option the caller supplied did not apply — so both are checked.
+/// `zoom-meeting-create` carried `wire = "settings.waiting_room"` and was this fleet's one
+/// demonstration of a payload root holding leaves *and* a branch — zendesk puts everything under
+/// `ticket.` and asana everything under `data.`; babelforce's agent-status update is the nearest
+/// remaining mixed root, and both of its fields are optional. It is withheld because its response
+/// carried `start_url`, the host's ZAK token in a URL
+/// (`crates/connector-spec/tests/credential_response.rs`), so this connector now declares **no body
+/// field at all** and the emitted-payload half of the claim has nothing to run against.
 ///
-/// The root of this payload holds leaves *and* a branch, which zendesk (everything under `ticket.`)
-/// and asana (everything under `data.`) do not exercise; babelforce's agent-status update is the only
-/// other mixed root in the fleet.
+/// **The rule is kept and the count is what moved.** The loop below still refuses a free-form
+/// `body_schema` and still refuses a `wire` path that is not exactly one level inside `settings`, so
+/// a body arriving here later — C-136 restoring the create, or any other write — meets the same
+/// gate. What it can no longer assert is the emitted nesting, and saying so is the point: an
+/// emitter change that stopped assembling the nested record would leave the IR intact and still send
+/// Zoom a body whose access-control member sits at the root, where Zoom does not define one. Zoom
+/// ignores an undefined top-level member and answers `201`, so the meeting would be created with the
+/// *account's* default waiting-room setting and nothing anywhere would report a problem. Nothing in
+/// this repository covers that today.
 #[test]
-fn the_meeting_settings_object_is_declared_through_wire_paths() {
+fn no_body_field_escapes_the_settings_wire_path_rule() {
     let connector = load();
 
     let mut nested = 0;
@@ -231,26 +240,21 @@ fn the_meeting_settings_object_is_declared_through_wire_paths() {
     }
 
     assert_eq!(
-        nested, 1,
-        "{nested} zoom body fields declare a wire path; C-78 declares exactly one meeting setting, \
-         `{SETTINGS}.{SETTING_FIELD}` — see the header comment in `providers/zoom.toml` for why one \
-         and not more"
+        nested, 0,
+        "{nested} zoom body fields declare a wire path. C-78 declared exactly one meeting setting, \
+         `{SETTINGS}.{SETTING_FIELD}`, on `zoom-meeting-create` — and C-430 withheld that operation \
+         because its response carried the host's ZAK token. If a body has legitimately come back, \
+         raise this count *and* restore the emitted-payload assertion this test lost with it, which \
+         is the half that catches a flattening the IR cannot see"
     );
 
-    // The emitted half. `payload = { …, settings: { waiting_room: $waiting_room }, … }` is what a
-    // nested body looks like; a flattened one would bind `payload = { …, waiting_room: …, … }`,
-    // which parses, analyzes and is canonical, so nothing but this assertion would fail.
-    let create = connector
-        .operations
-        .iter()
-        .find(|operation| operation.id == "zoom-meeting-create")
-        .expect("zoom declares `zoom-meeting-create`");
-    let emitted = emit_operation(&connector, create)
-        .unwrap_or_else(|error| panic!("`{}` does not emit: {error}", create.id));
     assert!(
-        emitted.contains(&format!("{SETTINGS}: {{ {SETTING_FIELD}")),
-        "`{}` does not nest `{SETTING_FIELD}` inside `{SETTINGS}`:\n{emitted}",
-        create.id
+        connector
+            .operations
+            .iter()
+            .all(|operation| operation.params.body.is_empty()),
+        "a zoom operation declares a request body; every one of them was withheld or is a read, so \
+         a body arriving here is a new claim that wants the nesting assertion back with it"
     );
 }
 

@@ -136,6 +136,7 @@ fn zendesk_comment_list() -> Connector {
                 ..ParamSet::default()
             },
             response_schema: None,
+            credential_response: Vec::new(),
             quirks: Default::default(),
         },
     )
@@ -186,6 +187,7 @@ fn zendesk_ticket_search() -> Connector {
                 ..ParamSet::default()
             },
             response_schema: None,
+            credential_response: Vec::new(),
             quirks: Default::default(),
         },
     )
@@ -243,6 +245,7 @@ fn babelforce_call_list() -> Connector {
                 ..ParamSet::default()
             },
             response_schema: None,
+            credential_response: Vec::new(),
             quirks: Default::default(),
         },
     )
@@ -268,6 +271,7 @@ fn zendesk_test() -> Connector {
             auth: None,
             params: ParamSet::default(),
             response_schema: None,
+            credential_response: Vec::new(),
             quirks: Default::default(),
         },
     )
@@ -334,6 +338,7 @@ fn freshdesk_note_add() -> Connector {
                 ..ParamSet::default()
             },
             response_schema: None,
+            credential_response: Vec::new(),
             quirks: Default::default(),
         },
     )
@@ -368,6 +373,7 @@ fn zendesk_ticket_show() -> Connector {
                 ..ParamSet::default()
             },
             response_schema: None,
+            credential_response: Vec::new(),
             quirks: Quirks {
                 error_envelope: Some(ErrorEnvelope {
                     message_pointer: "/description".to_string(),
@@ -670,6 +676,7 @@ fn headered_operation() -> Connector {
                 ..ParamSet::default()
             },
             response_schema: None,
+            credential_response: Vec::new(),
             quirks: Default::default(),
         },
     )
@@ -1002,6 +1009,7 @@ fn zendesk_comment_add() -> Connector {
                 ..ParamSet::default()
             },
             response_schema: None,
+            credential_response: Vec::new(),
             quirks: Default::default(),
         },
     )
@@ -1034,6 +1042,7 @@ fn babelforce_session_set() -> Connector {
                 ..ParamSet::default()
             },
             response_schema: None,
+            credential_response: Vec::new(),
             quirks: Default::default(),
         },
     )

@@ -61,6 +61,7 @@ fn operation(
         auth: None,
         params,
         response_schema: None,
+        credential_response: Vec::new(),
         quirks: Default::default(),
     }
 }

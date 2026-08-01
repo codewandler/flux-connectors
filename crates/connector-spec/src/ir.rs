@@ -947,9 +947,102 @@ pub struct Operation {
     /// The JSON Schema of a successful response body, when the spec publishes one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub response_schema: Option<JsonSchema>,
+    /// **Where in this operation's own response a credential arrives** — one location per entry,
+    /// each a [`response_location_exists`] pointer into [`response_schema`](Self::response_schema).
+    ///
+    /// C-430's declaration, and the *only* thing the gate that story built reads. A connector says
+    /// "the value at this location is a credential"; nothing infers it from a field name, because a
+    /// catalogue-wide scan for token-shaped names returned 31 hits of which **28 were correct as
+    /// they stood** — Klaviyo's `public_api_key` is public by design, Typeform's `token` is a
+    /// response's own opaque id, Anthropic's `max_input_tokens` is a limit. A gate wrong nine times
+    /// in ten does not get obeyed, it gets routed around. So the claim is the connector's to make.
+    ///
+    /// # Declaring it withholds the operation
+    ///
+    /// Today this field has exactly one consequence and it is refusal: the loader will not accept an
+    /// operation that declares one, and `AGENTS.md` § Authentication contract is why — an operation
+    /// whose declared response carries a token is withheld until C-136's diversion lands, because
+    /// the host's redactor holds only values the host itself resolved and cannot know a secret
+    /// minted by the very call returning it. So the field is not "mark it and ship it"; it is the
+    /// author's statement of the fact that withholds the operation, and it survives in a rejection
+    /// fixture and in the provider file's own accounting rather than in a shipped connector.
+    ///
+    /// **That is a floor, not the ceiling.** [C-79] designs the marker that lets an operation ship
+    /// *without* the field — the host redacting the location before the value reaches a
+    /// model-visible symbol — and C-136 designs the answer for an operation whose whole purpose is
+    /// to mint a credential: return a handle, not the secret. When either lands, this field is what
+    /// they are declared through; the refusal below is what changes, not the declaration.
+    ///
+    /// # Empty for every shipped connector, deliberately
+    ///
+    /// Because an operation carrying one cannot be selected. `skip_serializing_if` keeps the encoded
+    /// IR of every connector shipped before C-430 byte-identical, so landing the field moved no
+    /// `ir_sha256` and churned `connectors.lock` for nobody — the same property [`Service::roles`]
+    /// documents for the same reason.
+    ///
+    /// [C-79]: ../../../docs/stories/C-79-sensitive-response-fields.md
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub credential_response: Vec<String>,
     /// The ways this endpoint departs from its spec.
     #[serde(default, skip_serializing_if = "Quirks::is_empty")]
     pub quirks: Quirks,
+}
+
+/// **Whether a response location resolves against a response schema**, walking nested schemas.
+///
+/// A location is a JSON Pointer into the *response value* — `/start_url`, `/Servers/*/ApiTokens` —
+/// with one extension: `*` stands for "every element of an array". It must start with `/`, so there
+/// is exactly one spelling of a location and not two.
+///
+/// # Why the nesting is the whole of it
+///
+/// The scan that found C-430's violations was run twice. The first pass walked `properties` one
+/// level deep and found three; the second walked nested schemas and found a fourth, Postmark's
+/// `ApiTokens` — an array of live tokens in plaintext, sitting under `Servers[]`, and the worst of
+/// the set. A resolver that stops at the root would have let exactly that declaration pass as
+/// "matches nothing", which is why the walk descends through `items` as well as `properties` and why
+/// `tests/credential_response.rs` pins the nested case in both directions.
+///
+/// # Resolving to nothing is never silence
+///
+/// The caller's contract is that `false` is a **loud** answer: `validate_operations` turns it into a
+/// refusal naming the location. A pointer that matches nothing protects nothing, and it is the shape
+/// a vendor rename takes — a declaration that quietly stopped applying reads as protection while
+/// being none, which is worse than never having been written.
+pub fn response_location_exists(schema: &JsonSchema, location: &str) -> bool {
+    let Some(path) = location.strip_prefix('/') else {
+        return false;
+    };
+
+    let mut current = schema;
+    for segment in path.split('/') {
+        let Some(object) = current.as_object() else {
+            return false;
+        };
+        current = if segment == "*" {
+            // The one extension to JSON Pointer: an array is walked by element, never by index. An
+            // index would name whichever element happened to be at it, and a credential in the
+            // second entry is the same credential as one in the first.
+            match object.get("items") {
+                Some(items) => items,
+                None => return false,
+            }
+        } else {
+            // `~1` and `~0` are JSON Pointer's own escapes for `/` and `~`, unescaped in that order
+            // per RFC 6901 — the reverse order turns a literal `~1` into a separator.
+            let name = segment.replace("~1", "/").replace("~0", "~");
+            match object.get("properties").and_then(|properties| {
+                properties
+                    .as_object()
+                    .and_then(|properties| properties.get(&name))
+            }) {
+                Some(member) => member,
+                None => return false,
+            }
+        };
+    }
+
+    true
 }
 
 impl Operation {

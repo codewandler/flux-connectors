@@ -1107,6 +1107,11 @@
           "$ref": "#/$defs/jsonSchema",
           "description": "JSON Schema of a successful response body, when one is known."
         },
+        "credential_response": {
+          "type": "array",
+          "description": "Locations in this operation's own response that carry a CREDENTIAL — a JSON Pointer into the response value per entry, with `*` for every element of an array (`/start_url`, `/Servers/*/ApiTokens`).\n\nDeclaring one WITHHOLDS the operation: the loader refuses it, because an operation whose declared response carries a token cannot ship until C-136's diversion lands — the host's redactor holds only values it resolved itself and cannot know a secret minted by the very call returning it. See `AGENTS.md` § Authentication contract. A location that matches nothing in `response_schema` is a loud error, not a no-op.",
+          "items": { "type": "string", "pattern": "^/" }
+        },
         "quirks": {
           "$ref": "#/$defs/quirks",
           "description": "The ways this endpoint departs from what its spec implies."
