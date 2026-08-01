@@ -316,7 +316,21 @@ pub fn load(name: &str, source: &str) -> crate::Result<LoadedProvider> {
     load_inner(name, source, None)
 }
 
-/// The same, with the vendored document the file's `[spec]` points at — C-4.
+/// One vendored document available to a provider, as the spec cache holds it.
+///
+/// The [`path`](Self::path) is what makes this a document rather than a pile of bytes: `[spec] path`
+/// names exactly one file, and the loader resolves the pin against these rather than trusting a
+/// caller to have picked the right one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpecDocument<'a> {
+    /// The repository-relative path, spelled exactly as `[spec] path` spells it —
+    /// `specs/babelforce/manager-2026-07-10.yaml`.
+    pub path: &'a str,
+    /// The document's bytes as text.
+    pub document: &'a str,
+}
+
+/// The same, with the vendored documents the provider's spec cache holds — C-4.
 ///
 /// This is the whole spec front-end in one call: **spec -> patch -> validate**, in that fixed order.
 /// [`openapi::ingest`] turns the document into every operation it declares, the file's
@@ -324,10 +338,30 @@ pub fn load(name: &str, source: &str) -> crate::Result<LoadedProvider> {
 /// each, and the result is validated by exactly the same pass a hand-authored file goes through — so
 /// a selected operation is held to every rule an inline one is.
 ///
-/// # `document` is what the file points at, and the file decides whether it is read
+/// # The pin decides which document is read, and it is resolved here
 ///
-/// A provider with no `[spec]` block ignores the document entirely, even when one was found beside
-/// it in the cache. `specs/<provider>/` holding a file is not a declaration; `[spec] path` is.
+/// `documents` is the **cache**, not a choice already made: every file under `specs/<provider>/`,
+/// and this function picks the one `[spec] path` names. That is deliberate and it is load-bearing.
+/// The cache ordinarily holds more than one file — `specs/zendesk/2024-06-01.json` beside a later
+/// `2025-01-01.json` is what versioning a vendored document *looks* like — so a caller that picked
+/// one and passed it alone would be deciding, silently, something only the provider file may decide.
+/// A build that compiled `getUser` out of a document the file never named would emit plausible,
+/// wrong Flux and exit 0.
+///
+/// A pin naming a file the cache does not hold is refused, listing what is there.
+///
+/// # The declared `sha256` is checked against the bytes, not copied past them
+///
+/// [`SpecSource::sha256`] reaches [`Provenance::spec_sha256`] and from there `connectors.lock`. If
+/// nothing compared it against the document actually ingested, provenance would be a claim the file
+/// makes about itself — and the lockfile would record a hash for bytes it never saw. So a declared
+/// hash that disagrees with the document is a refusal here. (Comparing against *upstream* is
+/// different and is C-14's; this is the local claim against the local bytes.)
+///
+/// # The file decides whether any document is read at all
+///
+/// A provider with no `[spec]` block ignores the cache entirely. `specs/<provider>/` holding a file
+/// is not a declaration; `[spec] path` is.
 ///
 /// # Ingest selects nothing
 ///
@@ -338,15 +372,24 @@ pub fn load(name: &str, source: &str) -> crate::Result<LoadedProvider> {
 /// # Errors
 ///
 /// The two [`load`] returns, plus an [`Error::InvalidProvider`](crate::Error::InvalidProvider)
-/// naming the spec path when the document is not an OpenAPI 3.x document at all, or when a patch
-/// selects an operation the document does not declare. A document's *narrower* problems —
-/// one endpoint with an unresolvable `$ref`, one parameter with no schema — are not errors: they
-/// arrive as [`LoadedProvider::diagnostics`].
-pub fn load_with_spec(name: &str, source: &str, document: &str) -> crate::Result<LoadedProvider> {
-    load_inner(name, source, Some(document))
+/// naming the spec path when the pin resolves to nothing, when the declared hash disagrees with the
+/// bytes, when the document is not an OpenAPI 3.x document at all, or when a patch selects an
+/// operation the document does not declare. A document's *narrower* problems — one endpoint with an
+/// unresolvable `$ref`, one parameter with no schema — are not errors: they arrive as
+/// [`LoadedProvider::diagnostics`].
+pub fn load_with_spec(
+    name: &str,
+    source: &str,
+    documents: &[SpecDocument<'_>],
+) -> crate::Result<LoadedProvider> {
+    load_inner(name, source, Some(documents))
 }
 
-fn load_inner(name: &str, source: &str, document: Option<&str>) -> crate::Result<LoadedProvider> {
+fn load_inner(
+    name: &str,
+    source: &str,
+    documents: Option<&[SpecDocument<'_>]>,
+) -> crate::Result<LoadedProvider> {
     let file: ProviderFile = match toml::from_str(source) {
         Ok(file) => file,
         // `deny_unknown_fields` has already reported `roles` as an unknown top-level key and listed
@@ -388,8 +431,8 @@ fn load_inner(name: &str, source: &str, document: Option<&str>) -> crate::Result
     // the pass a hand-authored one is rather than by a second, weaker one.
     let mut problems = Vec::new();
     if loaded.spec.is_some() {
-        if let Some(document) = document {
-            ingest_spec(&mut loaded, document, &mut problems);
+        if let Some(documents) = documents {
+            ingest_spec(&mut loaded, documents, &mut problems);
             // Re-run, because selection appended operations after `assemble` distributed. The pass
             // only fills a header an operation does not already carry, so a second run over the
             // inline ones changes nothing.
@@ -414,12 +457,53 @@ fn load_inner(name: &str, source: &str, document: Option<&str>) -> crate::Result
 /// one, how risky it is. Nothing is inferred from the document, because the three fields an
 /// `Operation` needs that a specification never carries — the op id, [`Risk`] and [`Idempotency`] —
 /// are the three this repository refuses to decide by silence.
-fn ingest_spec(loaded: &mut LoadedProvider, document: &str, problems: &mut Vec<String>) {
-    let path = loaded
-        .spec
-        .as_ref()
-        .map(|spec| spec.path.clone())
-        .unwrap_or_default();
+fn ingest_spec(
+    loaded: &mut LoadedProvider,
+    documents: &[SpecDocument<'_>],
+    problems: &mut Vec<String>,
+) {
+    let Some(spec) = loaded.spec.clone() else {
+        return;
+    };
+    let path = spec.path.clone();
+
+    // **The pin, resolved.** `specs/<provider>/` ordinarily holds several files — versions of one
+    // document — and only `[spec] path` says which of them this connector is compiled from. Reading
+    // whichever happened to sort last would compile an operation out of a document the provider file
+    // never named, successfully and silently.
+    let Some(found) = documents
+        .iter()
+        .find(|candidate| candidate.path == path.trim())
+    else {
+        problems.push(format!(
+            "`[spec] path = {path:?}` names no vendored document. {}",
+            describe_cache(documents)
+        ));
+        return;
+    };
+    let document = found.document;
+
+    // **Provenance is checked, not copied.** `sha256` travels from here into `connectors.lock`; a
+    // value nothing compared against the ingested bytes would be the file's claim about itself,
+    // recorded as though it were a measurement. Checking upstream drift is a different question and
+    // is C-14's — this is the local claim against the local bytes.
+    if let Some(declared) = spec
+        .sha256
+        .as_deref()
+        .map(str::trim)
+        .filter(|hash| !hash.is_empty())
+    {
+        let measured = sha256_hex(document.as_bytes());
+        if !declared.eq_ignore_ascii_case(&measured) {
+            problems.push(format!(
+                "`[spec] sha256` declares {declared:?}, but {path} hashes to {measured:?}. The \
+                 declared value reaches `connectors.lock`, so a build that ignored the difference \
+                 would record a hash for bytes it never read — re-vendor the document or correct \
+                 the declaration"
+            ));
+            return;
+        }
+    }
 
     let ingested = match crate::openapi::ingest(document) {
         Ok(ingested) => ingested,
@@ -547,6 +631,29 @@ fn correct(
     }
     if let Some(schema) = &correction.schema {
         param.schema = schema.clone();
+    }
+}
+
+/// What the spec cache actually holds, for a refusal about a pin that resolved to nothing.
+///
+/// The paths, not a count: an author who mistyped a pin needs to see the spelling that would have
+/// worked, and one who vendored nothing needs to be told that rather than left comparing a number
+/// against a directory listing.
+fn describe_cache(documents: &[SpecDocument<'_>]) -> String {
+    if documents.is_empty() {
+        "The spec cache holds no document for this provider at all — the cache is committed, so a \
+         pointer at a file that is not there is a connector that cannot be built rather than one \
+         that builds empty"
+            .to_owned()
+    } else {
+        format!(
+            "The cache holds {}",
+            documents
+                .iter()
+                .map(|document| document.path)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 }
 

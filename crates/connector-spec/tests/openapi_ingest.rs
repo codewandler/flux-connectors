@@ -336,6 +336,76 @@ fn a_body_the_ir_cannot_express_skips_the_operation_rather_than_dropping_the_bod
     );
 }
 
+/// An operation under `options` or `trace` has no representation in the IR at all, and earns a
+/// diagnostic rather than vanishing.
+///
+/// Silence here would send an author who selected it to "names no `operationId`" about an operation
+/// they can read in the document, with nothing pointing at the method as the cause.
+#[test]
+fn a_method_the_ir_cannot_spell_is_reported_rather_than_dropped_silently() {
+    let ingested = openapi::ingest(
+        r#"{
+          "openapi": "3.0.3",
+          "servers": [{"url": "https://api.acme.example"}],
+          "paths": {
+            "/things": {
+              "get": {"operationId": "listThings"},
+              "options": {"operationId": "thingsPreflight"},
+              "trace": {"operationId": "thingsTrace"}
+            }
+          }
+        }"#,
+    )
+    .expect("a well-formed document");
+
+    assert_eq!(
+        ingested.operation_ids(),
+        vec!["listThings"],
+        "the sound operation beside them still ingests"
+    );
+    let reported: Vec<&str> = ingested
+        .diagnostics
+        .iter()
+        .map(|diagnostic| diagnostic.location.as_str())
+        .collect();
+    assert_eq!(reported, vec!["OPTIONS /things", "TRACE /things"]);
+}
+
+/// A cookie parameter skips the **whole operation**, exactly as an unrepresentable body does.
+///
+/// `ParamSet` has no cookie position, so publishing the operation without it would ship a request
+/// that quietly stopped sending something the vendor declared — the same failure shape the module
+/// already refuses for `multipart/form-data`, and the argument does not weaken by moving from a body
+/// to a parameter.
+#[test]
+fn a_cookie_parameter_skips_the_operation_rather_than_being_dropped_from_it() {
+    let ingested = openapi::ingest(
+        r#"{
+          "openapi": "3.0.3",
+          "servers": [{"url": "https://api.acme.example"}],
+          "paths": {
+            "/things": {
+              "get": {
+                "operationId": "listThings",
+                "parameters": [
+                  {"name": "session", "in": "cookie", "schema": {"type": "string"}}
+                ]
+              }
+            }
+          }
+        }"#,
+    )
+    .expect("a well-formed document");
+
+    assert!(
+        ingested.operations.is_empty(),
+        "the operation must not be published without a parameter the vendor requires"
+    );
+    let reported = &ingested.diagnostics[0];
+    assert_eq!(reported.location, "GET /things");
+    assert!(reported.problem.contains("cookie"), "{reported}");
+}
+
 /// A document that is not an OpenAPI 3.x document at all is an [`Err`], not a diagnostic — nothing
 /// useful can follow, so there is nothing to degrade to.
 #[test]

@@ -10,26 +10,40 @@
 
 use std::path::{Path, PathBuf};
 
-use connector_spec::{provider, Connector, Idempotency, Risk};
+use connector_spec::{provider, Connector, Idempotency, Risk, SpecDocument};
+
+/// The repository-relative path every fixture below pins, spelled as `[spec] path` spells it.
+const PINNED: &str = "specs/zendesk/2024-06-01-excerpt.json";
 
 fn document() -> String {
     let path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join("specs/zendesk/2024-06-01-excerpt.json");
+        .join(PINNED);
     std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()))
 }
 
+/// A spec cache holding exactly the pinned document.
+fn cache() -> Vec<SpecDocument<'static>> {
+    // Leaked so the fixtures can hand out a `SpecDocument<'static>` without threading a lifetime
+    // through every helper; a test process is the one place that costs nothing.
+    let document: &'static str = Box::leak(document().into_boxed_str());
+    vec![SpecDocument {
+        path: PINNED,
+        document,
+    }]
+}
+
 /// The connector `definition` compiles to against the excerpt.
 fn load(definition: &str) -> Connector {
-    provider::load_with_spec("providers/zendesk.toml", definition, &document())
+    provider::load_with_spec("providers/zendesk.toml", definition, &cache())
         .unwrap_or_else(|error| panic!("providers/zendesk.toml does not load: {error}"))
         .connector
 }
 
 /// The problems `definition` produces, rendered as the author would read them.
 fn refuse(definition: &str) -> String {
-    let error = provider::load_with_spec("providers/zendesk.toml", definition, &document())
+    let error = provider::load_with_spec("providers/zendesk.toml", definition, &cache())
         .err()
         .unwrap_or_else(|| panic!("this definition was expected not to load:\n{definition}"));
     error.to_string()
@@ -80,7 +94,7 @@ fn a_spec_backed_provider_with_no_patch_publishes_nothing() {
 /// is what "ingest makes everything available; it selects nothing" means concretely.
 #[test]
 fn everything_the_document_declares_stays_available_to_patch() {
-    let loaded = provider::load_with_spec("providers/zendesk.toml", POINTER, &document())
+    let loaded = provider::load_with_spec("providers/zendesk.toml", POINTER, &cache())
         .expect("a pointer with no patch is a valid provider file");
     let ingested = loaded
         .ingested
@@ -354,7 +368,7 @@ path = \"/api/v2/users/me\"
 risk = \"low\"
 idempotency = \"idempotent\"
 ";
-    let loaded = provider::load_with_spec("providers/zendesk.toml", definition, &document())
+    let loaded = provider::load_with_spec("providers/zendesk.toml", definition, &cache())
         .expect("a hand-authored file loads whatever sits in the cache beside it");
     assert!(loaded.is_hand_authored());
     assert!(loaded.ingested.is_none(), "nothing asked for an ingest");
@@ -366,15 +380,142 @@ idempotency = \"idempotent\"
 /// points at — the file is what an author can open and fix.
 #[test]
 fn a_document_that_cannot_be_ingested_fails_the_provider_naming_the_spec_path() {
-    let error =
-        provider::load_with_spec("providers/zendesk.toml", POINTER, "{\"swagger\": \"2.0\"}")
-            .expect_err("a Swagger 2.0 file is not an OpenAPI 3.x document");
+    let error = provider::load_with_spec(
+        "providers/zendesk.toml",
+        POINTER,
+        &[SpecDocument {
+            path: PINNED,
+            document: "{\"swagger\": \"2.0\"}",
+        }],
+    )
+    .expect_err("a Swagger 2.0 file is not an OpenAPI 3.x document");
     let rendered = error.to_string();
+    assert!(rendered.contains(PINNED), "{rendered}");
+    assert!(rendered.contains("openapi"), "{rendered}");
+}
+
+// ---------------------------------------------------------------------------------------------
+// The pin decides which document is compiled
+// ---------------------------------------------------------------------------------------------
+
+/// **`[spec] path` selects the document, and the cache ordinarily holds more than one.**
+///
+/// `specs/<provider>/` is a cache of *versions of one document*, so a pin beside a newer file is the
+/// ordinary state, not an exotic one. Resolving by anything other than the pin — file order, recency
+/// — compiles an operation out of a document the provider file never named, and does it
+/// successfully: the operation exists in both, so nothing downstream can tell.
+#[test]
+fn the_pinned_document_is_compiled_even_when_a_later_one_sits_beside_it() {
+    // Same `operationId`, different request — modelled on babelforce's real `getUser` collision.
+    const NEWER: &str = r#"{
+      "openapi": "3.0.3",
+      "servers": [{"url": "https://acme.zendesk.com"}],
+      "paths": {"/api/v2/wrong": {"get": {"operationId": "showTicket", "summary": "Not this one."}}}
+    }"#;
+
+    let pinned = document();
+    let loaded = provider::load_with_spec(
+        "providers/zendesk.toml",
+        &with(
+            "
+[[patch.operations]]
+select = \"showTicket\"
+rename = \"zendesk-ticket-show\"
+risk = \"low\"
+idempotency = \"idempotent\"
+",
+        ),
+        &[
+            SpecDocument {
+                path: PINNED,
+                document: &pinned,
+            },
+            SpecDocument {
+                path: "specs/zendesk/2025-01-01.json",
+                document: NEWER,
+            },
+        ],
+    )
+    .expect("the pinned document is in the cache");
+
+    assert_eq!(
+        loaded
+            .connector
+            .operation("zendesk-ticket-show")
+            .expect("selected")
+            .path,
+        "/api/v2/tickets/{ticket_id}",
+        "the pin was read as a label and a different document was compiled"
+    );
+}
+
+/// A pin that resolves to nothing is refused, and the refusal lists what the cache holds — a message
+/// naming only the pin sends an author looking for a typo in the wrong file.
+#[test]
+fn a_pin_that_resolves_to_nothing_is_refused_and_names_the_cache() {
+    let rendered = provider::load_with_spec(
+        "providers/zendesk.toml",
+        POINTER,
+        &[SpecDocument {
+            path: "specs/zendesk/2025-01-01.json",
+            document: "{\"openapi\":\"3.0.3\"}",
+        }],
+    )
+    .expect_err("the pinned document is not in the cache")
+    .to_string();
+    assert!(rendered.contains(PINNED), "{rendered}");
     assert!(
-        rendered.contains("specs/zendesk/2024-06-01-excerpt.json"),
+        rendered.contains("specs/zendesk/2025-01-01.json"),
         "{rendered}"
     );
-    assert!(rendered.contains("openapi"), "{rendered}");
+
+    let empty = provider::load_with_spec("providers/zendesk.toml", POINTER, &[])
+        .expect_err("an empty cache cannot satisfy a pin")
+        .to_string();
+    assert!(empty.contains(PINNED), "{empty}");
+    assert!(empty.contains("no document"), "{empty}");
+}
+
+/// **The declared `sha256` is checked against the bytes ingested, not copied past them.**
+///
+/// It travels into `Provenance::spec_sha256` and from there into `connectors.lock`. Unchecked, the
+/// lockfile would record a hash for bytes nothing ever hashed — provenance as a claim the file makes
+/// about itself. Checking *upstream* drift is a different question and is C-14's.
+#[test]
+fn a_declared_spec_hash_that_disagrees_with_the_document_is_refused() {
+    let pinned = document();
+    let definition = format!("{POINTER}sha256 = \"{}\"\n", "0".repeat(64));
+    let rendered = provider::load_with_spec(
+        "providers/zendesk.toml",
+        &definition,
+        &[SpecDocument {
+            path: PINNED,
+            document: &pinned,
+        }],
+    )
+    .expect_err("the declared hash is not the document's")
+    .to_string();
+    assert!(rendered.contains("sha256"), "{rendered}");
+    assert!(rendered.contains(&"0".repeat(64)), "{rendered}");
+
+    // And the honest declaration loads, so the check is a check and not a blanket refusal.
+    let honest = format!(
+        "{POINTER}sha256 = \"{}\"\n",
+        connector_spec::sha256_hex(pinned.as_bytes())
+    );
+    let loaded = provider::load_with_spec(
+        "providers/zendesk.toml",
+        &honest,
+        &[SpecDocument {
+            path: PINNED,
+            document: &pinned,
+        }],
+    )
+    .expect("a declaration that matches the bytes");
+    assert_eq!(
+        loaded.connector.provenance.spec_sha256.as_deref(),
+        Some(connector_spec::sha256_hex(pinned.as_bytes()).as_str())
+    );
 }
 
 /// Loading the same bytes twice produces the same connector — `connectors.lock` hashes the IR, so a

@@ -13,11 +13,13 @@
 //!
 //! # What is still stubbed here, and by whom it is finished
 //!
-//! - ~~**Spec ingest is C-4.**~~ **Wired.** [`ProviderInputs`] carries the vendored document and
-//!   [`load`] hands it to `connector_spec::provider::load_with_spec`, which ingests it and publishes
-//!   the operations `[[patch.operations]]` selects. What is *not* here, deliberately: a selector
-//!   that matches a set (C-411), a naming rule instead of a `rename` per operation (C-412), and
-//!   one connector reading several documents (C-410). See [`load`].
+//! - ~~**Spec ingest is C-4.**~~ **Wired.** [`ProviderInputs`] carries the provider's whole spec
+//!   cache and [`load`] hands it to `connector_spec::provider::load_with_spec`, which resolves the
+//!   file's `[spec] path` against it, ingests that document, and publishes the operations
+//!   `[[patch.operations]]` selects. What is *not* here, deliberately: a selector that matches a set
+//!   (C-411), a naming rule instead of a `rename` per operation (C-412), and one connector
+//!   compiling from **several** documents at once (C-410) — resolving the pin is not that; it picks
+//!   exactly one. See [`load`].
 //! - **The manifest is C-10's.** [`emit`] derives `<name>.connector.toml` from the IR here, because
 //!   `connector-flux` emits Flux and nothing else. C-10 replaces its body with the real capability
 //!   manifest — `http_hosts`, the endpoint env spec, and the credential declarations.
@@ -58,11 +60,19 @@ pub struct ProviderInputs {
     pub name: String,
     /// The contents of `providers/<name>.toml`.
     pub definition: String,
-    /// The vendored spec, when the provider has one.
+    /// **Every** vendored document under `specs/<name>/`, in discovery order.
     ///
-    /// Read for every provider whose `specs/<name>/` directory holds one, and *ingested* only when
-    /// the provider file's `[spec]` asks for it — the loader makes that distinction (C-4).
-    pub spec: Option<SpecInput>,
+    /// The whole cache rather than one chosen document, and the difference is a correctness one.
+    /// `specs/<provider>/` ordinarily holds several files — versions of one document — and only the
+    /// provider file's `[spec] path` says which of them the connector is compiled from. Handing the
+    /// loader a document this layer had already picked would move that decision out of the file that
+    /// owns it: `Provider::spec()` returns the **last by file stem**, so pinning
+    /// `specs/zendesk/2024-06-01.json` beside a newer `2025-01-01.json` compiled the newer one,
+    /// successfully and with no diagnostic. So the pin is resolved where the pin is read.
+    ///
+    /// Populated for every provider whose cache directory holds anything, and *ingested* only when
+    /// `[spec]` asks for it — a distinction the loader makes, not this one (C-4).
+    pub specs: Vec<SpecInput>,
 }
 
 /// A vendored spec document, already read into memory.
@@ -70,6 +80,9 @@ pub struct ProviderInputs {
 pub struct SpecInput {
     /// The upstream version, from the cache file's stem.
     pub version: String,
+    /// The repository-relative path, spelled as `[spec] path` spells it — which is what makes the
+    /// pin resolvable rather than merely comparable to a version.
+    pub path: String,
     /// The document's bytes.
     pub document: String,
 }
@@ -78,17 +91,18 @@ impl ProviderInputs {
     /// Read everything discovery found for one provider.
     pub fn read(provider: &Provider) -> Result<Self> {
         let definition = crate::artifact::read(&provider.definition)?;
-        let spec = match provider.spec() {
-            Some(spec) => Some(SpecInput {
+        let mut specs = Vec::new();
+        for spec in &provider.specs {
+            specs.push(SpecInput {
                 version: spec.version.clone(),
+                path: crate::workspace::spec_path(&provider.name, &spec.path),
                 document: crate::artifact::read(&spec.path)?,
-            }),
-            None => None,
-        };
+            });
+        }
         Ok(Self {
             name: provider.name.clone(),
             definition,
-            spec,
+            specs,
         })
     }
 
@@ -149,17 +163,23 @@ pub struct ServiceArtifacts {
 ///
 /// # A provider that points at a spec is compiled through ingest (C-4)
 ///
-/// `connector_spec::provider::load_with_spec` is the spec front-end: it ingests the vendored
-/// document into every operation the vendor declares, publishes the ones `[[patch.operations]]`
-/// selects, and validates the result through the same pass a hand-authored file goes through. This
-/// function's only remaining job on that path is to hand it the bytes discovery already read, and
-/// to refuse the one case the loader cannot see — a `[spec]` pointing at a document that is not in
-/// the cache at all.
+/// `connector_spec::provider::load_with_spec` is the spec front-end: it resolves the file's
+/// `[spec] path` against the cache, ingests **that** document into every operation the vendor
+/// declares, publishes the ones `[[patch.operations]]` selects, and validates the result through the
+/// same pass a hand-authored file goes through. This function's whole job on that path is to hand it
+/// the cache discovery already read.
 ///
-/// **A document is read only because the file asked for one.** `inputs.spec` is `Some` whenever
-/// `specs/<provider>/` holds anything, which is not a declaration; `[spec] path` is. The loader
-/// makes that distinction, so passing the document unconditionally is safe and a provider with no
-/// `[spec]` block compiles exactly as it did before C-4.
+/// **This layer chooses nothing.** It passes every document under `specs/<provider>/` and lets the
+/// loader resolve the pin, because which document a connector compiles from is the provider file's
+/// decision and only the provider file's. Choosing here is precisely the defect the resolution
+/// exists to prevent: `Provider::spec()` returns the **last by file stem**, so a pin at
+/// `specs/zendesk/2024-06-01.json` beside a newer `2025-01-01.json` compiled the newer one — exit 0,
+/// no diagnostic, an operation built from a document the file never named.
+///
+/// **A document is read only because the file asked for one.** A cache directory holding files is
+/// not a declaration; `[spec] path` is. The loader makes that distinction, so passing the cache
+/// unconditionally is safe and a provider with no `[spec]` block compiles exactly as it did before
+/// C-4.
 pub fn load(inputs: &ProviderInputs) -> Result<Connector> {
     Ok(load_reported(inputs)?.connector)
 }
@@ -173,25 +193,20 @@ pub fn load(inputs: &ProviderInputs) -> Result<Connector> {
 /// matched is legible before someone goes looking for the operation it names.
 pub fn load_reported(inputs: &ProviderInputs) -> Result<Loaded> {
     let label = inputs.label();
-    let loaded = match &inputs.spec {
-        Some(spec) => {
-            connector_spec::provider::load_with_spec(&label, &inputs.definition, &spec.document)?
-        }
-        None => connector_spec::provider::load(&label, &inputs.definition)?,
-    };
-
-    if let Some(spec) = &loaded.spec {
-        if inputs.spec.is_none() {
-            bail!(
-                "`{label}` points at the vendored spec `{}`, but `{}/{}/` holds no document to \
-                 ingest. The spec cache is committed, so a pointer at a file that is not there is \
-                 a connector that cannot be built rather than one that builds empty",
-                spec.path,
-                crate::workspace::SPECS_DIR,
-                inputs.name
-            );
-        }
-    }
+    // The whole cache, unfiltered. Which document is compiled is `[spec] path`'s decision and the
+    // loader's to resolve — this layer picking one would be exactly the silent substitution the
+    // resolution exists to prevent. A provider with no cache passes an empty slice rather than
+    // taking a different code path, so "the pin resolves to nothing" is one refusal in one place
+    // whether the cache is empty or merely missing the pinned file.
+    let cache: Vec<connector_spec::SpecDocument<'_>> = inputs
+        .specs
+        .iter()
+        .map(|spec| connector_spec::SpecDocument {
+            path: &spec.path,
+            document: &spec.document,
+        })
+        .collect();
+    let loaded = connector_spec::provider::load_with_spec(&label, &inputs.definition, &cache)?;
 
     Ok(Loaded {
         diagnostics: loaded
@@ -916,21 +931,47 @@ idempotency = "idempotent"
         ProviderInputs {
             name: "acme".to_string(),
             definition: definition.to_string(),
-            spec: None,
+            specs: Vec::new(),
         }
     }
 
     /// The same inputs, with the vendored document discovery would have read beside them.
     fn spec_backed(definition: &str, document: &str) -> ProviderInputs {
+        cached(definition, &[("specs/acme/v1.json", document)])
+    }
+
+    /// Inputs whose spec cache holds exactly the documents given, in the order discovery would
+    /// have yielded them — sorted by file stem.
+    fn cached(definition: &str, documents: &[(&str, &str)]) -> ProviderInputs {
         ProviderInputs {
             name: "acme".to_string(),
             definition: definition.to_string(),
-            spec: Some(SpecInput {
-                version: "v1".to_string(),
-                document: document.to_string(),
-            }),
+            specs: documents
+                .iter()
+                .map(|(path, document)| SpecInput {
+                    version: "v1".to_string(),
+                    path: (*path).to_string(),
+                    document: (*document).to_string(),
+                })
+                .collect(),
         }
     }
+
+    /// The **other** document in the cache: same `operationId`, different request.
+    ///
+    /// Modelled on the real collision — `getUser` is `GET /api/v2/users/{id}` in babelforce's
+    /// manager document and `GET /api/v2/user/me` in its user document.
+    const OTHER_DOCUMENT: &str = r#"{
+  "openapi": "3.0.3",
+  "info": { "title": "Acme (other surface)", "version": "1.0.0" },
+  "servers": [{ "url": "https://api.acme.example" }],
+  "paths": {
+    "/v2/user/me": {
+      "get": { "operationId": "showTicket", "summary": "The wrong request entirely." }
+    }
+  }
+}
+"#;
 
     #[test]
     fn emission_is_deterministic() {
@@ -1011,6 +1052,51 @@ idempotency = "idempotent"
         assert_eq!(param.name, "ticket_id");
         assert!(param.required);
         assert_eq!(param.schema, serde_json::json!({ "type": "integer" }));
+    }
+
+    /// **The pinned document is the document compiled**, even when a later-sorting one sits beside
+    /// it in the cache.
+    ///
+    /// `discover_specs` was built for *versions of one document* and orders by file stem, so
+    /// `2024-06-01.json` pinned beside a newer `2025-01-01.json` is the ordinary case, not an exotic
+    /// one. A build that read the pin as a label and compiled the last file would emit a connector
+    /// whose operations came from a document the provider file never named — exit 0, no diagnostic,
+    /// plausible and wrong Flux. `AGENTS.md`'s "refuse ambiguous or unsafe output" is the rule it
+    /// breaks.
+    #[test]
+    fn the_pinned_document_is_the_one_ingested_not_the_last_in_the_cache() {
+        let connector = load(&cached(
+            SPEC_BACKED,
+            // Sorted as discovery yields them: the pinned `v1` first, a later stem after it.
+            &[
+                ("specs/acme/v1.json", SPEC_DOCUMENT),
+                ("specs/acme/v2.json", OTHER_DOCUMENT),
+            ],
+        ))
+        .expect("the pinned document is present, so this compiles");
+
+        let operation = connector
+            .operation("acme-ticket-show")
+            .expect("the selected operation");
+        assert_eq!(
+            operation.path, "/v2/tickets/{ticket_id}",
+            "the build compiled `showTicket` out of a document `[spec] path` does not name"
+        );
+    }
+
+    /// A pin naming a document the cache does not hold is refused, and the refusal names both the
+    /// pin and what is actually there — a message that names only the pin sends an author looking
+    /// for a typo in the wrong file.
+    #[test]
+    fn a_pin_naming_an_absent_document_is_refused_and_lists_the_cache() {
+        let error = load(&cached(
+            SPEC_BACKED,
+            &[("specs/acme/v2.json", OTHER_DOCUMENT)],
+        ))
+        .expect_err("`specs/acme/v1.json` is not in the cache");
+        let rendered = format!("{error:#}");
+        assert!(rendered.contains("specs/acme/v1.json"), "{rendered}");
+        assert!(rendered.contains("specs/acme/v2.json"), "{rendered}");
     }
 
     /// **Ingest selects nothing.** A document with operations in it and a file that names none of

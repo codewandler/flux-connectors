@@ -67,6 +67,28 @@ schemas — so a provider TOML shrinks to a pointer plus patches.
   `idempotency` (a safety decision made by omission — the failure `Risk` has no `Default` to
   prevent), and a selection stating no `rename` (promoting a volatile `operationId` into a public op
   id). C-412 replaces the third with a rule declared once; it does not remove the decision.
+- **`[spec] path` decides which document is compiled, and the loader resolves it** (review finding).
+  The first landing passed `Provider::spec()` — the *last* file by stem — and used the pin only as an
+  error label, so a provider pinning `specs/acme/manager-2026-07-10.json` beside
+  `user-2026-06-25.json` emitted `getUser` out of the document it never named: exit 0, no
+  diagnostic, `url = fmt("{base}/api/v2/user/me")`. `specs/<provider>/` is a cache of *versions of
+  one document*, so this is the ordinary pin, not an exotic one, and it breaks `AGENTS.md`'s "refuse
+  ambiguous or unsafe output". `ProviderInputs` now carries the **whole cache** and
+  `provider::load_with_spec` resolves the pin, because which document a connector compiles from is
+  the provider file's decision and choosing in the CLI is the defect itself. A pin resolving to
+  nothing is refused, listing what the cache holds. Regression:
+  `seam.rs::the_pinned_document_is_the_one_ingested_not_the_last_in_the_cache` and
+  `spec_backed_provider.rs::the_pinned_document_is_compiled_even_when_a_later_one_sits_beside_it`.
+- **`[spec] sha256` is checked against the ingested bytes**, not copied past them. It reaches
+  `Provenance::spec_sha256` and from there `connectors.lock`; unchecked, the lockfile recorded a hash
+  for bytes nothing hashed. Checking *upstream* drift stays C-14's — this is the local claim against
+  the local bytes.
+- **Three smaller diagnostics**, each restoring the module's own rule that an unrepresentable
+  construct is reported rather than dropped: `options`/`trace` path-item keys, and a `cookie`
+  parameter (which now skips its operation, exactly as an unrepresentable body does — publishing the
+  operation without it ships a request that quietly stopped sending something the vendor declared).
+  The expansion-budget diagnostic no longer asserts self-reference it cannot distinguish; it reports
+  the size and quotes the measured 3,580-node maximum for scale.
 
 ## Notes
 - Ingest takes bytes; fetching is `C-14`'s job.

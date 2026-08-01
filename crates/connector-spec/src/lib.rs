@@ -73,10 +73,13 @@
 //! plus the patch set the overlay applies. `schema/provider-toml.schema.json`
 //! ([`PROVIDER_TOML_JSON_SCHEMA`]) documents the file format and is kept in sync by a test.
 //!
-//! [`provider::load_with_spec`] is the same call with the vendored document beside it, and it is the
-//! whole spec front-end in one line: **spec -> patch -> validate**. [`openapi::ingest`] turns the
-//! document into every operation the vendor declares, the patch set says which of them the connector
-//! publishes, and the result goes through exactly the validation pass a hand-authored file does.
+//! [`provider::load_with_spec`] is the same call with the provider's vendored spec cache beside it,
+//! and it is the whole spec front-end in one line: **spec -> patch -> validate**. It resolves the
+//! file's `[spec] path` against the cache — the pin decides which document is compiled, and it is
+//! checked against the declared `sha256` rather than merely labelled with it — then
+//! [`openapi::ingest`] turns that document into every operation the vendor declares, the patch set
+//! says which of them the connector publishes, and the result goes through exactly the validation
+//! pass a hand-authored file does.
 //! **Ingest selects nothing** — a pointer at a 398-operation document with no patch is a connector
 //! with no operations, which is what keeps a vendor catalogue from becoming 398 LLM tools by
 //! default.
@@ -118,7 +121,7 @@ pub use ir::{
 pub use lock::{sha256_hex, LockEntry, Lockfile, LOCKFILE_NAME, LOCKFILE_VERSION};
 pub use openapi::{Diagnostic, Ingested, Server, ServerVariable, SpecOperation};
 pub use provider::{
-    LoadedProvider, OperationPatch, ParamPatch, ParamPosition, Patch, SpecSource,
+    LoadedProvider, OperationPatch, ParamPatch, ParamPosition, Patch, SpecDocument, SpecSource,
     PROVIDER_TOML_JSON_SCHEMA,
 };
 

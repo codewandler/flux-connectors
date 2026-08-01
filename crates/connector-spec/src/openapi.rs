@@ -90,13 +90,30 @@ const METHODS: [(&str, HttpMethod); 6] = [
     ("head", HttpMethod::Head),
 ];
 
+/// The path-item keys that name an operation this pipeline cannot emit.
+///
+/// [`HttpMethod`] carries neither, so an operation declared under one has no representation in the
+/// IR at all. It earns a **diagnostic** rather than being passed over in silence, for the reason
+/// every other unrepresentable construct here does: an author who selected it would otherwise get
+/// "names no `operationId`" about an operation they can see in the document, with nothing saying the
+/// method is the problem. Zero occurrences across the babelforce corpus, which is why this is a
+/// diagnostic and not a reason to widen `HttpMethod`.
+const UNREPRESENTABLE_METHODS: [&str; 2] = ["options", "trace"];
+
 /// The ceiling on nodes produced while expanding one schema's `$ref`s.
 ///
 /// Cycle detection alone bounds *depth*, not *size*: a document whose schemas reference each other
-/// in a diamond expands exponentially without ever repeating a pointer on one path, and 848
+/// in a diamond expands multiplicatively without ever repeating a pointer on one path, and 848
 /// component schemas is enough for that to matter. This is the second bound, and it fails the
 /// operation with a diagnostic rather than consuming the machine — the same trade the cycle refusal
 /// makes, for the same reason.
+///
+/// **The diagnostic does not diagnose.** Hitting this says the expansion was too large and says
+/// nothing about why, because the two causes are indistinguishable from here: a genuinely enormous
+/// legitimate schema and a pathological reference graph both arrive as the same count. Measured
+/// headroom on the babelforce corpus is 14x — the largest real expansion is 3,580 nodes — so a
+/// document that reaches this is far outside anything observed, which is the reason to report it
+/// neutrally rather than assert a cause.
 const EXPANSION_BUDGET: usize = 50_000;
 
 /// One thing wrong with a document that did not stop the ingest.
@@ -485,6 +502,18 @@ fn read_paths(root: &Map<String, Value>, ingested: &mut Ingested) {
             continue;
         };
 
+        for word in UNREPRESENTABLE_METHODS {
+            if item.contains_key(word) {
+                ingested.diagnostics.push(Diagnostic {
+                    location: format!("{} {path}", word.to_uppercase()),
+                    problem: format!(
+                        "`{word}` is not a method this pipeline can emit, so the operation was \
+                         skipped and cannot be selected"
+                    ),
+                });
+            }
+        }
+
         let shared = item.get("parameters").cloned().unwrap_or(Value::Null);
         for (word, method) in METHODS {
             let Some(operation) = item.get(word).and_then(Value::as_object) else {
@@ -632,9 +661,15 @@ fn read_parameters(
             .ok_or_else(|| format!("parameter `{name}` declares no `in`"))?
             .to_owned();
         if position == "cookie" {
-            // Not a diagnostic, and not carried: `ParamSet` has no cookie position, and the IR
-            // deliberately models what a request *sends* rather than everything a document can say.
-            continue;
+            // **Skips the operation, exactly as an unrepresentable body does.** `ParamSet` has no
+            // cookie position, so carrying the operation without the parameter would publish a
+            // request that quietly stopped sending something the vendor declared — the same failure
+            // shape `read_request_body` refuses for `multipart/form-data`, and the reason it is
+            // refused there applies here unchanged. Zero occurrences across the babelforce corpus.
+            return Err(format!(
+                "parameter `{name}` travels in a cookie, which this IR has no request position \
+                 for. The operation was skipped rather than published without it"
+            ));
         }
         if !matches!(position.as_str(), "path" | "query" | "header") {
             return Err(format!(
@@ -895,9 +930,11 @@ impl Resolver<'_> {
         *budget += 1;
         if *budget > EXPANSION_BUDGET {
             return Err(format!(
-                "resolving its `$ref`s produced more than {EXPANSION_BUDGET} nodes, which is a \
-                 document referencing itself in a way that expands without repeating a pointer; \
-                 the operation was skipped rather than expanded further"
+                "resolving its `$ref`s produced more than {EXPANSION_BUDGET} nodes, so the \
+                 operation was skipped rather than expanded further. This bounds the expansion and \
+                 does not explain it: a very large legitimate schema and a reference graph that \
+                 multiplies are the same count from here. For scale, the largest expansion measured \
+                 across babelforce's 398 operations is 3,580 nodes"
             ));
         }
 
