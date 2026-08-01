@@ -40,6 +40,7 @@ fn operation(id: &str, service: &str) -> Operation {
         risk: Risk::Low,
         idempotency: Idempotency::Idempotent,
         repeatable_because: None,
+        expose: true,
         auth: None,
         params: ParamSet::default(),
         response_schema: None,

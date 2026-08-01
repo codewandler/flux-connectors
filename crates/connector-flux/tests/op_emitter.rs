@@ -107,6 +107,7 @@ fn zendesk_comment_list() -> Connector {
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
             repeatable_because: None,
+            expose: true,
             auth: None,
             params: ParamSet {
                 path: vec![param(
@@ -155,6 +156,7 @@ fn zendesk_ticket_search() -> Connector {
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
             repeatable_because: None,
+            expose: true,
             auth: None,
             params: ParamSet {
                 path: Vec::new(),
@@ -205,6 +207,7 @@ fn babelforce_call_list() -> Connector {
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
             repeatable_because: None,
+            expose: true,
             auth: None,
             params: ParamSet {
                 path: Vec::new(),
@@ -261,6 +264,7 @@ fn zendesk_test() -> Connector {
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
             repeatable_because: None,
+            expose: true,
             auth: None,
             params: ParamSet::default(),
             response_schema: None,
@@ -289,6 +293,7 @@ fn freshdesk_note_add() -> Connector {
             risk: Risk::Medium,
             idempotency: Idempotency::NonIdempotent,
             repeatable_because: None,
+            expose: true,
             auth: None,
             params: ParamSet {
                 path: vec![param(
@@ -351,6 +356,7 @@ fn zendesk_ticket_show() -> Connector {
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
             repeatable_because: None,
+            expose: true,
             auth: None,
             params: ParamSet {
                 path: vec![param(
@@ -643,6 +649,7 @@ fn headered_operation() -> Connector {
             risk: Risk::High,
             idempotency: Idempotency::NonIdempotent,
             repeatable_because: None,
+            expose: true,
             auth: None,
             params: ParamSet {
                 path: Vec::new(),
@@ -953,6 +960,7 @@ fn zendesk_comment_add() -> Connector {
                  ticket has not moved since, so a stale replay is rejected rather than duplicated"
                     .to_string(),
             ),
+            expose: true,
             auth: None,
             params: ParamSet {
                 path: vec![param(
@@ -1015,6 +1023,7 @@ fn babelforce_session_set() -> Connector {
             risk: Risk::Medium,
             idempotency: Idempotency::Idempotent,
             repeatable_because: None,
+            expose: true,
             auth: None,
             params: ParamSet {
                 path: vec![param("id", "The call id", true, json!({"type": "string"}))],

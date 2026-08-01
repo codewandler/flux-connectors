@@ -69,6 +69,7 @@ fn op(id: &str, auth: Option<Vec<AuthRequirement>>) -> Operation {
         risk: Risk::Low,
         idempotency: Idempotency::Idempotent,
         repeatable_because: None,
+        expose: true,
         auth,
         params: ParamSet::default(),
         response_schema: None,
@@ -396,6 +397,83 @@ fn body_encoding_is_closed_and_its_default_is_invisible() {
     assert!(json.contains(r#""body_encoding":"form""#), "{json}");
     let decoded: Operation = serde_json::from_str(&json).unwrap();
     assert_eq!(decoded.params.body_encoding, BodyEncoding::Form);
+}
+
+/// **Landing `expose` must not move a single existing `ir_sha256`** (C-413).
+///
+/// `Operation::expose` defaults to `true` and carries `skip_serializing_if`, and its doc comment
+/// claims that keeps every operation that says nothing hashing exactly as it did before the field
+/// existed. That claim has to be a test: `Connector::hash_domain` feeds `LockEntry::ir_sha256`, so a
+/// field serializing as `"expose": true` on all 299 shipped operations would move every hash in the
+/// repository, churn `connectors.lock` for providers nobody edited, and regenerate all 557 committed
+/// artifacts — which is precisely what "no shipped artifact moves" denies. Deleting the
+/// `skip_serializing_if` must turn something red, and this is it.
+///
+/// The assertion is **byte equality against the pre-field encoding**, not merely the absence of the
+/// substring. A field that elided its key while perturbing anything else in the encoding would still
+/// have moved every hash, and a `contains` check would have shrugged.
+#[test]
+fn an_exposed_operation_serializes_exactly_as_it_did_before_the_field_existed() {
+    let operation = op("acme.thing.list", None);
+    assert!(
+        operation.expose,
+        "the field must default to exposed; a default that hides is a decision made by silence"
+    );
+
+    // The encoding this operation had before `expose` existed, field for field.
+    let expected = json!({
+        "id": "acme.thing.list",
+        "method": "GET",
+        "path": "/v2/calls",
+        "description": "List calls",
+        "risk": "low",
+        "idempotency": "idempotent",
+    });
+    assert_eq!(
+        serde_json::to_value(&operation).unwrap(),
+        expected,
+        "an operation silent on `expose` must encode exactly as it did before the field existed, \
+         or landing C-413 moved every `ir_sha256` in the repository"
+    );
+
+    // The converse, so the assertion above cannot be satisfied by dropping the field entirely.
+    let mut unexposed = operation.clone();
+    unexposed.expose = false;
+    let json = serde_json::to_string(&unexposed).unwrap();
+    assert!(json.contains(r#""expose":false"#), "{json}");
+    let decoded: Operation = serde_json::from_str(&json).unwrap();
+    assert!(!decoded.expose, "the field must survive the round trip");
+}
+
+/// **An operation's exposure is part of what the connector means**, so changing it has to be a change
+/// `diff` and the lockfile can both see.
+///
+/// The elision above is only safe because it is *lossless*: `true` is the default, so its absence
+/// encodes it exactly. `false` is not the default and must reach the hash domain, or an author could
+/// unexpose an operation — a real change to what a model is handed — with `connectors.lock` reporting
+/// nothing happened.
+#[test]
+fn an_unexposed_operation_reaches_the_hash_domain() {
+    let mut connector = babelforce();
+    connector.operations = vec![op("acme.thing.list", None)];
+
+    let exposed = connector.hash_domain().expect("the hash domain encodes");
+    assert!(
+        !exposed.contains("expose"),
+        "a defaulted `expose` reached the hash domain: {exposed}"
+    );
+
+    connector.operations[0].expose = false;
+    let unexposed = connector.hash_domain().expect("the hash domain encodes");
+    assert!(
+        unexposed.contains("expose"),
+        "an operation withheld from every model must be visible in the hash domain — otherwise \
+         unexposing one is a change to what a host serves that no artifact records: {unexposed}"
+    );
+    assert_ne!(
+        exposed, unexposed,
+        "exposing and unexposing an operation must not hash alike"
+    );
 }
 
 /// The IR must be expressive enough that a **hand-authored** provider TOML defines a complete

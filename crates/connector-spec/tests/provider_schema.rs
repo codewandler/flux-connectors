@@ -220,3 +220,67 @@ fn the_schema_publishes_the_loaders_own_repeatability_floor() {
          as a stated condition"
     );
 }
+
+/// **The schema's documented default for `expose` is the loader's actual default.**
+///
+/// The key-set tests above prove the schema *mentions* `expose`; they say nothing about which way it
+/// defaults, and that is the half worth guarding. A schema publishing `default: false` beside a
+/// loader defaulting to `true` would tell an author their silent operations are hidden while the
+/// build exposes every one of them — a disagreement about a safety-shaped value, reached by nobody
+/// deciding anything.
+///
+/// The direction is checked by **loading a provider file that says nothing** rather than by reading a
+/// constant, so this fails if the serde default is ever flipped without the schema following, and
+/// fails the other way too.
+#[test]
+fn the_schema_publishes_the_exposure_default_the_loader_applies() {
+    let schema = schema();
+
+    for object in ["operation", "graph"] {
+        let published = schema["$defs"][object]["properties"]["expose"]["default"]
+            .as_bool()
+            .unwrap_or_else(|| panic!("`{object}.expose` must publish a boolean `default`"));
+
+        assert!(
+            published,
+            "`schema/provider-toml.schema.json` documents `{object}.expose` as defaulting to \
+             `false`, but silence means exposed — an author's editor and the build disagree about \
+             what a member that says nothing does"
+        );
+    }
+
+    let connector = connector_spec::provider::load(
+        "acme",
+        r#"
+id = "acme"
+vendor = "Acme"
+base_url = "https://api.acme.test"
+
+[[operations]]
+id = "acme-thing-list"
+method = "GET"
+path = "/v1/things"
+risk = "low"
+idempotency = "idempotent"
+
+[[graphs]]
+name = "acme-thing-flow"
+
+[[graphs.nodes]]
+id = "list"
+kind = { operation = { operation = "acme-thing-list" } }
+"#,
+    )
+    .expect("the fixture loads")
+    .connector;
+
+    assert!(
+        connector.operations[0].expose,
+        "an operation saying nothing about `expose` must load as exposed, or landing this field \
+         hid every operation in the repository"
+    );
+    assert!(
+        connector.graphs[0].expose,
+        "a flow saying nothing about `expose` must load as exposed"
+    );
+}

@@ -57,6 +57,7 @@ fn operation(
         risk,
         idempotency,
         repeatable_because: None,
+        expose: true,
         auth: None,
         params,
         response_schema: None,
@@ -199,6 +200,7 @@ fn graph(name: &str, nodes: Vec<GraphNode>, edges: Vec<Edge>) -> Graph {
         description: format!("The {name} flow."),
         inputs: Vec::new(),
         output: None,
+        expose: true,
         nodes,
         edges,
     }

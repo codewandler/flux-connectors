@@ -112,6 +112,31 @@ pub fn project(operation: &catalog::Operation) -> Result<ToolSpec, Error> {
     project_declaration(operation.id, &declaration)
 }
 
+/// **Whether this catalogue operation reaches a model as an LLM tool** (C-413).
+///
+/// The catalogue states this **positively**, on every operation, in the `expose` line of the embedded
+/// Flux — flux's formatter writes `expose true` or `expose false` and never elides either
+/// (`flux_lang::format`). So a consumer asking this question gets an answer rather than an inference
+/// from an absence, which is the distinction
+/// [C-235](../../../docs/stories/C-235-the-catalogue-cannot-say-an-operation-is-public.md) records as
+/// missing for credentials and the reason this is a function here rather than a `bool` a caller
+/// derives for itself.
+///
+/// **Unexposed is not uncatalogued.** An operation this returns `false` for is still in the
+/// manifest's `operations` list, still in `catalog.json`, still in the embedded catalogue, and
+/// [`crate::Operation::project`] still builds it into something [`crate::Operation::build_request`]
+/// and [`Rehearsal`](crate::Rehearsal) can drive. The single consequence is that [`crate::pack`]
+/// does not register it, so no model is handed it as a tool.
+///
+/// # Errors
+///
+/// [`Error::Unparsable`], [`Error::NotOneOperation`] or [`Error::Mismatched`] for an entry whose
+/// embedded Flux is not the single `op` declaration a catalogue rendering is — the same corrupt-input
+/// cases [`project`] reports, and unreachable for a catalogue this repository generated.
+pub fn is_exposed(operation: &catalog::Operation) -> Result<bool, Error> {
+    Ok(declaration_of(operation.id, operation.flux)?.meta.expose)
+}
+
 /// [`project`], over a declaration already parsed.
 ///
 /// The split exists because [`crate::Operation`] needs the declaration itself — C-115 builds the

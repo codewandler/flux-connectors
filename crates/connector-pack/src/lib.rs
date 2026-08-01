@@ -200,7 +200,7 @@ pub use dry_run::{CredentialReference, DryRun, DryRunTransport, Transport};
 pub use name::{dotted_name, NameError};
 pub use rehearsal::Rehearsal;
 pub use request::{Request, DEFAULT_USER_AGENT};
-pub use spec::project;
+pub use spec::{is_exposed, project};
 pub use tool::{Egress, Operation};
 
 // The credential vocabulary, re-exported rather than redefined — the same posture
@@ -768,18 +768,29 @@ fn install(
             available: catalog::providers().len(),
         })?;
 
-    let tools = entry
-        .operations
-        .iter()
-        .map(|operation| {
-            Ok(Arc::new(Operation::project(
-                operation,
-                http.clone(),
-                credentials.clone(),
-                configuration.clone(),
-            )?) as Arc<dyn Tool>)
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
+    // **The one place an operation stops being a tool** (C-413). `expose` separates two claims the
+    // emitter used to fuse: that an operation exists and can be called, and that it reaches a model
+    // as a tool. Everything else about an unexposed operation is unchanged — it is in this `entry`,
+    // in the manifest, in `catalog.json`, and `Operation::project` still builds it into something
+    // `build_request` and `Rehearsal` drive. It simply is not registered, so nothing hands it to a
+    // model.
+    //
+    // Filtered here rather than inside `Operation::project`, deliberately: projection is what makes
+    // an operation *callable*, and a host holding a `Rehearsal` for an unexposed operation is the
+    // supported case rather than an error. Refusing in the constructor would have withheld the call
+    // along with the tool, which is the conflation this story exists to remove.
+    let mut tools: Vec<Arc<dyn Tool>> = Vec::new();
+    for operation in entry.operations {
+        if !spec::is_exposed(operation)? {
+            continue;
+        }
+        tools.push(Arc::new(Operation::project(
+            operation,
+            http.clone(),
+            credentials.clone(),
+            configuration.clone(),
+        )?) as Arc<dyn Tool>);
+    }
 
     registry.try_register_all_from(source_label(entry.id), tools)
 }
