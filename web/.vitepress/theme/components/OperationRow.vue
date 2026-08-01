@@ -13,6 +13,7 @@ import {
   operationHref,
   ownIssues,
   ownsDefect,
+  published,
   type Operation,
   type PathResolver,
 } from '../../../data/catalog.mts'
@@ -52,8 +53,10 @@ const own = computed(() => ownIssues(props.operation))
     <p class="row__meta">
       <span class="row__vendor">{{ vendor }}</span>
       <code v-if="service" class="row__service">{{ service }}</code>
-      <span class="row__method">{{ operation.method }}</span>
-      <code>{{ operation.path }}</code>
+      <!-- C-408. A source that publishes no request shape gets no chip for one: an empty method and
+           an empty path are two blanks in a meta line that reads as a fact about the operation. -->
+      <span v-if="published(operation.method)" class="row__method">{{ operation.method }}</span>
+      <code v-if="published(operation.path)">{{ operation.path }}</code>
       <span>risk: {{ operation.risk }}</span>
       <span>{{ operation.idempotency }}</span>
     </p>

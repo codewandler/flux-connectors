@@ -45,6 +45,7 @@ import {
   narrowView,
   operationService,
   ownsDefect,
+  searchablePath,
   serviceFacet,
   type Operation,
   type Provider,
@@ -112,7 +113,9 @@ const matching = computed(() =>
     return (
       operation.id.toLowerCase().includes(needle) ||
       operation.description.toLowerCase().includes(needle) ||
-      operation.path.toLowerCase().includes(needle)
+      // C-408. A path this source did not publish matches nothing, rather than throwing on every
+      // keystroke — the search is over what the document carries, not over what it might have.
+      searchablePath(operation).includes(needle)
     )
   })
 )

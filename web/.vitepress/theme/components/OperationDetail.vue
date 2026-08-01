@@ -19,11 +19,15 @@
 import { computed, inject } from 'vue'
 import {
   PATH_RESOLVER,
+  UNPUBLISHED,
   identityPath,
   inheritedIssues,
   notes,
+  operationCredentials,
   ownIssues,
   ownsDefect,
+  providerAuth,
+  published,
   signature,
   type Catalog,
   type Credential,
@@ -52,8 +56,20 @@ const operation = computed<Operation | undefined>(() =>
 
 /** Resolve a credential reference against the provider's declared credentials. */
 function credential(name: string): Credential | undefined {
-  return provider.value?.auth.credentials.find((candidate) => candidate.name === name)
+  const auth = provider.value ? providerAuth(provider.value) : null
+  return auth?.credentials.find((candidate) => candidate.name === name)
 }
+
+/**
+ * The credential alternatives this source published, or `null` when it published none (C-408).
+ *
+ * `[]` and `null` are opposite facts here. An empty list is the C-206 case — a credential withheld,
+ * or a vendor that needs none — and the sentence about live calls being disabled is written for it.
+ * `null` is a source that carries no credentials at all, and that sentence is simply false of it.
+ */
+const credentials = computed(() =>
+  operation.value ? operationCredentials(operation.value) : null
+)
 
 const own = computed(() => (operation.value ? ownIssues(operation.value) : []))
 const inherited = computed(() => (operation.value ? inheritedIssues(operation.value) : []))
@@ -67,6 +83,14 @@ const inherited = computed(() => (operation.value ? inheritedIssues(operation.va
  * disabled. The catalogue now says which, so the page stops guessing on its behalf.
  */
 const clear = computed(() => (operation.value ? notes(operation.value) : []))
+
+/**
+ * The operation's Flux signature, or `null` when this source published no Flux (C-408).
+ *
+ * Not a cosmetic absence like the others: reading a first line off a module that is not there threw,
+ * so a page over a source that carries no Flux did not mislead, it failed to render at all.
+ */
+const declaration = computed(() => (operation.value ? signature(operation.value) : null))
 </script>
 
 <template>
@@ -86,8 +110,10 @@ const clear = computed(() => (operation.value ? notes(operation.value) : []))
 
     <p class="op__chips">
       <StatusBadge :operation="operation" />
-      <span class="chip chip--method">{{ operation.method }}</span>
-      <code class="chip chip--path">{{ operation.path }}</code>
+      <!-- C-408. Omitted rather than rendered empty: a chip with nothing in it is a request shape
+           this source did not publish, wearing the costume of one it did. -->
+      <span v-if="published(operation.method)" class="chip chip--method">{{ operation.method }}</span>
+      <code v-if="published(operation.path)" class="chip chip--path">{{ operation.path }}</code>
       <span class="chip">risk: {{ operation.risk }}</span>
       <span class="chip">{{ operation.idempotency }}</span>
       <a class="chip chip--link" :href="resolvePath(`/explorer#${provider!.id}`)">
@@ -102,7 +128,8 @@ const clear = computed(() => (operation.value ? notes(operation.value) : []))
     />
 
     <h2>Signature</h2>
-    <FluxSource :source="signature(operation)" />
+    <FluxSource v-if="declaration" :source="declaration" />
+    <p v-else class="op__note op__unpublished">{{ UNPUBLISHED }}</p>
 
     <h2>Parameters</h2>
     <ParameterTable :parameters="operation.parameters" />
@@ -121,24 +148,32 @@ const clear = computed(() => (operation.value ? notes(operation.value) : []))
     </template>
 
     <h2>Flux source</h2>
-    <p class="op__note">
-      The exact Flux declaration for this operation. Live installation is not available yet.
-    </p>
-    <FluxSource :source="operation.flux" />
+    <template v-if="published(operation.flux)">
+      <p class="op__note">
+        The exact Flux declaration for this operation. Live installation is not available yet.
+      </p>
+      <FluxSource :source="operation.flux" />
+    </template>
+    <p v-else class="op__note op__unpublished">{{ UNPUBLISHED }}</p>
 
     <h2>Credentials</h2>
     <IssueNotice title="Nothing to supply here" tone="clear" :issues="clear" />
-    <p v-if="!operation.credentials.length && !clear.length" class="op__note">
+    <!-- C-408. The condition's first term is the whole fix. The sentence below is true of an
+         operation whose catalogue published a credential set and left it empty — a credential
+         withheld because nobody can hold it safely yet — and says nothing true about a source that
+         publishes no credentials at all. It stays exactly as it was for the first. -->
+    <p v-if="credentials && !credentials.length && !clear.length" class="op__note">
       No safe credential configuration is available for this operation. Live calls are disabled.
     </p>
-    <template v-else-if="operation.credentials.length">
+    <p v-else-if="!credentials" class="op__note op__unpublished">{{ UNPUBLISHED }}</p>
+    <template v-else-if="credentials.length">
       <p class="op__note">
         Alternatives, any one of which authenticates the request. Each alternative lists every
         credential that must be supplied together. Environment variables are named, never read — no
         credential value appears in any generated artifact.
       </p>
       <ul class="creds">
-        <li v-for="(alternative, index) in operation.credentials" :key="index" class="creds__alt">
+        <li v-for="(alternative, index) in credentials" :key="index" class="creds__alt">
           <ul class="creds__and">
             <li v-for="name in alternative" :key="name">
               <code>{{ name }}</code>
@@ -175,7 +210,7 @@ const clear = computed(() => (operation.value ? notes(operation.value) : []))
     <ul class="hosts">
       <li v-for="host in operation.hosts" :key="host"><code>{{ host }}</code></li>
     </ul>
-    <p class="op__note">
+    <p v-if="published(provider!.base_url)" class="op__note">
       Base URL <code>{{ provider!.base_url }}</code>
     </p>
 
@@ -230,6 +265,13 @@ const clear = computed(() => (operation.value ? notes(operation.value) : []))
 .op__note {
   font-size: 14px;
   color: var(--vp-c-text-2);
+}
+
+/* C-408. A statement about the document, not about the operation — so it is muted and never toned
+   as a defect. What it replaces was a sentence claiming live calls were disabled. */
+.op__unpublished {
+  color: var(--vp-c-text-3);
+  font-style: italic;
 }
 
 .op__schema {

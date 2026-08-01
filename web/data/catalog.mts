@@ -4,6 +4,52 @@
 // present, an absent value is `null` or `[]`. Nothing here invents a value — no provider, no
 // operation and no issue code is named in this file or in any component. Add a fourth provider to
 // `providers/*.toml` and the site covers it with no edit.
+//
+// C-408 adds the one thing that contract cannot state, because it is a statement about a *source*
+// rather than about the document: the components are mounted over catalogues this repository does
+// not generate, and such a source may publish a **thinner** document than the one above. See
+// {@link Published}.
+
+/**
+ * A field the generated catalogue always publishes and a thinner source may not (C-408).
+ *
+ * **The distinction, and it is the whole of C-408.** `[]` and `null`-the-value are answers: this
+ * connector declares no scheme, this operation needs no credential. A field that is *absent* is not
+ * an answer at all — it says only that the source publishing this document does not carry that
+ * field. The two used to arrive as the same empty collection, so a component rendering a thinner
+ * catalogue said "the connector does not have that" when the truth was "this source does not
+ * publish that", and said it in the danger colour.
+ *
+ * `undefined` and `null` are both read as unpublished, because a document that omits a key and one
+ * that writes `null` for it are saying the same thing and no consumer should have to know which
+ * spelling its source chose. `{@link published}` is the only place either is interpreted.
+ *
+ * This is deliberately **not** the `??` tolerance in {@link notes}. That one covers a build-order
+ * window in which this site reads a committed artifact older than its own emitter, and it treats an
+ * absence as the empty answer. Here an absence is a different answer, and collapsing the two is the
+ * bug.
+ */
+export type Published<T> = T | null | undefined
+
+/**
+ * Whether the source publishing this document carries the field at all.
+ *
+ * An empty collection, an empty string and zero are all published values — the predicate is about
+ * the key, never about whether the value is interesting.
+ */
+export function published<T>(value: Published<T>): value is T {
+  return value !== null && value !== undefined
+}
+
+/**
+ * What a component says in place of a field its source did not publish.
+ *
+ * Site vocabulary, in one place, for the same reason {@link RISK_ORDER} and the verification labels
+ * are here: four components saying it four ways would drift into four different claims, and this is
+ * a sentence about the document rather than about any connector in it. It names nothing from the
+ * catalogue and never can — that is precisely its point.
+ */
+export const UNPUBLISHED = 'not published by this source'
 
 /** `catalog` | `provider` | `operation` — how far a condition reaches. */
 export type Scope = 'catalog' | 'provider' | 'operation'
@@ -71,14 +117,21 @@ export interface Operation {
   description: string
   risk: string
   idempotency: string
-  method: string
-  path: string
+  /** The request shape. `Published` because a source that describes no HTTP call omits both. */
+  method: Published<string>
+  path: Published<string>
   parameters: Parameter[]
   body_schema: Record<string, unknown> | null
   response_schema: Record<string, unknown> | null
-  credentials: string[][]
+  /**
+   * The alternatives that authenticate this operation. `[]` means the connector needs none —
+   * unpublished means this source does not say, which is not the same claim and must not read as
+   * one.
+   */
+  credentials: Published<string[][]>
   hosts: string[]
-  flux: string
+  /** The generated Flux. A source that carries no module publishes none. */
+  flux: Published<string>
   status: Status
 }
 
@@ -210,11 +263,17 @@ export interface Provider {
   authority: string | null
   vendor: string
   description: string
-  base_url: string
+  /** The vendor's API root. A source that describes no HTTP call publishes none. */
+  base_url: Published<string>
   api_version: string | null
   hosts: string[]
   services: Service[]
-  auth: Auth
+  /**
+   * What this connector authenticates with. An `Auth` with no scheme means the connector declares
+   * none — unpublished means this source does not carry auth at all, and the two must not render
+   * alike. Read it through {@link providerAuth}, never off the field.
+   */
+  auth: Published<Auth>
   operation_count: number
   operations: Operation[]
   /** The events this connector receives — the inbound half of its surface. `[]` for most. */
@@ -393,9 +452,49 @@ export function defectCount(operations: Operation[]): number {
  *
  * Reassembling `name(param: Type, …) -> Any` from the parameter list would be a second, subtly
  * different renderer for something the emitter already decided. This is the emitter's own answer.
+ *
+ * `null` when the source published no Flux (C-408). Reading a first line off an absent module used
+ * to throw, so this absence was not a misleading render but a broken page.
  */
-export function signature(operation: Operation): string {
-  return operation.flux.split('\n', 1)[0]
+export function signature(operation: Operation): string | null {
+  return published(operation.flux) ? operation.flux.split('\n', 1)[0] : null
+}
+
+// ---------------------------------------------------------------------------------------------
+// What this source published (C-408).
+//
+// One accessor per field a thinner source may omit. They exist so the answer is a value a component
+// can branch on three ways — the connector has none, the connector has these, this source did not
+// say — instead of a `.length` that collapses the first and the third. Nothing here learns *which*
+// source it is reading; the document says what it carries and that is the only question asked.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The auth this source publishes for a connector, or `null` when it publishes none.
+ *
+ * An `Auth` with an empty `schemes` is a published answer and keeps reading as one: that connector
+ * really is not configured, and the card says so in red. `null` is the other fact entirely.
+ */
+export function providerAuth(provider: Provider): Auth | null {
+  return published(provider.auth) ? provider.auth : null
+}
+
+/**
+ * The credential alternatives this source publishes for an operation, or `null` when it publishes
+ * none.
+ *
+ * `[]` is the case C-206 is about — a credential withheld because it cannot be held safely yet, or
+ * a vendor that needs none — and the page's sentence about live calls being disabled is written for
+ * it and stays. `null` is a source that carries no credentials at all, about which that sentence
+ * says nothing true.
+ */
+export function operationCredentials(operation: Operation): string[][] | null {
+  return published(operation.credentials) ? operation.credentials : null
+}
+
+/** The request path, lowercased for a search, or `''` when this source publishes none. */
+export function searchablePath(operation: Operation): string {
+  return published(operation.path) ? operation.path.toLowerCase() : ''
 }
 
 /** The stable, deep-linkable URL of one operation, relative to the site root. */
