@@ -66,6 +66,11 @@ connector-pack = { package = "codewandler-connector-pack", version = "0.8.0", pa
 # `no_network.rs` exists to state.
 connector-secrets = { package = "codewandler-connector-secrets", version = "0.8.0", path = "crates/connector-secrets" }
 
+# **The engine line is recorded once, in `crates/connector-cli/tests/flux_engine_line.rs`** (C-403).
+# `ENGINE_LINE` and `SPEC_LINE` there are the statement; the requirements below are required to
+# agree with them, and the lock is required to carry one engine line rather than two. So a bump is a
+# value change in one constant, and this test names every requirement still behind it.
+#
 # Flux-Lang: the emit target. Pinned deliberately — bumping this is a reviewed change, and
 # `flux-connectors check` verifies generated artifacts still match the pin (C-14).
 #
@@ -76,7 +81,7 @@ connector-secrets = { package = "codewandler-connector-secrets", version = "0.8.
 #     working tree rather than to a reviewed release.
 # flux publishes flux-lang to crates.io, so the registry pin is the only form that resolves
 # everywhere. The lib name stays `flux_lang`; only the *package* carries the vanity prefix.
-flux-lang = { package = "codewandler-flux-lang", version = "0.41" }
+flux-lang = { package = "codewandler-flux-lang", version = "0.45" }
 
 # The flux *runtime* seam, used by `connector-pack` alone (C-114). AGENTS.md's "flux-connectors does
 # not depend on the flux runtime" holds for the compiler — `connector-spec`, `connector-flux` and
@@ -88,15 +93,22 @@ flux-lang = { package = "codewandler-flux-lang", version = "0.41" }
 # From crates.io for the same reasons flux-lang is. `flux-spec` has its own version line: it is the
 # frozen wire vocabulary a guest plugin compiles against, so it moves independently of the runtime.
 #
-# It moved, and this requirement deliberately did not (C-192). crates.io is at 1.3.0, and both
-# `flux-lang` and `flux-runtime` 0.41 require it as plain `"1"` — so a fresh resolve anywhere
-# selects 1.3.0, and the committed lock does too. The requirement below stays `1.2` because it is a
-# **floor**, not a pin: 1.3.0 is purely additive over 1.2.1 (it derives `JsonSchema` on `Effect`,
-# `Risk`, `Idempotency`, `AccessKind` and `ToolSpec` and changes nothing else), so nothing here needs
-# it. Raising the floor to `1.3` would narrow what a consumer may unify with, and buy nothing.
-flux-core = { package = "codewandler-flux-core", version = "0.41" }
-flux-runtime = { package = "codewandler-flux-runtime", version = "0.41" }
-flux-spec = { package = "codewandler-flux-spec", version = "1.2" }
+# **`1.3`, and the two lines are not the same number** (C-403). C-192 left this at `1.2` on the
+# reasoning that the requirement is a floor rather than a pin, that 1.3.0 is purely additive over
+# 1.2.1 (it derives `JsonSchema` on `Effect`, `Risk`, `Idempotency`, `AccessKind` and `ToolSpec` and
+# changes nothing else), and that raising it would narrow what a consumer may unify with while
+# buying nothing. That trade is real and it is now overruled by a different property: the line this
+# workspace is *on* has to be a stated fact, or "bump flux" is a reading exercise across six version
+# strings and four paragraphs. `flux-spec` is on `1.3` because that is what resolves and what
+# everything here is tested against — the committed lock already selected 1.3.0 under the old `1.2`
+# floor, so this narrows the stated requirement and changes no resolution.
+#
+# What has not changed: `flux-spec` moves on its own `1.x` line and is **not** an engine crate. It is
+# the frozen wire vocabulary a guest plugin compiles against, so `SPEC_LINE` is recorded beside
+# `ENGINE_LINE` rather than derived from it.
+flux-core = { package = "codewandler-flux-core", version = "0.45" }
+flux-runtime = { package = "codewandler-flux-runtime", version = "0.45" }
+flux-spec = { package = "codewandler-flux-spec", version = "1.3" }
 # **The transport, and the only concrete `Egress` there is** (C-202). `flux-web` owns
 # `http.request` — the tool `connector-pack`'s own doc-comments name and that nothing in this
 # workspace could construct, because this crate was absent from `Cargo.lock` entirely.
@@ -106,12 +118,18 @@ flux-spec = { package = "codewandler-flux-spec", version = "1.2" }
 # pack takes a transport, it does not link one. `dependency_fence.rs` holds the compiler crates away
 # from it.
 #
-# 0.41 deliberately, matching `flux-runtime`: flux-web 0.41.1 requires `flux-core`, `flux-runtime`
-# and `flux-system` at `0.41.1`, so it resolves inside the line this workspace already pins and
-# drags no 0.42 crate into the lock. Verified before the edit, because the 0.42.x releases of
-# `flux-core`/`flux-system` sitting on crates.io are exactly the skew that would have made this
-# unpinnable.
-flux-web = { package = "codewandler-flux-web", version = "0.41" }
+# On the engine line, matching `flux-runtime`: flux-web 0.45.0 requires `flux-core`, `flux-runtime`
+# and `flux-system` at `0.45.0`, so it resolves inside the line this workspace pins and drags no
+# off-line crate into the lock. That used to be verified by hand before each edit — the 0.42.x
+# releases of `flux-core`/`flux-system` were exactly the skew that would have made this unpinnable —
+# and `the_lock_carries_one_engine_line` now asserts it instead (C-403).
+#
+# **flux-web 0.43 is the substantive break this pin absorbs.** `http.request`'s canonical `content`
+# is now the record `{status, headers, body}` rather than one flat `HTTP {status}\n{headers}\n{body}`
+# string, with the block kept as the model-facing `view`. `connector-pack` returns that result
+# unchanged, so the shape a consumer sees changed with no compile error anywhere; it is pinned by
+# `crates/connectors-api/tests/live_egress.rs::the_response_comes_back_as_a_record_not_a_flat_string`.
+flux-web = { package = "codewandler-flux-web", version = "0.45" }
 
 # `ToolContext::new` takes an `Arc<System>` (C-116). It was a **dev-dependency of `connector-pack`
 # only**; `connectors-api` now needs it in shipped code, because a host that dispatches a tool must
@@ -126,7 +144,7 @@ flux-web = { package = "codewandler-flux-web", version = "0.41" }
 # **The "no non-test code links it" clause is gone, and its disappearance is the point.** It was
 # true while this workspace had no host; C-202 gave it one, and leaving the claim standing would
 # have made the manifest assert a fence the code no longer keeps.
-flux-system = { package = "codewandler-flux-system", version = "0.41" }
+flux-system = { package = "codewandler-flux-system", version = "0.45" }
 
 # Shared third-party.
 anyhow = "1"
@@ -168,21 +186,17 @@ urlencoding = "2"
 # RFC-6749 `authorization_code` + PKCE S256 builder — and flux's own CLI drives them three times
 # over.
 #
-# **0.41, not the 0.42.1 the story names, and that is a measured correction rather than a
-# downgrade.** Two facts settle it:
+# **On the engine line, and C-204's careful exception to that is now spent** (C-403). C-204 held
+# this at 0.41 while the story it implemented named 0.42.1, because `codewandler-flux-credentials`
+# 0.42.1 required `flux-core ^0.42.1` and `flux-provider ^0.42.1` — semver-incompatible with the
+# workspace's 0.41 pin, so cargo resolved *both* lines and a `cargo tree -d` showed two
+# `flux-core`s, two `flux-provider`s and two `flux-credentials`. That reasoning was about the skew
+# between this crate and the rest, not about this crate: with the whole workspace on one line the
+# skew is gone, and holding this one behind would now *create* the split it was avoiding.
 #
-#   1. `codewandler-flux-credentials` 0.42.1 requires `flux-core ^0.42.1` and `flux-provider
-#      ^0.42.1`. Those are semver-incompatible with this workspace's 0.41 pin, so cargo resolves
-#      *both* lines. Measured, not predicted — a scratch resolve carrying this workspace's four flux
-#      pins plus flux-credentials 0.42.1 puts `codewandler-flux-core` 0.41.1 **and** 0.42.1 in one
-#      `cargo tree -d`, along with two `flux-provider`s and two `flux-credentials`. A split flux line
-#      is exactly what the `flux-web` note above records having checked for and avoided.
-#   2. 0.41.0 carries all three functions, and it is **already in `Cargo.lock`** — `flux-web` pulls
-#      `flux-plugin`, which depends on it. Naming it here resolves nothing new and adds no crate.
-#
-# So the reuse the story asks for costs zero new dependencies, and the version skew it flags as the
-# open question turns out not to apply to the code being reused.
-flux-credentials = { package = "codewandler-flux-credentials", version = "0.41" }
+# It still resolves nothing new and adds no crate — `flux-web` pulls `flux-plugin`, which depends on
+# it — and it still carries `generate_pkce()`, `generate_state()` and `oauth_authorize_url()`.
+flux-credentials = { package = "codewandler-flux-credentials", version = "0.45" }
 
 # **The `id_token` verifier.** The C-203 manifest recorded "no JWT library" as deliberate, on the
 # reasoning that identity would be read from the userinfo endpoint over TLS. C-204 reverses that on

@@ -122,11 +122,18 @@
 //! fail-closed, with a diagnostic naming the missing fact instead of a vendor's `401` — and
 //! `freshdesk`, which deliberately declares no *credential*, still refuses that way.
 //!
-//! **No response shaping, at the flux this workspace pins.** `codewandler-flux-web` 0.41 returns
-//! `http.request` as one flat string (`HTTP {status}\n{headers}\n{body}`), which is returned whole.
-//! Upstream this is already fixed: since flux-web **0.43.0** the canonical `ToolResult.content` is
-//! the record `{status, headers, body}` and the flat block is only the model-facing `view`, so this
-//! paragraph and the shaping it forbids expire on a flux-web bump.
+//! **The response is a record, and this pack still shapes nothing** (C-403). What stood here was
+//! that `http.request` returned one flat string (`HTTP {status}\n{headers}\n{body}`), returned
+//! whole, and that the paragraph expired on a flux-web bump. This is that bump: from flux-web
+//! **0.43.0** the canonical `ToolResult.content` is the record `{status, headers, body}` — JSON
+//! encoded, `body` parsed when the response is a JSON object or array — and the flat block is the
+//! model-facing `view`. A caller reads `$resp.body.data.id` instead of searching a block.
+//!
+//! **The "returned whole" half did not change and is not going to.** This pack delegates to the
+//! transport the host bound and hands back what it produced, so the shape is flux-web's to decide
+//! and a consumer's to read. That is also why the change is worth a paragraph rather than a line:
+//! nothing in this crate's types moved, so a host that parsed the old block compiles against the
+//! new record and quietly reads the wrong thing.
 //!
 //! # Configuration resolves through a bound port (C-193)
 //!

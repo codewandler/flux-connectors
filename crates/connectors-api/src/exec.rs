@@ -20,11 +20,19 @@ pub struct Outcome {
     pub tool: String,
     /// The vendor's response, **as the host's redactor renders it**.
     ///
-    /// Never the raw content. `http.request` returns one flat string
-    /// (`HTTP {status}\n{headers}\n{body}`) and returns it whole, and a vendor that echoes a token
-    /// back — several do, in an error body — would otherwise put it on this surface. Passing it
-    /// through the same redactor the credential was registered with is the difference between
-    /// "the pack kept it off the wire" and "it stayed off every surface".
+    /// Never the raw content. A vendor that echoes a token back — several do, in an error body —
+    /// would otherwise put it on this surface, so it goes through the same redactor the credential
+    /// was registered with. That is the difference between "the pack kept it off the wire" and "it
+    /// stayed off every surface".
+    ///
+    /// **Since C-403 this carries the record, not the block.** flux-web 0.43 made `http.request`'s
+    /// canonical `content` the JSON-encoded `{status, headers, body}` — `body` parsed when the
+    /// response is JSON — where it used to be `HTTP {status}\n{headers}\n{body}`. The pack returns
+    /// it whole, so this field's *text* changed while its type and its name did not: a client of
+    /// this route that scanned the block for a status line reads a JSON document now. The flat
+    /// block is still produced, as flux's model-facing `view`; this surface deliberately does not
+    /// carry it, because a route that published two renderings of one response would be asking
+    /// every caller to choose.
     pub content: String,
     /// Whether the tool reported failure. A `404` is **not** one of these: it is a result the vendor
     /// gave, and the pack returns it unshaped.
