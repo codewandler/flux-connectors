@@ -24,6 +24,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shifted would strand every credential already stored. The ambiguous case — several connections and
   none named — **refuses and lists the uuids that would have worked**, rather than guessing.
 
+### Added
+
+- **`connectors.lock` is written** (C-189). Three CHANGELOG entries asserted byte-identity of a file
+  that **did not exist**. `lock.rs` was a complete, tested hash domain whose *writer* was never built,
+  so provenance was computed and discarded and drift detection — vision principle 1 — was unenforced
+  across the whole catalogue. The file now exists: 53 provider rows, written by `build`, checked by
+  `diff` as the 558th artifact, and a fixed point (a rebuild reproduces it byte-for-byte).
+
+  The decision it forced was **write it, not delete the design** — and the timing is the argument.
+  babelforce became the first spec-backed connector the same day, pinning a vendored document by
+  `sha256`, with more OpenAPI-sourced providers intended. Deleting the design would have meant
+  deciding where drift detection lives instead, on the day the first connector started needing it.
+
+  **A multi-document connector would have been recorded with no spec hash at all** — a row that looks
+  complete and detects nothing — because `Provenance::spec_sha256` is `None` once a connector declares
+  several documents (C-410). `LockEntry` gained a per-document list to close that. It is deliberately
+  *not* `SpecSource`: that type carries `fetched_at`, and re-vendoring byte-identical bytes must not
+  rewrite the lockfile, so the projection is the named place that field is dropped.
+
+  Artifact keys are repository-relative paths rather than bare file names, because bare names
+  collide: an operation named after its own provider would land on the same map key as the provider's
+  module and silently drop a hash.
+
 ### Fixed
 
 - **A component can say "this source does not publish that", instead of claiming the connector lacks

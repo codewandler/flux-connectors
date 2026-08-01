@@ -2,8 +2,7 @@
 id: C-189
 title: "`connectors.lock` is designed, hashed against, and never written"
 pillar: Build
-status: in-progress
-priority: 3
+status: done
 design:
 epic: connectors-v1
 areas: [connector-spec, connector-cli]
