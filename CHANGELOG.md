@@ -7,6 +7,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The published crates are proved consumable from outside the workspace** (C-190). The claim that a
+  consumer writes `use catalog::…` and `use connector_pack::…` rather than the `codewandler-` package
+  names had never been exercised from outside; nor had the engine-line coupling. A scratch crate
+  built against the **registry** now does both, and `docs/integrating-with-flux.md` carries the exact
+  `Cargo.toml` a consumer needs.
+
+  **The flux engine line is not optional and is now written down.** `connector-pack` hands a host a
+  `ToolRegistry`, so a consumer must link the *same* flux line — `^0.46` for 0.9.0. Proved by a
+  negative probe rather than asserted: a consumer on 0.45 fails with *"expected
+  `flux_runtime::ToolRegistry`, found `ToolRegistry` … there are multiple different versions of crate
+  `flux_runtime` in the dependency graph"*. That is the failure this documentation exists to prevent,
+  demonstrated instead of described.
+
+  Two further facts established from a consumer's **resolved graph** rather than from a manifest:
+  `connector-secrets` pulls no HTTP client by default (no `reqwest`, no rustls, no hyper, no
+  openssl), and none of the four published crates supplies an `http.request` implementation — a host
+  brings its own transport.
+
 ## [0.9.0] — 2026-08-01
 
 ### Fixed

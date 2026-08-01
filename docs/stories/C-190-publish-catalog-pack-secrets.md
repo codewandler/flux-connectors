@@ -2,8 +2,7 @@
 id: C-190
 title: Publish connector-catalog, connector-pack and connector-secrets to crates.io
 pillar: Build
-status: in-progress
-priority: 1
+status: done
 design:
 epic:
 areas: [build]
