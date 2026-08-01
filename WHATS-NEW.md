@@ -14,6 +14,8 @@
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-08-01
+
 ### Action needed
 
 - **Four operations that handed you a credential have been withdrawn, across Zoom and Postmark.**

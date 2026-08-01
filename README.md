@@ -11,7 +11,7 @@ one read that proves the connection works. Out come typed Flux operations, capab
 queryable Rust catalogue, and a flux Tool pack.
 
 > [!WARNING]
-> **v0.9.0 is a compiler, a catalogue and a Tool pack.** None of the published crates opens a socket;
+> **v0.9.1 is a compiler, a catalogue and a Tool pack.** None of the published crates opens a socket;
 > the pack authenticates and dispatches through an `http.request` its caller supplies. The one host in
 > this repository is `crates/connectors-api` — `publish = false`, loopback-only, and the thing that has
 > actually sent bytes to a vendor. See [Current limitations](#current-limitations).

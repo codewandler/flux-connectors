@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-08-01
+
 ### Added
 
 - **A configuration field can declare a closed set of values** (C-225). A two-choice region rendered as
