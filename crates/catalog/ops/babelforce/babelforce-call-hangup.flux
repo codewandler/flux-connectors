@@ -1,5 +1,5 @@
 op babelforce-call-hangup(id: String) -> Any
-  description "Hang up a live call"
+  description "Hang up a call"
   risk "destructive"
   idempotency "non_idempotent"
   effects ["network"]

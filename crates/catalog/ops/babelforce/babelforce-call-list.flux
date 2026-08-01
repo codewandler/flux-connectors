@@ -1,4 +1,4 @@
-op babelforce-call-list(page: Number, max: Number, id: Any, sessionId: String, conversationId: String, agentId: Any, fromNumber: Any, toNumber: Any, type: String, state: String, finishReason: String, time_start: Number, time_end: Number, q: String) -> Any
+op babelforce-call-list(page: Number, max: Number, sessionId: String, conversationId: String, id: Any, type: Any, fromNumber: String, toNumber: Any, time_start: Number, time_end: Number, agentId: Any, q: String, state: Any, finishReason: Any) -> Any
   description "List and filter calls from the reporting view"
   risk "low"
   idempotency "idempotent"
@@ -14,17 +14,17 @@ op babelforce-call-list(page: Number, max: Number, id: Any, sessionId: String, c
   when max
     url = fmt("{url}{sep}max={max}")
     sep = "&"
-  when id
-    url = fmt("{url}{sep}id={id}")
-    sep = "&"
   when sessionId
     url = fmt("{url}{sep}sessionId={sessionId}")
     sep = "&"
   when conversationId
     url = fmt("{url}{sep}conversationId={conversationId}")
     sep = "&"
-  when agentId
-    url = fmt("{url}{sep}agentId={agentId}")
+  when id
+    url = fmt("{url}{sep}id={id}")
+    sep = "&"
+  when type
+    url = fmt("{url}{sep}type={type}")
     sep = "&"
   when fromNumber
     url = fmt("{url}{sep}fromNumber={fromNumber}")
@@ -32,22 +32,22 @@ op babelforce-call-list(page: Number, max: Number, id: Any, sessionId: String, c
   when toNumber
     url = fmt("{url}{sep}toNumber={toNumber}")
     sep = "&"
-  when type
-    url = fmt("{url}{sep}type={type}")
-    sep = "&"
-  when state
-    url = fmt("{url}{sep}state={state}")
-    sep = "&"
-  when finishReason
-    url = fmt("{url}{sep}finishReason={finishReason}")
-    sep = "&"
   when time_start
     url = fmt("{url}{sep}time.start={time_start}")
     sep = "&"
   when time_end
     url = fmt("{url}{sep}time.end={time_end}")
     sep = "&"
+  when agentId
+    url = fmt("{url}{sep}agentId={agentId}")
+    sep = "&"
   when q
     url = fmt("{url}{sep}q={q}")
+    sep = "&"
+  when state
+    url = fmt("{url}{sep}state={state}")
+    sep = "&"
+  when finishReason
+    url = fmt("{url}{sep}finishReason={finishReason}")
   response = http.request(method: "GET", url)
   return response

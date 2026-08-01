@@ -1,4 +1,4 @@
-op babelforce-agent-list(page: Number, max: Number, q: String, enabled: Bool, name: String, number: String, sourceId: String, source: String, state: String, groupIds: Any, groups: Any) -> Any
+op babelforce-agent-list(page: Number, max: Number, q: String, enabled: Bool, name: String, number: String, sourceId: String, state: String, source: String, groupIds: Any, groups: Any, tags: Any) -> Any
   description "List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint"
   risk "low"
   idempotency "idempotent"
@@ -29,16 +29,19 @@ op babelforce-agent-list(page: Number, max: Number, q: String, enabled: Bool, na
   when sourceId
     url = fmt("{url}{sep}sourceId={sourceId}")
     sep = "&"
-  when source
-    url = fmt("{url}{sep}source={source}")
-    sep = "&"
   when state
     url = fmt("{url}{sep}state={state}")
+    sep = "&"
+  when source
+    url = fmt("{url}{sep}source={source}")
     sep = "&"
   when groupIds
     url = fmt("{url}{sep}groupIds={groupIds}")
     sep = "&"
   when groups
     url = fmt("{url}{sep}groups={groups}")
+    sep = "&"
+  when tags
+    url = fmt("{url}{sep}tags={tags}")
   response = http.request(method: "GET", url)
   return response

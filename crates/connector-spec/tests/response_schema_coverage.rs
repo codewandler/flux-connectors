@@ -43,6 +43,9 @@ use std::path::{Path, PathBuf};
 
 use connector_spec::JsonSchema;
 
+#[path = "support/shipped_provider.rs"]
+mod shipped_provider;
+
 /// Operations carrying a `response_schema`, as measured by [`coverage`]. **Raise this when coverage
 /// rises; do not lower it to make a build green.**
 ///
@@ -167,13 +170,14 @@ fn shipped() -> Vec<String> {
     names
 }
 
+/// Through C-421's shared seam, because this measurement reads the **shipped** definitions.
+///
+/// A spec-backed provider's operations are a function of its vendored document as well as of its
+/// file, so plain `provider::load` cannot answer for one — it refuses rather than under-reporting,
+/// which is how this call site was found. Coverage measured through the pure loader would have
+/// counted babelforce's nine as absent forever.
 fn load(name: &str) -> connector_spec::Connector {
-    let path = providers_dir().join(format!("{name}.toml"));
-    let source = std::fs::read_to_string(&path)
-        .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-    connector_spec::provider::load(&format!("providers/{name}.toml"), &source)
-        .unwrap_or_else(|error| panic!("providers/{name}.toml does not load: {error}"))
-        .connector
+    shipped_provider::connector(name)
 }
 
 /// One provider's contribution to the measurement.

@@ -2,7 +2,7 @@
 # Provider: babelforce
 # Regenerate with `flux-connectors build`.
 
-op babelforce-agent-list(page: Number, max: Number, q: String, enabled: Bool, name: String, number: String, sourceId: String, source: String, state: String, groupIds: Any, groups: Any) -> Any
+op babelforce-agent-list(page: Number, max: Number, q: String, enabled: Bool, name: String, number: String, sourceId: String, state: String, source: String, groupIds: Any, groups: Any, tags: Any) -> Any
   description "List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint"
   risk "low"
   idempotency "idempotent"
@@ -33,22 +33,25 @@ op babelforce-agent-list(page: Number, max: Number, q: String, enabled: Bool, na
   when sourceId
     url = fmt("{url}{sep}sourceId={sourceId}")
     sep = "&"
-  when source
-    url = fmt("{url}{sep}source={source}")
-    sep = "&"
   when state
     url = fmt("{url}{sep}state={state}")
+    sep = "&"
+  when source
+    url = fmt("{url}{sep}source={source}")
     sep = "&"
   when groupIds
     url = fmt("{url}{sep}groupIds={groupIds}")
     sep = "&"
   when groups
     url = fmt("{url}{sep}groups={groups}")
+    sep = "&"
+  when tags
+    url = fmt("{url}{sep}tags={tags}")
   response = http.request(method: "GET", url)
   return response
 
 op babelforce-agent-get(id: String) -> Any
-  description "Get one agent"
+  description "Get an agent"
   risk "low"
   idempotency "idempotent"
   effects ["network"]
@@ -59,8 +62,8 @@ op babelforce-agent-get(id: String) -> Any
   response = http.request(method: "GET", url)
   return response
 
-op babelforce-agent-status-update(id: String, enabled: Bool, presence_name: String) -> Any
-  description "Update an agent's status. Supply at least one of enabled or presence.name — the request body's properties are all optional, so an empty PUT is schema-valid and does nothing"
+op babelforce-agent-status-update(id: String, enabled: Bool, presence: Any) -> Any
+  description "Update an agent's status. Supply at least one of `enabled` or `presence.name` — the request body's properties are all optional, so an empty PUT is schema-valid and does nothing"
   risk "medium"
   idempotency "idempotent"
   effects ["network"]
@@ -69,11 +72,11 @@ op babelforce-agent-status-update(id: String, enabled: Bool, presence_name: Stri
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/agents/{id}/status")
   content_type = "application/json"
-  payload = { enabled, presence: { name: presence_name } }
+  payload = { enabled, presence }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
   return response
 
-op babelforce-call-list(page: Number, max: Number, id: Any, sessionId: String, conversationId: String, agentId: Any, fromNumber: Any, toNumber: Any, type: String, state: String, finishReason: String, time_start: Number, time_end: Number, q: String) -> Any
+op babelforce-call-list(page: Number, max: Number, sessionId: String, conversationId: String, id: Any, type: Any, fromNumber: String, toNumber: Any, time_start: Number, time_end: Number, agentId: Any, q: String, state: Any, finishReason: Any) -> Any
   description "List and filter calls from the reporting view"
   risk "low"
   idempotency "idempotent"
@@ -89,17 +92,17 @@ op babelforce-call-list(page: Number, max: Number, id: Any, sessionId: String, c
   when max
     url = fmt("{url}{sep}max={max}")
     sep = "&"
-  when id
-    url = fmt("{url}{sep}id={id}")
-    sep = "&"
   when sessionId
     url = fmt("{url}{sep}sessionId={sessionId}")
     sep = "&"
   when conversationId
     url = fmt("{url}{sep}conversationId={conversationId}")
     sep = "&"
-  when agentId
-    url = fmt("{url}{sep}agentId={agentId}")
+  when id
+    url = fmt("{url}{sep}id={id}")
+    sep = "&"
+  when type
+    url = fmt("{url}{sep}type={type}")
     sep = "&"
   when fromNumber
     url = fmt("{url}{sep}fromNumber={fromNumber}")
@@ -107,28 +110,28 @@ op babelforce-call-list(page: Number, max: Number, id: Any, sessionId: String, c
   when toNumber
     url = fmt("{url}{sep}toNumber={toNumber}")
     sep = "&"
-  when type
-    url = fmt("{url}{sep}type={type}")
-    sep = "&"
-  when state
-    url = fmt("{url}{sep}state={state}")
-    sep = "&"
-  when finishReason
-    url = fmt("{url}{sep}finishReason={finishReason}")
-    sep = "&"
   when time_start
     url = fmt("{url}{sep}time.start={time_start}")
     sep = "&"
   when time_end
     url = fmt("{url}{sep}time.end={time_end}")
     sep = "&"
+  when agentId
+    url = fmt("{url}{sep}agentId={agentId}")
+    sep = "&"
   when q
     url = fmt("{url}{sep}q={q}")
+    sep = "&"
+  when state
+    url = fmt("{url}{sep}state={state}")
+    sep = "&"
+  when finishReason
+    url = fmt("{url}{sep}finishReason={finishReason}")
   response = http.request(method: "GET", url)
   return response
 
 op babelforce-call-get(id: String) -> Any
-  description "Get one call"
+  description "Get a call"
   risk "low"
   idempotency "idempotent"
   effects ["network"]
@@ -140,7 +143,7 @@ op babelforce-call-get(id: String) -> Any
   return response
 
 op babelforce-call-hangup(id: String) -> Any
-  description "Hang up a live call"
+  description "Hang up a call"
   risk "destructive"
   idempotency "non_idempotent"
   effects ["network"]
@@ -151,8 +154,8 @@ op babelforce-call-hangup(id: String) -> Any
   response = http.request(method: "POST", url)
   return response
 
-op babelforce-call-session-set(id: String, body: Any) -> Any
-  description "Set session variables on a live call. Variable keys must start with `app` — babelforce rejects other keys, and states the rule only in prose"
+op babelforce-call-session-set(id: String, variables: Any) -> Any
+  description "Set session variables on a live call. Pass them as the `variables` map; babelforce applies only keys beginning `app.` and silently ignores the rest, and states that rule only in prose"
   risk "medium"
   idempotency "idempotent"
   effects ["network"]
@@ -161,12 +164,12 @@ op babelforce-call-session-set(id: String, body: Any) -> Any
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/calls/{id}/session/set")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
   return response
 
 op babelforce-session-get(id: String) -> Any
-  description "Get the IVR variables for a session"
+  description "Get a session's variables"
   risk "low"
   idempotency "idempotent"
   effects ["network"]
@@ -178,7 +181,7 @@ op babelforce-session-get(id: String) -> Any
   return response
 
 op babelforce-session-update(id: String, body: Any) -> Any
-  description "Update the user-scoped variables of a session"
+  description "Update the user-scoped variables of a session. The body is the variable map itself"
   risk "medium"
   idempotency "idempotent"
   effects ["network"]

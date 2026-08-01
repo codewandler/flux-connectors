@@ -1,5 +1,5 @@
 op babelforce-agent-get(id: String) -> Any
-  description "Get one agent"
+  description "Get an agent"
   risk "low"
   idempotency "idempotent"
   effects ["network"]
