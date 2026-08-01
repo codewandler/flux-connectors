@@ -107,11 +107,22 @@ async function render(status, routes = {}) {
   const calls = []
   window.fetch = async (input, init = {}) => {
     const url = String(input)
-    calls.push({ url, method: init.method ?? 'GET' })
-    const body = url === '/auth/status' ? status : (routes[url] ?? null)
+    const method = init.method ?? 'GET'
+    // The request body is recorded too (C-237): "invalid JSON never reaches the vendor" is a claim
+    // about what went out, not about whether anything did. Recorded only when there *is* one, so a
+    // call with no body still deep-equals `{ url, method }` and the guards above are untouched.
+    const call = { url, method }
+    if (init.body !== undefined) call.body = init.body
+    calls.push(call)
+    const route = url === '/auth/status' ? status : routes[url]
+    // A route may answer as a value — every caller before C-237 does — or as a function of the
+    // method, which is what lets one path answer a `GET` and a `DELETE` differently.
+    const answered = typeof route === 'function' ? route(method, init.body) : route
+    const status_code = answered?.__status ?? 200
+    const body = answered?.__status === undefined ? (answered ?? null) : (answered.body ?? null)
     return {
-      ok: true,
-      status: 200,
+      ok: status_code < 400,
+      status: status_code,
       text: async () => JSON.stringify(body),
     }
   }
@@ -507,4 +518,597 @@ test('the emitted stylesheet keeps the developer sign-in a secondary action', as
     /button\.ghost\s*\{[^}]*background:\s*transparent/,
     'the stylesheet no longer draws `button.ghost` as an unfilled secondary action'
   )
+})
+
+// ---------------------------------------------------------------------------------------------
+// The console (C-237)
+//
+// Six properties about what the page does with what the host already sends it. Every fixture below
+// is the *shape* of `/v1/connectors/{id}`; `crates/connectors-api/tests/wiring.rs` is what holds the
+// host to producing it, and `wiring_vocabulary.rs` is what holds the two to one vocabulary.
+// ---------------------------------------------------------------------------------------------
+
+/** A signed-in status. Everything in this section happens behind it. */
+const signedIn = (rest = {}) => ({
+  configured: true,
+  dev: false,
+  signed_in: true,
+  account: { email: 'operator@example.test', tenant: 'fixture-tenant' },
+  ...rest,
+})
+
+/** How many operations the fixture connector ships. Large enough that an N+1 is a measurement. */
+const OPERATION_COUNT = 30
+
+/**
+ * The operations of a connector, as `ConnectorView::operations` carries them.
+ *
+ * Every field here is one the host fills from the catalogue entry it already has in hand. The page
+ * having them *is* the N+1 fix: before C-237 `operations[]` carried `id`, `requires`, `requirement`
+ * and `callable`, and the page fetched the other five one request at a time.
+ */
+const fixtureOperations = () =>
+  Array.from({ length: OPERATION_COUNT }, (_, index) => ({
+    id: `fixture-op-${index}`,
+    tool: `fixture.op.${index}`,
+    service: index % 3 === 0 ? 'management' : 'default',
+    description: `Fixture operation ${index}`,
+    risk: index % 2 ? 'low' : 'medium',
+    idempotency: 'idempotent',
+    hosts: ['api.fixture.test'],
+    requires: [['fixture.api_key']],
+    requirement: 'declared',
+    callable: true,
+  }))
+
+/** One connector, as `GET /v1/connectors/{id}` serves it. */
+const fixtureConnector = (over = {}) => ({
+  id: 'fixture',
+  vendor: 'Fixture',
+  description: 'A connector that exists only in this harness.',
+  authority: 'fixture.test',
+  base_url: 'https://api.fixture.test',
+  operation_count: OPERATION_COUNT,
+  operations: fixtureOperations(),
+  wiring: 'wired',
+  callable_operations: OPERATION_COUNT,
+  credentials: [
+    {
+      name: 'fixture.api_key',
+      leaf: 'api_key',
+      placement: 'header:Authorization',
+      needs_username: false,
+      address: 'fixture-tenant/fixture.test/default/api_key',
+      stored: true,
+    },
+  ],
+  settings: [],
+  config_choices: [],
+  ...over,
+})
+
+/** One operation, as `GET /v1/operations/{id}` serves it — the expanded view, with the Flux. */
+const fixtureDetail = (index, over = {}) => ({
+  id: `fixture-op-${index}`,
+  provider: 'fixture',
+  service: index % 3 === 0 ? 'management' : 'default',
+  description: `Fixture operation ${index}`,
+  risk: index % 2 ? 'low' : 'medium',
+  idempotency: 'idempotent',
+  hosts: ['api.fixture.test'],
+  credentials: [['fixture.api_key']],
+  tool: `fixture.op.${index}`,
+  flux: `op fixture.op.${index} { }`,
+  input_schema: { type: 'object', properties: { ticket_id: { type: 'string' } } },
+  ...over,
+})
+
+/** Every route a fixture connector needs, detail included, so nothing 404s into a crash. */
+function fixtureRoutes(connector = fixtureConnector(), extra = {}) {
+  const routes = { '/v1/connectors': [connector], [`/v1/connectors/${connector.id}`]: connector }
+  for (let index = 0; index < OPERATION_COUNT; index += 1) {
+    routes[`/v1/operations/fixture-op-${index}`] = fixtureDetail(index)
+  }
+  return { ...routes, ...extra }
+}
+
+/** The requests the page made for a *single* operation's detail. The N+1's own measurement. */
+const detailFetches = (calls) =>
+  calls.filter((call) => /^\/v1\/operations\/[^/]+$/.test(call.url) && call.method === 'GET')
+
+/** The connector rows the left rail is currently showing. */
+const rail = (document) => [...document.querySelectorAll('#list .conn')]
+
+/** The operation rows the detail pane is currently showing. */
+const rows = (document) => [...document.querySelectorAll('.op')]
+
+/** The operation row whose tool name is `tool`. */
+const row = (document, tool) => rows(document).find((node) => node.textContent.includes(tool))
+
+/** Type into a control the page listens to, the way a person does. */
+async function type(page, control, text) {
+  control.value = text
+  control.dispatchEvent(new page.window.Event('input', { bubbles: true }))
+  await page.settle()
+}
+
+// ---------------------------------------------------------------------------------------------
+
+test('opening a connector fetches no operation detail, and expanding one fetches exactly that one', async () => {
+  // The measurement C-237 exists for. `show()` used to run
+  // `Promise.all(c.operations.map(o => api('GET', '/v1/operations/' + o.id)))` — one request per
+  // operation *in* the connector, 30 for this fixture and ~30 for the largest shipped one, to read
+  // three fields. C-212 put `requires` and `callable` on `operations[]` so this would not be needed
+  // and the page kept doing it; C-237 puts the other five there too, so the list costs nothing and
+  // only an expansion costs a request.
+  const page = await render(signedIn(), fixtureRoutes())
+  try {
+    rail(page.document)[0].click()
+    await page.settle()
+
+    assert.deepEqual(
+      detailFetches(page.calls).map((call) => call.url),
+      [],
+      `opening a connector fetched ${detailFetches(page.calls).length} operation details to render a list the host already sent whole — every field those responses carry is on \`operations[]\``
+    )
+    assert.equal(
+      rows(page.document).length,
+      OPERATION_COUNT,
+      'the operations were not rendered at all, so costing nothing proves nothing'
+    )
+
+    // And the other half: an expansion *is* a request, because `flux` and `input_schema` are the
+    // two things the list deliberately does not carry.
+    row(page.document, 'fixture.op.7').click()
+    await page.settle()
+    assert.deepEqual(
+      detailFetches(page.calls).map((call) => call.url),
+      ['/v1/operations/fixture-op-7'],
+      'expanding one operation fetched something other than exactly that operation'
+    )
+  } finally {
+    await page.close()
+  }
+})
+
+test('operations are grouped by service, and idempotency and hosts are rendered', async () => {
+  // `service` is the addressing level C-49 established, and the dimension `explorer-ux.md` says the
+  // public explorer is missing too. `OperationView` returned all three and the page rendered none
+  // of them.
+  const page = await render(signedIn(), fixtureRoutes())
+  try {
+    rail(page.document)[0].click()
+    await page.settle()
+
+    const groups = [...page.document.querySelectorAll('.service')]
+    assert.deepEqual(
+      groups.map((group) => group.dataset.service).sort(),
+      ['default', 'management'],
+      'the operations are one flat list — the service each belongs to is on every row and is not shown'
+    )
+    let grouped = 0
+    for (const group of groups) {
+      const service = group.dataset.service
+      for (const node of group.querySelectorAll('.op')) {
+        grouped += 1
+        const index = Number(node.dataset.operation.replace('fixture-op-', ''))
+        assert.equal(
+          index % 3 === 0 ? 'management' : 'default',
+          service,
+          `\`fixture.op.${index}\` is grouped under \`${service}\`, which is not its service`
+        )
+      }
+    }
+    assert.equal(grouped, OPERATION_COUNT, 'some operations are in no service group at all')
+
+    const detail = page.document.querySelector('#detail').textContent
+    assert.match(detail, /idempotent/, "an operation's idempotency is discarded")
+    assert.match(detail, /api\.fixture\.test/, 'the hosts an operation reaches are discarded')
+  } finally {
+    await page.close()
+  }
+})
+
+test('the connector list can be searched by connector, by vendor and by operation id', async () => {
+  // 54 connectors and ~299 operations in one flat unsorted rail. The three things a person actually
+  // types are asserted separately, because a search matching only the vendor name is the one that
+  // gets written and the one that fails the operator looking for `ticket-list`.
+  const zendesk = fixtureConnector({
+    id: 'zendesk',
+    vendor: 'Zendesk',
+    description: 'Support ticketing.',
+    operation_count: 1,
+    callable_operations: 1,
+    operations: [{ ...fixtureOperations()[0], id: 'zendesk-ticket-list', tool: 'zendesk.ticket.list' }],
+  })
+  const stripe = fixtureConnector({
+    id: 'stripe',
+    vendor: 'Stripe',
+    description: 'Payments.',
+    operation_count: 1,
+    callable_operations: 1,
+    operations: [{ ...fixtureOperations()[0], id: 'stripe-charge-list', tool: 'stripe.charge.list' }],
+  })
+  const page = await render(signedIn(), { '/v1/connectors': [zendesk, stripe] })
+  try {
+    const search = page.document.querySelector('#search')
+    assert.ok(search, 'the rail has no search box, so 54 connectors are found by scrolling')
+
+    const shown = () => rail(page.document).map((node) => node.textContent)
+    assert.equal(shown().length, 2, 'the rail did not render both connectors to begin with')
+
+    await type(page, search, 'zendesk')
+    assert.equal(shown().length, 1, 'searching a connector id narrows to no single connector')
+    assert.match(shown()[0], /Zendesk/)
+
+    await type(page, search, 'Stripe')
+    assert.equal(shown().length, 1, 'searching a vendor name narrows to no single connector')
+    assert.match(shown()[0], /Stripe/)
+
+    await type(page, search, 'ticket-list')
+    assert.equal(
+      shown().length,
+      1,
+      'searching an operation id finds nothing — the operator who knows the operation but not the vendor is left scrolling'
+    )
+    assert.match(shown()[0], /Zendesk/)
+
+    await type(page, search, '')
+    assert.equal(shown().length, 2, 'clearing the search does not restore the rail')
+  } finally {
+    await page.close()
+  }
+})
+
+test('the rail can be narrowed to the connectors that still need setup', async () => {
+  // *"Which of these still need setup"* is the operator's real question, and `wiring` already
+  // answers it. The filter is keyed on the host's own tokens for the same reason the sentences are —
+  // `wiring_vocabulary.rs` holds the page to every variant the host can send.
+  const ready = fixtureConnector({ id: 'ready', vendor: 'Ready', wiring: 'wired' })
+  const unset = fixtureConnector({
+    id: 'unset',
+    vendor: 'Unset',
+    wiring: 'not-wired',
+    callable_operations: 0,
+  })
+  const page = await render(signedIn(), { '/v1/connectors': [ready, unset] })
+  try {
+    const [needs] = buttons(page.document, /needs setup/i)
+    assert.ok(needs, 'the rail cannot be narrowed to the connectors an operator still has work on')
+    needs.click()
+    await page.settle()
+    assert.deepEqual(
+      rail(page.document).map((node) => node.textContent.replace(/\d+\/?\d*/g, '').trim()),
+      ['Unset'],
+      'narrowing to the connectors that need setup keeps the ones that do not'
+    )
+  } finally {
+    await page.close()
+  }
+})
+
+test('an operation whose credential is withheld is never offered as ready', async () => {
+  // C-235's distinction, at the unit that has it. `requirement: 'no-credential'` and
+  // `requirement: 'no-credential-required'` both arrive with an empty `requires`, and the page
+  // rendered the empty list into the sentence "needs " with nothing after it. An operator reading a
+  // blank requirement reasonably concludes there is nothing to supply, which is exactly the
+  // conclusion C-235 exists to stop them drawing about freshdesk.
+  const connector = fixtureConnector({
+    operation_count: 2,
+    callable_operations: 1,
+    wiring: 'partly-wired',
+    credentials: [],
+    operations: [
+      {
+        ...fixtureOperations()[0],
+        id: 'fixture-public',
+        tool: 'fixture.public',
+        requires: [],
+        requirement: 'no-credential-required',
+        callable: true,
+      },
+      {
+        ...fixtureOperations()[1],
+        id: 'fixture-withheld',
+        tool: 'fixture.withheld',
+        requires: [],
+        requirement: 'no-credential',
+        callable: false,
+      },
+    ],
+  })
+  const page = await render(signedIn(), {
+    '/v1/connectors': [connector],
+    '/v1/connectors/fixture': connector,
+  })
+  try {
+    rail(page.document)[0].click()
+    await page.settle()
+
+    const withheld = row(page.document, 'fixture.withheld')
+    assert.ok(withheld, 'the withheld operation was not rendered')
+    assert.doesNotMatch(
+      withheld.textContent,
+      /needs\s*$|needs\s{2,}/,
+      'a withheld operation renders "needs" with nothing after it — the requirement list is empty because the credential is withheld, not because nothing is needed'
+    )
+    assert.match(
+      withheld.textContent,
+      /withheld|not held|cannot be held/i,
+      'a withheld operation does not say its credential is withheld, so it reads as one nobody got round to configuring'
+    )
+
+    const open = row(page.document, 'fixture.public')
+    assert.doesNotMatch(
+      open.textContent,
+      /withheld|cannot be held/i,
+      'a positively-public operation is described as withheld — the two states differ by one word and mean opposite things about whether the connector works'
+    )
+  } finally {
+    await page.close()
+  }
+})
+
+test('a field the host did not publish reads as unpublished, never as a fact about the connector', async () => {
+  // C-408's rule, on the other surface that reads a catalogue. A source that does not publish
+  // `hosts` is not a connector that reaches no host, and a source that does not publish a
+  // description is not a connector without one. The public explorer learned this from
+  // flux-exchange's console rendering "not configured" in red on every card; this page has the same
+  // mistake available and no second consumer to find it.
+  const connector = fixtureConnector({
+    description: null,
+    operation_count: 1,
+    callable_operations: 1,
+    operations: [
+      {
+        ...fixtureOperations()[0],
+        id: 'fixture-thin',
+        tool: 'fixture.thin',
+        description: null,
+        hosts: null,
+        idempotency: null,
+      },
+    ],
+  })
+  const page = await render(signedIn(), {
+    '/v1/connectors': [connector],
+    '/v1/connectors/fixture': connector,
+  })
+  try {
+    rail(page.document)[0].click()
+    await page.settle()
+
+    const detail = page.document.querySelector('#detail')
+    assert.doesNotMatch(
+      detail.textContent,
+      /\bnull\b|\bundefined\b/,
+      'an unpublished field reached the page as the literal `null`, which is a rendering of the absence rather than a reading of it'
+    )
+    assert.match(
+      row(page.document, 'fixture.thin').textContent,
+      /not published/i,
+      'an operation whose source published no description renders as though it simply has none'
+    )
+
+    // And the counter-case, which is what keeps this a rule about *absence* rather than a blanket
+    // apology: a published field is rendered, not hedged.
+    const full = await render(signedIn(), fixtureRoutes())
+    try {
+      rail(full.document)[0].click()
+      await full.settle()
+      assert.doesNotMatch(
+        row(full.document, 'fixture.op.1').textContent,
+        /not published/i,
+        'a fully published operation is reported as unpublished'
+      )
+    } finally {
+      await full.close()
+    }
+  } finally {
+    await page.close()
+  }
+})
+
+test('a stored credential can be removed from the page, and invalid parameters never reach the vendor', async () => {
+  // Two holes in the same surface. `DELETE /v1/credentials/{provider}/{credential}` has existed
+  // since C-203 and nothing on the page could reach it, so an operator could store a credential and
+  // not take it back. And the parameter editor was a single-line `<input value="{}">` whose contents
+  // went out unparsed, so a typo was diagnosed by the vendor as a 400 about a document it never got.
+  const connector = fixtureConnector()
+  const page = await render(signedIn(), fixtureRoutes(connector))
+  try {
+    rail(page.document)[0].click()
+    await page.settle()
+
+    const forget = buttons(page.document, /Remove|Forget|Delete/i)
+    assert.ok(forget.length >= 1, 'a stored credential cannot be removed through the page')
+    forget[0].click()
+    await page.settle()
+    assert.deepEqual(
+      page.calls.filter((call) => call.method === 'DELETE').map((call) => call.url),
+      ['/v1/credentials/fixture/fixture.api_key'],
+      'removing a credential does not DELETE it at the address the host serves it from'
+    )
+
+    // The parameter editor: a body that is not JSON is refused here.
+    row(page.document, 'fixture.op.7').click()
+    await page.settle()
+    const params = page.document.querySelector('#play textarea')
+    assert.ok(params, 'the parameter editor is not a textarea, so a real body cannot be typed into it')
+
+    await type(page, params, '{ "ticket_id": }')
+    buttons(page.document, /^Send$/)[0].click()
+    await page.settle()
+
+    assert.deepEqual(
+      page.calls.filter((call) => call.url.endsWith('/execute')),
+      [],
+      'invalid JSON was sent to the vendor, which then diagnosed a document the operator never wrote'
+    )
+    assert.match(
+      page.document.querySelector('#play').textContent,
+      /not valid JSON/i,
+      'invalid JSON is refused silently, so the operator is left with a button that does nothing'
+    )
+  } finally {
+    await page.close()
+  }
+})
+
+test('a dry run shows the request without sending it, and a refusal is shown as written', async () => {
+  // C-145's seam, reached from the page. `crates/connectors-api/tests/dry_run.rs` is what holds the
+  // *route* to naming the unbound field, its service and the operation; this is what holds the page
+  // to two things it could each get wrong on its own — rehearsing must not execute, and a refusal
+  // must not be flattened into "something went wrong".
+  const connector = fixtureConnector()
+  const rehearsal = {
+    operation: 'fixture-op-7',
+    tool: 'fixture.op.7',
+    request: {
+      method: 'GET',
+      url: 'https://api.fixture.test/v1/tickets/42',
+      headers: { authorization: 'Bearer {fixture.api_key}' },
+      body: null,
+    },
+    credentials: [
+      {
+        credential: 'fixture.api_key',
+        reference: '{fixture.api_key}',
+        place: 'header',
+        target: 'authorization',
+        prefix: 'Bearer ',
+      },
+    ],
+  }
+  const page = await render(
+    signedIn(),
+    fixtureRoutes(connector, { '/v1/operations/fixture-op-7/dry-run': rehearsal })
+  )
+  try {
+    rail(page.document)[0].click()
+    await page.settle()
+    row(page.document, 'fixture.op.7').click()
+    await page.settle()
+
+    const [dry] = buttons(page.document, /^Dry run$/)
+    assert.ok(dry, 'the page offers no way to see the request before sending it')
+    dry.click()
+    await page.settle()
+
+    assert.deepEqual(
+      page.calls.filter((call) => call.url.endsWith('/execute')),
+      [],
+      'a dry run sent the call — the one thing it exists not to do'
+    )
+    const panel = page.document.querySelector('#play').textContent
+    assert.match(panel, /https:\/\/api\.fixture\.test\/v1\/tickets\/42/, 'the rehearsed URL is not shown')
+    assert.match(panel, /authorization/, 'the rehearsed headers are not shown')
+    assert.match(
+      panel,
+      /no stored value was read|Not sent/,
+      'the panel does not say that nothing was sent, so it reads like a response'
+    )
+  } finally {
+    await page.close()
+  }
+
+  // And the refusal, which is the half worth having. `MissingConfig` names the field and its
+  // service; a page that replaced it with its own wording would be answering a different question.
+  const REFUSAL =
+    '`zendesk-ticket-show` needs configuration field `subdomain` for service `default`, which is not bound'
+  const refused = await render(
+    signedIn(),
+    fixtureRoutes(connector, {
+      '/v1/operations/fixture-op-7/dry-run': { __status: 400, body: { error: REFUSAL } },
+    })
+  )
+  try {
+    rail(refused.document)[0].click()
+    await refused.settle()
+    row(refused.document, 'fixture.op.7').click()
+    await refused.settle()
+    buttons(refused.document, /^Dry run$/)[0].click()
+    await refused.settle()
+    assert.match(
+      refused.document.querySelector('#play').textContent,
+      /subdomain/,
+      'the refusal was flattened — the field an operator has to bind is the whole content of it'
+    )
+  } finally {
+    await refused.close()
+  }
+})
+
+test('the response is legible: status, headers and body are distinguished and JSON is formatted', async () => {
+  // `exec::Outcome::content` is the JSON-encoded `{status, headers, body}` flux's `http.request`
+  // makes canonical (C-403), and the page wrote the whole document into a `<pre>` verbatim. The
+  // redactor's output passes through unchanged — it is what stops a vendor echoing a token onto this
+  // surface — so the check below is that the *shape* is read, never that the text is rewritten.
+  const connector = fixtureConnector()
+  const outcome = {
+    tool: 'fixture.op.7',
+    is_error: false,
+    content: JSON.stringify({
+      status: 201,
+      headers: { 'content-type': 'application/json', 'x-request-id': 'req_fixture' },
+      body: { id: 'tkt_1', subject: 'A ticket', tags: ['a', 'b'] },
+    }),
+  }
+  const page = await render(
+    signedIn(),
+    fixtureRoutes(connector, { '/v1/operations/fixture-op-7/execute': outcome })
+  )
+  try {
+    rail(page.document)[0].click()
+    await page.settle()
+    row(page.document, 'fixture.op.7').click()
+    await page.settle()
+    buttons(page.document, /^Send$/)[0].click()
+    await page.settle()
+
+    const panel = page.document.querySelector('#play')
+    const status = panel.querySelector('.response-status')
+    const headers = panel.querySelector('.response-headers')
+    const body = panel.querySelector('.response-body')
+    assert.ok(status && headers && body, 'the response is still one undifferentiated block of text')
+    assert.match(status.textContent, /201/, 'the status is not shown')
+    assert.match(headers.textContent, /x-request-id/, 'the headers are not shown')
+    assert.match(
+      body.textContent,
+      /\n {2}"id": "tkt_1"/,
+      'a JSON body is not formatted, so it is read as one line'
+    )
+
+    // The redactor's own output is text and stays text. A response that is *not* the canonical
+    // document is shown whole rather than dropped — the alternative is a page that hides what it
+    // could not parse, which is how an operator stops trusting the panel.
+    const REDACTED = 'HTTP 200 Authorization: Bearer [REDACTED]'
+    const opaque = await render(
+      signedIn(),
+      fixtureRoutes(connector, {
+        '/v1/operations/fixture-op-7/execute': {
+          tool: 'fixture.op.7',
+          is_error: false,
+          content: REDACTED,
+        },
+      })
+    )
+    try {
+      rail(opaque.document)[0].click()
+      await opaque.settle()
+      row(opaque.document, 'fixture.op.7').click()
+      await opaque.settle()
+      buttons(opaque.document, /^Send$/)[0].click()
+      await opaque.settle()
+      assert.match(
+        opaque.document.querySelector('#play').textContent,
+        /\[REDACTED\]/,
+        'a response the page could not split was dropped rather than shown — the redactor already rendered it'
+      )
+    } finally {
+      await opaque.close()
+    }
+  } finally {
+    await page.close()
+  }
 })

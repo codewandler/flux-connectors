@@ -99,3 +99,49 @@ pub async fn execute(
         is_error: result.is_error,
     })
 }
+
+/// **What `operation` would send for `tenant`, without sending it** — C-145's seam (C-237).
+///
+/// The one question an operator cannot otherwise get a straight answer to. A call that fails
+/// because a configuration field is unbound and a call that fails because the vendor refused the
+/// credential are the same red box on the page; this one names the missing fact before anything
+/// leaves — `MissingConfig` names the field *and the service it belongs to*, `MissingCredential`
+/// names the address to store a value at.
+///
+/// **The secret store is never read.** [`connector_pack::Operation::dry_run`] places each declared
+/// credential's *reference* rather than its value, so this answers identically over an empty store
+/// and there is no path from here to a value. That is what makes it safe to offer beside a Send
+/// button rather than behind one.
+///
+/// # Errors
+///
+/// Everything the projection refuses — an operation whose connector this catalogue does not carry,
+/// a tenant the ports will not bind — plus everything `dry_run` refuses. None of them is reported
+/// as a partial rehearsal, which would be a *different* call presented as the real one.
+pub fn dry_run(
+    app: &App,
+    tenant: &str,
+    operation_id: &str,
+    params: &Value,
+) -> anyhow::Result<Value> {
+    let entry = catalog::operation(OperationKey::id(operation_id))
+        .ok_or_else(|| anyhow::anyhow!("no operation `{operation_id}` in this catalogue"))?;
+    catalog::provider(ProviderKey::id(entry.provider)).ok_or_else(|| {
+        anyhow::anyhow!(
+            "`{operation_id}` names provider `{}`, which this catalogue does not carry",
+            entry.provider
+        )
+    })?;
+
+    // The same pair, built from one value at one call site, for the same reason `execute` does it:
+    // it is what makes `Error::TenantMismatch` unreachable here rather than merely unlikely.
+    let credentials = app.credentials(tenant)?;
+    let configuration = Configuration::new(
+        Arc::clone(app.settings()) as Arc<dyn connector_pack::ConfigStore>,
+        tenant,
+    )?;
+
+    let projected =
+        connector_pack::Operation::project(entry, app.egress(), credentials, configuration)?;
+    Ok(projected.dry_run(params)?.to_json())
+}
