@@ -17,6 +17,16 @@ Take `providers/babelforce.toml` from nine operations to the 397 `manager-sdk/CO
 canonical, and put a check under it so coverage cannot regress unnoticed.
 
 ## Acceptance
+- [ ] **Scope is exactly what manager-sdk covers — owner-stated 2026-08-01: "only include things
+      which are also included in manager-sdk itself".** That is `manager-sdk/COVERAGE.md`'s canonical
+      **397**, which is the 398 operations the five documents declare minus
+      `POST /api/v1/webhook/zendesk` (operationId `zendesk`) — a webhook *receiver* babelforce exposes
+      for Zendesk to call, not a client-callable operation. Nothing beyond that set is added here.
+- [ ] **No `/api/internal` surface, ever.** Measured 2026-08-01: `internal` appears in **zero** paths
+      across all five documents, so there is nothing to exclude today — which is exactly why this is a
+      **guard** rather than a filter. A check refuses any selected operation whose path carries an
+      `internal` segment, so a future spec pull cannot introduce one silently. Owner-stated, and the
+      cost of the guard is one assertion.
 - [ ] All five services are selected and reach the IR; the emitted operation count matches the
       canonical scope, with every intentional exclusion named in the file beside its reason.
 - [ ] A coverage test in this repo mirrors `manager-sdk/COVERAGE.md`: it reads the vendored documents,

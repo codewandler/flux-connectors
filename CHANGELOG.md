@@ -24,6 +24,46 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shifted would strand every credential already stored. The ambiguous case — several connections and
   none named — **refuses and lists the uuids that would have worked**, rather than guessing.
 
+### Changed
+
+- **babelforce is the first spec-backed connector** (C-416). `providers/babelforce.toml` now points at
+  the vendored manager document and selects its nine operations through `[[patch.operations]]`
+  instead of writing them out. This is the claim `docs/designs/connector-pipeline.md` has carried
+  since C-2 — *"if patching a bad vendor spec turns out harder than hand-writing the integration, the
+  whole premise needs revisiting"* — settled with a number rather than an impression:
+
+  | | before | after |
+  |---|---:|---:|
+  | whole file | 533 lines | **420** |
+  | declarations | 306 | **98** |
+  | operation blocks | 293 | **80** (32.6 → 8.9 per operation) |
+
+  **Zero parameter patches were needed.** The document's descriptions and schemas beat the hand
+  transcription everywhere, and the one place they did not — a 38-parameter reporting endpoint with 18
+  `filters.`-prefixed synonyms — is what C-422 was built for. The transferable finding is the shape of
+  the saving: the old file paid ~5 lines to *describe* each of 14 kept parameters, the new one pays ~1
+  line to *name* each of 24 dropped ones. **Curation by exclusion beats curation by transcription
+  whenever a vendor documents more than half of what you want**, which for a 356-operation document is
+  always.
+
+  Byte-identity was **deliberately refused**: `connectors/babelforce.flux` grows because the document
+  publishes response schemas for all nine operations where the hand-authored file had none — the exact
+  gap C-126 recorded babelforce as the largest block of. Coverage moves 0/9 → 9/9, so the ratchet
+  turns: `COVERED_FLOOR` 250 → **277** and `ABSENCE_CEILING` 33 → **24**, both at the measured figures.
+
+  Two premises the conversion disproved, both recorded rather than quietly corrected: there is no
+  POST/PUT disagreement on `babelforce-call-session-set` (both say `PUT`), and `servers[0]` is
+  Production rather than staging, so the `base_url` comment's stated reason was wrong.
+
+  **One change is unverified and is flagged as such.** `babelforce-call-session-set`'s request body:
+  the hand-authored connector sends a bare map, the document declares a `{"variables": {…}}` wrapper.
+  The document was taken, then the implementor re-examined and lowered its own confidence to roughly
+  even — five other session-variable payloads in the same document are bare maps, one of them saying
+  in prose "the body is a key/value map", and a bare `SessionVariables` component exists that this
+  operation does not reference. **Both failure modes are silent**: non-`app.` keys are ignored, so the
+  wrong shape either way returns `200 {"success": true}` and nothing notices. One live call settles
+  it; nothing offline can.
+
 ### Fixed
 
 - **Loading a provider file means the same thing everywhere** (C-421). `provider::load` took bytes and
