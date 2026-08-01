@@ -26,6 +26,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The flux engine line moves to 0.46** (C-428). Raised in review: flux released 0.46.0 and this
+  repository pinned 0.45. flux treats the minor position as the breaking signal at `0.y`, so `^0.45`
+  does not resolve it — and `connector-pack` hands a host `Arc<dyn flux_runtime::Tool>`, so a pack
+  built against 0.45 and a host on 0.46 resolve two copies of the runtime and the types do not unify.
+  That made the bump a prerequisite for this release rather than a follow-up: publishing on 0.45
+  would have shipped a crate its intended consumer cannot link.
+
+  All six pins move together — a split line is worse than a stale one, which is what
+  `flux_engine_line.rs` exists to refuse. **No generated artifact moved**: `flux-lang` owns the
+  formatter this repository emits through, and all 948 artifacts are byte-identical under 0.46.
+
 - **babelforce carries manager-sdk's whole API surface: 391 operations** (C-417). The connector went
   from 9 curated operations to **391 emitted**, which reconciles against manager-sdk's canonical 397
   as `391 + 5 inexpressible + 1 withheld`. It is described in **751 lines with 247 declarations** —

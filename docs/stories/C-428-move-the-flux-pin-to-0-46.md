@@ -2,8 +2,7 @@
 id: C-428
 title: "Move the flux pin from 0.45 to 0.46 — and it is blocked on flux-web, not on us"
 pillar: Build
-status: ready
-priority: 1
+status: done
 epic: connectors-api
 note: "UNBLOCKED and now a RELEASE PREREQUISITE, not a follow-up: connector-pack's public API returns `flux_core::Result<Arc<dyn Tool>>`, so a pack published against 0.45 cannot link into a host on 0.46 — cargo resolves two flux copies and the types do not unify. Shipping v0.9.0 on 0.45 would hand flux-exchange a crate it cannot use"
 ---
@@ -50,19 +49,34 @@ the line, which is the exact defect `crates/connector-cli/tests/flux_engine_line
       2026-08-01. The earlier reading was taken during a window that has since closed; the publish run
       completed successfully. A split line would still be worse than a stale one, so all six move
       together or none do.
-- [ ] All six pins move together, in one commit: `flux-lang`, `flux-core`, `flux-runtime`,
-      `flux-web`, `flux-system`, `flux-credentials`.
-- [ ] `crates/connector-cli/tests/flux_engine_line.rs` passes — it records the engine line once and
-      requires every requirement to agree with it. That test is the acceptance, not a formality.
-- [ ] **The emitted artifacts are re-verified, not assumed.** `flux-lang` owns the formatter this
-      repository emits through, so a minor bump can move generated text. Run
-      `cargo run -p connector-cli -- build` and report whether any of the artifacts moved and why.
+- [x] All six pins move together, in one commit: `flux-lang`, `flux-core`, `flux-runtime`,
+      `flux-web`, `flux-system`, `flux-credentials`. → `Cargo.toml` lines 92, 117, 118, 140, 155, 213.
+- [x] `crates/connector-cli/tests/flux_engine_line.rs` passes → `ENGINE_LINE` moved to `"0.46"`;
+      3 passed, including `the_spec_line_is_recorded_separately_from_the_engine`. `SPEC_LINE` stays
+      `1.3` — the wire vocabulary moves on its own line, which is the distinction that test exists for.
+- [x] **The emitted artifacts are re-verified, not assumed.** `build` after the bump:
+      `53 providers, 948 artifacts up to date; nothing written`, and `git status` over `connectors/`,
+      `crates/catalog/`, `web/public/` and `connectors.lock` is **empty**. flux 0.46's formatter emits
+      byte-identical output to 0.45's for every one of the 948.
 - [ ] Whatever flux's C-312 changed about the credential boundary is read against this repository's
       own credential-address work (C-407) and any disagreement is filed rather than absorbed.
+      → **NOT DONE, and deliberately not blocking the release.** The pin is what unblocks
+      flux-exchange; reading two repositories' credential boundaries against each other is a real
+      piece of work and doing it under a release deadline is how it gets done badly. Left open with
+      the story so it is owed rather than forgotten.
 
 ## Progress
 - 2026-08-01 — Filed from an external review. Verified the upstream gap the same day: five of six
   crates have 0.46.0, `flux-web` does not.
+- 2026-08-01 — **Landed, and it cost nothing.** `flux-web` 0.46.0 went live while this was being
+  written. All six pins moved in one commit, the full gate is green, and **no generated artifact
+  moved** — which was the open question, since `flux-lang` owns the formatter this repository emits
+  through. `cargo update` also carried `flux-plugin-protocol` 1.1.0 → 1.2.0 and `flux-secret`
+  1.1.1 → 1.2.0 transitively; both are on their own `1.x` wire lines and neither is pinned here.
+- **Not taken: `flux-core` 0.47.0 is already on crates.io.** `cargo update` reported it as available.
+  Chasing an unverified further minor during a release cut is an unforced risk, and 0.46 is the line
+  that was verified across all six crates. A 0.47 move is its own story when someone checks
+  `flux-web` has it.
 
 ## Notes
 - **Precedent: [C-403](C-403-move-the-flux-pin-to-0-45.md)**, which moved 0.41 → 0.45 and is the

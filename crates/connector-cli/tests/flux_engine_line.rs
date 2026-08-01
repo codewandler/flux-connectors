@@ -35,7 +35,7 @@ use std::path::{Path, PathBuf};
 ///
 /// A `0.x` line, so this is the whole compatibility unit: `"0.45"` admits every `0.45.z` and
 /// nothing else.
-const ENGINE_LINE: &str = "0.45";
+const ENGINE_LINE: &str = "0.46";
 
 /// **The `flux-spec` line**, which is not the engine's — see this module's documentation.
 const SPEC_LINE: &str = "1.3";
