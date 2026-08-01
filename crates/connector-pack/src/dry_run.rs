@@ -112,7 +112,7 @@ impl Transport for Egress {
         params: &Value,
     ) -> flux_core::Result<ToolResult> {
         let request = operation.build_authenticated_request(ctx, params).await?;
-        self.tool().execute(ctx, request.to_params()).await
+        self.send(ctx, request).await
     }
 }
 

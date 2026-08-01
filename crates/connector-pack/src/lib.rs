@@ -188,6 +188,7 @@ mod auth;
 mod config;
 mod credentials;
 mod dry_run;
+mod mint;
 mod name;
 mod rehearsal;
 mod request;
@@ -678,6 +679,35 @@ pub enum Error {
     EmptyMechanism {
         /// The operation id.
         operation: String,
+    },
+
+    /// **A credential-producing call that produced none** — C-136, and the failure path the whole
+    /// story turns on.
+    ///
+    /// Raised whenever the secret cannot be taken out of the vendor's answer: the transport failed,
+    /// the answer is not JSON, the declared location resolves to nothing, or it resolves to
+    /// something that is not a non-empty string. One variant for all four, because telling them
+    /// apart for a caller would mean describing the body — and the body of a login is where the
+    /// credential is.
+    ///
+    /// **It carries no bytes of that answer.** At most the HTTP status, which is a small structured
+    /// fact rather than vendor text, and which is the one thing an operator actually acts on. That
+    /// is the deliberate cost the story pays: an operation whose success is a credential cannot
+    /// quote its own failure, because the two are the same document read at different times. See
+    /// [`crate::mint`].
+    #[error(
+        "`{operation}` was called to mint `{credential}` and no credential was minted; the \
+         vendor's answer is withheld, because an operation of this shape cannot quote its own \
+         response without risking the value it exists to divert{}",
+        status.map_or_else(String::new, |status| format!(" (HTTP {status})"))
+    )]
+    CredentialNotMinted {
+        /// The operation id.
+        operation: String,
+        /// The credential it was called to mint.
+        credential: String,
+        /// The vendor's HTTP status, when the transport's answer carried one.
+        status: Option<u64>,
     },
 }
 

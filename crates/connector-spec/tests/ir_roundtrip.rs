@@ -74,6 +74,7 @@ fn op(id: &str, auth: Option<Vec<AuthRequirement>>) -> Operation {
         params: ParamSet::default(),
         response_schema: None,
         credential_response: Vec::new(),
+        produces_credential: None,
         quirks: Quirks::default(),
     }
 }

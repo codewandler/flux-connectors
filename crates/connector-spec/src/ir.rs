@@ -983,9 +983,102 @@ pub struct Operation {
     /// [C-79]: ../../../docs/stories/C-79-sensitive-response-fields.md
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub credential_response: Vec<String>,
+    /// **This operation's whole purpose is to mint a credential**, and this says which one and
+    /// where in the vendor's answer it arrives — C-136's declaration.
+    ///
+    /// The sibling of [`credential_response`](Self::credential_response) and the inverse of it.
+    /// That field says *"a credential arrives here and I have no way to keep it out of the
+    /// session"*, and the only thing the loader can do with the claim is withhold the operation.
+    /// This one says *"a credential arrives here and it is to be diverted into the store"*, which is
+    /// an operation that can ship: the value travels from the response into the bound
+    /// `CredentialStore` and the caller receives the **handle**.
+    ///
+    /// # The declared output is the handle, not the vendor's body
+    ///
+    /// [`Operation::effective_response_schema`] is what a consumer reads, and for an operation
+    /// declaring this it is [`credential_handle_schema`] — `{ "credential": "tenants/…" }` — whatever
+    /// else the author wrote. A `response_schema` beside this field documents the *vendor's wire
+    /// body*, which the loader cross-checks does not carry the secret; it is never the operation's
+    /// output. C-430's finding is why the distinction is spelled out rather than left implicit:
+    /// deleting a location from a published schema removes the **disclosure** and leaves the
+    /// **exposure**, because nothing between the vendor and a model-visible symbol projects a
+    /// response. Only removing the value from what a caller receives removes the exposure, and that
+    /// is what the diversion does.
+    ///
+    /// # Empty for every shipped connector today
+    ///
+    /// The four operations v0.9.0 and v0.9.1 withheld under `AGENTS.md` § Authentication contract
+    /// are withheld for `credential_response`, and reinstating one is a separate change to that
+    /// provider file. `skip_serializing_if` keeps the encoded IR of every connector shipped before
+    /// C-136 byte-identical, so landing the field moves no `ir_sha256`, no `connectors.lock` entry
+    /// and none of the generated artifacts — the same property
+    /// [`credential_response`](Self::credential_response) and [`Operation::expose`] document, for
+    /// the same reason.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub produces_credential: Option<ProducedCredential>,
     /// The ways this endpoint departs from its spec.
     #[serde(default, skip_serializing_if = "Quirks::is_empty")]
     pub quirks: Quirks,
+}
+
+/// **A credential an operation mints**: where the secret arrives, and which declared credential it
+/// is stored as.
+///
+/// Two facts, and the diversion needs both. Without [`secret`](Self::secret) the extractor would not
+/// know what to divert; without [`credential`](Self::credential) there is no address to divert it
+/// *to*, because a [`CredentialRef`](connector_address::CredentialRef) is composed from the
+/// connector's `authority` and the credential's own leaf. The loader refuses a declaration missing
+/// either, rather than inferring one — inferring "the field called `access_token`" is exactly the
+/// name-shaped guessing C-430 measured to be wrong nine times in ten.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProducedCredential {
+    /// **Where the secret arrives in the vendor's response body** — one
+    /// [`response_location_exists`] pointer, `/access_token`.
+    ///
+    /// The same vocabulary as [`Operation::credential_response`], deliberately: two spellings of
+    /// "a location in a response" would be two resolvers to keep in step, and the pair of fields
+    /// describes one thing from two sides.
+    pub secret: String,
+    /// **Which declared credential the value is stored as** — an [`AuthMethod::name`], e.g.
+    /// `babelforce.access_token`.
+    ///
+    /// A name rather than an address: the address is the host's to render, from the tenant it
+    /// authenticated, the connector's `authority` and this credential's leaf. This repository owns
+    /// the address and never the store, and a field holding a rendered path here would be a second
+    /// spelling of one C-90 already owns.
+    pub credential: String,
+}
+
+/// **The property name a diverted credential's handle is returned under.**
+///
+/// One spelling, shared by the schema below and by `connector-pack`'s runtime, so the declared
+/// output and the effective output cannot drift into two different words.
+pub const CREDENTIAL_HANDLE_FIELD: &str = "credential";
+
+/// **The declared output of every credential-producing operation**: the handle, and nothing else.
+///
+/// `{ "credential": "tenants/<tenant>/<authority>/…" }`. It is derived rather than authored, for the
+/// reason `Level` is in `docs/designs/connector-configuration.md`: a value a author could state
+/// differently per operation is a value some operation will eventually state wrongly, and here
+/// "wrongly" means a published schema that promises a caller the secret.
+pub fn credential_handle_schema() -> JsonSchema {
+    serde_json::json!({
+        "type": "object",
+        "description": "A handle to the credential this call minted. The secret itself is never \
+                        returned: it travels from the vendor's response straight into the host's \
+                        credential store, and downstream operations name this address rather than \
+                        reading a value.",
+        "properties": {
+            CREDENTIAL_HANDLE_FIELD: {
+                "type": "string",
+                "description": "The credential's address, e.g. \
+                                `tenants/<tenant>/<authority>/<credential>`.",
+            }
+        },
+        "required": [CREDENTIAL_HANDLE_FIELD],
+        "additionalProperties": false,
+    })
 }
 
 /// **Whether a response location resolves against a response schema**, walking nested schemas.
@@ -1070,6 +1163,24 @@ impl Operation {
     /// a field absent.
     pub fn states_repeatability_condition(&self) -> bool {
         self.repeatable_because.is_some()
+    }
+
+    /// **What a caller of this operation actually receives**, as opposed to what the vendor sends.
+    ///
+    /// The two are the same for every operation except a credential-producing one, where the
+    /// difference is the whole of C-136: the secret travels into the store and the caller receives
+    /// [`credential_handle_schema`]. Read this rather than [`response_schema`](Self::response_schema)
+    /// anywhere a consumer is being told what the operation returns — the public catalogue does
+    /// (`connector-cli`'s `site`), because a published schema promising the secret is precisely the
+    /// disclosure C-430 refused to fix by deletion.
+    ///
+    /// Derived, never authored. An author who could spell the output would eventually spell one
+    /// that contains the secret, and a schema is not the kind of thing a reviewer re-reads.
+    pub fn effective_response_schema(&self) -> Option<JsonSchema> {
+        if self.produces_credential.is_some() {
+            return Some(credential_handle_schema());
+        }
+        self.response_schema.clone()
     }
 
     /// **One JSON Schema describing everything the operation receives.**

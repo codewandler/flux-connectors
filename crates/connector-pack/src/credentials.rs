@@ -59,7 +59,7 @@
 
 use std::sync::Arc;
 
-use connector_secrets::{validate_tenant, CredentialRef, SecretStore, StoreError};
+use connector_secrets::{validate_tenant, CredentialRef, Secret, SecretStore, StoreError};
 use flux_runtime::ToolContext;
 
 use crate::auth::{self, Assembled};
@@ -154,6 +154,55 @@ impl Credentials {
                 reason,
             },
         )
+    }
+
+    /// **Divert a freshly minted secret into the bound store, and answer with its address** (C-136).
+    ///
+    /// The mirror image of [`resolve`](Self::resolve), through the same `Arc<dyn SecretStore>` and
+    /// therefore under the same rule: the store is the one the host handed to [`crate::pack`], so an
+    /// operation cannot mint into a store the host did not supply. A host that bound none has a
+    /// login that refuses rather than a login that writes somewhere.
+    ///
+    /// # The redactor is told first, and it is the same ordering `resolve` uses
+    ///
+    /// [`register`] runs **before** the store write — the only fallible step after it — so a failure
+    /// between "the value arrived" and "the value is stored" cannot surface it. That is the second
+    /// line of defence the story asks for and not the guarantee: the guarantee is that this function
+    /// returns a [`CredentialRef`] and there is no code path on which the value itself is returned.
+    /// Registering it anyway matters because the value is now a value *this process is holding*,
+    /// which is exactly the condition `Redactor` exists for.
+    ///
+    /// It also inherits C-152's refusal: a secret the host's redactor would silently decline to hold
+    /// — under six characters once trimmed — is [`Error::UnredactableCredential`] and **is not
+    /// stored**. A vendor answering a login with a five-character token is a misconfiguration long
+    /// before it is a credential, and storing it would leave every later request placing a value no
+    /// scrub covers.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NoCredentialAddress`] and [`Error::CredentialAddress`] exactly as
+    /// [`reference`](Self::reference) raises them, [`Error::UnredactableCredential`] per the above,
+    /// and [`Error::CredentialStore`] when the store could not be written. None of them carries the
+    /// value: `StoreError` is documented as safe to log, and the two address errors name a path.
+    pub(crate) async fn mint(
+        &self,
+        ctx: &ToolContext,
+        operation: &'static catalog::Operation,
+        provider: &'static catalog::Provider,
+        credential: &'static catalog::Credential,
+        secret: &str,
+    ) -> Result<CredentialRef, Error> {
+        let reference = self.reference(operation.id, provider, credential)?;
+        register(ctx, operation.id, credential, &reference, secret)?;
+        self.store
+            .put(&reference, &Secret::new(secret))
+            .await
+            .map_err(|source| Error::CredentialStore {
+                operation: operation.id.to_owned(),
+                credential: credential.name.to_owned(),
+                source,
+            })?;
+        Ok(reference)
     }
 
     /// Resolve, assemble and **register** every credential one of `operation`'s mechanisms needs.

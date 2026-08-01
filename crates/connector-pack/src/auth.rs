@@ -118,6 +118,14 @@ impl std::fmt::Debug for Assembled {
 pub(crate) fn acquire(credential: &'static Credential, secret: &str, user: Option<&str>) -> String {
     match credential.acquire {
         Acquisition::Static => secret.to_string(),
+        // **Identical to `Static`, and deliberately spelled out rather than joined to it** (C-136).
+        // A minted credential is one this connector's own login put into the store; by the time
+        // anything places it, it is a stored value like any other and the acquisition axis has
+        // nothing left to do. The variant carries provenance — which call mints it, and where in
+        // that call's answer the value arrives — which the *minting* side reads and the placing
+        // side must not. Writing it as its own arm is what makes a future acquisition step on this
+        // variant a decision somebody takes here rather than one that arrives by falling through.
+        Acquisition::Minted { .. } => secret.to_string(),
         // A `None` user cannot happen — the caller resolves it whenever the acquisition is a join —
         // and composing `base64(":<secret>")` would be a plausible header the vendor rejects with a
         // 401 that says nothing. The empty string is what a vendor would see either way; the caller's

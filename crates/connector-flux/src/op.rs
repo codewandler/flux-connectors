@@ -1404,6 +1404,7 @@ mod tests {
             },
             response_schema: None,
             credential_response: Vec::new(),
+            produces_credential: None,
             quirks: Default::default(),
         }
     }

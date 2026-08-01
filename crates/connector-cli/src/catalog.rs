@@ -420,7 +420,10 @@ fn render_auth(connector: &Connector) -> Result<String> {
         out.push_str("    crate::Credential {\n");
         out.push_str(&format!("        name: {},\n", string(&method.name)));
         out.push_str(&format!("        leaf: {},\n", string(leaf)));
-        out.push_str(&format!("        acquire: {},\n", acquisition(method)));
+        out.push_str(&format!(
+            "        acquire: {},\n",
+            acquisition(connector, method)
+        ));
         out.push_str(&format!("        place: {},\n", placement(&method.scheme)));
         out.push_str("    },\n");
     }
@@ -473,7 +476,35 @@ fn render_config_choices(connector: &Connector) -> String {
 /// `Basic` is the only scheme that composes anything, and it composes the **user** half — which is
 /// config rather than a gated secret, so it resolves from declared environment variables and never
 /// from the secret store.
-fn acquisition(method: &connector_spec::AuthMethod) -> String {
+///
+/// # The minting join (C-136)
+///
+/// One answer on this axis is not a property of the credential's own declaration at all: a
+/// credential minted by one of this connector's operations is `Acquisition::Minted`, and the two
+/// facts it carries — which operation, and where in that operation's answer the secret arrives —
+/// are stated in the `[[operations]]` block rather than in `[[auth]]`. So this reads the whole
+/// connector and joins the two sides by credential name.
+///
+/// The loader has already refused every arrangement that would make the join ambiguous or
+/// unresolvable: a `produces_credential` naming a credential no `[[auth]]` block declares, and two
+/// operations minting one credential. So the `find` below is a lookup, not a search with a
+/// tie-break — and `Minted` wins over the scheme-derived answer because a minted credential's
+/// *placement* is unaffected by it (`Bearer` stays `Bearer`); what changes is only the provenance.
+fn acquisition(connector: &Connector, method: &connector_spec::AuthMethod) -> String {
+    if let Some((operation, produced)) = connector.operations.iter().find_map(|operation| {
+        operation
+            .produces_credential
+            .as_ref()
+            .filter(|produced| produced.credential == method.name)
+            .map(|produced| (operation, produced))
+    }) {
+        return format!(
+            "crate::Acquisition::Minted {{ by: {}, from: {} }}",
+            string(&operation.id),
+            string(&produced.secret)
+        );
+    }
+
     match method.scheme {
         AuthScheme::Basic => format!(
             "crate::Acquisition::BasicJoin {{ user_env: &[{}], user_suffix: {} }}",
@@ -618,6 +649,7 @@ mod tests {
             params: ParamSet::default(),
             response_schema: None,
             credential_response: Vec::new(),
+            produces_credential: None,
             quirks: Quirks::default(),
         }
     }
