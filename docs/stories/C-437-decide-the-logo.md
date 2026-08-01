@@ -2,8 +2,7 @@
 id: C-437
 title: "Decide how a connector carries a logo — the licensing question comes before the file"
 pillar: Build
-status: in-progress
-priority: 2
+status: done
 design: docs/designs/connector-presentation.md
 epic: connector-presentation
 areas: [build, providers]

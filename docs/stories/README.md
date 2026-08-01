@@ -63,7 +63,6 @@ _A connector is more than a set of callable operations. It also has **schemas** 
 ### a connector's presentation — a logo, and resources a listing can show
 _Owner-stated 2026-08-01: *"a connector should always come with a logo, multiple potential websites or_
 - [C-436 — A connector cannot name a single link — not its homepage, not its API reference, not a status page](C-436-connector-resources.md) · Spec · a provider publishes fifteen keys into catalog.json and not one is a link. Meanwhile `docs_url` already exists TWICE at lower scopes — on ConfigField and on ManualSetup — so a field can say where its documentation lives and a connector cannot
-- [C-437 — Decide how a connector carries a logo — the licensing question comes before the file](C-437-decide-the-logo.md) · Build · DECISION. A vendor logo is a third-party trademark and this repository is public — the same CLASS of question C-415's spec vendoring turned out to be, where the answer was a split nobody had articulated. Not one an implementor should settle by adding 54 files
 
 ### a connector's security posture — publish the facts, and be careful about the grade
 _Owner-stated 2026-08-01: *"it would be great to have something like a security rating over a_
@@ -180,7 +179,6 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 
 ### the connector bundle
 _A connector is more than a set of callable operations. It also has **schemas** (what goes in, what_
-- [C-40 — Ship provider icons as bundle assets](C-40-provider-icons.md) · Build · alongside the .flux, never inside it
 - [C-41 — Move build output to a per-provider bundle directory](C-41-bundle-layout.md) · Build · breaking layout change — C-13, C-27 and C-33 all assume the flat shape
 
 ### a connector's presentation — a logo, and resources a listing can show
@@ -247,6 +245,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-29 — Close the request-body modelling gaps in the IR](C-29-body-modelling-gaps.md) · Spec · found by C-17 transcribing real providers · blocks correct write operations
 - [C-34 — Decide whether a connectors proxy belongs in this project](C-34-proxy-charter-decision.md) · Bridge · **decision, not code** · blocks the whole epic · contradicts a stated non-goal
 - [C-38 — Render Flux per operation and embed it in a catalog crate](C-38-operation-catalog-crate.md) · Build · **the goal** · one .flux per expanded op, consumable as a Rust crate
+- [C-40 — Ship provider icons as bundle assets](C-40-provider-icons.md) · Build · CLOSED 2026-08-01 by C-437's answer, and refused as worded. No vendor mark is vendored: a brand guideline grants identification use to the DISPLAYER, revocably and non-sublicensably, while this repo's MIT/Apache-2.0 grants copy, modify and sublicense to everyone irrevocably — and git makes that unwithdrawable. The story's SHAPE survives: a mark ships beside the .flux, never base64 inside it
 - [C-42 — Emit catalog.json for the public site](C-42-catalog-json.md) · Codegen · the site's data must be generated, never hand-maintained
 - [C-43 — Scaffold the VitePress site and deploy to GitHub Pages](C-43-vitepress-pages.md) · Surfaces · first Node toolchain in a Rust repo — keep it contained
 - [C-44 — Build the provider and operation explorer](C-44-operation-explorer.md) · Surfaces · the reason the site exists · needs C-42 and C-43
@@ -392,6 +391,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-429 — `build` cannot see a committed artifact it did not write, so a stale rendering ships indefinitely](C-429-the-build-cannot-see-an-orphaned-artifact.md) · Build · hit THREE times in one story (C-417) — connectors/babelforce.flux, its manifest, and crates/catalog/ops/babelforce/babelforce-token.flux each survived a full `build` + `diff` reporting 'up to date' while belonging to no plan. All three were deleted by hand, which is not a mechanism
 - [C-430 — No operation returns a secret — and three shipped in v0.9.0 that do](C-430-no-operation-returns-a-secret.md) · Spec · owner-stated 2026-08-01. A SECOND, deeper scan found worse than the first: postmark-server-get and -list return `ApiTokens` — the server's live tokens IN PLAINTEXT, by the vendor's own description. With zoom's start_url that is four operations live in v0.9.0. babelforce's was withheld by C-426
 - [C-431 — Move the flux pin from 0.46 to 0.47 — and the interesting result is that nothing here changed](C-431-move-the-flux-pin-to-0-47.md) · Build · the successor C-428 asked for. Measured rather than assumed: every source file in all six engine crates this workspace links is BYTE-IDENTICAL between 0.46.0 and 0.47.1 — 0.47.0's C-404 and L-123 land in flux crates this repository does not consume. The bump exists to keep one engine line for the pack's `Arc<dyn Tool>`, not to pick up a fix
+- [C-437 — Decide how a connector carries a logo — the licensing question comes before the file](C-437-decide-the-logo.md) · Build · DECIDED 2026-08-01 — NEITHER. No vendor mark is vendored and no logo_url is declared; a listing derives a monogram from the published vendor+id, or brings its own asset pack. A brand guideline grants identification use to the DISPLAYER, revocably — this repo's MIT/Apache-2.0 grants copy, modify and sublicense to everyone, irrevocably, and git makes that unwithdrawable. Also answers C-40
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->
