@@ -1633,6 +1633,56 @@ mod tests {
         }
     }
 
+    /// **What the host rule does *not* do, pinned so the claim cannot drift again.**
+    ///
+    /// The test above only ever composes `{label}.zendesk.com`, so everything it proves is about a
+    /// value that must sit *inside* a suffix the template supplies. Four shipped connectors do not
+    /// have that shape — `freshdesk` (`https://{domain}/api/v2`), `newrelic` (`https://{host}/v2`),
+    /// `okta` (`https://{domain}/api/v1`) and `docusign` (`https://{account_host}/…`) template the
+    /// **whole** authority. There the template contributes no fixed suffix, so "cannot introduce a
+    /// delimiter" stops implying "cannot reach another host": the value *is* the host.
+    ///
+    /// That is the guard behaving as its own documentation says — it refuses delimiter injection,
+    /// which is all it ever claimed — and it is why `crates/connectors-api/README.md` was wrong to
+    /// summarise it as *"no shipped connector can be pointed at a loopback address"*. The layer that
+    /// actually refuses loopback is flux's SSRF guard (`guard_url_scoped`, `PrivateNetAllow::None`),
+    /// which the same section already cites one bullet earlier. Two layers were claimed; one exists.
+    ///
+    /// This test asserts the **current, correct** behaviour rather than a defect. If a future change
+    /// makes a whole-host template require an operator-supplied allowlist, this test is the one that
+    /// should fail and be rewritten deliberately.
+    #[test]
+    fn a_whole_host_template_is_constrained_only_to_being_a_hostname() {
+        // The value is the entire authority for these four connectors, so any hostname composes.
+        for whole_host in [
+            "acme.freshdesk.com", // what an operator would really supply
+            "evil.example.com",   // …and nothing in this rule prefers the first over this
+            "127.0.0.1",          // refused later by the SSRF guard, NOT here
+            "localhost",
+            "169.254.169.254", // cloud metadata, likewise not this rule's job
+        ] {
+            assert!(
+                validate_authority(whole_host).is_ok(),
+                "{whole_host:?} was refused; if that is now intended, this test documents the \
+                 boundary that moved and must be rewritten rather than deleted"
+            );
+        }
+
+        // What the rule *does* still guarantee, even with no fixed suffix: the value cannot escape
+        // the authority position. This half is load-bearing and must not regress.
+        for escaping in [
+            "evil.example.com/path",
+            "evil.example.com:8080",
+            "user@evil.example.com",
+            "evil.example.com%2f",
+        ] {
+            assert!(
+                validate_authority(escaping).is_err(),
+                "{escaping:?} escapes the authority and must be refused"
+            );
+        }
+    }
+
     /// The three request positions, and the one that encodes rather than refuses.
     #[test]
     fn each_position_answers_for_itself() {

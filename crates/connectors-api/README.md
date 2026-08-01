@@ -360,12 +360,32 @@ around:
   for one host on one `App`, not `PrivateNetAllow::Any`, and the shipped default is untouched. The
   same file then runs the *same* operation under `App::new` and requires it to be refused with
   nothing on the wire, so the widening is proved to be the only reason the live test can send.
-- **No shipped connector can be pointed at a loopback address**, deliberately: nine carry a
-  `{placeholder}`, every one templates a label inside a fixed vendor suffix
-  (`{subdomain}.zendesk.com`), and C-214's `Slot` guard exists to stop a configuration value from
-  moving a request to another host. So the test rewrites **one string literal** — the origin — in
-  the operation's own emitted Flux, and nothing else. The method, path, module-set header, body
-  encoding, credential placement and `Bearer ` prefix are all the shipped operation's.
+- **The test rewrites one string literal** — the origin — in the operation's own emitted Flux, and
+  nothing else. The method, path, module-set header, body encoding, credential placement and
+  `Bearer ` prefix are all the shipped operation's.
+
+  > **Corrected 2026-08-01.** This bullet previously read *"No shipped connector can be pointed at a
+  > loopback address, deliberately: nine carry a `{placeholder}`, every one templates a label inside
+  > a fixed vendor suffix."* **Both halves were false, and the security claim rested on them.**
+  >
+  > Measured: **thirteen** templated base URLs, not nine, and they are three shapes rather than one —
+  > seven template a label inside a fixed suffix (`{subdomain}.zendesk.com`), **four template the
+  > whole authority** (`freshdesk` `https://{domain}/api/v2`, `newrelic` `https://{host}/v2`, `okta`
+  > `https://{domain}/api/v1`, `docusign` `https://{account_host}/…`), and two template only a path
+  > segment (`contentful`, `statuspage`).
+  >
+  > Where the template supplies no suffix, `Slot::Host` constrains the value only to *being a
+  > hostname*: `validate_authority` accepts `127.0.0.1`, `localhost` and `169.254.169.254`. That is
+  > the guard behaving exactly as its own documentation says — it refuses a value that would
+  > **escape** the authority (`@`, `:`, `/`, `%`), which is all it ever claimed — but it is not the
+  > second, independent layer this bullet asserted.
+  >
+  > **What actually refuses loopback is the SSRF guard in the bullet above**
+  > (`guard_url_scoped`, shipped default `PrivateNetAllow::None`). Defence in depth still holds for
+  > the seven suffix-shaped connectors; for the four whole-host ones there is one layer, not two.
+  > Pinned by `connector-pack`'s `a_whole_host_template_is_constrained_only_to_being_a_hostname`, so
+  > the claim cannot drift again. Whether a whole-host template should additionally require an
+  > operator-supplied allowlist is [C-402](../../docs/stories/C-402-whole-host-template-allowlist.md).
 
 The bound is worth stating: this proves the pack's request survives the wire intact, not that
 `api.openai.com` answers it. The leg against a **real vendor** stays manual, and the section above is
