@@ -173,6 +173,37 @@ connector as it stands, report what upstream added, removed or changed. That is 
 The manager document paginates uniformly (`page`/`max`, as the nine current operations already
 declare). Attaching that per operation is 356 repetitions of one fact.
 
+## Loading a provider file, once the front-end is real (C-421)
+
+The front-end being real changes what "load a provider" *means*, and the epic did not cost that.
+`provider::load` takes bytes and no spec cache, so it cannot compile a spec-backed file — and until
+C-421 it returned `Ok` with a **skeleton** anyway: id, base URL, credentials, provenance, zero
+operations. Ninety-one files call it, eighty-six of them tests, and C-416 measured the consequence of
+the first shipped provider converting: **53 tests across 18 binaries in 4 crates**, every one of them
+green beforehand over a connector it believed it had checked.
+
+**The decision: the pure entry point stays pure and refuses.** `load` on a file that pins a `[spec]`
+is an `InvalidProvider` naming the pinned documents and naming `load_with_spec`. The alternative —
+folding the cache into `load` as a parameter, so "load" has one meaning everywhere — was rejected on
+what it does to the callers who have no cache, which is most of them and every unit test that authors
+its own TOML. The only argument they can pass is an empty slice, and an empty slice against a pinned
+`[spec]` already refuses one layer down in `ingest_specs` ("names no vendored document"). So the
+parameter buys one *signature*, not one meaning; the second meaning is just spelled `&[]`, and it
+lands as a vestigial argument on roughly forty golden-error tests that will never own a document.
+
+**The second half is what actually makes conversion cheap, and it is the part C-417 and C-420
+depend on.** The test suite had no shared way to load a shipped provider — eighteen binaries, each
+with its own loader — so the convention "read `providers/x.toml`, call `provider::load`" was
+replicated everywhere and was wrong everywhere at once. There is now one:
+`crates/connector-spec/tests/support/shipped_provider.rs`, `#[path]`-included by the three crates
+that need it, which reads the definition **and every document under `specs/<name>/`** and calls
+`load_with_spec`. The rule it states is one sentence — *bytes read from `providers/` go through the
+helper; TOML a test wrote itself goes through `provider::load`* — and the consequence is that a
+provider converting to `[spec]` needs **no test change at all**.
+
+Measured on C-416's branch: the 53 failures fall to **2**, and both survivors are C-126's
+coordinator-fenced ratchet constants moving because babelforce goes 0/9 → 9/9 on response schemas.
+
 ## Vendoring and provenance
 
 The specs are not secret — the babelforce developer hub renders them publicly. What is internal is

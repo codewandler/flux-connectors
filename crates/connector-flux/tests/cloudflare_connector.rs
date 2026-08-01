@@ -41,9 +41,10 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{
-    provider, Binding, Connector, HttpMethod, Idempotency, Level, Position, Risk,
-};
+use connector_spec::{Binding, Connector, HttpMethod, Idempotency, Level, Position, Risk};
+
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
 
 /// `<repo root>/providers/cloudflare.toml`, derived from this crate's manifest directory so the test
 /// is independent of the working directory a runner happens to use.
@@ -62,7 +63,7 @@ fn cloudflare() -> Connector {
             path.display()
         )
     });
-    provider::load("providers/cloudflare.toml", &source)
+    shipped_provider::load_definition("cloudflare", &source)
         .expect("providers/cloudflare.toml does not load")
         .connector
 }

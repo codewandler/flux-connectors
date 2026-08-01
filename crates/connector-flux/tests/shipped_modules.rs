@@ -18,7 +18,10 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{provider, Connector};
+use connector_spec::Connector;
+
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
 
 fn providers_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -56,7 +59,7 @@ fn load(name: &str) -> Connector {
     let path = providers_dir().join(format!("{name}.toml"));
     let source = std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-    provider::load(&format!("providers/{name}.toml"), &source)
+    shipped_provider::load_definition(name, &source)
         .unwrap_or_else(|error| panic!("providers/{name}.toml does not load: {error}"))
         .connector
 }

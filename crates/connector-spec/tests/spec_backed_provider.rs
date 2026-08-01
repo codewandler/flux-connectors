@@ -178,6 +178,76 @@ idempotency = \"idempotent\"
 // What the loader refuses rather than deciding
 // ---------------------------------------------------------------------------------------------
 
+/// **Plain [`provider::load`] refuses a spec-backed file rather than answering with a skeleton**
+/// (C-421).
+///
+/// A spec-backed connector's operations are a function of the file's bytes *and* of the documents it
+/// pins. `load` is handed only the first, so it is being asked a question it does not have the input
+/// to answer — and until C-421 it answered anyway, with the id, the base URL, the credentials, the
+/// provenance and **no operations at all**, and returned `Ok`. That is the "plausible but incorrect"
+/// outcome `AGENTS.md` refuses: every catalogue-wide test in this repository reads `providers/` and
+/// would have gone on passing over a connector it believed it had checked.
+///
+/// The refusal is narrow by construction. It fires on a pinned `[spec]` and nothing else, so the
+/// fifty-three hand-authored providers load exactly as they did, and the same bytes handed to
+/// [`provider::load_with_spec`] with the cache compile — which is what makes this a missing input
+/// rather than a policy about spec-backed files.
+#[test]
+fn plain_load_refuses_a_spec_backed_file_rather_than_returning_a_skeleton() {
+    let definition = with(
+        "
+[[patch.operations]]
+select = \"showTicket\"
+rename = \"zendesk-ticket-show\"
+risk = \"low\"
+idempotency = \"idempotent\"
+",
+    );
+
+    let rendered = provider::load("providers/zendesk.toml", &definition)
+        .expect_err(
+            "a spec-backed file loaded with no cache must refuse, not answer with a skeleton",
+        )
+        .to_string();
+    assert!(
+        rendered.contains(PINNED),
+        "the refusal names the document it could not read: {rendered}"
+    );
+    assert!(
+        rendered.contains("load_with_spec"),
+        "the refusal names the entry point that takes the cache: {rendered}"
+    );
+
+    // The same bytes, with the cache the file asks for, compile. The refusal above is about an
+    // input this entry point cannot accept, not about the file being wrong.
+    let connector = load(&definition);
+    assert_eq!(
+        connector
+            .operations
+            .iter()
+            .map(|operation| operation.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["zendesk-ticket-show"]
+    );
+
+    // And a file that pins nothing still loads through the pure entry point, unchanged.
+    let hand_authored = "\
+id = \"zendesk\"
+vendor = \"Zendesk\"
+base_url = \"https://acme.zendesk.com\"
+
+[[operations]]
+id = \"zendesk-hand-written\"
+method = \"GET\"
+path = \"/api/v2/users/me\"
+risk = \"low\"
+idempotency = \"idempotent\"
+";
+    let pure = provider::load("providers/zendesk.toml", hand_authored)
+        .expect("a hand-authored file needs no cache");
+    assert_eq!(pure.connector.operations.len(), 1);
+}
+
 /// A `select` that matches nothing is loud. A silent no-op is how a patch set rots underneath a
 /// vendor's rename: the operation disappears from the connector and the build stays green.
 #[test]

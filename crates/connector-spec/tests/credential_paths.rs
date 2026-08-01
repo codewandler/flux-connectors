@@ -22,6 +22,9 @@ use connector_spec::{
     DEFAULT_SERVICE,
 };
 
+#[path = "support/shipped_provider.rs"]
+mod shipped_provider;
+
 /// The same tiny LCG `service_partition.rs` uses.
 struct Rng(u64);
 
@@ -486,7 +489,7 @@ fn shipped(name: &str) -> Connector {
         .join("../../providers")
         .join(format!("{name}.toml"));
     let source = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path:?}: {e}"));
-    provider::load(&format!("providers/{name}.toml"), &source)
+    shipped_provider::load_definition(name, &source)
         .unwrap_or_else(|e| panic!("providers/{name}.toml must load:\n{e}"))
         .connector
 }

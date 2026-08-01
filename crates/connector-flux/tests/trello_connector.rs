@@ -31,7 +31,10 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{provider, AuthScheme, Binding, Connector, HttpMethod, Idempotency, Risk};
+use connector_spec::{AuthScheme, Binding, Connector, HttpMethod, Idempotency, Risk};
+
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
 
 /// The provider under test.
 const PROVIDER: &str = "trello";
@@ -81,7 +84,7 @@ fn load_provider(id: &str) -> Connector {
             path.display()
         )
     });
-    provider::load(&format!("providers/{id}.toml"), &source)
+    shipped_provider::load_definition(id, &source)
         .unwrap_or_else(|error| panic!("providers/{id}.toml does not load: {error}"))
         .connector
 }
@@ -352,11 +355,12 @@ fn the_query_placement_forces_the_key_to_be_declared_secret() {
         honest_about_the_vendor, source,
         "the substitution must actually apply, or the refusal below proves nothing"
     );
-    let error = provider::load(
-        &format!("providers/{PROVIDER}.toml"),
-        &honest_about_the_vendor,
-    )
-    .expect_err("a config field binding a credential while declaring `secret = false` is refused");
+    // Through the spec-aware helper like every other read of the shipped bytes, doctored or not:
+    // the substitution changes one key, so the file is otherwise still the one that ships and must
+    // be compiled the way the build compiles it.
+    let error = shipped_provider::load_definition(PROVIDER, &honest_about_the_vendor).expect_err(
+        "a config field binding a credential while declaring `secret = false` is refused",
+    );
     let message = error.to_string();
     assert!(
         message.contains("api_key") && message.contains("secret"),

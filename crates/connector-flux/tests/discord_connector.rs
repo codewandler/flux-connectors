@@ -53,7 +53,10 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{provider, AuthScheme, Binding, Connector, HttpMethod, Idempotency, Risk};
+use connector_spec::{AuthScheme, Binding, Connector, HttpMethod, Idempotency, Risk};
+
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
 
 /// The provider under test.
 const PROVIDER: &str = "discord";
@@ -114,7 +117,7 @@ fn load_provider(id: &str) -> Connector {
             path.display()
         )
     });
-    provider::load(&format!("providers/{id}.toml"), &source)
+    shipped_provider::load_definition(id, &source)
         .unwrap_or_else(|error| panic!("providers/{id}.toml does not load: {error}"))
         .connector
 }

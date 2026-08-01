@@ -37,8 +37,11 @@ use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
 use connector_spec::{
-    provider, AuthScheme, Binding, Connector, Format, HttpMethod, Idempotency, Level, Risk,
+    AuthScheme, Binding, Connector, Format, HttpMethod, Idempotency, Level, Risk,
 };
+
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
 
 /// The provider under test.
 const PROVIDER: &str = "mailchimp";
@@ -124,7 +127,7 @@ fn source() -> String {
 /// The shipped definition, through the real loader — the same route `shipped_modules.rs` takes, so
 /// this file cannot pass against a fixture that drifted from what ships.
 fn load() -> Connector {
-    provider::load(&format!("providers/{PROVIDER}.toml"), &source())
+    shipped_provider::load_definition(PROVIDER, &source())
         .unwrap_or_else(|error| panic!("providers/{PROVIDER}.toml does not load: {error}"))
         .connector
 }
@@ -206,7 +209,7 @@ fn the_datacenter_is_asked_for_as_ordinary_configuration() {
         source(),
         "the substitution must actually apply, or the refusal below proves nothing"
     );
-    let error = provider::load(&format!("providers/{PROVIDER}.toml"), &secret_datacenter)
+    let error = shipped_provider::load_definition(PROVIDER, &secret_datacenter)
         .expect_err("a field binding a base-URL template variable cannot declare `secret = true`");
     let message = error.to_string();
     assert!(
@@ -325,7 +328,7 @@ fn the_credential_is_a_bearer_token_because_a_constant_username_cannot_be_declar
         source(),
         "the substitution must actually apply, or the refusal below proves nothing"
     );
-    let error = provider::load(&format!("providers/{PROVIDER}.toml"), &constant_username)
+    let error = shipped_provider::load_definition(PROVIDER, &constant_username)
         .expect_err("a `basic` credential declaring no `user_env` is refused");
     let message = error.to_string();
     assert!(

@@ -30,7 +30,10 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{provider, Connector, HttpMethod, Idempotency, Risk};
+use connector_spec::{Connector, HttpMethod, Idempotency, Risk};
+
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
 
 /// `<repo root>/providers/typeform.toml`, derived from this crate's manifest directory so the test
 /// is independent of the working directory a runner happens to use.
@@ -49,7 +52,7 @@ fn typeform() -> Connector {
             path.display()
         )
     });
-    provider::load("providers/typeform.toml", &source)
+    shipped_provider::load_definition("typeform", &source)
         .expect("providers/typeform.toml does not load")
         .connector
 }

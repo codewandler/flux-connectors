@@ -18,7 +18,10 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{provider, Connector};
+use connector_spec::Connector;
+
+#[path = "../../connector-spec/tests/support/shipped_provider.rs"]
+mod shipped_provider;
 
 const PROVIDER: &str = "babelforce";
 const BASE_URL: &str = "https://services.babelforce.com";
@@ -67,7 +70,7 @@ fn load() -> Connector {
     let path = providers_dir().join(format!("{PROVIDER}.toml"));
     let source = std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("cannot read {} ({error})", path.display()));
-    provider::load(&format!("providers/{PROVIDER}.toml"), &source)
+    shipped_provider::load_definition(PROVIDER, &source)
         .unwrap_or_else(|error| panic!("providers/{PROVIDER}.toml does not load: {error}"))
         .connector
 }
