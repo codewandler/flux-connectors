@@ -1,0 +1,331 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Zendesk Support API (excerpt)",
+    "version": "2024-06-01",
+    "description": "A trimmed excerpt of Zendesk's published Support API document, vendored as an ingest fixture for C-4. It is NOT a full vendoring: only the endpoints that exercise a distinct ingest path are kept, and `providers/zendesk.toml` remains hand-authored and points at no `[spec]`. The endpoints under `/api/v2/_ingest-fixture/` do not exist upstream and are here to pin the diagnostic path."
+  },
+  "servers": [
+    {
+      "url": "https://{subdomain}.zendesk.com",
+      "description": "A Zendesk account, addressed by its subdomain.",
+      "variables": {
+        "subdomain": {
+          "default": "example",
+          "description": "The account's subdomain, supplied per tenant."
+        }
+      }
+    }
+  ],
+  "paths": {
+    "/api/v2/tickets/{ticket_id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TicketId"
+        }
+      ],
+      "get": {
+        "operationId": "showTicket",
+        "summary": "Show one ticket by id.",
+        "responses": {
+          "200": {
+            "description": "The ticket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such ticket."
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteTicket",
+        "summary": "Delete one ticket.",
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          }
+        }
+      }
+    },
+    "/api/v2/tickets": {
+      "get": {
+        "operationId": "listTickets",
+        "summary": "List the account's tickets.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "description": "How many tickets per page.",
+            "schema": {
+              "type": "integer",
+              "maximum": 100
+            }
+          },
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of tickets.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createTicket",
+        "summary": "Create a ticket.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ticket"
+                ],
+                "properties": {
+                  "ticket": {
+                    "$ref": "#/components/schemas/TicketInput"
+                  },
+                  "async": {
+                    "type": "boolean",
+                    "description": "Create the ticket in the background."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/organizations/{organization_id}": {
+      "get": {
+        "operationId": "showOrganization",
+        "summary": "Show one organization and the tree beneath it.",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The organization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationNode"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/_ingest-fixture/untyped": {
+      "get": {
+        "operationId": "fixtureUntypedParameter",
+        "summary": "A parameter the vendor never typed.",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "description": "No `schema` and no `content`, so nothing says what this is."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Whatever."
+          }
+        }
+      }
+    },
+    "/api/v2/_ingest-fixture/uploads": {
+      "post": {
+        "operationId": "fixtureMultipartUpload",
+        "summary": "A body in a media type the IR cannot spell.",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Uploaded."
+          }
+        }
+      }
+    },
+    "/api/v2/_ingest-fixture/anonymous": {
+      "get": {
+        "summary": "An operation with no `operationId`, so nothing can select it.",
+        "responses": {
+          "200": {
+            "description": "Whatever."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "TicketId": {
+        "name": "ticket_id",
+        "in": "path",
+        "required": true,
+        "description": "The ticket's numeric id.",
+        "schema": {
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "Page": {
+        "name": "page",
+        "in": "query",
+        "description": "Which page to fetch.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "schemas": {
+      "TicketResponse": {
+        "type": "object",
+        "properties": {
+          "ticket": {
+            "$ref": "#/components/schemas/Ticket"
+          }
+        }
+      },
+      "TicketsResponse": {
+        "type": "object",
+        "properties": {
+          "tickets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Ticket"
+            }
+          },
+          "next_page": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "Ticket": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "via": {
+            "$ref": "#/components/schemas/Via"
+          }
+        }
+      },
+      "Via": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ViaSource"
+          }
+        }
+      },
+      "ViaSource": {
+        "type": "object",
+        "properties": {
+          "rel": {
+            "type": "string"
+          }
+        }
+      },
+      "TicketInput": {
+        "type": "object",
+        "required": [
+          "subject"
+        ],
+        "properties": {
+          "subject": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "object",
+            "properties": {
+              "body": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "OrganizationNode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrganizationNode"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -2,7 +2,7 @@
 id: C-4
 title: Ingest OpenAPI 3.x into the IR
 pillar: Spec
-status: ready
+status: in-progress
 priority: 1
 design: docs/designs/spec-front-end.md
 epic: spec-front-end
@@ -17,29 +17,56 @@ Turn a vendored vendor OpenAPI document into IR operations — servers, paths, m
 schemas — so a provider TOML shrinks to a pointer plus patches.
 
 ## Acceptance
-- [ ] OpenAPI 3.0 and 3.1 documents parse into `Connector` operations with path, query, header, and
+- [x] OpenAPI 3.0 and 3.1 documents parse into `Connector` operations with path, query, header, and
       body parameters, each carrying its resolved JSON Schema.
-- [ ] `$ref` resolution within the document works, including nested and repeated refs; a cyclic ref
+- [x] `$ref` resolution within the document works, including nested and repeated refs; a cyclic ref
       is reported as an error rather than hanging.
-- [ ] `servers` produce the base URL, with templated server variables preserved for tenant
+- [x] `servers` produce the base URL, with templated server variables preserved for tenant
       substitution (e.g. Zendesk's per-account subdomain).
-- [ ] Missing or malformed sections degrade to a reported diagnostic naming the offending path — a
+- [x] Missing or malformed sections degrade to a reported diagnostic naming the offending path — a
       real vendor spec is never fully well-formed, and one bad endpoint must not fail the whole
       ingest.
-- [ ] Fixture-driven tests over trimmed real Zendesk and Anthropic spec excerpts committed under
+- [x] Fixture-driven tests over trimmed real Zendesk and Anthropic spec excerpts committed under
       `specs/`.
-- [ ] **YAML as well as JSON.** Every babelforce document is YAML, and the spec cache is already
+- [x] **YAML as well as JSON.** Every babelforce document is YAML, and the spec cache is already
       extension-agnostic (`discover_specs` takes the version from the file stem). `serde_norway` is
       pre-added to `crates/connector-spec/Cargo.toml` by the coordinator — do not add or change any
       dependency yourself.
-- [ ] **`crates/connector-cli/src/seam.rs:160`'s refusal is deleted**, not worked around. A
+- [x] **`crates/connector-cli/src/seam.rs:160`'s refusal is deleted**, not worked around. A
       failing-first test builds a provider whose `[spec]` points at a fixture and asserts operations
       reach the IR; today it fails with "spec ingest (story C-4), which is not wired yet".
-- [ ] Ingest is a pure function from bytes to IR — `connector-spec` must not touch the network
+- [x] Ingest is a pure function from bytes to IR — `connector-spec` must not touch the network
       (`AGENTS.md`, Ownership boundaries).
 
 ## Progress
-- (not started)
+- **Done.** `crates/connector-spec/src/openapi.rs` is the ingest: bytes -> `Ingested`, no IO of any
+  kind. `provider::load_with_spec` is the join, and `seam::load` hands it the document discovery
+  already read. The refusal at `seam.rs:160` is gone.
+- **Ingest selects nothing, and two tests say so** —
+  `spec_backed_provider.rs::a_spec_backed_provider_with_no_patch_publishes_nothing` and
+  `seam.rs::a_spec_backed_provider_with_no_patch_publishes_no_operations`. A pointer with no patch
+  is a connector with no operations; the whole document stays reachable on
+  `LoadedProvider::ingested` so C-6/C-411 have something to widen selection *over*.
+- **Two grades of failure**, and the split is the design. A document that is not OpenAPI 3.x is an
+  `Error::ParseSpec` and fails the provider. One bad endpoint is an `openapi::Diagnostic` naming
+  method and path, and the operation is **skipped** — never ingested half-formed. There is no
+  "ingest it without its body" path: a `POST` that quietly stopped sending a body is
+  indistinguishable from a legitimately bodiless write. Diagnostics reach the user through
+  `Plan::diagnostics`, which `build` and `diff` print.
+- **The excerpts carry deliberate defects** under `/api/v2/_ingest-fixture/` — an untyped parameter,
+  a `multipart/form-data` body, an operation with no `operationId` — plus a genuinely cyclic
+  `OrganizationNode`. A fixture that is well-formed proves nothing about the half of this story that
+  matters.
+- **What C-4 deliberately did not take**, so the sequencing holds: a selector matching a set (C-411),
+  a naming rule instead of a `rename` per operation (C-412), risk/idempotency by selector (C-414),
+  several documents per connector (C-410), and `securitySchemes` extraction (C-5). Every selected
+  operation lands in `default`; a provider declaring named services plus a `[spec]` is therefore a
+  loud loader error today, and C-410 is where that is answered.
+- **Three things the loader refuses rather than deciding**, each stated because the silent
+  alternative is worse: a `select` naming no operation (config rot), a selection stating no `risk` or
+  `idempotency` (a safety decision made by omission — the failure `Risk` has no `Default` to
+  prevent), and a selection stating no `rename` (promoting a volatile `operationId` into a public op
+  id). C-412 replaces the third with a rule declared once; it does not remove the decision.
 
 ## Notes
 - Ingest takes bytes; fetching is `C-14`'s job.

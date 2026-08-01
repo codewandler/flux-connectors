@@ -79,6 +79,8 @@ fn build(invocation: &Invocation, out: &mut impl Write) -> Result<()> {
         invocation.service.as_deref(),
     )?;
 
+    report_diagnostics(&plan, out)?;
+
     if plan.is_up_to_date() {
         writeln!(
             out,
@@ -124,7 +126,21 @@ fn show_diff(invocation: &Invocation, out: &mut impl Write) -> Result<()> {
         invocation.provider.as_deref(),
         invocation.service.as_deref(),
     )?;
+    report_diagnostics(&plan, out)?;
     write!(out, "{}", diff::render(&workspace, &plan))?;
+    Ok(())
+}
+
+/// Say what the vendored spec documents got wrong, before saying what the build did — C-4.
+///
+/// **Reported, never fatal.** A real vendor OpenAPI document is incomplete or wrong somewhere, and
+/// ingest skips the endpoint rather than failing the connector; this is the line that keeps that
+/// from being silent. It writes nothing at all when there is nothing to say, which is every
+/// hand-authored connector — so the CLI's output for the current catalogue is unchanged.
+fn report_diagnostics(plan: &pipeline::Plan, out: &mut impl Write) -> Result<()> {
+    for diagnostic in &plan.diagnostics {
+        writeln!(out, "spec: {diagnostic}")?;
+    }
     Ok(())
 }
 

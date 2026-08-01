@@ -73,6 +73,14 @@
 //! plus the patch set the overlay applies. `schema/provider-toml.schema.json`
 //! ([`PROVIDER_TOML_JSON_SCHEMA`]) documents the file format and is kept in sync by a test.
 //!
+//! [`provider::load_with_spec`] is the same call with the vendored document beside it, and it is the
+//! whole spec front-end in one line: **spec -> patch -> validate**. [`openapi::ingest`] turns the
+//! document into every operation the vendor declares, the patch set says which of them the connector
+//! publishes, and the result goes through exactly the validation pass a hand-authored file does.
+//! **Ingest selects nothing** — a pointer at a 398-operation document with no patch is a connector
+//! with no operations, which is what keeps a vendor catalogue from becoming 398 LLM tools by
+//! default.
+//!
 //! # Recording what produced an artifact
 //!
 //! [`Lockfile`] renders `connectors.lock`: one [`LockEntry`] per provider, holding the hashes and
@@ -88,6 +96,7 @@ pub mod graph;
 pub mod inbound;
 mod ir;
 pub mod lock;
+pub mod openapi;
 pub mod provider;
 
 pub use address::{Gid, Oip, Pid};
@@ -107,6 +116,7 @@ pub use ir::{
     DEFAULT_SERVICE, FREE_FORM_BODY, MIN_REPEATABILITY_CONDITION,
 };
 pub use lock::{sha256_hex, LockEntry, Lockfile, LOCKFILE_NAME, LOCKFILE_VERSION};
+pub use openapi::{Diagnostic, Ingested, Server, ServerVariable, SpecOperation};
 pub use provider::{
     LoadedProvider, OperationPatch, ParamPatch, ParamPosition, Patch, SpecSource,
     PROVIDER_TOML_JSON_SCHEMA,
@@ -142,6 +152,20 @@ pub enum Error {
         name: String,
         /// One line per problem, each naming the operation or credential it is about.
         problems: Vec<String>,
+    },
+    /// A vendored spec document is not an OpenAPI 3.x document at all — see [`openapi::ingest`].
+    ///
+    /// Reserved for the whole-document failure. Everything narrower — one endpoint with an
+    /// unresolvable `$ref`, one parameter with no schema — is a [`openapi::Diagnostic`] instead, so
+    /// that a real vendor document's inevitable rough edges cost the offending endpoint and not the
+    /// other 397.
+    ///
+    /// It carries no file name, because [`openapi::ingest`] takes bytes and has none to give.
+    /// [`provider::load_with_spec`] is the layer that knows the path and states it.
+    #[error("the vendored document is not an OpenAPI 3.x document: {reason}")]
+    ParseSpec {
+        /// Why it is not one this ingest can read.
+        reason: String,
     },
     /// A global address (pid, gid or oip) is not well-formed — see [`address`].
     ///
