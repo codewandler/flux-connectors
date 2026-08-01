@@ -5,8 +5,14 @@
 # Modelled on ../flux's scripts/publish-crates-io.sh, with one deliberate difference: the order is
 # **derived**, not listed. flux hand-lists 29 crates because its graph has ordering constraints a
 # manifest does not state (an optional feature dependency, a protocol line versioned independently).
-# This workspace has four crates and one non-obvious edge, so a topological sort over the manifests
-# is exact — and a sort cannot go stale the way a list does.
+# This workspace has four crates in the closure and one non-obvious edge, so a topological sort over
+# the manifests is exact — and a sort cannot go stale the way a list does.
+#
+# The non-obvious edge is `connector-secrets -> connector-address`: the addressing is re-exported,
+# never redefined, so the crate that owns it is published behind `connector-secrets` without anyone
+# asking for it. That edge used to point at `connector-spec` — the compiler — which is what C-407
+# extracted the vocabulary to end. `crates/connector-cli/tests/publish_closure.rs` asserts both the
+# derivation and the property that no crate in it is machinery.
 #
 # What *is* listed is ROOTS: which crates a consumer is meant to add. That is a policy choice
 # (C-190's), not a dependency fact. Everything below it is computed.

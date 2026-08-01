@@ -32,13 +32,20 @@ different execution model that is not finished; do not plan around it.
 
 ### Step 0 — get the crates
 
-The publish closure is four crates — `connector-catalog`, `connector-spec`, `connector-secrets`,
+The publish closure is four crates — `connector-address`, `connector-catalog`, `connector-secrets`,
 `connector-pack` — published as `codewandler-connector-*` by CI on a `vX.Y.Z` tag.
 
-**They are on crates.io.** All four went out on **2026-07-31**, first at **0.7.0** and then at
+**They are on crates.io.** Four crates went out on **2026-07-31**, first at **0.7.0** and then at
 **0.8.0** the same day ([C-190](stories/C-190-publish-catalog-pack-secrets.md)), so a registry
 dependency works and the `path`/`git` workaround this section used to require is gone. Check
 crates.io for the current version rather than trusting the pin below.
+
+> **The membership changed after 0.8.0** ([C-407](stories/C-407-extract-the-credential-address-crate.md)).
+> The fourth crate used to be `codewandler-connector-spec` — the compiler — which was published only
+> because `connector-secrets` re-exported the credential address vocabulary out of it. That
+> vocabulary is `codewandler-connector-address` now, and the next tag publishes it in
+> `connector-spec`'s place. `codewandler-connector-spec` 0.7.0 and 0.8.0 stay on crates.io, because
+> a published version cannot be withdrawn; nothing new is published from it.
 
 ```toml
 [dependencies]

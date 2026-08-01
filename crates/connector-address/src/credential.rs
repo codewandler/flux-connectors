@@ -1,6 +1,6 @@
 //! Where a tenant's credential for a connector lives — the address, not the value and not the store.
 //!
-//! The [`config`](crate::config) module says *what to ask a human for* and where the answer goes on a
+//! `connector_spec`'s `config` module says *what to ask a human for* and where the answer goes on a
 //! request. This one says where the answer is **kept**: a stable, tenant-scoped path a secret store
 //! can be wrapped around.
 //!
@@ -8,7 +8,7 @@
 //!
 //! `docs/vision.md`'s non-goal is load-bearing — *"A runtime. This repo compiles; flux executes."* —
 //! so nothing here opens a socket, holds a value, or knows what Vault is. What this repository is
-//! uniquely placed to own is the **naming**: it already owns [`Pid`](crate::Pid),
+//! uniquely placed to own is the **naming**: this crate already owns [`Pid`](crate::Pid),
 //! [`Gid`](crate::Gid) and [`Oip`](crate::Oip), validates every component of them, and refuses an
 //! address it cannot spell. A credential path is one more address derived from the same facts.
 //!
@@ -75,7 +75,7 @@
 
 use std::fmt;
 
-use crate::ir::DEFAULT_SERVICE;
+use crate::DEFAULT_SERVICE;
 
 /// The first segment of every path [`TenantLayout`] renders.
 pub const TENANTS_ROOT: &str = "tenants";
@@ -126,9 +126,9 @@ impl fmt::Display for InstanceId {
 
 /// The connections one tenant holds to one connector, and which of them an address names.
 ///
-/// This is the input [`Connector::credential_ref_for`](crate::Connector::credential_ref_for) needs
-/// and cannot derive: a connector knows what it declares, never how many times a tenant has
-/// connected it. The host holds that fact, so the host states it here.
+/// This is the input `connector_spec::Connector::credential_ref_for` needs and cannot derive: a
+/// connector knows what it declares, never how many times a tenant has connected it. The host holds
+/// that fact, so the host states it here.
 ///
 /// [`resolve`](Self::resolve) is the whole rule:
 ///
@@ -236,9 +236,9 @@ impl CredentialRef {
     /// # Errors
     ///
     /// A reason string naming the offending component. The authority, service and credential are
-    /// re-checked even though a loaded [`Connector`](crate::Connector) already validated them,
-    /// because a reference can be built from outside one — a host resolving a path it was handed is
-    /// exactly the case that matters.
+    /// re-checked even though a loaded `connector_spec::Connector` already validated them, because a
+    /// reference can be built from outside one — a host resolving a path it was handed is exactly
+    /// the case that matters.
     pub fn new(
         tenant: &str,
         authority: &str,

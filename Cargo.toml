@@ -22,6 +22,7 @@
 #     the resolver imply coverage that does not exist.
 resolver = "3"
 members = [
+    "crates/connector-address",
     "crates/connector-spec",
     "crates/connector-flux",
     "crates/connector-cli",
@@ -45,6 +46,13 @@ rust-version = "1.87"
 
 [workspace.dependencies]
 # Internal crates.
+# The address vocabulary (C-407): pid/gid/oip and the credential path, and nothing else. It sits
+# *below* the compiler rather than inside it, which is the whole reason it exists — `connector-spec`
+# is the connector IR, both front-ends, validation and the lockfile writer, and one re-export of
+# `CredentialRef` from `connector-secrets` was enough to drag all of it into the crates.io closure.
+# `crates/connector-cli/tests/publish_closure.rs::no_machinery_crate_is_published` is what keeps that
+# edge from growing back.
+connector-address = { package = "codewandler-connector-address", version = "0.8.0", path = "crates/connector-address" }
 connector-spec = { package = "codewandler-connector-spec", version = "0.8.0", path = "crates/connector-spec" }
 connector-flux = { version = "0.8.0", path = "crates/connector-flux" }
 # The catalog (C-38): generated data, and the crate a consumer adds to get it. Nothing in this

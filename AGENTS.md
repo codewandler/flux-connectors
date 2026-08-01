@@ -763,13 +763,19 @@ version number is burned, and a wrong `description`, `readme` or `keywords` is f
   [`.github/workflows/crates-io.yml`](.github/workflows/crates-io.yml) does the rest. It needs one
   secret, `CARGO_REGISTRY_TOKEN`, checked before anything is packaged, and holds a `concurrency`
   group so two runs cannot race. `workflow_dispatch` resumes a run that died partway.
-- **The publish closure is four crates, not three.** `connector-catalog`, `connector-spec`,
-  `connector-secrets`, `connector-pack`. `connector-cli` and `connector-flux` are not published.
-  The closure is *derived* from the manifests by
+- **The publish closure is four crates, not three.** `connector-address`, `connector-catalog`,
+  `connector-secrets`, `connector-pack`. `connector-cli`, `connector-flux` and `connector-spec` are
+  not published. The closure is *derived* from the manifests by
   [`scripts/publish-crates-io.sh`](scripts/publish-crates-io.sh), which lists only the consumable
   roots; the order is a topological sort, so a new edge changes it automatically.
   `crates/connector-cli/tests/publish_closure.rs` asserts the derivation, the order and the
   metadata.
+- **No crate in the closure is the compiler, and that is a test rather than a habit** (C-407).
+  `connector-secrets` re-exports the credential address vocabulary, so the crate owning that
+  vocabulary is published behind it — and while that was `connector-spec`, a release would have put
+  the IR, both front-ends, validation and the lockfile writer on crates.io permanently. It is
+  `connector-address` now, and `publish_closure.rs::no_machinery_crate_is_published` fails on any
+  edge that puts machinery back in. Reach for a new small crate rather than widening what ships.
 - **Adding a workspace dependency can enlarge the closure.** If a published crate gains an edge to
   an unpublished workspace crate, that crate must be published too or consumers cannot resolve
   anything — the path dependency that makes it work here does not travel. The test above fails on it

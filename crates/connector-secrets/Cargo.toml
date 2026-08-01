@@ -31,7 +31,12 @@ vault = ["dep:reqwest", "dep:serde_json"]
 [dependencies]
 # The addressing, and the only source of it. `CredentialRef` / `Layout` / `TenantLayout` come from
 # C-90; this crate does not define a second scheme.
-connector-spec.workspace = true
+#
+# **`connector-address`, not `connector-spec`** (C-407). This edge is what decides the crates.io
+# closure: the closure is derived from the manifests, so whatever crate the addressing lives in gets
+# published behind this one. It used to be the compiler — 11,832 lines of IR, provider TOML and
+# OpenAPI ingest, validation and the lockfile writer — shipped so that one re-export resolved.
+connector-address.workspace = true
 
 async-trait.workspace = true
 thiserror.workspace = true

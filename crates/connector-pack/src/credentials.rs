@@ -16,7 +16,7 @@
 //! # The address is C-90's, and it is not re-derived here
 //!
 //! `tenants/<tenant>/<authority>/<credential>` comes from
-//! [`connector_secrets::CredentialRef`], which re-exports `connector-spec`'s. That address gained an
+//! [`connector_secrets::CredentialRef`], which re-exports `connector-address`'s. That address gained an
 //! optional instance level in C-406 — `…/<authority>/@instances/<uuid>/…`, for a tenant holding more
 //! than one connection to one connector — and **this port composes the sole-connection form**, which
 //! is the same address it always rendered. Threading a connection through belongs to the host that
@@ -69,9 +69,10 @@ use crate::Error;
 /// The reserved service name [`CredentialRef::new`] elides, spelled here because a credential is
 /// declared at **provider** level and therefore always addresses it.
 ///
-/// `connector-spec` owns the definition (`ir::DEFAULT_SERVICE`), and this crate deliberately does not
-/// depend on the loader — the pack's input is the catalogue. So this is a mirror, and a mirror is only
-/// safe if drift is *checked* rather than promised. It is:
+/// `connector-address` owns the definition (`connector_address::DEFAULT_SERVICE`, moved out of the
+/// loader by C-407), and this crate deliberately does not depend on either — the pack's input is the
+/// catalogue. So this is a mirror, and a mirror is only safe if drift is *checked* rather than
+/// promised. It is:
 /// [`the_elided_service_is_the_one_the_addressing_reserves`](tests::the_elided_service_is_the_one_the_addressing_reserves)
 /// builds a real [`CredentialRef`] with it and asserts the addressing agrees that it elides, which is
 /// a stronger statement than string equality would be — it fails if the reserved name changes *or* if
@@ -639,8 +640,8 @@ mod tests {
 
     /// **The guard on [`DEFAULT_SERVICE`]'s mirror.**
     ///
-    /// Asserted through the addressing type rather than against `connector_spec`'s constant, because
-    /// this crate does not depend on the loader and should not start. That makes it the stronger
+    /// Asserted through the addressing type rather than against `connector_address`'s constant,
+    /// because this crate reaches the addressing only through `connector-secrets`. That makes it the stronger
     /// check of the two: it fails if the reserved name changes, and it also fails if the *elision
     /// rule* changes — either of which would have this port writing a service segment into every
     /// credential path and looking up values nobody stored.

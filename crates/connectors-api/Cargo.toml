@@ -24,8 +24,8 @@ homepage.workspace = true
 rust-version = "1.88"
 description = "The reference host: binds the connector pack's three ports and runs its operations"
 
-# **Never published** (C-201). The publish closure is four crates — `connector-catalog`,
-# `connector-spec`, `connector-secrets`, `connector-pack` — and a host is not one of them. A manifest
+# **Never published** (C-201). The publish closure is four crates — `connector-address`,
+# `connector-catalog`, `connector-secrets`, `connector-pack` — and a host is not one of them. A manifest
 # key is how "never published" is enforced rather than remembered;
 # `crates/connector-cli/tests/publish_closure.rs` derives the closure from the manifests, so this
 # keeps the derivation honest too.

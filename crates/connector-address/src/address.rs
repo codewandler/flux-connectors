@@ -15,9 +15,9 @@
 //! Each separator carries exactly one meaning — `/` hierarchy, `:` version, `#` operation — mirroring
 //! URI path-then-fragment syntax. The scheme is C-37's
 //! ([`docs/designs/global-addressing.md`](../../../docs/designs/global-addressing.md)); what C-49
-//! fixes is the **meaning of the middle level**: it is a declared
-//! [`Service`](crate::Service), not an anonymous path segment, and it owns the version that renders
-//! after the colon (`docs/designs/provider-services.md`).
+//! fixes is the **meaning of the middle level**: it is a declared `connector_spec::Service`, not an
+//! anonymous path segment, and it owns the version that renders after the colon
+//! (`docs/designs/provider-services.md`).
 //!
 //! # The elision is the load-bearing rule
 //!
@@ -49,14 +49,14 @@
 //!
 //! # Rendered, never authored
 //!
-//! An address is a *function* of structured fields ([`Connector::gid_of`](crate::Connector::gid_of)),
-//! so a typo in a segment cannot masquerade as a valid address, and grouping or filtering by service
-//! needs no parser at the call site. [`Gid::parse`] exists for the other direction — a user or an
-//! external reference naming a slice — and it validates every component.
+//! An address is a *function* of structured fields (`connector_spec::Connector::gid_of`), so a typo
+//! in a segment cannot masquerade as a valid address, and grouping or filtering by service needs no
+//! parser at the call site. [`Gid::parse`] exists for the other direction — a user or an external
+//! reference naming a slice — and it validates every component.
 
 use std::fmt;
 
-use crate::ir::DEFAULT_SERVICE;
+use crate::DEFAULT_SERVICE;
 
 /// A provider's address: its reverse-DNS authority, and nothing else.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

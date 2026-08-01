@@ -14,7 +14,8 @@ connector-secrets = "0.5"
 
 ## What it is
 
-[`connector-spec`](https://crates.io/crates/connector-spec) owns the credential *address* —
+[`connector-address`](https://crates.io/crates/codewandler-connector-address) owns the credential
+*address* —
 `tenants/<tenant>/<authority>[/@instances/<uuid>][/<service>]/<credential>`, pure and validated.
 The instance names which of a tenant's connections, and is carried only when it holds more than one,
 so a single-connection address is byte-identical to the four-component form. This crate is the other

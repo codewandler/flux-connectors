@@ -19,13 +19,21 @@ a complete hand-authored definition — and normalized into one `Connector` valu
 operations a host calls and the events the vendor sends back) and what an **operator** must supply
 to use it — credentials, configuration, and the one read that proves the connection works.
 
-It also owns **credential addressing**: `CredentialRef` and the
-`tenants/<tenant>/<authority>[/@instances/<uuid>][/<service>]/<credential>` layout — the instance
-naming which of a tenant's connections, for a tenant that holds more than one — which
-[`connector-secrets`](https://crates.io/crates/connector-secrets) re-exports rather than redefining.
-That re-export is why this crate is published: it is in the public API of a crate consumers add.
+It **derives** addresses — `Connector::gid_of`, `Connector::credential_ref_for` — but no longer owns
+their spelling. `Pid`/`Gid`/`Oip` and `CredentialRef` live in
+[`connector-address`](https://crates.io/crates/codewandler-connector-address) and are re-exported
+here unchanged, so `connector_spec::address` and `connector_spec::credential` resolve as they always
+did. They moved because
+[`connector-secrets`](https://crates.io/crates/codewandler-connector-secrets) re-exports the
+addressing into a published API, and while it lived here that put this whole crate — a compiler — on
+crates.io to deliver a few hundred lines of vocabulary.
 
 ## What it is not
+
+In the publish closure. This crate is this repository's compiler, not something a consumer adds; the
+crates.io closure is `connector-address`, `connector-catalog`, `connector-secrets` and
+`connector-pack`, derived from the manifests. Versions 0.7.0 and 0.8.0 went out before the
+vocabulary was extracted and cannot be withdrawn; nothing new is published from here.
 
 A client, a fetcher, or a runtime. **This crate performs no network IO.** Ingest takes bytes, so
 every stage is a pure, unit-testable function; fetching lives in the `flux-connectors` binary alone,
