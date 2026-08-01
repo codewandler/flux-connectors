@@ -1209,11 +1209,11 @@ ir_sha256 = "9a1d597148ebbaa1d6f80b0a4c49337986adeb2334edb45cb82a103e29ffea8d"
 [[provider]]
 id = "twilio"
 generator = "flux-connectors 0.9.1"
-toml_sha256 = "7427d6ddeb60026d9183c63fd95c5c3cc45429a2a26f15e297eb772b69cd7585"
-ir_sha256 = "397f3df725f43dfb62fcb1ac1371271d364c86b37e8d95af7c741cf81185efd5"
+toml_sha256 = "8e4a1eefc9e5aff9a4ff3e72ce60d45e8a1345442fb4057853c8bb7beb69eecf"
+ir_sha256 = "09e1129bac04484a4ac69e4a05db3772ef58892a3301ea30925e32e43dabe3ae"
 
 [provider.artifacts]
-"connectors/twilio.connector.toml" = "ba15319804a71b46df2e3352de1819558d7e13cad0927716b8ad6a7732b10e2c"
+"connectors/twilio.connector.toml" = "a81b6e8ab1b735a5a28f0e0e000a1cf4634c28fec7d55e4ceee98844aa52d495"
 "connectors/twilio.flux" = "55239a59415e15afcf83a7771c668cfe174bcdc1a41aaeb2eaa36167ccd1730a"
 "crates/catalog/ops/twilio/twilio-account-get.flux" = "eb5644b85ca45449a7f8eb58fc7a51805993abe07606746744567b0e7ba04858"
 "crates/catalog/ops/twilio/twilio-call-get.flux" = "8f135e7b4787eaa1430d10ae6a0cfa35795580a54917b067ed424bd55d8069b1"

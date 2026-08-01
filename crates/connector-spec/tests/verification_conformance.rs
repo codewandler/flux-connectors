@@ -38,7 +38,9 @@
 
 use std::path::{Path, PathBuf};
 
-use connector_spec::inbound::{parse_tolerance, signed_placeholders, SIGNED_PLACEHOLDERS};
+use connector_spec::inbound::{
+    parse_tolerance, signed_placeholders, PAYLOAD_PLACEHOLDERS, SIGNED_PLACEHOLDERS,
+};
 use connector_spec::{
     provider, Digest, Encoding, FieldSource, HmacSpec, TimestampFormat, VerificationScheme,
 };
@@ -60,6 +62,18 @@ mod shipped_provider;
 struct Request {
     headers: Vec<(String, String)>,
     body: Vec<u8>,
+    /// The **full request URL the vendor was configured with**, which Twilio's scheme signs.
+    ///
+    /// Not a fact this repository ships — `ChannelBinding` deliberately carries no URL, because the
+    /// endpoint address is the operator's deployment detail. It is a fact the *transport* supplies
+    /// at request time, exactly as the body and the headers are, which is why it enters here and
+    /// not into the IR.
+    ///
+    /// It is also the axis with a deployment hazard worth naming: behind a proxy or a load balancer
+    /// the host sees a rewritten scheme, authority or path, and the signature was computed over the
+    /// one the vendor was told about. A host that signs what it received rather than what was
+    /// configured rejects every genuine delivery.
+    url: String,
     /// The verifier's "now", in unix seconds. Injected rather than read from the clock so that a
     /// tolerance test is a test and not a race.
     now: i64,
@@ -98,15 +112,15 @@ enum Refusal {
 /// absence is the conformance claim.
 fn verify(spec: &HmacSpec, secret: &[u8], request: &Request) -> Result<(), Refusal> {
     // Axis 1 — the digest.
+    // SHA-1 used to be a stated refusal here — it was in the IR only because GitHub's superseded
+    // `X-Hub-Signature` used it, and nothing shipped it. Twilio ships it: `X-Twilio-Signature` is
+    // base64(HMAC-SHA1(…)) and the vendor publishes no SHA-256 alternative. A refusal would have
+    // meant declaring a binding this matrix never reproduced, which is the one outcome the story
+    // forbids, so the primitive is implemented and pinned to RFC 2202 rather than the row being
+    // waved through.
     let mac = match spec.algorithm {
         Digest::Sha256 => hmac_sha256,
-        // SHA-1 is in the IR only because GitHub's superseded `X-Hub-Signature` used it. Nothing
-        // ships it, and a scheme that needs it gets a stated refusal rather than a quiet pass.
-        Digest::Sha1 => {
-            return Err(Refusal::CannotVerify(
-                "sha1 signatures are not verified by this matrix".to_owned(),
-            ))
-        }
+        Digest::Sha1 => hmac_sha1,
     };
 
     // Axis 2 — how the digest is spelled in the header.
@@ -153,7 +167,12 @@ fn verify(spec: &HmacSpec, secret: &[u8], request: &Request) -> Result<(), Refus
         },
         None => None,
     };
-    let message = signed_message(&spec.signed, &request.body, timestamp.as_deref())?;
+    let message = signed_message(
+        &spec.signed,
+        &request.body,
+        timestamp.as_deref(),
+        Some(request.url.as_str()),
+    )?;
 
     // Axis 4 — how long a signature stays acceptable, and axis 5 — how the timestamp is spelled.
     if let (Some(tolerance), Some(stamp)) = (&spec.tolerance, timestamp.as_deref()) {
@@ -185,6 +204,7 @@ fn signed_message(
     template: &str,
     body: &[u8],
     timestamp: Option<&str>,
+    url: Option<&str>,
 ) -> Result<Vec<u8>, Refusal> {
     for placeholder in signed_placeholders(template) {
         if !SIGNED_PLACEHOLDERS.contains(&placeholder.as_str()) {
@@ -216,6 +236,18 @@ fn signed_message(
         };
         match &after[..close] {
             "body" => out.extend_from_slice(body),
+            // The one placeholder that is a *derivation* rather than a splice. See
+            // `reassemble_sorted_form` for why that is still a declaration and not a script.
+            "sorted_form" => out.extend_from_slice(&reassemble_sorted_form(body)?),
+            "url" => {
+                match url {
+                    Some(value) => out.extend_from_slice(value.as_bytes()),
+                    None => return Err(Refusal::CannotVerify(
+                        "the template signs the request URL, which this transport does not supply"
+                            .to_owned(),
+                    )),
+                }
+            }
             "timestamp" => match timestamp {
                 Some(value) => out.extend_from_slice(value.as_bytes()),
                 None => {
@@ -233,6 +265,104 @@ fn signed_message(
         rest = &after[close + 1..];
     }
     out.extend_from_slice(rest.as_bytes());
+    Ok(out)
+}
+
+/// `{sorted_form}` — the form body's fields, decoded, sorted by name, and re-joined name-then-value
+/// with no separator anywhere.
+///
+/// # Why this is a declaration and not an escape hatch
+///
+/// It is the one placeholder whose value is not a splice of something the transport handed over,
+/// which is exactly the objection `providers/twilio.toml` recorded against ever adding it: "a
+/// `signed` template concatenates fixed strings around two named values; it cannot re-sort N form
+/// fields whose count and names vary per delivery." That is true of the *template*, and it stays
+/// true — the template still cannot sort anything. What sorts is this function, once, for every
+/// vendor that names the placeholder. The template says *which* derivation, not *how*, and the set
+/// of derivations it may name is closed by `SIGNED_PLACEHOLDERS`.
+///
+/// # Every step here is forced by Twilio's own published vector
+///
+/// - **Decoded, not raw.** Twilio's example signs `To` as `+18005551212`, which travels on the wire
+///   as `To=%2B18005551212`. Splicing raw bytes reproduces nothing.
+/// - **Sorted by the decoded name**, byte-wise. Twilio sorts the parameter names as strings; UTF-8
+///   byte order and code-point order agree, so the two never diverge.
+/// - **No delimiter**, between a name and its value or between pairs. `CallSidCA1234…Caller+1415…`.
+///
+/// # A repeated name is refused, not resolved
+///
+/// `a=1&a=2` has no defined answer: Twilio's own helper libraries build a map, so one value wins and
+/// which one depends on the language. A verifier that picks silently disagrees with some other
+/// correct implementation, and disagreement on an authentication path means one side accepts what
+/// the other rejects. It is refused instead — a stated `cannot verify`, which is a 4xx and no
+/// delivery, rather than a coin flip. Nothing Twilio sends repeats a name; a forger controls the
+/// body and would.
+fn reassemble_sorted_form(body: &[u8]) -> Result<Vec<u8>, Refusal> {
+    let mut fields: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
+    if !body.is_empty() {
+        for pair in body.split(|byte| *byte == b'&') {
+            let (name, value) = match pair.iter().position(|byte| *byte == b'=') {
+                Some(split) => (&pair[..split], &pair[split + 1..]),
+                // A bare `flag` with no `=`. Twilio never sends one; decoding it as an empty value
+                // is what every form parser does, and it stays deterministic either way.
+                None => (pair, &pair[pair.len()..]),
+            };
+            fields.push((form_decode(name)?, form_decode(value)?));
+        }
+    }
+
+    fields.sort_by(|left, right| left.0.cmp(&right.0));
+    for pair in fields.windows(2) {
+        if pair[0].0 == pair[1].0 {
+            return Err(Refusal::CannotVerify(format!(
+                "form field {:?} appears more than once, and the reassembled order is then \
+                 undefined; a verifier that guessed would disagree with another correct one",
+                String::from_utf8_lossy(&pair[0].0)
+            )));
+        }
+    }
+
+    let mut out = Vec::new();
+    for (name, value) in fields {
+        out.extend_from_slice(&name);
+        out.extend_from_slice(&value);
+    }
+    Ok(out)
+}
+
+/// One `application/x-www-form-urlencoded` component, decoded to bytes.
+///
+/// Bytes rather than `String`: a percent escape can denote any octet, and refusing a delivery
+/// because its decoded form is not UTF-8 would be this function inventing a rule the vendor never
+/// stated. The digest is over bytes regardless.
+fn form_decode(component: &[u8]) -> Result<Vec<u8>, Refusal> {
+    let mut out = Vec::with_capacity(component.len());
+    let mut index = 0;
+    while index < component.len() {
+        match component[index] {
+            b'+' => {
+                out.push(b' ');
+                index += 1;
+            }
+            b'%' => {
+                let hex = component
+                    .get(index + 1..index + 3)
+                    .and_then(|pair| std::str::from_utf8(pair).ok())
+                    .and_then(|pair| u8::from_str_radix(pair, 16).ok())
+                    .ok_or_else(|| {
+                        Refusal::Malformed(
+                            "the form body has a truncated or non-hex percent escape".to_owned(),
+                        )
+                    })?;
+                out.push(hex);
+                index += 3;
+            }
+            byte => {
+                out.push(byte);
+                index += 1;
+            }
+        }
+    }
     Ok(out)
 }
 
@@ -292,6 +422,98 @@ fn hmac_sha256(key: &[u8], message: &[u8]) -> Vec<u8> {
     outer.finalize().to_vec()
 }
 
+/// HMAC-SHA1, RFC 2104, over the SHA-1 below.
+///
+/// Same shape as [`hmac_sha256`], different block output. It exists because Twilio signs with SHA-1
+/// and publishes no alternative, and [`the_hmac_sha1_primitive_matches_rfc_2202`] pins it to
+/// vectors from outside this repository — without which reproducing Twilio's published signature
+/// would only show this file agreeing with itself.
+fn hmac_sha1(key: &[u8], message: &[u8]) -> Vec<u8> {
+    const BLOCK: usize = 64;
+
+    let mut padded = [0u8; BLOCK];
+    if key.len() > BLOCK {
+        padded[..20].copy_from_slice(&sha1(key));
+    } else {
+        padded[..key.len()].copy_from_slice(key);
+    }
+
+    let mut inner = padded.iter().map(|b| b ^ 0x36).collect::<Vec<_>>();
+    inner.extend_from_slice(message);
+    let inner = sha1(&inner);
+
+    let mut outer = padded.iter().map(|b| b ^ 0x5c).collect::<Vec<_>>();
+    outer.extend_from_slice(&inner);
+    sha1(&outer).to_vec()
+}
+
+/// SHA-1, FIPS 180-4 §6.1, written out here rather than taken as a dependency.
+///
+/// The workspace pins `sha2` and no SHA-1 crate, and a dependency list is not this story's to edit.
+/// SHA-1 is ninety lines of shifts with a published test suite, so writing it costs less than the
+/// manifest change and is pinned to the same standard the crate would be.
+///
+/// **This is a test fixture, not a recommendation.** SHA-1 is collision-broken; it is here because
+/// `X-Twilio-Signature` uses it, and HMAC-SHA1's security does not rest on collision resistance.
+fn sha1(message: &[u8]) -> [u8; 20] {
+    let mut state: [u32; 5] = [
+        0x6745_2301,
+        0xefcd_ab89,
+        0x98ba_dcfe,
+        0x1032_5476,
+        0xc3d2_e1f0,
+    ];
+
+    let mut padded = message.to_vec();
+    let bits = (message.len() as u64) * 8;
+    padded.push(0x80);
+    while padded.len() % 64 != 56 {
+        padded.push(0);
+    }
+    padded.extend_from_slice(&bits.to_be_bytes());
+
+    for chunk in padded.chunks_exact(64) {
+        let mut w = [0u32; 80];
+        for (index, word) in chunk.chunks_exact(4).enumerate() {
+            w[index] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
+        }
+        for index in 16..80 {
+            w[index] = (w[index - 3] ^ w[index - 8] ^ w[index - 14] ^ w[index - 16]).rotate_left(1);
+        }
+
+        let [mut a, mut b, mut c, mut d, mut e] = state;
+        for (index, word) in w.iter().enumerate() {
+            let (f, k) = match index {
+                0..=19 => ((b & c) | (!b & d), 0x5a82_7999_u32),
+                20..=39 => (b ^ c ^ d, 0x6ed9_eba1),
+                40..=59 => ((b & c) | (b & d) | (c & d), 0x8f1b_bcdc),
+                _ => (b ^ c ^ d, 0xca62_c1d6),
+            };
+            let temp = a
+                .rotate_left(5)
+                .wrapping_add(f)
+                .wrapping_add(e)
+                .wrapping_add(k)
+                .wrapping_add(*word);
+            e = d;
+            d = c;
+            c = b.rotate_left(30);
+            b = a;
+            a = temp;
+        }
+
+        for (slot, value) in state.iter_mut().zip([a, b, c, d, e]) {
+            *slot = slot.wrapping_add(value);
+        }
+    }
+
+    let mut out = [0u8; 20];
+    for (index, word) in state.iter().enumerate() {
+        out[index * 4..index * 4 + 4].copy_from_slice(&word.to_be_bytes());
+    }
+    out
+}
+
 fn hex_encode(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
 
@@ -303,6 +525,25 @@ fn hex_encode(bytes: &[u8]) -> String {
 }
 
 const BASE64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+/// The inverse of [`decode`]'s base64 arm, so a test can spell a digest the way a base64 vendor
+/// sends it. Only a test builds signatures; nothing shipped encodes one.
+fn base64_encode(bytes: &[u8]) -> String {
+    let mut out = String::new();
+    for group in bytes.chunks(3) {
+        let mut block = [0u8; 3];
+        block[..group.len()].copy_from_slice(group);
+        let packed = u32::from_be_bytes([0, block[0], block[1], block[2]]);
+        for slot in 0..4 {
+            if slot <= group.len() {
+                out.push(BASE64[(packed >> (18 - 6 * slot)) as usize & 0x3f] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
+}
 
 /// Decode a header's digest according to the declared encoding.
 ///
@@ -414,6 +655,10 @@ struct Row {
     body: &'static [u8],
     signature: (&'static str, &'static str),
     timestamp: Option<(&'static str, &'static str)>,
+    /// The URL the vendor was configured with, for a row whose scheme signs it. Every other row
+    /// leaves it unset, and an unset URL that a template then names is a stated refusal rather than
+    /// an empty string quietly signed.
+    url: Option<&'static str>,
     now: i64,
     /// Whether `HmacSpec` can express this vendor at all. A `false` row must produce a stated
     /// [`Refusal::CannotVerify`], never a pass.
@@ -447,6 +692,7 @@ secret = "acme.webhook_secret"
                 "sha256=757107ea0eb2509fc211221cce984b8a37570b6d7586c22c46f4379c8b043e17",
             ),
             timestamp: None,
+            url: None,
             now: 0,
             in_matrix: true,
         },
@@ -470,6 +716,7 @@ secret = "acme.webhook_secret"
                 "v0=a2114d57b48eac39b9ad189dd8316235a7b4a8d21a10bd27519666489c69b503",
             ),
             timestamp: Some(("X-Slack-Request-Timestamp", "1531420618")),
+            url: None,
             // Inside Slack's documented five-minute window, and the stale case below steps outside
             // it.
             now: 1_531_420_618 + 60,
@@ -509,6 +756,7 @@ tolerance = "5m"
                 "X-Zendesk-Webhook-Signature-Timestamp",
                 "2022-05-05T18:32:28Z",
             )),
+            url: None,
             now: 1_651_775_548 + 60,
             in_matrix: true,
         },
@@ -545,14 +793,49 @@ tolerance = "5m"
                 "t=1492774577,v1=5257a869e7ecebeda32affa62cdca3fa51cad7e77a0e56ff536d0ce8e108d8bd",
             ),
             timestamp: None,
+            url: None,
             now: 1_492_774_577,
             in_matrix: false,
+        },
+        // -- Twilio -----------------------------------------------------------------------------
+        // The row this story exists for, and the second **shipped** one: it is read from
+        // `providers/twilio.toml`'s `message-status-callback` binding rather than restated here.
+        //
+        // Twilio publishes the whole worked example at twilio.com/docs/usage/security — the URL,
+        // the five parameters, the auth token `12345`, the exact concatenated string, and the
+        // signature below. Everything about it is outside the matrix's previous reach: SHA-1 rather
+        // than SHA-256, base64, no timestamp and therefore no window, and a signed string that
+        // contains neither the raw body nor any constant this repository could have guessed.
+        //
+        // The body here is the wire form of that example — note `%2B` where the signed string has a
+        // literal `+`. That single detail is the proof that `{sorted_form}` is a derivation and not
+        // `{body}` under another name: splice the raw bytes and Twilio's own signature does not
+        // reproduce. `the_reassembled_form_is_a_derivation_of_the_body_and_not_its_bytes` pins it.
+        Row {
+            vendor: "twilio",
+            source: Source::VendorDocumented,
+            hmac_toml: None,
+            shipped: Some(("twilio", "message-status-callback")),
+            secret: "12345",
+            body: TWILIO_BODY,
+            signature: ("X-Twilio-Signature", "L/OH5YylLD5NRKLltdqwSvS0BnU="),
+            timestamp: None,
+            url: Some("https://example.com/myapp.php?foo=1&bar=2"),
+            now: 0,
+            in_matrix: true,
         },
     ]
 }
 
 /// Slack's documented example payload, a form-encoded slash-command body.
 const SLACK_BODY: &[u8] = b"token=xyzz0WbapA4vBCDEFasx0q6G&team_id=T1DC2JH3J&team_domain=testteamnow&channel_id=G8PSS9T3V&channel_name=foobar&user_id=U2CERLKJA&user_name=roadrunner&command=%2Fwebhook-collect&text=&response_url=https%3A%2F%2Fhooks.slack.com%2Fcommands%2FT1DC2JH3J%2F397700885554%2F96rGlfmibIGlgcZRskXaIFfN&trigger_id=398738663015.47445629121.803a0bc887a14d10d2c447fce8b6703c";
+
+/// Twilio's documented example parameters, as the form body that carries them on the wire.
+///
+/// Declaration order is deliberately *not* sorted: `To` first, `CallSid` last. The scheme sorts, and
+/// a fixture already in sorted order would let a verifier that skipped the sort still pass.
+const TWILIO_BODY: &[u8] =
+    b"To=%2B18005551212&From=%2B14158675310&Digits=1234&Caller=%2B14158675310&CallSid=CA1234567890ABCDE";
 
 /// The secret for every row a vendor does not publish one for. Unmistakably not a credential: a
 /// fixture shaped like one is an incident on its own, independent of whether it ever was a secret.
@@ -603,6 +886,7 @@ impl Row {
         Request {
             headers,
             body: self.body.to_vec(),
+            url: self.url.unwrap_or_default().to_owned(),
             now: self.now,
         }
     }
@@ -825,13 +1109,27 @@ fn vendor_signature_vectors_verify() {
 /// all, then a template whose *first* placeholder is well-formed passes every check the loader makes
 /// and the body silently leaves the signed string.
 fn assert_body_is_signed(row: &Row, spec: &HmacSpec) {
-    let typo = spec.signed.replacen("{body}", "{body", 1);
-    if typo == spec.signed {
-        return;
-    }
+    // Whichever placeholder puts the payload in — `{body}` for four vendors, `{sorted_form}` for
+    // Twilio. The typo is the same typo and the hole it opens is the same hole, so the check has to
+    // follow the payload rather than the spelling.
+    let Some(placeholder) = PAYLOAD_PLACEHOLDERS
+        .iter()
+        .map(|name| format!("{{{name}}}"))
+        .find(|placeholder| spec.signed.contains(placeholder.as_str()))
+    else {
+        panic!(
+            "vendor {}: `signed = {:?}` names no payload placeholder at all, which the loader must \
+             already have refused",
+            row.vendor, spec.signed
+        );
+    };
+    let typo = spec
+        .signed
+        .replacen(&placeholder, placeholder.trim_end_matches('}'), 1);
 
-    let one = signed_message(&typo, b"the original payload", Some("1531420618"));
-    let other = signed_message(&typo, b"a forged payload", Some("1531420618"));
+    let url = row.url;
+    let one = signed_message(&typo, b"a=the+original+payload", Some("1531420618"), url);
+    let other = signed_message(&typo, b"a=a+forged+payload", Some("1531420618"), url);
     if let (Ok(one), Ok(other)) = (&one, &other) {
         assert_ne!(
             one, other,
@@ -844,7 +1142,7 @@ fn assert_body_is_signed(row: &Row, spec: &HmacSpec) {
 
     // And the file that could contain that typo must not load in the first place.
     if let Some(table) = row.hmac_toml {
-        let source = fixture(&table.replace("{body}", "{body"));
+        let source = fixture(&table.replace(&placeholder, placeholder.trim_end_matches('}')));
         let error = provider::load("providers/fixture.toml", &source)
             .err()
             .unwrap_or_else(|| {
@@ -895,8 +1193,8 @@ fn a_signed_template_that_omits_the_body_verifies_a_forged_payload() {
     let forged = b"payload=a+payload+the+vendor+never+saw";
 
     // 1. The signed string is the same for both bodies. Nothing about the payload enters it.
-    let over_genuine = signed_message(&spec.signed, genuine, Some(stamp)).expect("renders");
-    let over_forged = signed_message(&spec.signed, forged, Some(stamp)).expect("renders");
+    let over_genuine = signed_message(&spec.signed, genuine, Some(stamp), None).expect("renders");
+    let over_forged = signed_message(&spec.signed, forged, Some(stamp), None).expect("renders");
     assert_eq!(
         over_genuine, over_forged,
         "`signed = {:?}` signs a body-independent string",
@@ -918,6 +1216,8 @@ fn a_signed_template_that_omits_the_body_verifies_a_forged_payload() {
             ),
         ],
         body: body.to_vec(),
+        // Slack's template names no `{url}`, so nothing reads this.
+        url: String::new(),
         now,
     };
 
@@ -964,6 +1264,171 @@ tolerance = "5m"
     assert!(
         error.contains("signed") && error.contains("{body}"),
         "the refusal must name the template and what it is missing:\n{error}"
+    );
+}
+
+/// **C-141's hole, reopened by the new placeholders and closed again.**
+///
+/// Widening `SIGNED_PLACEHOLDERS` from two names to four is the moment a rule spelled "`signed` must
+/// interpolate `{body}`" stops being the rule that was meant. `{url}` is a **constant per endpoint**
+/// — every delivery to one callback URL signs the same string — so `signed = "{url}"` is
+/// `signed = "{timestamp}"` with a longer constant and *no* window at all to bound the replay. It
+/// would have loaded the moment `{url}` became fillable, and it would have read as a scheme that
+/// signs something request-specific.
+///
+/// So the loader's rule is not about `{body}`. It is that the template must interpolate one of
+/// [`PAYLOAD_PLACEHOLDERS`] — the placeholders through which the payload actually enters the signed
+/// string. The forgery is demonstrated first, on Twilio's *shipped* parameters with the form
+/// dropped out of the template and nothing else touched.
+#[test]
+fn a_signed_template_that_covers_only_the_url_verifies_a_forged_payload() {
+    let mut spec = shipped_spec("twilio", "message-status-callback");
+    spec.signed = spec.signed.replace("{sorted_form}", "");
+    assert_eq!(
+        spec.signed, "{url}",
+        "the template under test is Twilio's with `{{sorted_form}}` removed"
+    );
+
+    let secret = SENTINEL_SECRET.as_bytes();
+    let url = "https://hooks.example.com/twilio/status";
+    let genuine = b"MessageSid=SM00000000000000000000000000000001&MessageStatus=delivered";
+    let forged = b"MessageSid=SM00000000000000000000000000000002&MessageStatus=failed";
+
+    // 1. The signed string is the same for both bodies. Nothing about the payload enters it, and
+    //    unlike the timestamp case it does not even change between deliveries.
+    let over_genuine = signed_message(&spec.signed, genuine, None, Some(url)).expect("renders");
+    let over_forged = signed_message(&spec.signed, forged, None, Some(url)).expect("renders");
+    assert_eq!(
+        over_genuine, over_forged,
+        "`signed = {:?}` signs a body-independent string",
+        spec.signed
+    );
+
+    // 2. Capture the signature the vendor would send with the genuine delivery.
+    let captured = base64_encode(&hmac_sha1(secret, &over_genuine));
+    let request = |body: &[u8]| Request {
+        headers: vec![(spec.header.clone(), captured.clone())],
+        body: body.to_vec(),
+        url: url.to_owned(),
+        now: 0,
+    };
+
+    assert_eq!(
+        verify(&spec, secret, &request(genuine)),
+        Ok(()),
+        "the captured signature verifies the delivery it was captured from"
+    );
+    // …and a payload the holder of the secret never signed. Twilio's scheme carries no timestamp,
+    // so there is no `tolerance` to bound this: the captured signature works forever.
+    assert_eq!(
+        verify(&spec, secret, &request(forged)),
+        Ok(()),
+        "THE FORGERY: `signed = {:?}` accepts a forged body under a signature captured from a \
+         different one — and with no timestamp in the scheme, for as long as the endpoint exists",
+        spec.signed
+    );
+
+    // 3. So the declaration must not load.
+    for template in [
+        // The URL alone: a per-endpoint constant.
+        r#"signed = "{url}""#,
+        // And a timestamp does not rescue it — that combination is C-141's exact case with a
+        // second constant bolted on.
+        r#"signed = "{url}{timestamp}"
+timestamp = { source = "header", name = "X-Acme-Timestamp" }
+tolerance = "5m""#,
+    ] {
+        let source = fixture(&format!(
+            r#"
+[channels.verification.hmac]
+algorithm = "sha256"
+encoding = "hex"
+header = "X-Acme-Signature"
+secret = "acme.webhook_secret"
+{template}
+"#
+        ));
+        let error = provider::load("providers/fixture.toml", &source)
+            .err()
+            .unwrap_or_else(|| {
+                panic!(
+                    "a `signed` template that never interpolates the payload must be refused at \
+                     load — the forgery above is what it ships:\n{template}"
+                )
+            });
+        let error = format!("{error}");
+        assert!(
+            error.contains("signed") && error.contains("{body}") && error.contains("{sorted_form}"),
+            "the refusal must name the template and both ways of covering the payload:\n{error}"
+        );
+    }
+}
+
+/// `{sorted_form}` is a **derivation of** the body, not a second spelling of its bytes.
+///
+/// The distinction is the whole reason the placeholder had to be added rather than Twilio being
+/// declared with `{url}{body}`, and Twilio's own vector is what settles it: the example signs
+/// `To+18005551212`, while the wire carries `To=%2B18005551212`. Sorting matters too — the fixture
+/// is deliberately in declaration order, not sorted order.
+#[test]
+fn the_reassembled_form_is_a_derivation_of_the_body_and_not_its_bytes() {
+    let reassembled = reassemble_sorted_form(TWILIO_BODY).expect("Twilio's example reassembles");
+    assert_eq!(
+        String::from_utf8_lossy(&reassembled),
+        "CallSidCA1234567890ABCDECaller+14158675310Digits1234From+14158675310To+18005551212",
+        "the derivation is: percent-decode, sort by name, join name-then-value with no separator"
+    );
+    assert_ne!(
+        reassembled,
+        TWILIO_BODY.to_vec(),
+        "if the reassembled form were the raw bytes, `{{body}}` would have covered Twilio and this \
+         story would not exist"
+    );
+
+    // Reordering the fields on the wire must not change what is signed — that is what "sorted"
+    // buys, and it is why Twilio can sign a form whose transmission order it does not control.
+    let shuffled = b"CallSid=CA1234567890ABCDE&To=%2B18005551212&Caller=%2B14158675310&From=%2B14158675310&Digits=1234";
+    assert_eq!(
+        reassemble_sorted_form(shuffled).expect("reassembles"),
+        reassembled,
+        "the reassembled form is order-independent"
+    );
+
+    // A repeated name has no defined answer, so it is refused rather than resolved. A forger picks
+    // the body, and two correct implementations would disagree about which value wins.
+    let repeated = b"Digits=1234&Digits=9999";
+    assert!(
+        matches!(
+            reassemble_sorted_form(repeated),
+            Err(Refusal::CannotVerify(_))
+        ),
+        "a repeated form field name must be a stated refusal, not a coin flip"
+    );
+}
+
+/// HMAC-SHA1, pinned to RFC 2202 §3 — the same role RFC 4231 plays for SHA-256.
+///
+/// Twilio publishes a worked triple, so its row is already strong evidence; this is what makes the
+/// hand-written SHA-1 underneath it accountable to something other than itself.
+#[test]
+fn the_hmac_sha1_primitive_matches_rfc_2202() {
+    // §3, test case 1.
+    assert_eq!(
+        hex_encode(&hmac_sha1(&[0x0b; 20], b"Hi There")),
+        "b617318655057264e28bc0b6fb378c8ef146be00"
+    );
+    // §3, test case 2 — a key that is a word, and a longer message.
+    assert_eq!(
+        hex_encode(&hmac_sha1(b"Jefe", b"what do ya want for nothing?")),
+        "effcdf6ae5eb2fa2d27416d5f184df9c259a7c79"
+    );
+    // §3, test case 6 — a key longer than the 64-byte block, so the key-hashing branch runs.
+    assert_eq!(
+        hex_encode(&hmac_sha1(
+            &[0xaa; 80],
+            b"Test Using Larger Than Block-Size Key - Hash Key First"
+        )),
+        "aa4ae5e15272d00e95705637ce8a3b55ed402112"
     );
 }
 
