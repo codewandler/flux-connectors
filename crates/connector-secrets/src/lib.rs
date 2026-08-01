@@ -1,7 +1,9 @@
 //! Where a connector's credential **address** resolves to a **value**.
 //!
 //! [`connector_spec::credential`] owns the address:
-//! `tenants/<tenant>/<authority>/<service>/<credential>`, pure and validated. It deliberately owns
+//! `tenants/<tenant>/<authority>[/@instances/<uuid>][/<service>]/<credential>`, pure and validated —
+//! the instance being which of a tenant's connections, present only when it holds more than one
+//! (C-406), so a single-connection address is exactly what it always was. It deliberately owns
 //! nothing else — `docs/vision.md`'s non-goal is load-bearing: *"A runtime. This repo compiles; flux
 //! executes."* This crate is the other half, and it is a **host library**.
 //!
@@ -97,7 +99,8 @@ pub use vault::VaultStore;
 // this ecosystem and it lives in `connector-spec`; a consumer of this crate should never need to
 // name both crates to spell one address.
 pub use connector_spec::credential::{
-    validate_tenant, CredentialRef, Layout, TenantLayout, MAX_TENANT, TENANTS_ROOT,
+    validate_instance, validate_tenant, CredentialRef, InstanceId, Layout, TenantInstances,
+    TenantLayout, INSTANCES_SEGMENT, MAX_TENANT, TENANTS_ROOT,
 };
 
 use async_trait::async_trait;

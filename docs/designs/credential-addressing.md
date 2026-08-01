@@ -49,15 +49,63 @@ substantive difference here.
 ## Shape
 
 ```
-tenants/<tenant>/<authority>/<service>/<credential>
+tenants/<tenant>/<authority>[/@instances/<uuid>][/<service>]/<credential>
 
 tenants/9f3a…/com.slack.api/signing_secret          ← `default` service elided
 tenants/9f3a…/com.zendesk.api/support/api_token
 tenants/9f3a…/com.amazonaws/s3/access_key
+tenants/9f3a…/com.zendesk.api/@instances/7c1e…/api_token   ← one of several connections
 ```
 
 The tenant leads because it is the segment a store's access control is written against: a Vault policy
 scoping a token to one customer is a prefix rule, and a prefix rule wants the tenant first.
+
+### One tenant, two connections to one vendor (C-406)
+
+A tenant may hold `acme.zendesk.com` and `acme-eu.zendesk.com`, or a sandbox and a production Jira.
+Until C-406 nothing in the address varied per connection, so both rendered one path: the second write
+overwrote the first, and every later call resolved whichever credential survived — **a `200` from the
+wrong account, with no compile signal and no runtime error**. The inverse of C-226, which is a
+credential two connectors cannot share; this is a connector that cannot hold two credentials.
+
+Four decisions carry it, and each is a refusal of an easier answer:
+
+1. **A uuid, not an operator's label.** Stable under rename, cannot collide, cannot be spelled to
+   traverse. `validate_instance` admits the canonical lowercase hyphenated form and nothing else —
+   the uppercase, braced, URN and unhyphenated spellings are the *same* uuid, and admitting them
+   would put one connection at two addresses. The nil uuid is refused because "no instance" already
+   has a spelling: the address that omits the level.
+2. **Optional, and absent whenever the tenant holds one connection.** An address that shifted would
+   strand every credential already stored, under every deployment, at once — so the four-component
+   form is the address a single connection renders, byte for byte, and a host may pass the connection
+   it is acting for unconditionally without moving anything.
+3. **The ambiguous case refuses.** Several connections and no uuid is an error listing the uuids that
+   would have worked. Never a default and never the first match: "refuse; never repair" exists for
+   exactly this case, because the repair is indistinguishable from success until someone reads
+   another customer's tickets.
+4. **The marker is `@instances`, and the `@` is the argument.** A uuid is a well-formed *service*
+   name (lowercase hex and hyphens), so a bare `…/<authority>/<uuid>/<credential>` would be two
+   addresses wearing one spelling. No component's grammar admits `@`, so the marker cannot be forged
+   or reserved away from anyone — and the instanced form is two segments longer, so the two forms
+   cannot even be the same length. A vendor whose surfaces really are called `instances` stays
+   spellable.
+
+**Which layer owns the label→uuid mapping: the host.** A uuid is opaque to the operator who has to
+choose between "production" and "sandbox", so the human-facing name is a **label on the connection**,
+held by the host beside the connection record and resolved to the uuid *before* an address is built.
+flux-exchange's `invoke` design already fixes this boundary from the other side — the caller cannot
+name the authority, the host or the credential. An instance selector is a value a caller *does*
+supply, so the caller names *which of my connections* and the host says what that points at. This
+repository never sees a label, holds no mapping, and would be the wrong place for one: a label is
+tenant-scoped, mutable and renameable, and every one of those is a property a compiled artifact must
+not have.
+
+**The one migration this implies**, stated rather than discovered: the day a tenant's second
+connection appears, the first credential's address gains a level and the host must move the stored
+value. The refusal is what makes that loud — until the host names an instance it gets an error, and
+once it does it gets an address with nothing at it yet, which fails closed rather than answering from
+the wrong account. The alternative, qualifying every address unconditionally, strands every stored
+credential everywhere at once.
 
 ### The API version is deliberately absent
 

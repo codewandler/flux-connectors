@@ -1264,22 +1264,48 @@ impl Connector {
     /// every path that already exists. Nothing today needs it, because credential names are unique
     /// within a provider and already distinguish the case.
     ///
+    /// # The instance segment
+    ///
+    /// A connector is declared once; a *tenant* may connect it twice — two Zendesk subdomains, a
+    /// sandbox and a production Jira. Nothing this type knows varies per connection, so `instances`
+    /// carries the fact from the only place that holds it (C-406). Pass
+    /// [`TenantInstances::sole`](crate::TenantInstances::sole) for the single-connection case, which
+    /// is every address that exists today and renders byte-identically to what it always has.
+    ///
+    /// ```text
+    /// tenants/<tenant>/com.zendesk.api/@instances/<uuid>/api_token
+    /// ```
+    ///
     /// # Errors
     ///
-    /// A reason string when the tenant id is unusable, or when `credential` is not one this connector
-    /// declares.
+    /// A reason string when the tenant id is unusable, when `credential` is not one this connector
+    /// declares, or when the tenant holds several connections and the reference names none — that
+    /// last one lists the uuids that would have worked rather than picking one.
     pub fn credential_ref_for(
         &self,
         tenant: &str,
         credential: &str,
+        instances: crate::credential::TenantInstances<'_>,
     ) -> crate::Result<Option<crate::credential::CredentialRef>> {
         let leaf = self.local_credential_name(credential)?;
+        // The authority is checked first, so "this connector has no address at all" stays a single
+        // answer rather than one that depends on how many times a tenant connected it.
         let Some(authority) = self.authority.as_deref() else {
             return Ok(None);
         };
-        crate::credential::CredentialRef::new(tenant, authority, DEFAULT_SERVICE, leaf)
-            .map(Some)
-            .map_err(crate::Error::Invalid)
+        let instance = instances.resolve().map_err(crate::Error::Invalid)?;
+        match instance {
+            Some(instance) => crate::credential::CredentialRef::for_instance(
+                tenant,
+                authority,
+                instance.as_str(),
+                DEFAULT_SERVICE,
+                leaf,
+            ),
+            None => crate::credential::CredentialRef::new(tenant, authority, DEFAULT_SERVICE, leaf),
+        }
+        .map(Some)
+        .map_err(crate::Error::Invalid)
     }
 
     /// The local part of a declared credential's name — `api_token` from `zendesk.api_token`.

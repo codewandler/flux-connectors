@@ -16,7 +16,12 @@
 //! # The address is C-90's, and it is not re-derived here
 //!
 //! `tenants/<tenant>/<authority>/<credential>` comes from
-//! [`connector_secrets::CredentialRef`], which re-exports `connector-spec`'s. This module composes
+//! [`connector_secrets::CredentialRef`], which re-exports `connector-spec`'s. That address gained an
+//! optional instance level in C-406 — `…/<authority>/@instances/<uuid>/…`, for a tenant holding more
+//! than one connection to one connector — and **this port composes the sole-connection form**, which
+//! is the same address it always rendered. Threading a connection through belongs to the host that
+//! knows how many a tenant holds (flux-exchange X-14); what must not happen is a second spelling
+//! being invented here. This module composes
 //! one from facts the catalogue already carries — the provider's authority, the credential's leaf —
 //! and the *store* renders it through whichever [`Layout`](connector_secrets::Layout) the host
 //! configured. So a deployment with its own secret layout keeps it, and nothing here has an opinion

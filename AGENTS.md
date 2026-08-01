@@ -431,7 +431,7 @@ A connector derives **where a tenant's credential is kept** — the address, nev
 the store. See [docs/designs/credential-addressing.md](docs/designs/credential-addressing.md).
 
 ```
-tenants/<tenant>/<authority>/<service>/<credential>
+tenants/<tenant>/<authority>[/@instances/<uuid>][/<service>]/<credential>
 ```
 
 - **This repository owns the address; a host library owns the client.** The address is pure and
@@ -447,6 +447,16 @@ tenants/<tenant>/<authority>/<service>/<credential>
   implies otherwise.
 - **`default` never reaches a path**, and spelling it out explicitly does not parse. Two spellings of
   one address is how a store holds the same credential twice with nothing to say which is current.
+- **One tenant may hold two connections to one vendor, and the address says which** (C-406). The
+  instance is a **uuid** — stable under rename, uncollidable, unspellable as a traversal — and it is
+  carried **only when the tenant holds more than one connection of that kind**, so every
+  single-connection address renders byte-identically to the four-component form and no stored
+  credential moves. `TenantInstances` states the rule once: several connections and no uuid is a
+  **refusal naming the uuids that would have worked**, never a default and never the first match —
+  the alternative is a `200` from the wrong account. The human-facing "production vs sandbox" label
+  is the **host's**, mapped to the uuid before an address is built; this repository never sees a
+  label, and `connector-pack` composes the sole-connection form until a host threads a connection
+  through.
 - **The leaf drops the vendor prefix.** `zendesk.api_token` is the flat-namespace name; the path
   already carries the authority, so the leaf is `api_token`. A prefix disagreeing with the connector
   id is refused — it would render a plausible path under the wrong vendor.

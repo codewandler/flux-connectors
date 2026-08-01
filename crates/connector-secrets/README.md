@@ -15,7 +15,9 @@ connector-secrets = "0.5"
 ## What it is
 
 [`connector-spec`](https://crates.io/crates/connector-spec) owns the credential *address* —
-`tenants/<tenant>/<authority>/<service>/<credential>`, pure and validated. This crate is the other
+`tenants/<tenant>/<authority>[/@instances/<uuid>][/<service>]/<credential>`, pure and validated.
+The instance names which of a tenant's connections, and is carried only when it holds more than one,
+so a single-connection address is byte-identical to the four-component form. This crate is the other
 half: the `SecretStore` trait that turns an address into a value, a `MemoryStore` for tests, and an
 optional Vault KV v2 store.
 
