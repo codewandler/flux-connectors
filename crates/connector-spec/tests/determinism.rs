@@ -79,6 +79,7 @@ fn connector(reversed: bool) -> Connector {
             },
             response_schema: Some(schema),
             credential_response: Vec::new(),
+            produces_credential: None,
             quirks: Quirks::default(),
         }],
         events: Vec::new(),

@@ -1709,6 +1709,13 @@ fn compose(
         // lands `[]` and an author who finds one states it in a `[[operations]]` block, where the
         // gate refuses it and a reviewer reads the reason beside it.
         credential_response: Vec::new(),
+        // **And a vendor document cannot make this one either** (C-136). "This call's purpose is to
+        // mint a credential" is a judgement about what an endpoint is *for*, and a token endpoint is
+        // described by its document as an operation returning a JSON object like any other. There is
+        // no `[[patch.operations]]` key for it for the same reason `credential_response` has none:
+        // the declaration belongs beside the reviewer who read the vendor's own documentation, in a
+        // `[[operations]]` block.
+        produces_credential: None,
         quirks: patch
             .and_then(|patch| patch.quirks.clone())
             .unwrap_or_default(),
@@ -4437,6 +4444,7 @@ fn validate_operations(connector: &Connector, problems: &mut Vec<String>) {
 
         validate_repeatability_condition(operation, problems);
         validate_credential_response(operation, problems);
+        validate_produces_credential(connector, operation, problems);
 
         if let Some(alternatives) = &operation.auth {
             validate_requirements(
@@ -4611,6 +4619,155 @@ fn validate_credential_response(operation: &Operation, problems: &mut Vec<String
          whatever its exposure (C-413)",
         quoted(&operation.credential_response)
     ));
+}
+
+/// **A credential-producing operation returns a handle, or it does not load** — C-136's refusals.
+///
+/// [`Operation::produces_credential`] is the declaration that makes a login shippable: the secret
+/// travels from the vendor's response into the host's bound `CredentialStore` and the caller
+/// receives `{ "credential": "tenants/…" }`. Every rule below exists because the guarantee is
+/// *structural* — it comes from the declared shape rather than from a filter — and a declaration the
+/// loader accepted while the shape did not hold would be the worst of both: an operation documented
+/// as safe to call, shipping the token.
+///
+/// # The three the story names, and the three that make them possible
+///
+/// - **The declared output still exposes the secret.** A `response_schema` beside this declaration
+///   documents the vendor's wire body; if the secret's own location resolves in it, the operation is
+///   describing an output it does not have and one that carries a credential. Refused, and this is
+///   C-430's mechanism read from the other side — that story established that *deleting* the
+///   location from the schema removes the disclosure and leaves the exposure, so the schema is
+///   cross-checked rather than silently rewritten.
+/// - **No secret field is named.** The extractor would not know what to divert, and an operation
+///   that diverts nothing returns the vendor's body — which is the unsafe operation wearing the safe
+///   operation's declaration.
+/// - **`idempotency = "idempotent"`.** Minting a token is a write, and some vendors invalidate the
+///   previous one; `Idempotent` additionally licenses flux's op cache to serve a stored result
+///   *instead of executing*, which for a login means handing back an address whose value was
+///   replaced.
+///
+/// The other three are the ones without which the first three cannot be enforced at all: a
+/// credential the connector does not declare has no leaf and therefore no address; a connector with
+/// no `authority` has no second path segment, so nothing composes; and two operations minting one
+/// credential leave "which call put the value there" unanswerable, which is the same ambiguity
+/// C-406 refuses for two connections of one vendor.
+fn validate_produces_credential(
+    connector: &Connector,
+    operation: &Operation,
+    problems: &mut Vec<String>,
+) {
+    let Some(produced) = &operation.produces_credential else {
+        return;
+    };
+    let id = operation.id.as_str();
+
+    // **Refusal 1 — names no secret field.** A pointer must start with `/`, exactly as
+    // `credential_response` does: one spelling of "a location in a response", not two.
+    if produced.secret.trim().is_empty() || !produced.secret.starts_with('/') {
+        problems.push(format!(
+            "operation {id:?} declares `produces_credential` with `secret = {:?}`, which names no \
+             field of the vendor's response. The extractor would not know what to divert, so the \
+             operation would return the vendor's body — state a location as `credential_response` \
+             spells one: a JSON Pointer into the response body, `/access_token`",
+            produced.secret
+        ));
+    }
+
+    // **And it names exactly one value.** `credential_response`'s vocabulary admits `*` for every
+    // element of an array, because that field describes *where credentials appear* and an array of
+    // them is a real shape — postmark's `Servers[].ApiTokens` is the case that forced it. A **mint**
+    // is the other question: one call, one value, one address. `*` here would name several secrets
+    // for one credential with nothing to say which is stored, so it is refused at load rather than
+    // left to fail at every call. Refusing is also what keeps the runtime honest — the diversion
+    // resolves the location with `serde_json::Value::pointer`, which has no wildcard, so a `*` this
+    // validator admitted would be a documented behaviour the code does not have.
+    if produced.secret.contains('*') {
+        problems.push(format!(
+            "operation {id:?} declares `produces_credential` at {:?}, which uses `*`. A `*` names \
+             every element of an array and a mint stores exactly one value at exactly one address, \
+             so there would be nothing to say which element is the credential. That spelling \
+             belongs to `credential_response`, which describes where credentials *appear*; name a \
+             single location here",
+            produced.secret
+        ));
+    }
+
+    // **Refusal 2 — the declared output still exposes the secret.** Read against what the author
+    // wrote, because `Operation::effective_response_schema` already answers the handle here; the
+    // question is whether the connector's own description of the wire body promises a caller the
+    // value.
+    if let Some(schema) = &operation.response_schema {
+        if response_location_exists(schema, &produced.secret) {
+            problems.push(format!(
+                "operation {id:?} declares `produces_credential` at {:?} and its `response_schema` \
+                 still describes that location, so its published contract offers a caller the \
+                 secret the diversion exists to withhold. A `response_schema` here documents the \
+                 vendor's wire body and must not carry the minted value — note that deleting the \
+                 location is not enough on its own (C-430): what makes the operation safe is that \
+                 the value never reaches the result, which is what `produces_credential` does",
+                produced.secret
+            ));
+        }
+    }
+
+    // **Refusal 3 — a write declared safe to repeat.**
+    if operation.idempotency == Idempotency::Idempotent {
+        problems.push(format!(
+            "operation {id:?} declares `produces_credential` and `idempotency = \"idempotent\"`. \
+             Minting a credential is a write — some vendors invalidate the previous token — and \
+             `idempotent` additionally licenses flux's op cache to serve a stored result instead of \
+             executing, which would hand back an address whose value has since been replaced. \
+             Declare `non_idempotent`"
+        ));
+    }
+
+    // The credential must be one the connector declares, or there is no leaf to address it by.
+    if !connector
+        .auth
+        .iter()
+        .any(|method| method.name == produced.credential)
+    {
+        problems.push(format!(
+            "operation {id:?} declares `produces_credential` storing {:?}, which this connector \
+             declares no `[[auth]]` credential for. The value would have nowhere to be put: the \
+             address is composed from the connector's `authority` and the credential's own leaf, \
+             and neither exists for a name nothing declares",
+            produced.credential
+        ));
+    }
+
+    // And the connector must have an authority, or the second segment of the address does not
+    // exist. `connector-pack` refuses the same arrangement at resolve time with
+    // `Error::NoCredentialAddress`; refusing here makes it a build failure instead of a first-call
+    // one.
+    if connector.authority.is_none() {
+        problems.push(format!(
+            "operation {id:?} declares `produces_credential` but this connector declares no \
+             `authority`, so `tenants/<tenant>/<authority>/…` has no second segment and the minted \
+             value has no address to be stored at"
+        ));
+    }
+
+    // One producer per credential. Two would leave a reader with no way to say which call put the
+    // value there, and the catalogue's own record of the mint names exactly one operation.
+    for other in &connector.operations {
+        if other.id == operation.id {
+            break;
+        }
+        if other
+            .produces_credential
+            .as_ref()
+            .is_some_and(|earlier| earlier.credential == produced.credential)
+        {
+            problems.push(format!(
+                "operations {:?} and {id:?} both declare `produces_credential` storing {:?}. Two \
+                 calls minting into one address leave \"which one put the value there\" \
+                 unanswerable, and a downstream operation naming the credential cannot say which \
+                 login it needs — give each grant its own credential",
+                other.id, produced.credential
+            ));
+        }
+    }
 }
 
 /// Locations as a refusal lists them: `"/a", "/b"`. One spelling, so two refusals about the same
@@ -4868,6 +5025,7 @@ pub fn accepted_keys() -> Vec<(&'static str, Vec<String>)> {
         ("oauthRedirect", probe::<crate::OAuthRedirect>()),
         ("authRequirement", probe::<AuthRequirement>()),
         ("operation", probe::<Operation>()),
+        ("producedCredential", probe::<crate::ProducedCredential>()),
         ("event", probe::<EventDecl>()),
         ("channel", probe::<ChannelBinding>()),
         ("configField", probe::<ConfigField>()),

@@ -426,6 +426,7 @@ mod tests {
             params: ParamSet::default(),
             response_schema: None,
             credential_response: Vec::new(),
+            produces_credential: None,
             quirks: Quirks::default(),
         }
     }

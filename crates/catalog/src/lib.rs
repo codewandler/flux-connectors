@@ -301,16 +301,58 @@ pub enum Placement {
 
 /// **How stored material becomes the value that is placed** — the *acquisition* axis.
 ///
-/// Only the two pure acquisitions the shipped catalogue needs are modelled. Effectful ones —
-/// `oauth2`, `session` — are the host's, by the line `docs/designs/unified-auth.md` draws: they need
-/// a network round trip, a token cache and refresh-on-401, and a connector that ran them would have
-/// to pass a raw token through a bound symbol.
+/// Two of the three are pure: the stored secret is placed unchanged, or it is joined into a Basic
+/// pair. The third, [`Minted`](Self::Minted), is the one effectful acquisition this repository
+/// models, and it is modelled as *provenance* rather than as a step a connector performs — see its
+/// own documentation. The remaining effectful ones — token refresh, expiry, `session` — are still
+/// the host's, by the line `docs/designs/unified-auth.md` draws: they need a cache and a
+/// refresh-on-401, and C-90 put both out of scope.
 ///
 /// Not `#[non_exhaustive]`, for the reason [`Placement`] is not.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Acquisition {
     /// The stored secret, unchanged.
     Static,
+    /// **The stored secret, unchanged — and one of this connector's own operations put it there**
+    /// (C-136).
+    ///
+    /// Read as a *placement* instruction this is [`Static`](Self::Static): a minted credential goes
+    /// onto a request exactly as a statically provisioned one does, because by the time anything
+    /// places it, it is a value in the store like any other. What the variant adds is the fact the
+    /// diversion needs, and which nothing else in the catalogue carries: **which call mints it, and
+    /// where in that call's answer the value arrives**.
+    ///
+    /// `connector-pack` reads it from the minting side. Projecting an operation, it looks for the
+    /// declared credential whose [`by`](Self::Minted::by) is that operation's own id; finding one
+    /// makes the operation credential-producing, and its result stops being the vendor's body and
+    /// becomes the handle `{ "credential": "tenants/…" }`. A downstream operation that *uses* the
+    /// credential names it in `credentials` like any other and never sees a value — which is the
+    /// property C-136 exists for: **a caller can use a credential it can never read.**
+    ///
+    /// # Why the fact lives on the credential rather than on the operation
+    ///
+    /// It reads as though it belongs on [`Operation`], and semantically it is the operation's
+    /// declaration — `produces_credential` in the provider file sits in the `[[operations]]` block.
+    /// It is carried here because it is also, exactly, an answer on this axis, and because a field
+    /// on `Operation` is a field every one of the catalogue's generated tables must state: adding
+    /// one rewrites every `crates/catalog/src/generated/<provider>.rs`, every artifact hash under
+    /// it, and `connectors.lock` — for a fact no shipped connector declares. A variant costs
+    /// nothing until something uses it, which is the same reason `skip_serializing_if` is on the IR
+    /// field.
+    Minted {
+        /// The [`Operation::id`] whose call mints this credential.
+        by: &'static str,
+        /// Where the secret arrives in that operation's response body — **one** JSON Pointer into
+        /// the response value, `/access_token`.
+        ///
+        /// Exactly one location, and the loader refuses anything else. `credential_response`'s
+        /// sibling vocabulary admits `*` for every element of an array because it describes where
+        /// credentials *appear*; a mint stores one value at one address, so there would be nothing
+        /// to say which element it was. That is also what keeps this field's documented behaviour
+        /// and the runtime's the same thing: the diversion resolves it with
+        /// `serde_json::Value::pointer`, which has no wildcard.
+        from: &'static str,
+    },
     /// `base64(<user><user_suffix>:<secret>)` — HTTP Basic, composed rather than pre-composed.
     ///
     /// The user half is **config, not a gated secret**: it is an email address or an account name,

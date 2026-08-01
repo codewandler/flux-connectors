@@ -498,7 +498,9 @@ struct OperationEntry {
     /// The schema of a free-form body, when the body *is* a schema rather than assembled from
     /// named fields. Mutually exclusive with body parameters; `null` in the common case.
     body_schema: Option<JsonSchema>,
-    /// The JSON Schema of a successful response, when the vendor publishes one.
+    /// The JSON Schema of a successful response, when the vendor publishes one — or, for a
+    /// credential-producing operation, the handle its caller actually receives (C-136). See
+    /// [`connector_spec::Operation::effective_response_schema`].
     response_schema: Option<JsonSchema>,
     /// The credentials required, as alternatives (OR) of mechanisms (AND) — the IR's own shape.
     /// `[["a", "b"]]` is one mechanism needing both, not two ways to authenticate.
@@ -782,7 +784,12 @@ fn operation_entry(
         parameters: parameters(operation),
         input_schema: operation.input_schema(),
         body_schema: operation.params.body_schema.clone(),
-        response_schema: operation.response_schema.clone(),
+        // **The effective output, not the declared one** (C-136). They differ for exactly one shape
+        // of operation — a credential-producing login, whose caller receives the handle and never
+        // the vendor's body — and this is the surface where the difference matters most: a
+        // published schema promising a caller the secret is the disclosure C-430 refused to fix by
+        // deleting a location, since deletion removes the disclosure and leaves the exposure.
+        response_schema: operation.effective_response_schema(),
         credentials: catalog::credential_mechanisms(connector, operation)
             .into_iter()
             .map(|mechanism| mechanism.into_iter().map(str::to_string).collect())
@@ -944,6 +951,7 @@ mod tests {
             },
             response_schema: None,
             credential_response: Vec::new(),
+            produces_credential: None,
             quirks: Quirks::default(),
         }
     }

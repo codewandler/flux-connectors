@@ -1135,9 +1135,31 @@
           "description": "Locations in this operation's own response that carry a CREDENTIAL — a JSON Pointer into the response value per entry, with `*` for every element of an array (`/start_url`, `/Servers/*/ApiTokens`).\n\nDeclaring one WITHHOLDS the operation: the loader refuses it, because an operation whose declared response carries a token cannot ship until C-136's diversion lands — the host's redactor holds only values it resolved itself and cannot know a secret minted by the very call returning it. See `AGENTS.md` § Authentication contract. A location that matches nothing in `response_schema` is a loud error, not a no-op.",
           "items": { "type": "string", "pattern": "^/" }
         },
+        "produces_credential": {
+          "$ref": "#/$defs/producedCredential",
+          "description": "This operation's purpose is to MINT a credential — a login. The secret is diverted from the vendor's response straight into the host's credential store and the caller receives the handle `{ \"credential\": \"tenants/<tenant>/<authority>/…\" }`; the secret is absent from the operation's output entirely. Refused at load if the declared `response_schema` still describes the secret's own location, if no secret field is named, if the operation declares `idempotency = \"idempotent\"` (minting is a write and some vendors invalidate the previous token), if the named credential is not declared in `[[auth]]`, if the connector declares no `authority`, or if two operations mint the same credential."
+        },
         "quirks": {
           "$ref": "#/$defs/quirks",
           "description": "The ways this endpoint departs from what its spec implies."
+        }
+      }
+    },
+
+    "producedCredential": {
+      "type": "object",
+      "title": "The credential an operation mints",
+      "additionalProperties": false,
+      "required": ["secret", "credential"],
+      "properties": {
+        "secret": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "Where the secret arrives in the vendor's response body — one JSON Pointer into the response value (`/access_token`). Exactly one location: a mint stores one value at one address, so `credential_response`'s `*` (every element of an array) is refused here — that spelling describes where credentials APPEAR, which is a different question."
+        },
+        "credential": {
+          "type": "string",
+          "description": "Which declared `[[auth]]` credential the value is stored as, by name (`babelforce.access_token`). A name, never an address: the address is composed host-side from the authenticated tenant, the connector's `authority` and this credential's leaf."
         }
       }
     },

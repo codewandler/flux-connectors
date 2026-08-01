@@ -13,6 +13,7 @@ use serde_json::Value;
 
 use crate::config::{Field, Snapshot};
 use crate::dry_run::{DryRun, DryRunTransport, Transport};
+use crate::mint;
 use crate::request::{self, Request};
 use crate::{auth, spec, Configuration, Credentials, Error};
 
@@ -54,6 +55,19 @@ impl Egress {
     /// The tool itself.
     pub fn tool(&self) -> &Arc<dyn Tool> {
         &self.0
+    }
+
+    /// Hand `request` to the host's tool, under the **same** `ctx`.
+    ///
+    /// The second half of [`Transport::carry`], named so that the minting path
+    /// ([`Tool::execute`]) can run the two halves separately without a second copy of this line —
+    /// see that method for why only the second half is withheld.
+    pub(crate) async fn send(
+        &self,
+        ctx: &ToolContext,
+        request: Request,
+    ) -> flux_core::Result<ToolResult> {
+        self.0.execute(ctx, request.to_params()).await
     }
 }
 
@@ -110,6 +124,13 @@ pub struct Operation {
     /// same moment. A value is checked against its position where it is substituted, so the rule
     /// binds every host and every `ConfigStore` rather than the loader's view of an `example`.
     endpoint_slots: BTreeMap<String, request::Slot>,
+    /// **The credential this operation mints, when minting is its whole purpose** (C-136).
+    ///
+    /// `None` for every operation the shipped catalogue carries, and the field that decides whether
+    /// [`Tool::execute`] answers with the vendor's response or with a handle. Derived at install
+    /// from the connector's own declaration, for the same reason [`Operation::spec`] is: a
+    /// projection error has nowhere to go inside a host's registration.
+    minting: Option<mint::Minting>,
 }
 
 /// Hand-written because [`CompositeOpDecl`]'s `Debug` is the whole parsed body, which buries the
@@ -134,9 +155,41 @@ impl Operation {
     /// embedded Flux is not the single declaration a catalogue rendering is — plus
     /// [`Error::NoDeclaredHost`] for an entry that names no host, which is refused here so that
     /// [`Tool::permission_subjects`] can never return an empty answer, and
-    /// [`Error::TenantMismatch`] for two ports bound to different tenants.
+    /// [`Error::TenantMismatch`] for two ports bound to different tenants, and
+    /// [`Error::InboundCredential`] for a login declared to mint a signing secret (see
+    /// [`mint::declared_by`]).
     pub fn project(
         entry: &'static catalog::Operation,
+        http: Egress,
+        credentials: Credentials,
+        configuration: Configuration,
+    ) -> Result<Self, Error> {
+        let provider =
+            catalog::provider(catalog::ProviderKey::id(entry.provider)).ok_or_else(|| {
+                Error::UnknownProvider {
+                    provider: entry.provider.to_owned(),
+                    available: catalog::providers().len(),
+                }
+            })?;
+        Self::project_onto(entry, provider, http, credentials, configuration)
+    }
+
+    /// [`project`](Self::project) against a **given** connector rather than the one the catalogue
+    /// holds for `entry.provider`.
+    ///
+    /// Crate-visible on purpose, and it is the seam that lets a fail-closed path with no shipped
+    /// instance be tested at all. The shipped catalogue declares no minted credential — the four
+    /// operations v0.9.0 and v0.9.1 withheld are withheld under C-430 — so `Acquisition::Minted` is
+    /// reachable only from a connector doctored in a test, exactly as `Placement::Query` is in
+    /// [`crate::credentials`]. That makes the path *more* worth covering rather than less.
+    ///
+    /// It is **not** public. A host pairing an operation with a connector that is not its own would
+    /// be a host sending one vendor's credentials to another, and no signature that takes both can
+    /// rule that out — so the one caller that needs it is inside this crate, where the pairing is
+    /// visible in the same file as the assertion it serves.
+    pub(crate) fn project_onto(
+        entry: &'static catalog::Operation,
+        provider: &'static catalog::Provider,
         http: Egress,
         credentials: Credentials,
         configuration: Configuration,
@@ -162,14 +215,6 @@ impl Operation {
                 operation: entry.id.to_owned(),
             });
         }
-
-        let provider =
-            catalog::provider(catalog::ProviderKey::id(entry.provider)).ok_or_else(|| {
-                Error::UnknownProvider {
-                    provider: entry.provider.to_owned(),
-                    available: catalog::providers().len(),
-                }
-            })?;
 
         let declaration = spec::declaration_of(entry.id, entry.flux)?;
         let spec = spec::project_declaration(entry.id, &declaration)?;
@@ -197,6 +242,10 @@ impl Operation {
         // two different hosts against two different spaces.
         let settings = configuration.snapshot(provider.id, entry.service, fields);
 
+        // **Whether this operation's whole purpose is to mint a credential** (C-136), read once at
+        // install like everything else here. `None` for every operation the catalogue ships today.
+        let minting = mint::declared_by(entry, provider)?;
+
         Ok(Self {
             spec,
             endpoint_variables,
@@ -207,7 +256,28 @@ impl Operation {
             http,
             credentials,
             settings,
+            minting,
         })
+    }
+
+    /// **Divert a secret this operation just minted into the bound credential store.**
+    ///
+    /// The one seam between [`mint`] and the port, so that module holds no `Credentials` of its own
+    /// and the store stays exactly what the host handed to [`crate::pack`].
+    ///
+    /// # Errors
+    ///
+    /// Whatever [`Credentials::mint`] refuses: a value too short for the host's redactor to hold, a
+    /// connector with no address to compose, and a store that could not be written.
+    pub(crate) async fn mint(
+        &self,
+        ctx: &ToolContext,
+        credential: &'static catalog::Credential,
+        secret: &str,
+    ) -> Result<connector_secrets::CredentialRef, Error> {
+        self.credentials
+            .mint(ctx, self.entry, self.provider, credential, secret)
+            .await
     }
 
     /// The configuration variables this operation's URL carries, in stable order.
@@ -486,8 +556,30 @@ impl Tool for Operation {
     /// operation dispatches through; the seam exists so that the dry run — which must run *before*
     /// a credential is resolved rather than after — is an implementation of the same interface
     /// instead of a second request path.
+    ///
+    /// # The one operation shape whose answer is not returned (C-136)
+    ///
+    /// An operation declaring `produces_credential` is a **login**, and its answer is a credential.
+    /// So the branch below is not a variation on the paragraphs above: nothing derived from the
+    /// vendor's answer leaves it. The secret goes into the store the host bound and the caller
+    /// receives the handle `{ "credential": "tenants/…" }`; a call that did not mint one is a
+    /// refusal naming at most the HTTP status. See [`crate::mint`] for why redaction cannot stand in
+    /// for that, and why removing the field from the published schema is strictly worse than
+    /// withholding the operation.
+    ///
+    /// **The split between the two steps is load-bearing.** `build_authenticated_request` refuses
+    /// for the pack's own reasons — a missing parameter, an unconfigured `{subdomain}`, a credential
+    /// this tenant never provisioned — and no vendor has answered at that point, so those refusals
+    /// are reported unchanged and a login stays diagnosable. It is exactly the two lines
+    /// [`Transport`] runs for [`Egress`]; the minting path spells them out because only the second
+    /// is withheld.
     async fn execute(&self, ctx: &ToolContext, params: Value) -> flux_core::Result<ToolResult> {
-        self.http.carry(ctx, self, &params).await
+        let Some(minting) = &self.minting else {
+            return self.http.carry(ctx, self, &params).await;
+        };
+        let request = self.build_authenticated_request(ctx, &params).await?;
+        let carried = self.http.send(ctx, request).await;
+        mint::divert(self, minting, ctx, carried).await
     }
 }
 

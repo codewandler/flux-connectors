@@ -233,6 +233,7 @@ fn operation(method: HttpMethod, idempotency: Idempotency, condition: Option<&st
         params: ParamSet::default(),
         response_schema: None,
         credential_response: Vec::new(),
+        produces_credential: None,
         quirks: Quirks::default(),
     }
 }
