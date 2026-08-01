@@ -69,7 +69,7 @@ use std::path::{Path, PathBuf};
 use connector_flux::emit_operation;
 use connector_spec::{
     provider, AuthScheme, Connector, CredentialRef, HttpMethod, Idempotency, Layout, Risk,
-    TenantLayout,
+    TenantInstances, TenantLayout,
 };
 
 /// The provider under test.
@@ -181,11 +181,11 @@ fn the_two_atlassian_connectors_do_not_share_a_credential_address() {
     assert_eq!(confluence.base_url, format!("{ATLASSIAN_HOST}/wiki"));
 
     let confluence_ref = confluence
-        .credential_ref_for(TENANT, CREDENTIAL)
+        .credential_ref_for(TENANT, CREDENTIAL, TenantInstances::sole())
         .expect("a valid tenant id and a declared credential must resolve")
         .expect("confluence declares an authority, so a reference must render");
     let jira_ref = jira
-        .credential_ref_for(TENANT, "jira.api_token")
+        .credential_ref_for(TENANT, "jira.api_token", TenantInstances::sole())
         .expect("a valid tenant id and a declared credential must resolve")
         .expect("jira declares an authority, so a reference must render");
 
@@ -262,13 +262,13 @@ fn a_service_split_would_have_shared_the_credential_and_is_still_refused() {
     // trade-off with a cost rather than a free win forgone.
     let confluence_path = TenantLayout.render(
         &load()
-            .credential_ref_for(TENANT, CREDENTIAL)
+            .credential_ref_for(TENANT, CREDENTIAL, TenantInstances::sole())
             .expect("resolves")
             .expect("renders"),
     );
     let jira_path = TenantLayout.render(
         &load_provider(SIBLING)
-            .credential_ref_for(TENANT, "jira.api_token")
+            .credential_ref_for(TENANT, "jira.api_token", TenantInstances::sole())
             .expect("resolves")
             .expect("renders"),
     );

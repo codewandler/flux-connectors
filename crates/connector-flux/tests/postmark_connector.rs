@@ -35,7 +35,9 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{provider, AuthScheme, Connector, CredentialRef, Layout, TenantLayout};
+use connector_spec::{
+    provider, AuthScheme, Connector, CredentialRef, Layout, TenantInstances, TenantLayout,
+};
 
 /// The provider under test.
 const PROVIDER: &str = "postmark";
@@ -239,11 +241,11 @@ fn credential_ref_for_elides_the_service_and_the_two_tokens_still_never_collide(
     let connector = load();
 
     let server_ref = connector
-        .credential_ref_for("9f3a4b2c", SERVER_TOKEN)
+        .credential_ref_for("9f3a4b2c", SERVER_TOKEN, TenantInstances::sole())
         .expect("a valid tenant id and a declared credential must resolve")
         .expect("postmark declares an authority, so a reference must render");
     let account_ref = connector
-        .credential_ref_for("9f3a4b2c", ACCOUNT_TOKEN)
+        .credential_ref_for("9f3a4b2c", ACCOUNT_TOKEN, TenantInstances::sole())
         .expect("a valid tenant id and a declared credential must resolve")
         .expect("postmark declares an authority, so a reference must render");
 

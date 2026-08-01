@@ -85,7 +85,10 @@ request is theirs to choose:
   guard, with `PrivateNetAllow::None`.
 - **It cannot name a credential.** The address is *derived*:
   `tenants/<tenant>/<authority>/<credential>`, where `<tenant>` comes from the session and
-  `<authority>` and `<credential>` come from the operation's declaration in the catalogue. A provider
+  `<authority>` and `<credential>` come from the operation's declaration in the catalogue. C-406's
+  optional instance level does not weaken this: a caller may say *which of my connections*, never
+  what it points at, and this host is single-connection-valued today so it composes the address
+  without one. A provider
   with no declared `authority` yields `Error::NoCredentialAddress` and the request is refused
   (`crates/connector-pack/src/credentials.rs:126-149`) rather than sent unauthenticated.
 - **It cannot name a tenant.** `tenant_of()` (`src/api.rs:26-36`) is the single seam, and its

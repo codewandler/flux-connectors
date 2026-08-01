@@ -49,24 +49,43 @@ host concern rather than this crate's.
 
 ## Acceptance
 
-- [ ] `CredentialRef` carries an optional instance uuid, validated at construction like every other
+- [x] `CredentialRef` carries an optional instance uuid, validated at construction like every other
       component — `new` re-checks components precisely because a reference can be built from outside
       a loaded `Connector`, and this one is no different.
-- [ ] **Failing-first test** — two instances of one connector, for one tenant, render **different**
+- [x] **Failing-first test** — two instances of one connector, for one tenant, render **different**
       addresses. This is the bug; assert it directly.
-- [ ] **Failing-first test** — a single-instance address renders **byte-identical** to what it
+- [x] **Failing-first test** — a single-instance address renders **byte-identical** to what it
       renders today. The instance component is additive, and an address that shifted under existing
       deployments would strand every credential already stored.
-- [ ] The ambiguous case — more than one instance, no uuid supplied — is a **refusal naming what
+- [x] The ambiguous case — more than one instance, no uuid supplied — is a **refusal naming what
       would have worked**, not a default and not the first match.
-- [ ] A uuid that is not a uuid is refused at construction, and the refusal names the component.
-- [ ] `Connector::credential_ref_for` and every call site are updated coherently; no second spelling
+- [x] A uuid that is not a uuid is refused at construction, and the refusal names the component.
+- [x] `Connector::credential_ref_for` and every call site are updated coherently; no second spelling
       of an address appears anywhere in the workspace.
 - [ ] The address grammar is documented wherever the four-component form is currently written down,
-      including `crate::address` and the integration guide.
+      including `crate::address` and the integration guide. **All but the integration guide** —
+      `docs/integrating-with-flux.md` is owned by C-403 in this wave and was left untouched
+      deliberately; the paragraph under "The unit of addressing is a `CredentialRef`" is the one
+      place still stating the four-component form.
 
 ## Progress
-- (not started)
+- **Landed on `impl/C-406`.** The address is
+  `tenants/<tenant>/<authority>[/@instances/<uuid>][/<service>]/<credential>`.
+- `InstanceId` is a validated newtype (canonical lowercase hyphenated uuid only — one value, one
+  address; the nil uuid is refused because "no instance" is already spelled by omitting the level).
+- `TenantInstances` carries the fact this crate cannot derive: how many connections a tenant holds
+  and which one is named. It states the whole rule — elide at one, the named one at several, refuse
+  when several and none is named, refuse a uuid the tenant does not hold.
+- The marker is `@instances`, and `@` is unspellable in every component grammar, so the level cannot
+  be forged and no service or credential name is reserved away. A bare uuid segment would have been
+  ambiguous with a service, since a uuid is a well-formed service name.
+- `Connector::credential_ref_for` takes `TenantInstances`; every call site passes
+  `TenantInstances::sole()` except the new tests, so no shipped address moves —
+  `cargo run -p connector-cli -- diff` reports 557 artifacts up to date.
+- **The label→uuid mapping is the host's** (recorded in `docs/designs/credential-addressing.md` and
+  in `AGENTS.md`): the label is tenant-scoped, mutable and renameable, and a compiled artifact must
+  hold none of those. `connector-pack` still composes the sole-connection form; threading a
+  connection through is the host's, i.e. flux-exchange X-14.
 
 ## Notes
 - **Consumer waiting on this:** flux-exchange

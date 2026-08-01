@@ -20,7 +20,8 @@ operations a host calls and the events the vendor sends back) and what an **oper
 to use it — credentials, configuration, and the one read that proves the connection works.
 
 It also owns **credential addressing**: `CredentialRef` and the
-`tenants/<tenant>/<authority>/<service>/<credential>` layout, which
+`tenants/<tenant>/<authority>[/@instances/<uuid>][/<service>]/<credential>` layout — the instance
+naming which of a tenant's connections, for a tenant that holds more than one — which
 [`connector-secrets`](https://crates.io/crates/connector-secrets) re-exports rather than redefining.
 That re-export is why this crate is published: it is in the public API of a crate consumers add.
 

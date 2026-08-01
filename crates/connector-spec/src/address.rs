@@ -32,6 +32,21 @@
 //! tail segment under an elided `default`. The design records the two admissible resolutions; neither
 //! is decided here, and a gid with more than one middle segment is refused rather than guessed at.
 //!
+//! # The credential path is a fourth address, and it is spelled elsewhere
+//!
+//! [`crate::credential`] renders where a *tenant's* credential lives, and it is the one address in
+//! this repository that is not a function of the connector alone:
+//!
+//! ```text
+//! tenants/<tenant>/<authority>[/@instances/<uuid>][/<service>]/<credential>
+//! ```
+//!
+//! Two optional levels, and each stays unambiguous a different way. The service elides exactly as it
+//! does in a gid. The instance — which of a tenant's connections, when it holds more than one
+//! (C-406) — is two segments led by `@instances`, a marker no component's grammar can spell, so the
+//! instanced and un-instanced forms cannot even be the same length. It carries **no `api_version`**,
+//! deliberately: a token must survive the vendor's v2 migration.
+//!
 //! # Rendered, never authored
 //!
 //! An address is a *function* of structured fields ([`Connector::gid_of`](crate::Connector::gid_of)),

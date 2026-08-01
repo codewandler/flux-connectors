@@ -14,8 +14,13 @@
 //! no new dependency, and a deterministic generator makes a failure reproducible from the seed in the
 //! assertion rather than from a shape nobody can rebuild.
 
-use connector_spec::credential::{validate_tenant, MAX_TENANT, TENANTS_ROOT};
-use connector_spec::{provider, Connector, CredentialRef, Layout, TenantLayout, DEFAULT_SERVICE};
+use connector_spec::credential::{
+    validate_instance, validate_tenant, INSTANCES_SEGMENT, MAX_TENANT, TENANTS_ROOT,
+};
+use connector_spec::{
+    provider, Connector, CredentialRef, InstanceId, Layout, TenantInstances, TenantLayout,
+    DEFAULT_SERVICE,
+};
 
 /// The same tiny LCG `service_partition.rs` uses.
 struct Rng(u64);
@@ -91,6 +96,29 @@ const CREDENTIALS: &[&str] = &[
     "",
 ];
 
+/// Instances, drawn the same way. `None` is the ordinary single-connection case and is weighted
+/// heavily on purpose: it is the address every stored credential is at, so most draws must exercise
+/// the form that must not move.
+const INSTANCES: &[Option<&str>] = &[
+    None,
+    None,
+    None,
+    Some("7c1e9a02-6b3d-4f11-9c8a-2d5e7f0b4c63"),
+    Some("00000000-0000-4000-8000-000000000001"),
+    // Hostile. A uuid is one value with one spelling here, so the uppercase, braced, URN and
+    // unhyphenated forms are refused rather than normalised — each would be a second address for one
+    // connection. The rest would traverse or forge a level.
+    Some("7C1E9A02-6B3D-4F11-9C8A-2D5E7F0B4C63"),
+    Some("{7c1e9a02-6b3d-4f11-9c8a-2d5e7f0b4c63}"),
+    Some("urn:uuid:7c1e9a02-6b3d-4f11-9c8a-2d5e7f0b4c63"),
+    Some("7c1e9a026b3d4f119c8a2d5e7f0b4c63"),
+    Some("00000000-0000-0000-0000-000000000000"),
+    Some("../../../../etc/passwd"),
+    Some("a/b"),
+    Some(""),
+    Some("default"),
+];
+
 /// **The law.** Over the whole mixed corpus: every reference the constructor admits round-trips, and
 /// every one it rejects is genuinely unrepresentable — never silently repaired into a different
 /// address.
@@ -98,19 +126,28 @@ const CREDENTIALS: &[&str] = &[
 fn every_admissible_reference_round_trips_and_no_rejected_one_renders() {
     let mut admitted = 0;
     let mut rejected = 0;
+    let mut instanced = 0;
 
-    // The corpus is mostly hostile by design, so roughly one draw in thirty is admissible — the seed
-    // count is what makes both sides of the assertion meaningful.
-    for seed in 0..3000u64 {
+    // The corpus is mostly hostile by design, so only a small fraction of draws is admissible — the
+    // seed count is what makes both sides of the assertion meaningful.
+    for seed in 0..9000u64 {
         let mut rng = Rng(seed.wrapping_mul(2_654_435_761).wrapping_add(1));
         let tenant = rng.pick(TENANTS);
         let authority = rng.pick(AUTHORITIES);
         let service = rng.pick(SERVICES);
         let credential = rng.pick(CREDENTIALS);
+        let instance = *rng.pick(INSTANCES);
 
-        match CredentialRef::new(tenant, authority, service, credential) {
+        let built = match instance {
+            Some(instance) => {
+                CredentialRef::for_instance(tenant, authority, instance, service, credential)
+            }
+            None => CredentialRef::new(tenant, authority, service, credential),
+        };
+        match built {
             Ok(reference) => {
                 admitted += 1;
+                instanced += usize::from(reference.instance().is_some());
                 let rendered = TenantLayout.render(&reference);
 
                 // No admitted reference may render a segment that traverses.
@@ -136,6 +173,16 @@ fn every_admissible_reference_round_trips_and_no_rejected_one_renders() {
     // The corpus must actually exercise both sides, or the assertions above are vacuous.
     assert!(admitted > 50, "only {admitted} references were admitted");
     assert!(rejected > 50, "only {rejected} references were rejected");
+    // And both address forms, or the law would be proven only for the one that existed before C-406.
+    assert!(
+        instanced > 20,
+        "only {instanced} instanced references were admitted"
+    );
+    assert!(
+        admitted - instanced > 20,
+        "only {} un-instanced references were admitted",
+        admitted - instanced
+    );
 }
 
 #[test]
@@ -161,6 +208,234 @@ fn the_default_service_is_elided_and_the_elision_stays_unambiguous() {
         Ok(elided)
     );
     assert_eq!(TenantLayout.parse(&TenantLayout.render(&named)), Ok(named));
+}
+
+// ---------------------------------------------------------------------------------------------
+// One tenant, two connections to the same connector (C-406)
+// ---------------------------------------------------------------------------------------------
+
+/// The tenant that holds them. A uuid, because a real one is.
+const TENANT: &str = "9f3a4b2c-1d5e-4f60-8a7b-2c3d4e5f6071";
+const INSTANCE_US: &str = "7c1e9a02-6b3d-4f11-9c8a-2d5e7f0b4c63";
+const INSTANCE_EU: &str = "b48d2f57-0a91-4c3e-8d16-5f2b7e904ac8";
+
+fn two_instances() -> [InstanceId; 2] {
+    [
+        InstanceId::parse(INSTANCE_US).expect("a uuid"),
+        InstanceId::parse(INSTANCE_EU).expect("a uuid"),
+    ]
+}
+
+/// **The bug.** A tenant connects `acme.zendesk.com` and then `acme-eu.zendesk.com`. Before C-406
+/// nothing in the address varied per connection, so both rendered one path: the second write
+/// overwrote the first, and every later call resolved whichever credential survived — a `200` from
+/// the wrong account rather than a refusal.
+#[test]
+fn two_instances_of_one_connector_for_one_tenant_render_different_addresses() {
+    let connector = shipped("zendesk");
+    let held = two_instances();
+
+    let us = connector
+        .credential_ref_for(
+            TENANT,
+            "zendesk.api_token",
+            TenantInstances::held(&held, Some(&held[0])),
+        )
+        .expect("the tenant is valid and one connection is named")
+        .expect("zendesk declares an authority");
+    let eu = connector
+        .credential_ref_for(
+            TENANT,
+            "zendesk.api_token",
+            TenantInstances::held(&held, Some(&held[1])),
+        )
+        .expect("the tenant is valid and one connection is named")
+        .expect("zendesk declares an authority");
+
+    assert_ne!(
+        TenantLayout.render(&us),
+        TenantLayout.render(&eu),
+        "two connections of one connector, for one tenant, must not share an address"
+    );
+    assert_eq!(
+        TenantLayout.render(&us),
+        format!("tenants/{TENANT}/com.zendesk.api/@instances/{INSTANCE_US}/api_token")
+    );
+    assert_eq!(
+        TenantLayout.render(&eu),
+        format!("tenants/{TENANT}/com.zendesk.api/@instances/{INSTANCE_EU}/api_token")
+    );
+
+    // And the law still holds over the new level: an address is an identifier, not merely a
+    // destination.
+    assert_eq!(TenantLayout.parse(&TenantLayout.render(&us)), Ok(us));
+    assert_eq!(TenantLayout.parse(&TenantLayout.render(&eu)), Ok(eu));
+}
+
+/// **The property that makes the component safe to add at all.** A tenant with one connection keeps
+/// the address it already has, byte for byte — an address that shifted would strand every credential
+/// already stored, under every deployment, at once.
+///
+/// The literal is written out rather than derived, because deriving it from the same code that
+/// renders it would assert only that the renderer agrees with itself.
+#[test]
+fn a_single_instance_address_is_byte_identical_to_the_four_component_form() {
+    let connector = shipped("zendesk");
+    const BEFORE: &str = "tenants/9f3a4b2c-1d5e-4f60-8a7b-2c3d4e5f6071/com.zendesk.api/api_token";
+
+    let sole = connector
+        .credential_ref_for(TENANT, "zendesk.api_token", TenantInstances::sole())
+        .expect("valid")
+        .expect("declared");
+    assert_eq!(TenantLayout.render(&sole), BEFORE);
+    assert!(sole.instance().is_none());
+
+    // A host that knows its tenant's one connection and names it unconditionally gets the same
+    // address: the instance is carried when it *distinguishes* something, and with one connection
+    // there is nothing to distinguish. This is what lets a host pass the connection it is acting for
+    // without branching on how many the tenant happens to hold.
+    let held = [InstanceId::parse(INSTANCE_US).expect("a uuid")];
+    let named = connector
+        .credential_ref_for(
+            TENANT,
+            "zendesk.api_token",
+            TenantInstances::held(&held, Some(&held[0])),
+        )
+        .expect("valid")
+        .expect("declared");
+    assert_eq!(TenantLayout.render(&named), BEFORE);
+    assert_eq!(named, sole);
+
+    // The service-scoped form is unchanged too — the instance sits above the service, so neither
+    // optional level disturbs the other.
+    assert_eq!(
+        TenantLayout.render(
+            &CredentialRef::new("t1", "com.zendesk.api", "support", "api_token").expect("valid")
+        ),
+        "tenants/t1/com.zendesk.api/support/api_token"
+    );
+}
+
+/// **The ambiguous case refuses.** Two connections and a reference naming neither has no answer, and
+/// the refusal names the ones that would have worked rather than picking one.
+#[test]
+fn several_instances_and_no_uuid_is_a_refusal_naming_what_would_have_worked() {
+    let connector = shipped("zendesk");
+    let held = two_instances();
+
+    let refusal = connector
+        .credential_ref_for(
+            TENANT,
+            "zendesk.api_token",
+            TenantInstances::held(&held, None),
+        )
+        .expect_err("two connections and no uuid has no address");
+    let message = refusal.to_string();
+
+    assert!(
+        message.contains(INSTANCE_US) && message.contains(INSTANCE_EU),
+        "the refusal must name what would have worked, and this one says: {message}"
+    );
+
+    // Never a default and never the first match: nothing renders at all.
+    assert!(
+        !message.contains(TENANTS_ROOT),
+        "the refusal must not offer an address it declined to render: {message}"
+    );
+
+    // A uuid the tenant does not hold is refused as well, rather than resolving to a plausible
+    // address with nothing at it.
+    let stranger = InstanceId::parse("11111111-2222-4333-8444-555555555555").expect("a uuid");
+    assert!(connector
+        .credential_ref_for(
+            TENANT,
+            "zendesk.api_token",
+            TenantInstances::held(&held, Some(&stranger)),
+        )
+        .is_err());
+}
+
+/// A uuid that is not a uuid is refused at construction, and the refusal names the component — the
+/// same guarantee every other component of an address already gives, for the same reason: a
+/// reference can be built from outside a loaded `Connector`.
+#[test]
+fn an_instance_that_is_not_a_uuid_is_refused_and_the_refusal_names_the_component() {
+    for hostile in [
+        "production",
+        "acme-eu",
+        "../../etc",
+        "7c1e9a02-6b3d-4f11-9c8a-2d5e7f0b4c6",
+        "7c1e9a02-6b3d-4f11-9c8a-2d5e7f0b4c633",
+        // One uuid with two spellings would be one connection at two addresses.
+        "7C1E9A02-6B3D-4F11-9C8A-2D5E7F0B4C63",
+        "7c1e9a026b3d4f119c8a2d5e7f0b4c63",
+        "{7c1e9a02-6b3d-4f11-9c8a-2d5e7f0b4c63}",
+        "urn:uuid:7c1e9a02-6b3d-4f11-9c8a-2d5e7f0b4c63",
+        // The nil uuid names no connection, and "no connection" is already spelled by omitting it.
+        "00000000-0000-0000-0000-000000000000",
+        "",
+    ] {
+        assert!(
+            validate_instance(hostile).is_err(),
+            "instance {hostile:?} must be refused"
+        );
+        assert!(InstanceId::parse(hostile).is_err());
+
+        let reason =
+            CredentialRef::for_instance("t1", "com.zendesk.api", hostile, DEFAULT_SERVICE, "token")
+                .expect_err("a reference must not be constructible from it");
+        assert!(
+            reason.contains("instance"),
+            "the refusal must name the component, and this one says: {reason}"
+        );
+    }
+}
+
+/// The instanced form is a **second optional level**, and it stays unambiguous the same way the
+/// service elision does: there is exactly one spelling of any one address.
+#[test]
+fn an_instanced_path_cannot_be_confused_with_a_service() {
+    // The marker is unspellable as a component, so nothing can forge a level. That is a property of
+    // the grammars, restated here because it is what the parse rests on.
+    assert!(INSTANCES_SEGMENT.starts_with('@'));
+    assert!(connector_spec::address::validate_service_name(INSTANCES_SEGMENT).is_err());
+    assert!(connector_spec::address::validate_member_name(INSTANCES_SEGMENT).is_err());
+    assert!(connector_spec::address::validate_authority(INSTANCES_SEGMENT).is_err());
+    assert!(validate_tenant(INSTANCES_SEGMENT).is_err());
+
+    // A uuid *is* a well-formed service name, which is exactly why the marker exists: without it,
+    // `tenants/t1/com.acme.api/<uuid>/token` would be two addresses wearing one spelling.
+    assert!(connector_spec::address::validate_service_name(INSTANCE_US).is_ok());
+
+    let instanced =
+        CredentialRef::for_instance("t1", "com.acme.api", INSTANCE_US, "support", "token")
+            .expect("valid");
+    assert_eq!(
+        TenantLayout.render(&instanced),
+        format!("tenants/t1/com.acme.api/@instances/{INSTANCE_US}/support/token")
+    );
+    assert_eq!(
+        TenantLayout.parse(&TenantLayout.render(&instanced)),
+        Ok(instanced)
+    );
+
+    for forged in [
+        // A uuid where a service goes is a service named like a uuid, and nothing else.
+        format!("tenants/t1/com.acme.api/{INSTANCE_US}/token"),
+        // The marker without a uuid under it, the marker misspelled as a name, the elided service
+        // written out, a uuid that is not one, and a level too many.
+        format!("tenants/t1/com.acme.api/@instances/{INSTANCE_US}"),
+        format!("tenants/t1/com.acme.api/instances/{INSTANCE_US}/token"),
+        format!("tenants/t1/com.acme.api/@instances/{INSTANCE_US}/default/token"),
+        "tenants/t1/com.acme.api/@instances/not-a-uuid/token".to_owned(),
+        format!("tenants/t1/com.acme.api/@instances/{INSTANCE_US}/a/b/token"),
+    ] {
+        let parsed = TenantLayout.parse(&forged);
+        assert!(
+            parsed.as_ref().map(|r| r.instance().is_some()) != Ok(true),
+            "path {forged:?} must not parse as an instanced address: {parsed:?}"
+        );
+    }
 }
 
 /// Writing `default` out by hand must not be a second spelling of the elided form.
@@ -226,7 +501,7 @@ fn slack_derives_a_path_for_each_of_its_credentials() {
     let connector = shipped("slack");
 
     let bot = connector
-        .credential_ref_for("9f3a", "slack.bot_token")
+        .credential_ref_for("9f3a", "slack.bot_token", TenantInstances::sole())
         .expect("the tenant is valid")
         .expect("slack declares an authority");
     assert_eq!(
@@ -236,7 +511,7 @@ fn slack_derives_a_path_for_each_of_its_credentials() {
     );
 
     let signing = connector
-        .credential_ref_for("9f3a", "slack.signing_secret")
+        .credential_ref_for("9f3a", "slack.signing_secret", TenantInstances::sole())
         .expect("valid")
         .expect("declared");
     assert_eq!(
@@ -270,13 +545,13 @@ fn the_three_outcomes_are_distinguishable() {
 
     assert!(
         connector
-            .credential_ref_for("../etc", "slack.bot_token")
+            .credential_ref_for("../etc", "slack.bot_token", TenantInstances::sole())
             .is_err(),
         "a bad tenant is an error naming what is wrong with it"
     );
     assert!(
         connector
-            .credential_ref_for("9f3a", "slack.nonexistent")
+            .credential_ref_for("9f3a", "slack.nonexistent", TenantInstances::sole())
             .is_err(),
         "an undeclared credential is an error"
     );
@@ -310,7 +585,7 @@ idempotency = "idempotent"
         "the fixture exists to have no authority"
     );
     assert!(matches!(
-        no_authority.credential_ref_for("9f3a", "acme.token"),
+        no_authority.credential_ref_for("9f3a", "acme.token", TenantInstances::sole()),
         Ok(None)
     ));
 }
@@ -361,7 +636,7 @@ fn every_shipped_provider_declares_an_authority_and_renders_a_credential_path() 
             continue;
         };
         if connector
-            .credential_ref_for("9f3a", &method.name)
+            .credential_ref_for("9f3a", &method.name, TenantInstances::sole())
             .expect("the tenant is valid")
             .is_none()
         {
