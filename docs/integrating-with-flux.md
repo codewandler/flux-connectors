@@ -3,9 +3,9 @@
 **Audience:** someone building or extending a flux **host** who wants this repository's connectors to
 make real calls. **Not** a contributor guide — for that, start at [AGENTS.md](../AGENTS.md).
 
-> Measured against the working tree at **v0.6.0** on **2026-07-31**. Counts come from
-> `web/public/catalog.json`, not from prose: **45 providers, 52 services, 254 operations, 8 events,
-> 2 channel bindings**. All 45 providers declare an `authority`. Re-measure before quoting; the
+> Measured against the working tree at **v0.8.0** on **2026-08-01**. Counts come from
+> `web/public/catalog.json`, not from prose: **53 providers, 60 services, 299 operations, 8 events,
+> 2 channel bindings**. All 53 providers declare an `authority`. Re-measure before quoting; the
 > hand-typed figures in `README.md` have drifted and [C-81](stories/C-81-declared-counts-are-checked.md) is the fix.
 
 ## The one thing to understand first
@@ -35,13 +35,14 @@ different execution model that is not finished; do not plan around it.
 The publish closure is four crates — `connector-catalog`, `connector-spec`, `connector-secrets`,
 `connector-pack` — published as `codewandler-connector-*` by CI on a `vX.Y.Z` tag.
 
-**As of 2026-07-31 they are not on crates.io** ([C-190](stories/C-190-publish-catalog-pack-secrets.md)
-is `ready`, with a verified 404). Until it lands, a consuming repository must use a `path` or `git`
-dependency — which is exactly what some consumers forbid. Check crates.io before assuming otherwise.
+**They are on crates.io.** All four went out on **2026-07-31**, first at **0.7.0** and then at
+**0.8.0** the same day ([C-190](stories/C-190-publish-catalog-pack-secrets.md)), so a registry
+dependency works and the `path`/`git` workaround this section used to require is gone. Check
+crates.io for the current version rather than trusting the pin below.
 
 ```toml
 [dependencies]
-codewandler-connector-pack    = "0.6"          # brings the catalogue and secrets with it
+codewandler-connector-pack    = "0.8"          # brings the catalogue and secrets with it
 codewandler-flux-runtime      = "0.41"         # your host already has this
 codewandler-flux-spec         = "1.2"          # floor, not a pin
 ```
@@ -270,24 +271,24 @@ before "fixing" one.
 
 | # | Gap | Effect on a host | Owner |
 |---|---|---|---|
-| 1 | **No `http.request` implementation in the dependency graph.** `Egress::new` takes a configured `Arc<dyn Tool>` and nothing here supplies one; `codewandler-flux-web` is not in `Cargo.lock` at all. | Path A needs a transport you bring. Trivial if your host links flux-web; otherwise you must not substitute a hand-rolled client — a demo of a substitute demonstrates the substitute. | [connectors-app.md](designs/connectors-app.md) |
-| 2 | **The crates are unpublished.** Verified 404 on 2026-07-31. | `path`/`git` dependency only, which some consuming repositories forbid outright. | [C-190](stories/C-190-publish-catalog-pack-secrets.md) `ready` |
-| 3 | **Six declared surfaces reach no artifact.** `config` (45 fields / 28 providers), `verify` (28 providers), service `roles`, `quirks.pagination`, `graphs`, `quirks.rate_limit` are in the IR and validated by the loader, and appear in neither the manifest nor the catalogue. | A host **cannot render a settings page**, cannot discover the "Test connection" operation, cannot page a list — for connectors that declare all of it. You must supply endpoint values (Step 3) knowing only the variable names, read off each operation's emitted Flux. `site.rs` also collapses the whole `OAuth2Spec` to `oauth2: bool`, so **no host can build an authorize URL from the published catalogue.** | [C-87](stories/C-87-configuration-codegen.md) `ready`, [connector-surfaces.md](designs/connector-surfaces.md) |
-| 4 | **Published `status.works` is false for every one of the 254 operations**, on a catalog-scoped `credential-not-injected` issue describing the module path. `unbound-base-url-template` reads as stale too, since C-193 closed it for the pack. | A host filtering the catalogue on `works` installs nothing, including operations the pack executes correctly. Filter on issue `code`/`scope`; treat `unencodable-query-value` and `no-credential` as real, `credential-not-injected` as Path-C-only. | none filed — worth one |
+| 1 | **No `http.request` implementation in the *publishable* dependency graph.** `Egress::new` takes a configured `Arc<dyn Tool>` and none of the four published crates supplies one. `codewandler-flux-web` **is** in `Cargo.lock` (0.41.0), but only through `crates/connectors-api`, the `publish = false` reference host. | Path A needs a transport you bring. Trivial if your host links flux-web; otherwise you must not substitute a hand-rolled client — a demo of a substitute demonstrates the substitute. | [connectors-app.md](designs/connectors-app.md) |
+| 2 | ~~**The crates are unpublished.**~~ **Closed.** All four are on crates.io, first published 2026-07-31 (0.7.0) and now at 0.8.0. | None. Depend on `codewandler-connector-*` from the registry. | [C-190](stories/C-190-publish-catalog-pack-secrets.md), still `ready` on the board although its outcome has shipped |
+| 3 | **Six declared surfaces reach no artifact.** `config` (112 fields / 40 providers), `verify` (40 providers), service `roles`, `quirks.pagination`, `graphs`, `quirks.rate_limit` are in the IR and validated by the loader, and appear in neither the manifest nor the catalogue. | A host **cannot render a settings page**, cannot discover the "Test connection" operation, cannot page a list — for connectors that declare all of it. You must supply endpoint values (Step 3) knowing only the variable names, read off each operation's emitted Flux. `site.rs` also collapses the whole `OAuth2Spec` to `oauth2: bool`, so **no host can build an authorize URL from the published catalogue.** | [C-87](stories/C-87-configuration-codegen.md) `ready`, [connector-surfaces.md](designs/connector-surfaces.md) |
+| 4 | **Published `status.works` is false for every one of the 299 operations**, on a catalog-scoped `credential-not-injected` issue describing the module path. `unbound-base-url-template` reads as stale too, since C-193 closed it for the pack. | A host filtering the catalogue on `works` installs nothing, including operations the pack executes correctly. Filter on issue `code`/`scope`; treat `unencodable-query-value` and `no-credential` as real, `credential-not-injected` as Path-C-only. | none filed — worth one |
 | 5 | **The `.flux` module path is unauthenticated and uninstallable.** | Path C is unavailable. | [C-10](stories/C-10-auth-injection-and-manifest.md), [C-15](stories/C-15-install-and-live-e2e.md) |
 | 6 | **No inbound adapter.** Events and channels are published and unconsumed. | Webhooks, Socket Mode and polling are yours to build. | [C-118](stories/C-118-connector-channel-adapter.md) `ready` |
 | 7 | **`zendesk-ticket-search` is non-functional; `form` bodies share the gap.** Query values are not percent-encoded and flux exposes no encoder a Flux *program* can call. `&`, `#` and `+` corrupt the request; `x&per_page=1` injects a parameter. | Do not expose that operation. The body half now exists upstream as `L-101` and arrives when flux-lang publishes it; the query half is still open. | [query-encoding-flux-stories.md](designs/query-encoding-flux-stories.md) |
 | 8 | **Freshdesk declares no credential**, deliberately: its API key occupies the Basic *username* position, which the model treats as non-secret config, so emitting it would bypass secret gating and redaction. | All 9 of its operations fail closed with a `401`. | [C-16](stories/C-16-design-auth-seam.md) |
-| 9 | **No response shaping.** `http.request` returns one flat string, `HTTP {status}\n{headers}\n{body}`, returned whole. | Field-selecting a response is the caller's problem; a `404` comes back as a result, not an error. | flux-side seam, filed |
+| 9 | **No response shaping — *at the flux version this repository pins*.** `Cargo.lock` holds `codewandler-flux-web` **0.41.0**, where `http.request`'s `ToolResult.content` is the flat string `HTTP {status}\n{headers}\n{body}`. **Upstream this is already fixed:** since flux-web **0.43.0** the canonical `content` is the record `{status, headers, body}` (`body` parsed when the response is JSON), and the flat block survives only as the model-facing `view`. | Today: field-selecting a response is the caller's problem, and `Graph` → composite-op lowering stays refused for the reason `crates/connector-flux/src/graph.rs` records. After a bump to flux-web ≥ 0.43: a caller selects `$resp.body.data.id` directly and that refusal becomes stale. A `404` comes back as a result, not an error, in both. | a flux-web bump; upstream seam is `flux/crates/flux-web/src/http.rs` |
 | 10 | **No token refresh, no OAuth acquisition, no multi-tenancy in one pack.** Out of scope since C-90: the store hands back a value and keeping it current is the host's. One `Credentials`/`Configuration` pair serves one tenant. | Build a pack per tenant; own your refresh loop. | by design |
-| 11 | **No reference host exists**, so every safety property above is asserted against stubs rather than demonstrated. No byte has left this repository towards a vendor. | Your host is the first real exercise of the seam. Budget for that. | [connectors-app.md](designs/connectors-app.md) |
-| 12 | **OpenAPI ingest is not wired.** All 45 providers are hand-authored and no vendor spec is vendored. | Drift from a vendor's real API is undetectable by machine. | [C-14](stories/C-14-fetch-and-drift-check.md) |
+| 11 | **The reference host is not a product.** `crates/connectors-api` (C-200) binds the ports, runs the loop and has sent real bytes — the first went to `api.anthropic.com` on 2026-07-31, recorded in that crate's README — but it is `publish = false`, loopback-only, and holds credentials in a 0600 file. | The seams are demonstrated, not merely stubbed; what is *not* demonstrated is a deployed multi-tenant host. Read `crates/connectors-api` as an exercise of the seam, not as something to run in production. | [connectors-app.md](designs/connectors-app.md) |
+| 12 | **OpenAPI ingest is not wired.** All 53 providers are hand-authored and no vendor spec is vendored. | Drift from a vendor's real API is undetectable by machine. | [C-14](stories/C-14-fetch-and-drift-check.md) |
 
 ### Not gaps, though they read like ones
 
-- **Credential addressing is complete.** All 45 providers declare an `authority`; the older
-  "only two of nineteen" and "exactly seven" notes in `crates/connector-pack/src/lib.rs` and
-  `designs/connectors-app.md` predate C-92 and are stale.
+- **Credential addressing is complete.** All 53 providers declare an `authority`. The older
+  "only two of nineteen" note in `crates/connector-pack/src/lib.rs` has been corrected; the
+  "exactly seven" note in `designs/connectors-app.md` predates C-92 and is still stale.
 - **Templated base URLs resolve.** C-193 and C-197 closed this; the `Configuration` port is Step 3, and
   an unbound variable refuses by name rather than reaching the wire.
 - **`$auth` is not blocking Path A.** C-114/C-115/C-116 moved auth assembly into Rust, so flux's

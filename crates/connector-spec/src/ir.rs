@@ -327,8 +327,9 @@ pub struct ParamSet {
     /// How the body above is encoded on the wire. See [`BodyEncoding`].
     ///
     /// Defaulted rather than mandatory, unlike [`Risk`] and [`Idempotency`]: silence here is not a
-    /// safety decision, it is the answer nineteen of nineteen shipped providers already give, and
-    /// making it explicit everywhere would be nineteen files restating one fact. What silence must
+    /// safety decision, it is the answer fifty-three of fifty-three shipped providers already give
+    /// (no shipped operation declares a non-default encoding), and making it explicit everywhere
+    /// would be fifty-three files restating one fact. What silence must
     /// not do is *change* — so `json` is the default and the emitter's output for an operation that
     /// declares nothing is byte-for-byte what it was before this field existed.
     #[serde(default, skip_serializing_if = "BodyEncoding::is_json")]
@@ -575,10 +576,12 @@ impl Role {
 /// `zendesk-ticket-comment-list` are the same slot. The match is on whole segments and never on a
 /// substring, or `acme-blocklist-get` would satisfy a role it has nothing to do with.
 ///
-/// **A one-segment slot is loose**, and known to be: a bare `list` is a suffix nine of seventeen
-/// shipped providers contain somewhere. That is a weakness of how a role spells its slots, not of the
-/// match, and C-121 addresses it by giving a slot a tighter spelling (`models.list`) and a set of
-/// accepted ones. Multi-segment slots are already tight.
+/// **A one-segment slot is loose**, and known to be: a bare `list` is the trailing segment of **83
+/// shipped operations across 42 of the 53 shipped providers** — a majority, and growing with every
+/// fleet wave, so the looseness is worse now than when this was first written (it then read "nine of
+/// seventeen"). That is a weakness of how a role spells its slots, not of the match, and C-121
+/// addresses it by giving a slot a tighter spelling (`models.list`) and a set of accepted ones.
+/// Multi-segment slots are already tight.
 fn fills_slot(member: &str, slot: &str) -> bool {
     const SEPARATORS: [char; 3] = ['-', '_', '.'];
     let member: Vec<&str> = member.split(SEPARATORS).collect();

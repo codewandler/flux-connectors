@@ -11,13 +11,14 @@ one read that proves the connection works. Out come typed Flux operations, capab
 queryable Rust catalogue, and a flux Tool pack.
 
 > [!WARNING]
-> **v0.5.0 is a compiler, a catalogue and a Tool pack — not a running system.** The build works end to
-> end and the pack can authenticate and dispatch, but nothing in this repository is a *host*, so
-> nothing here makes a live API call on its own. See [Current limitations](#current-limitations).
+> **v0.8.0 is a compiler, a catalogue and a Tool pack.** None of the published crates opens a socket;
+> the pack authenticates and dispatches through an `http.request` its caller supplies. The one host in
+> this repository is `crates/connectors-api` — `publish = false`, loopback-only, and the thing that has
+> actually sent bytes to a vendor. See [Current limitations](#current-limitations).
 
-The repository currently contains **254 curated connector operations across 45 providers and 52
+The repository currently contains **299 curated connector operations across 53 providers and 60
 services**, plus 8 events and 2 channel bindings. It also publishes 77 Flux-owned core operations, node
-kinds and capability records, and 3 core JSON Schemas. A full build compiles everything into **454
+kinds and capability records, and 3 core JSON Schemas. A full build compiles everything into **557
 committed, reviewable artifacts** without contacting a vendor. Browse them in the
 [catalogue explorer](https://flux.codewandler.org/explorer).
 
@@ -67,7 +68,7 @@ cargo run -p connector-cli -- build
 On a clean checkout, `diff` reports:
 
 ```text
-488 artifacts up to date (45 providers checked)
+557 artifacts up to date (53 providers checked)
 ```
 
 Then inspect [`connectors/zendesk.flux`](connectors/zendesk.flux), browse the
@@ -75,7 +76,7 @@ Then inspect [`connectors/zendesk.flux`](connectors/zendesk.flux), browse the
 catalogue from Rust:
 
 ```bash
-cargo add connector-catalog
+cargo add codewandler-connector-catalog
 ```
 
 ```rust
@@ -154,8 +155,8 @@ fails closed:
   redactor before building the request, and `crates/connectors-api` binds that to a real
   `http.request` from `codewandler-flux-web`. This repository has sent real bytes to a real vendor;
   the exchange is recorded in `crates/connectors-api/README.md`.
-- **Six declarable surfaces reach no artifact.** `config` (45 fields across 28 providers), `verify`
-  (28), a service's `roles`, `quirks.pagination`, `graphs` and `quirks.rate_limit` are modelled in the
+- **Six declarable surfaces reach no artifact.** `config` (112 fields across 40 providers), `verify`
+  (40), a service's `roles`, `quirks.pagination`, `graphs` and `quirks.rate_limit` are modelled in the
   IR and validated by the loader, and then appear in neither the manifest nor the published catalogue.
   A host reading a connector today cannot render its settings page or find its "Test connection"
   operation, even though the connector declares both.
@@ -169,7 +170,7 @@ fails closed:
 - **Base URLs can contain template variables**, such as `https://{subdomain}.zendesk.com`. A connector
   binds each one with a `[[config]]` field — but since `config` reaches no artifact, a host cannot yet
   discover what to ask for.
-- **OpenAPI ingest is not wired.** All 45 providers are hand-authored, and `specs/` currently vendors
+- **OpenAPI ingest is not wired.** All 53 providers are hand-authored, and `specs/` currently vendors
   only flux's own core catalogue. A `[spec]`-backed provider is rejected rather than compiled into a
   plausible but empty module.
 - **`check`, `fetch`, and `install` are not implemented.** Their CLI entries fail explicitly and

@@ -6,9 +6,9 @@ document is the hand-written narrative around it.
 
 ## Status
 
-_As of 2026-07-31:_ the compiler is built, the catalogue is real, and **84 of 192 stories are
-closed** across seven releases up to **v0.5.0**. `cargo run -p connector-cli -- diff` reports
-`488 artifacts up to date (45 providers checked)` — 52 services, 254 curated operations, 8 events and
+_As of 2026-08-01:_ the compiler is built, the catalogue is real, and **131 of 237 stories are
+closed** across eight releases up to **v0.8.0**. `cargo run -p connector-cli -- diff` reports
+`557 artifacts up to date (53 providers checked)` — 60 services, 299 curated operations, 8 events and
 2 channel bindings. Twenty epics carry the work, not the single **connectors-v1** this section once
 named; ten of them have a narrative below and the rest live on the board.
 
@@ -26,7 +26,7 @@ gates the milestone. [designs/auth-seam.md](designs/auth-seam.md) is kept as the
 design. What still waits on flux is narrower: the form and query **encoder** (upstream `L-101`), which
 is what keeps `zendesk-ticket-search` and every `form` body non-functional.
 
-A live call is no longer gated. `codewandler-flux-web` 0.41.1 supplies the `http.request`
+A live call is no longer gated. `codewandler-flux-web` 0.41 supplies the `http.request`
 implementation `Egress` takes as a constructor argument, and `crates/connectors-api` is the host that
 binds it and runs the loop — the first thing here that calls anyone (C-202, C-203). See
 [designs/connectors-api.md](designs/connectors-api.md). The loopback-only narrowing in
@@ -37,9 +37,10 @@ cited.
 
 What the host is *today* is narrower than what the charter now permits, and the gap is stated in
 [designs/connectors-api.md](designs/connectors-api.md)'s measured table rather than left to
-inference: the bind is still `127.0.0.1` with no flag, the tenant is still the constant `"local"`
-with no authenticated principal behind it, and the credential store is still in memory. C-204 and
-C-207 close the last two.
+inference: the bind is still `127.0.0.1` with no flag. The other two are closed — C-204 replaced the
+constant `"local"` tenant with one that comes from a Google-backed session, and C-207 replaced the
+in-memory credential store with a 0600 file the host refuses to open when it is wider. Both are
+recorded, with transcripts, in `crates/connectors-api/README.md`.
 
 The largest gap is not a blocker but a hole: **six declarable surfaces reach no artifact** —
 `config`, `verify`, a service's `roles`, `quirks.pagination`, `graphs` and `quirks.rate_limit`. The IR
@@ -71,11 +72,19 @@ The itemized history is [CHANGELOG.md](../CHANGELOG.md); this is its shape.
   (C-83), service roles (C-120), verification conformance against real vendor vectors (C-60), and
   C-104 making whole-catalogue artifacts coordinator-owned — the change that let provider stories run
   in parallel at all.
-- **Unreleased** — the second provider fleet, run in waves rather than one at a time: past forty
+- **v0.6.0** — the second provider fleet, run in waves rather than one at a time: past forty
   vendors, with each connector chosen for the modelling question it forces rather than the row it
   adds. Plus `body_encoding = "form"` (C-144), a measured floor under response-shape coverage (C-126),
-  and `AuthScheme::Header { prefix }` (C-184), so a credential can sit inside a header value it does
-  not wholly occupy.
+  `AuthScheme::Header { prefix }` (C-184), so a credential can sit inside a header value it does
+  not wholly occupy, and C-197's fix for two services of one connector collapsing into one
+  configuration value.
+- **v0.7.0** — `crates/connectors-api`, the reference host (C-202, C-203), and **the first byte this
+  repository ever sent to a vendor**. Google sign-in, accounts and sessions (C-204); an installable
+  tenant scope (C-187); Bitbucket, Discord, Confluence, New Relic, Mailchimp, Klaviyo, Supabase and
+  Resend. Also the first crates.io publish of the four-crate closure, at 0.7.0.
+- **v0.8.0** — credentials that survive a restart (C-207), a dev sign-in so the host runs without a
+  Google registration (C-234), a `User-Agent` on every outgoing request (C-223), a checked MSRV
+  (C-213), and C-186's requirement that a repeatable write state the condition it depends on.
 
 ## Publishing
 
@@ -100,12 +109,13 @@ names are a contested namespace, and `connector-cli` is already taken on crates.
 project. Package names are decoupled from crate names by `[lib] name`, so `use catalog::` and
 `use connector_spec::` are unaffected.
 
-**Nothing is published yet, and the order is deliberate.**
-[C-197](stories/C-197-config-collapses-across-services.md) and
-[C-92](stories/C-92-authorities-for-every-provider.md) have **landed**. What remains before a tag is
+**All four are published, and the order was deliberate.** The closure first went out at **0.7.0** on
+**2026-07-31** and is at **0.8.0** as of the same day, in the dependency order above. Everything the ordering waited
+on had landed by then: [C-197](stories/C-197-config-collapses-across-services.md),
+[C-92](stories/C-92-authorities-for-every-provider.md), and
 [C-192](stories/C-192-flux-0-41-bump.md) — a consumer must link exactly one flux-runtime, because
 `connector-pack` hands out `Arc<dyn Tool>` and two engine versions are two incompatible types — plus
-one proven live call.
+one proven live call, recorded in `crates/connectors-api/README.md`.
 
 *A correction worth keeping, because it was the stated reason for this ordering:* C-197 was expected
 to be a **breaking** change to `catalog::Operation`, and therefore to have to precede any publish of
@@ -237,14 +247,14 @@ and its visual language with the page they read.
 ### The explorer at fleet scale
 
 The public explorer was designed against six providers and twenty-five operations. When this epic was
-filed it indexed sixteen providers, eighteen services and eighty-eight operations; as of 2026-07-31 it
-is **45 providers, 52 services and 254 operations**, and the decisions that were right at a fraction
+filed it indexed sixteen providers, eighteen services and eighty-eight operations; as of 2026-08-01 it
+is **53 providers, 60 services and 299 operations**, and the decisions that were right at a fraction
 of the size are wrong at this one: VitePress's doc layout caps the content column at 688px, so
 a `minmax(320px, 1fr)` provider grid renders exactly two columns and the five-control filter bar wraps.
 Services — the middle addressing level C-49 established — are published in the catalogue and appear
 nowhere in the UI. Design: [designs/explorer-ux.md](designs/explorer-ux.md).
 
-The constraint that outlives the redesign: the explorer does **not** report "N of 254 operations
+The constraint that outlives the redesign: the explorer does **not** report "N of 299 operations
 working". `works` is false for every operation for a reason that is *shared* — no host runs them here —
 and a working-count headline would misrepresent the overwhelming majority that are exactly as designed
 and waiting on that one thing rather than on anything of their own. (The shared reason has changed

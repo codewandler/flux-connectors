@@ -113,24 +113,31 @@
 //!
 //! # What is not here yet
 //!
-//! **Not every connector can be authenticated.** A credential's address is
-//! `tenants/<tenant>/<authority>/<credential>`, and only two of the nineteen shipped connectors —
-//! `slack` and `fly` — declare an `authority` (C-37). The rest refuse with
-//! [`Error::NoCredentialAddress`] rather than sending an unauthenticated request — fail-closed, and
-//! with a diagnostic naming the missing fact instead of a vendor's `401`.
+//! **Not a gap any more: every connector can be addressed.** What used to stand here was that only
+//! two connectors could be, and C-92 left it behind. A credential's address is
+//! `tenants/<tenant>/<authority>/<credential>`, and **all 53 shipped connectors** declare an
+//! `authority` (C-37); the "only two — `slack` and `fly`" this note once recorded was true of a
+//! nineteen-connector fleet. A connector that declared none would still
+//! refuse with [`Error::NoCredentialAddress`] rather than send an unauthenticated request —
+//! fail-closed, with a diagnostic naming the missing fact instead of a vendor's `401` — and
+//! `freshdesk`, which deliberately declares no *credential*, still refuses that way.
 //!
-//! **No response shaping.** `http.request` returns one flat string
-//! (`HTTP {status}\n{headers}\n{body}`), which is returned whole.
+//! **No response shaping, at the flux this workspace pins.** `codewandler-flux-web` 0.41 returns
+//! `http.request` as one flat string (`HTTP {status}\n{headers}\n{body}`), which is returned whole.
+//! Upstream this is already fixed: since flux-web **0.43.0** the canonical `ToolResult.content` is
+//! the record `{status, headers, body}` and the flat block is only the model-facing `view`, so this
+//! paragraph and the shaping it forbids expire on a flux-web bump.
 //!
 //! # Configuration resolves through a bound port (C-193)
 //!
 //! What used to stand here was the note that a templated base URL reached the wire verbatim. It
-//! does not any more. **Nine** of the 43 shipped connectors declare a `base_url` carrying a
-//! `{placeholder}`, covering **53 of 242 operations**:
+//! does not any more. **Thirteen** of the 53 shipped connectors declare a `base_url` carrying a
+//! `{placeholder}` — at connector level or on one of their services — covering **75 of 299
+//! operations**, which is exactly the catalogue's `unbound-base-url-template` issue count:
 //!
 //! | | connectors | operations |
 //! |---|---|---|
-//! | a templated **host**, which does not resolve at all | `zendesk`, `shopify`, `jira`, `freshdesk`, `salesforce`, `docusign`, `okta` | 43 |
+//! | a templated **host**, which does not resolve at all | `confluence`, `docusign`, `freshdesk`, `jira`, `mailchimp`, `newrelic`, `okta`, `salesforce`, `shopify`, `supabase`, `zendesk` | 65 |
 //! | a templated **path**, on a host that does resolve | `contentful`, `statuspage` | 10 |
 //!
 //! Both rows matter and only the first is obvious. `https://api.statuspage.io/v1/pages/{page_id}`
