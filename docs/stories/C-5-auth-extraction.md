@@ -5,7 +5,7 @@ pillar: Spec
 status: backlog
 priority:
 design: docs/designs/auth-seam.md
-epic: connectors-v1
+epic: spec-front-end
 areas: [connector-spec]
 ---
 

@@ -4,7 +4,7 @@ title: Fetch specs and detect upstream drift
 pillar: Build
 status: backlog
 design: docs/designs/connector-pipeline.md
-epic: connectors-v1
+epic: spec-front-end
 areas: [connector-cli]
 ---
 

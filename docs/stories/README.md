@@ -142,6 +142,13 @@ _Seventeen connectors share structure that nothing currently names. `zendesk`, `
 - [C-156 — A model in the pool should say what it transforms — and openai-audio-speech is the first Text→Audio](C-156-model-modality.md) · Spec · there is NO local TTS model in flux — flux-audio is sample-rate math, dependency-free, no model. But POST /v1/audio/speech IS request/response, so a TTS operation is connector-shaped and gives the modality axis a second value
 - [C-157 — Ollama inference already works — what is missing is knowing which models are installed](C-157-ollama-model-catalogue.md) · Spec · flux's KNOWN_PROVIDERS already contains \"ollama\" and \"ollama-anthropic\", so ollama/llama3 resolves today. Nothing enumerates the LOCAL models though — GET /api/tags is one request, one response, so discovery is the connector-shaped half
 
+### the spec front-end — `[spec]` + patches, proven by retiring manager-sdk
+_[connector-pipeline.md](connector-pipeline.md) drew two front-ends over one IR: a hand-authored_
+- [C-4 — Ingest OpenAPI 3.x into the IR](C-4-openapi-ingest.md) · Spec · the trunk of the spec front-end — seam.rs:160 refuses every spec-backed provider until this lands, so the `[spec]` schema landed with C-3 has been unused ever since
+- [C-409 — The spec front-end, proven by retiring manager-sdk (epic)](C-409-spec-front-end-epic.md) · Spec · EPIC — the `[spec]` half of the pipeline was designed in C-2 and never built; all 53 providers are hand-authored and seam.rs:160 refuses a spec-backed one outright. babelforce forces it: 397 operations across 5 documents, which nobody is hand-authoring
+- [C-413 — An operation can be callable without being an LLM tool](C-413-callable-without-being-a-tool.md) · Spec · `expose: true` is hard-coded at connector-flux/src/op.rs:791 and graph.rs:1182, so every emitted op is a tool. That is why babelforce ships 9 of 163 — and it is the one thing that makes 397 survivable
+- [C-415 — Vendor the five babelforce manager specs, scrubbed and provenanced](C-415-vendor-babelforce-specs.md) · Build · the blocker providers/babelforce.toml:7-15 has recorded since C-17, resolved: the spec bytes are publishable, the GitLab fetch configuration is not — and the Testers Inc. accessId/accessToken examples come out
+
 ### Tool Pack
 - [C-113 — The connector Tool pack — the flux interop layer (epic)](C-113-tool-pack-epic.md) · Bridge · EPIC — flux REMOVED flux-plugin-zendesk pending 'a flux-connectors interop layer'; D-200/D-201/D-202 are blocked on this and examples/zendesk.triage.flux is the written acceptance target. A Tool pack delegates to flux's own http.request, so flux keeps every byte of egress
 - [C-117 — Generate the pack from the IR and hold it to the drift gate](C-117-pack-codegen.md) · Codegen · two surfaces from one IR can disagree about the same operation — the differential test is the honest guard, and it belongs here rather than in a later postmortem
@@ -177,11 +184,7 @@ _A connector is more than a set of callable operations. It also has **schemas** 
 
 ### Connectors v1 — spec to Flux
 _Prove the whole thesis on two real providers, end to end against a live flux._
-- [C-4 — Ingest OpenAPI 3.x into the IR](C-4-openapi-ingest.md) · Spec
-- [C-5 — Extract auth methods from securitySchemes](C-5-auth-extraction.md) · Spec
-- [C-6 — Build the patch/overlay layer](C-6-overlay-layer.md) · Spec · the real bet — if patching is harder than hand-writing, the thesis fails
 - [C-12 — Compile quirks into Flux control flow](C-12-quirks-as-control-flow.md) · Codegen · the payoff for targeting a real language
-- [C-14 — Fetch specs and detect upstream drift](C-14-fetch-and-drift-check.md) · Build
 - [C-15 — Install into flux and prove milestone 1 end to end](C-15-install-and-live-e2e.md) · Build · milestone 1 · needs the $auth seam released in ../flux
 - [C-23 — Make operation names a stable public contract](C-23-operation-naming-contract.md) · Codegen · op names are what users and models call — renaming one silently breaks callers
 - [C-24 — Verify generated connectors against recorded HTTP fixtures](C-24-fixture-verification.md) · Build · proves a connector *works*, not merely that it parses — without live credentials
@@ -198,6 +201,19 @@ _A connector today compiles a vendor spec into **outbound** ops: flux calls Zend
 ### rendered provider documentation
 _A connector's operations are currently legible only by reading `providers/<name>.toml` or the_
 - [C-33 — Treat generated docs as a checked artifact](C-33-docs-are-a-checked-artifact.md) · Build
+
+### the spec front-end — `[spec]` + patches, proven by retiring manager-sdk
+_[connector-pipeline.md](connector-pipeline.md) drew two front-ends over one IR: a hand-authored_
+- [C-5 — Extract auth methods from securitySchemes](C-5-auth-extraction.md) · Spec
+- [C-6 — Build the patch/overlay layer](C-6-overlay-layer.md) · Spec · the real bet — if patching is harder than hand-writing, the thesis fails
+- [C-14 — Fetch specs and detect upstream drift](C-14-fetch-and-drift-check.md) · Build
+- [C-410 — One connector, many spec documents — a spec per service](C-410-many-spec-documents.md) · Spec · discovery.rs:39 returns the LAST spec by version order and SpecSource.path is one string — one document per provider was never decided, it was assumed. babelforce has five, over two API versions and two security models
+- [C-411 — One selector selects many operations, so 397 do not cost 397 blocks](C-411-selector-matches-a-set.md) · Spec · `OperationPatch` selects exactly one operationId. Selection stays opt-in — this widens what one statement selects, it does not introduce `hide` and must not
+- [C-412 — A declared naming rule turns operationId into a stable op id](C-412-naming-rule.md) · Spec · op ids are a public contract, which is why `rename` exists — but 397 renames is the other half of the boilerplate. Declare the rule once, pin the exceptions, and refuse collisions
+- [C-414 — Risk and idempotency stated by selector, with silence refusing](C-414-risk-by-selector.md) · Spec · 214 of babelforce's 398 operations mutate and no spec publishes risk. Stating each is 214 blocks; deriving from the HTTP method is 214 unverified claims a host reads as a licence
+- [C-416 — Reproduce babelforce's nine operations through the spec route, byte-identical](C-416-reproduce-the-nine.md) · Spec · the migration safety net and C-6's real test — providers/babelforce.toml:14 has said since C-17 that 'the operation set below is the selection to reproduce'. If the spec route cannot reproduce nine hand-checked operations, it must not be trusted with 397
+- [C-417 — Widen babelforce to manager-sdk's full coverage, and gate it](C-417-widen-to-full-coverage.md) · Spec · 397 operations against a catalogue that holds 299 across 53 providers today — so this more than doubles it, and every one of the four bulk declarations has to be carrying its weight for the file to stay reviewable
+- [C-418 — Retire manager-sdk — the caller's migration and the three gaps that block it](C-418-retire-manager-sdk.md) · Bridge · owner-decided 2026-08-01: callers reach babelforce through connectors-api or flux ops, and this repo grows no language emitters. The claim does not tick until multipart, form bodies and the 23 nameless operations are resolved or scoped out
 
 ### unified auth — one model for every provider's credentials
 _Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._
