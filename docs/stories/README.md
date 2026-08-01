@@ -145,6 +145,7 @@ _Seventeen connectors share structure that nothing currently names. `zendesk`, `
 ### the spec front-end — `[spec]` + patches, proven by retiring manager-sdk
 _[connector-pipeline.md](connector-pipeline.md) drew two front-ends over one IR: a hand-authored_
 - [C-409 — The spec front-end, proven by retiring manager-sdk (epic)](C-409-spec-front-end-epic.md) · Spec · EPIC — the `[spec]` half of the pipeline was designed in C-2 and never built; all 53 providers are hand-authored and seam.rs:160 refuses a spec-backed one outright. babelforce forces it: 397 operations across 5 documents, which nobody is hand-authoring
+- [C-419 — A helper writes the patch set, so referencing a spec is cheaper than hand-authoring](C-419-scaffold-a-provider-from-a-spec.md) · Build · the missing half of the front-end. C-411/C-412/C-414 make one statement cover many operations; this writes those statements FROM the document, so a 397-operation connector is generated, reviewed and committed rather than typed
 
 ### Tool Pack
 - [C-113 — The connector Tool pack — the flux interop layer (epic)](C-113-tool-pack-epic.md) · Bridge · EPIC — flux REMOVED flux-plugin-zendesk pending 'a flux-connectors interop layer'; D-200/D-201/D-202 are blocked on this and examples/zendesk.triage.flux is the written acceptance target. A Tool pack delegates to flux's own http.request, so flux keeps every byte of egress
@@ -211,6 +212,7 @@ _[connector-pipeline.md](connector-pipeline.md) drew two front-ends over one IR:
 - [C-416 — Reproduce babelforce's nine operations through the spec route, byte-identical](C-416-reproduce-the-nine.md) · Spec · the migration safety net and C-6's real test — providers/babelforce.toml:14 has said since C-17 that 'the operation set below is the selection to reproduce'. If the spec route cannot reproduce nine hand-checked operations, it must not be trusted with 397
 - [C-417 — Widen babelforce to manager-sdk's full coverage, and gate it](C-417-widen-to-full-coverage.md) · Spec · 397 operations against a catalogue that holds 299 across 53 providers today — so this more than doubles it, and every one of the four bulk declarations has to be carrying its weight for the file to stay reviewable
 - [C-418 — Retire manager-sdk — the caller's migration and the three gaps that block it](C-418-retire-manager-sdk.md) · Bridge · owner-decided 2026-08-01: callers reach babelforce through connectors-api or flux ops, and this repo grows no language emitters. The claim does not tick until multipart, form bodies and the 23 nameless operations are resolved or scoped out
+- [C-420 — Rebuild the catalogue from spec references wherever a document exists](C-420-rebuild-the-suite-from-spec-references.md) · Spec · twenty-odd providers open with a comment explaining WHY THIS IS NOT A `[spec]` POINTER, each naming ingest as the blocker. Ingest landed 2026-08-01, so those comments are now claims about a gap that closed
 
 ### unified auth — one model for every provider's credentials
 _Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._

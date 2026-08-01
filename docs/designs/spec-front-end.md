@@ -144,7 +144,31 @@ flatters is worse than no default; a default that must be overridden to *lower* 
 unstated DELETE does not compile, and a selector saying `risk = "destructive"` over 54 DELETEs is one
 reviewable line instead of 54.
 
-### 5 · Quirks once per service (C-415 covers the babelforce values)
+### 5 · A helper that writes the statements (C-419)
+
+The four declarations above reduce how much has to be *said*. They do not reduce who has to say it,
+and at 397 operations that is still the binding constraint — **owner-stated 2026-08-01: the point is
+to adjust the helpers and the manifest layout so referencing a document is easy, and then rebuild the
+suite from there.**
+
+So `connector-cli scaffold <provider>` reads the vendored document and emits the provider TOML that
+references it — `[spec]` block, selectors, naming pins, and per-operation blocks for what a selector
+cannot cover. To **stdout**, never over a file in place: the author diffs and pastes, so a bad run
+costs nothing and the reviewed artifact is still a human's.
+
+Two rules keep it honest, and they are the same rule twice:
+
+- **What the document cannot state comes out as a hole, not a guess.** `risk` and `idempotency` emit
+  as an explicit `TODO` that the loader refuses (§4). A scaffold that silently declares 54 DELETEs
+  `low` has not saved anyone work, it has manufactured 54 unreviewed safety claims.
+- **What it could not carry is reported, per operation and by count.** A dropped operation that
+  produces no output reads as "the vendor does not offer that".
+
+`--diff` is the other half and the one that matters over time: compare the document against the
+connector as it stands, report what upstream added, removed or changed. That is what makes a
+**re-build** a repeatable operation rather than a one-time migration.
+
+### 6 · Quirks once per service (C-415 covers the babelforce values)
 
 The manager document paginates uniformly (`page`/`max`, as the nine current operations already
 declare). Attaching that per operation is 356 repetitions of one fact.
@@ -202,11 +226,20 @@ C-4  ingest  ──┬── C-410 many documents ──┬── C-6 overlay �
 C-415 vendor ──┘   C-5 auth extraction ───┘                 └── C-414 risk/idem ────┤
 C-413 exposure tier (independent of all of the above) ──────────────────────────────┤
                                                                                     ▼
+                                                                    C-419 scaffold helper
+                                                                              │
                                             C-416 reproduce the 9 ── C-417 widen to 397 ── C-418 retire
-                                                                          C-14 drift ──────────┘
+                                                                          C-14 drift ──────────┤
+                                                                    C-420 rebuild the suite ───┘
 ```
 
-C-4, C-413 and C-415 have no edge between them and are the first wave.
+C-4, C-413 and C-415 had no edge between them and were the first wave; all three landed 2026-08-01.
+
+**The shape of the whole thing, in one line:** the manifest layout (C-410 – C-414) says a lot with
+few statements, the helper (C-419) writes those statements from the document, and the suite is then
+rebuilt through both (C-417 for babelforce, C-420 for everyone else). Each of the three is close to
+useless without the other two — a terse manifest nobody can generate is still an authoring job, and a
+generator emitting a verbose manifest produces something nobody can review.
 
 ## Alternatives considered
 
