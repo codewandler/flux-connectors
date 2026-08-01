@@ -132,6 +132,28 @@ One nearby file is intentionally hand-maintained: `assets/readme-snippet.flux` i
 for the README image, and tests keep it identical to the operation shown in the generated Zendesk
 module.
 
+### Vendored specs: the pulled bytes, never the pull configuration
+
+A vendor document under `specs/` is committed because builds are hermetic and offline, and this
+repository is **public**. So the rule for vendoring from a private source is: the pulled bytes come
+here, the configuration that pulled them does not. Concretely, for babelforce (C-415), the five
+OpenAPI documents are vendored and `sources.json` and `scripts/pull.sh` are not — they name an
+internal GitLab host and its project ids, which is precisely the material that stays internal. For
+the same reason `SpecSource::source_url` is **omitted** rather than pointed at that host; identity is
+carried by the pull date in the file name and the `sha256` of the vendored bytes, recorded in
+`specs/<vendor>.provenance.toml`, and drift stays detectable through `upstream_sha256` (C-25) even
+though nothing here can re-fetch. What is vendored is a **declared scrub** of what was pulled: the
+scrub is a script (`scripts/vendor-babelforce-specs.sh`) so a re-vendor is reproducible and
+reviewable as a diff, it takes example *values* and never declarations — ingest must keep seeing a
+`securityScheme` for drift-check to keep reporting on it — and it is enforced by
+`crates/connector-spec/tests/vendored_specs.rs`, which fails on a hit rather than trusting that
+somebody looked. **The scrub is not limited to secrets.** Credential-shaped examples come out, and so
+do email addresses and telephone numbers: a named individual's work address and an internal
+service-account identity are things a public repository must not carry even though neither is a
+credential, and repository history makes either expensive to undo once pushed. Every such rule is
+allowlist-shaped, so a value a future pull introduces is scrubbed by default rather than travelling
+on the strength of nobody having listed it.
+
 ### Whole-catalogue artifacts are coordinator-owned
 
 The four artifacts marked **whole-catalogue** above describe the catalogue *as a whole*. A scoped run

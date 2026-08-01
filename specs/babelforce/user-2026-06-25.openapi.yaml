@@ -1,0 +1,508 @@
+openapi: 3.0.3
+info:
+  version: 0.0.0-dev
+  license:
+    name: MIT
+    url: https://www.mit.edu/~amini/LICENSE.md
+  title: babelforce User API
+  termsOfService: https://www.babelforce.com/impressum
+  contact:
+    email: support@babelforce.com
+servers:
+  - url: https://services.babelforce.com
+    description: Production
+security:
+  - oauth2:
+      - '*'
+tags:
+  - description: User
+    name: User
+paths:
+  /api/v2/user/account:
+    get:
+      description: Get user & account information
+      operationId: getUserCustomer
+      parameters: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserCustomerItemResponse'
+          description: Get user & account
+      summary: ''
+      tags:
+        - User
+  /api/v2/user/accounts:
+    get:
+      description: Get List of available Accounts
+      operationId: listAccounts
+      parameters: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAccountResponse'
+          description: Account-List
+      summary: ''
+      tags:
+        - User
+  /api/v2/user/me:
+    get:
+      description: Get the current User
+      operationId: getUser
+      parameters: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserItemResponse'
+          description: Get a single user
+      summary: ''
+      tags:
+        - User
+  /api/v2/user/reset-password:
+    post:
+      description: Request a Password Change
+      operationId: resetPassword
+      parameters: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultV2MessageResponse'
+          description: HTTP 200 Response
+      summary: ''
+      tags:
+        - User
+components:
+  parameters: {}
+  requestBodies: {}
+  schemas:
+    Account:
+      description: Babelforce Account
+      example:
+        roles: user
+        name: name
+        id: 046b6c7f-0b8a-43b9-b35d-6489e6daee91
+      properties:
+        id:
+          description: The unique Identifier (UUID) of the object
+          format: uuid
+          type: string
+        name:
+          description: The Name of the Company
+          type: string
+        roles:
+          $ref: '#/components/schemas/AccountRole'
+      required:
+        - id
+        - name
+        - roles
+    AccountRole:
+      description: A role associated with the Account
+      enum:
+        - manager
+        - owner
+        - reporter
+        - user
+        - agent
+        - supervisor
+        - sales
+        - router
+        - scheduler
+      example: user
+      type: string
+    Date:
+      example: 2020-04-16T22:21:38Z
+      format: date-time
+      type: string
+    DefaultSuccess:
+      description: Whether or not the request was successful
+      type: boolean
+    DefaultV2MessageResponse:
+      example:
+        success: true
+        message: message
+      properties:
+        message:
+          type: string
+        success:
+          description: Whether or not the request was successful
+          type: boolean
+      required:
+        - success
+    ObjectUuid:
+      description: The unique Identifier (UUID) of the object
+      format: uuid
+      type: string
+    ObjectUuids:
+      description: A List of ObjectUuid
+      items:
+        $ref: '#/components/schemas/ObjectUuid'
+      type: array
+    PaginatedAccountResponse:
+      example:
+        pagination:
+          next: next
+          total: 6
+          current: 1
+          pages: 0
+          max: 5
+        items:
+          - roles: user
+            name: name
+            id: 046b6c7f-0b8a-43b9-b35d-6489e6daee91
+          - roles: user
+            name: name
+            id: 046b6c7f-0b8a-43b9-b35d-6489e6daee91
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/Account'
+          type: array
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+      required:
+        - items
+        - pagination
+    Pagination:
+      example:
+        next: next
+        total: 6
+        current: 1
+        pages: 0
+        max: 5
+      properties:
+        pages:
+          type: integer
+        total:
+          type: integer
+        current:
+          type: integer
+        max:
+          type: integer
+        next:
+          type: string
+      required:
+        - current
+        - max
+        - pages
+        - total
+    Tag:
+      description: A Tag describing an Object
+      type: string
+    Tags:
+      description: A List of Tags describing an Object
+      items:
+        $ref: '#/components/schemas/Tag'
+      type: array
+    UnixTimestamp:
+      description: Unix timestamp
+      example: 1607904000
+      type: integer
+    User:
+      example:
+        roles:
+          - user
+          - user
+        id: 046b6c7f-0b8a-43b9-b35d-6489e6daee91
+        account:
+          company: company
+          id: 046b6c7f-0b8a-43b9-b35d-6489e6daee91
+        username: username
+      properties:
+        id:
+          description: The unique Identifier (UUID) of the object
+          format: uuid
+          type: string
+        username:
+          type: string
+        roles:
+          description: A List of Roles which are associated with the current User
+          items:
+            $ref: '#/components/schemas/AccountRole'
+          type: array
+        account:
+          $ref: '#/components/schemas/UserAccount'
+      required:
+        - account
+        - id
+        - roles
+        - username
+    UserAccount:
+      description: A Company User Account
+      example:
+        company: company
+        id: 046b6c7f-0b8a-43b9-b35d-6489e6daee91
+      properties:
+        id:
+          description: The unique Identifier (UUID) of the object
+          format: uuid
+          type: string
+        company:
+          description: The Name of the Company associated with that User
+          type: string
+      required:
+        - company
+        - id
+    UserAccountItemResponse:
+      properties:
+        item:
+          $ref: '#/components/schemas/UserAccount'
+        success:
+          description: Whether the Request was successful or not
+          type: boolean
+      required:
+        - item
+        - success
+    UserAccountRoles:
+      description: A List of Roles which are associated with the current User
+      items:
+        $ref: '#/components/schemas/AccountRole'
+      type: array
+    UserCustomer:
+      description: User & associated customer account information
+      example:
+        user:
+          id: 8b41513d-a95c-4c48-a48c-168d66320dca
+          username: redacted@example.com
+          roles:
+            - manager
+            - owner
+            - user
+          expired: false
+        customer:
+          id: '00000000-0000-0000-0000-000000000000'
+          company: Testers Inc.
+          phone: '000000000000'
+          firstName: Will
+          lastName: Tester
+          email: redacted@example.com
+          dateCreated: 2021-02-03T16:47:42.000Z
+          settings:
+            enabled: true
+            isTrialExpired: false
+            trialExpirationDate: null
+            defaultTimeZone: Europe/Berlin
+          apis:
+            babelforce:
+              accessId: '00000000-0000-0000-0000-000000000000'
+              accessToken: '00000000000000000000000000000000'
+            stream:
+              token: '0000000000000000000000000000000000000000000000000000000000000000'
+              dateCreated: 2021-02-03T16:48:32.000Z
+              lastUpdated: 2021-02-03T16:48:32.000Z
+      properties:
+        user:
+          $ref: '#/components/schemas/UserCustomer_user'
+        customer:
+          $ref: '#/components/schemas/UserCustomer_customer'
+      required:
+        - customer
+        - user
+    UserCustomerItemResponse:
+      example:
+        item:
+          user:
+            id: 8b41513d-a95c-4c48-a48c-168d66320dca
+            username: redacted@example.com
+            roles:
+              - manager
+              - owner
+              - user
+            expired: false
+          customer:
+            id: '00000000-0000-0000-0000-000000000000'
+            company: Testers Inc.
+            phone: '000000000000'
+            firstName: Will
+            lastName: Tester
+            email: redacted@example.com
+            dateCreated: 2021-02-03T16:47:42.000Z
+            settings:
+              enabled: true
+              isTrialExpired: false
+              trialExpirationDate: null
+              defaultTimeZone: Europe/Berlin
+            apis:
+              babelforce:
+                accessId: '00000000-0000-0000-0000-000000000000'
+                accessToken: '00000000000000000000000000000000'
+              stream:
+                token: '0000000000000000000000000000000000000000000000000000000000000000'
+                dateCreated: 2021-02-03T16:48:32.000Z
+                lastUpdated: 2021-02-03T16:48:32.000Z
+        success: true
+      properties:
+        item:
+          $ref: '#/components/schemas/UserCustomer'
+        success:
+          description: Whether the Request was successful or not
+          type: boolean
+      required:
+        - item
+        - success
+    UserCustomer_customer:
+      description: A user's customer account details
+      properties:
+        id:
+          description: The unique Identifier (UUID) of the object
+          format: uuid
+          type: string
+        company:
+          description: The name of the company associated with the user
+          type: string
+        phone:
+          description: The contact number for the user's customer account
+          type: string
+        firstName:
+          description: Customer account owner's first name
+          type: string
+        lastName:
+          description: Customer account owner's last name
+          type: string
+        email:
+          description: Customer account owner's email
+          format: email
+          type: string
+        dateCreated:
+          example: 2020-04-16T22:21:38Z
+          format: date-time
+          type: string
+        settings:
+          $ref: '#/components/schemas/UserCustomer_customer_settings'
+        apis:
+          $ref: '#/components/schemas/UserCustomer_customer_apis'
+      required:
+        - apis
+        - company
+        - dateCreated
+        - email
+        - firstName
+        - id
+        - lastName
+        - phone
+        - settings
+      type: object
+    UserCustomer_customer_apis:
+      description: API access information for the user's customer account
+      properties:
+        babelforce:
+          $ref: '#/components/schemas/UserCustomer_customer_apis_babelforce'
+        stream:
+          $ref: '#/components/schemas/UserCustomer_customer_apis_stream'
+      required:
+        - babelforce
+        - stream
+      type: object
+    UserCustomer_customer_apis_babelforce:
+      description: REST API access credentials
+      properties:
+        accessId:
+          description: The unique Identifier (UUID) of the object
+          format: uuid
+          type: string
+        accessToken:
+          description: The unique Identifier (UUID) of the object
+          format: uuid
+          type: string
+      required:
+        - accessId
+        - accessToken
+      type: object
+    UserCustomer_customer_apis_stream:
+      description: Stream API access information
+      properties:
+        token:
+          description: Push API token
+          type: string
+        dateCreated:
+          example: 2020-04-16T22:21:38Z
+          format: date-time
+          type: string
+        lastUpdated:
+          example: 2020-04-16T22:21:38Z
+          format: date-time
+          type: string
+      required:
+        - dateCreated
+        - lastUpdated
+        - token
+      type: object
+    UserCustomer_customer_settings:
+      description: User's customer account settings
+      properties:
+        enabled:
+          description: Whether the user's customer account is enabled or not
+          type: boolean
+        isTrialExpired:
+          description: Whether the user's customer account is an expired trial account or not
+          type: boolean
+        trialExpirationDate:
+          example: 2020-04-16T22:21:38Z
+          format: date-time
+          type: string
+        defaultTimeZone:
+          description: Timezone of the user's customer account
+          type: string
+      required:
+        - defaultTimeZone
+        - enabled
+        - isTrialExpired
+        - trialExpirationDate
+      type: object
+    UserCustomer_user:
+      description: Basic user information
+      properties:
+        id:
+          description: The unique Identifier (UUID) of the object
+          format: uuid
+          type: string
+        username:
+          description: User's email username
+          format: email
+          type: string
+        roles:
+          description: A List of Roles which are associated with the current User
+          items:
+            $ref: '#/components/schemas/AccountRole'
+          type: array
+        expired:
+          description: Whether or not the user account has expired
+          type: boolean
+      type: object
+    UserItemResponse:
+      example:
+        item:
+          roles:
+            - user
+            - user
+          id: 046b6c7f-0b8a-43b9-b35d-6489e6daee91
+          account:
+            company: company
+            id: 046b6c7f-0b8a-43b9-b35d-6489e6daee91
+          username: username
+        success: true
+      properties:
+        item:
+          $ref: '#/components/schemas/User'
+        success:
+          description: Whether the Request was successful or not
+          type: boolean
+      required:
+        - item
+        - success
+  securitySchemes:
+    oauth2:
+      description: OAuth2 Authentication
+      flows:
+        password:
+          refreshUrl: /oauth/token
+          scopes:
+            '*': All Access
+          tokenUrl: /oauth/token
+      type: oauth2
