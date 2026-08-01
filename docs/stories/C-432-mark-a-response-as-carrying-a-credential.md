@@ -2,12 +2,12 @@
 id: C-432
 title: "A token endpoint is a connector function that marks its response — not an operation we refuse"
 pillar: Spec
-status: in-progress
+status: blocked
 priority: 1
 design: docs/designs/connector-security-posture.md
 epic: connector-security-posture
 areas: [connector-spec, connector-flux, connector-pack]
-note: "OWNER RULING 2026-08-01, superseding the one recorded that morning: a token endpoint SHOULD be a connector function, marked as returning sensitive information. flux 0.47.1's credential_boundary REFUSES such a response outright when it is unmarked, so an unmarked one does not merely leak — the exchange fails"
+note: "PARTIAL 2026-08-01. The C-430/C-136 conflict is settled and enforced; the marking is NOT built, because the premise does not hold for this repo — PlatformSourcing is an opt-in to REFUSAL with no permit state, and the boundary sits on the plugin seam our .flux + .connector.toml never reach. Blocked on an owner decision about which of the three routes to take"
 ---
 
 # A token endpoint is a connector function that marks its response — not an operation we refuse
@@ -165,3 +165,26 @@ rather than five"*, which is the likely origin of the story's five.)
   behaviour ([C-431](C-431-move-the-flux-pin-to-0-47.md)).
 - C-136's mechanism is not wasted: the diversion, the handle, the store write and its seven refusals
   all stand. What changes is that refusing to *emit* stops being the answer for this shape.
+
+## What unblocks this — coordinator note, 2026-08-01
+
+The finding was verified independently at integration rather than taken on report:
+`refuse_response` early-returns on `platform.is_none()` (`credential_boundary.rs:162-164`) and
+`PlatformSourcing::None` is the `#[default]`, with only `Operation` and `Activation` beside it —
+both of which *turn refusal on*. A shipped `connectors/*.connector.toml` carries no `platform` field
+at all (the single grep hit is the words "voice platform" in babelforce's description).
+
+**One over-claim in the implementor's report, corrected:** it quoted flux's *"the check is a no-op"*
+line as conceding the boundary is inert for us. Read in context (`credential_boundary.rs:100-110`)
+that sentence is about **flux's own** `host-kit` `internal_op` path, not about this repository. The
+conclusion survives on the stronger ground above — our artifacts never reach the seam at all.
+
+Three routes, and it is an owner decision which:
+1. **Take the plugin seam.** Emit a plugin manifest with `PlatformSourcing::Operation` — but that is
+   the deployment-dials architecture, and it turns refusal *on* rather than off.
+2. **Ask flux for a permit state.** A fourth `PlatformSourcing` value, or an equivalent, meaning
+   "this response carries a credential and that is declared and expected". Upstream work.
+3. **Keep the withholding**, and treat C-136's diversion — handle in, secret to the store — as the
+   answer for the shape, with the emitter refusal standing because Flux has no credential-store port.
+
+Route 3 is what ships today and needs no decision to remain true.

@@ -7,6 +7,41 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **One credential fact, two dispositions, and the loader refuses an operation claiming both**
+  (C-432). Two declarations had grown up describing the same thing with opposite consequences:
+  C-430's `credential_response` marks a response as carrying a credential and **withholds** the
+  operation; C-136's `produces_credential` marks one and **ships** it, returning a handle. An
+  operation declaring both was a contradiction nothing caught. It is now refused, and the refusal
+  names which declaration governs and why — selected by *purpose* (does this operation exist to mint
+  a credential?) rather than by the shape of the response.
+
+### Changed
+
+- **No vendor logo will be vendored, and no `logo_url` declared** (C-437, closing C-40). A brand
+  guideline grants *identification use* to the party **displaying** a mark — revocably,
+  non-transferably, non-sublicensably, conditioned on not modifying it. `LICENSE-MIT` and
+  `LICENSE-APACHE` grant *copy, modify and sublicense*, perpetually, to everyone, over everything
+  here. Vendoring puts those in direct contradiction over bytes this project does not own, and git
+  history means a revocation could not be honoured. A `logo_url` was refused separately, on the
+  privacy fact: 54 `<img src>` elements fire third-party requests from every visitor's browser before
+  anyone has chosen anything. A listing individualises a connector with a monogram derived from the
+  published `vendor` and `id`, or brings its own asset pack.
+
+  C-415's spec-vendoring split does not transfer, and the reason is worth keeping: an OpenAPI
+  document is published *in order to be* implemented against, so scrubbing what must not travel makes
+  the bytes publishable. A trademark exists *in order not to be* copied — there is nothing in the
+  file to scrub, because the file is the problem.
+
+- **What flux's credential boundary actually keys on is now recorded** (C-432), because a design was
+  about to be built on a premise that does not hold here. `PlatformSourcing` is an opt-in to
+  **refusal**, not a permit — `None` is the default and the only other states, `Operation` and
+  `Activation`, are what *turn refusal on*. There is no state meaning "this response carries a
+  credential and that is expected". And the boundary applies to a plugin `OperationSpec` arriving
+  over the NDJSON plugin protocol, which is a seam this repository's `.flux` module and
+  `.connector.toml` never reach.
+
 ## [0.10.0] — 2026-08-01
 
 ### Added
