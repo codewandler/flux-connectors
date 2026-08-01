@@ -14,6 +14,58 @@
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-08-01
+
+### New
+
+- **The whole babelforce API is now available — 391 operations, up from nine.** Everything the
+  babelforce SDK reaches, this connector now reaches: agents, calls, sessions, queues, campaigns,
+  routing, task automation, scheduling and the rest. You call any of them by name.
+
+  Nine of them are offered to an AI assistant as tools, exactly as before. The other 382 are
+  available to your own code but are deliberately not put in front of a model — handing an assistant
+  nearly four hundred tools makes it worse at choosing between them, and a good many of those
+  operations delete things.
+
+  One operation is deliberately missing: the endpoint that mints an access token. Its reply *is* a
+  credential, and this platform cannot yet guarantee such a reply never lands somewhere it should not
+  — so it is withheld until it can, rather than shipped with a warning attached.
+
+- **A connector can now be built from a vendor's own API description instead of written by hand.**
+  Point it at the published specification, say which operations you want, and the rest — parameters,
+  types, response shapes, descriptions — comes from the vendor. babelforce is the first connector
+  built this way: 391 operations described in 751 lines, where writing them out by hand would have
+  taken several thousand and would have been out of date the day the vendor changed something.
+
+### Improved
+
+- **Operations can be available without being offered to an AI assistant.** Previously every
+  operation a connector published was also a tool a model could pick up. Those are now separate: a
+  connector can carry its full API surface for your code to call, while the assistant sees only the
+  handful you meant it to see.
+
+- **You can leave out parameters a vendor documents but nobody wants.** Some endpoints publish dozens
+  of near-identical filters — one babelforce reporting call offers thirty-eight, eighteen of them
+  duplicates under different names. You can now name the ones to drop, so the operation stays usable
+  instead of arriving with thirty-eight arguments.
+
+- **Every build now records what produced it.** A lockfile captures the exact inputs behind each
+  generated file, so if a vendor changes their API or a file drifts out of step, it is detected
+  rather than quietly absorbed.
+
+- **The connector browser no longer claims a connector lacks something when the information simply
+  was not published.** A catalogue that carries less detail used to show missing pieces as red
+  warnings on every card — a statement about the connector rather than about the catalogue. Those are
+  now told apart.
+
+### Action needed
+
+- **If you use these packages directly, one name has changed.** The credential-address types moved
+  into a smaller package of their own so that installing them no longer pulls in the whole compiler.
+  If you depended on that vocabulary through the secrets package, nothing changes. If you named the
+  compiler package to get it, depend on the address package instead.
+
+
 ## [0.8.0] — 2026-08-01
 
 ### New
