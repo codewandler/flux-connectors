@@ -14,10 +14,15 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://{domain}/api/v2",
     auth: AUTH,
     operations: OPERATIONS,
+    config_choices: CONFIG_CHOICES,
 };
 
 #[rustfmt::skip]
 static AUTH: &[crate::Credential] = &[
+];
+
+#[rustfmt::skip]
+static CONFIG_CHOICES: &[crate::ConfigChoices] = &[
 ];
 
 #[rustfmt::skip]

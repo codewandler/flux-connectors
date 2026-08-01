@@ -2274,10 +2274,111 @@ fn validate_config(connector: &Connector, problems: &mut Vec<String>) {
             }
         }
 
+        validate_choices(field, problems);
         validate_binding(connector, field, problems);
     }
 
     validate_every_template_variable_is_asked_for(connector, problems);
+}
+
+/// **A closed set of values is a narrowing of the field, not a second field beside it** — C-225.
+///
+/// `choices` answers *which values are legal*; [`Format`](crate::Format) answers *what shape a value
+/// has*. Keeping them separate is what makes the rules below derivations rather than preferences:
+///
+/// 1. **Every permitted value satisfies the field's own `format`.** A set that could admit a value
+///    the format rejects would let a closed field be *wider* than the open one it narrows, and the
+///    renderer's fallback input — built from `format` — would refuse a value the select offers.
+/// 2. **A set has at least two values.** A set of one is a constant: the field asks a question with
+///    one answer, which belongs in the base URL rather than in front of a human. An empty
+///    `choices = []` is an open field spelled the long way, and reads in a diff as a set someone
+///    emptied by accident.
+/// 3. **Every entry is renderable and distinguishable.** A blank label is a dropdown row with
+///    nothing in it; a repeated value is one member wearing two names; a repeated label is two rows
+///    a user cannot tell apart. Each of the three produces a form that cannot be answered
+///    correctly, which is the same standard `label` and `help` are mandatory under.
+/// 4. **A `secret` declares none.** The values would be credentials, enumerated in a committed file.
+///    That is the C-231 rule about `example` in its stronger form — an example is one such literal,
+///    a set is all of them — and the same push-protection and disclosure argument settles it.
+/// 5. **The `example` is one of the choices.** It is the placeholder a user copies, so on a closed
+///    field it has to be an answer they are allowed to give. Exactly the defect class the
+///    format/example rule already refuses, one level narrower.
+///
+/// The sixth rule is not here: a value pinned into a request position is checked against that
+/// position in [`validate_pin`], beside the `example` check it mirrors, because the rule belongs to
+/// the binding rather than to the set.
+fn validate_choices(field: &ConfigField, problems: &mut Vec<String>) {
+    let name = field.name.as_str();
+    if field.choices.is_empty() {
+        // Distinguishable from "no `choices` key at all" only in the source, so an explicit empty
+        // list is called out rather than silently read as an open field.
+        return;
+    }
+
+    if field.secret {
+        problems.push(format!(
+            "configuration field {name:?} declares `secret = true` and `choices`. A closed set of \
+             secret values is a list of credentials in a committed file — the same defect a \
+             secret's `example` is refused for (C-231), and a stronger form of it, because a set is \
+             exhaustive where an example is one literal"
+        ));
+        return;
+    }
+
+    if field.choices.len() < 2 {
+        problems.push(format!(
+            "configuration field {name:?} declares `choices` with one value. A set of one is a \
+             constant, not a choice: put the value in the `base_url` (or wherever the field binds) \
+             rather than asking a human to confirm the only answer"
+        ));
+    }
+
+    let mut values: Vec<&str> = Vec::new();
+    let mut labels: Vec<&str> = Vec::new();
+    for choice in &field.choices {
+        if let Err(reason) = field.format.validate(&choice.value) {
+            problems.push(format!(
+                "configuration field {name:?} declares `format = \"{}\"` but a choice that does not \
+                 satisfy it: {reason}. A closed set narrows the field's format; it cannot widen it, \
+                 or the input a renderer falls back to would reject a value the set offers",
+                field.format.word()
+            ));
+        }
+        if choice.label.trim().is_empty() {
+            problems.push(format!(
+                "configuration field {name:?} declares a choice {:?} with an empty `label`; a set \
+                 of raw values is a dropdown nobody can read, which is why the label is the whole \
+                 reason a choice is a table rather than a string",
+                choice.value
+            ));
+        }
+        if values.contains(&choice.value.as_str()) {
+            problems.push(format!(
+                "configuration field {name:?} lists the choice {:?} more than once; one value under \
+                 two labels is a set a user cannot select from unambiguously",
+                choice.value
+            ));
+        }
+        if labels.contains(&choice.label.as_str()) {
+            problems.push(format!(
+                "configuration field {name:?} uses the label {:?} more than once; two rows a user \
+                 cannot tell apart is a choice they cannot make",
+                choice.label
+            ));
+        }
+        values.push(&choice.value);
+        labels.push(&choice.label);
+    }
+
+    if let Some(example) = &field.example {
+        if let Err(reason) = field.permits(example) {
+            problems.push(format!(
+                "configuration field {name:?} declares an `example` that is not one of its own \
+                 choices: {reason}. A placeholder a user copies and is then refused for is worse \
+                 than none"
+            ));
+        }
+    }
 }
 
 /// Checks one field's `binds`: that it parses, that it resolves, and that `secret` agrees with it.
@@ -2424,6 +2525,21 @@ fn validate_pin(
         if let Err(reason) = position.validate_value(example) {
             problems.push(format!(
                 "configuration field {name:?} pins a {word} value but gives an `example` that could \
+                 not be one: {reason}"
+            ));
+        }
+    }
+
+    // **And so is every value a closed set permits** (C-225). This is the interaction worth stating
+    // rather than leaving to inference: a choice is not merely displayed, it is a value an operator
+    // is *invited* to pick, and it lands inside a URL the host composes. A permitted value that
+    // escaped its path segment would be a sanctioned way to address another resource on the same
+    // host with the same credential — the failure `Position::validate_value` exists for, with the
+    // connector's own blessing on it.
+    for choice in &field.choices {
+        if let Err(reason) = position.validate_value(&choice.value) {
+            problems.push(format!(
+                "configuration field {name:?} pins a {word} value but offers a choice that could \
                  not be one: {reason}"
             ));
         }
@@ -4645,6 +4761,7 @@ pub fn accepted_keys() -> Vec<(&'static str, Vec<String>)> {
         ("event", probe::<EventDecl>()),
         ("channel", probe::<ChannelBinding>()),
         ("configField", probe::<ConfigField>()),
+        ("choice", probe::<crate::Choice>()),
         ("graph", probe::<Graph>()),
         ("graphNode", probe::<GraphNode>()),
         ("port", probe::<crate::graph::Port>()),

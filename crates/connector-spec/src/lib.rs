@@ -116,7 +116,7 @@ pub use connector_address::{
 };
 
 pub use auth::{AuthMethod, AuthRequirement, AuthScheme, OAuth2Spec, OAuthGrant, OAuthRedirect};
-pub use config::{Binding, ConfigField, Format, Level, Position};
+pub use config::{Binding, Choice, ConfigField, Format, Level, Position};
 pub use credential::{CredentialRef, InstanceId, Layout, TenantInstances, TenantLayout};
 pub use graph::{
     Backoff, Compare, Condition, Edge, Graph, GraphNode, NodeKind, Port, PortRef, TextRole,

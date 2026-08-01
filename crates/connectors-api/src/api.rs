@@ -125,6 +125,40 @@ pub struct ConnectorView {
     credentials: Vec<CredentialView>,
     /// Configuration fields with a value, as `("default/endpoint.subdomain", "acme")`.
     settings: Vec<(String, String)>,
+    /// **The configuration slots that permit a closed set of values, and the set** (C-225).
+    ///
+    /// What turns the configuration form's value box into a select. Empty for nearly every
+    /// connector; present for the ones whose value is a *choice* an operator cannot discover — New
+    /// Relic's two region hosts, Intercom's three. Published straight from the catalogue, so the
+    /// page and [`put_config`]'s refusal cannot disagree about what is permitted.
+    config_choices: Vec<ConfigChoicesView>,
+}
+
+/// One configuration slot whose value comes from a closed set — C-225.
+///
+/// A view rather than the catalogue's own type because `catalog` has **no dependencies** and
+/// therefore no `Serialize`; the mapping is one-to-one and the field names are the catalogue's.
+#[derive(Serialize)]
+pub struct ConfigChoicesView {
+    /// The service this field configures — the first path segment of `PUT /v1/config/…`.
+    service: &'static str,
+    /// The declared field name, for the row's label copy.
+    field: &'static str,
+    /// The form label.
+    label: &'static str,
+    /// `endpoint` or `username` — the `kind` segment of the same route.
+    kind: &'static str,
+    /// The binding target — the `field` segment of the same route.
+    name: &'static str,
+    /// The permitted values, in the vendor's own order.
+    choices: Vec<ChoiceView>,
+}
+
+/// One permitted value and the text the page shows for it.
+#[derive(Serialize)]
+pub struct ChoiceView {
+    value: &'static str,
+    label: &'static str,
 }
 
 /// One operation, and whether this tenant can call it — **the honest unit** (C-212).
@@ -294,6 +328,25 @@ async fn view_of(
         operations,
         credentials,
         settings: app.settings().bound_for(tenant, provider.id),
+        config_choices: provider
+            .config_choices
+            .iter()
+            .map(|entry| ConfigChoicesView {
+                service: entry.service,
+                field: entry.field,
+                label: entry.label,
+                kind: entry.kind,
+                name: entry.name,
+                choices: entry
+                    .choices
+                    .iter()
+                    .map(|choice| ChoiceView {
+                        value: choice.value,
+                        label: choice.label,
+                    })
+                    .collect(),
+            })
+            .collect(),
     })
 }
 
@@ -438,6 +491,20 @@ pub struct ConfigInput {
 }
 
 /// Bind one configuration field — an endpoint variable, or a Basic user half.
+///
+/// # A value outside a declared closed set is refused **here** — C-225
+///
+/// This is *the point a value is supplied*, and it is deliberately the only place membership is
+/// checked. New Relic serves one API from two hosts and nothing pre-auth says which is yours, so a
+/// wrong region is a `401` on every call that reads exactly like a bad key; the whole value of
+/// declaring the set is that the mistake is caught at the input rather than diagnosed from a status
+/// code that names the wrong cause. The refusal lists the permitted values for the same reason —
+/// "invalid" would reproduce the guessing this exists to remove.
+///
+/// **A stored value that later leaves the set is left alone.** Nothing re-validates on read, so a
+/// vendor adding a region does not brick a connection configured before it existed: the next edit
+/// of that field is where the operator is asked to pick again. Refusing at read time would turn a
+/// catalogue update into an outage on connections that were never wrong.
 pub async fn put_config(
     State(app): State<App>,
     principal: Principal,
@@ -457,6 +524,29 @@ pub async fn put_config(
             ))
         }
     };
+
+    // An unknown provider is not refused here — it never was, and a setting bound under one is
+    // inert rather than dangerous — but a *known* provider's closed set is enforced.
+    if let Some(entry) = catalog::provider(catalog::ProviderKey::id(&provider))
+        .and_then(|declared| declared.choices_for(&service, &kind, name))
+    {
+        if !entry.choices.iter().any(|c| c.value == input.value) {
+            let permitted: Vec<String> = entry
+                .choices
+                .iter()
+                .map(|choice| format!("`{}` ({})", choice.value, choice.label))
+                .collect();
+            return Err(Failure(
+                StatusCode::BAD_REQUEST,
+                format!(
+                    "`{}` permits only {}, and `{}` is none of them",
+                    entry.field,
+                    permitted.join(", "),
+                    input.value
+                ),
+            ));
+        }
+    }
 
     app.settings()
         .set(principal.tenant(), &provider, &service, target, input.value);

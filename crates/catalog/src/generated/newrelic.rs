@@ -14,6 +14,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://{host}/v2",
     auth: AUTH,
     operations: OPERATIONS,
+    config_choices: CONFIG_CHOICES,
 };
 
 #[rustfmt::skip]
@@ -23,6 +24,21 @@ static AUTH: &[crate::Credential] = &[
         leaf: "api_key",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "X-Api-Key", prefix: "" },
+    },
+];
+
+#[rustfmt::skip]
+static CONFIG_CHOICES: &[crate::ConfigChoices] = &[
+    crate::ConfigChoices {
+        service: "default",
+        field: "host",
+        label: "New Relic API host",
+        kind: "endpoint",
+        name: "host",
+        choices: &[
+            crate::Choice { value: "api.newrelic.com", label: "United States" },
+            crate::Choice { value: "api.eu.newrelic.com", label: "European Union" },
+        ],
     },
 ];
 

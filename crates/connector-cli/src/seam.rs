@@ -32,7 +32,7 @@ use anyhow::{bail, Result};
 use serde::Serialize;
 
 use connector_spec::{
-    ChannelBinding, EventDecl, ManualSetup, Selector, Subscription, VerificationScheme,
+    ChannelBinding, ConfigField, EventDecl, ManualSetup, Selector, Subscription, VerificationScheme,
 };
 
 use crate::catalog::{self, OperationRendering};
@@ -497,6 +497,11 @@ fn manifest(connector: &Connector, service: &str) -> Result<String> {
         events: Vec<ManifestEvent<'a>>,
         #[serde(skip_serializing_if = "Vec::is_empty")]
         channels: Vec<ManifestChannel<'a>>,
+        /// **The configuration fields of this service that permit a closed set of values** — C-225.
+        ///
+        /// Skipped entirely for the connectors that declare none, which is nearly all of them.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        config_choices: Vec<ManifestChoices<'a>>,
     }
 
     let named = service != connector_spec::DEFAULT_SERVICE;
@@ -530,6 +535,10 @@ fn manifest(connector: &Connector, service: &str) -> Result<String> {
         channels: connector
             .channels_of(service)
             .map(|channel| manifest_channel(connector, channel))
+            .collect(),
+        config_choices: connector
+            .config_of(service)
+            .filter_map(manifest_choices)
             .collect(),
     };
 
@@ -676,6 +685,58 @@ fn manifest_event<'a>(connector: &Connector, event: &'a EventDecl) -> ManifestEv
         default: event.default,
         group: &event.group,
     }
+}
+
+/// One `[[config_choices]]` block: the closed set one configuration field permits — C-225.
+///
+/// **Not the whole configuration surface.** That is C-87's, and this deliberately does not preempt
+/// it: what is carried here is the set itself, addressed by `(kind, name)` — the same address the
+/// runtime configuration port keys a stored value on — plus the field name and label a form needs to
+/// draw the row. A closed set that reached no artifact would be a declaration a renderer cannot act
+/// on, which is a text box with extra steps.
+#[derive(Serialize)]
+struct ManifestChoices<'a> {
+    /// The declared field name — the key a host stores the collected value under.
+    field: &'a str,
+    /// The form label.
+    label: &'a str,
+    /// Where the value goes: `endpoint`, `path`, `query`, `header`, `username` or `oauth`.
+    kind: &'static str,
+    /// The name within `kind`.
+    name: &'a str,
+    /// The permitted values, in the vendor's own order. An inline array of tables, so the block
+    /// stays one contiguous `[[config_choices]]` in the emitted TOML.
+    choices: Vec<ManifestChoice<'a>>,
+}
+
+/// One permitted value and the text a renderer shows for it.
+#[derive(Serialize)]
+struct ManifestChoice<'a> {
+    value: &'a str,
+    label: &'a str,
+}
+
+/// The `[[config_choices]]` block for one field, or `None` when the field is open.
+///
+/// A field whose `binds` does not parse contributes nothing, which cannot happen on a loaded
+/// connector — the loader refuses it — so this is a total function in practice rather than a
+/// silently skipped case.
+fn manifest_choices(field: &ConfigField) -> Option<ManifestChoices<'_>> {
+    let binding = field.binding().filter(|_| field.is_closed())?;
+    Some(ManifestChoices {
+        field: &field.name,
+        label: &field.label,
+        kind: binding.kind(),
+        name: binding.target(),
+        choices: field
+            .choices
+            .iter()
+            .map(|choice| ManifestChoice {
+                value: &choice.value,
+                label: &choice.label,
+            })
+            .collect(),
+    })
 }
 
 fn manifest_channel<'a>(connector: &Connector, channel: &'a ChannelBinding) -> ManifestChannel<'a> {

@@ -2,7 +2,7 @@
 id: C-225
 title: "A configuration field cannot declare a closed set of values, so a two-choice region reads as free text and a wrong answer looks exactly like a bad key"
 pillar: Spec
-status: ready
+status: in-progress
 priority: 2
 design: docs/designs/connector-configuration.md
 epic:
@@ -64,22 +64,40 @@ A closed set helps most exactly where the value cannot be discovered.
 
 ## Acceptance
 
-- [ ] **Failing-first test:** a provider declares an enumerated set of values for a configuration
+- [x] **Failing-first test:** a provider declares an enumerated set of values for a configuration
       field and it loads. It is refused today as an unknown field. Name the test.
-- [ ] Each permitted value can carry a human **label**, so a renderer shows "United States" rather
+      → `crates/connector-spec/tests/config_choices.rs::a_config_field_declares_a_closed_set_of_values_and_a_value_outside_it_is_refused`
+- [x] Each permitted value can carry a human **label**, so a renderer shows "United States" rather
       than `api.newrelic.com`. A set of raw values is a dropdown nobody can read.
-- [ ] Settle whether a field with a closed set still needs a `format`, and record the reason. They
+      → `Choice { value, label }`, `crates/connector-spec/src/config.rs`; both fields mandatory, and
+      a blank or repeated label is a load refusal (`validate_choices`, `provider.rs`).
+- [x] Settle whether a field with a closed set still needs a `format`, and record the reason. They
       answer different questions — shape versus membership — and collapsing them will be tempting.
-- [ ] A value outside the set is refused **at the point it is supplied**, and the refusal names the
+      → **`format` stays.** Recorded in `config.rs`'s module docs, in `validate_choices`'s doc
+      comment, and in the design's new §`choices` … narrows `format`. Three concrete reasons rather
+      than a preference: every choice is validated against the format at load (so a set can never be
+      *wider* than the field it narrows), the format is the input a renderer falls back to, and
+      `example` now answers to both shape and membership.
+- [x] A value outside the set is refused **at the point it is supplied**, and the refusal names the
       field and lists what is permitted. A refusal that says only "invalid" reproduces the diagnosis
       problem this story exists to remove.
-- [ ] State what a host does with a **stored** value that later leaves the set — a vendor adding a
+      → `ConfigField::permits`, called by `connectors-api`'s `PUT /v1/config/…`
+      (`crates/connectors-api/src/api.rs::put_config`). Asserted end to end by
+      `crates/connectors-api/tests/config_choices.rs::a_host_outside_the_set_is_refused_and_the_refusal_names_the_answers`.
+- [x] State what a host does with a **stored** value that later leaves the set — a vendor adding a
       region must not brick an existing connection. This is the half that is easy to skip and
       expensive to retrofit.
-- [ ] `newrelic` and `intercom` both adopt it, and `intercom`'s `SCHEMA GAP` comment at
+      → **Nothing.** Membership is checked on the write path only, never on read; stated in
+      `config.rs`'s module docs, in `put_config`'s doc comment and in the design, and pinned by
+      `a_stored_value_is_never_re_validated_on_the_way_out`.
+- [x] `newrelic` and `intercom` both adopt it, and `intercom`'s `SCHEMA GAP` comment at
       `providers/intercom.toml:123` is removed rather than left describing a gap that closed.
-- [ ] `crates/connectors-api/src/index.html` renders the choice as a choice. A closed set that still
+      → both declare `choices` on a `host` field; intercom's `base_url` is now `https://{host}` and
+      the gap comment is replaced by an account of the closure.
+- [x] `crates/connectors-api/src/index.html` renders the choice as a choice. A closed set that still
       renders as a text box has moved the declaration without moving the benefit.
+      → the configuration row's value control is a `<select>` of labels when the selected
+      `(service, kind, field)` has a published set, and a text input otherwise.
 
 ## Notes
 
@@ -92,3 +110,73 @@ A closed set helps most exactly where the value cannot be discovered.
   value being *validated where it is substituted*. This is about the set of legal values being
   *declarable at all*. C-214 without this still cannot refuse `api.not-new-relic.example`, because
   nothing anywhere says what the legal hosts are.
+
+## Progress
+
+**2026-08-01 — landed on `impl/C-225`.** Every Acceptance item is ticked; the notes below are what a
+reviewer or a resuming agent needs that the ticks do not say.
+
+### The key is `choices`, not `values`
+
+Each permitted value carries a label, so the entry is a table (`{ value = …, label = … }`) rather
+than a string, and `values = [...]` would have been a misleading name for a list of tables. The
+C-220 contract test probed `values`; it has been rewritten in place —
+`newrelic_connector.rs::the_closed_set_of_two_hosts_is_declared_and_any_other_host_is_refused` is the
+same claim inverted, and it now asserts the refusal rather than the gap.
+
+### Six loader rules, all in `validate_choices`
+
+Every choice satisfies the field's own `format`; a set has at least two values; every choice has a
+non-empty label and no value or label repeats; a `secret` declares none (C-231's rule in its stronger
+form — an example is one credential-shaped literal, a set is all of them); the `example` is one of
+the choices; and a field that *pins a request position* has every choice checked against that
+position, beside the `example` check it mirrors (`validate_pin`). That last one is the `binds`
+interaction the story asked about: a permitted value that escaped its path segment would be a
+**sanctioned** way to address another resource on the same host with the same credential.
+
+`choices = []` is deliberately *not* a separate refusal: serde's `default` makes an empty list and an
+absent key the same IR, and distinguishing them would mean an `Option<Vec<_>>` in the public surface
+to carry a diagnostic nobody has needed.
+
+### Publishing: the set, and only the set
+
+The choices reach `connectors/<id>.connector.toml` as `[[config_choices]]`, `catalog.json` as
+`config_choices`, `catalog::Provider::config_choices`, and the connect API's `ConnectorView`. Each
+row is keyed by `(service, kind, name)` — the address `connector-pack`'s configuration port already
+stores a value under, and the same segments `PUT /v1/config/<provider>/<service>/<kind>/<field>`
+takes — so a consumer joins on the route it is about to call.
+
+**This is not C-87 landing early.** Labels for every field, help, `format`, `binds`, the derived
+level, `verify`, subscription and setup are still unpublished, and so is the breaking `auth.oauth2`
+flattening C-87 has to settle. What is here is the part a closed set is worthless without: a set a
+renderer cannot see is a text box with extra steps. C-87 folds these rows into its per-field block;
+the row shape was chosen so that is an extension rather than a merge of two disagreeing lists.
+
+`catalog.json`'s `schema_version` stays `2` — the key is additive, which is exactly the rule
+`docs/designs/catalog-json.md` §Versioning states, and the design now documents the two new objects.
+
+### Intercom's adoption is a behaviour change, and it is the deliberate one
+
+`providers/intercom.toml` shipped US-only with a literal `base_url = "https://api.intercom.io"`, and
+recorded "an EU workspace needs a second connector" as the remedy. It is now
+`base_url = "https://{host}"` with a three-value set, so:
+
+- **an EU or AU workspace can be connected at all**, which it could not before;
+- **`host` is a required configuration value where none was required before.** An operator who
+  previously needed only a token must now pick a region. `connector-pack` fails closed
+  (`Error::MissingConfig`) rather than defaulting, so an existing deployment that upgrades without
+  binding `host` gets a refusal naming the field — not a request to the wrong region;
+- **the egress claim moved from one literal host to three enumerated ones.** That is narrower than
+  the tempting alternative (a widened host list) in the way that matters: the reachable set is still
+  enumerable from the artifacts. `crates/connector-cli/tests/shipped_providers_build.rs` was rewritten
+  around that claim rather than deleted.
+
+### What was deliberately not done
+
+- **`hosts` in `catalog.json` still publishes `{host}` for a templated base URL**, even where the
+  closed set makes the reachable hosts knowable. Narrowing the published egress list to the set is a
+  real improvement and a separate change: it touches `catalog::host_of`, the per-service `hosts`
+  claim and every consumer of it, and it wants its own argument about whether a template with a set
+  should publish the template, the set, or both.
+- **`connector-pack` does not consult the set.** That is the stored-value rule above, not an
+  omission: the pack is the read path.

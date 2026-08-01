@@ -41,6 +41,40 @@
 //! needs one, and adding it means a regex dependency in a crate that has six — it lands when a real
 //! provider needs something the enum cannot say.
 //!
+//! # A field can also name the values it permits, and that is a different question (C-225)
+//!
+//! [`Format`] says what *shape* a value has. [`ConfigField::choices`] says which *values* are legal.
+//! Two vendors measured the difference in one wave: New Relic serves one REST API from
+//! `api.newrelic.com` and `api.eu.newrelic.com` and nothing pre-auth discloses which, and Intercom
+//! adds `api.au.intercom.io` to the same shape. `format = "hostname"` accepts every syntactically
+//! valid host on the internet, so a wrong region loaded, rendered as a text box, and failed as
+//! `401 Unauthorized` on every call — **indistinguishable from a bad key**, so the operator's first
+//! move is to rotate a credential that was never wrong.
+//!
+//! **`choices` narrows a formatted field; it does not replace `format`.** The two are kept separate
+//! deliberately, and three consequences follow from it rather than from taste:
+//!
+//! 1. Every permitted value is validated against the field's own `format` at load, so a set cannot
+//!    smuggle in a value the field's own rule would reject.
+//! 2. A renderer still knows the input type — which is what it falls back to when it cannot draw a
+//!    select, and what it validates a typed value with.
+//! 3. `example` keeps answering to both: it satisfies the format *and* is one of the choices, which
+//!    is the same defect class the format/example rule already refuses.
+//!
+//! **Deliberately not a constraint language.** A closed list of values, each with a label, is the
+//! whole of it. Ranges, patterns and conditionals are each their own argument, and the same call
+//! `Format`'s missing `pattern` already makes applies: they land when a real provider needs them.
+//!
+//! # What a host does with a stored value that later leaves the set
+//!
+//! A vendor adding a region must not brick an existing connection, so membership is checked **where
+//! a value is supplied** and nowhere else. [`ConfigField::permits`] is called by whatever accepts a
+//! value from a human — this repository's own connect API does it in `PUT /v1/config/…` — and it is
+//! *not* consulted when a stored value is read back and substituted into a request. A connection
+//! configured with a host the connector no longer lists keeps working; the next edit of that field
+//! is where the operator is asked to pick again. The alternative, refusing at read time, converts a
+//! catalogue update into an outage on connections that were never wrong.
+//!
 //! # An operator can pin a tenant scope, not only a host (C-187)
 //!
 //! [`Binding::Endpoint`] reaches a `{placeholder}` in a service's `base_url` and nothing else. That
@@ -393,7 +427,7 @@ pub enum Binding<'a> {
     OAuthClientSecret,
 }
 
-impl Binding<'_> {
+impl<'a> Binding<'a> {
     /// Who supplies this value. See [`Level`].
     /// **A pinned request value is *connection* level, and that is derivation rather than
     /// preference.** "Operator" here means *once per vendor, by whoever runs the product* — the app
@@ -412,6 +446,36 @@ impl Binding<'_> {
             | Self::Request { .. }
             | Self::Credential { .. }
             | Self::Username { .. } => Level::Connection,
+        }
+    }
+
+    /// The word this binding's destination is addressed by — `endpoint`, `path`, `query`, `header`,
+    /// `username`, `credential` or `oauth`.
+    ///
+    /// The first half of the `(kind, target)` pair a host keys a stored value on, and the same
+    /// vocabulary [`parse_binding`] accepts. It exists so that a consumer publishing or resolving a
+    /// value does not re-split the `binds` string and get the `username.` / `credential.` prefix
+    /// distinction subtly wrong.
+    pub fn kind(self) -> &'static str {
+        match self {
+            Self::Endpoint { .. } => "endpoint",
+            Self::Request { position, .. } => position.word(),
+            Self::Credential { .. } => "credential",
+            Self::Username { .. } => "username",
+            Self::OAuthClientId | Self::OAuthClientSecret => "oauth",
+        }
+    }
+
+    /// The name within [`kind`](Self::kind) — the template variable, the credential, the wire name
+    /// of a pin, or the OAuth half.
+    pub fn target(self) -> &'a str {
+        match self {
+            Self::Endpoint { variable } => variable,
+            Self::Request { name, .. } | Self::Credential { name } | Self::Username { name } => {
+                name
+            }
+            Self::OAuthClientId => "client_id",
+            Self::OAuthClientSecret => "client_secret",
         }
     }
 
@@ -489,6 +553,21 @@ pub fn parse_binding(binds: &str) -> Result<Binding<'_>, String> {
     }
 }
 
+/// One permitted value of a [closed set](ConfigField::choices), and the text a renderer shows for it.
+///
+/// **The label is mandatory, and that is the point of the type.** A bare list of strings is a
+/// dropdown offering `api.newrelic.com` and `api.eu.newrelic.com` to someone who knows their account
+/// is in Frankfurt, which moves the declaration without moving the benefit. `value` is what reaches
+/// the wire; `label` is what the person choosing it reads.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Choice {
+    /// The value itself — what a host stores and what substitution puts on the request.
+    pub value: String,
+    /// The human name for it — "United States", not `api.newrelic.com`. Sentence case, no colon.
+    pub label: String,
+}
+
 /// One thing a human must supply, and everything a form needs to ask for it.
 ///
 /// The presentation fields are separate from [`description`](crate::Operation::description) on
@@ -533,6 +612,19 @@ pub struct ConfigField {
     /// The value's shape, which decides the input type and the validation a form applies.
     #[serde(default, skip_serializing_if = "is_text")]
     pub format: Format,
+    /// **The closed set of values this field permits** — empty when the field is open (C-225).
+    ///
+    /// A *narrowing* of [`format`](Self::format) rather than an alternative to it: every value here
+    /// is validated against the field's own format at load, the example must be one of them, and a
+    /// renderer that cannot draw a select still knows the input type. See the module docs for why
+    /// the two questions stay separate and for what a host does with a stored value that later
+    /// leaves the set.
+    ///
+    /// Order is the vendor's, and it is preserved end to end — a `Vec`, not a set, because "US
+    /// first" is a fact about how the vendor names its regions and a re-sorted dropdown is a worse
+    /// one.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub choices: Vec<Choice>,
     /// Whether the connector cannot function without it.
     ///
     /// Defaults to `true`: a connector declaring a field it does not need is the rarer case, and the
@@ -566,6 +658,42 @@ impl ConfigField {
     /// Who supplies this value, derived from its binding. See [`Level`].
     pub fn level(&self) -> Option<Level> {
         Some(self.binding()?.level())
+    }
+
+    /// Whether this field permits a closed set of values rather than free text.
+    ///
+    /// The question a renderer asks to decide between a select and an input.
+    pub fn is_closed(&self) -> bool {
+        !self.choices.is_empty()
+    }
+
+    /// **Whether `value` is one this field permits**, with a refusal that names the field and lists
+    /// what is legal.
+    ///
+    /// Always `Ok` on an open field — a field with no closed set permits anything its format
+    /// accepts, and the format is a separate check that a renderer applies to a typed value.
+    ///
+    /// The refusal spells out every choice on purpose. "Invalid value" reproduces the diagnosis
+    /// problem a closed set exists to remove: an operator who has just been told their region is
+    /// wrong needs to be told what the regions *are*, in the same sentence, or they are back to
+    /// guessing between an answer and a credential.
+    ///
+    /// **Called where a value is supplied, never where one is read back.** See the module docs: a
+    /// vendor adding a region must not brick a connection configured before it existed.
+    pub fn permits(&self, value: &str) -> Result<(), String> {
+        if self.choices.is_empty() || self.choices.iter().any(|choice| choice.value == value) {
+            return Ok(());
+        }
+        let permitted: Vec<String> = self
+            .choices
+            .iter()
+            .map(|choice| format!("{:?} ({})", choice.value, choice.label))
+            .collect();
+        Err(format!(
+            "configuration field {:?} permits only {}, and {value:?} is none of them",
+            self.name,
+            permitted.join(", ")
+        ))
     }
 
     /// The request position and placeholder this field pins, when it pins one.

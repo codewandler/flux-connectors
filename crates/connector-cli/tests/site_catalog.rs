@@ -756,3 +756,88 @@ fn rebuilding_the_document_writes_nothing() {
         String::from_utf8_lossy(&second.stdout)
     );
 }
+
+/// **The closed sets a connector declares reach the published document** — C-225.
+///
+/// A set that stayed in the IR would be a declaration a product cannot act on: a hosted form that
+/// cannot see the choices renders a text box, and the wrong New Relic region is a `401` on every
+/// call that reads exactly like a bad key. So this asserts the published shape, on the shipped
+/// document, for the two connectors the story is about.
+///
+/// It names those two rather than walking the catalogue (`AGENTS.md`), so a fifty-fourth connector
+/// cannot turn it red by existing — only New Relic or Intercom changing their regions can.
+#[test]
+fn every_declared_closed_set_reaches_the_published_document() {
+    let document = committed();
+    let providers = document["providers"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{CATALOG_JSON} carries a `providers` array"));
+
+    for (id, values) in [
+        ("newrelic", &["api.newrelic.com", "api.eu.newrelic.com"][..]),
+        (
+            "intercom",
+            &[
+                "api.intercom.io",
+                "api.eu.intercom.io",
+                "api.au.intercom.io",
+            ][..],
+        ),
+    ] {
+        let provider = providers
+            .iter()
+            .find(|entry| entry["id"] == Value::String(id.to_string()))
+            .unwrap_or_else(|| panic!("{CATALOG_JSON} carries the provider `{id}`"));
+        let sets = provider["config_choices"]
+            .as_array()
+            .unwrap_or_else(|| panic!("`{id}` carries no `config_choices` array"));
+        assert_eq!(sets.len(), 1, "`{id}` declares exactly one closed set");
+
+        let host = &sets[0];
+        // Addressed by `(service, kind, name)` — the same address the runtime configuration port
+        // keys a stored value on, so a consumer joins on it rather than re-parsing a `binds` string
+        // this document does not carry yet.
+        assert_eq!(host["service"], "default", "{id}");
+        assert_eq!(host["kind"], "endpoint", "{id}");
+        assert_eq!(host["name"], "host", "{id}");
+        assert_eq!(host["field"], "host", "{id}");
+        assert!(
+            host["label"]
+                .as_str()
+                .is_some_and(|label| !label.is_empty()),
+            "`{id}`'s set carries the form label"
+        );
+
+        let choices = host["choices"]
+            .as_array()
+            .unwrap_or_else(|| panic!("`{id}`'s set carries a `choices` array"));
+        assert_eq!(
+            choices
+                .iter()
+                .map(|choice| choice["value"].as_str().expect("value"))
+                .collect::<Vec<_>>(),
+            values,
+            "`{id}` publishes its regions in the vendor's own order"
+        );
+        assert!(
+            choices
+                .iter()
+                .all(|choice| choice["label"].as_str().is_some_and(|l| !l.is_empty())),
+            "`{id}` labels every region — a dropdown of bare hostnames is one nobody can answer"
+        );
+    }
+
+    // The key is additive, so every provider carries it and the open ones carry `[]`. A consumer
+    // that reads it unconditionally is what makes "additive" true rather than aspirational.
+    assert!(
+        providers
+            .iter()
+            .all(|provider| provider["config_choices"].is_array()),
+        "`config_choices` is present on every provider, empty where nothing is closed"
+    );
+    assert_eq!(
+        document["schema_version"],
+        Value::from(2),
+        "adding a key does not bump the schema version — see docs/designs/catalog-json.md"
+    );
+}
