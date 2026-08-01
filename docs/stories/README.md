@@ -108,10 +108,6 @@ _Four waves built this vocabulary without naming it:_
 - [C-97 — The boundary program pattern — what an operator writes around a generated flow](C-97-graph-boundary-program.md) · Bridge · flux lifts only `op`; channel and trigger are Program members an operator writes. So a boundary node is DOCUMENTED, never emitted — the same split C-63 uses for poll
 - [C-98 — The node kinds flux-lang already has — parallel, match, each, saga, fallback](C-98-richer-node-kinds.md) · Spec · exposure, not invention — all of these are existing flux_lang::ast::Node variants this repo has never constructed. Match is what finally lets a value escape a conditional
 
-### generated connector tests — what can be derived, and what must never be
-_`crates/connector-flux/tests/` holds **52 `*_connector.rs` files totalling 22,455 lines** — roughly_
-- [C-423 — Classify what the 52 per-connector test files actually assert](C-423-classify-what-the-per-connector-tests-assert.md) · Build · the spike that decides the epic, and it may end it — 22,455 lines across 52 files, but 37 of them declare a `const PROVIDER` and 31 a `const OPERATIONS`, which is the provider TOML said twice. The answer is a count, not an opinion
-
 ### The host's explorer — an operator console that converges on the site's components
 _The owner ran the app on 2026-07-31 and reported it working but visibly weaker than the public_
 - [C-236 — The host's explorer — an operator console, then convergence on the site's components (epic)](C-236-host-explorer-epic.md) · Surfaces · EPIC — filed 2026-07-31 after the owner ran the app and found the built-in explorer visibly weaker than the public site's. The cause is recorded: no story ever asked for more, and explorer-ux.md is scoped exclusively to web/
@@ -195,8 +191,8 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-50 — Offer AWS as a provider with s3 and bedrock as services](C-50-aws-services.md) · Spec · first multi-service provider · SigV4 signs the request, not a header
 
 ### generated connector tests — what can be derived, and what must never be
-_`crates/connector-flux/tests/` holds **52 `*_connector.rs` files totalling 22,455 lines** — roughly_
-- [C-424 — Fold the mechanical per-connector assertions into fleet-wide tests that cannot drift](C-424-fold-mechanical-assertions-into-fleet-wide-tests.md) · Build · the likely answer to 'generate the boilerplate' is DELETE it — a test whose expected value comes from the same IR that produced the artifact asserts that the generator is the generator, and `diff` already checks all 557 artifacts byte-for-byte
+_> **C-423 measured this. The answer is a negative: do not generate.** The numbers below replace the_
+- [C-424 — Fold the mechanical per-connector assertions into fleet-wide tests that cannot drift](C-424-fold-mechanical-assertions-into-fleet-wide-tests.md) · Build · RE-CUT by C-423's measurement 2026-08-01. The target is real but SMALL — 209 assertions / 1,571 lines, under 7% of the corpus — and deleting it has a stated cost, because slack_connector.rs restates the fleet gate on purpose. A small careful pass, not the rewrite the epic imagined
 - [C-425 — Check the vendor's own examples against the vendor's own schemas](C-425-vendor-examples-as-a-test-oracle.md) · Build · the one genuinely generatable test in the epic, because it is NOT derived from one thing twice — an example and a schema are two independent statements the vendor made, and nothing here has ever checked they agree. babelforce alone supplies 352 cases
 
 ### inbound events — the reverse call direction
@@ -369,6 +365,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-415 — Vendor the five babelforce manager specs, scrubbed and provenanced](C-415-vendor-babelforce-specs.md) · Build · the blocker providers/babelforce.toml:7-15 has recorded since C-17, resolved: the spec bytes are publishable, the GitLab fetch configuration is not — and the Testers Inc. accessId/accessToken examples come out
 - [C-421 — No shipped provider can become spec-backed, because loading one is not spec-aware](C-421-loading-a-provider-is-not-spec-aware.md) · Spec · found by C-416 on 2026-08-01 and it blocks the epic outright — `provider::load` takes no spec cache, so a spec-backed provider loads as a ZERO-OPERATION SKELETON. 91 files call it, 86 of them tests. C-416 and C-417 are both stuck behind this
 - [C-422 — A patch cannot drop a parameter, so one vendor endpoint becomes a 38-argument tool with 17 synonyms](C-422-a-patch-cannot-drop-a-parameter.md) · Spec · measured by C-416 on 2026-08-01 — THE one place hand-authoring beat patching. babelforce-call-list goes from 14 curated query parameters to 38, of which 17 are exact synonyms the vendor documents alongside their own aliases
+- [C-423 — Classify what the 52 per-connector test files actually assert](C-423-classify-what-the-per-connector-tests-assert.md) · Build · the spike that decides the epic, and it may end it — 22,455 lines across 52 files, but 37 of them declare a `const PROVIDER` and 31 a `const OPERATIONS`, which is the provider TOML said twice. The answer is a count, not an opinion
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

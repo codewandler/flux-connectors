@@ -2,8 +2,7 @@
 id: C-423
 title: "Classify what the 52 per-connector test files actually assert"
 pillar: Build
-status: in-progress
-priority: 2
+status: done
 design: docs/designs/generated-connector-tests.md
 epic: generated-connector-tests
 areas: [connector-flux]
