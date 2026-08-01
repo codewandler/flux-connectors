@@ -194,6 +194,11 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-46 — Generic connectors — http, a2a, mcp and friends](C-46-generic-connectors.md) · Spec · extends the charter — a provider need not be a vendor · **not** mysql, see Notes
 - [C-50 — Offer AWS as a provider with s3 and bedrock as services](C-50-aws-services.md) · Spec · first multi-service provider · SigV4 signs the request, not a header
 
+### generated connector tests — what can be derived, and what must never be
+_`crates/connector-flux/tests/` holds **52 `*_connector.rs` files totalling 22,455 lines** — roughly_
+- [C-424 — Fold the mechanical per-connector assertions into fleet-wide tests that cannot drift](C-424-fold-mechanical-assertions-into-fleet-wide-tests.md) · Build · the likely answer to 'generate the boilerplate' is DELETE it — a test whose expected value comes from the same IR that produced the artifact asserts that the generator is the generator, and `diff` already checks all 557 artifacts byte-for-byte
+- [C-425 — Check the vendor's own examples against the vendor's own schemas](C-425-vendor-examples-as-a-test-oracle.md) · Build · the one genuinely generatable test in the epic, because it is NOT derived from one thing twice — an example and a schema are two independent statements the vendor made, and nothing here has ever checked they agree. babelforce alone supplies 352 cases
+
 ### inbound events — the reverse call direction
 _A connector today compiles a vendor spec into **outbound** ops: flux calls Zendesk, GitHub, Slack._
 - [C-61 — Codegen — inbound events into the manifest and catalogue, nothing into the module](C-61-codegen-inbound-manifest.md) · Codegen · a connector module carries `op` declarations ONLY (flux lifts nothing else from ~/.flux/flows), so an event emits into the manifest + catalogue and the emitter REFUSES to fake one as a pollable op — the correction C-66 forced on this story

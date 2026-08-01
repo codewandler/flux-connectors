@@ -347,3 +347,37 @@ They are chosen to exercise different halves of the pipeline:
 - **zendesk** — Basic auth and heavy patching. Proves the overlay layer, forces the auth seam, and
   tests the plugin-replacement claim directly against flux's `plugins/zendesk` (687 lines of Rust,
   reduced to one TOML).
+
+### Generated connector tests — what can be derived, and what must never be
+
+`crates/connector-flux/tests/` holds **52 `*_connector.rs` files totalling 22,455 lines**, roughly one
+per shipped provider, and every new connector adds one by hand. The obvious reading is that this is
+boilerplate a generator should write. The measurement says only partly, and the interesting part is
+not the part you would generate.
+
+Across those 52 files, 37 declare a `const PROVIDER`, 36 an env-var constant, 31 a `const OPERATIONS`,
+29 a `const CREDENTIAL`, 26 a `const BASE_URL` — every one a second spelling of something the provider
+TOML already states. But `slack_connector.rs` asserts one connector-specific property, that Slack
+declares **no query parameter at all**, and explains why: Slack's ids are opaque strings, the emitter
+interpolates query values with no percent-encoding (C-30), so a read expressed as a `GET` would ship
+the same defect `zendesk-ticket-search` carries. Its header ends *"nothing else in the repository
+would fail if someone converted a read to a GET, and the resulting connector would look tidier and be
+broken."* No generator produces that, and a generator that replaced it would delete the only thing
+standing between a tidy-looking change and a broken connector.
+
+So the epic starts with a **measurement, not a generator** — and it is allowed to conclude "not worth
+doing", which for a spike is a successful outcome. Two things follow from what it finds. The
+mechanical bucket probably wants **deletion into a fleet-wide test** rather than generation: a test
+whose expected value comes from the same IR that produced the artifact asserts that the generator is
+the generator, and `flux-connectors diff` already checks all 557 artifacts byte-for-byte against
+exactly that derivation. A disk-enumerating test in the `shipped_modules.rs` mould cannot drift and
+covers providers not written yet. Separately, there is one genuinely new check available: the vendored
+documents publish `example` blocks and, since C-4, resolved response schemas — two *independent*
+statements by the vendor that nothing has ever compared.
+
+Design: [designs/generated-connector-tests.md](designs/generated-connector-tests.md).
+
+**Done looks like:** the question answered with a number — how many of the 22,455 lines restate the
+provider file, how many are already covered fleet-wide, how many are reasoned claims that stay — and
+then either the mechanical bucket is gone or the measurement says it was never the boilerplate it
+looked like, written down so nobody re-opens it on a hunch.
