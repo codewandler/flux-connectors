@@ -1,0 +1,304 @@
+openapi: 3.0.3
+info:
+  version: 0.0.0-dev
+  license:
+    name: MIT
+    url: https://www.mit.edu/~amini/LICENSE.md
+  description: "OAuth 2.0 authorization endpoints: token issuance (`/oauth/token`), the authorization-code consent endpoint (`/oauth/authorize`) and token revocation (`/oauth/revoke`). Supports the Authorization Code grant with PKCE (RFC 7636) so public clients (SPA / CLI / mobile) can authenticate without exposing the user's password or holding a client secret."
+  title: babelforce Auth API
+  termsOfService: https://www.babelforce.com/impressum
+  contact:
+    email: support@babelforce.com
+servers:
+  - url: https://services.babelforce.com
+    description: Production
+security:
+  - oauth2:
+      - '*'
+tags:
+  - description: OAuth 2.0 authorization, token and revocation endpoints
+    name: OAuth
+paths:
+  /oauth/authorize:
+    get:
+      description: First step of the Authorization Code flow (RFC 6749 §4.1.1). The user authenticates with babelforce and approves the client; babelforce then redirects back to `redirect_uri` with a short-lived `code`. The `redirect_uri` MUST exactly match the value registered for the client. For PKCE (RFC 7636) supply `code_challenge` (and optionally `code_challenge_method`, default `S256`); public clients MUST use PKCE.
+      operationId: authorize
+      parameters:
+        - description: Must be `code` for the Authorization Code flow.
+          explode: true
+          in: query
+          name: response_type
+          required: true
+          schema:
+            enum:
+              - code
+            type: string
+          style: form
+        - explode: true
+          in: query
+          name: client_id
+          required: true
+          schema:
+            type: string
+          style: form
+        - description: Must exactly match the client's registered callback URL.
+          explode: true
+          in: query
+          name: redirect_uri
+          required: true
+          schema:
+            format: uri
+            type: string
+          style: form
+        - description: Requested scope, e.g. `*` for all access.
+          explode: true
+          in: query
+          name: scope
+          required: true
+          schema:
+            type: string
+          style: form
+        - description: Opaque value returned unchanged in the redirect; use it for CSRF protection.
+          explode: true
+          in: query
+          name: state
+          required: false
+          schema:
+            type: string
+          style: form
+        - description: PKCE code challenge (RFC 7636). Required for public clients.
+          explode: true
+          in: query
+          name: code_challenge
+          required: false
+          schema:
+            type: string
+          style: form
+        - description: PKCE transformation. `S256` is strongly recommended.
+          explode: true
+          in: query
+          name: code_challenge_method
+          required: false
+          schema:
+            default: S256
+            enum:
+              - S256
+              - plain
+            type: string
+          style: form
+      responses:
+        '200':
+          content:
+            text/html:
+              schema:
+                type: string
+          description: HTML consent page shown to the authenticated user.
+        '302':
+          description: Redirect to `redirect_uri` carrying the authorization `code` and `state` (after the user approves via `/oauth/authorize/grant`).
+          headers:
+            Location:
+              explode: false
+              schema:
+                format: uri
+                type: string
+              style: simple
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuth2Error'
+          description: Invalid request (e.g. `redirect_uri_mismatch`, `invalid_client`, `invalid_scope`).
+      security: []
+      summary: OAuth 2.0 authorization endpoint
+      tags:
+        - OAuth
+  /oauth/revoke:
+    post:
+      description: Revoke an access token or a refresh token. Revoking a refresh token also invalidates the access token issued with it. Per RFC 7009 §2.2 the endpoint responds `200` even for unknown or already-revoked tokens.
+      operationId: revoke
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OAuthRevokeRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+          description: The token is no longer valid (or was already unknown).
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuth2Error'
+          description: Missing `token` or invalid client credentials.
+      security: []
+      summary: OAuth 2.0 token revocation (RFC 7009)
+      tags:
+        - OAuth
+  /oauth/token:
+    post:
+      description: "Issues access tokens (and refresh tokens). Supported `grant_type` values: `authorization_code` (exchange a code from `/oauth/authorize`, with PKCE `code_verifier` for public clients), `refresh_token` (refresh tokens are rotated on every use — present the most recently issued one), `password` (legacy first-party only) and `client_credentials`. Which other fields are required depends on the grant; see each field's description."
+      operationId: token
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OAuthTokenRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthTokenResponse'
+          description: Token issued.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuth2Error'
+          description: Invalid request — e.g. `invalid_grant` (bad/expired code, redirect_uri mismatch, failed PKCE, reused or revoked refresh token), `invalid_client` or `invalid_request`.
+      security: []
+      summary: OAuth 2.0 token endpoint
+      tags:
+        - OAuth
+components:
+  parameters: {}
+  requestBodies: {}
+  schemas:
+    OAuth2Error:
+      example:
+        error_description: error_description
+        state: state
+        error: error
+      properties:
+        error:
+          description: RFC 6749 error code, e.g. invalid_grant, invalid_client, invalid_request.
+          type: string
+        error_description:
+          type: string
+        state:
+          description: Echoed from the request when present.
+          type: string
+      required:
+        - error
+      type: object
+    OAuthRevokeRequest:
+      properties:
+        token:
+          description: The access_token or refresh_token to revoke.
+          type: string
+        token_type_hint:
+          description: Optional optimization hint (RFC 7009 §2.1).
+          enum:
+            - access_token
+            - refresh_token
+          type: string
+        client_id:
+          description: Optional; validated when supplied.
+          type: string
+        client_secret:
+          description: Required with client_id for confidential clients.
+          format: password
+          type: string
+      required:
+        - token
+      type: object
+    OAuthTokenRequest:
+      properties:
+        grant_type:
+          description: The OAuth 2.0 grant type.
+          enum:
+            - authorization_code
+            - refresh_token
+            - password
+            - client_credentials
+          type: string
+        code:
+          description: '`authorization_code` only — the code returned by /oauth/authorize.'
+          type: string
+        redirect_uri:
+          description: '`authorization_code` only — must match the value used at /oauth/authorize.'
+          format: uri
+          type: string
+        code_verifier:
+          description: '`authorization_code` with PKCE (RFC 7636) — required for public clients.'
+          type: string
+        refresh_token:
+          description: '`refresh_token` only — the most recently issued refresh token (rotated each use).'
+          type: string
+        username:
+          description: "`password` only — the user's email/username."
+          type: string
+        password:
+          description: "`password` only — the user's password."
+          format: password
+          type: string
+        client_id:
+          description: Required for `authorization_code` and `client_credentials`.
+          type: string
+        client_secret:
+          description: Required for confidential clients; omitted by public clients (which use PKCE).
+          format: password
+          type: string
+        scope:
+          description: Requested scope. For `authorization_code` the scope bound to the code always wins.
+          type: string
+        access_type:
+          description: '`offline` (default for authorization_code) also returns a refresh_token.'
+          enum:
+            - offline
+            - online
+          type: string
+      required:
+        - grant_type
+      type: object
+    OAuthTokenResponse:
+      example:
+        access_token: access_token
+        refresh_token: refresh_token
+        scope: scope
+        token_type: bearer
+        expires_in: 0
+        client_id: client_id
+      properties:
+        access_token:
+          type: string
+        token_type:
+          example: bearer
+          type: string
+        expires_in:
+          description: Lifetime in seconds. Omitted for non-expiring tokens.
+          format: int64
+          type: integer
+        refresh_token:
+          description: Present when a refresh token was issued (rotated on every refresh).
+          type: string
+        scope:
+          type: string
+        client_id:
+          type: string
+      required:
+        - access_token
+        - token_type
+      type: object
+  securitySchemes:
+    oauth2:
+      description: OAuth2 Authentication
+      flows:
+        authorizationCode:
+          authorizationUrl: /oauth/authorize
+          refreshUrl: /oauth/token
+          scopes:
+            '*': All Access
+          tokenUrl: /oauth/token
+        password:
+          refreshUrl: /oauth/token
+          scopes:
+            '*': All Access
+          tokenUrl: /oauth/token
+      type: oauth2

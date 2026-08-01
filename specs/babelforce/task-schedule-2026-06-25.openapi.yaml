@@ -1,0 +1,1285 @@
+openapi: 3.0.3
+info:
+  description: execution of recurring time based tasks
+  version: 3.63.10
+  title: task-automation task schedule API
+  termsOfService: https://www.babelforce.com/impressum/
+  contact:
+    email: support@babelforce.com
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: A bearer token in format Authorization:'Bearer {token}'. You need to supply {token} string.
+    oauth2:
+      type: oauth2
+      description: OAuth2 Authentication with password flow. You need to supply your babelforce username and password, for the selected server. Select request body and your requested scope.
+      flows:
+        password:
+          tokenUrl: /oauth/token
+          refreshUrl: /oauth/token
+          scopes:
+            '*': All Access
+  schemas:
+    Id:
+      type: string
+      description: a unique identifier
+    UUID:
+      type: string
+      description: a unique identifier
+      format: UUID
+    TimestampInMsUTC:
+      type: integer
+      format: int64
+      minimum: 0
+      maximum: 9.223372036854776e+18
+      description: Timestamp in milliseconds UTC
+    Milliseconds:
+      type: integer
+      format: int64
+      minimum: 0
+      maximum: 9.223372036854776e+18
+      description: Milliseconds
+    TaskType:
+      type: string
+      pattern: ^[a-zA-Z0-9._-]+$
+      example: babelforce.call.inbound
+    TaskCompletionSettings:
+      type: object
+      additionalProperties: false
+      properties:
+        autoComplete:
+          type: boolean
+          example: false
+          description: True = tasks are not waiting for agent interactions when pending. False = task may wait forever in pending state until an agent or the system completes the task.
+    AcceptTimeout:
+      description: Time in milliseconds the agent has to accept a task before it is auto rejected.
+      type: integer
+      format: int64
+      minimum: 0
+      maximum: 9.223372036854776e+18
+    CompleteTimeout:
+      description: Time in milliseconds the agent has to complete a task before it is auto canceled.
+      type: integer
+      format: int64
+      minimum: 0
+      maximum: 9.223372036854776e+18
+    RescheduleDelay:
+      description: Time in milliseconds the task is delayed after rescheduling.
+      type: integer
+      format: int64
+      minimum: 0
+      maximum: 9.223372036854776e+18
+    ExpireIn:
+      description: A time in milliseconds after task scheduling, if it is reached the task will be canceled
+      type: integer
+      format: int64
+      minimum: 0
+      maximum: 9.223372036854776e+18
+    SelectionEngine:
+      type: string
+      enum:
+        - legacy
+        - acd
+    TaskSelectionSettings:
+      type: object
+      additionalProperties: false
+      properties:
+        enable:
+          type: boolean
+          description: True = agent selection is enabled False = No agent selection will be attempted
+          example: true
+        auto_accept:
+          type: boolean
+          description: True = the selected agent has to accept the task before it will be assigned to him. False = the agent will get the task forceably assigned
+          example: false
+        priority:
+          description: 0 = lowest priority ... 256 = higher priority ... max integer = highest priority
+          type: integer
+          format: int32
+          example: 0
+        expire_in:
+          $ref: '#/components/schemas/ExpireIn'
+        accept_timeout:
+          $ref: '#/components/schemas/AcceptTimeout'
+        complete_timeout:
+          $ref: '#/components/schemas/CompleteTimeout'
+        reschedule_delay:
+          $ref: '#/components/schemas/RescheduleDelay'
+        selection_engine:
+          $ref: '#/components/schemas/SelectionEngine'
+        legacy_settings:
+          $ref: '#/components/schemas/TaskSelectionLegacySettings'
+        acd_settings:
+          $ref: '#/components/schemas/TaskSelectionAcdSettings'
+    TaskSelectionLegacySettings:
+      type: object
+      properties:
+        line_status:
+          type: string
+          example:
+            - all
+            - available
+          default: available
+        reachable_by_phone:
+          type: boolean
+          example: true
+          default: true
+        max:
+          type: integer
+          default: 1
+          example: 1
+          minimum: 0
+          maximum: 100
+        call_id:
+          type: string
+        exclusive:
+          type: boolean
+          default: true
+    TaskSelectionAcdSettings:
+      type: object
+      properties:
+        line_status:
+          type: string
+          example:
+            - all
+            - available
+        reachable_by_phone:
+          type: boolean
+          example: true
+        priority:
+          type: number
+          example:
+            - 1
+            - 0
+            - 0.5
+          minimum: 0
+          maximum: 1
+        timeout:
+          type: integer
+          example:
+            - 1
+            - 1000
+            - 50000
+          minimum: 0
+    ActionSetting:
+      type: object
+      required:
+        - transitions
+      properties:
+        transitions:
+          $ref: '#/components/schemas/TaskStateEvents'
+        async:
+          type: boolean
+          description: 'When set to true, action events on_* will run asynchronously with further state transitions.action will not block '
+        timeout:
+          $ref: '#/components/schemas/Milliseconds'
+    AgentActions:
+      type: string
+      enum:
+        - Accept
+        - Reject
+        - Complete
+    AgentLocking:
+      type: string
+      enum:
+        - unlock
+    AgentLockState:
+      properties:
+        agent_id:
+          $ref: '#/components/schemas/Id'
+        state:
+          type: string
+          enum:
+            - locked
+            - unlocked
+    TaskStateEvents:
+      type: string
+      enum:
+        - on_scheduled
+        - on_rescheduled
+        - on_selecting
+        - on_accepted
+        - on_rejected
+        - on_assigned
+        - on_processing
+        - on_pending
+        - on_completed
+        - on_canceled
+        - on_failed
+    TaskState:
+      type: string
+      enum:
+        - Scheduled
+        - Rescheduled
+        - Selecting
+        - Accepted
+        - Rejected
+        - Assigned
+        - Processing
+        - Pending
+        - Completed
+        - Canceled
+        - Failed
+    Actions:
+      type: object
+      additionalProperties: false
+      properties:
+        on_scheduled:
+          type: array
+          items:
+            $ref: '#/components/schemas/Action'
+        on_rescheduled:
+          type: array
+          items:
+            $ref: '#/components/schemas/Action'
+        on_selecting:
+          type: array
+          items:
+            $ref: '#/components/schemas/Action'
+        on_accepted:
+          type: array
+          items:
+            $ref: '#/components/schemas/Action'
+        on_rejected:
+          type: array
+          items:
+            $ref: '#/components/schemas/Action'
+        on_assigned:
+          type: array
+          items:
+            $ref: '#/components/schemas/Action'
+        on_processing:
+          type: array
+          items:
+            $ref: '#/components/schemas/Action'
+        on_pending:
+          type: array
+          items:
+            $ref: '#/components/schemas/Action'
+        on_completed:
+          type: array
+          items:
+            $ref: '#/components/schemas/Action'
+        on_canceled:
+          type: array
+          items:
+            $ref: '#/components/schemas/Action'
+        on_failed:
+          type: array
+          items:
+            $ref: '#/components/schemas/Action'
+        settings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionSetting'
+    ActionType:
+      enum:
+        - generic
+        - noop
+        - log
+        - trace
+        - action
+        - jwt
+        - http
+        - js
+        - js_ref
+        - codeblock
+        - codeblock_ref
+        - async
+        - pipeline
+        - iteration
+    TypedAction:
+      anyOf:
+        - $ref: '#/components/schemas/IntegrationProxyAction'
+        - $ref: '#/components/schemas/HttpAction'
+        - $ref: '#/components/schemas/JavaScriptAction'
+        - $ref: '#/components/schemas/JavaScriptReferenceAction'
+        - $ref: '#/components/schemas/CodeblockAction'
+        - $ref: '#/components/schemas/CodeblockReferenceAction'
+        - $ref: '#/components/schemas/JWTCreateAction'
+        - $ref: '#/components/schemas/IterationAction'
+        - $ref: '#/components/schemas/PipelineAction'
+        - $ref: '#/components/schemas/AsyncAction'
+        - $ref: '#/components/schemas/NoopAction'
+        - $ref: '#/components/schemas/LogAction'
+        - $ref: '#/components/schemas/GenericAction'
+      discriminator:
+        propertyName: action_type
+        mapping:
+          action: '#/components/schemas/IntegrationProxyAction'
+          http: '#/components/schemas/HttpAction'
+          js: '#/components/schemas/JavaScriptAction'
+          js_ref: '#/components/schemas/JavaScriptReferenceAction'
+          codeblock: '#/components/schemas/CodeblockAction'
+          codeblock_ref: '#/components/schemas/CodeblockReferenceAction'
+          async: '#/components/schemas/AsyncAction'
+          pipeline: '#/components/schemas/PipelineAction'
+          iteration: '#/components/schemas/IterationAction'
+          noop: '#/components/schemas/NoopAction'
+          log: '#/components/schemas/LogAction'
+          generic: '#/components/schemas/GenericAction'
+      example:
+        action:
+          params:
+            agent_id: '{{task.assigned_agent.external_id}}'
+            comment: Task has been assigned to agent {{task.assigned_agent.name}}
+          type: zendesk.ticket.update
+          integration_id: 1234-1234-1234-1234
+    CommonActionProperties:
+      type: object
+      properties:
+        condition:
+          nullable: false
+          type: string
+          format: js
+          description: a javascript if not set or if it returns true then the action is executed
+          example: () => {return (task.body.branch_a===true && (task.body.branch_b===false || task.body.branch_c===true));}
+        var:
+          nullable: false
+          type: string
+          example: my_variable_name
+        timeout:
+          nullable: false
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9.223372036854776e+18
+        arguments:
+          nullable: false
+          type: array
+          items:
+            type: object
+          example:
+            - "1"
+            - 1
+            - - 1
+              - 2
+              - 3
+            - hello: null
+              world: null
+        error:
+          $ref: '#/components/schemas/ErrorHandlingConfig'
+    ErrorHandlingConfig:
+      type: object
+      properties:
+        visibility:
+          $ref: '#/components/schemas/ErrorContextPropagationBehavior'
+        handling:
+          $ref: '#/components/schemas/ErrorHandlingBehavior'
+    ErrorHandlingBehavior:
+      type: string
+      description: changes behavior if an error continues. stop - does not execute further actions in the same pipeline, continue - executes the next action regardless of a failure, enables that an error can be handled explicitly.
+      enum:
+        - stop
+        - continue
+      default: stop
+    ErrorContextPropagationBehavior:
+      type: string
+      description: controls if an error response should be added to the context, an error is only added if there is a var for that action. show - an error response is added to the context in {varName}.["error.response"], hide - does not add the error response to the context.
+      enum:
+        - show
+        - hide
+      default: show
+    ListProperties:
+      type: array
+      items:
+        $ref: '#/components/schemas/TypedAction'
+    AsyncAction:
+      type: object
+      required:
+        - action_type
+      properties:
+        action_type:
+          type: string
+          default: async
+        async:
+          $ref: '#/components/schemas/ListProperties'
+    PipelineAction:
+      type: object
+      required:
+        - action_type
+      properties:
+        action_type:
+          type: string
+          default: pipeline
+        pipeline:
+          $ref: '#/components/schemas/ListProperties'
+    IterationProperties:
+      type: object
+      required:
+        - items
+        - result
+      properties:
+        items_max:
+          type: integer
+          default: 100
+          description: ' The number of items specified for iteration. If you supply more elements, a runtime error will occur. Additionally, when increasing this limit beyond the default, consider setting the timeout property on both the state, parents and iteration. '
+        result:
+          type: string
+          enum:
+            - single
+            - full
+          default: single
+        onError:
+          type: string
+          description: on child error continue or fail the iteration
+          enum:
+            - fail
+            - continue
+          default: continue
+        items:
+          type: array
+          items:
+            type: object
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/TypedAction'
+    IterationAction:
+      type: object
+      required:
+        - action_type
+      properties:
+        action_type:
+          type: string
+          default: iteration
+        iteration:
+          allOf:
+            - $ref: '#/components/schemas/CommonActionProperties'
+            - $ref: '#/components/schemas/IterationProperties'
+    HttpActionProperties:
+      type: object
+      required:
+        - method
+        - url
+      properties:
+        body:
+          type: object
+          additionalProperties: true
+          description: payload of the http call
+          example:
+            hello: world
+        method:
+          type: string
+          description: http method
+          example: POST
+        checkCertificate:
+          type: boolean
+          default: true
+        queryParams:
+          type: object
+          description: flat key value object
+        header:
+          type: object
+          additionalProperties: true
+          example:
+            Content-Type: application/json
+        url:
+          type: string
+          example: http://my.test.url/some/path
+        mTLS:
+          type: object
+          description: any parameters of mTLS should be referenced as {{secrets.whatever.key}}, {{secrets.whatever.cert}},  {{secrets.whatever.ca_cert}} etc.
+          required:
+            - key
+            - cert
+            - ca_cert
+          properties:
+            key:
+              type: string
+              format: base64
+              description: client private key
+            cert:
+              type: string
+              format: base64
+              description: client certificate accepted by the target server
+            ca_cert:
+              type: string
+              format: base64
+              description: public CA certificate used to create the server certificate
+    Http:
+      allOf:
+        - $ref: '#/components/schemas/CommonActionProperties'
+        - $ref: '#/components/schemas/HttpActionProperties'
+    HttpAction:
+      allOf:
+        - $ref: '#/components/schemas/Action'
+        - type: object
+          properties:
+            action_type:
+              type: string
+              default: http
+            http:
+              $ref: '#/components/schemas/Http'
+    JavaScriptProperties:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          nullable: false
+          type: string
+    JavaScript:
+      allOf:
+        - $ref: '#/components/schemas/CommonActionProperties'
+        - $ref: '#/components/schemas/JavaScriptProperties'
+    JavaScriptAction:
+      allOf:
+        - $ref: '#/components/schemas/Action'
+        - type: object
+          properties:
+            action_type:
+              type: string
+              default: js
+            js:
+              $ref: '#/components/schemas/JavaScript'
+    ReferenceProperties:
+      type: object
+      minProperties: 1
+      properties:
+        identifier:
+          type: string
+          format: UUID
+          description: system unique id to address the reference.
+        name:
+          type: string
+          description: account unique name of the reference to address it
+    JavaScriptReferenceProperties:
+      type: object
+      required:
+        - ref
+      description: A reference to a stored java script. Either the identifier or the name need to be specified.
+      properties:
+        ref:
+          $ref: '#/components/schemas/ReferenceProperties'
+    JavaScriptReference:
+      allOf:
+        - $ref: '#/components/schemas/CommonActionProperties'
+        - $ref: '#/components/schemas/JavaScriptReferenceProperties'
+    JavaScriptReferenceAction:
+      allOf:
+        - $ref: '#/components/schemas/Action'
+        - type: object
+          properties:
+            action_type:
+              type: string
+              default: js_ref
+            js_ref:
+              $ref: '#/components/schemas/JavaScriptReference'
+    IntegrationProxyProperties:
+      type: object
+      required:
+        - integration_id
+        - type
+      properties:
+        integration_id:
+          type: string
+          example: 52b418036e724778a3ed41d61a977fd4
+        type:
+          type: string
+          example: ticket.create
+        params:
+          type: object
+          additionalProperties: true
+          example:
+            public: false
+            subject: task {{task.id}} --> {{task.body.subject}}
+            custom_fields: {}
+            comment: '{{task.body.description}}'
+            additional_fields: {}
+            type: task
+            priority: high
+        context:
+          type: object
+          additionalProperties: true
+          example: {}
+        queryParams:
+          type: object
+          additionalProperties: true
+          description: flat object of query parameters
+          example:
+            agent_id: "1233"
+    IntegrationProxy:
+      allOf:
+        - $ref: '#/components/schemas/CommonActionProperties'
+        - $ref: '#/components/schemas/IntegrationProxyProperties'
+    IntegrationProxyAction:
+      allOf:
+        - $ref: '#/components/schemas/Action'
+        - type: object
+          properties:
+            action_type:
+              type: string
+              default: action
+            action:
+              $ref: '#/components/schemas/IntegrationProxy'
+    LogProperties:
+      type: object
+      properties:
+        message:
+          type: string
+    LogActionData:
+      allOf:
+        - $ref: '#/components/schemas/CommonActionProperties'
+        - $ref: '#/components/schemas/LogProperties'
+    LogAction:
+      allOf:
+        - $ref: '#/components/schemas/Action'
+        - type: object
+          properties:
+            action_type:
+              type: string
+              default: log
+            log:
+              $ref: '#/components/schemas/LogActionData'
+    NoopProperties:
+      type: object
+    Noop:
+      allOf:
+        - $ref: '#/components/schemas/CommonActionProperties'
+        - $ref: '#/components/schemas/NoopProperties'
+    NoopAction:
+      allOf:
+        - $ref: '#/components/schemas/Action'
+        - type: object
+          properties:
+            action_type:
+              type: string
+              default: noop
+            noop:
+              $ref: '#/components/schemas/Noop'
+    CodeblockProperties:
+      type: object
+      required:
+        - actions
+      properties:
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Action'
+    CodeblockAction:
+      type: object
+      required:
+        - action_type
+      properties:
+        action_type:
+          type: string
+          default: codeblock
+        codeblock:
+          allOf:
+            - $ref: '#/components/schemas/CommonActionProperties'
+            - $ref: '#/components/schemas/CommonCodeblockProperties'
+            - $ref: '#/components/schemas/CodeblockProperties'
+    CodeblockReferenceProperties:
+      type: object
+      required:
+        - ref
+      description: A reference to a stored codeblock. Either the identifier or the name need to be specified.
+      properties:
+        ref:
+          $ref: '#/components/schemas/ReferenceProperties'
+    CommonCodeblockProperties:
+      type: object
+      properties:
+        parameter:
+          type: object
+          additionalProperties: true
+    CodeblockReferenceAction:
+      type: object
+      required:
+        - action_type
+      properties:
+        action_type:
+          type: string
+          default: codeblock
+        codeblock:
+          allOf:
+            - $ref: '#/components/schemas/CommonActionProperties'
+            - $ref: '#/components/schemas/CommonCodeblockProperties'
+            - $ref: '#/components/schemas/CodeblockReferenceProperties'
+    JWTCreateProperties:
+      type: object
+      required:
+        - payload
+        - header
+      properties:
+        payload:
+          description: Payload that contains claims that are statements about an entity (typically, the user) and additional data see https://jwt.io/introduction
+          type: object
+          additionalProperties: true
+          example:
+            iss: trautomations@taskrouterautomations.iam.gserviceaccount.com
+            aud: https://oauth2.googleapis.com/token
+            scope: https://www.googleapis.com/auth/spreadsheets
+        header:
+          description: The header typically consists of two parts. Type of the token, which is JWT, and the signing algorithm being used, such as HMAC SHA256 or RSA see https://jwt.io/introduction
+          type: object
+          additionalProperties: true
+          example:
+            alg: RS256
+            typ: JWT
+        signKey:
+          description: Key ued to sign the JWT, must match the type specified in the header 'alg'.
+          type: string
+          format: base64
+        expireIn:
+          $ref: '#/components/schemas/Milliseconds'
+    JWTCreate:
+      allOf:
+        - $ref: '#/components/schemas/CommonActionProperties'
+        - $ref: '#/components/schemas/JWTCreateProperties'
+    JWTCreateAction:
+      allOf:
+        - $ref: '#/components/schemas/Action'
+        - type: object
+          properties:
+            action_type:
+              type: string
+              default: jwt
+            jwt:
+              $ref: '#/components/schemas/JWTCreate'
+    GenericAction:
+      allOf:
+        - $ref: '#/components/schemas/Action'
+      additionalProperties: true
+    Action:
+      type: object
+      properties:
+        action_type:
+          type: string
+          default: generic
+      example:
+        action:
+          params:
+            agent_id: '{{task.assigned_agent.external_id}}'
+            comment: Task has been assigned to agent {{task.assigned_agent.name}}
+          type: zendesk.ticket.update
+          integration_id: 1234-1234-1234-1234
+      additionalProperties: true
+      required:
+        - action_type
+    Body:
+      additionalProperties: true
+    Error:
+      type: boolean
+      default: false
+      description: true - an error occured during task execution, false - no errors during execution
+    Timestamp:
+      type: integer
+      format: int64
+    ScheduledAt:
+      type: string
+      example: in 1w 3d 5h 10min 5sec
+      description: defines when the task will be scheduled for execution. now - as soon as possible at 1654075565950 - at the given timestamp in 1w 3d 5h 10min 5sec  - in 1 week 3 days 5 hours 10 minutes and 5 seconds
+    SubmitTask:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          $ref: '#/components/schemas/UUID'
+        queue_id:
+          $ref: '#/components/schemas/Id'
+        type:
+          $ref: '#/components/schemas/TaskType'
+        body:
+          $ref: '#/components/schemas/Body'
+        actions:
+          $ref: '#/components/schemas/Actions'
+        task_completion:
+          $ref: '#/components/schemas/TaskCompletionSettings'
+        selection_settings:
+          $ref: '#/components/schemas/TaskSelectionSettings'
+        scheduled_at:
+          $ref: '#/components/schemas/ScheduledAt'
+    UpdateTask:
+      $ref: '#/components/schemas/Task'
+    TaskList:
+      type: object
+      properties:
+        _metadata:
+          $ref: '#/components/schemas/PageMetadata'
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+    BaseTask:
+      type: object
+      required:
+        - body
+      properties:
+        id:
+          $ref: '#/components/schemas/UUID'
+        queue_id:
+          $ref: '#/components/schemas/Id'
+        session_id:
+          $ref: '#/components/schemas/Id'
+        customer_id:
+          $ref: '#/components/schemas/Id'
+        agent_id:
+          $ref: '#/components/schemas/Id'
+        created_at:
+          $ref: '#/components/schemas/TimestampInMsUTC'
+        body:
+          $ref: '#/components/schemas/Body'
+        type:
+          $ref: '#/components/schemas/TaskType'
+        state:
+          $ref: '#/components/schemas/TaskState'
+        actions:
+          $ref: '#/components/schemas/Actions'
+        task_completion:
+          $ref: '#/components/schemas/TaskCompletionSettings'
+        selection_settings:
+          $ref: '#/components/schemas/TaskSelectionSettings'
+        scheduled_at:
+          $ref: '#/components/schemas/ScheduledAt'
+    TemplatedTask:
+      allOf:
+        - $ref: '#/components/schemas/BaseTask'
+        - type: object
+    Task:
+      required:
+        - scheduled_at
+        - id
+        - customer_id
+        - created_at
+        - state
+        - type
+      allOf:
+        - $ref: '#/components/schemas/BaseTask'
+        - type: object
+          properties:
+            has_error:
+              $ref: '#/components/schemas/Error'
+    TaskTemplate:
+      required:
+        - required_fields
+        - task
+      type: object
+      properties:
+        task:
+          $ref: '#/components/schemas/TemplatedTask'
+        required_fields:
+          type: array
+          items:
+            type: string
+    TaskEvent:
+      required:
+        - type
+      allOf:
+        - $ref: '#/components/schemas/BaseTask'
+        - type: object
+          properties:
+            context:
+              $ref: '#/components/schemas/Body'
+            event_id:
+              $ref: '#/components/schemas/UUID'
+            scheduled_at:
+              $ref: '#/components/schemas/Timestamp'
+            has_error:
+              $ref: '#/components/schemas/Error'
+            event_start:
+              $ref: '#/components/schemas/Timestamp'
+            event_end:
+              $ref: '#/components/schemas/Timestamp'
+    LogMetadata:
+      type: object
+      properties:
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        start:
+          $ref: '#/components/schemas/Milliseconds'
+        end:
+          $ref: '#/components/schemas/Milliseconds'
+    ActionEvent:
+      type: object
+      required:
+        - input
+        - error
+      properties:
+        type:
+          $ref: '#/components/schemas/ActionType'
+        id:
+          $ref: '#/components/schemas/Id'
+        parent:
+          $ref: '#/components/schemas/Id'
+        input:
+          type: object
+          additionalProperties: true
+        context:
+          type: object
+          additionalProperties: true
+        output:
+          type: object
+        error:
+          type: object
+          additionalProperties: true
+        meta:
+          $ref: '#/components/schemas/LogMetadata'
+        task:
+          type: object
+          properties:
+            execution_id:
+              $ref: '#/components/schemas/UUID'
+            id:
+              $ref: '#/components/schemas/UUID'
+            account_id:
+              type: string
+            type:
+              type: string
+            state:
+              $ref: '#/components/schemas/TaskState'
+    Token:
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        client_id:
+          type: string
+        token_type:
+          type: string
+        scope:
+          type: string
+        expires_in:
+          $ref: '#/components/schemas/Milliseconds'
+        expire_time:
+          $ref: '#/components/schemas/TimestampInMsUTC'
+    Agent:
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        number:
+          type: string
+        name:
+          type: string
+        selectionParams:
+          type: object
+          additionalProperties: true
+    InterruptionTargetStates:
+      type: string
+      enum:
+        - Completed
+        - Canceled
+        - Failed
+    PageMetadata:
+      type: object
+      properties:
+        page:
+          type: integer
+        per_page:
+          type: integer
+        page_count:
+          type: integer
+        total_count:
+          type: integer
+    ErrorResponse:
+      type: object
+      description: Babelforce error response, indicating in error_message the problem and details in error_detail
+      additionalProperties: false
+      properties:
+        error_detail:
+          description: detailed description of what went wrong during the request
+          type: string
+        error_message:
+          description: generic error message
+          type: string
+    ManualActionRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    TemplateStyle:
+      type: string
+      default: hierarchy
+      enum:
+        - flat
+        - hierarchy
+    Timezone:
+      type: string
+      default: UTC
+      example: Europe/Berlin
+      description: 'A valid IANA timezone for examples see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones. Note: Be careful when setting fire times between the hours of the morning when “daylight savings” changes occur in your locale (for US locales, this would typically be the hour before and after 2:00 AM - because the time shift can cause a skip or a repeat depending on whether the time moves back or jumps forward. You may find this wikipedia entry helpful in determining the specifics to your locale https://secure.wikimedia.org/wikipedia/en/wiki/Daylight_saving_time_around_the_world'
+    SubmitTaskSchedule:
+      type: object
+      additionalProperties: false
+      required:
+        - cron
+        - name
+        - task
+      properties:
+        cron:
+          type: string
+        name:
+          type: string
+        task:
+          type: object
+        template_id:
+          type: string
+        template_style:
+          $ref: '#/components/schemas/TemplateStyle'
+        timezone:
+          $ref: '#/components/schemas/Timezone'
+    TaskSchedule:
+      required:
+        - cron
+        - customer_id
+      properties:
+        cron:
+          type: string
+        name:
+          type: string
+        task:
+          type: object
+          additionalProperties: true
+        template_id:
+          type: string
+        template_style:
+          $ref: '#/components/schemas/TemplateStyle'
+        timezone:
+          $ref: '#/components/schemas/Timezone'
+    TaskScheduleList:
+      type: object
+      properties:
+        _metadata:
+          $ref: '#/components/schemas/PageMetadata'
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskSchedule'
+  parameters:
+    pathLockState:
+      name: lockState
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/AgentLocking'
+    pathTaskState:
+      name: taskState
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/TaskState'
+    queryCustomerId:
+      name: customer_id
+      in: query
+      schema:
+        format: uuid
+        description: a babelforce accountId
+        type: string
+    pathTaskId:
+      name: taskId
+      in: path
+      required: true
+      description: id of the task
+      schema:
+        $ref: '#/components/schemas/UUID'
+    pathAgentId:
+      name: agentId
+      in: path
+      required: true
+      description: id of the agent
+      schema:
+        type: string
+    agentActionOnTask:
+      name: agentAction
+      in: path
+      required: true
+      description: agent action on a task
+      schema:
+        $ref: '#/components/schemas/AgentActions'
+    interruptTo:
+      name: interruptTo
+      in: path
+      required: true
+      description: state to force a task in via interruption
+      schema:
+        $ref: '#/components/schemas/InterruptionTargetStates'
+    queryPage:
+      name: page
+      in: query
+      required: false
+      description: page index, "1" based.
+      schema:
+        minimum: 1
+        format: int64
+        type: integer
+    queryPageSize:
+      name: page_size
+      in: query
+      required: false
+      description: page size, "1..100" based.
+      schema:
+        minimum: 1
+        format: int64
+        type: integer
+        maximum: 100
+    queryFilter:
+      name: filter
+      in: query
+      schema:
+        type: string
+      required: false
+      examples:
+        in state example:
+          summary: In filter
+          value: (state=in=( 'Scheduled', 'Assigned'))
+        a complex example:
+          summary: A complex example
+          value: (id=in=('id1','id3','id5','id6') and state=out=('Failed')) or (state=in=('Pending'))
+        equals type example:
+          summary: Equals type
+          value: type==babelforce.call.inbound
+        not equals type example:
+          summary: Not equals customer_id type
+          value: customer_id!=123213-123123-123-12-3
+        greater than type example:
+          summary: Greater than customer_id type
+          value: created_at=gt=1610115403866
+        less than type example:
+          summary: Less than customer_id type
+          value: scheduled_at=lt=1610115403866
+    taskScheduleName:
+      name: taskScheduleName
+      description: Task schedule name to be deleted
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    defaultErrorResponse:
+      description: Babelforce error response, indicating in error_message the problem and details in error_detail
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    taskListResponse:
+      description: enter description
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TaskList'
+    taskResponse:
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Task'
+    taskScheduleListResponse:
+      description: list task schedules
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TaskScheduleList'
+    taskScheduleResponse:
+      description: single task schedule
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TaskSchedule'
+  requestBodies:
+    submitTaskBody:
+      description: submit a new task
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SubmitTask'
+        application/yaml:
+          schema:
+            $ref: '#/components/schemas/SubmitTask'
+    updateTaskBody:
+      description: update a task
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Task'
+    manualAction:
+      description: manual action reason
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ManualActionRequest'
+    submitTaskScheduleBody:
+      description: submit a new task schedule
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SubmitTaskSchedule'
+        application/yaml:
+          schema:
+            $ref: '#/components/schemas/SubmitTaskSchedule'
+paths:
+  /api/v3/tasks/schedules:
+    get:
+      description: List cron scheduled tasks
+      operationId: getTaskSchedules
+      security:
+        - bearerAuth: []
+        - oauth2:
+            - '*'
+      tags:
+        - scheduleManager
+      parameters:
+        - $ref: '#/components/parameters/queryPage'
+        - $ref: '#/components/parameters/queryPageSize'
+      responses:
+        "200":
+          $ref: '#/components/responses/taskScheduleListResponse'
+    post:
+      description: Schedule new task
+      operationId: submitTaskSchedule
+      security:
+        - bearerAuth: []
+        - oauth2:
+            - '*'
+      tags:
+        - scheduleManager
+      requestBody:
+        $ref: '#/components/requestBodies/submitTaskScheduleBody'
+      responses:
+        "204":
+          description: Schedule created
+  /api/v3/tasks/schedules/{taskScheduleName}:
+    get:
+      description: Get cron schedule task by name
+      operationId: getTaskSchedule
+      security:
+        - bearerAuth: []
+        - oauth2:
+            - '*'
+      tags:
+        - scheduleManager
+      parameters:
+        - $ref: '#/components/parameters/taskScheduleName'
+      responses:
+        "200":
+          $ref: '#/components/responses/taskScheduleResponse'
+        "404":
+          description: not found
+    delete:
+      description: Delete scheduled task
+      operationId: deleteScheduleTask
+      security:
+        - bearerAuth: []
+        - oauth2:
+            - '*'
+      tags:
+        - scheduleManager
+      parameters:
+        - $ref: '#/components/parameters/taskScheduleName'
+      responses:
+        "204":
+          description: Schedule deleted
+servers:
+  - url: https://services.babelforce.com
+    description: Production
