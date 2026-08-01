@@ -4,7 +4,7 @@ title: "Decide whether a whole-host template needs an operator allowlist"
 pillar: Bridge
 status: ready
 priority: 4
-note: "four connectors template the ENTIRE authority, so Slot::Host constrains the value only to being a hostname — 127.0.0.1 and 169.254.169.254 both compose. Not a defect; a thinner layer than the docs claimed"
+note: "DECIDED 2026-08-01 — option (b): the connector declares an allowlist or suffix and the loader REFUSES a whole-host template that declares neither. Four connectors template the ENTIRE authority, so Slot::Host constrains the value only to being a hostname — 127.0.0.1 and 169.254.169.254 both compose. Not a defect; a thinner layer than the docs claimed"
 ---
 
 # Decide whether a whole-host template needs an operator allowlist
@@ -34,7 +34,7 @@ Pinned by `connector-pack`'s `a_whole_host_template_is_constrained_only_to_being
 
 ## Acceptance
 
-- [ ] A decision, recorded in a design note, among at least these:
+- [x] A decision, recorded below, among at least these:
       1. **Nothing changes.** The SSRF guard is the layer, the tenant supplies its own host for its
          own credential, and a tenant choosing where its own secret goes is not an escalation.
          Defensible — but it must be *chosen*, and the asymmetry with the suffix-shaped connectors
@@ -49,8 +49,30 @@ Pinned by `connector-pack`'s `a_whole_host_template_is_constrained_only_to_being
 - [ ] Either way, the multi-tenant case is addressed explicitly: whether tenant A supplying a host
       for its own connection can affect tenant B, and why not.
 
+## The decision (2026-08-01)
+
+**Option (b): the connector declares an allowlist or suffix, and the loader refuses a whole-host
+template that declares neither.**
+
+Derived from this repository's own principles rather than from taste:
+
+- *"A connector declares what it needs, and nothing grants itself access."* A connector that templates
+  its entire authority is asking for an unbounded grant and currently says nothing about it. Making it
+  declare the bound is the same move the credential model already makes.
+- *"The vendor spec is the source of truth; drift is detected, not absorbed."* Which hosts a vendor
+  serves is a **vendor fact**, so it belongs in the provider definition where a machine can check it —
+  not in a deployment where it is re-decided, or forgotten, per operator.
+- *"Refuse; never repair."* A loader that accepts a whole-host template with no bound is absorbing the
+  gap rather than detecting it.
+
+**Why not the others.** (a) is passive: it leaves the asymmetry between seven suffix-shaped connectors
+and four unbounded ones undocumented and unchecked, which is how the README came to claim a layer that
+was not there. (c) defers a catalogue fact to deploy time, which contradicts the compiler-first north
+star and makes the guarantee vary by deployment — precisely the property flux-exchange cannot build on
+when it promises callers "cannot name a host".
+
 ## Progress
-- (not started)
+- Decision recorded. Implementation not started.
 
 ## Notes
 - Worth weighing before it feels urgent: the threat is not obviously a tenant misdirecting **its
