@@ -973,6 +973,14 @@ pub struct Operation {
     /// to mint a credential: return a handle, not the secret. When either lands, this field is what
     /// they are declared through; the refusal below is what changes, not the declaration.
     ///
+    /// # This field or [`produces_credential`](Self::produces_credential), never both (C-432)
+    ///
+    /// The two state one fact and prescribe opposite dispositions, so declaring both is refused —
+    /// see `validate_one_credential_disposition`. **The discriminator is purpose, not shape:** this
+    /// field is for a credential that arrives *incidentally*, beside the result the operation exists
+    /// to deliver, where diverting the whole result would delete the answer. When the credential
+    /// **is** the answer, the operation is a mint and declares `produces_credential` instead.
+    ///
     /// # Empty for every shipped connector, deliberately
     ///
     /// Because an operation carrying one cannot be selected. `skip_serializing_if` keeps the encoded
@@ -992,6 +1000,13 @@ pub struct Operation {
     /// This one says *"a credential arrives here and it is to be diverted into the store"*, which is
     /// an operation that can ship: the value travels from the response into the bound
     /// `CredentialStore` and the caller receives the **handle**.
+    ///
+    /// **An operation declares one or the other, never both** (C-432), and the loader refuses the
+    /// pair — see `validate_one_credential_disposition`. Nothing about the pointer, the schema or
+    /// the field's name distinguishes them, because the discriminator is **purpose**: declare this
+    /// field when the credential *is* the answer, and `credential_response` when it arrives
+    /// *incidentally* beside the answer, where diverting the result would delete what the caller
+    /// asked for.
     ///
     /// # The declared output is the handle, not the vendor's body
     ///

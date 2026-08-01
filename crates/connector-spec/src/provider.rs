@@ -4596,8 +4596,14 @@ fn validate_operations(connector: &Connector, problems: &mut Vec<String>) {
         }
 
         validate_repeatability_condition(operation, problems);
-        validate_credential_response(operation, problems);
-        validate_produces_credential(connector, operation, problems);
+        // The two credential declarations are checked as a pair before either is checked alone:
+        // when both are present the operation is incoherent at the root, and the rules downstream
+        // of each would render two contradicting instructions for one fact. See
+        // `validate_one_credential_disposition`, which returns whether it took the decision.
+        if !validate_one_credential_disposition(operation, problems) {
+            validate_credential_response(operation, problems);
+            validate_produces_credential(connector, operation, problems);
+        }
 
         if let Some(alternatives) = &operation.auth {
             validate_requirements(
@@ -4703,6 +4709,52 @@ fn bool_word(value: bool) -> &'static str {
     } else {
         "false"
     }
+}
+
+/// **One fact, one disposition** — C-432's reconciliation of C-430 and C-136.
+///
+/// [`Operation::credential_response`] and [`Operation::produces_credential`] state the same fact —
+/// a credential arrives in this operation's response — and prescribe opposite outcomes. C-430's
+/// field withholds the operation; C-136's ships it and returns a handle. Declared together they ask
+/// for both, and before this story the loader obliged: `credential_response`'s stock refusal told
+/// the author to withhold an operation the sibling declaration says ships, with nothing stating
+/// which governs. Two rules in one repository is the thing C-432 exists to remove.
+///
+/// **The discriminator is purpose, not shape.** Both fields point at a credential in a response; no
+/// inspection of the pointer, the schema or the field name can tell them apart, because the
+/// difference is what the operation is *for*:
+///
+/// - the credential **is** the answer — a token exchange, a login — so diverting it into the store
+///   and returning the handle costs the caller nothing. That is `produces_credential`.
+/// - the credential arrives **incidentally**, beside the meeting or the server the operation exists
+///   to deliver. Diverting the whole result would delete the answer, so the operation is withheld
+///   until the value can be redacted where it sits — `credential_response`, and C-79.
+///
+/// That sentence is what the refusal has to carry, because it is the one thing an author cannot
+/// re-derive by reading either field's own documentation.
+///
+/// Returns `true` when it refused, and the pair-wise check is then the *only* thing said about this
+/// operation's credential declarations: the per-field rules downstream are all conditioned on a
+/// disposition this operation has not yet chosen, so running them would bury the choice under
+/// consequences of both branches.
+fn validate_one_credential_disposition(operation: &Operation, problems: &mut Vec<String>) -> bool {
+    if operation.credential_response.is_empty() || operation.produces_credential.is_none() {
+        return false;
+    }
+    let id = operation.id.as_str();
+    problems.push(format!(
+        "operation {id:?} declares both `credential_response` (at {}) and `produces_credential`, \
+         which state one fact — a credential arrives in this response — and prescribe opposite \
+         dispositions. Exactly one governs, and which one is a question about the operation's \
+         **purpose**, not about the shape of the value: if the credential *is* the answer, as a \
+         token exchange's is, declare only `produces_credential` and the value is diverted into the \
+         bound `CredentialStore` with the caller receiving the handle. If the credential arrives \
+         **incidentally**, beside the result the operation exists to deliver, declare only \
+         `credential_response` — diverting the whole result would delete the answer, so the \
+         operation is withheld until the value can be redacted where it sits (C-79)",
+        quoted(&operation.credential_response)
+    ));
+    true
 }
 
 /// **No operation returns a secret** (C-430) — the gate, reading the declaration that says one does.

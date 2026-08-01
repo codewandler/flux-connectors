@@ -45,7 +45,10 @@
 # the partition on a live two-service connector and can no longer do so. **C-136 does NOT restore these**
 # — it diverts the whole result of an operation that exists to mint a credential, and `ApiTokens` arrives
 # beside the server this call exists to return. `Servers[].ApiTokens` also carries N servers' tokens, which
-# one credential address cannot name. C-79 is the mechanism; what would restore both
+# one credential address cannot name. **C-432 does not restore them either** — it settled the choice
+# between the two credential declarations (the discriminator is **purpose, not shape**, so a
+# credential arriving incidentally stays `credential_response`'s case) and it did not make a marked
+# response shippable. C-79 is the mechanism; what would restore both
 # the operations and the demonstration; restore them in the same commit that deletes their entries
 # from `crates/connector-spec/tests/credential_response.rs`.
 #
