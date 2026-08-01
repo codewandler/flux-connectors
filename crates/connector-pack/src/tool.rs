@@ -467,9 +467,19 @@ impl Tool for Operation {
     /// The **same** `ctx` travels through, so the redactor, the evidence log and the cancellation
     /// token the host bound are the ones the request is made under — and the redactor is the one the
     /// credential was registered with a moment earlier. The response comes back as `http.request`
-    /// produced it — one flat string, `HTTP {status}\n{headers}\n{body}` — and is returned unshaped:
-    /// it is a *result*, a 404 included, and field-selecting it needs `http.request` to return a
-    /// record. That is a seam story on flux, filed rather than faked.
+    /// produced it and is returned **unshaped**: it is a *result*, a 404 included.
+    ///
+    /// **What "as produced" now means changed under this crate, without a compile error** (C-403).
+    /// Through flux-web 0.42 the canonical `content` was one flat string,
+    /// `HTTP {status}\n{headers}\n{body}`, and field-selecting a response was the caller's problem —
+    /// recorded here as a seam story on flux, filed rather than faked. flux-web **0.43** landed it:
+    /// `content` is the record `{status, headers, body}`, JSON encoded, with `body` parsed when the
+    /// response is a JSON object or array, and the flat block kept as the model-facing `view`.
+    ///
+    /// Nothing in this method moved, which is exactly why it is written down. A consumer that
+    /// parsed the block gets no type error from the change, only different bytes — so the shape is
+    /// pinned by `crates/connectors-api/tests/live_egress.rs`, against a real `HttpRequestTool`,
+    /// which is the only place in this repository where one answers.
     ///
     /// It reads as one line because C-145 moved the two that were here behind
     /// [`Transport`](crate::Transport), unchanged. The live arm is still the only thing a registered

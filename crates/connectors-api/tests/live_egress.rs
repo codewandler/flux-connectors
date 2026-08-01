@@ -340,15 +340,100 @@ async fn the_vendor_receives_exactly_the_request_the_pack_built() {
 
     // The four fields above are the acceptance; these two are the sanity that the exchange
     // completed rather than the server having recorded a request it then failed to answer.
+    //
+    // **Read off `view()`, not `content`** (C-403). Since flux-web 0.43 the canonical `content` is
+    // the `{status, headers, body}` record and the flat block is the model-facing view; these two
+    // want the block, and what the record carries is
+    // [`the_response_comes_back_as_a_record_not_a_flat_string`]'s subject rather than this test's.
     assert!(
-        result.content.starts_with("HTTP 200 OK"),
+        result.view().starts_with("HTTP 200 OK"),
         "the vendor's response did not come back: {}",
-        result.content
+        result.view()
     );
     assert!(
-        result.content.contains("chatcmpl-loopback"),
+        result.view().contains("chatcmpl-loopback"),
         "the vendor's body did not come back: {}",
-        result.content
+        result.view()
+    );
+    assert!(!result.is_error, "a 200 is not a tool error");
+}
+
+/// **What a caller gets back, pinned** (C-403).
+///
+/// The one assertion in this repository that a *consumer* of `connector-pack` can be broken by
+/// without a compile error. `Operation::execute` returns the transport's [`ToolResult`] unchanged,
+/// so the shape of that result is flux-web's to decide and this repository's to state — and a host
+/// parsing the old flat block against the new record gets no type error, only a silent behaviour
+/// change. So it is pinned here, where a real `HttpRequestTool` answers a real response.
+///
+/// **Since flux-web 0.43 the canonical `content` is the record `{status, headers, body}`**, JSON
+/// encoded, with `body` *parsed* when the response is a JSON object or array. The flat
+/// `HTTP {status}\n{headers}\n{body}` block survives as the model-facing `view`, which is why both
+/// halves are asserted: a bump that shaped one and not the other would be a caller reading the wrong
+/// one of two plausible strings.
+///
+/// The `content != view` assertion is the tripwire for the version this file used to run against.
+/// `ToolResult::view()` falls back to `content` when no view is set, so a transport that shaped
+/// nothing at all would satisfy every "the block is still there" assertion above it.
+#[tokio::test]
+async fn the_response_comes_back_as_a_record_not_a_flat_string() {
+    let vendor = Vendor::start().await;
+    let app = App::with_web_options(
+        env!("CARGO_MANIFEST_DIR"),
+        WebOptions {
+            private_net: PrivateNetAllow::Hosts(vec!["127.0.0.1".to_owned()]),
+            ..WebOptions::default()
+        },
+    )
+    .expect("the crate root exists");
+
+    let operation = projected(&app, retargeted_at(OPERATION, &vendor.origin)).await;
+    let result = operation
+        .execute(&app.context(), params())
+        .await
+        .expect("the request reaches the loopback vendor");
+
+    let record: Value = serde_json::from_str(&result.content).unwrap_or_else(|error| {
+        panic!(
+            "the canonical `content` is not the `{{status, headers, body}}` record a caller \
+             field-selects from ({error}); it is: {}",
+            result.content
+        )
+    });
+
+    assert_eq!(
+        record.get("status"),
+        Some(&json!(200)),
+        "`status` must be the number a caller compares, not text: {record}"
+    );
+    assert!(
+        record
+            .get("headers")
+            .is_some_and(|headers| headers.is_object()),
+        "`headers` must be a map a caller can read a name out of: {record}"
+    );
+    // The whole point of the record: `$resp.body.id` rather than a substring search over a block.
+    assert_eq!(
+        record.pointer("/body/id"),
+        Some(&json!("chatcmpl-loopback")),
+        "the vendor's JSON body must arrive parsed under `body`: {record}"
+    );
+    assert_eq!(
+        record.pointer("/body/object"),
+        Some(&json!("chat.completion")),
+        "the vendor's JSON body must arrive parsed under `body`: {record}"
+    );
+
+    // And the flat block is still reachable — as the model-facing view, and only there.
+    assert!(
+        result.view().starts_with("HTTP 200 OK"),
+        "the flat block no longer survives as the model-facing view: {}",
+        result.view()
+    );
+    assert_ne!(
+        result.view(),
+        result.content,
+        "`view()` fell back to `content`, so the transport shaped nothing"
     );
     assert!(!result.is_error, "a 200 is not a tool error");
 }

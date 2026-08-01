@@ -563,10 +563,16 @@ These failures are recorded decisions. Do not “fix” one without reading its 
   Two things used to be missing here, and **both have since landed**:
 
   1. ~~An `http.request` implementation in the dependency graph.~~ **Closed.**
-     `codewandler-flux-web` is published at 0.41.1, matching the pinned flux 0.41, and
+     `codewandler-flux-web` sits on the engine line this workspace pins — 0.45 since C-403 — and
      `connectors-api` constructs its `HttpRequestTool` once and hands it to every operation as the
      `Egress`. Note what did *not* change: `connector-pack`'s own tests still pass a stub, and still
      say so — the crate must never link a client.
+
+     **The engine line is not repeated here.** It is recorded once, in
+     `crates/connector-cli/tests/flux_engine_line.rs` (`ENGINE_LINE`/`SPEC_LINE`), which requires
+     every `codewandler-flux-*` requirement in `[workspace.dependencies]` to state it and the lock to
+     carry one engine line rather than two. Bumping flux is a value change in that constant; a
+     version quoted in prose is the hand-typed figure this file already warns about elsewhere.
   2. ~~A host to bind it.~~ **Closed.** `crates/connectors-api` constructs the registry, binds the
      secret store and the transport, and runs the loop. It is not the `crates/connectors-app` the
      older text names: the loopback narrowing that crate was designed under was superseded by
