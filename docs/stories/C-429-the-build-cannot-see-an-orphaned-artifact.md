@@ -2,8 +2,7 @@
 id: C-429
 title: "`build` cannot see a committed artifact it did not write, so a stale rendering ships indefinitely"
 pillar: Build
-status: in-progress
-priority: 2
+status: done
 areas: [connector-cli]
 note: "hit THREE times in one story (C-417) — connectors/babelforce.flux, its manifest, and crates/catalog/ops/babelforce/babelforce-token.flux each survived a full `build` + `diff` reporting 'up to date' while belonging to no plan. All three were deleted by hand, which is not a mechanism"
 ---

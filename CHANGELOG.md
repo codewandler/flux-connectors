@@ -7,6 +7,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`build` sees the artifact no plan claims, and refuses to ship it** (C-429). `build` and `diff`
+  compared each *planned* artifact against what was committed and had no view of the inverse: a file
+  under an artifact root that **no plan claims**. A rendering whose operation was deselected was never
+  looked at again, and `diff` reported `N artifacts up to date` with a straight face. It bit **nine
+  times across three stories** in a single day, every one deleted by hand — which worked only because
+  the diffs happened to be under review.
+
+  **It refuses; it does not remove.** A root is *derived* from what the emitter says it writes, so an
+  emitter bug is a mis-derived root, and deleting on one turns a bug into data loss. Removal is the
+  cheap half — one `git rm`, reviewed in the same diff as the change that orphaned the file — while
+  *noticing* was the expensive half. The refusal lands before any write, so a refused build leaves the
+  tree byte-identical.
+
+  Roots are **derived, never listed**: every planned artifact now declares which directory family it
+  belongs to, and that is a required argument, so an artifact cannot reach the tree without its author
+  answering the question. A singleton's directory is deliberately not a root, which is what keeps
+  `Cargo.lock` and `crates/catalog/src/lib.rs` out of the report.
+
 ### Fixed
 
 - **Four operations that returned a secret are withheld, and a declaration now gates it** (C-430).
