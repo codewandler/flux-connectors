@@ -31,9 +31,12 @@ that it **reaches a model as a tool**. Without the split, a full-coverage connec
 - [x] An unexposed operation is still **catalogued and callable**: it appears in the manifest's
       `operations` list, in `catalog.json`, and in the embedded catalogue, and `connector-pack` will
       still build a request for it. Only the `ToolSpec` projection is withheld.
-      → `connector-cli/tests/exposure_artifacts.rs` (module, manifest, embedded catalogue);
-      `connector-pack/tests/exposure.rs::an_unexposed_operation_composes_exactly_the_request_an_exposed_one_composes`.
-      The withholding is one `continue` in `connector-pack/src/lib.rs:784`.
+      → `connector-cli/tests/exposure_artifacts.rs` (module, manifest, embedded catalogue, catalog.json);
+      `connector-pack/tests/exposure.rs::an_unexposed_operation_composes_exactly_the_request_an_exposed_one_composes`
+      and `::every_shipped_operation_resolves_whether_or_not_it_is_exposed`.
+      **Two seams**: `pack` (model-facing, withholds) at `connector-pack/src/lib.rs:789`, and
+      `resolve` (caller-facing, withholds nothing) at `lib.rs:842`, which
+      `connectors-api/src/exec.rs:88` executes through.
 - [x] The catalogue distinguishes the two states positively — a consumer can tell "not exposed" from
       "exposed", which is the distinction
       [C-235](C-235-the-catalogue-cannot-say-an-operation-is-public.md) needs and cannot express.
@@ -68,11 +71,33 @@ that it **reaches a model as a tool**. Without the split, a full-coverage connec
   wants a typed column, that is a whole-catalogue regeneration the coordinator runs, not this story.
 - **`connector-pack` changed although `areas` does not list it.** Nothing else could withhold the
   tool: the pack registers native Rust `Tool`s and bypasses flux's own op machinery, so `expose` in
-  the emitted Flux is inert until `install` consults it. Filtered in the registration loop rather than
-  in `Operation::project`, deliberately — projection is what makes an operation *callable*, and
-  refusing there would have withheld the call along with the tool.
+  the emitted Flux is inert until `install` consults it.
+- **Corrected at review: filtering the registry alone made unexposed mean *uncallable*.** A
+  `ToolRegistry` is both the advertisement surface (`specs`, which a host hands a model) and the
+  resolution surface (`get`, which an execute route reads), so the first landing's filter withheld the
+  call as a side effect of withholding the tool — and `connectors-api/src/exec.rs`, the only execute
+  path in the workspace, resolved through exactly that registry. An unexposed operation was
+  catalogued, documented, manifest-listed and unreachable, which is this story inverted and would have
+  sunk the epic's premise (babelforce's ~388 callable-but-unexposed operations). The fix is a second
+  seam: `connector_pack::resolve` projects and admits **one named operation regardless of exposure**,
+  under the identical flux admission checks a packed tool passes, and `exec.rs` goes through it.
+  `pack` stays model-facing. This also made `exec.rs` project one operation per request instead of
+  every operation its provider ships.
+- **Three tests re-cut that would have forbidden the feature.** `catalog/tests/embedded_operations.rs`
+  asserted `meta.expose` of every embedded op; it now asserts the loaded flag **agrees with the
+  emitted text**, which is a claim about renderings rather than about curation.
+  `connector-pack/tests/projection.rs` asserted every operation resolves in the packed registry and
+  that the counts match; both are now scoped to the exposed set. My own first-landing test
+  "every shipped operation is exposed" had the same defect and was replaced by the two durable
+  invariants: the registered set is exactly the exposed set, and **every** operation resolves.
 - **Two golden error snapshots re-recorded** (`authored-input-schema`, `operation-auth-typo`): both
   embed the loader's accepted-key list, which now names `expose`. The new text is strictly better.
+- **The `false` branch is tested where the type system allows.** `catalog::Operation` is
+  `#[non_exhaustive]`, so no unexposed catalogue entry can be built outside the `catalog` crate and
+  nothing shipped is unexposed yet. `spec::declares_exposure` — the exact predicate `pack` branches on
+  — is unit-tested in both directions against a real rendering with one token changed, and a rendering
+  that states no `expose` at all is pinned to **fail open** (`CompositeOpMeta::default()` is `true`),
+  so the accidental failure mode is a tool staying visible rather than silently vanishing.
 - Not done, and not this story's job: no shipped provider declares `expose = false` yet. Babelforce
   declaring the inverse is the payoff and belongs with the connector that needs it.
 

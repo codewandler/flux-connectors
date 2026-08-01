@@ -132,3 +132,47 @@ fn the_embedded_catalogue_carries_an_unexposed_operation_and_its_flux() {
          thing telling a host not to register it:\n{audit}"
     );
 }
+
+/// **`catalog.json` carries it too**, which the Acceptance names and which is the surface an outside
+/// consumer reads.
+///
+/// The exposure travels inside each operation's published `flux` string rather than as a column of
+/// its own — flux's formatter writes the `expose` line unconditionally, so the fact is already there
+/// and a column would have restated it. This test is what stops that from being an accident: it
+/// holds trivially today and would fail the moment the published document stopped carrying the
+/// rendering.
+#[test]
+fn catalog_json_publishes_each_operations_declared_exposure() {
+    let published = built("exposure-catalog-json").read("web/public/catalog.json");
+    let document: serde_json::Value =
+        serde_json::from_str(&published).expect("catalog.json is valid JSON");
+
+    let operations = document["providers"][0]["operations"]
+        .as_array()
+        .expect("the provider publishes its operations");
+
+    let mut seen = 0;
+    for operation in operations {
+        let id = operation["id"].as_str().expect("an operation id");
+        let flux = operation["flux"]
+            .as_str()
+            .expect("an operation's rendering");
+
+        let expected = match id {
+            "acme-ticket-show" => "expose true",
+            "acme-ticket-audit" => "expose false",
+            other => panic!("unexpected operation `{other}` in the published catalogue"),
+        };
+        assert!(
+            flux.contains(expected),
+            "`{id}` must publish `{expected}`; without it a consumer of catalog.json cannot tell a \
+             withheld operation from an advertised one:\n{flux}"
+        );
+        seen += 1;
+    }
+
+    assert_eq!(
+        seen, 2,
+        "both operations must reach the published catalogue"
+    );
+}

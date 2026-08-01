@@ -73,8 +73,15 @@ fn every_provider() -> Vec<&'static str> {
 /// This is the whole contract in one place: if `pack` does not install, if a name is projected
 /// wrongly, or if two operations collide into one registry entry, this fails and names the
 /// operation.
+///
+/// **Scoped to the exposed operations** (C-413). `pack` is the model-facing seam and withholds
+/// operations declaring `expose = false`, so "every operation resolves" stopped being the invariant
+/// the day exposure became a declaration; the invariant is that **exactly the exposed ones do**.
+/// Written as a filter rather than as an assertion that everything is exposed, so the first provider
+/// to ship an unexposed operation is not failed here for using the feature. An unexposed operation's
+/// own reachability is `exposure.rs`'s subject, through `resolve`.
 #[test]
-fn every_shipped_operation_projects_to_a_registrable_spec() {
+fn every_shipped_exposed_operation_projects_to_a_registrable_spec() {
     let providers = every_provider();
     let mut registry = ToolRegistry::new();
 
@@ -85,6 +92,18 @@ fn every_shipped_operation_projects_to_a_registrable_spec() {
     for operation in catalog::operations() {
         let dotted = connector_pack::dotted_name(operation.id)
             .unwrap_or_else(|error| panic!("`{}` has no dotted tool name: {error}", operation.id));
+
+        if !connector_pack::is_exposed(operation)
+            .unwrap_or_else(|error| panic!("`{}` reads its exposure: {error}", operation.id))
+        {
+            assert!(
+                registry.get(&dotted).is_none(),
+                "`{}` declares `expose false` and must not be registered — the registry is what a \
+                 host advertises to a model",
+                operation.id
+            );
+            continue;
+        }
 
         let tool = registry.get(&dotted).unwrap_or_else(|| {
             panic!(
@@ -120,7 +139,7 @@ fn every_shipped_operation_projects_to_a_registrable_spec() {
     assert_eq!(
         registry.names().len(),
         projected,
-        "the registry holds a different number of tools than the catalogue offers"
+        "the registry holds a different number of tools than the catalogue exposes"
     );
 }
 

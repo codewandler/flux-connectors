@@ -837,6 +837,14 @@ pub struct Operation {
     /// - **exposed** — it additionally reaches a model as a tool. That is this field, and it is the
     ///   only thing withheld when it is `false`.
     ///
+    /// Keeping the first of those true takes a deliberate seam, because a `ToolRegistry` is *both*
+    /// what a host advertises to a model and what an execute route resolves through: filtering it
+    /// withholds the **call** as a side effect of withholding the **tool**. So `connector_pack::pack`
+    /// is model-facing and withholds an unexposed operation, while `connector_pack::resolve` is
+    /// caller-facing and withholds nothing — and `connectors-api`'s execute route goes through the
+    /// second. Without that split this field would make several hundred operations catalogued,
+    /// documented, manifest-listed and unreachable, which is the feature inverted.
+    ///
     /// # Why the default is `true`
     ///
     /// This is a **widening, not a loosening**: `false` is a state no author could express before, and
