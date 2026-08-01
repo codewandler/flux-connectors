@@ -674,15 +674,95 @@
     "patch": {
       "type": "object",
       "title": "Patch set",
-      "description": "What the overlay applies on top of a faithfully ingested spec. Selection is opt-in: only operations named by a `select` reach the connector, so a 163-operation spec does not become 163 LLM tools and a new upstream operation is never a new tool by default.",
+      "description": "What the overlay applies on top of a faithfully ingested spec. Selection is opt-in: only operations a `[[patch.operations]] select` names or a `[[patch.select]]` matches reach the connector, so a 398-operation document does not become 398 LLM tools and a new upstream operation is never a new tool by default. There is no `hide`, and there must not be one.\n\nThe merge order is fixed and total: spec, then `[[patch.select]]`, then `[[patch.operations]]`, then validation. A block overrides a selector that also matched it, field by field; where the block is silent the selector's statement stands; where neither speaks, that field's own rule decides or refuses. Two selectors stating different values for one operation are refused rather than ordered.",
       "additionalProperties": false,
       "properties": {
+        "select": {
+          "type": "array",
+          "description": "One entry per statement about a set of operations.",
+          "items": { "$ref": "#/$defs/operationSelector" }
+        },
+        "naming": {
+          "$ref": "#/$defs/naming",
+          "description": "How an `operationId` becomes an op id, declared once, with pinned exceptions."
+        },
         "operations": {
           "type": "array",
-          "description": "One entry per operation selected from the spec.",
+          "description": "One entry per operation selected from the spec by name.",
           "items": { "$ref": "#/$defs/operationPatch" }
         }
       }
+    },
+
+    "operationSelector": {
+      "type": "object",
+      "title": "Selection of a set of operations",
+      "description": "One statement that selects many operations, so a full-coverage connector is reviewable rather than 397 near-identical blocks. It matches by `service`, `path_prefix` and `methods`, and may state `risk`, `idempotency` and `expose` for everything it matched.\n\nIt does not make anything default-selected; a file with no selector and no `[[patch.operations]]` publishes nothing. A selector that matches nothing is a loud error, for the same reason a `select` naming an absent `operationId` is: a prefix that stopped matching after an upstream reshuffle would empty the connector quietly. No operation whose path carries an `internal` segment is ever selected.",
+      "additionalProperties": false,
+      "properties": {
+        "service": {
+          "type": "string",
+          "description": "The `service` of the `[[spec]]` entry whose document this selector reads, which is also the service its matched operations land in. Omit it only when the connector declares exactly one document."
+        },
+        "path_prefix": {
+          "type": "string",
+          "description": "The path prefix an operation must carry, matched on whole segments: `/api/v2/agents` reaches `/api/v2/agents/{id}` and does not reach `/api/v2/agentsummary`. Omit it to match every path in the document.",
+          "examples": ["/api/v2/agents"]
+        },
+        "methods": {
+          "type": "array",
+          "description": "The HTTP methods to match. Omit it for every method. Splitting a prefix by method is how one `risk` covers a set honestly, since the reads and the deletes under one prefix are not one damage claim.",
+          "items": { "$ref": "#/$defs/httpMethod" }
+        },
+        "risk": {
+          "$ref": "#/$defs/risk",
+          "description": "The risk every matched operation carries. Silence on a mutating method REFUSES THE BUILD: no OpenAPI document publishes risk, and a default that flatters would turn unmade decisions into claims a host reads as a licence. A matched operation whose method changes nothing takes `low` — not a flattering default but the only value a read can have, which is the asymmetry this key rests on."
+        },
+        "idempotency": {
+          "$ref": "#/$defs/idempotency",
+          "description": "The idempotency every matched operation carries, under the same silence rule as `risk`; an unstated read takes `idempotent`. Stating `conditional` here does not make `repeatable_because` bulk: every matched write still owes a stated condition per operation, which no selector can supply, so the build refuses by name."
+        },
+        "expose": {
+          "type": "boolean",
+          "description": "Whether every matched operation reaches a model as a tool. Omit it for the field's own default, which is exposed. Declaring the inverse per operation is 388 lines for a full-coverage babelforce, which is why this key exists.",
+          "examples": [false]
+        }
+      }
+    },
+
+    "naming": {
+      "type": "object",
+      "title": "Op naming rule",
+      "description": "How an `operationId` becomes an op id, declared once rather than restated per operation. This is the pinned override the pipeline design requires, made bulk: an id is still never derived from a volatile spec field without one. Collisions refuse — two `operationId`s deriving one op id is an error, never last-write-wins — and a derived id that is not a legal flux `decl_name` is reported naming the operation rather than mangled into one that happens to parse.",
+      "additionalProperties": false,
+      "required": ["rule"],
+      "properties": {
+        "rule": {
+          "$ref": "#/$defs/namingRule",
+          "description": "The derivation to apply. Required: a rule that could be omitted would be a public contract decided by silence."
+        },
+        "prefix": {
+          "type": "string",
+          "description": "Prepended to every derived id, joined with `-`. In practice the connector id, because an op id is global.",
+          "examples": ["babelforce"]
+        },
+        "pin": {
+          "type": "object",
+          "description": "`operationId` to op id, overriding the rule: the escape hatch, and the only per-operation naming cost. Keyed by `operationId` alone, which is unique inside one document and nowhere else, so a key two of the connector's documents both declare is refused; name that one with a `[[patch.operations]] rename`, which states its `service` and outranks a pin.",
+          "additionalProperties": { "type": "string" },
+          "examples": [{ "listAgents": "babelforce-agent-list" }]
+        }
+      }
+    },
+
+    "namingRule": {
+      "enum": ["kebab"],
+      "description": "`listReportingCalls` becomes `list-reporting-calls`, with case boundaries becoming `-`. Acronyms keep their shape: `listHTTPCalls` becomes `list-http-calls`, because the boundary is read at the end of a run of capitals rather than at every capital."
+    },
+
+    "httpMethod": {
+      "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+      "description": "An HTTP method."
     },
 
     "operationPatch": {
@@ -733,6 +813,11 @@
         "omit": {
           "$ref": "#/$defs/paramOmission",
           "description": "Parameters this connector drops from what the document declares. Applied after `params`, so an author may correct a wrong `required` flag and then omit the parameter."
+        },
+        "expose": {
+          "type": "boolean",
+          "description": "Overrides whether this operation reaches a model as a tool. The counterpart of a selector's `expose`, and the reason both exist: a selector states the rule for a set (`expose = false` over 388 operations) and a block states the exception (`expose = true` on the curated nine). Omit it for whatever the selector that matched this operation said, and exposed if none did.",
+          "examples": [true]
         }
       }
     },

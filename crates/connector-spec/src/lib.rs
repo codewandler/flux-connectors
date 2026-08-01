@@ -121,8 +121,9 @@ pub use ir::{
 pub use lock::{sha256_hex, LockEntry, LockSpec, Lockfile, LOCKFILE_NAME, LOCKFILE_VERSION};
 pub use openapi::{Diagnostic, Ingested, Server, ServerVariable, SpecOperation};
 pub use provider::{
-    IngestedDocument, LoadedProvider, OperationPatch, ParamOmission, ParamPatch, ParamPosition,
-    Patch, SpecDocument, SpecSource, PROVIDER_TOML_JSON_SCHEMA,
+    IngestedDocument, LoadedProvider, Naming, NamingRule, OperationPatch, OperationSelector,
+    ParamOmission, ParamPatch, ParamPosition, Patch, SpecDocument, SpecSource,
+    PROVIDER_TOML_JSON_SCHEMA,
 };
 
 /// Everything that can go wrong turning a provider definition into a [`Connector`].
