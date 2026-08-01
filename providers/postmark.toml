@@ -42,7 +42,10 @@
 # **So does the two-credential finding below.** It is kept as a record of what was measured, because
 # the finding is about the mechanism rather than about Postmark, but note before reading it: **this
 # connector no longer demonstrates it.** `crates/connector-flux/tests/postmark_connector.rs` measured
-# the partition on a live two-service connector and can no longer do so. C-136 is what restores both
+# the partition on a live two-service connector and can no longer do so. **C-136 does NOT restore these**
+# — it diverts the whole result of an operation that exists to mint a credential, and `ApiTokens` arrives
+# beside the server this call exists to return. `Servers[].ApiTokens` also carries N servers' tokens, which
+# one credential address cannot name. C-79 is the mechanism; what would restore both
 # the operations and the demonstration; restore them in the same commit that deletes their entries
 # from `crates/connector-spec/tests/credential_response.rs`.
 #

@@ -246,7 +246,11 @@ description = "Zoom server-to-server OAuth access token, sent as a bearer. Minte
 
 # ---------------------------------------------------------------------------------------------
 # `zoom-meeting-get` STOOD HERE, and `zoom-meeting-create` after it. Both are withheld by rule —
-# `start_url` is the host's ZAK token in a URL. See the header block; C-136 is what restores them.
+# `start_url` is the host's ZAK token in a URL. See the header block. **C-136 does NOT restore these**:
+# it lands the diversion for an operation that exists TO mint a credential, and returns a handle in place
+# of the whole result. `start_url` arrives beside the meeting this call exists to deliver, so diverting it
+# would delete the answer rather than the exposure. C-79 — declaring that a response FIELD is a
+# credential — is the narrower mechanism these two need, exactly as the header block already said.
 #
 # The one write left.
 #

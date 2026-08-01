@@ -2,8 +2,7 @@
 id: C-136
 title: "A credential-producing operation returns a handle, never the secret"
 pillar: Spec
-status: in-progress
-priority: 2
+status: done
 design: docs/designs/authentication-surface.md
 epic: authentication-surface
 areas: [connector-spec, bridge]

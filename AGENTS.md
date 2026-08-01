@@ -478,7 +478,12 @@ Three consequences, each of which has already been got wrong once:
   operation: `connector_pack::resolve` admits any named operation regardless of exposure, by design
   (C-413), and `connectors-api`'s execute route goes through it. The operation must not be *selected*.
 - **A credential-producing response is a second, independent test.** Any operation whose declared
-  response carries a token — not only an OAuth one — is withheld until C-136's diversion lands,
+  response carries a token — not only an OAuth one — is withheld until it can be returned safely. **C-136
+  landed and does not cover this case**: it diverts the whole result of an operation that exists *to*
+  mint a credential, returning a handle in its place. An operation whose response carries a credential
+  *incidentally* — beside the meeting or the server it exists to deliver — needs C-79's field-level
+  declaration instead, because diverting the result would delete the answer rather than the exposure.
+  The rule stands unchanged; only the story that closes it moved. It is withheld
   because the host's redactor holds only values the host itself resolved and cannot know a secret
   minted by the very call returning it.
 

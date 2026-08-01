@@ -1036,7 +1036,7 @@ ir_sha256 = "b5cc0dc8180a456b2914ab3f4b1387c2bd43dcdf341c6997a1d6dd6057ace0b8"
 [[provider]]
 id = "postmark"
 generator = "flux-connectors 0.9.1"
-toml_sha256 = "56ab851f346f84cb562309a568004405311d611605daf4ea4957b052b3c1a2bd"
+toml_sha256 = "36291e6014b7b9e552580686d69068515355ad665360d713dbf02dd22aac2873"
 ir_sha256 = "8a9eb54e7c1b8116cf49ce0e6123fd5fcf7271969a7a15e49d76837826d68657"
 
 [provider.artifacts]
@@ -1292,7 +1292,7 @@ ir_sha256 = "c31d5b9a4039b8b67a3f79c5e5a98059ed5053885ae96a4480cdcf0208233fe2"
 [[provider]]
 id = "zoom"
 generator = "flux-connectors 0.9.1"
-toml_sha256 = "9f99076aaa7606380e31340c40d68756f4f1c01981d837a52f85ebad90228323"
+toml_sha256 = "03baadd3cdf765f0bd4c952193f526b2eb220c7fba5405567e37d7f68e9cacf1"
 ir_sha256 = "6d3093ff4f0a60537357c0a4316855e541ddfb39c0385e7df8c8ed8bb514f8f0"
 
 [provider.artifacts]

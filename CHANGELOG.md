@@ -7,6 +7,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A credential-producing operation returns a handle, never the secret** (C-136). An operation's
+  result becomes a session value a model can read and a log can print, so a login that *returns* its
+  token has already lost — and redaction cannot save it, because the host's redactor holds only values
+  the host itself resolved and cannot know a secret minted by the very call returning it.
+  `produces_credential` names the secret field and the `CredentialRef` it is stored under; the declared
+  output is the **handle**, and the secret is absent from the effective output entirely.
+
+  **Seven refusals, not the three the story asked for.** A response schema still exposing the secret; no
+  secret field named; `idempotent` declared (minting is a write and some vendors invalidate the previous
+  token); plus an undeclared credential, a connector with no `authority`, two operations minting one
+  credential, and a wildcard location — each a case where the first three could not be enforced at all.
+
+  **The module path is closed by refusal, and that is the honest outcome.** Review found that the
+  diversion existed only on the host path while the *emitted Flux* still performed the login and
+  returned the vendor's response — the two artifacts disagreeing, with the Flux one being what runs.
+  Teaching the emitter is forbidden by the invariant it would violate and unimplementable anyway, since
+  the diversion is a write to a bound port and Flux holds no handle on the credential store. So a
+  connector declaring `produces_credential` **no longer builds**, and the refusal states the true thing:
+  this execution format cannot express a credential-producing operation. The test pins it with the
+  unmodified operation's emitted body as the control — the failure quotes the `return response` a login
+  would have shipped.
+
+  **It does not restore the four operations withheld in v0.9.1.** Those return a credential
+  *incidentally*, beside the meeting or the server the operation exists to deliver, so diverting the
+  field would delete the answer rather than the exposure — and one of them returns N servers' tokens,
+  which a single credential name cannot address. They remain C-79's.
+
 ### Fixed
 
 - **The embedded catalogue can say *why* an operation names no credential** (C-235). It emitted `[]`
