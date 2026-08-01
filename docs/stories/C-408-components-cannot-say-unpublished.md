@@ -1,5 +1,5 @@
 ---
-id: C-407
+id: C-408
 title: "The explorer components cannot say 'this source does not publish that', so a thinner catalogue reads as a claim about the connector"
 pillar: Surfaces
 status: ready
