@@ -5,7 +5,7 @@ pillar: Spec
 status: backlog
 priority:
 design: docs/designs/connector-pipeline.md
-epic: connectors-v1
+epic: spec-front-end
 areas: [connector-spec]
 note: the real bet — if patching is harder than hand-writing, the thesis fails
 ---
