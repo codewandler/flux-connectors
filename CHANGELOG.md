@@ -26,6 +26,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A patch can drop a parameter the vendor declares** (C-422). Measured, not anticipated: converting
+  babelforce to the spec route was cheaper everywhere except one endpoint. The document declares **38
+  query parameters** on `listReportingCalls` — **18 of them `filters.`-prefixed restatements** of
+  names already present — where the hand-authored connector curated 14. Without omission, the one
+  operation the conversion could not curate became a 38-argument tool full of exact synonyms, which is
+  a tool a model has to choose between. This was the single place hand-authoring beat patching.
+
+  `omit` is a **name list grouped by position**, not a flag per parameter: a three-line block per name
+  would have cost 72 lines to remove 24 synonyms — more than the entire 293 → 54 saving the conversion
+  won — and would have told a reviewer the same thing 24 times. It costs 7. Identity is still name
+  *and* position; position became the table key rather than a field.
+
+  Omission is **explicit and never inferred**, which lands the opposite way from `Patch` having no
+  `hide` at the operation level, and deliberately: an operation reaching this point has already been
+  selected, so the author is narrowing a stated intent rather than opting out of review.
+
+  Two refusals beyond what the story asked, both the same sentence pointed elsewhere. A **path**
+  parameter cannot be dropped whatever its `required` flag says — the path template keeps its
+  placeholder, so `/tickets/{id}` with nothing to fill it is a URL nothing can complete. And
+  **corrections apply before omissions**, so requiredness is judged as the *connector* states it: an
+  author who believes the vendor's flag is wrong corrects it — a reviewable statement of its own — and
+  is then free to drop the parameter. Without that ordering, a vendor that wrongly marks a filter
+  required would pin that argument into the tool with no way out.
+
 - **One connector can ingest many vendor documents, one per service** (C-410). One document per
   provider was never decided, it was assumed: `SpecSource.path` was a single string and
   `Provider::spec()` returned *the last file by stem*, which for babelforce would have selected the

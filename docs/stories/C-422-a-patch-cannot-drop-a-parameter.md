@@ -2,12 +2,11 @@
 id: C-422
 title: "A patch cannot drop a parameter, so one vendor endpoint becomes a 38-argument tool with 17 synonyms"
 pillar: Spec
-status: in-progress
-priority: 2
+status: done
 design: docs/designs/spec-front-end.md
 epic: spec-front-end
 areas: [connector-spec]
-note: "measured by C-416 on 2026-08-01 — THE one place hand-authoring beat patching. babelforce-call-list goes from 11 curated query parameters to 38, of which 17 are exact synonyms the vendor documents alongside their own aliases"
+note: "measured by C-416 on 2026-08-01 — THE one place hand-authoring beat patching. babelforce-call-list goes from 14 curated query parameters to 38, of which 17 are exact synonyms the vendor documents alongside their own aliases"
 ---
 
 # A patch cannot drop a parameter, so one vendor endpoint becomes a 38-argument tool with 17 synonyms
