@@ -343,6 +343,70 @@ fn two_operations_minting_one_credential_are_refused() {
     );
 }
 
+/// **One fact, two dispositions, and the operation may not claim both** (C-432).
+///
+/// `credential_response` and `produces_credential` state the *same* fact — a credential arrives in
+/// this operation's response — and prescribe opposite outcomes: withhold the operation, or ship it
+/// and hand back a handle. An operation declaring both asks the loader to do both, and before this
+/// story it got both answers: `credential_response`'s stock refusal telling the author to withhold
+/// the operation, rendered beside a `produces_credential` declaration whose whole meaning is that
+/// the operation ships. Two instructions, contradicting, with nothing saying which governs.
+///
+/// The rule that resolves it is **purpose, not shape**: if the credential *is* the answer, the
+/// operation is a mint and diverts it (`produces_credential`); if the credential arrives *beside*
+/// the answer, diverting would delete the answer, so the operation is withheld until it can be
+/// redacted in place (`credential_response`, and C-79). That discriminator is what the refusal has
+/// to carry, because it is the thing an author cannot re-derive from either field alone.
+///
+/// The second assertion is the load-bearing half: exactly one disposition is stated. A refusal that
+/// merely *added* a sentence about the conflict, while still telling the author to withhold an
+/// operation the other field says ships, would leave the reader exactly where they started.
+#[test]
+fn an_operation_declaring_both_credential_declarations_is_refused_naming_which_governs() {
+    let source = provider(
+        r#"
+[[operations]]
+id = "acme-oauth-token"
+method = "POST"
+path = "/oauth/token"
+description = "Exchange client credentials for an access token."
+risk = "medium"
+idempotency = "non_idempotent"
+credential_response = ["/access_token"]
+
+[operations.produces_credential]
+secret = "/access_token"
+credential = "acme.access_token"
+
+[operations.response_schema]
+type = "object"
+
+[operations.response_schema.properties.access_token]
+type = "string"
+"#,
+    );
+
+    let error = refusal(&source);
+    assert!(
+        error.contains("credential_response") && error.contains("produces_credential"),
+        "the refusal must name both declarations, or it does not say what conflicts: {error}"
+    );
+    assert!(
+        error.contains("acme-oauth-token"),
+        "the refusal must name the operation: {error}"
+    );
+    assert!(
+        error.contains("purpose") && error.contains("incidental"),
+        "the refusal must carry the discriminator that says which declaration governs — purpose \
+         versus incidental — not merely report that two were found: {error}"
+    );
+    assert!(
+        !error.contains("Withhold the operation and name it as an exclusion"),
+        "the refusal still prescribes withholding beside a declaration that says the operation \
+         ships, which is the contradiction this story exists to remove: {error}"
+    );
+}
+
 /// **Nothing shipped declares one**, and that is the honest state of the catalogue rather than an
 /// oversight.
 ///

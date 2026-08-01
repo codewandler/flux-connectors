@@ -66,6 +66,18 @@ closing the last gap between the babelforce connector and manager-sdk's canonica
   `/oauth/*` endpoints and `GET /api/v2/user/account` are withheld; babelforce goes 391 → 388
   operations and 948 → 943 artifacts. `no_oauth_endpoint_becomes_an_operation` is the failing-first
   test.
+  - **Narrowed the same day, and `/oauth/token` is the only one affected**
+    ([C-432](C-432-mark-a-response-as-carrying-a-credential.md)). The owner reversed the ruling for
+    `token` specifically: it is a real request/response call a program makes and reads, unlike
+    `authorize` (a browser redirect with no result to return) and `revoke` (which takes a
+    `client_secret` as a plain argument). **Those two stay withheld on the original ground, and
+    `GET /api/v2/user/account` is untouched** — it was withheld for carrying credentials in its
+    response, a separate and still-standing rule.
+  - **`/oauth/token` is nevertheless still withheld**, so this story's counts do not move. C-432
+    found that the marking the reversal depends on does not exist: flux's credential boundary keys
+    on `PlatformSourcing`, which is an opt-in to *refusal* rather than a permit, and it sits on the
+    plugin seam this repository is not on. Restoring the operation needs a mechanism nobody has
+    built — see C-432's finding and C-136's *"The owner ruled, and the refusal still stands"*.
 - **`GET /api/v2/user/account` was verified against the document, not accepted on the field name.**
   Its 200 body carries `UserCustomer_customer_apis_babelforce`, which the vendor itself describes as
   *"REST API access credentials"* (`user-2026-06-25.openapi.yaml:402-415`), plus a sibling
