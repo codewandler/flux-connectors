@@ -737,7 +737,8 @@ These failures are recorded decisions. Do not “fix” one without reading its 
   Two things used to be missing here, and **both have since landed**:
 
   1. ~~An `http.request` implementation in the dependency graph.~~ **Closed.**
-     `codewandler-flux-web` sits on the engine line this workspace pins — 0.45 since C-403 — and
+     `codewandler-flux-web` sits on the engine line this workspace pins — the line itself is
+     `ENGINE_LINE`, not a number repeated here; this sentence said `0.45` through two bumps — and
      `connectors-api` constructs its `HttpRequestTool` once and hands it to every operation as the
      `Egress`. Note what did *not* change: `connector-pack`'s own tests still pass a stub, and still
      say so — the crate must never link a client.
