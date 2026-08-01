@@ -2,8 +2,7 @@
 id: C-417
 title: "Widen babelforce to manager-sdk's full coverage, and gate it"
 pillar: Spec
-status: in-progress
-priority: 3
+status: done
 design: docs/designs/spec-front-end.md
 epic: spec-front-end
 areas: [providers, connector-cli]

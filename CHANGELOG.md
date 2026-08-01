@@ -26,6 +26,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **babelforce carries manager-sdk's whole API surface: 391 operations** (C-417). The connector went
+  from 9 curated operations to **391 emitted**, which reconciles against manager-sdk's canonical 397
+  as `391 + 5 inexpressible + 1 withheld`. It is described in **751 lines with 247 declarations** —
+  against roughly 6,000 hand-authored, and more than 1,600 as one patch block per operation.
+
+  **9 are exposed to a model; 382 are callable and unexposed.** That distinction is the entire reason
+  C-413 exists: the full SDK surface is reachable by name through the host, while a model's tool
+  catalogue stays the curated set it always was. The nine keep their contract byte-for-byte — ids,
+  methods, paths, risk and idempotency all unmoved, verified against the previous release.
+
+  **`POST /oauth/token` is deliberately withheld**, and it is the one operation manager-sdk covers
+  that this connector does not. Its declared 2xx response carries `access_token` and `refresh_token`
+  as required fields — the response *is* a credential. `expose = false` is not sufficient protection,
+  because the execute route resolves an operation by name regardless of exposure (by design, C-413),
+  and the host's redactor holds only values the host itself resolved, so a token minted by that call
+  is unknown to it until after it has arrived. Shipping the first credential-minting response into
+  the catalogue one story before the diversion mechanism (C-136) would invert the order that story
+  exists to impose. The exclusion is recorded beside its reason and names what would let it back.
+
+  A vendor document that publishes a response schema constraining nothing — a bare
+  `{"type": "object"}` — is now dropped at ingest with a diagnostic rather than recorded as coverage.
+  C-126 has refused that shape from a human author since it landed; ingest was laundering it in from
+  a vendor. Zero shipped operations moved, verified across all 53 providers.
+
+  Response-schema coverage moves accordingly: `COVERED_FLOOR` 277 → **611**, `ABSENCE_CEILING`
+  24 → **71**.
+
 - **The compiler leaves the crates.io publish closure** (C-407). `connector-secrets` re-exported
   `CredentialRef`, so `connector-spec` was in its public API — and `connector-spec` is the connector
   IR, both front-ends, validation and the lockfile writer: **11,832 lines with 128 public items,
