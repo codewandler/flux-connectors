@@ -162,6 +162,14 @@ fn the_hash_domain_excludes_every_provenance_field() {
         upstream_version: Some("0.7.0".into()),
         fetched_at: Some("2026-07-30T12:00:00Z".into()),
         spec_sha256: Some("a".repeat(64)),
+        // The per-document record C-410 added is provenance too, so it is outside the hash domain
+        // for the same reason the four scalars are: re-vendoring a document must not move
+        // `ir_sha256` unless the compiled meaning moved with it.
+        specs: vec![connector_spec::SpecSource {
+            path: "specs/zendesk/2024-06-01.json".into(),
+            sha256: Some("a".repeat(64)),
+            ..Default::default()
+        }],
         toml_sha256: Some("b".repeat(64)),
     });
 
@@ -339,6 +347,7 @@ fn the_rendered_shape_is_pinned() {
         fetched_at: Some("2026-07-30T12:00:00Z".into()),
         spec_sha256: Some("a".repeat(64)),
         toml_sha256: Some("b".repeat(64)),
+        ..Provenance::default()
     });
     connector.id = "zendesk".into();
     lockfile.insert(

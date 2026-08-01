@@ -590,6 +590,11 @@ fn quirks_and_provenance_round_trip() {
         upstream_version: Some("2024-05-06".into()),
         fetched_at: Some("2026-07-30T09:00:00Z".into()),
         spec_sha256: Some("a".repeat(64)),
+        specs: vec![connector_spec::SpecSource {
+            path: "specs/babelforce/manager-2026-07-10.openapi.yaml".into(),
+            sha256: Some("a".repeat(64)),
+            ..Default::default()
+        }],
         toml_sha256: Some("b".repeat(64)),
     };
     connector.operations[1].quirks = Quirks {

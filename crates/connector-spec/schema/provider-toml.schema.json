@@ -90,8 +90,11 @@
           "items": { "$ref": "#/$defs/graph" }
         },
         "spec": {
-          "$ref": "#/$defs/spec",
-          "description": "The vendored vendor spec this connector is derived from. Omit it for a fully hand-authored connector."
+          "oneOf": [
+            { "$ref": "#/$defs/spec" },
+            { "type": "array", "items": { "$ref": "#/$defs/spec" } }
+          ],
+          "description": "The vendored vendor documents this connector is derived from. Omit it for a fully hand-authored connector. Write `[spec]` for one document and `[[spec]]` for several — they are one key in two TOML spellings, and the single table is the one-element case. A connector whose vendor splits its API across documents declares one entry per document, each naming the `service` its operations join; babelforce publishes five over two API versions."
         },
         "patch": {
           "$ref": "#/$defs/patch",
@@ -637,13 +640,17 @@
     "spec": {
       "type": "object",
       "title": "Vendored spec source",
-      "description": "Points at the committed spec cache under `specs/`, never at a URL fetched during a build — builds are hermetic and offline.",
+      "description": "Points at the committed spec cache under `specs/`, never at a URL fetched during a build — builds are hermetic and offline. One entry is one document and one document is one service; `sha256`, `fetched_at` and `upstream_version` are therefore stated per document, so a drift check can say which of a connector's documents moved.",
       "additionalProperties": false,
       "required": ["path"],
       "properties": {
         "path": {
           "type": "string",
-          "description": "The vendored spec file relative to the repository root, e.g. `specs/babelforce/manager-0.7.0.openapi.json`."
+          "description": "The vendored spec file relative to the repository root, e.g. `specs/babelforce/manager-2026-07-10.openapi.yaml`."
+        },
+        "service": {
+          "type": "string",
+          "description": "The service this document's selected operations join. Omit it to join the reserved `default` service, which is what a single `[spec]` block means. A named value must be one a `[[services]]` entry declares: a document joins a service, it does not declare one. Two documents may not join the same service, because a service is one name namespace and two vendor documents can declare the same `operationId`."
         },
         "source_url": {
           "type": "string",
@@ -685,6 +692,10 @@
       "additionalProperties": false,
       "required": ["select"],
       "properties": {
+        "service": {
+          "type": "string",
+          "description": "The `service` of the `[[spec]]` entry whose document this patch reads, which is also the service the published operation lands in. Omit it only when the connector declares exactly one document. As soon as a second is declared this is required, because an `operationId` is unique inside one document and nowhere else: babelforce declares `getUser` in both `manager-2026-07-10` and `user-2026-06-25` as two different requests."
+        },
         "select": {
           "type": "string",
           "description": "The spec's `operationId` this entry selects, e.g. `listReportingCalls`."
@@ -1202,7 +1213,12 @@
         },
         "spec_sha256": {
           "type": "string",
-          "description": "SHA-256 of the vendored spec bytes under `specs/`."
+          "description": "SHA-256 of the vendored spec bytes under `specs/`. Filled only when the connector compiles from exactly one document; with several, no single value of it is true and `specs` is the record."
+        },
+        "specs": {
+          "type": "array",
+          "description": "Every vendored document this connector compiles, one entry each, so a drift check can say which document moved. Filled for a single-document connector too — the four fields above are the projection of the one-element case.",
+          "items": { "$ref": "#/$defs/spec" }
         },
         "toml_sha256": {
           "type": "string",
