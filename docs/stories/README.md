@@ -204,7 +204,7 @@ _A connector's operations are currently legible only by reading `providers/<name
 ### the spec front-end — `[spec]` + patches, proven by retiring manager-sdk
 _[connector-pipeline.md](connector-pipeline.md) drew two front-ends over one IR: a hand-authored_
 - [C-5 — Extract auth methods from securitySchemes](C-5-auth-extraction.md) · Spec
-- [C-6 — Build the patch/overlay layer](C-6-overlay-layer.md) · Spec · the real bet — if patching is harder than hand-writing, the thesis fails
+- [C-6 — Build the patch/overlay layer](C-6-overlay-layer.md) · Spec · RE-CUT 2026-08-01 — C-4 could not land without applying the patch schema (an Operation needs id/risk/idempotency, which no spec carries), so four of the six bullets below arrived with it. What remains is the part that was always the bet: patching a REAL vendor document
 - [C-14 — Fetch specs and detect upstream drift](C-14-fetch-and-drift-check.md) · Build
 - [C-410 — One connector, many spec documents — a spec per service](C-410-many-spec-documents.md) · Spec · discovery.rs:39 returns the LAST spec by version order and SpecSource.path is one string — one document per provider was never decided, it was assumed. babelforce has five, over two API versions and two security models
 - [C-411 — One selector selects many operations, so 397 do not cost 397 blocks](C-411-selector-matches-a-set.md) · Spec · `OperationPatch` selects exactly one operationId. Selection stays opt-in — this widens what one statement selects, it does not introduce `hide` and must not
