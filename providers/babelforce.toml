@@ -14,18 +14,25 @@
 # call anyone here makes. It is excluded by *stating the prefix that holds its 30 siblings* rather
 # than by listing it, so what this file says is what is wanted rather than what is not.
 #
-# **391 of those 397 are emitted, and the other six are named — for two different reasons.**
+# **389 of those 397 are emitted, and the other eight are named — for two different reasons.**
 #
 #   * **Five cannot be expressed.** Ingest skips an operation whose request body is
 #     `multipart/form-data`, with a diagnostic, rather than publishing it without its body:
 #     `BodyEncoding` is `Json | Form` and this IR has no third value. Five manager operations are
-#     file uploads. That is an IR gap, and C-426 closes it.
-#   * **One is deliberately withheld.** `POST /oauth/token` returns a response body carrying
-#     `access_token` and `refresh_token`, and no redactor in this repository can reach a credential
-#     the call itself minted. The argument is at the `auth` POST selector below; C-136 is what lets
-#     it come back.
+#     file uploads. **C-426 established that this is not ours to close**: flux 0.46 cannot carry a
+#     multipart body at all — `http.request`'s `body` is a string, and `parse`'s `as_type` is a
+#     closed list of six the analyzer enforces, with no multipart among them. Describing the body in
+#     the IR would produce a module that fails on a real call, so the five stay named. The fix is a
+#     flux-side encoder, exactly as it is for the form/query gap.
+#   * **Three are auth-flow endpoints, withheld by rule.** `POST /oauth/token`,
+#     `GET /oauth/authorize` and `POST /oauth/revoke` describe **how to authenticate**. That is the
+#     connector's authentication surface — `[[auth]]` below states it and the *host* performs it —
+#     not something a caller invokes and reads a result from. Owner-stated 2026-08-01 and general
+#     rather than a babelforce judgement; the rule and its reasoning are in `AGENTS.md`
+#     § Authentication contract. The `auth` service therefore contributes **zero** operations.
 #
-# So `391 + 5 + 1 = 397`, and that accounting is checked rather than asserted:
+# So `389 + 5 + 3 = 397`, three categories rather than two, and that accounting is checked rather
+# than asserted:
 # `crates/connector-spec/tests/babelforce_coverage.rs` reads the five documents, counts what they
 # declare, compares it against what this connector emits, and **refuses a gap that carries no
 # reason** — in both directions, so an allow-list entry cannot outlive the gap it explained.
@@ -35,7 +42,7 @@
 # Four declarations, and they are the whole epic's thesis:
 #
 #   * `[[spec]]` — five documents, one per service, each hash-checked against its own bytes (C-410).
-#   * `[patch.naming]` — one rule, so 391 `rename =` lines become one line plus the nine pins that
+#   * `[patch.naming]` — one rule, so 389 `rename =` lines become one line plus the nine pins that
 #     hold a shipped op id still (C-412).
 #   * `[[patch.select]]` — one statement per (document, method class), because `risk` is a damage
 #     claim and the reads and the deletes under one prefix are not one claim (C-411, C-414).
@@ -44,8 +51,8 @@
 #
 # # Exposure is what makes widening survivable
 #
-# `expose = false` on every selector. All 391 are catalogued, addressable and callable; **nine**
-# reach a model as tools. 391 LLM tools is not a catalogue, it is a denial of service against a
+# `expose = false` on every selector. All 389 are catalogued, addressable and callable; **nine**
+# reach a model as tools. 389 LLM tools is not a catalogue, it is a denial of service against a
 # model's context, and C-413's field exists precisely so that the number of callable operations and
 # the number of tools stop being the same number.
 
@@ -134,9 +141,13 @@ default_auth = [{ credentials = ["babelforce.access_token"] }]
 name = "manager"
 description = "The manager API: agents, calls, sessions, outbound, phonebook, reporting and account administration"
 
-[[services]]
-name = "auth"
-description = "OAuth token endpoints — minting and revoking an access token"
+# **There is deliberately no `[[services]]` entry for `auth`.** All three `/oauth/*` endpoints are
+# withheld (see the block below the selectors), so the service would carry zero operations — and
+# `crates/connector-spec/tests/services.rs` refuses that outright, because a build emits an empty
+# module and an `operations = []` manifest for it. Measured: it did, until this entry was removed.
+# The `[[spec]]` entry below **stays**, so ingest keeps reading the document, the three endpoints
+# stay inside the coverage accounting rather than vanishing from both sides of it, and C-410's
+# per-document `sha256` keeps watching it for drift.
 
 [[services]]
 name = "user"
@@ -180,12 +191,22 @@ upstream_version = "0.0.0-dev"
 fetched_at = "2026-07-10T12:24:21Z"
 sha256 = "5728cd62a637e4b3fdd5fa1d376c0ebb478ad0c966922a9dd3fb0608918d739c"
 
-[[spec]]
-path = "specs/babelforce/auth-2026-06-25.openapi.yaml"
-service = "auth"
-upstream_version = "0.0.0-dev"
-fetched_at = "2026-06-25T09:37:13Z"
-sha256 = "0f1c947bae5b930925480a82a5902ab4f710e188e33c335cf95c6c2022a2f93f"
+# **`auth-2026-06-25.openapi.yaml` is deliberately not read here**, and this is the one document of
+# the five with no `[[spec]]` entry. All three endpoints it declares are withheld by rule, so the
+# `auth` service would carry zero operations — and a declared service with no operation emits an
+# empty module and an `operations = []` manifest, which
+# `crates/connector-spec/tests/services.rs` refuses. The loader also refuses a `[[spec]]` naming a
+# service no `[[services]]` entry declares ("a document joins a service, it does not declare one"),
+# so the service entry and the spec entry stand or fall together. Both fall.
+#
+# **Nothing is lost by not reading it.** Its identity and integrity are recorded independently in
+# `specs/babelforce.provenance.toml`, whose `[[spec]] name = "auth"` entry carries both `sha256` and
+# `upstream_sha256` and is checked against the file's actual bytes by
+# `crates/connector-spec/tests/vendored_specs.rs` — that check reads the provenance file, never this
+# one, so C-410's drift detection on this document is unaffected. Its three endpoints stay inside
+# the coverage accounting by name, through `UNREAD` in
+# `crates/connector-spec/tests/babelforce_coverage.rs`, so they are still counted and still carry a
+# reason rather than vanishing from both sides of the gate.
 
 [[spec]]
 path = "specs/babelforce/user-2026-06-25.openapi.yaml"
@@ -261,11 +282,14 @@ description = "SSO-issued babelforce access token, minted outside flux and suppl
 # The documents model the bearer as OAuth2 with a **password grant** at `/oauth/token`
 # (`manager-2026-07-10.openapi.yaml:26271-26279`), and we still do not implement it: it would require
 # flux to hold a babelforce user password in order to mint tokens, which is strictly worse than
-# holding the token (§5.1.4). Note that widening to the full surface makes `/oauth/token` itself a
-# *selected, callable operation* — that is not the same thing as flux performing the grant, and the
-# two must not be confused: an operator may call it, and nothing in this connector does. It is
-# `expose = false` like everything else the `auth` selector matches, so no model can reach for it.
-# Revisit only if babelforce publishes a client-credentials flow.
+# holding the token (§5.1.4). Revisit only if babelforce publishes a client-credentials flow.
+#
+# **This paragraph used to carry a second argument, and it is now moot.** It read that widening to
+# the full surface makes `/oauth/token` itself a *selected, callable operation*, which "is not the
+# same thing as flux performing the grant", and leaned on `expose = false` to keep a model away from
+# it. The owner ruling of 2026-08-01 removed the premise: `/oauth/token` is **not selected at all**,
+# and neither are its two siblings. An authentication endpoint is not an operation, so there is no
+# longer a callable-but-unexposed `/oauth/*` operation to reason about. See the `auth` block below.
 
 # ---------------------------------------------------------------------------------------------
 # Naming — one rule, nine pins (C-412)
@@ -348,58 +372,94 @@ risk = "destructive"
 idempotency = "non_idempotent"
 expose = false
 
-[[patch.select]]
-service = "auth"
-path_prefix = "/oauth"
-methods = ["GET"]
-expose = false
+# ---------------------------------------------------------------------------------------------
+# **The `auth` service selects nothing, and that is the whole of its declaration.**
+#
+# There is deliberately no `[[patch.select]]` for `service = "auth"`. All three `/oauth/*` endpoints
+# the document declares — `POST /oauth/token`, `GET /oauth/authorize`, `POST /oauth/revoke` — are
+# withheld, so the service contributes **zero** operations.
+#
+# **The rule is general and owner-stated (2026-08-01): an authentication endpoint is never a
+# connector operation.** It describes *how to authenticate*, which is a property of the connector's
+# authentication surface — the `[[auth]]` block above, the grant, the redirect — and it is what the
+# **host** performs. It is not something a caller invokes and reads a result from. A vendor document
+# publishing them as paths does not make them operations, and selecting them would be a selection
+# error rather than a coverage win. `AGENTS.md` § Authentication contract carries the reasoning; it
+# is not restated here, because a rule copied into 45 provider files is a rule with 45 versions.
+#
+# Look at what these three are and the rule stops needing defence:
+#
+#   * `GET /oauth/authorize` is the **PKCE browser redirect** — `response_type`, `redirect_uri`,
+#     `code_challenge`, `code_challenge_method`. A user-agent is *sent* there; there is no result to
+#     return to a program.
+#   * `POST /oauth/revoke` takes a **`client_secret` as a plain argument**, which is auth-flow
+#     material travelling as an operation parameter — the one shape the three-axis auth model exists
+#     to keep out of a call signature.
+#   * `POST /oauth/token` is an auth-flow endpoint by the same rule, **and independently** returns a
+#     credential: `auth-2026-06-25.openapi.yaml:260` declares `OAuthTokenResponse` carrying
+#     `access_token` and `refresh_token`, which no redactor here can reach because the host's
+#     redactor holds only values the host itself resolved before the call
+#     (`connector-pack/src/credentials.rs:149`, rendered at `connectors-api/src/exec.rs:98`). Both
+#     are true; the auth-flow half is the load-bearing one, because it holds even after C-136 lands
+#     the credential-response diversion.
+#
+# **`expose = false` was never the mechanism**, which is the part worth being precise about. C-413
+# withholds the *tool*, never the *call*: `connectors-api`'s execute route resolves any named
+# operation regardless of exposure (`exec.rs:88`). Unexposed is a smaller surface, not a closed one.
+# The operation must not be **selected**, which is why this is an absence of a selector rather than
+# a selector with a flag on it.
+#
+# The `[[services]]` entry and the `[[spec]]` entry for `auth` both **stay**. Ingest must keep
+# reading the document: the coverage gate counts what all five documents declare, so dropping the
+# spec would take these three out of the accounting entirely rather than recording them as
+# withheld — and it would stop drift-check watching that document's `sha256`. A service that
+# contributes no operations is a service whose surface is entirely the connector's authentication,
+# which is exactly what this one is.
+#
+# Each of the three carries an `ALLOWED` entry in
+# `crates/connector-spec/tests/babelforce_coverage.rs` stating this rule, and
+# `no_oauth_endpoint_becomes_an_operation` there fails if any of them is ever selected again.
+# ---------------------------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------------------------
-# **`POST /oauth/token` is excluded, and it is the one operation of the canonical 397 that is.**
+# **`GET /api/v2/user/account` is excluded, and it is the only operation excluded for what it
+# returns rather than for what it is.**
 #
-# Not because of what it *takes* — the input half is argued at length under `[[auth]]` above, and
-# `expose = false` already keeps every model away from it. Because of what it **returns**.
+# The two GET reads that are wanted are stated one prefix each rather than swept in with a single
+# `/api/v2/user`, because that wider prefix also reaches `/api/v2/user/account` — and a prefix is
+# matched on **whole segments**, so `/api/v2/user/accounts` reaches the account *list* and never the
+# single account. The prefix states what is wanted rather than excluding what is not, the same way
+# the `auth` block above does.
 #
-# `auth-2026-06-25.openapi.yaml:260` declares `OAuthTokenResponse` carrying `access_token` and
-# `refresh_token`. A selected operation's response body is rendered by `connectors-api`
-# (`src/exec.rs:98`) through `ctx.redactor.redact`, and the redactor holds only the values the
-# **host resolved** before the call (`connector-pack/src/credentials.rs:149`). A token minted *by
-# this call* is unknown to it until after the token has already arrived, so redaction cannot reach
-# it — and `exec.rs:20-25` states the standard this repository holds itself to: *"Never the raw
-# content… That is the difference between 'the pack kept it off the wire' and 'it stayed off every
-# surface'."* For this one operation that sentence would become false, and nothing in the tree today
-# could make it true.
+# **Its 200 body carries two credentials.** `user-2026-06-25.openapi.yaml` declares
+# `UserCustomerItemResponse` -> `UserCustomer` -> `UserCustomer_customer_apis`, whose two members are:
 #
-# **`expose = false` is not sufficient here**, which is the part worth being precise about. C-413
-# withholds the *tool*, never the *call*: `connectors-api`'s execute route resolves any named
-# operation regardless of exposure (`exec.rs:88`), so a caller naming `babelforce-token` gets a
-# response body carrying a live bearer through a redactor that has never seen it. Unexposed is a
-# smaller surface, not a closed one.
+#   * `UserCustomer_customer_apis_babelforce`, described by the vendor as **"REST API access
+#     credentials"**, carrying `accessId` and `accessToken` (:402-415); and
+#   * `UserCustomer_customer_apis_stream`, carrying `token`, described **"Push API token"** (:417-421).
 #
-# **C-136 is what lets this come back.** It is `ready` and not landed; it diverts a
-# credential-shaped response away from the reply rather than trying to redact it after the fact.
-# Landing the first credential-minting response into the catalogue one story *before* the mechanism
-# that exists to contain it inverts the order, so the operation waits. Widen this prefix back to
-# `/oauth` in the story that lands C-136, and delete the matching `ALLOWED` entry in
-# `crates/connector-spec/tests/babelforce_coverage.rs` in the same commit.
+# `accessToken` is described as *"The unique Identifier (UUID) of the object"* with `format: uuid`,
+# and **the document contradicts itself**: the scrubbed example for `accessId` is a real UUID
+# (`00000000-0000-0000-0000-000000000000`) while `accessToken`'s is 32 hex characters with no dashes
+# (:294). The description is boilerplate copied onto both fields; the sibling that really is an id
+# proves it, and the shape proves which of the two the token is. C-415 scrubbed exactly this example
+# block as credential-shaped, which is the same reading reached independently.
 #
-# `POST /oauth/revoke` is the other POST here and is *destroying* a credential, not minting one; its
-# 2xx body is `{"type": "object"}`, which ingest drops. `GET /oauth/authorize` returns a redirect.
-# Neither returns a secret, so the prefix states the one that is wanted rather than excluding the
-# one that is not — and a future `/oauth/introspect` is excluded by the same line, without anyone
-# remembering to exclude it.
+# So this is not a name-shaped guess. `AGENTS.md` § Authentication contract: *"Any operation whose
+# declared response carries a token — not only an OAuth one — is withheld until C-136's diversion
+# lands"*, because the host's redactor holds only values it resolved before the call and cannot
+# redact a secret the response itself delivers. C-136 is what lets this come back; widen these two
+# prefixes back to `/api/v2/user` and delete the matching `ALLOWED` entry in the same commit.
 # ---------------------------------------------------------------------------------------------
 [[patch.select]]
-service = "auth"
-path_prefix = "/oauth/revoke"
-methods = ["POST"]
-risk = "high"
-idempotency = "non_idempotent"
+service = "user"
+path_prefix = "/api/v2/user/accounts"
+methods = ["GET"]
 expose = false
 
 [[patch.select]]
 service = "user"
-path_prefix = "/api/v2/user"
+path_prefix = "/api/v2/user/me"
 methods = ["GET"]
 expose = false
 

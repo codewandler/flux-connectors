@@ -8,7 +8,7 @@
 //!
 //! # What C-417 changed here, and what it did not
 //!
-//! The connector now compiles from **five** documents rather than one, and publishes 391 operations
+//! The connector now compiles from **four** of the five vendored documents rather than one, and publishes 388 operations
 //! rather than nine. Every assertion below that counted has been restated as the claim it was
 //! standing in for, because each of them was a proxy for "the conversion did not widen selection by
 //! accident" and that sentence stopped being the question the day widening became the goal.
@@ -49,9 +49,15 @@ const PINNED: &str = "specs/babelforce/manager-2026-07-10.openapi.yaml";
 /// inputs would agree with whatever the file happened to say, which is the one thing it must not do.
 /// Ordered as `providers/babelforce.toml` declares them, because that order is what decides the
 /// order operations publish in.
-const DOCUMENTS: [(&str, &str); 5] = [
+///
+/// **Four, not the five that are vendored.** `auth-2026-06-25.openapi.yaml` is deliberately not
+/// pinned here: all three of its endpoints are withheld because an authentication endpoint is never
+/// an operation (`AGENTS.md` § Authentication contract), which would leave the `auth` service
+/// carrying zero operations — and `services.rs` refuses a service that emits an empty module, while
+/// the loader refuses a `[[spec]]` naming an undeclared service. The document is still vendored and
+/// still hash-checked, through `specs/babelforce.provenance.toml` and `vendored_specs.rs`.
+const DOCUMENTS: [(&str, &str); 4] = [
     ("manager", PINNED),
-    ("auth", "specs/babelforce/auth-2026-06-25.openapi.yaml"),
     ("user", "specs/babelforce/user-2026-06-25.openapi.yaml"),
     (
         "task-automation",
@@ -118,7 +124,7 @@ fn read(relative: &str) -> String {
 ///
 /// Through C-421's shared seam rather than a cache assembled here. That is the point of the seam:
 /// it passes **every** document under `specs/babelforce/` and lets `[spec] path` resolve the pin,
-/// so this file states nothing about which of the five is compiled — which is the only way the
+/// so this file states nothing about which of the four is compiled — which is the only way the
 /// claims below stay claims about the provider rather than about a cache the test picked.
 fn load() -> LoadedProvider {
     shipped_provider::load("babelforce")
@@ -127,10 +133,10 @@ fn load() -> LoadedProvider {
 /// **The story's first acceptance bullet.** The connector is compiled from the vendored documents,
 /// and from exactly the ones the file names.
 #[test]
-fn babelforce_is_compiled_from_the_five_vendored_documents() {
+fn babelforce_is_compiled_from_the_pinned_vendored_documents() {
     let loaded = load();
 
-    // **All five, each joined to its service.** This asserted `vec![PINNED]` while babelforce
+    // **All four pinned, each joined to its service.** This asserted `vec![PINNED]` while babelforce
     // compiled from one document, and it was a real claim then: the other four were in the cache
     // and none of them could reach the connector until a story selected out of one. C-417 is that
     // story, so the claim is restated at its new value rather than relaxed — a connector that
@@ -143,7 +149,7 @@ fn babelforce_is_compiled_from_the_five_vendored_documents() {
     assert_eq!(
         pinned,
         DOCUMENTS.to_vec(),
-        "providers/babelforce.toml does not pin exactly the five vendored documents, one per \
+        "providers/babelforce.toml does not pin exactly the four vendored documents it reads, one per \
          service. If it declares no `[spec]` at all it is still hand-authored"
     );
 
@@ -225,7 +231,7 @@ fn selection_stays_opt_in_and_the_nine_are_named_one_at_a_time() {
     // corpus be pointed at safely.
     assert!(
         !loaded.patch.select.is_empty(),
-        "no `[[patch.select]]` statement, so the 391 operations must have arrived by default — \
+        "no `[[patch.select]]` statement, so the 388 operations must have arrived by default — \
          which is the one thing selection must never do"
     );
 

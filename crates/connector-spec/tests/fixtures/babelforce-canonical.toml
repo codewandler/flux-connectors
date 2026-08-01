@@ -127,25 +127,25 @@ risk = "destructive"
 idempotency = "non_idempotent"
 expose = false
 
-[[patch.select]]
-service = "auth"
-path_prefix = "/oauth"
-methods = ["GET"]
-expose = false
+# **The `auth` service selects nothing.** All three `/oauth/*` endpoints are withheld: an
+# authentication endpoint describes *how to authenticate* and is never a connector operation
+# (owner-stated 2026-08-01, `AGENTS.md` § Authentication contract). The absence of a selector is the
+# mechanism — `expose = false` withholds a tool, not a call.
 
-# `POST /oauth/token` mints a credential and `POST /oauth/revoke` destroys one; neither is a call a
-# model makes, and both are stated rather than swept in with the manager writes.
+# The two wanted reads, one prefix each. The wider `/api/v2/user` would also reach
+# `GET /api/v2/user/account`, whose 200 body carries the customer's REST API `accessToken` and the
+# stream `token`; an operation whose response delivers a credential is withheld until C-136 lands
+# (`AGENTS.md` § Authentication contract). Prefixes match whole segments, so `/api/v2/user/accounts`
+# reaches the list and never the single account.
 [[patch.select]]
-service = "auth"
-path_prefix = "/oauth"
-methods = ["POST"]
-risk = "high"
-idempotency = "non_idempotent"
+service = "user"
+path_prefix = "/api/v2/user/accounts"
+methods = ["GET"]
 expose = false
 
 [[patch.select]]
 service = "user"
-path_prefix = "/api/v2/user"
+path_prefix = "/api/v2/user/me"
 methods = ["GET"]
 expose = false
 

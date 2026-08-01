@@ -55,19 +55,77 @@ const CANONICAL: usize = 397;
 /// number in the same commit — and to say, in the story that moved it, what the vendor added.
 const DECLARED: usize = 398;
 
+/// **The endpoints of the one vendored document the connector no longer reads.**
+///
+/// `providers/babelforce.toml` has no `[[spec]]` entry for `auth-2026-06-25.openapi.yaml`, because
+/// all three of its endpoints are withheld and a service carrying zero operations emits an empty
+/// module — which `services.rs` refuses, and the loader refuses a `[[spec]]` whose service is not
+/// declared, so the two entries stand or fall together.
+///
+/// **They are named here rather than dropped**, and that is the whole point of this constant. The
+/// module docs above explain why an operation must never vanish from *both* sides of the
+/// comparison: the gate would stay green while coverage fell. A document the connector stops
+/// reading is exactly that failure with a different cause, so its endpoints are folded back into
+/// [`declared`] by name and must still carry an [`ALLOWED`] reason like any other gap.
+///
+/// Their bytes are still checked: `specs/babelforce.provenance.toml` records this document's
+/// `sha256`, and `vendored_specs.rs` verifies it against the file independently of the provider
+/// definition.
+const UNREAD: [(HttpMethod, &str); 3] = [
+    (HttpMethod::Get, "/oauth/authorize"),
+    (HttpMethod::Post, "/oauth/revoke"),
+    (HttpMethod::Post, "/oauth/token"),
+];
+
 /// **What the connector emits, and the two reasons it is not [`CANONICAL`].**
 ///
-/// - **Five cannot be expressed.** Ingest skips an operation whose request body is
-///   `multipart/form-data`, with a diagnostic, rather than publishing it without its body:
+/// - **Five cannot be expressed** ([`Gap::Inexpressible`]). Ingest skips an operation whose request
+///   body is `multipart/form-data`, with a diagnostic, rather than publishing it without its body:
 ///   `BodyEncoding` is `Json | Form` and this IR has no third value. Five manager operations are
 ///   file uploads. That is an **IR gap, not a selection gap** — nothing here failed to match them,
-///   ingest never produced them — and closing it is C-426's.
-/// - **One is deliberately withheld.** `POST /oauth/token` returns a credential. See its
-///   [`ALLOWED`] entry; C-136 is what lets it come back.
+///   ingest never produced them. C-426 went to close it and found the gap is **not this
+///   repository's**: flux 0.46 cannot carry a multipart body, so the IR variant would describe a
+///   request no emitted module could perform. See the entries themselves.
+/// - **Four are withheld by rule** ([`Gap::Withheld`]). Three `/oauth/*` endpoints, because an
+///   authentication endpoint describes how to authenticate rather than being an operation; and
+///   `GET /api/v2/user/account`, because its 200 body delivers two credentials. Both rules are in
+///   `AGENTS.md` § Authentication contract, and the second is explicitly *"not only an OAuth one"*.
 ///
-/// So `391 + 5 + 1 = 397`. When either gap closes, this constant rises and the matching [`ALLOWED`]
-/// entries are deleted, in one commit, together — which the stale-entry half of the gate enforces.
-const EMITTED: usize = 391;
+/// So `388 + 5 + 4 = 397` — **three categories, not two**, because the two kinds of absence are not
+/// the same claim: one is a limit and the other is a decision. Reporting them as one number is how
+/// a deliberate exclusion comes to read as something missing. When a gap closes, this constant
+/// rises and the matching [`ALLOWED`] entries are deleted, in one commit, together — which the
+/// stale-entry half of the gate enforces.
+const EMITTED: usize = 388;
+
+/// **Why an operation the documents declare is not emitted.** Three kinds, and they are not
+/// interchangeable.
+///
+/// The distinction is the point of the accounting: [`Gap::Inexpressible`] is a *limit* this
+/// repository would lift if it could, [`Gap::Withheld`] is a *decision* it would not, and
+/// [`Gap::OutsideSurface`] is not a gap in coverage at all. Collapsing them into one count is what
+/// lets a withheld endpoint read as a coverage hole, and a coverage hole read as a decision.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Gap {
+    /// Outside manager-sdk's canonical surface, so not missing from it. The receiver, and the
+    /// reason [`CANONICAL`] is 397 rather than [`DECLARED`].
+    OutsideSurface,
+    /// Inside the surface, and ingest cannot produce it.
+    Inexpressible,
+    /// Inside the surface and perfectly expressible, withheld on purpose.
+    ///
+    /// Two rules land here, both from `AGENTS.md` § Authentication contract and both about
+    /// credentials rather than about coverage: an authentication endpoint is never an operation,
+    /// and an operation whose declared response carries a token is withheld until C-136's
+    /// diversion lands. They share a category because they share a consequence — the entry's own
+    /// reason says which rule it is.
+    Withheld,
+}
+
+/// How many [`ALLOWED`] entries carry each [`Gap`], as the accounting states them.
+const OUTSIDE_SURFACE: usize = 1;
+const INEXPRESSIBLE: usize = 5;
+const WITHHELD: usize = 4;
 
 /// The operations the connector deliberately does not emit, each with the reason it does not.
 ///
@@ -76,61 +134,132 @@ const EMITTED: usize = 391;
 /// refuses one. It is also refused at a length that would let `"n/a"` through — see
 /// [`MIN_REASON`].
 ///
-/// **Three kinds of entry, and they are not interchangeable.** One is outside manager-sdk's surface
-/// and so is not a gap in coverage at all (the receiver, which is why [`CANONICAL`] is 397 and not
-/// 398); five are inside it and inexpressible; one is inside it, expressible, and withheld on
-/// purpose. Only the last is a decision this repository could reverse today, and it is the one that
-/// names the story that would.
-const ALLOWED: [(HttpMethod, &str, &str); 7] = [
+/// **Three kinds of entry, and they are not interchangeable** — see [`Gap`], which each entry
+/// carries so the accounting can count them apart rather than by position in this list.
+///
+/// The withheld entries state the **general rule** rather than restatements of a special case: an
+/// authentication endpoint is never an operation, and an operation whose response delivers a
+/// credential waits for C-136. Each per-endpoint sentence says only which rule it is and what that
+/// particular path carries.
+const ALLOWED: [(HttpMethod, &str, Gap, &str); 10] = [
     (
         HttpMethod::Post,
         "/api/v1/webhook/zendesk",
+        Gap::OutsideSurface,
         "a webhook receiver Zendesk calls into babelforce, not a call flux makes out of it. \
          Outside manager-sdk's surface, and excluded by the task-automation selectors stating \
          `/api/v3` rather than by naming it",
     ),
+    // ---- Authentication, not operations. AGENTS.md § Authentication contract. ----
     (
         HttpMethod::Post,
         "/oauth/token",
-        "its 2xx body is `OAuthTokenResponse`, which declares `access_token` and `refresh_token` \
-         (auth-2026-06-25.openapi.yaml:260). `connectors-api` renders a response body through \
-         `ctx.redactor.redact` (exec.rs:98) and the redactor holds only values the host resolved \
-         before the call (connector-pack/src/credentials.rs:149), so a token this call mints is \
-         unknown to it until after it has arrived — and `expose = false` does not help, because \
-         the execute route resolves any named operation regardless of exposure (exec.rs:88). \
-         C-136 diverts a credential-shaped response instead of redacting it after the fact; widen \
-         the `auth` POST selector back to `/oauth` and delete this entry in the commit that lands \
-         it",
+        Gap::Withheld,
+        "an authentication endpoint describes how to authenticate and is never a connector \
+         operation (owner-stated 2026-08-01, AGENTS.md § Authentication contract): it is the \
+         connector's authentication surface, performed by the host, not a call anyone invokes for \
+         a result. This one is the token grant itself. **Independently** its 2xx body is \
+         `OAuthTokenResponse`, declaring `access_token` and `refresh_token` \
+         (auth-2026-06-25.openapi.yaml:260), which no redactor here can reach — the host's \
+         redactor holds only values it resolved before the call \
+         (connector-pack/src/credentials.rs:149, rendered at connectors-api/src/exec.rs:98). Both \
+         reasons are true and the auth-flow one is load-bearing, because it still holds after \
+         C-136 lands the credential-response diversion",
+    ),
+    (
+        HttpMethod::Get,
+        "/oauth/authorize",
+        Gap::Withheld,
+        "an authentication endpoint describes how to authenticate and is never a connector \
+         operation (owner-stated 2026-08-01, AGENTS.md § Authentication contract). This one is the \
+         PKCE browser redirect — `response_type`, `redirect_uri`, `code_challenge`, \
+         `code_challenge_method` — an endpoint a user-agent is sent to, with no result to return \
+         to a program. It was emitted as `babelforce-authorize` through v0.9.0",
     ),
     (
         HttpMethod::Post,
+        "/oauth/revoke",
+        Gap::Withheld,
+        "an authentication endpoint describes how to authenticate and is never a connector \
+         operation (owner-stated 2026-08-01, AGENTS.md § Authentication contract). This one takes \
+         a `client_secret` as a plain argument, which is auth-flow material travelling as an \
+         operation parameter — the shape the three-axis auth model exists to keep out of a call \
+         signature. It was emitted as `babelforce-revoke` through v0.9.0",
+    ),
+    // ---- Withheld for what it returns, not for what it is. ----
+    (
+        HttpMethod::Get,
+        "/api/v2/user/account",
+        Gap::Withheld,
+        "its 200 body delivers two credentials, so it is withheld under the same contract as the \
+         `/oauth/*` three — AGENTS.md § Authentication contract, which says explicitly `not only an \
+         OAuth one`. `UserCustomer_customer_apis` carries \
+         `UserCustomer_customer_apis_babelforce`, which the vendor itself describes as `REST API \
+         access credentials` and which declares `accessId` and `accessToken` \
+         (user-2026-06-25.openapi.yaml:402-415), plus \
+         `UserCustomer_customer_apis_stream.token`, described `Push API token` (:417-421). \
+         `accessToken` claims `format: uuid` and `The unique Identifier (UUID) of the object`, but \
+         that description is boilerplate copied onto both fields and the document contradicts it: \
+         the scrubbed example for `accessId` is a real UUID while `accessToken`'s is 32 undashed \
+         hex characters (:294). C-415 scrubbed this same block as credential-shaped. The host's \
+         redactor holds only values it resolved before the call, so it cannot redact a secret the \
+         response itself delivers; C-136 is what lets this come back",
+    ),
+    // ---- Inexpressible: flux cannot carry a multipart body, so neither can this. ----
+    (
+        HttpMethod::Post,
         "/api/v2/agents/provision",
+        Gap::Inexpressible,
         "multipart/form-data request body, which `BodyEncoding` cannot spell; ingest skips it \
-         rather than publishing a request that silently sends no body. C-426 closes this",
+         rather than publishing a request that silently sends no body. C-426 established the \
+         blocker is flux, not this IR: on the pinned engine line `http.request`'s `body` is a \
+         string and `parse`'s `as_type` is a closed analyzer-enforced list with no multipart, so \
+         there is no part list, filename or per-part content type to lower to. Needs a flux-side \
+         encoder first",
     ),
     (
         HttpMethod::Post,
         "/api/v2/agents/provision/validate",
+        Gap::Inexpressible,
         "multipart/form-data request body, which `BodyEncoding` cannot spell; ingest skips it \
-         rather than publishing a request that silently sends no body. C-426 closes this",
+         rather than publishing a request that silently sends no body. C-426 established the \
+         blocker is flux, not this IR: on the pinned engine line `http.request`'s `body` is a \
+         string and `parse`'s `as_type` is a closed analyzer-enforced list with no multipart, so \
+         there is no part list, filename or per-part content type to lower to. Needs a flux-side \
+         encoder first",
     ),
     (
         HttpMethod::Post,
         "/api/v2/outbound/lists/{id}/leads/upload",
+        Gap::Inexpressible,
         "multipart/form-data request body, which `BodyEncoding` cannot spell; ingest skips it \
-         rather than publishing a request that silently sends no body. C-426 closes this",
+         rather than publishing a request that silently sends no body. C-426 established the \
+         blocker is flux, not this IR: on the pinned engine line `http.request`'s `body` is a \
+         string and `parse`'s `as_type` is a closed analyzer-enforced list with no multipart, so \
+         there is no part list, filename or per-part content type to lower to. Needs a flux-side \
+         encoder first",
     ),
     (
         HttpMethod::Post,
         "/api/v2/phonebook/bulk",
+        Gap::Inexpressible,
         "multipart/form-data request body, which `BodyEncoding` cannot spell; ingest skips it \
-         rather than publishing a request that silently sends no body. C-426 closes this",
+         rather than publishing a request that silently sends no body. C-426 established the \
+         blocker is flux, not this IR: on the pinned engine line `http.request`'s `body` is a \
+         string and `parse`'s `as_type` is a closed analyzer-enforced list with no multipart, so \
+         there is no part list, filename or per-part content type to lower to. Needs a flux-side \
+         encoder first",
     ),
     (
         HttpMethod::Post,
         "/api/v2/prompts",
+        Gap::Inexpressible,
         "multipart/form-data request body, which `BodyEncoding` cannot spell; ingest skips it \
-         rather than publishing a request that silently sends no body. C-426 closes this",
+         rather than publishing a request that silently sends no body. C-426 established the \
+         blocker is flux, not this IR: on the pinned engine line `http.request`'s `body` is a \
+         string and `parse`'s `as_type` is a closed analyzer-enforced list with no multipart, so \
+         there is no part list, filename or per-part content type to lower to. Needs a flux-side \
+         encoder first",
     ),
 ];
 
@@ -149,7 +278,7 @@ const MIN_REASON: usize = 24;
 /// the file under test would agree with whatever that file happens to say.
 ///
 /// **`risk` and `idempotency` are here, not only the id, and that is what this file adds to
-/// `babelforce_spec_route.rs`.** Widening to 391 operations meant declaring a blunt
+/// `babelforce_spec_route.rs`.** Widening to 388 operations meant declaring a blunt
 /// `risk = "high"` over every manager write, and three of these nine *are* manager writes that ship
 /// as `medium`/`idempotent`. Those two fields reach a host's approval gate and its retry decision,
 /// so letting a bulk selector raise them would have been a silent behavioural change to three
@@ -262,7 +391,13 @@ fn load() -> LoadedProvider {
 /// The union of what ingest published and what it diagnosed away. See the module docs for why the
 /// second half cannot be dropped.
 fn declared(loaded: &LoadedProvider) -> BTreeSet<String> {
-    let mut declared: BTreeSet<String> = BTreeSet::new();
+    // The document the connector no longer reads, folded back in by name — see [`UNREAD`]. Without
+    // this the three endpoints would leave both sides of the comparison at once, which is the one
+    // shape of coverage loss this gate exists to make impossible.
+    let mut declared: BTreeSet<String> = UNREAD
+        .iter()
+        .map(|(method, path)| key(*method, path))
+        .collect();
 
     for document in &loaded.ingested {
         for operation in &document.ingested.operations {
@@ -323,7 +458,7 @@ fn the_documents_are_covered_and_every_gap_carries_a_reason() {
 
     let allowed: BTreeSet<String> = ALLOWED
         .iter()
-        .map(|(method, path, _)| key(*method, path))
+        .map(|(method, path, _, _)| key(*method, path))
         .collect();
     let gap: BTreeSet<String> = declared.difference(&emitted).cloned().collect();
 
@@ -351,7 +486,7 @@ fn the_documents_are_covered_and_every_gap_carries_a_reason() {
          entry with nothing to allow is a pre-authorised regression"
     );
 
-    for (method, path, reason) in ALLOWED {
+    for (method, path, _, reason) in ALLOWED {
         assert!(
             reason.trim().chars().count() >= MIN_REASON,
             "the reason for {} is {} characters, and a reason shorter than {MIN_REASON} tells a \
@@ -361,16 +496,37 @@ fn the_documents_are_covered_and_every_gap_carries_a_reason() {
         );
     }
 
-    // **The accounting, stated as arithmetic rather than as prose.** `391 + 5 + 1 = 397`. Exactly
-    // one allow-list entry — the receiver — is *outside* the canonical surface rather than missing
-    // from it, which is why it is the one subtracted here and why `CANONICAL + 1 == DECLARED`
+    // **The accounting, stated as arithmetic rather than as prose, in three categories.**
+    // `388 + 5 + 3 = 397`. The categories are counted from the entries' own [`Gap`] rather than by
+    // position, so an entry added under the wrong heading fails here instead of being absorbed into
+    // a total. Exactly one entry — the receiver — is *outside* the canonical surface rather than
+    // missing from it, which is why it is excluded from the sum and why `CANONICAL + 1 == DECLARED`
     // below is the same fact stated from the other end.
+    let count = |kind: Gap| ALLOWED.iter().filter(|(_, _, gap, _)| *gap == kind).count();
+
     assert_eq!(emitted.len(), EMITTED, "the emitted operation count moved");
     assert_eq!(
-        emitted.len() + (ALLOWED.len() - 1),
+        count(Gap::OutsideSurface),
+        OUTSIDE_SURFACE,
+        "the receiver is the only entry outside the canonical surface"
+    );
+    assert_eq!(
+        count(Gap::Inexpressible),
+        INEXPRESSIBLE,
+        "the inexpressible set is the multipart uploads, and moving it means flux grew a multipart \
+         body — re-read C-426 before editing this"
+    );
+    assert_eq!(
+        count(Gap::Withheld),
+        WITHHELD,
+        "the withheld set is the three `/oauth/*` endpoints plus `GET /api/v2/user/account`; an \
+         operation joining or leaving it is a change to what this connector will hand a caller"
+    );
+    assert_eq!(
+        emitted.len() + count(Gap::Inexpressible) + count(Gap::Withheld),
         CANONICAL,
-        "{EMITTED} emitted + {} in scope and not emitted = the {CANONICAL} manager-sdk covers",
-        ALLOWED.len() - 1
+        "{EMITTED} emitted + {INEXPRESSIBLE} inexpressible + {WITHHELD} withheld = the {CANONICAL} \
+         manager-sdk covers"
     );
     assert_eq!(
         CANONICAL + 1,
@@ -411,15 +567,61 @@ fn no_emitted_operation_lives_on_an_internal_path() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Exposure — the reason 391 operations is survivable
+// The auth-flow rule
 // ---------------------------------------------------------------------------------------------
 
-/// **Nine tools, not 391.** The exposure tier's whole purpose, asserted as a number.
+/// **An OAuth endpoint never becomes a connector operation.**
+///
+/// Owner-stated 2026-08-01, and **general rather than a babelforce judgement**: an `/oauth/*`
+/// endpoint is *how to authenticate*. That is the connector's authentication surface, which
+/// `[[auth]]` describes and which the host performs — not something an agent or a caller invokes
+/// and reads a result from. The rule is recorded in `AGENTS.md` § Authentication contract.
+///
+/// v0.9.0 withheld `POST /oauth/token` on the narrower argument that its response body *is* a
+/// credential. That was right and under-reasoned, and it left the two siblings emitted, both wrong
+/// for the broader reason:
+///
+/// - `GET /oauth/authorize` is the **PKCE browser redirect** — `response_type`, `redirect_uri`,
+///   `code_challenge`, `code_challenge_method`. It is an endpoint a *user-agent* is sent to, not
+///   one a program calls and reads a result from.
+/// - `POST /oauth/revoke` takes a **`client_secret` as a plain operation argument**, which is
+///   auth-flow material travelling as a call parameter — the shape the three-axis auth model exists
+///   to keep out of a signature.
+///
+/// So the `auth` service contributes **zero** operations. Its `[[services]]` and `[[spec]]` entries
+/// stay: ingest must keep reading the document so [`DECLARED`] still counts all three and
+/// drift-check still watches its `sha256`. A gap this rule creates is still a gap [`ALLOWED`] must
+/// explain — which is why all three carry an entry rather than disappearing from the accounting.
+#[test]
+fn no_oauth_endpoint_becomes_an_operation() {
+    let connector = load().connector;
+
+    let oauth: Vec<(&str, &str)> = connector
+        .operations
+        .iter()
+        .filter(|operation| operation.path.starts_with("/oauth"))
+        .map(|operation| (operation.id.as_str(), operation.path.as_str()))
+        .collect();
+
+    assert!(
+        oauth.is_empty(),
+        "OAuth endpoints reached the connector as operations: {oauth:?}. An `/oauth/*` endpoint is \
+         how a caller authenticates — `[[auth]]` describes it and the host performs it — and it is \
+         never an operation. Remove the `auth` selectors from `providers/babelforce.toml` and give \
+         each withheld endpoint an `ALLOWED` entry stating the auth-flow rule"
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Exposure — the reason 388 operations is survivable
+// ---------------------------------------------------------------------------------------------
+
+/// **Nine tools, not 388.** The exposure tier's whole purpose, asserted as a number.
 ///
 /// C-413 split "callable" from "exposed" precisely so that widening a connector to a vendor's full
 /// surface does not spend a model's entire context on a tool list. Without this assertion the
 /// mechanism is one absent `expose = false` away from being undone — a selector that loses the key
-/// still compiles, still emits every operation, and turns the catalogue into 391 LLM tools.
+/// still compiles, still emits every operation, and turns the catalogue into 388 LLM tools.
 #[test]
 fn only_the_curated_nine_reach_a_model() {
     let connector = load().connector;
@@ -434,7 +636,7 @@ fn only_the_curated_nine_reach_a_model() {
 
     assert_eq!(
         exposed, expected,
-        "the exposed set is not the curated nine. 391 operations are callable and nine are tools; \
+        "the exposed set is not the curated nine. 388 operations are callable and nine are tools; \
          a difference here is either a tool that vanished from every caller's reach or several \
          hundred that arrived in a model's context"
     );
@@ -512,7 +714,7 @@ fn the_nine_shipped_operations_keep_their_contract() {
 ///
 /// 23 operations across the five documents declare neither `summary` nor `description`. The story's
 /// rule is that each either gets one through the overlay or stays unexposed — and since 382 of the
-/// 391 are unexposed, that is very nearly free. This is the assertion that keeps it free rather
+/// 388 are unexposed, that is very nearly free. This is the assertion that keeps it free rather
 /// than assumed: the day someone exposes one of the 23, the build fails until they write the
 /// sentence a model would otherwise have to guess from.
 #[test]

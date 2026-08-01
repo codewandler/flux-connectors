@@ -93,16 +93,10 @@ fn segments_contain(haystack: &str, needle: &str) -> bool {
 /// `getUser` mean two different requests without either being compiled by accident. The address
 /// cost `AGENTS.md` warns about was paid for a surface that exists, which is the distinction the
 /// old comment here drew.
-const SERVICES: &[&str] = &[
-    "manager",
-    "auth",
-    "user",
-    "task-automation",
-    "task-schedule",
-];
+const SERVICES: &[&str] = &["manager", "user", "task-automation", "task-schedule"];
 
 #[test]
-fn babelforce_publishes_the_nine_curated_operations_across_five_named_services() {
+fn babelforce_publishes_the_nine_curated_operations_across_four_named_services() {
     let connector = load();
     assert_eq!(connector.id, PROVIDER);
     assert_eq!(connector.vendor, "Babelforce");
@@ -133,7 +127,7 @@ fn babelforce_publishes_the_nine_curated_operations_across_five_named_services()
         "the curated nine are the exposed set; the rest are callable without being tools"
     );
 
-    // Five named services, and **nothing in the reserved `default`**: every operation arrived
+    // Four named services, and **nothing in the reserved `default`**: every operation arrived
     // through a `[[spec]]` entry that names the service its document joins, so an operation left in
     // `default` would be one that reached the connector by some other route.
     assert_eq!(connector.service_names(), SERVICES);
