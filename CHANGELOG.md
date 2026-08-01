@@ -7,6 +7,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The flux engine line moves from 0.41 to 0.45 (C-403).** All seven `codewandler-flux-*` pins
+  advance, with `flux-spec` going `1.2` → `1.3` on its own `1.x` line. This is the change a consumer
+  has been waiting on: `connector_pack::pack` hands out `Arc<dyn flux_runtime::Tool>`, and while this
+  repository built against 0.41 no host on current flux could link the pack at all.
+
+  **The emitted Flux is unchanged.** A full build rewrites 2 of 557 artifacts — the two README
+  snippet SVGs — and the change is four `fill=` attributes: flux-lang 0.45 classifies a reference to
+  a previously-bound local as `Op`, so `payload`, `content_type`, `url` and `response` take the
+  identifier colour. Every text node is byte-identical, and no `.flux` module, `.connector.toml`,
+  catalogue table or `catalog.json` moves.
+
+  **The behavioural change to know about** is flux 0.43's: `http.request` returns a
+  `{status, headers, body}` record instead of one flat string, and `Egress` returns it unchanged.
+  `ToolResult`'s Rust type did not change, so a consumer that string-matched the old block gets **no
+  compile error** — only different bytes. `connectors-api`'s `/execute` response text changes
+  accordingly. The shape is now pinned by
+  `connectors-api/tests/live_egress.rs::the_response_comes_back_as_a_record_not_a_flat_string`.
+
+  **One lock movement is not a consequence of the seven bumps:** `codewandler-flux-secret` 1.0.1 →
+  1.1.1. `flux-runtime` 0.45.0 declares `flux-secret = "1"` but calls `Redactor::try_add_secret`,
+  which first exists in 1.1.0 — so any resolve that legally selects a 1.0.x fails to compile, as this
+  repository's committed lock did. That is an upstream under-declaration; the requirement should be
+  `"1.1"`. The 1.0.1 → 1.1.1 diff is strictly more redaction, so the movement is in the safe
+  direction for the secrets invariant.
+
+  This does **not** yet unblock a downstream host: published `connector-pack` 0.8.0 still requires
+  `flux-runtime ^0.41`. Only the next release closes flux-exchange's X-11.
+
 ## [0.8.0] — 2026-08-01
 
 ### Added

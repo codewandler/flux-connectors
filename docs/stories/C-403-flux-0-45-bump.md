@@ -2,7 +2,7 @@
 id: C-403
 title: "Move the flux pin from 0.41 to 0.45"
 pillar: Build
-status: ready
+status: done
 priority: 1
 epic: connectors-api
 note: "THE CRITICAL PATH TO flux-exchange. Seven crates pinned at 0.41 while flux is 0.45; connector-pack hands out Arc<dyn flux_runtime::Tool>, so no consumer can link the pack and current flux together"
@@ -37,22 +37,44 @@ behind it.
 
 ## Acceptance
 
-- [ ] All seven `codewandler-flux-*` pins move to the current line, and `flux-spec` is re-checked
+- [x] All seven `codewandler-flux-*` pins move to the current line, and `flux-spec` is re-checked
       against crates.io rather than assumed — it moves on its own `1.x` line.
-- [ ] `cargo build --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets
+- [x] `cargo build --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets
       -- -D warnings`, `cargo fmt --all --check` all green.
-- [ ] `cargo run -p connector-cli -- diff` reports every artifact up to date. **A bump that silently
+- [x] `cargo run -p connector-cli -- diff` reports every artifact up to date. **A bump that silently
       changes emitted Flux is the failure mode to watch for** — if artifacts move, stop and explain
       why before regenerating.
-- [ ] **Failing-first test** — the response shape `connector-pack` hands back is asserted. Whatever
+- [x] **Failing-first test** — the response shape `connector-pack` hands back is asserted. Whatever
       it is after the bump, a test pins it, because a consumer parsing the old flat string gets no
       compile error and a silent behaviour change.
-- [ ] `docs/integrating-with-flux.md` Gap 9 is re-checked and corrected: it currently says the record
+- [x] `docs/integrating-with-flux.md` Gap 9 is re-checked and corrected: it currently says the record
       change is "closed upstream and expires here on a flux-web bump". This *is* that bump.
-- [ ] The engine line is recorded in one place, so the next bump is a value change.
+- [x] The engine line is recorded in one place, so the next bump is a value change.
 
 ## Progress
-- (not started)
+- **Done.** Merged from `impl/C-403`; full gate green after the coordinator's artifact build.
+- **The `diff` Acceptance item was met the hard way and is worth reading as a success.** The
+  implementor stopped at `2 artifacts would change` and **did not regenerate**, exactly as the story
+  demands. Characterised: both are the README snippet SVGs, every text node byte-identical, four
+  `fill=` attributes moving because flux-lang 0.45 classifies a reference to a bound local as `Op`.
+  No `.flux`, `.connector.toml`, catalogue table or `catalog.json` moved — the emitted Flux is
+  unchanged by the bump. The coordinator's full build then wrote exactly those 2 of 557, and
+  `diff` now reports all 557 up to date.
+- Five tests were red on the stale SVGs, one of them
+  (`every_highlight_class_in_the_snippet_has_its_own_colour`) outside `AGENTS.md`'s documented
+  expected-red set — because that table enumerates the *new-provider* case and this was a
+  highlighter-classification change. Same single cause; all five green after the build.
+- **Found, and worth filing upstream against flux:** `flux-runtime` 0.45.0 declares
+  `flux-secret = "1"` but calls `Redactor::try_add_secret`, which first exists in 1.1.0. Any resolve
+  that legally selects a 1.0.x fails with E0599 — this repository's committed lock did. The
+  requirement should be `"1.1"`. This forced the only lock movement that is not a mechanical
+  consequence of the seven declared bumps.
+- Also corrected at integration: `crates/connectors-api/Cargo.toml` restated the engine line as 0.41
+  with C-204's spent exception. `flux_engine_line.rs` reads `[workspace.dependencies]` only, so a
+  second copy of the version there would never have been caught — precisely what Acceptance's
+  "recorded in one place" exists to prevent.
+- **This does not unblock a downstream host yet.** Published `connector-pack` 0.8.0 still requires
+  `flux-runtime ^0.41`; only the next release closes flux-exchange's X-11.
 
 ## Notes
 - This unblocks two things at once. Beside the linking problem, the record return is the prerequisite

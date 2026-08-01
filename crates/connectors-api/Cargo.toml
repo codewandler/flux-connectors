@@ -54,9 +54,13 @@ reqwest = { workspace = true, features = ["json"] }
 
 # **Sign-in** (C-204). `flux-credentials` supplies PKCE, the `state` generator and the RFC-6749
 # authorize-URL builder, because the story's first instruction is not to write a fourth PKCE
-# implementation in this ecosystem; `jsonwebtoken` verifies the `id_token`. The workspace manifest
-# records why this is 0.41 rather than the 0.42.1 the story names — 0.42 splits the flux line, and
-# 0.41.0 has the same three functions and is already in the lock.
+# implementation in this ecosystem; `jsonwebtoken` verifies the `id_token`.
+#
+# The version is the workspace engine line and is stated **only** there (C-403). This comment used
+# to restate it as 0.41 with C-204's reasoning for pinning below the line; that exception is spent —
+# the whole workspace is on 0.45 — and a second copy of a version number is exactly what
+# `flux_engine_line.rs` exists to stop. It reads `[workspace.dependencies]` alone, so a stale
+# restatement here would never have been caught.
 flux-credentials.workspace = true
 jsonwebtoken.workspace = true
 
