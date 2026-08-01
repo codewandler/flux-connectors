@@ -39,6 +39,7 @@ mod inbound;
 pub mod net;
 pub mod pipeline;
 pub mod png;
+pub mod scaffold;
 pub mod seam;
 pub mod site;
 pub mod status;
@@ -56,6 +57,7 @@ pub fn run(invocation: &Invocation, out: &mut impl Write) -> Result<()> {
     match invocation.command {
         Command::Build => build(invocation, out),
         Command::Diff => show_diff(invocation, out),
+        Command::Scaffold => scaffold(invocation, out),
         Command::Check => not_yet_implemented("check", "C-14"),
         Command::Fetch => not_yet_implemented("fetch", "C-14"),
         Command::Install => not_yet_implemented("install", "C-15"),
@@ -115,6 +117,31 @@ fn rasterize(invocation: &Invocation, workspace: &Workspace, out: &mut impl Writ
         }
         png::Outcome::Skipped(reason) => writeln!(out, "no PNG written: {reason}")?,
     }
+    Ok(())
+}
+
+/// Write the provider TOML that references a vendored document — C-419.
+///
+/// **To `out` and nowhere else.** This is the one command whose whole safety argument is that it
+/// produces text rather than a file: the author diffs and pastes, so a bad run costs nothing and the
+/// reviewed artifact stays a human's. Nothing here opens a file for writing, and the emitted TOML is
+/// not an artifact — it is not hashed, not in `connectors.lock`, and `diff` says nothing about it.
+fn scaffold(invocation: &Invocation, out: &mut impl Write) -> Result<()> {
+    let workspace = workspace_for(invocation)?;
+    let Some(provider) = invocation.provider.as_deref() else {
+        bail!(
+            "`flux-connectors scaffold` needs a provider to scaffold: \
+             `flux-connectors scaffold <PROVIDER>`\n\n{}",
+            cli::USAGE
+        );
+    };
+
+    let rendered = if invocation.diff {
+        scaffold::render_diff(&workspace, provider)?
+    } else {
+        scaffold::render(&workspace, provider, &invocation.selects)?
+    };
+    write!(out, "{rendered}")?;
     Ok(())
 }
 

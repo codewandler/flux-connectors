@@ -8,8 +8,10 @@
 //! | provider TOML -> `Connector` IR | `connector-spec` (**C-3**) | [`load`] |
 //! | `Connector` IR -> `.flux` + `.connector.toml` | `connector-flux` (**C-8**) | [`emit`] |
 //!
-//! Both are wired (C-27); this module is the only place either crate is named, and both stages are
-//! pure functions of bytes, which is why all IO lives in [`crate::pipeline`].
+//! Both are wired (C-27); this module is the only place either crate's **entry points** are called,
+//! and both stages are pure functions of bytes, which is why all IO lives in [`crate::pipeline`].
+//! (Other modules name the crate's *types* — the IR travels through orchestration untranslated —
+//! but nothing else calls a loader, an ingest or an emitter.)
 //!
 //! # What is still stubbed here, and by whom it is finished
 //!
@@ -196,6 +198,26 @@ pub fn load(inputs: &ProviderInputs) -> Result<Connector> {
 /// visible: each line names the endpoint and says what it cost, so a `select` that could never have
 /// matched is legible before someone goes looking for the operation it names.
 pub fn load_reported(inputs: &ProviderInputs) -> Result<Loaded> {
+    let loaded = load_full(inputs)?;
+    Ok(Loaded {
+        diagnostics: loaded
+            .diagnostics()
+            .iter()
+            .map(|diagnostic| format!("{}: {diagnostic}", inputs.name))
+            .collect(),
+        connector: loaded.connector,
+    })
+}
+
+/// [`load_reported`], keeping the whole [`connector_spec::LoadedProvider`] rather than the two parts
+/// a build needs.
+///
+/// `scaffold` (C-419) is the caller: it has to read the *declarations* — which documents the file
+/// pins and with what provenance, which parameters a `[[patch.operations]]` block omits — and not
+/// only the connector they compiled to. Those are exactly the fields a build has no use for, which
+/// is why `load_reported` drops them and why this is a second function rather than a wider return
+/// type on the one the pipeline calls.
+pub fn load_full(inputs: &ProviderInputs) -> Result<connector_spec::LoadedProvider> {
     let label = inputs.label();
     // The whole cache, unfiltered. Which documents are compiled is the `[spec]` entries' decision
     // and the loader's to resolve — this layer picking one would be exactly the silent substitution
@@ -210,16 +232,22 @@ pub fn load_reported(inputs: &ProviderInputs) -> Result<Loaded> {
             document: &spec.document,
         })
         .collect();
-    let loaded = connector_spec::provider::load_with_spec(&label, &inputs.definition, &cache)?;
+    Ok(connector_spec::provider::load_with_spec(
+        &label,
+        &inputs.definition,
+        &cache,
+    )?)
+}
 
-    Ok(Loaded {
-        diagnostics: loaded
-            .diagnostics()
-            .iter()
-            .map(|diagnostic| format!("{}: {diagnostic}", inputs.name))
-            .collect(),
-        connector: loaded.connector,
-    })
+/// Read one vendored document without a provider file to resolve it against — C-419.
+///
+/// The third and last call into `connector-spec`'s front ends, and the only one that is not part of
+/// compiling a connector. `scaffold` needs it for the case the other two cannot serve: a document
+/// sitting in `specs/<provider>/` that **no `[spec]` entry pins**, because the provider file does not
+/// exist yet or does not name it. That is the whole point of scaffolding — the file that would pin
+/// it is the output, not the input.
+pub fn ingest(document: &str) -> Result<connector_spec::Ingested> {
+    Ok(connector_spec::openapi::ingest(document)?)
 }
 
 /// One provider's IR, plus everything its vendored document got wrong — see [`load_reported`].

@@ -1,9 +1,9 @@
 //! The `flux-connectors` command surface.
 //!
-//! Hand-rolled rather than derived from a parser crate: the surface is five subcommands and three
-//! flags, and adding a dependency would collide with the connector stories in flight. If the surface
-//! grows past this, swapping in a real parser is a contained change — [`parse`] is the only place
-//! that knows argv exists.
+//! Hand-rolled rather than derived from a parser crate: the surface is six subcommands, five flags
+//! and one positional, and adding a dependency would collide with the connector stories in flight.
+//! If the surface grows past this, swapping in a real parser is a contained change — [`parse`] is
+//! the only place that knows argv exists.
 
 use std::path::PathBuf;
 
@@ -24,6 +24,30 @@ pub struct Invocation {
     pub service: Option<String>,
     /// Also rasterize the README snippet to PNG (`build` only). See [`crate::png`].
     pub png: bool,
+    /// `scaffold` only: which operations to select, in the order they were written — C-419.
+    ///
+    /// Each entry is one `[[patch.select]]` statement, spelled
+    /// `<service>:<path_prefix>:<METHOD,METHOD>`; see [`USAGE`] for the grammar and
+    /// [`crate::scaffold`] for why selection is an argument rather than something the helper infers.
+    pub selects: Vec<String>,
+    /// `scaffold` only: report the document against the connector as it stands, rather than
+    /// emitting TOML — C-419.
+    pub diff: bool,
+}
+
+impl Invocation {
+    /// A command with no options, for the paths that answer before reading any.
+    fn bare(command: Command) -> Self {
+        Self {
+            command,
+            root: None,
+            provider: None,
+            service: None,
+            png: false,
+            selects: Vec::new(),
+            diff: false,
+        }
+    }
 }
 
 /// A subcommand.
@@ -39,6 +63,8 @@ pub enum Command {
     Fetch,
     /// Install artifacts into a local flux. Lands with C-15.
     Install,
+    /// Write the provider TOML that references a vendored document, to stdout — C-419.
+    Scaffold,
     /// Print usage.
     Help,
     /// Print the version.
@@ -53,6 +79,7 @@ impl Command {
             "check" => Command::Check,
             "fetch" => Command::Fetch,
             "install" => Command::Install,
+            "scaffold" => Command::Scaffold,
             "help" | "-h" | "--help" => Command::Help,
             "version" | "-V" | "--version" => Command::Version,
             other => bail!("unknown command `{other}`\n\n{USAGE}"),
@@ -66,10 +93,12 @@ flux-connectors — compile vendor API specs into Flux-Lang
 
 USAGE:
     flux-connectors <COMMAND> [OPTIONS]
+    flux-connectors scaffold <PROVIDER> [--select <SEL>]... [--diff]
 
 COMMANDS:
     build      Compile providers/*.toml plus the vendored spec cache into connectors/
     diff       Show what `build` would change, without writing anything
+    scaffold   Write the provider TOML that references a vendored document, to stdout
     check      Verify artifacts against their inputs           (not yet implemented — story C-14)
     fetch      Refresh the vendored spec cache from upstream   (not yet implemented — story C-14)
     install    Install artifacts into ~/.flux                  (not yet implemented — story C-15)
@@ -77,6 +106,16 @@ COMMANDS:
     version    Print the version
 
 OPTIONS:
+    --select <SEL>      `scaffold` only, repeatable: one `[[patch.select]]` statement,
+                        spelled <service>:<path_prefix>:<METHOD,METHOD> — for example
+                        `manager:/api/v2/agents:GET,POST`. Fields may be dropped from
+                        the right (`manager:/api/v2`, `manager`) and left empty
+                        (`:/api/v2:GET`); an empty field states nothing, which is
+                        C-411's absent key. Without any --select every document is
+                        selected whole, split by method class
+    --diff              `scaffold` only: report what the documents declare that this
+                        connector does not publish, and the reverse, instead of
+                        emitting TOML
     --provider <NAME>   Restrict the run to one connector
     --service <NAME>    Restrict the run to one whole service of that connector,
                         by service name (`s3`) or by its address
@@ -90,21 +129,16 @@ OPTIONS:
     -h, --help          Print this message
     -V, --version       Print the version
 
-`build`, `diff` and `check` are hermetic and offline: they compile committed bytes. `fetch` is the
-only command that contacts a vendor.";
+`build`, `diff`, `check` and `scaffold` are hermetic and offline: they read committed bytes. `fetch`
+is the only command that contacts a vendor. `scaffold` writes to stdout and never over a file in
+place — the author diffs and pastes, so a bad run costs nothing.";
 
 /// Parse an argument list that does **not** include the program name.
 pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation> {
     let mut args = args.into_iter();
 
     let Some(first) = args.next() else {
-        return Ok(Invocation {
-            command: Command::Help,
-            root: None,
-            provider: None,
-            service: None,
-            png: false,
-        });
+        return Ok(Invocation::bare(Command::Help));
     };
     let command = Command::parse(&first)?;
 
@@ -112,6 +146,8 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation> {
     let mut provider = None;
     let mut service = None;
     let mut png = false;
+    let mut selects = Vec::new();
+    let mut diff = false;
     while let Some(arg) = args.next() {
         match split_flag(&arg) {
             Some(("--root", value)) => {
@@ -126,17 +162,23 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation> {
             // Only `build` writes anything, so only `build` can be asked to write one more thing.
             // Accepting it elsewhere would promise a raster that `diff` has no way to produce.
             Some(("--png", _)) if command == Command::Build => png = true,
-            Some(("--help" | "-h", _)) => return Ok(help()),
-            Some(("--version" | "-V", _)) => {
-                return Ok(Invocation {
-                    command: Command::Version,
-                    root: None,
-                    provider: None,
-                    service: None,
-                    png: false,
-                })
+            // `scaffold` is the only command that states a selection, and the only one that reports
+            // instead of compiling. Accepting either elsewhere would promise a `build` that selects
+            // — which is the provider file's decision and only its.
+            Some(("--select", value)) if command == Command::Scaffold => {
+                selects.push(value_of("--select", value, &mut args)?);
             }
+            Some(("--diff", _)) if command == Command::Scaffold => diff = true,
+            Some(("--help" | "-h", _)) => return Ok(Invocation::bare(Command::Help)),
+            Some(("--version" | "-V", _)) => return Ok(Invocation::bare(Command::Version)),
             Some((flag, _)) => bail!("unknown option `{flag}` for `{first}`\n\n{USAGE}"),
+            // `scaffold <provider>`, the one positional in the surface. It is spelled positionally
+            // because the provider is not a *restriction* on a whole-catalogue run the way
+            // `build --provider` is — a scaffold of nothing in particular has no meaning — and
+            // `--provider` stays accepted so the two spellings do not have to be remembered apart.
+            None if command == Command::Scaffold && provider.is_none() => {
+                provider = Some(arg);
+            }
             None => bail!("unexpected argument `{arg}` for `{first}`\n\n{USAGE}"),
         }
     }
@@ -147,17 +189,9 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation> {
         provider,
         service,
         png,
+        selects,
+        diff,
     })
-}
-
-fn help() -> Invocation {
-    Invocation {
-        command: Command::Help,
-        root: None,
-        provider: None,
-        service: None,
-        png: false,
-    }
 }
 
 /// Split `--flag=value` into its parts; `None` when the argument is not a flag at all.
@@ -210,6 +244,7 @@ mod tests {
             ("check", Command::Check),
             ("fetch", Command::Fetch),
             ("install", Command::Install),
+            ("scaffold", Command::Scaffold),
         ] {
             assert_eq!(parse_args(&[token]).unwrap().command, expected);
         }
@@ -260,5 +295,49 @@ mod tests {
     fn a_stray_positional_is_an_error() {
         // Catching this matters: `flux-connectors build zendesk` must not silently build everything.
         assert!(parse_args(&["build", "zendesk"]).is_err());
+    }
+
+    #[test]
+    fn scaffold_names_its_provider_positionally() {
+        let positional = parse_args(&["scaffold", "babelforce"]).unwrap();
+        assert_eq!(positional.provider.as_deref(), Some("babelforce"));
+        assert_eq!(
+            positional,
+            parse_args(&["scaffold", "--provider", "babelforce"]).unwrap()
+        );
+        // A second one is an error rather than a silent last-wins: two provider names is a command
+        // line whose author meant something this surface cannot do.
+        assert!(parse_args(&["scaffold", "babelforce", "zendesk"]).is_err());
+    }
+
+    #[test]
+    fn select_is_repeatable_and_scaffold_only() {
+        let invocation = parse_args(&[
+            "scaffold",
+            "babelforce",
+            "--select",
+            "manager:/api/v2:GET",
+            "--select=auth:/oauth",
+        ])
+        .unwrap();
+        assert_eq!(
+            invocation.selects,
+            vec!["manager:/api/v2:GET".to_owned(), "auth:/oauth".to_owned()]
+        );
+        // `build` compiles what the provider file selects; a selection on its command line would be
+        // a second, invisible source of truth for the same decision.
+        assert!(parse_args(&["build", "--select", "manager:/api/v2"]).is_err());
+    }
+
+    #[test]
+    fn diff_is_a_scaffold_flag_and_a_command_of_its_own() {
+        assert!(
+            parse_args(&["scaffold", "babelforce", "--diff"])
+                .unwrap()
+                .diff
+        );
+        assert!(!parse_args(&["scaffold", "babelforce"]).unwrap().diff);
+        assert_eq!(parse_args(&["diff"]).unwrap().command, Command::Diff);
+        assert!(parse_args(&["build", "--diff"]).is_err());
     }
 }
