@@ -281,6 +281,13 @@ pub struct OperationPatch {
     /// Parameter-level corrections: a wrong type, a false `required`, a missing description.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub params: Vec<ParamPatch>,
+    /// Parameters the connector **drops** from what the document declares — C-422.
+    ///
+    /// Applied after [`params`](Self::params), so requiredness is judged as the connector states it
+    /// rather than as the vendor guessed it: an author may correct a wrong `required` flag and then
+    /// omit the parameter, and the two statements read in that order.
+    #[serde(default, skip_serializing_if = "ParamOmission::is_empty")]
+    pub omit: ParamOmission,
 }
 
 /// A correction to one parameter of a selected operation.
@@ -306,6 +313,83 @@ pub struct ParamPatch {
     /// types a date as a bare string.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schema: Option<JsonSchema>,
+}
+
+/// The parameters a selected operation **drops**, named by position and then by name — C-422.
+///
+/// # Why this exists at all
+///
+/// A vendor document is written to describe an API, not to be a tool contract. babelforce's
+/// `listReportingCalls` declares 38 query parameters, of which the vendor's own prose marks most as
+/// aliases of the others (`fromNumber` *of* `from`, and a whole `filters.`-prefixed restatement of
+/// the set). A model choosing arguments out of 38 synonyms chooses worse than one choosing out of
+/// 14, and before this existed the only way back to 14 was to abandon the document and hand-write
+/// the operation — which C-416 measured as the single place where hand-authoring beat patching
+/// across an entire converted provider.
+///
+/// # Why this is not a contradiction of `Patch` having no `hide`
+///
+/// [`Patch`] refuses an operation-level opt-out because **selection is opt-in**: a `hide` list would
+/// make every operation a vendor adds upstream a new tool by default, and the author would learn
+/// about it from a model's behaviour rather than from a diff. That argument does not reach one level
+/// down, and lands the opposite way, *because the operation is already selected*. An author writing
+/// here has stated intent about this endpoint and is **narrowing** it — not opting out of reviewing
+/// it — and a new upstream parameter still arrives in the tool by default, exactly as an operation
+/// does.
+///
+/// # Why it is a list of names rather than a flag on `ParamPatch`
+///
+/// Dropping is not correcting: there is nothing else to say about a parameter that is going away, so
+/// a three-line block per name would cost 51 lines to remove babelforce's 17 synonyms and hand a
+/// reviewer 51 lines that all say the same thing. Grouping by position keeps the identity
+/// [`ParamPatch`] uses — name **and** position, because a vendor may bind one name in two places —
+/// and costs one line per group plus the names.
+///
+/// **Every omission is written down**, which is the property that survives regeneration: nothing
+/// here is inferred from a description, a naming convention or a similarity between two parameters,
+/// because none of those is a decision anybody made.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ParamOmission {
+    /// Path parameters to drop. Always refused — see [`omit`] — and present so that naming one is a
+    /// refusal that explains itself rather than an unknown-key error.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub path: Vec<String>,
+    /// Query-string parameters to drop. The synonym flood lives here.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub query: Vec<String>,
+    /// Caller-supplied headers to drop.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub header: Vec<String>,
+    /// Named request-body fields to drop.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub body: Vec<String>,
+}
+
+impl ParamOmission {
+    /// Whether the patch drops nothing.
+    pub fn is_empty(&self) -> bool {
+        self.path.is_empty()
+            && self.query.is_empty()
+            && self.header.is_empty()
+            && self.body.is_empty()
+    }
+
+    /// Every omission as the pair that identifies it, in a fixed group order.
+    ///
+    /// The order is fixed rather than incidental because it is the order the refusals come out in,
+    /// and a loader that reported the same file's problems in a different order on a different run
+    /// would fail the determinism test this crate keeps.
+    pub fn entries(&self) -> impl Iterator<Item = (ParamPosition, &str)> {
+        [
+            (ParamPosition::Path, &self.path),
+            (ParamPosition::Query, &self.query),
+            (ParamPosition::Header, &self.header),
+            (ParamPosition::Body, &self.body),
+        ]
+        .into_iter()
+        .flat_map(|(position, names)| names.iter().map(move |name| (position, name.as_str())))
+    }
 }
 
 /// Where a parameter travels on the request. Mirrors the groups of [`ParamSet`].
@@ -807,6 +891,14 @@ fn select(
     for correction in &patch.params {
         correct(&mut params, correction, select, problems);
     }
+    // **Corrections first, then omissions**, because the omission rules read the corrected
+    // parameter: `required` is refused as the *connector* states it, not as the vendor guessed it.
+    // A document that marks a filter required when it is not would otherwise pin that argument into
+    // the tool with no way out, and the way out has to stay a written statement — correct the flag,
+    // then drop the parameter.
+    for (position, name) in patch.omit.entries() {
+        omit(&mut params, position, name, select, problems);
+    }
 
     Some(Operation {
         id,
@@ -874,6 +966,67 @@ fn correct(
     if let Some(schema) = &correction.schema {
         param.schema = schema.clone();
     }
+}
+
+/// Drop one parameter a [`ParamOmission`] names from a selected operation — C-422.
+///
+/// Three refusals, and each is the same sentence pointed somewhere different: **an omission may only
+/// drop a parameter the request can still be composed without, and only one the document actually
+/// declares.**
+///
+/// - **A name the document does not declare there** is a problem rather than a no-op, for the reason
+///   [`correct`] gives one: the vendor renames a parameter, the line that used to drop it stops
+///   applying, and the argument this connector removed on purpose is silently back in the tool with
+///   the build green. It is also what catches a name listed twice — the second lookup finds nothing,
+///   because the first one removed it.
+/// - **A required parameter** composes a request the vendor rejects. Every other consequence of
+///   omission is a wider or narrower tool; this one is a runtime failure, so it is the case where
+///   silence would be actively unsafe rather than merely unhelpful. Judged *after* corrections, so
+///   an author who believes the vendor's flag is wrong says so in `params` and is then free to drop
+///   it.
+/// - **A path parameter**, whatever its flag says. The path template keeps its placeholder, so
+///   dropping `id` from `/tickets/{id}` leaves a URL nothing can fill — the `PUT /tickets/` defect
+///   [`ParamPatch::required`] exists to correct, arrived at from the other direction. There is no
+///   legitimate case: a parameter can only leave the path by the path changing, which is a different
+///   operation.
+fn omit(
+    params: &mut ParamSet,
+    position: ParamPosition,
+    name: &str,
+    select: &str,
+    problems: &mut Vec<String>,
+) {
+    let group = match position {
+        ParamPosition::Path => &mut params.path,
+        ParamPosition::Query => &mut params.query,
+        ParamPosition::Header => &mut params.header,
+        ParamPosition::Body => &mut params.body,
+    };
+    let Some(index) = group.iter().position(|param| param.name == name) else {
+        problems.push(format!(
+            "patch for {select:?} omits a `{position:?}` parameter named {name:?}, which the \
+             vendored spec does not declare there"
+        ));
+        return;
+    };
+    if position == ParamPosition::Path {
+        problems.push(format!(
+            "patch for {select:?} omits the path parameter {name:?}, which cannot be dropped: the \
+             path template still carries `{{{name}}}` and nothing composes a URL with that left in \
+             it. A path parameter leaves only when the path does"
+        ));
+        return;
+    }
+    if group[index].required {
+        problems.push(format!(
+            "patch for {select:?} omits {name:?}, which the vendored spec declares **required** — \
+             dropping it composes a request the vendor rejects. If the vendor's flag is wrong, \
+             correct it with a `[[patch.operations.params]]` block stating `required = false` and \
+             then omit it"
+        ));
+        return;
+    }
+    group.remove(index);
 }
 
 /// What the spec cache actually holds, for a refusal about a pin that resolved to nothing.
@@ -3526,6 +3679,14 @@ fn validate_patch(loaded: &LoadedProvider, inline: &[String], problems: &mut Vec
                 ));
             }
         }
+
+        for (position, name) in patch.omit.entries() {
+            if name.trim().is_empty() {
+                problems.push(format!(
+                    "patch for {select:?} omits a `{position:?}` parameter with an empty `name`"
+                ));
+            }
+        }
     }
 }
 
@@ -3551,6 +3712,7 @@ pub fn accepted_keys() -> Vec<(&'static str, Vec<String>)> {
         ("patch", probe::<Patch>()),
         ("operationPatch", probe::<OperationPatch>()),
         ("paramPatch", probe::<ParamPatch>()),
+        ("paramOmission", probe::<ParamOmission>()),
         ("authMethod", probe::<AuthMethod>()),
         ("oauth2", probe::<crate::OAuth2Spec>()),
         ("oauthRedirect", probe::<crate::OAuthRedirect>()),
