@@ -463,6 +463,32 @@ Three consequences, each of which has already been got wrong once:
   because the host's redactor holds only values the host itself resolved and cannot know a secret
   minted by the very call returning it.
 
+**The build enforces that second test, and it enforces it on a *declaration*** (C-430). An operation
+declares `credential_response = ["/Servers/*/ApiTokens"]` — one JSON Pointer per location, `*` for
+every element of an array — and the loader refuses it, naming the rule above. Four operations shipped
+in v0.9.0 against the rule and were withheld by that story: `postmark-server-list` and
+`postmark-server-get` (`ApiTokens`, the account's live Server Tokens in plaintext) and
+`zoom-meeting-get` and `zoom-meeting-create` (`start_url`, the host's ZAK token in a URL). Three
+consequences of *how* it is enforced, each of which is the part that gets rebuilt wrong:
+
+- **Never by field name.** A catalogue-wide scan for token-shaped names returned 31 hits and 28 were
+  correct as they stood — Klaviyo's `public_api_key` is *"public by design"*, Typeform's `token` is a
+  response's own opaque id, Anthropic's `max_input_tokens` is a limit. A gate wrong nine times in ten
+  is one authors learn to spell around, so only a connector's own claim trips it.
+- **The pointer resolves through nested schemas, arrays included.** `ApiTokens` sits under
+  `Servers[]`, and the hand-run scan that walked `properties` one level deep missed it on the first
+  pass. A location matching nothing is a loud refusal, not a no-op: that is the shape a vendor rename
+  takes.
+- **A declaration nobody makes catches nothing**, so the four withheld ids are also named, with their
+  reasons, in `crates/connector-spec/tests/credential_response.rs` — reinstating one is a red build.
+  Each provider file carries the same exclusion in prose, in babelforce's three-category form.
+
+Removing the *field* rather than the operation is not the answer and was refused explicitly: nothing
+between the vendor and a model-visible symbol projects a response — `connector-flux` emits
+`return $response` and `connector-pack` hands back what the transport produced — so omitting a
+location from `response_schema` deletes the disclosure and leaves the exposure. C-79 is the story
+that makes redaction possible and therefore makes such an operation shippable again.
+
 Flux's four existing `AuthScheme` variants are presets of the three-axis model. A connector using
 only those presets must serialize exactly what flux already understands.
 

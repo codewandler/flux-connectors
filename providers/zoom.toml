@@ -8,14 +8,18 @@
 # meetings, webinars, recordings, reports, users, phone, rooms and account administration — pointing
 # at it without a selection mechanism would be pointing several hundred LLM tools at a paying Zoom
 # account. When C-14's fetch and C-4's ingest land this file becomes `[spec]` plus a
-# `[[patch.operations]]` selection, and **the four operations below are the selection to reproduce.**
+# `[[patch.operations]]` selection, and **the two operations below are the selection to reproduce.**
 # By Zoom's `operationId`, with the method and path alongside because an id can be renamed upstream
 # while a path cannot:
 #
-#   meeting        GET     /v2/meetings/{meetingId}
-#   meetingCreate  POST    /v2/users/{userId}/meetings
 #   meetingDelete  DELETE  /v2/meetings/{meetingId}
 #   user           GET     /v2/users/{userId}
+#
+# Two more were selected until 2026-08-01 and are **withheld by rule**, not forgotten — see the
+# withholding block below, which is the accounting a selection must reproduce as an exclusion:
+#
+#   meeting        GET     /v2/meetings/{meetingId}     — returns `start_url`
+#   meetingCreate  POST    /v2/users/{userId}/meetings  — returns `start_url`
 #
 # Until then drift is undetectable by machine, exactly as for every hand-authored provider here
 # (`docs/designs/provider-operation-inventory.md` §6.7).
@@ -57,20 +61,46 @@
 # shipped connector shares, and it is stated here rather than implied by silence.
 #
 # ---------------------------------------------------------------------------------------------
-# SCHEMA GAP: a *response* field can be a credential, and nothing can say so.
+# WITHHELD BY RULE: the two operations that returned the host's ZAK token (C-430).
 # ---------------------------------------------------------------------------------------------
 #
-# Zoom's meeting object carries `start_url` — a URL with the host's ZAK token embedded, which starts
-# the meeting **as the host** for anyone holding it. Both `zoom-meeting-get` and
-# `zoom-meeting-create` return it. `http.request` hands the whole response back as one string, so the
-# emitted op returns it into a model-visible symbol, and there is no field on `Operation` or inside
-# `response_schema` that marks a response location as sensitive the way `[[auth]]` marks a request
-# credential. AGENTS.md's credential invariant is about generated *artifacts* and holds — nothing here
-# embeds a value — but the runtime consequence is real and is recorded rather than left to be
-# discovered: a Zoom meeting response put in front of a model contains a host-privileged URL. The two
-# `response_schema` descriptions below say so in the one place a consumer of
-# `web/public/catalog.json` will read. Closing it means a response-redaction declaration the host
-# applies, which is `$auth`-seam-adjacent and belongs with C-10/C-21 rather than in this file.
+# **What this connector emits is 2 operations of the 4 it once did, and the other two are named
+# here with the reason** — the same three-category accounting `providers/babelforce.toml` uses
+# (emitted / inexpressible / withheld), rather than an absence a reader has to guess at:
+#
+#   * **`zoom-meeting-get` and `zoom-meeting-create` are withheld.** Zoom's meeting object carries
+#     `start_url` — a URL with the host's ZAK token embedded, which starts the meeting **as the
+#     host** for anyone holding it — and both operations returned it. `AGENTS.md`
+#     § Authentication contract: *"Any operation whose declared response carries a token — not only
+#     an OAuth one — is withheld until C-136's diversion lands"*, because the host's redactor holds
+#     only values the host itself resolved and cannot know a secret minted by the very call
+#     returning it. Withheld 2026-08-01, having shipped in v0.9.0 and every release before it.
+#   * Everything else this connector does not declare is the ordinary *inexpressible* category —
+#     the query-parameter and optional-body gaps below, which are C-30's and C-56's.
+#
+# **This file described the hazard accurately for five releases and returned the field anyway**, and
+# that is the mistake worth recording rather than quietly deleting. The two `response_schema`
+# entries carried `"HOST-PRIVILEGED. Embeds the host's ZAK token … Treat it as a credential"`, which
+# a reader of `web/public/catalog.json` did meet — but a warning in a tool contract is a warning to
+# whoever reads the contract, and the value still arrived in the response either way. Describing a
+# credential is not withholding it. C-79 had carried this exact `start_url` in its frontmatter since
+# it was filed.
+#
+# **Removing the field instead of the operation was considered and refused.** It would have deleted
+# the disclosure while leaving the exposure: `http.request` hands the whole response back
+# (`crates/connector-flux/src/op.rs` emits `return $response`), `connector-pack` "delegates to the
+# transport the host bound and hands back what it produced" (`crates/connector-pack/src/lib.rs`),
+# and nothing between the vendor and a model-visible symbol projects a response at all. Omitting
+# `start_url` from `response_schema` would move it out of the published contract and not out of the
+# payload — strictly worse than the state it replaced.
+#
+# **What brings them back.** C-136: an operation that legitimately produces a credential returns a
+# *handle*, not the secret. C-79's response-redaction declaration is the narrower answer for an
+# operation like `zoom-meeting-get`, which is otherwise a legitimate read that happens to carry one
+# hazardous field — it needs the host to redact the location before the value reaches a
+# model-visible symbol, which is host work no part of this repository does today. Restore these two
+# in the same commit that deletes their entries from
+# `crates/connector-spec/tests/credential_response.rs`.
 #
 # ---------------------------------------------------------------------------------------------
 # SCHEMA GAP: no query parameter of any kind (C-30), which is what excludes the meeting list.
@@ -82,15 +112,15 @@
 # value carrying `&` does not filter, it injects a parameter. Excluded here, pending C-30:
 #
 # - `GET /v2/users/{userId}/meetings`, the meetings **list**, with `type` (`scheduled`, `upcoming`,
-#   `previous_meetings`, …), `page_size`, and the opaque server-issued `next_page_token` cursor. This
-#   is the omission a reader will notice: an agent can create a meeting and read one by id, but cannot
-#   enumerate a user's schedule. `type` and `page_size` are an enum and an integer that *would*
-#   survive verbatim interpolation today, which is exactly the trap — a query-assembly path in this
-#   connector is where the next author adds a text filter.
-# - `occurrence_id` on meeting get and meeting delete, which addresses one occurrence of a recurring
-#   meeting. Recurring meetings are out of scope anyway — see `type` on the create — so its absence
-#   costs nothing beyond that.
-# - `show_previous_occurrences` on meeting get, and `schedule_for_reminder` /
+#   `previous_meetings`, …), `page_size`, and the opaque server-issued `next_page_token` cursor.
+#   `type` and `page_size` are an enum and an integer that *would* survive verbatim interpolation
+#   today, which is exactly the trap — a query-assembly path in this connector is where the next
+#   author adds a text filter. (Since C-430 withheld the meeting get, no operation here reads a
+#   meeting at all, so the list is no longer the omission a reader notices first.)
+# - `occurrence_id` on meeting delete, which addresses one occurrence of a recurring meeting.
+#   Recurring meetings are out of scope anyway — see the C-56 block above — so its absence costs
+#   nothing beyond that.
+# - `schedule_for_reminder` /
 #   `cancel_meeting_reminder` on meeting delete. **The two delete flags decide whether Zoom emails the
 #   host and the registrants about the cancellation**, so their absence means whichever default Zoom
 #   applies is what happens; this connector does not get to choose it, and `zoom-meeting-delete`'s own
@@ -112,7 +142,7 @@
 # them. That asymmetry between path and query is the whole selection principle for this connector.
 #
 # ---------------------------------------------------------------------------------------------
-# SCHEMA GAP: no optional request-body field can be declared (C-56).
+# SCHEMA GAP: no optional request-body field can be declared (C-56) — which no longer bites here.
 # ---------------------------------------------------------------------------------------------
 #
 # The emitter binds every declared body field into the payload record unconditionally, so a caller who
@@ -122,37 +152,20 @@
 # did nothing, which is the worst available mode. Until C-56 teaches the emitter to omit an absent
 # field, this file declares required fields only.
 #
-# `zoom-meeting-create` is the only operation here with a body, and what the gap costs it is:
+# **`zoom-meeting-create` was the only operation here with a body, and it is withheld** (C-430), so
+# nothing this connector now emits sends one at all. The gap is recorded rather than deleted because
+# it is what the operation costs when C-136 brings it back: top-level `agenda`, `password`,
+# `default_password`, `timezone`, `schedule_for`, `template_id`, `tracking_fields` and `pre_schedule`;
+# `recurrence`, whose absence is what makes Zoom's recurring meeting types unreachable; and every
+# `settings` option but `waiting_room`, which the operation declared as an always-sent required field
+# because a meeting's access control is not something a caller should inherit silently.
 #
-# - top-level `agenda`, `password`, `default_password`, `timezone`, `schedule_for`, `template_id`,
-#   `tracking_fields` and `pre_schedule`;
-# - `recurrence`, whose absence is what makes Zoom's recurring meeting types unreachable — see `type`
-#   on that operation;
-# - and every `settings` option but one. That list is on the operation itself, because "which meeting
-#   options are unreachable" is the question a reader of a *scheduling* connector will actually ask.
-#
-# ---------------------------------------------------------------------------------------------
-# NESTED `settings`: DECLARED THROUGH C-29 WIRE PATHS, NOT FLATTENED.
-# ---------------------------------------------------------------------------------------------
-#
-# A Zoom meeting's options do not sit next to its topic. `POST /v2/users/{userId}/meetings` takes
-#
-#   {"topic": …, "type": 2, "start_time": …, "duration": …, "settings": {"waiting_room": …}}
-#
-# so the one declared option carries `wire = "settings.waiting_room"` (C-29) and the emitter assembles
-# the nested record:
-#
-#   $payload = { duration: …, settings: { waiting_room: $waiting_room }, start_time: …, … }
-#
-# A flat `{"waiting_room": true}` is a top-level member Zoom does not define. It is **ignored** rather
-# than rejected: the meeting is created with whatever the account default is and the API answers
-# `201`. That is zendesk's failure mode, not asana's — a success and a wrong meeting — which is why
-# `crates/connector-flux/tests/zoom_connector.rs` asserts the nesting on the IR *and* on the emitted
-# `$payload` text.
-#
-# The root of this payload holds leaves **and** a branch, which neither zendesk (everything under
-# `ticket.`) nor asana (everything under `data.`) exercises; babelforce's agent-status update is the
-# only other mixed root in the fleet, and both of its fields are optional.
+# It also carried this fleet's one demonstration of C-29 wire paths assembling a **nested** payload —
+# `wire = "settings.waiting_room"` producing `{…, settings: { waiting_room: … }, …}` — with the root
+# holding leaves and a branch together, which neither zendesk (everything under `ticket.`) nor asana
+# (everything under `data.`) exercises. That demonstration goes with the operation;
+# `crates/connector-flux/tests/zoom_connector.rs` asserted it and no longer can. babelforce's
+# agent-status update is the nearest remaining mixed root, and both of its fields are optional.
 
 id = "zoom"
 vendor = "Zoom"
@@ -187,7 +200,7 @@ api_version = "v2"
 # one would widen the egress allow-list for something no operation here does.
 base_url = "https://api.zoom.us"
 
-description = "Zoom meeting scheduling: read, create and delete a meeting, and read a user"
+description = "Zoom meeting administration: cancel a meeting, and read a user. Reading and creating a meeting are withheld — both return the host's ZAK token in `start_url` (C-430)"
 
 # Every operation authenticates the same way.
 default_auth = [{ credentials = ["zoom.access_token"] }]
@@ -206,10 +219,11 @@ env = ["ZOOM_ACCESS_TOKEN"]
 description = "Zoom server-to-server OAuth access token, sent as a bearer. Minted outside flux and supplied through the environment; it expires within the hour and nothing here can refresh it"
 
 # ---------------------------------------------------------------------------------------------
-# Operations — 4, all under Zoom's one versioned prefix
+# Operations — 2 emitted and 2 withheld, all under Zoom's one versioned prefix
 #
 # Curated to what a scheduling flow executes at runtime: read a meeting, create one, cancel one, and
-# resolve the user the meeting belongs to. Everything else Zoom's Meeting API offers — webinars,
+# resolve the user the meeting belongs to — of which the first two are withheld by rule (C-430) and
+# what remains is the cancel and the user read. Everything else Zoom's Meeting API offers — webinars,
 # recordings, registrants, polls, live streaming, reports, account and group administration — is
 # excluded, and so is every listing endpoint: the same selection principle babelforce's 9-of-163
 # follows (`docs/designs/provider-operation-inventory.md` §5.2).
@@ -230,145 +244,24 @@ description = "Zoom server-to-server OAuth access token, sent as a bearer. Minte
 # alphanumerics, `_` and `-` only, so `op zoom.meetings.get` is undeclarable (C-8, C-23).
 # ---------------------------------------------------------------------------------------------
 
-[[operations]]
-id = "zoom-meeting-get"
-method = "GET"
-path = "/v2/meetings/{meeting_id}"
-description = "Get one meeting — its topic, start time, duration, timezone, join URL and settings. The response also carries `start_url`, which starts the meeting as its host for anyone holding it"
-risk = "low"
-idempotency = "idempotent"
-
-[[operations.params.path]]
-name = "meeting_id"
-description = "The meeting's numeric id, as returned by `zoom-meeting-create`. Zoom also accepts a meeting UUID here; this operation does not, because a UUID is base64 that can carry `/` and would have to be double URL-encoded, and nothing in this pipeline encodes a path"
-required = true
-schema = { type = "integer", format = "int64", minimum = 1 }
-
-[operations.response_schema]
-type = "object"
-required = ["id", "join_url"]
-properties = { id = { type = "integer", format = "int64", description = "The meeting's numeric id — what later calls address it by" }, join_url = { type = "string", description = "The URL a participant joins with" }, start_url = { type = "string", description = "HOST-PRIVILEGED. Embeds the host's ZAK token: anyone holding this URL starts the meeting as its host. Treat it as a credential: do not log it, echo it, or pass it to another tool" } }
-
-[operations.quirks.error_envelope]
-message_pointer = "/message"
-code_pointer = "/code"
-
 # ---------------------------------------------------------------------------------------------
-# The two writes.
+# `zoom-meeting-get` STOOD HERE, and `zoom-meeting-create` after it. Both are withheld by rule —
+# `start_url` is the host's ZAK token in a URL. See the header block; C-136 is what restores them.
 #
-# `risk` is set from what each one changes and who sees it, not from the HTTP method:
+# The one write left.
 #
-# - `zoom-meeting-delete` is `destructive` — "deletes or otherwise irreversible". Zoom offers no
-#   undelete; the meeting id, its join URL and any registrations go with it.
-# - `zoom-meeting-create` is `medium`. See its own comment: with no invitee list declarable (C-56) it
-#   notifies nobody, which is what keeps it below the `high` tier.
+# `risk` is set from what it changes and who sees it, not from the HTTP method:
+# `zoom-meeting-delete` is `destructive` — "deletes or otherwise irreversible". Zoom offers no
+# undelete; the meeting id, its join URL and any registrations go with it.
 #
-# `idempotency` is `non_idempotent` on both. Zoom documents no idempotency key and no idempotency
-# guarantee on either endpoint, so `idempotent` would be a claim with nothing behind it — and on the
-# delete it would be a claim flux acts on, because `connector-flux`'s `check_write_metadata` permits
-# `idempotent` on a `DELETE` (it is an idempotent *method* under RFC 9110 §9.2.2). A retried
-# cancellation whose first attempt already notified the registrants is not a no-op to the people who
-# received the email. The direction is fail-closed: flux forgoes a safe retry rather than replaying a
-# write.
+# `idempotency` is `non_idempotent`. Zoom documents no idempotency key and no idempotency guarantee
+# on the endpoint, so `idempotent` would be a claim with nothing behind it — and here it would be a
+# claim flux acts on, because `connector-flux`'s `check_write_metadata` permits `idempotent` on a
+# `DELETE` (it is an idempotent *method* under RFC 9110 §9.2.2). A retried cancellation whose first
+# attempt already notified the registrants is not a no-op to the people who received the email. The
+# direction is fail-closed: flux forgoes a safe retry rather than replaying a write.
 # ---------------------------------------------------------------------------------------------
 
-[[operations]]
-id = "zoom-meeting-create"
-method = "POST"
-path = "/v2/users/{user_id}/meetings"
-description = "Schedule a one-off meeting for a user at a fixed time. Nobody is invited and nobody is notified — the meeting appears on the host's own Zoom schedule and the returned `join_url` is how anyone else learns of it. The response also carries `start_url`, which starts the meeting as its host for anyone holding it"
-# A new entry on somebody's calendar, but a quiet one: with no `settings.meeting_invitees` declarable
-# (C-56) Zoom emails nobody, the meeting is visible only to the host and to whoever is handed the join
-# URL, and a human can delete it in one click. `medium` — "writes with limited blast radius" — rather
-# than the `high` that `github-issue-create` and `asana-task-story-add` carry, because neither of those
-# is quiet: they publish text to everyone watching.
-#
-# WHEN C-56 LANDS AND `settings.meeting_invitees` BECOMES DECLARABLE, REVISIT THIS. An invitee list
-# makes Zoom send calendar invitations immediately, under the token owner's name, and that is the
-# `high` case.
-risk = "medium"
-idempotency = "non_idempotent"
-
-[[operations.params.path]]
-name = "user_id"
-description = "The host: `me` for the token's own user, a Zoom user id, or the user's email address"
-required = true
-schema = { type = "string", pattern = "^[A-Za-z0-9@._+-]+$", minLength = 1 }
-
-[[operations.params.body]]
-name = "topic"
-description = "The meeting's title, as it appears on the host's schedule and in the invitation"
-required = true
-schema = { type = "string", minLength = 1, maxLength = 200 }
-
-# A *constant*, not a caller-supplied parameter, pinned with a JSON Schema `const` — the same
-# declaration `providers/zendesk.toml` uses for `ticket.safe_update`. `const` already means "this
-# value and no other", so codegen sends it and keeps it out of the op signature (C-8,
-# `connector-flux`'s `constant`), and no model has to guess a magic number.
-#
-# `2` is Zoom's *scheduled* meeting: one occurrence, at a fixed `start_time`, for `duration` minutes.
-# It is pinned because it is the only type this operation can honestly offer. Type `1` (instant)
-# ignores `start_time` and `duration`, which are required fields here; types `3` and `8` are recurring
-# and need the `recurrence` object, which C-56 makes undeclarable. Leaving `type` to the caller would
-# mean a signature that accepts values producing a meeting the other required fields contradict.
-[[operations.params.body]]
-name = "type"
-description = "Constant `2` — a scheduled, one-off meeting at a fixed time. Not caller-supplied: the recurring types need a `recurrence` object this connector cannot declare, and the instant type ignores the start time"
-required = true
-schema = { type = "integer", const = 2 }
-
-# UTC only, and the `pattern` is the contract. Zoom accepts a local-time `start_time` *paired with* a
-# `timezone`, and pairs badly with C-56: `timezone` would have to be an always-sent field that Zoom
-# then ignores whenever the start time carries a `Z`. Requiring the absolute instant instead removes
-# the ambiguity entirely — Zoom renders it in each participant's own zone regardless.
-[[operations.params.body]]
-name = "start_time"
-description = "When the meeting starts, as UTC in `yyyy-MM-ddTHH:mm:ssZ` form. Local-time scheduling is not offered: it requires a paired `timezone` field, and Zoom ignores that field whenever the start time is already absolute"
-required = true
-schema = { type = "string", format = "date-time", pattern = "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" }
-
-[[operations.params.body]]
-name = "duration"
-description = "How long the meeting is scheduled for, in minutes. A meeting that overruns is not cut off; this is what the calendar entry says"
-required = true
-schema = { type = "integer", minimum = 1, maximum = 1440 }
-
-# WHICH SETTING, AND WHY EXACTLY ONE.
-#
-# Under C-56 a declared field is always sent, so every option declared here becomes a value the caller
-# *must* supply. `waiting_room` is the one worth that cost: it decides whether somebody holding the
-# join URL walks straight into the meeting or waits for the host to admit them — it is the meeting's
-# access control, and the join URL is the only thing standing between a scheduled call and whoever the
-# link reaches. A connector that omitted it would create meetings whose access control is whatever the
-# Zoom account happens to be configured for, with nothing in the operation's signature saying so.
-# Making it an explicit caller decision is the fail-closed direction, and it is the same reasoning
-# that makes zendesk's `comment.public` default to an internal note.
-#
-# `join_before_host` is the option a reader would add next, and it is deliberately absent: Zoom
-# ignores it when a waiting room is enabled, so declaring both would put two always-sent fields on the
-# signature whose interaction this file cannot express and the emitter cannot validate.
-#
-# UNREACHABLE UNTIL C-56, and therefore inherited from the account's own defaults: `host_video`,
-# `participant_video`, `mute_upon_entry`, `join_before_host`, `audio`, `auto_recording`,
-# `meeting_authentication`, `approval_type`, `registration_type`, `alternative_hosts`, `contact_email`
-# and `meeting_invitees`. The last one is what holds this operation's `risk` at `medium` — see above.
-[[operations.params.body]]
-name = "waiting_room"
-wire = "settings.waiting_room"
-description = "True to hold arrivals in a waiting room until the host admits them; false to let anyone with the join URL enter directly. Always sent, because the account default is not something a caller should inherit silently"
-required = true
-schema = { type = "boolean" }
-
-[operations.response_schema]
-type = "object"
-required = ["id", "join_url"]
-properties = { id = { type = "integer", format = "int64", description = "The created meeting's numeric id — what `zoom-meeting-get` and `zoom-meeting-delete` address it by" }, join_url = { type = "string", description = "The URL to hand to participants" }, start_url = { type = "string", description = "HOST-PRIVILEGED. Embeds the host's ZAK token: anyone holding this URL starts the meeting as its host. Treat it as a credential: do not log it, echo it, or pass it to another tool" } }
-
-[operations.quirks.error_envelope]
-message_pointer = "/message"
-code_pointer = "/code"
-
-# ---------------------------------------------------------------------------------------------
 
 [[operations]]
 id = "zoom-meeting-delete"
@@ -391,7 +284,7 @@ idempotency = "non_idempotent"
 
 [[operations.params.path]]
 name = "meeting_id"
-description = "The numeric id of the meeting to cancel. As on the get, a meeting UUID is not accepted"
+description = "The numeric id of the meeting to cancel. A meeting UUID is not accepted: a Zoom UUID is base64 that can carry `/` and would have to be double URL-encoded, and nothing in this pipeline encodes a path"
 required = true
 schema = { type = "integer", format = "int64", minimum = 1 }
 
@@ -426,8 +319,9 @@ schema = { type = "string", pattern = "^[A-Za-z0-9@._+-]+$", minLength = 1 }
 # this schema earns its place — every one of them is a field a reader would assume wrongly:
 #
 # - **`type` is an integer plan code**, not a string: `1` Basic, `2` Licensed, `4` Unassigned without
-#   Meetings Basic. It is what this operation exists to resolve before `zoom-meeting-create`, because a
-#   Basic user's meetings are capped at 40 minutes.
+#   Meetings Basic. It is what this operation existed to resolve before `zoom-meeting-create`, because
+#   a Basic user's meetings are capped at 40 minutes — and it stays declared while that operation is
+#   withheld, because the licence is the same fact whoever schedules the meeting.
 # - **`verified` is an integer**, `1` verified and `0` not — while the `verified` inside a
 #   `phone_numbers` entry is a genuine boolean. Two members, one name, two types.
 # - **timestamps are ISO 8601 strings**, not the Unix integers Intercom's sibling connector returns.

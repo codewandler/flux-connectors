@@ -9,9 +9,47 @@
 # on 2026-07-31.
 #
 # ---------------------------------------------------------------------------------------------
+# WITHHELD BY RULE: the Account API surface, which returned live Server Tokens in plaintext (C-430).
+# ---------------------------------------------------------------------------------------------
+#
+# **This connector emits 4 operations, and 2 more are named here with the reason** — the same
+# three-category accounting `providers/babelforce.toml` uses (emitted / inexpressible / withheld):
+#
+#   * **`postmark-server-list` and `postmark-server-get` are withheld.** Both returned `ApiTokens`:
+#     that server's own live Server Token(s) **in plaintext**, and on the list, for every server on
+#     the account. `AGENTS.md` § Authentication contract: *"Any operation whose declared response
+#     carries a token — not only an OAuth one — is withheld until C-136's diversion lands"*, because
+#     the host's redactor holds only values the host itself resolved and cannot know a secret minted
+#     by the very call returning it. Withheld 2026-08-01, having shipped in v0.9.0.
+#   * The bounce filters below are the ordinary *inexpressible* category — C-30's query gap.
+#
+# **The previous version of this comment argued for declaring the field and shipping the operation,
+# and it was wrong.** It said, correctly, that omitting `ApiTokens` from `response_schema` "would not
+# hide it at runtime (the vendor still returns it; a caller reading the raw response still sees it)
+# and would hide the *warning* from every reader who only ever sees this connector's declared
+# contract". Both halves of that are true and neither of them licenses returning the token. The
+# choice was never "omit the field or declare it" — it was "return the token or do not", and the
+# operation is what returns it. Describing a credential is not withholding it.
+#
+# **What this costs, stated plainly rather than buried.** Postmark's whole Account API surface goes
+# with the two operations: the `account` service (a service with no operation emits an empty module
+# and an `operations = []` manifest, which `crates/connector-spec/tests/services.rs` refuses — the
+# same fall `providers/babelforce.toml` records for its `auth` service), the
+# `postmark.account_token` credential, and the `account_token` config field that asked a human for
+# it. A connector "asks for everything it needs and nothing it cannot use", and after the withholding
+# there is nothing left that can use an Account Token.
+#
+# **So does the two-credential finding below.** It is kept as a record of what was measured, because
+# the finding is about the mechanism rather than about Postmark, but note before reading it: **this
+# connector no longer demonstrates it.** `crates/connector-flux/tests/postmark_connector.rs` measured
+# the partition on a live two-service connector and can no longer do so. C-136 is what restores both
+# the operations and the demonstration; restore them in the same commit that deletes their entries
+# from `crates/connector-spec/tests/credential_response.rs`.
+#
+# ---------------------------------------------------------------------------------------------
 # C-180'S QUESTION: IS A CREDENTIAL ALREADY ADDRESSABLE PER SERVICE, OR DOES THIS CONNECTOR NEED A
 # NEW MECHANISM? MEASURED, AND THE ANSWER IS: IT ALREADY HOLDS, ONE LEVEL DOWN FROM WHERE THE STORY
-# NOTE POINTS.
+# NOTE POINTS. **Historical from 2026-08-01** — see the withholding block above.
 # ---------------------------------------------------------------------------------------------
 #
 # Postmark genuinely partitions its surface by credential rather than sending both together:
@@ -24,35 +62,34 @@
 # (`crates/connector-spec/src/credential.rs`), since a credential path already carries a `service`
 # segment (`tenants/<tenant>/<authority>/<service>/<credential>`) and the module docs call that
 # "deliberate headroom: a vendor whose surfaces authenticate separately is expressible the day one
-# appears" (`crates/connector-spec/src/ir.rs:1157-1160`, reached from `Connector::credential_ref_for`).
-# But `credential_ref_for` (`ir.rs:1166-1178`) always renders the reserved `DEFAULT_SERVICE` for
-# *every* declared credential, whatever service its operations belong to — its own doc comment says
-# so: "a credential is declared at **provider** level ... nothing today needs [a service segment],
-# because credential names are unique within a provider and already distinguish the case." Postmark
-# does not change that; `postmark.server_token` and `postmark.account_token` still both resolve
-# through `credential_ref_for` to a path under the elided default service, telling two credentials
-# apart by leaf name alone (`server_token` vs `account_token`), not by a service segment.
-# `crates/connector-flux/tests/postmark_connector.rs` measures this directly rather than asserting it
-# in prose.
+# appears", reached from `Connector::credential_ref_for`. But `credential_ref_for` always renders the
+# reserved `DEFAULT_SERVICE` for *every* declared credential, whatever service its operations belong
+# to — its own doc comment says so: "a credential is declared at **provider** level ... nothing today
+# needs [a service segment], because credential names are unique within a provider and already
+# distinguish the case." Postmark did not change that; `postmark.server_token` and
+# `postmark.account_token` both resolved through `credential_ref_for` to a path under the elided
+# default service, telling two credentials apart by leaf name alone (`server_token` vs
+# `account_token`), not by a service segment.
 #
-# **What actually keeps the two tokens from ever traveling on the same request is a different,
-# already-shipped mechanism: per-operation `auth`.** `Operation::auth` (`ir.rs:652-669`) lets an
-# operation override the connector's `default_auth` with its own alternatives list; every operation in
-# the `account` service here does exactly that, naming `postmark.account_token` and nothing else,
-# while every operation in `server` declares no `auth` of its own and inherits `default_auth`'s
-# `postmark.server_token`. That override is already general — babelforce's own
-# `[[patch.operations]] auth = [...]` overlay entry uses it on a different axis — so **no change to
-# connector-spec was needed to ship this connector**, and the two-credential partition this file
-# demonstrates is enforced at the operation level, which the `[[services]]` split already requires
-# operations to declare correctly (`validate_member_service`, `crates/connector-spec/src/provider.rs`).
+# **What actually kept the two tokens from ever traveling on the same request is a different,
+# already-shipped mechanism: per-operation `auth`.** `Operation::auth` lets an operation override the
+# connector's `default_auth` with its own alternatives list; every operation in the `account` service
+# did exactly that, naming `postmark.account_token` and nothing else, while every operation in
+# `server` declares no `auth` of its own and inherits `default_auth`'s `postmark.server_token`. That
+# override is already general — babelforce's own `[[patch.operations]] auth = [...]` overlay entry
+# uses it on a different axis — so **no change to connector-spec was needed to ship this
+# connector**, and the two-credential partition was enforced at the operation level, which the
+# `[[services]]` split already requires operations to declare correctly (`validate_member_service`,
+# `crates/connector-spec/src/provider.rs`).
 #
-# One more consequence of that split is worth naming: `server` is a *named* service below, not the
-# elided implicit `default`, even though a single-service Postmark connector would have been happy to
-# leave it unnamed. `AGENTS.md`'s service contract is explicit that a provider declaring any named
-# service loses the implicit `default` entirely — every operation and config field must then name one
-# of the provider's declared services, `server` included. That is a separate, narrower rule from the
-# credential-addressing question above; it decides how operations are grouped, not which token they
-# authenticate with.
+# One more consequence of that split is worth naming: `server` is still a *named* service below, not
+# the elided implicit `default`, even though a single-service Postmark connector would be happy to
+# leave it unnamed. It stays named because renaming it would move every operation's gid and every
+# emitted artifact for a connector whose surface merely narrowed. `AGENTS.md`'s service contract is
+# explicit that a provider declaring any named service loses the implicit `default` entirely — every
+# operation and config field must then name one of the provider's declared services, `server`
+# included. That is a separate, narrower rule from the credential-addressing question above; it
+# decides how operations are grouped, not which token they authenticate with.
 #
 # So the finding for C-177 (Contentful) is: **the address headroom exists but is unused **and**
 # unnecessary** — a connector whose services authenticate separately needs only distinct credential
@@ -62,8 +99,8 @@
 # repository has met.
 #
 # ---------------------------------------------------------------------------------------------
-# WHAT SHIPS: 6 operations. Server Token — send an email, read delivery stats, list bounces, get one
-# bounce. Account Token — list servers, get one server.
+# WHAT SHIPS: 4 operations, all Server Token — send an email, read delivery stats, list bounces, get
+# one bounce. The two Account Token operations are withheld; see the block above.
 # ---------------------------------------------------------------------------------------------
 #
 # `postmark-email-send` ships where SendGrid's own send operation could not (`providers/sendgrid.toml`
@@ -81,17 +118,12 @@
 # personal data with no example, the convention `providers/sendgrid.toml`'s bounce list already
 # carries.
 #
-# **`GET /servers` and `GET /servers/{id}` also return `ApiTokens` in the real payload** — the Account
-# API's own mechanism for retrieving a server's Server Token in plaintext. Omitting the property from
-# `response_schema` would not hide it at runtime (the vendor still returns it; a caller reading the raw
-# response still sees it) and would hide the *warning* from every reader who only ever sees this
-# connector's declared contract — `response_schema` is not inert prose, it is cloned straight into the
-# published site catalogue (`crates/connector-cli/src/site.rs`) and is what a model reads as the tool
-# contract for `postmark-server-list`/`postmark-server-get`. So this connector does the opposite of
-# omitting it: both operations declare `ApiTokens`' shape with a `description` that states the danger,
-# the same convention `providers/zoom.toml`'s `start_url` (a URL embedding a live ZAK token) and
-# `providers/zendesk.toml`'s `authenticity_token` already carry — declared, described, never given an
-# example or a value.
+# **`GET /servers` and `GET /servers/{id}` return `ApiTokens` in the real payload** — the Account
+# API's own mechanism for retrieving a server's Server Token in plaintext — and that is why neither
+# is declared here any more. See the withholding block above; `providers/zoom.toml`'s `start_url`
+# fell to the same rule in the same commit. `providers/zendesk.toml`'s `authenticity_token` did not
+# and must not: that connector documents it as *"not a credential for this API"*, and a rule that
+# cannot tell those two apart is a rule authors work around rather than obey.
 #
 # Only `count`/`offset` (both plain integers) are curated onto `postmark-bounce-list`; Postmark's own
 # `emailFilter`, `tag` and `messageID` filters are free text this pipeline's `fmt`-based query
@@ -110,27 +142,32 @@ authority = "com.postmarkapp.api"
 # nothing to record without asserting a vendor fact from outside it. A `pid` and a credential path
 # render without one; only a `gid` needs both halves.
 base_url = "https://api.postmarkapp.com"
-description = "Postmark transactional email: send a message, read delivery stats and bounces. Account: list and inspect servers, authenticated separately from sending"
+description = "Postmark transactional email: send a message, read delivery stats and bounces. Listing and inspecting servers is withheld — the Account API returns live Server Tokens in plaintext (C-430)"
 verify = "postmark-deliverystats-get"
 
-# The sending credential is the connector default; every operation in the `account` service overrides
-# it explicitly below rather than inheriting this.
+# The sending credential, and now the only one. It was the connector default while the `account`
+# service's operations overrode it explicitly; every operation that remains inherits it.
 default_auth = [{ credentials = ["postmark.server_token"] }]
 
-# Two named services, not one named service beside an implicit `default`: the service contract
+# One named service, and no implicit `default` beside it: the service contract
 # (`AGENTS.md`) is explicit that a provider declaring any named service has no implicit `default` left
-# for an operation to fall into, so both surfaces are named here even though `server` alone would have
-# been happy to stay elided on a single-service provider.
+# for an operation to fall into, so every operation and config field below names `server` even though
+# a single-service provider would have been happy to leave it elided. It stays named after the
+# `account` surface was withheld because eliding it now would move every operation's gid.
 [[services]]
 name = "server"
 description = "Postmark's own \"Server API\" naming: send mail and read one server's delivery stats and bounces. Authenticates with the Server Token; the Account Token cannot reach this surface at all"
 
-[[services]]
-name = "account"
-description = "Postmark's own \"Account API\" naming: account-wide administration — list and inspect servers. Authenticates with the Account Token; the Server Token cannot reach this surface at all"
+# **There is deliberately no `[[services]]` entry for `account`.** Both of the Account API operations
+# it carried are withheld by rule (C-430 — they return live Server Tokens in plaintext), so the
+# service would carry zero operations, and `crates/connector-spec/tests/services.rs` refuses that
+# outright: a build emits an empty module and an `operations = []` manifest for it. The same fall
+# `providers/babelforce.toml` records for its `auth` service, for the same reason.
 
 # ---------------------------------------------------------------------------------------------
-# Credentials — two, and never sent on the same request. See the header comment.
+# Credentials — one. `postmark.account_token` stood beside it until 2026-08-01 and went with the
+# Account API surface: nothing this connector emits can use an Account Token, and a connector "asks
+# for everything it needs and nothing it cannot use". See the withholding block in the header.
 # ---------------------------------------------------------------------------------------------
 
 [[auth]]
@@ -138,12 +175,6 @@ name = "postmark.server_token"
 scheme = { header = { name = "X-Postmark-Server-Token" } }
 env = ["POSTMARK_SERVER_TOKEN"]
 description = "Postmark Server API token, scoped to one server. Authenticates sending and that server's own message history; cannot list or manage servers"
-
-[[auth]]
-name = "postmark.account_token"
-scheme = { header = { name = "X-Postmark-Account-Token" } }
-env = ["POSTMARK_ACCOUNT_TOKEN"]
-description = "Postmark Account API token. Authenticates account-wide server administration only; Postmark rejects it for sending"
 
 # ---------------------------------------------------------------------------------------------
 # Operations — `server` service (Server Token): send, delivery stats, bounces
@@ -312,58 +343,6 @@ message_pointer = "/Message"
 code_pointer = "/ErrorCode"
 
 # ---------------------------------------------------------------------------------------------
-# Operations — `account` service (Account Token): list and inspect servers
-# ---------------------------------------------------------------------------------------------
-
-[[operations]]
-id = "postmark-server-list"
-service = "account"
-method = "GET"
-path = "/servers"
-description = "List every server on this account. Each entry also carries `ApiTokens`, that server's own live Server Token(s) in plaintext — see that field's own description before handling this response"
-risk = "low"
-idempotency = "idempotent"
-# The connector default is the Server Token; this operation needs the Account Token instead and
-# names it explicitly rather than inheriting `default_auth`.
-auth = [{ credentials = ["postmark.account_token"] }]
-
-[operations.response_schema]
-type = "object"
-required = ["TotalCount", "Servers"]
-properties = { TotalCount = { type = "integer" }, Servers = { type = "array", items = { type = "object", required = ["ID", "Name", "Color", "SMTPApiActivated", "DeliveryType"], properties = { ID = { type = "integer" }, Name = { type = "string" }, Color = { type = "string" }, SMTPApiActivated = { type = "boolean" }, RawEmailEnabled = { type = "boolean" }, DeliveryType = { type = "string", enum = ["Live", "Test"] }, ServerLink = { type = "string" }, InboundAddress = { type = "string", description = "This server's own inbound-processing address, not a third party's" }, InboundDomain = { type = "string" }, TrackOpens = { type = "boolean" }, TrackLinks = { type = "string", enum = ["None", "HtmlAndText", "HtmlOnly", "TextOnly"] }, ApiTokens = { type = "array", items = { type = "string" }, description = "ACCOUNT-PRIVILEGED. This server's own live Server Token(s), in plaintext — the Account API's own mechanism for retrieving one. Treat it as a credential: do not log it, echo it, or pass it to another tool" } } } } }
-
-[operations.quirks.error_envelope]
-message_pointer = "/Message"
-code_pointer = "/ErrorCode"
-
-# ---------------------------------------------------------------------------------------------
-
-[[operations]]
-id = "postmark-server-get"
-service = "account"
-method = "GET"
-path = "/servers/{server_id}"
-description = "Get one server's configuration by id. The response also carries `ApiTokens`, that server's own live Server Token(s) in plaintext — see that field's own description before handling this response"
-risk = "low"
-idempotency = "idempotent"
-auth = [{ credentials = ["postmark.account_token"] }]
-
-[[operations.params.path]]
-name = "server_id"
-description = "The server's id, from postmark-server-list"
-required = true
-schema = { type = "integer" }
-
-[operations.response_schema]
-type = "object"
-required = ["ID", "Name", "Color", "SMTPApiActivated", "DeliveryType"]
-properties = { ID = { type = "integer" }, Name = { type = "string" }, Color = { type = "string" }, SMTPApiActivated = { type = "boolean" }, RawEmailEnabled = { type = "boolean" }, DeliveryType = { type = "string", enum = ["Live", "Test"] }, ServerLink = { type = "string" }, InboundAddress = { type = "string", description = "This server's own inbound-processing address, not a third party's" }, InboundDomain = { type = "string" }, TrackOpens = { type = "boolean" }, TrackLinks = { type = "string", enum = ["None", "HtmlAndText", "HtmlOnly", "TextOnly"] }, ApiTokens = { type = "array", items = { type = "string" }, description = "ACCOUNT-PRIVILEGED. This server's own live Server Token(s), in plaintext — the Account API's own mechanism for retrieving one. Treat it as a credential: do not log it, echo it, or pass it to another tool" } }
-
-[operations.quirks.error_envelope]
-message_pointer = "/Message"
-code_pointer = "/ErrorCode"
-
-# ---------------------------------------------------------------------------------------------
 # Configuration — what a product asks a human for before any of the above can run
 # ---------------------------------------------------------------------------------------------
 
@@ -377,12 +356,3 @@ secret = true
 docs_url = "https://postmarkapp.com/support/article/1008-what-are-the-account-server-api-tokens"
 binds = "credential.postmark.server_token"
 
-[[config]]
-name = "account_token"
-service = "account"
-label = "Postmark Account Token"
-help = "Find it under Account API Tokens in the Postmark dashboard. Grants account-wide server administration — creating, editing and deleting servers — and Postmark rejects it for sending, so never reuse the Server Token here"
-format = "token"
-secret = true
-docs_url = "https://postmarkapp.com/support/article/1008-what-are-the-account-server-api-tokens"
-binds = "credential.postmark.account_token"

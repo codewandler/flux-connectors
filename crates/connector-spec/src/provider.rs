@@ -57,9 +57,9 @@ use crate::inbound::{
 };
 use crate::lock::sha256_hex;
 use crate::{
-    AuthMethod, AuthRequirement, AuthScheme, Connector, HttpMethod, Idempotency, JsonSchema,
-    Operation, Param, ParamSet, Provenance, Quirks, Risk, Role, Runtime, Service, DEFAULT_SERVICE,
-    MIN_REPEATABILITY_CONDITION,
+    response_location_exists, AuthMethod, AuthRequirement, AuthScheme, Connector, HttpMethod,
+    Idempotency, JsonSchema, Operation, Param, ParamSet, Provenance, Quirks, Risk, Role, Runtime,
+    Service, DEFAULT_SERVICE, MIN_REPEATABILITY_CONDITION,
 };
 
 /// The documented JSON Schema for `providers/<name>.toml`.
@@ -1702,6 +1702,13 @@ fn compose(
         auth: patch.and_then(|patch| patch.auth.clone()),
         params,
         response_schema: spec.response_schema.clone(),
+        // **A vendor document cannot make this claim, and no `[[patch.operations]]` key writes it
+        // either** (C-430). "This response field is a credential" is a judgement about what a value
+        // *is*; a document that returns a token describes it as a string like any other, which is
+        // precisely how postmark's `ApiTokens` and zoom's `start_url` shipped. So the spec route
+        // lands `[]` and an author who finds one states it in a `[[operations]]` block, where the
+        // gate refuses it and a reviewer reads the reason beside it.
+        credential_response: Vec::new(),
         quirks: patch
             .and_then(|patch| patch.quirks.clone())
             .unwrap_or_default(),
@@ -4290,6 +4297,7 @@ fn validate_operations(connector: &Connector, problems: &mut Vec<String>) {
         }
 
         validate_repeatability_condition(operation, problems);
+        validate_credential_response(operation, problems);
 
         if let Some(alternatives) = &operation.auth {
             validate_requirements(
@@ -4395,6 +4403,85 @@ fn bool_word(value: bool) -> &'static str {
     } else {
         "false"
     }
+}
+
+/// **No operation returns a secret** (C-430) — the gate, reading the declaration that says one does.
+///
+/// `AGENTS.md` § Authentication contract states the rule this enforces, and states it once: an
+/// operation whose declared response carries a token is withheld until C-136's diversion lands,
+/// because the host's redactor holds only values the host itself resolved and cannot know a secret
+/// minted by the very call returning it. Four operations shipped in v0.9.0 against it — postmark's
+/// server pair returning `ApiTokens` in plaintext, zoom's meeting pair returning a `start_url` with
+/// the host's ZAK token embedded — every one of them accurately describing the hazard in its own
+/// `response_schema` and returning the field anyway. Describing a credential is not withholding it.
+///
+/// # It reads a declaration, and that is the design rather than a shortcut
+///
+/// A catalogue-wide scan for token-shaped property names found 31 candidates and **28 of them were
+/// correct as they stood**, each documented as harmless by its own connector. A regex over field
+/// names would refuse all 28, and a gate that is wrong nine times in ten is one authors learn to
+/// spell around — so the only thing that trips this is [`Operation::credential_response`], which
+/// nothing but a connector can write. The cost is stated rather than hidden: this does not catch an
+/// author who never declares. `crates/connector-spec/tests/credential_response.rs` carries the other
+/// half — the four withheld operations, named, so reinstating one is a red build.
+///
+/// # Three refusals, and the first two are what keep the third honest
+///
+/// - **A location with no `response_schema` to resolve against**, which is a claim about a shape
+///   nothing states.
+/// - **A location that matches nothing**, which is the shape a vendor rename takes: a declaration
+///   that quietly stopped applying reads as protection while being none. C-79 names this one
+///   explicitly, and it is the reason the walk descends into arrays — `ApiTokens` sits under
+///   `Servers[]`, and a resolver stopping at the root would call the true declaration a typo.
+/// - **The declaration itself**, which is the withholding.
+fn validate_credential_response(operation: &Operation, problems: &mut Vec<String>) {
+    if operation.credential_response.is_empty() {
+        return;
+    }
+    let id = operation.id.as_str();
+
+    match &operation.response_schema {
+        None => problems.push(format!(
+            "operation {id:?} declares `credential_response` but no `response_schema`, so there is \
+             nothing for {} to resolve against. A location naming a shape the operation does not \
+             declare cannot be checked by anything",
+            quoted(&operation.credential_response)
+        )),
+        Some(schema) => {
+            for location in &operation.credential_response {
+                if !response_location_exists(schema, location) {
+                    problems.push(format!(
+                        "operation {id:?} declares a credential response location {location:?} \
+                         that matches nothing in its `response_schema`. A location resolving to \
+                         nothing protects nothing, and this is the shape a vendor rename takes — \
+                         spell each segment as the response spells it, and `*` for every element \
+                         of an array"
+                    ));
+                }
+            }
+        }
+    }
+
+    problems.push(format!(
+        "operation {id:?} declares that its own response carries a credential at {}, so it cannot \
+         ship. `AGENTS.md` § Authentication contract: an operation whose declared response carries \
+         a token is withheld until C-136's diversion lands, because the host's redactor holds only \
+         values the host itself resolved and cannot know a secret minted by the very call returning \
+         it. Withhold the operation and name it as an exclusion carrying that reason — `expose = \
+         false` is not the mechanism, since `connector_pack::resolve` admits any named operation \
+         whatever its exposure (C-413)",
+        quoted(&operation.credential_response)
+    ));
+}
+
+/// Locations as a refusal lists them: `"/a", "/b"`. One spelling, so two refusals about the same
+/// operation read alike.
+fn quoted(locations: &[String]) -> String {
+    locations
+        .iter()
+        .map(|location| format!("{location:?}"))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// The `idempotency` value as an author spells it in a provider file. Exhaustive so a fourth variant

@@ -44,6 +44,7 @@ fn operation(id: &str, service: &str) -> Operation {
         auth: None,
         params: ParamSet::default(),
         response_schema: None,
+        credential_response: Vec::new(),
         quirks: Quirks::default(),
     }
 }

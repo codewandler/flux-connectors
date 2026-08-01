@@ -575,6 +575,7 @@ mod tests {
             auth: None,
             params: ParamSet::default(),
             response_schema: None,
+            credential_response: Vec::new(),
             quirks: Quirks::default(),
         }
     }

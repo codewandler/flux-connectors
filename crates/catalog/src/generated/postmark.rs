@@ -8,7 +8,7 @@
 pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     id: "postmark",
     vendor: "Postmark",
-    description: "Postmark transactional email: send a message, read delivery stats and bounces. Account: list and inspect servers, authenticated separately from sending",
+    description: "Postmark transactional email: send a message, read delivery stats and bounces. Listing and inspecting servers is withheld — the Account API returns live Server Tokens in plaintext (C-430)",
     authority: Some("com.postmarkapp.api"),
     runtime: crate::Runtime::Http,
     base_url: "https://api.postmarkapp.com",
@@ -23,12 +23,6 @@ static AUTH: &[crate::Credential] = &[
         leaf: "server_token",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "X-Postmark-Server-Token", prefix: "" },
-    },
-    crate::Credential {
-        name: "postmark.account_token",
-        leaf: "account_token",
-        acquire: crate::Acquisition::Static,
-        place: crate::Placement::Header { name: "X-Postmark-Account-Token", prefix: "" },
     },
 ];
 
@@ -77,27 +71,5 @@ static OPERATIONS: &[crate::Operation] = &[
         credentials: &[&["postmark.server_token"]],
         hosts: &["api.postmarkapp.com"],
         flux: include_str!("../../ops/postmark/postmark-bounce-get.flux"),
-    },
-    crate::Operation {
-        id: "postmark-server-list",
-        provider: "postmark",
-        service: "account",
-        description: "List every server on this account. Each entry also carries `ApiTokens`, that server's own live Server Token(s) in plaintext — see that field's own description before handling this response",
-        risk: crate::Risk::Low,
-        idempotency: crate::Idempotency::Idempotent,
-        credentials: &[&["postmark.account_token"]],
-        hosts: &["api.postmarkapp.com"],
-        flux: include_str!("../../ops/postmark/postmark-server-list.flux"),
-    },
-    crate::Operation {
-        id: "postmark-server-get",
-        provider: "postmark",
-        service: "account",
-        description: "Get one server's configuration by id. The response also carries `ApiTokens`, that server's own live Server Token(s) in plaintext — see that field's own description before handling this response",
-        risk: crate::Risk::Low,
-        idempotency: crate::Idempotency::Idempotent,
-        credentials: &[&["postmark.account_token"]],
-        hosts: &["api.postmarkapp.com"],
-        flux: include_str!("../../ops/postmark/postmark-server-get.flux"),
     },
 ];

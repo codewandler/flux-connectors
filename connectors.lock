@@ -635,7 +635,7 @@ ir_sha256 = "6b9fd39a405f857b8551f7360e80a7321b6c64610da2bbbcb791723233f4a1a7"
 [[provider]]
 id = "docusign"
 generator = "flux-connectors 0.9.0"
-toml_sha256 = "c35bdec345a6a9339905d6315f3ab3c33759dbd703ed84a17d6d2d667705057f"
+toml_sha256 = "219afb0284c1669736a52efcecfa278e6133d4356f71fe819ccffef5c28f264f"
 ir_sha256 = "2bd6c598ba496414af7beae9d35823605975bb9d5220a41e1b1d1202db0ce5b1"
 
 [provider.artifacts]
@@ -1036,21 +1036,17 @@ ir_sha256 = "b5cc0dc8180a456b2914ab3f4b1387c2bd43dcdf341c6997a1d6dd6057ace0b8"
 [[provider]]
 id = "postmark"
 generator = "flux-connectors 0.9.0"
-toml_sha256 = "1bd72dc5c2231a1e9a41bde798f3f4f0b5a34ab17c037df40642f171366c402a"
-ir_sha256 = "6bc69de1515f7936ca1cdf0d1b522e6bf41f79a90f33d31e3cd51acc2535edd0"
+toml_sha256 = "56ab851f346f84cb562309a568004405311d611605daf4ea4957b052b3c1a2bd"
+ir_sha256 = "8a9eb54e7c1b8116cf49ce0e6123fd5fcf7271969a7a15e49d76837826d68657"
 
 [provider.artifacts]
-"connectors/postmark-account.connector.toml" = "2033c7f8daf25c5ed544ad121e04fd940fce83498ac23ef0633834bafb5c9805"
-"connectors/postmark-account.flux" = "3c3ccc371df2e40f512741562db223af308f232c9935640b9456ba66be3c3ead"
-"connectors/postmark-server.connector.toml" = "e4a4ca4d67f3f69f5a2b4b3adf34156e1be4c19ef9b14a1e25b3f1b199f880f4"
+"connectors/postmark-server.connector.toml" = "5430aea5376fd9143150056afb2dea34021db52eda40ba505856b2919dc77654"
 "connectors/postmark-server.flux" = "228e4e759b6d80c66e58a83b9dac098eb447e0bed0e8c0022114eb2127600411"
 "crates/catalog/ops/postmark/postmark-bounce-get.flux" = "61d32ecf8db1ca42d8105a541adb0cb83b69fd94aef601d844fce3ca5754ddba"
 "crates/catalog/ops/postmark/postmark-bounce-list.flux" = "f66e62b12dc580f31fc5d80f1336bd6a79b6f6d135aead226f23a6c044519826"
 "crates/catalog/ops/postmark/postmark-deliverystats-get.flux" = "983a7bcf12eb38cc33fb787ecc81218a89241f49ba0bcbbcb3287c8f3a0e0a7f"
 "crates/catalog/ops/postmark/postmark-email-send.flux" = "6baab965a6aab1b9e4596c3c1cedf0777f877ce15691fa815dc385dfe26f1104"
-"crates/catalog/ops/postmark/postmark-server-get.flux" = "6295d509699d69c6d971356319574303d254bcae84337de71c17147dfe774ad9"
-"crates/catalog/ops/postmark/postmark-server-list.flux" = "3034f741362fd37b4737dcc42c5df2bf1d18b0caab4bfd2288d256ab5806675d"
-"crates/catalog/src/generated/postmark.rs" = "fa5d7ec987d65fd02f0f0b0e5ec6cbc9e84e833a59f388df1e146783215a62aa"
+"crates/catalog/src/generated/postmark.rs" = "7f8effd870bb80dffe381355f8ece3278b85b4700efcc7168b475f9fbaf65dd8"
 
 [[provider]]
 id = "resend"
@@ -1296,14 +1292,12 @@ ir_sha256 = "c31d5b9a4039b8b67a3f79c5e5a98059ed5053885ae96a4480cdcf0208233fe2"
 [[provider]]
 id = "zoom"
 generator = "flux-connectors 0.9.0"
-toml_sha256 = "dfb3e5e4d57558923064cc0bcb5561f68fc2bcd94db5fce0ddacdbfa016c6a71"
-ir_sha256 = "7278f157cb70ad347063559dc30289983048951d7a420e540f1817228a6459c6"
+toml_sha256 = "9f99076aaa7606380e31340c40d68756f4f1c01981d837a52f85ebad90228323"
+ir_sha256 = "6d3093ff4f0a60537357c0a4316855e541ddfb39c0385e7df8c8ed8bb514f8f0"
 
 [provider.artifacts]
-"connectors/zoom.connector.toml" = "289667895be227dd8b03f47dc9f7e591dfd88734a918c97edd38433f4202b317"
-"connectors/zoom.flux" = "0465dd8cee8683da68b0aacdd02e5869ed8a003b07504601dcd26207c6ae17ed"
-"crates/catalog/ops/zoom/zoom-meeting-create.flux" = "ba45b3fe231e3988e0564983d3655a2d70c4c5a50565cb9be8eaf5207ceeb40b"
+"connectors/zoom.connector.toml" = "149a199b9d0b7ec6470c11ba035c7af4f3609ba9711a4ac7d04bb01377eddb31"
+"connectors/zoom.flux" = "1bdc984471426661f12bdff20f82ff6e680b094d4fa694da8730543965719e81"
 "crates/catalog/ops/zoom/zoom-meeting-delete.flux" = "f745dc8309f4a4b715545ccd43f8bdfc8dae8b3ca28f17943eb8efe5e7a0ffe7"
-"crates/catalog/ops/zoom/zoom-meeting-get.flux" = "1c89bfb08164ca98f8534ca70d55728e14ceae6c6194e780ecffcf5a7070fc36"
 "crates/catalog/ops/zoom/zoom-user-get.flux" = "dcbf75a01c19a7bcc95c82a121fc9f96a0afd8376c646bf909f70ef9f8328be5"
-"crates/catalog/src/generated/zoom.rs" = "a6b606965d6b18cdbf55f4474a0472d6b6607f932abff202fbd253a6803bcbc5"
+"crates/catalog/src/generated/zoom.rs" = "603a2403a06e7d1707240e52114d180c26bfb091616c3914f2c8834ca3af8dce"

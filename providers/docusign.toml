@@ -72,11 +72,15 @@
 # `docusign-embedded-signing` (DocuSign's "Create Recipient View" call, which mints a URL that starts
 # an embedded signing session as a *specific* recipient with no further authentication) is
 # deliberately not declared. It is exactly the "signing URL that acts as a bearer token" hazard this
-# story calls out, and unlike Zoom's `start_url` (declared, with its hazard stated, because
-# `zoom-meeting-get`/`zoom-meeting-create` return it whether this connector likes it or not) this
-# connector never has to return one at all: nothing in the curated set below calls that endpoint, so
-# there is no field to declare or omit. Left out rather than shipped with a fabricated recipient to
-# call it with.
+# story calls out, and this connector never has to return one at all: nothing in the curated set
+# below calls that endpoint, so there is no field to declare or omit. Left out rather than shipped
+# with a fabricated recipient to call it with.
+#
+# Zoom reached the same place from the other direction and paid more for it. `zoom-meeting-get` and
+# `zoom-meeting-create` returned `start_url` — a URL embedding the host's ZAK token — with the hazard
+# accurately stated in the `response_schema` description, and shipped that way through v0.9.0 until
+# C-430 withheld both operations. Describing a credential is not withholding it, and not calling the
+# endpoint is the cheaper answer whenever it is available.
 #
 # ---------------------------------------------------------------------------------------------
 # THE QUERY-ENCODING GAP (C-30): the one query parameter this connector offers is pattern-constrained.

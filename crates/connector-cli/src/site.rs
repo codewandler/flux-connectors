@@ -874,6 +874,7 @@ mod tests {
                 ..ParamSet::default()
             },
             response_schema: None,
+            credential_response: Vec::new(),
             quirks: Quirks::default(),
         }
     }
