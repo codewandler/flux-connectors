@@ -2,8 +2,7 @@
 id: C-408
 title: "The explorer components cannot say 'this source does not publish that', so a thinner catalogue reads as a claim about the connector"
 pillar: Surfaces
-status: in-progress
-priority: 3
+status: done
 note: "found 2026-08-01 by flux-exchange's console, the second consumer C-191/C-238 anticipated. It publishes no auth and no credentials, so ProviderCard renders 'not configured' in the danger colour on every card — a red claim the service never made"
 ---
 

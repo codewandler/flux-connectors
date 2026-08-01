@@ -24,6 +24,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shifted would strand every credential already stored. The ambiguous case — several connections and
   none named — **refuses and lists the uuids that would have worked**, rather than guessing.
 
+### Fixed
+
+- **A component can say "this source does not publish that", instead of claiming the connector lacks
+  it** (C-408). Two different facts rendered identically, and one of them was a red claim a service
+  never made: `ProviderCard` rendered an absent `auth` as **"not configured"** in the danger colour on
+  **every card**, and `OperationDetail` told a reader *"No safe credential configuration is available
+  for this operation. Live calls are disabled."* — a true and important sentence for freshdesk, where
+  a credential exists and is deliberately withheld, and a false one for a catalogue that simply
+  carries no credentials field.
+
+  The distinction is carried by the **document**, not by the component: a field a thinner source may
+  omit is typed `Published<T> = T | null | undefined`, and one `published()` predicate is the only
+  place either spelling of an absence is interpreted. No source-capability descriptor and no new prop
+  — a component that learned *which source* it renders would be the same defect wearing a fix.
+  Deliberate withholding still renders exactly as it did, in red; a three-way branch keeps them apart
+  and a test asserts the middle branch stays an `else-if`, because merging it back for tidiness
+  reinstates the bug.
+
+  **One absence was worse than a wrong colour.** `signature()` called `operation.flux.split(…)`, so a
+  page over a source omitting `flux` **threw** rather than misleading — and `OperationList`'s search
+  called `operation.path.toLowerCase()`, the same crash one keystroke away. Six fields are covered,
+  not the three the story named.
+
+  `web/`'s own rendering is unchanged, measured rather than asserted: the base was rebuilt into a
+  separate tree and all 1,241 files compared — **visible text of all 379 pages identical**. Byte
+  identity is unobtainable for any change that adds a CSS rule, because Vue's scoped-style hash moves
+  on every element of that component.
+
 ### Changed
 
 - **babelforce is the first spec-backed connector** (C-416). `providers/babelforce.toml` now points at
