@@ -729,6 +729,39 @@
           "type": "array",
           "description": "Parameter-level corrections: a wrong type, a false `required`, a missing description.",
           "items": { "$ref": "#/$defs/paramPatch" }
+        },
+        "omit": {
+          "$ref": "#/$defs/paramOmission",
+          "description": "Parameters this connector drops from what the document declares. Applied after `params`, so an author may correct a wrong `required` flag and then omit the parameter."
+        }
+      }
+    },
+
+    "paramOmission": {
+      "type": "object",
+      "title": "Parameters dropped from the vendor's declaration",
+      "description": "Names to remove, grouped by the position that completes their identity. Omission is always written down and never inferred: a vendor document describes an API rather than a tool contract, and one babelforce endpoint declares 38 query parameters of which the vendor's own prose marks most as aliases of the others. Three refusals: a name the document does not declare there, a required parameter (dropping it composes a request the vendor rejects), and any path parameter (the path template keeps its placeholder).",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "array",
+          "description": "Path parameters to drop — always refused, and accepted here only so that naming one is a refusal that explains itself.",
+          "items": { "type": "string" }
+        },
+        "query": {
+          "type": "array",
+          "description": "Query-string parameters to drop.",
+          "items": { "type": "string" }
+        },
+        "header": {
+          "type": "array",
+          "description": "Caller-supplied headers to drop.",
+          "items": { "type": "string" }
+        },
+        "body": {
+          "type": "array",
+          "description": "Named request-body fields to drop.",
+          "items": { "type": "string" }
         }
       }
     },
