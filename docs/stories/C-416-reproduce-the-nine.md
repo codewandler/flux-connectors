@@ -26,9 +26,14 @@ hand-authoring.
 - [ ] Every deliberate departure from the document survives the conversion, each still carrying the
       comment that explains it: the production `base_url` (the document's `servers[0]` is staging),
       the excluded `X-Auth-Access-*` pair, and the refusal to implement the OAuth password grant.
-- [ ] The excluded header pair is removed **through the overlay** — an explicit per-operation `auth`
-      — so ingest keeps seeing it and drift-check keeps reporting on it, exactly as
-      `providers/babelforce.toml:88-96` requires.
+- [ ] The excluded header pair is handled honestly. **This bullet's premise changed on 2026-08-01**:
+      C-415 measured the vendored documents and `X-Auth-Access-Id`/`X-Auth-Access-Token` are **not
+      declared in any of the five** — `securitySchemes` holds `oauth2` alone. So there is nothing for
+      an overlay `auth` to remove and nothing for drift-check to report on, and
+      `providers/babelforce.toml:88-96`'s instruction ("ingest must keep *seeing* the pair") is not
+      satisfiable against this spec version. Either the maintainers finished the scrubbing the
+      inventory said was under way, or these documents were never the ones that declared it. Confirm
+      which with the API owners, then rewrite that comment block to say what is true.
 - [ ] The `SCHEMA GAP:` comment at `providers/babelforce.toml:17` is deleted: provenance is now
       reachable, which was the whole reason it was written.
 - [ ] Where the document and the hand-authored file disagree, the diff is recorded in this story

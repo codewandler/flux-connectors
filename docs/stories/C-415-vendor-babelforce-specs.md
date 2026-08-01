@@ -2,8 +2,7 @@
 id: C-415
 title: "Vendor the five babelforce manager specs, scrubbed and provenanced"
 pillar: Build
-status: in-progress
-priority: 1
+status: done
 design: docs/designs/spec-front-end.md
 epic: spec-front-end
 areas: [specs, connector-cli]

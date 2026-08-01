@@ -26,6 +26,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The five babelforce OpenAPI documents are vendored** (C-415), 890 KB under `specs/babelforce/` —
+  the blocker `providers/babelforce.toml` has recorded since C-17, which said the spec was "not
+  vendored in this repository, and it is not an oversight". The resolution splits what was one
+  question into two: the **pulled bytes** are publishable, the **pull configuration** is not.
+  `sources.json` and `pull.sh` hold an internal GitLab host and project ids and stay where they are;
+  `source_url` is omitted rather than naming that host, and `sha256` carries the identity instead —
+  which it has to, because `info.version` is the string `0.0.0-dev` on three of the five documents.
+
+  Six literals were scrubbed by a script, none of them written into this repository — not even into
+  the thing that removes them. Each is discovered from the source, replaced wherever it occurs under
+  any key, and recorded as a **SHA-256** so an exact gate can exist without the repo holding the
+  preimage: three credential values, two email addresses, one telephone number. Two of the six were
+  reachable only because a value also appears under a plain `id:`, where a key-scoped rule cannot see
+  it — which is why the shape gate and the digest gate both exist.
+
+  Ten tests hold it, each mutation-tested rather than observed green: reinserting the `accessId`
+  literal under a plain `id:` turns the digest gate red while the shape gate stays green.
+
+  **A correction the vendoring itself produced:** `X-Auth-Access-Id`/`X-Auth-Access-Token` are not
+  declared in any of the five documents. `providers/babelforce.toml` says at length that ingest must
+  keep *seeing* the deprecated pair so drift-check keeps reporting on it — against these documents
+  that is unsatisfiable. The connector's refusal to model the pair is unaffected and still correct;
+  it is now enforced by upstream's silence rather than by our overlay.
+
 - **The catalogue publishes each connector's runtime** (C-405). `http`, `socket`, `process`,
   `container`, `plugin` or `remote` — a closed set with `http` the default, reaching the manifest,
   `catalog.json` and the Rust catalogue. A host that must refuse a locally-executing runtime when it
