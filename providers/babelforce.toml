@@ -14,20 +14,28 @@
 # call anyone here makes. It is excluded by *stating the prefix that holds its 30 siblings* rather
 # than by listing it, so what this file says is what is wanted rather than what is not.
 #
-# **392 of those 397 are emitted, and the other five are named.** Ingest skips an operation whose
-# request body is `multipart/form-data`, with a diagnostic, rather than publishing it without its
-# body — `BodyEncoding` is `Json | Form` and this IR has no third value. Five manager operations are
-# file uploads. So `392 + 5 = 397`, and that accounting is checked rather than asserted:
+# **391 of those 397 are emitted, and the other six are named — for two different reasons.**
+#
+#   * **Five cannot be expressed.** Ingest skips an operation whose request body is
+#     `multipart/form-data`, with a diagnostic, rather than publishing it without its body:
+#     `BodyEncoding` is `Json | Form` and this IR has no third value. Five manager operations are
+#     file uploads. That is an IR gap, and C-426 closes it.
+#   * **One is deliberately withheld.** `POST /oauth/token` returns a response body carrying
+#     `access_token` and `refresh_token`, and no redactor in this repository can reach a credential
+#     the call itself minted. The argument is at the `auth` POST selector below; C-136 is what lets
+#     it come back.
+#
+# So `391 + 5 + 1 = 397`, and that accounting is checked rather than asserted:
 # `crates/connector-spec/tests/babelforce_coverage.rs` reads the five documents, counts what they
 # declare, compares it against what this connector emits, and **refuses a gap that carries no
-# reason**. Closing the multipart gap is C-426's.
+# reason** — in both directions, so an allow-list entry cannot outlive the gap it explained.
 #
 # # What makes 397 operations a file a human reads
 #
 # Four declarations, and they are the whole epic's thesis:
 #
 #   * `[[spec]]` — five documents, one per service, each hash-checked against its own bytes (C-410).
-#   * `[patch.naming]` — one rule, so 392 `rename =` lines become one line plus the nine pins that
+#   * `[patch.naming]` — one rule, so 391 `rename =` lines become one line plus the nine pins that
 #     hold a shipped op id still (C-412).
 #   * `[[patch.select]]` — one statement per (document, method class), because `risk` is a damage
 #     claim and the reads and the deletes under one prefix are not one claim (C-411, C-414).
@@ -36,8 +44,8 @@
 #
 # # Exposure is what makes widening survivable
 #
-# `expose = false` on every selector. All 392 are catalogued, addressable and callable; **nine**
-# reach a model as tools. 392 LLM tools is not a catalogue, it is a denial of service against a
+# `expose = false` on every selector. All 391 are catalogued, addressable and callable; **nine**
+# reach a model as tools. 391 LLM tools is not a catalogue, it is a denial of service against a
 # model's context, and C-413's field exists precisely so that the number of callable operations and
 # the number of tools stop being the same number.
 
@@ -64,7 +72,7 @@ authority = "com.babelforce.api"
 # observation it used to be.
 #
 # This line used to say `v2` was "taken from the operations below — every one of their paths begins
-# `/api/v2/`". That was true of nine operations and is not true of 392: `task-automation` and
+# `/api/v2/`". That was true of nine operations and is not true of 391: `task-automation` and
 # `task-schedule` are both `/api/v3`, and each states its own `api_version` below, which is what
 # `Service::api_version` exists for. What is left here is the version of the surface this connector
 # already published an address under, and it does not move: `com.babelforce.api:v2` is a rendered
@@ -85,7 +93,7 @@ api_version = "v2"
 # deferring to it. `Ingested::base_url()` is advisory by construction and the loader refuses an empty
 # `base_url` precisely so that a vendor who reorders `servers` — or a re-vendor that skips the
 # normalization — moves a reviewable line in this file instead of moving every request silently.
-# **That argument got 392 times stronger with this story**: one wrong host is now one wrong host for
+# **That argument got 391 times stronger with this story**: one wrong host is now one wrong host for
 # the entire surface. Staging remains reachable through the operator's `BABELFORCE_URL` override.
 #
 # All five documents agree on this host, so no service declares its own `base_url`.
@@ -95,7 +103,7 @@ api_version = "v2"
 base_url = "https://services.babelforce.com"
 
 # **What a model reads, so it describes the nine exposed tools and says the rest exist.** The
-# catalogue blurb is not an inventory: naming 392 operations here would spend a model's attention on
+# catalogue blurb is not an inventory: naming 391 operations here would spend a model's attention on
 # a surface it cannot call as tools anyway, and the operations it *can* call are the sentence.
 description = "Babelforce voice platform: agent availability, live and reported calls, and the session variables a flow reads and writes. The full manager-sdk surface — agents, calls, sessions, outbound, phonebook, reporting, task automation and scheduling — is catalogued and callable; the operations above are the ones a model drives directly"
 
@@ -109,7 +117,7 @@ verify = "babelforce-agent-list"
 #
 # Every selected operation therefore inherits this and none of them states `auth`. That is a
 # decision, not an omission: `OperationPatch::auth` exists so an overlay can narrow an operation's
-# alternatives, and narrowing to the one alternative the documents already declare would be 392
+# alternatives, and narrowing to the one alternative the documents already declare would be 391
 # copies of a fact stated once. **Selection made that argument decisive** — it was nine copies
 # before.
 default_auth = [{ credentials = ["babelforce.access_token"] }]
@@ -224,7 +232,7 @@ description = "SSO-issued babelforce access token, minted outside flux and suppl
 # **`oauth2` alone**, and the same is true of all five documents. There is no header pair in the
 # documents for an overlay to remove, no per-operation `auth` to write, and nothing for drift-check to
 # report on — so the instruction that block left behind is not satisfiable against this spec version,
-# and following it would have produced 392 `auth` lines defending against a scheme that is not there.
+# and following it would have produced 391 `auth` lines defending against a scheme that is not there.
 #
 # Two readings fit and this repository cannot choose between them from the bytes: either the
 # maintainers finished the scrubbing the inventory recorded as under way between the 0.7.0 document
@@ -263,7 +271,7 @@ description = "SSO-issued babelforce access token, minted outside flux and suppl
 # Naming — one rule, nine pins (C-412)
 #
 # The rule derives `listReportingCalls` into `babelforce-list-reporting-calls`, so a public op id
-# exists for all 392 operations without 392 lines saying so. Collisions refuse rather than
+# exists for all 391 operations without 391 lines saying so. Collisions refuse rather than
 # last-write-wins, and a derived id that is not a legal flux `decl_name` is reported by name.
 #
 # **The nine pins are the compatibility contract, and they are the reason this block is a pin table
@@ -294,7 +302,7 @@ getSessionVariables = "babelforce-session-get"
 updateSessionVariables = "babelforce-session-update"
 
 # ---------------------------------------------------------------------------------------------
-# Selection — thirteen statements for 392 operations (C-411, C-414)
+# Selection — thirteen statements for 391 operations (C-411, C-414)
 #
 # Split by method class rather than by resource, because what a selector *states* is a damage claim:
 # `risk = "destructive"` over the DELETEs is one reviewable line, and the same line over the reads
@@ -311,7 +319,7 @@ updateSessionVariables = "babelforce-session-update"
 # claims the worse of the two. An operation that deserves less says so in its own block below —
 # which is a change that *lowers* a claim, and therefore one a reviewer is looking at on purpose.
 #
-# `expose = false` throughout. See the header: 392 catalogued and callable, nine reaching a model.
+# `expose = false` throughout. See the header: 391 catalogued and callable, nine reaching a model.
 #
 # The prefixes are stated on whole segments, so `/api/v2/agents` reaches `/api/v2/agents/{id}` and
 # never `/api/v2/agentsummary`. A prefix that matched half a segment would select by spelling
@@ -346,11 +354,44 @@ path_prefix = "/oauth"
 methods = ["GET"]
 expose = false
 
-# `POST /oauth/token` mints a credential and `POST /oauth/revoke` destroys one; neither is a call a
-# model makes, and both are stated rather than swept in with the manager writes.
+# ---------------------------------------------------------------------------------------------
+# **`POST /oauth/token` is excluded, and it is the one operation of the canonical 397 that is.**
+#
+# Not because of what it *takes* — the input half is argued at length under `[[auth]]` above, and
+# `expose = false` already keeps every model away from it. Because of what it **returns**.
+#
+# `auth-2026-06-25.openapi.yaml:260` declares `OAuthTokenResponse` carrying `access_token` and
+# `refresh_token`. A selected operation's response body is rendered by `connectors-api`
+# (`src/exec.rs:98`) through `ctx.redactor.redact`, and the redactor holds only the values the
+# **host resolved** before the call (`connector-pack/src/credentials.rs:149`). A token minted *by
+# this call* is unknown to it until after the token has already arrived, so redaction cannot reach
+# it — and `exec.rs:20-25` states the standard this repository holds itself to: *"Never the raw
+# content… That is the difference between 'the pack kept it off the wire' and 'it stayed off every
+# surface'."* For this one operation that sentence would become false, and nothing in the tree today
+# could make it true.
+#
+# **`expose = false` is not sufficient here**, which is the part worth being precise about. C-413
+# withholds the *tool*, never the *call*: `connectors-api`'s execute route resolves any named
+# operation regardless of exposure (`exec.rs:88`), so a caller naming `babelforce-token` gets a
+# response body carrying a live bearer through a redactor that has never seen it. Unexposed is a
+# smaller surface, not a closed one.
+#
+# **C-136 is what lets this come back.** It is `ready` and not landed; it diverts a
+# credential-shaped response away from the reply rather than trying to redact it after the fact.
+# Landing the first credential-minting response into the catalogue one story *before* the mechanism
+# that exists to contain it inverts the order, so the operation waits. Widen this prefix back to
+# `/oauth` in the story that lands C-136, and delete the matching `ALLOWED` entry in
+# `crates/connector-spec/tests/babelforce_coverage.rs` in the same commit.
+#
+# `POST /oauth/revoke` is the other POST here and is *destroying* a credential, not minting one; its
+# 2xx body is `{"type": "object"}`, which ingest drops. `GET /oauth/authorize` returns a redirect.
+# Neither returns a secret, so the prefix states the one that is wanted rather than excluding the
+# one that is not — and a future `/oauth/introspect` is excluded by the same line, without anyone
+# remembering to exclude it.
+# ---------------------------------------------------------------------------------------------
 [[patch.select]]
 service = "auth"
-path_prefix = "/oauth"
+path_prefix = "/oauth/revoke"
 methods = ["POST"]
 risk = "high"
 idempotency = "non_idempotent"
@@ -446,7 +487,7 @@ expose = false
 # knowledge the document does not — a precondition, a caveat, which of two synonymous parameters to
 # use — that sentence is kept, because it is what reaches a model as the tool contract.
 #
-# **The unexposed 383 need no description, and 23 of them have none.** 23 operations across the five
+# **The unexposed 382 need no description, and 23 of them have none.** 23 operations across the five
 # documents declare neither `summary` nor `description`. A tool contract with no sentence in it does
 # not ship — but an *unexposed* operation is not a tool contract, it is a catalogue entry, and none
 # of the 23 is among the nine. `babelforce_coverage.rs::every_exposed_operation_carries_a_sentence`
@@ -458,7 +499,7 @@ expose = false
 # All nine of these previously declared **no** `response_schema`, and babelforce was the largest
 # single absent block in `crates/connector-spec/tests/response_schema_coverage.rs`. The documents
 # publish a 2xx JSON schema for all nine, ingest reads the lowest 2xx, and no schema here was
-# guessed. Widening to 392 operations moves that table by an order of magnitude in the same
+# guessed. Widening to 391 operations moves that table by an order of magnitude in the same
 # direction, and the same way: every schema arrives from a document rather than from an author.
 # ---------------------------------------------------------------------------------------------
 
@@ -473,7 +514,7 @@ description = "List and filter agents. Doubles as the verification operation —
 
 # Not in any spec, so stated here. The manager document paginates uniformly on `page`/`max`;
 # attaching that per operation is a repetition C-415's per-service quirks are meant to end, and
-# widening to 392 operations makes the case for a service-level `quirks` block considerably louder —
+# widening to 391 operations makes the case for a service-level `quirks` block considerably louder —
 # it is stated on two operations here and would be true of well over a hundred.
 [patch.operations.quirks.pagination]
 page = { page_param = "page", size_param = "max", page_size = 100, max_pages = 20 }
@@ -554,8 +595,8 @@ description = "List and filter calls from the reporting view"
 #     exchange for nothing functional. Flip the two lists below if that trade ever changes.
 #   - `parentId`, `domain`, `source`, `anonymous` — real filters, but narrow. Add on demand.
 #
-# **This is the only operation of the 392 that omits anything, and that is on purpose.** Omission is
-# a per-operation judgement about a tool contract, and 383 of these operations are not tool
+# **This is the only operation of the 391 that omits anything, and that is on purpose.** Omission is
+# a per-operation judgement about a tool contract, and 382 of these operations are not tool
 # contracts. An unexposed operation carrying a vendor's redundant parameter costs a caller who
 # passes it nothing and costs a model nothing at all, because no model sees it.
 #

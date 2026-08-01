@@ -3923,17 +3923,6 @@ static OPERATIONS: &[crate::Operation] = &[
         flux: include_str!("../../ops/babelforce/babelforce-revoke.flux"),
     },
     crate::Operation {
-        id: "babelforce-token",
-        provider: "babelforce",
-        service: "auth",
-        description: "OAuth 2.0 token endpoint",
-        risk: crate::Risk::High,
-        idempotency: crate::Idempotency::NonIdempotent,
-        credentials: &[&["babelforce.access_token"]],
-        hosts: &["services.babelforce.com"],
-        flux: include_str!("../../ops/babelforce/babelforce-token.flux"),
-    },
-    crate::Operation {
         id: "babelforce-get-user-customer",
         provider: "babelforce",
         service: "user",

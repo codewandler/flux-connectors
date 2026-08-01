@@ -55,8 +55,8 @@ ir_sha256 = "44dcf9556ac04eef1d9c529533b46f768b91a0bb1465056d9c58e602e16882a7"
 [[provider]]
 id = "babelforce"
 generator = "flux-connectors 0.8.0"
-toml_sha256 = "95677dab748f364a88503177f948f5271dfb9b7ec8b12ede08d51cc69b70b00e"
-ir_sha256 = "ef090a9806acc5c647ab5c1afc37d02e7ce688e9cf70fcd63d35a918fdc57a9e"
+toml_sha256 = "2dfcffc230f062eb1107e50b1042707a60b81252697349b59a81c77bb242e5ef"
+ir_sha256 = "4e4a6b37cebd81b73cfb75c37f4b0e4db90b7947882e040fb1f2d48e38cf7f6c"
 
 [[provider.specs]]
 path = "specs/babelforce/manager-2026-07-10.openapi.yaml"
@@ -89,8 +89,8 @@ upstream_version = "3.63.10"
 sha256 = "031327359000bd70d6b2ab012868971cc834812e5f61f5157531e7cb5daa4d85"
 
 [provider.artifacts]
-"connectors/babelforce-auth.connector.toml" = "02f82770247acf91837b56e7bfd0ce701ea4cea854a9472dcaa554e31bbe0534"
-"connectors/babelforce-auth.flux" = "6a01b493fff1aef91c742b02b60560f5a2169137a5707c5b59e9a8fb01ca7cc4"
+"connectors/babelforce-auth.connector.toml" = "30f94bbcdea40133476971bf2402330552144f7e6efe8bd045bf40e1ef3997e4"
+"connectors/babelforce-auth.flux" = "c8647d86f22a643c1babd1344b86df8bf156f9fb64dd219aa19cd449dea37f73"
 "connectors/babelforce-manager.connector.toml" = "45d01fb99efa06fe5d460c4cba6f79334f6defb40f14f5b0791133a84bef152a"
 "connectors/babelforce-manager.flux" = "215d1527cf8da2899d48061dc521ee8d9546ed3dd7f231b3b4631c47c4e69936"
 "connectors/babelforce-task-automation.connector.toml" = "6718340024d6f474efdf1e352410aa66124e539ea4b84e7615c42b8e9774d878"
@@ -443,7 +443,6 @@ sha256 = "031327359000bd70d6b2ab012868971cc834812e5f61f5157531e7cb5daa4d85"
 "crates/catalog/ops/babelforce/babelforce-test-triggers.flux" = "8da629b48e28c477bbf449e5c7012f2e3870acfffa9ba4b00af1a49940ade00b"
 "crates/catalog/ops/babelforce/babelforce-testing.flux" = "031f873cc0eda16812911d36bc1ca5390e2cca0e71c31e77730296e75735e332"
 "crates/catalog/ops/babelforce/babelforce-toggle-recording-flag.flux" = "d96c609767314bbb3beb19e5bce8e7b05584027d4ed41a95d5092f858861dc65"
-"crates/catalog/ops/babelforce/babelforce-token.flux" = "1c121667178bb1804290b1ad27f7de721badcc0aa2b30b7125d928004fd337b4"
 "crates/catalog/ops/babelforce/babelforce-unflag-recording.flux" = "f96f953ba4f2d1fbe22c20d6bd4a052ddbfab4a336c7fb60f49c53cab491a548"
 "crates/catalog/ops/babelforce/babelforce-unset-campaign-list.flux" = "9b16fa2ff15979e7d331ef442580ef4eb39beb3cfb15ab8eb922093ecc71a4bd"
 "crates/catalog/ops/babelforce/babelforce-update-agent-group.flux" = "5c162f8f276b612163790d5a980c7126346f90afcd710e059d3e99fc29b40aa8"
@@ -491,7 +490,7 @@ sha256 = "031327359000bd70d6b2ab012868971cc834812e5f61f5157531e7cb5daa4d85"
 "crates/catalog/ops/babelforce/babelforce-update-trigger.flux" = "bfe53d5bbf608b388a71f83126309adf6f6caace96eab1ba12ac58e71da36e0e"
 "crates/catalog/ops/babelforce/babelforce-user-me-get.flux" = "a4566ca2313dfb66100848a9a044ced3872befa0ed738802d7f64c0c953a9410"
 "crates/catalog/ops/babelforce/babelforce-write-log.flux" = "259a0d1682bb9278c762f17e1a663aa3d4b6f4e2ba6e1d3c2d55b72f89910d34"
-"crates/catalog/src/generated/babelforce.rs" = "975b40ec264d6e3037fc93185da5b6867dc369aa003417bd029a831994652826"
+"crates/catalog/src/generated/babelforce.rs" = "fbf762f4dbcfa0c5946885c2839b5e8f0774b7d846e45c7f93a12786fc56a368"
 
 [[provider]]
 id = "bitbucket"

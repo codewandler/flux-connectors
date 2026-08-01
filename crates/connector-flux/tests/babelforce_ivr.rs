@@ -112,7 +112,7 @@ fn babelforce_publishes_the_nine_curated_operations_across_five_named_services()
     // **The nine lead, and they are the nine that reach a model.** C-417 widened this connector to
     // the whole manager-sdk surface, so the published set is no longer nine — but the nine are a
     // public contract, they still publish first and in this order because a `[[patch.operations]]`
-    // block outranks a selector, and they are the only exposed operations in a set of 392.
+    // block outranks a selector, and they are the only exposed operations in a set of 391.
     assert_eq!(
         connector
             .operations

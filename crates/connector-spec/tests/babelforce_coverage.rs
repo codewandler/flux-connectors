@@ -55,16 +55,19 @@ const CANONICAL: usize = 397;
 /// number in the same commit — and to say, in the story that moved it, what the vendor added.
 const DECLARED: usize = 398;
 
-/// **What the connector emits, and the reason it is not [`CANONICAL`].**
+/// **What the connector emits, and the two reasons it is not [`CANONICAL`].**
 ///
-/// Ingest skips an operation whose request body is `multipart/form-data`, with a diagnostic, rather
-/// than publishing it without its body: `BodyEncoding` is `Json | Form` and this IR has no third
-/// value. Five manager operations are file uploads.
+/// - **Five cannot be expressed.** Ingest skips an operation whose request body is
+///   `multipart/form-data`, with a diagnostic, rather than publishing it without its body:
+///   `BodyEncoding` is `Json | Form` and this IR has no third value. Five manager operations are
+///   file uploads. That is an **IR gap, not a selection gap** — nothing here failed to match them,
+///   ingest never produced them — and closing it is C-426's.
+/// - **One is deliberately withheld.** `POST /oauth/token` returns a credential. See its
+///   [`ALLOWED`] entry; C-136 is what lets it come back.
 ///
-/// So `392 + 5 = 397`. That is an **IR gap, not a selection gap** — nothing here failed to match
-/// them, ingest never produced them — and closing it is C-426's. When it closes, this constant
-/// rises to [`CANONICAL`] and five [`ALLOWED`] entries are deleted, in one commit, together.
-const EMITTED: usize = 392;
+/// So `391 + 5 + 1 = 397`. When either gap closes, this constant rises and the matching [`ALLOWED`]
+/// entries are deleted, in one commit, together — which the stale-entry half of the gate enforces.
+const EMITTED: usize = 391;
 
 /// The operations the connector deliberately does not emit, each with the reason it does not.
 ///
@@ -72,13 +75,32 @@ const EMITTED: usize = 392;
 /// coverage hole nobody decided on, and [`the_documents_are_covered_and_every_gap_carries_a_reason`]
 /// refuses one. It is also refused at a length that would let `"n/a"` through — see
 /// [`MIN_REASON`].
-const ALLOWED: [(HttpMethod, &str, &str); 6] = [
+///
+/// **Three kinds of entry, and they are not interchangeable.** One is outside manager-sdk's surface
+/// and so is not a gap in coverage at all (the receiver, which is why [`CANONICAL`] is 397 and not
+/// 398); five are inside it and inexpressible; one is inside it, expressible, and withheld on
+/// purpose. Only the last is a decision this repository could reverse today, and it is the one that
+/// names the story that would.
+const ALLOWED: [(HttpMethod, &str, &str); 7] = [
     (
         HttpMethod::Post,
         "/api/v1/webhook/zendesk",
         "a webhook receiver Zendesk calls into babelforce, not a call flux makes out of it. \
          Outside manager-sdk's surface, and excluded by the task-automation selectors stating \
          `/api/v3` rather than by naming it",
+    ),
+    (
+        HttpMethod::Post,
+        "/oauth/token",
+        "its 2xx body is `OAuthTokenResponse`, which declares `access_token` and `refresh_token` \
+         (auth-2026-06-25.openapi.yaml:260). `connectors-api` renders a response body through \
+         `ctx.redactor.redact` (exec.rs:98) and the redactor holds only values the host resolved \
+         before the call (connector-pack/src/credentials.rs:149), so a token this call mints is \
+         unknown to it until after it has arrived — and `expose = false` does not help, because \
+         the execute route resolves any named operation regardless of exposure (exec.rs:88). \
+         C-136 diverts a credential-shaped response instead of redacting it after the fact; widen \
+         the `auth` POST selector back to `/oauth` and delete this entry in the commit that lands \
+         it",
     ),
     (
         HttpMethod::Post,
@@ -127,7 +149,7 @@ const MIN_REASON: usize = 24;
 /// the file under test would agree with whatever that file happens to say.
 ///
 /// **`risk` and `idempotency` are here, not only the id, and that is what this file adds to
-/// `babelforce_spec_route.rs`.** Widening to 392 operations meant declaring a blunt
+/// `babelforce_spec_route.rs`.** Widening to 391 operations meant declaring a blunt
 /// `risk = "high"` over every manager write, and three of these nine *are* manager writes that ship
 /// as `medium`/`idempotent`. Those two fields reach a host's approval gate and its retry decision,
 /// so letting a bulk selector raise them would have been a silent behavioural change to three
@@ -339,14 +361,15 @@ fn the_documents_are_covered_and_every_gap_carries_a_reason() {
         );
     }
 
-    // **The accounting, stated as arithmetic rather than as prose.** `392 + 5 = 397`, and the
-    // sixth allow-list entry is the receiver, which is outside the canonical surface rather than
-    // missing from it.
+    // **The accounting, stated as arithmetic rather than as prose.** `391 + 5 + 1 = 397`. Exactly
+    // one allow-list entry — the receiver — is *outside* the canonical surface rather than missing
+    // from it, which is why it is the one subtracted here and why `CANONICAL + 1 == DECLARED`
+    // below is the same fact stated from the other end.
     assert_eq!(emitted.len(), EMITTED, "the emitted operation count moved");
     assert_eq!(
         emitted.len() + (ALLOWED.len() - 1),
         CANONICAL,
-        "{EMITTED} emitted + {} inexpressible = the {CANONICAL} manager-sdk covers",
+        "{EMITTED} emitted + {} in scope and not emitted = the {CANONICAL} manager-sdk covers",
         ALLOWED.len() - 1
     );
     assert_eq!(
@@ -388,15 +411,15 @@ fn no_emitted_operation_lives_on_an_internal_path() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Exposure — the reason 392 operations is survivable
+// Exposure — the reason 391 operations is survivable
 // ---------------------------------------------------------------------------------------------
 
-/// **Nine tools, not 392.** The exposure tier's whole purpose, asserted as a number.
+/// **Nine tools, not 391.** The exposure tier's whole purpose, asserted as a number.
 ///
 /// C-413 split "callable" from "exposed" precisely so that widening a connector to a vendor's full
 /// surface does not spend a model's entire context on a tool list. Without this assertion the
 /// mechanism is one absent `expose = false` away from being undone — a selector that loses the key
-/// still compiles, still emits every operation, and turns the catalogue into 392 LLM tools.
+/// still compiles, still emits every operation, and turns the catalogue into 391 LLM tools.
 #[test]
 fn only_the_curated_nine_reach_a_model() {
     let connector = load().connector;
@@ -411,7 +434,7 @@ fn only_the_curated_nine_reach_a_model() {
 
     assert_eq!(
         exposed, expected,
-        "the exposed set is not the curated nine. 392 operations are callable and nine are tools; \
+        "the exposed set is not the curated nine. 391 operations are callable and nine are tools; \
          a difference here is either a tool that vanished from every caller's reach or several \
          hundred that arrived in a model's context"
     );
@@ -466,8 +489,9 @@ fn the_nine_shipped_operations_keep_their_contract() {
         );
     }
 
-    // Order, too: the nine publish first and in the file's block order, which is what
-    // `connectors/babelforce.flux` renders and therefore what a reviewer diffs.
+    // Order, too: the nine publish first and in the file's block order, which is the order
+    // `connectors/babelforce-manager.flux` and `crates/catalog/src/generated/babelforce.rs` render
+    // them in and therefore what a reviewer diffs.
     let leading: Vec<&str> = connector
         .operations
         .iter()
@@ -487,8 +511,8 @@ fn the_nine_shipped_operations_keep_their_contract() {
 /// **A tool contract with no sentence in it does not ship.**
 ///
 /// 23 operations across the five documents declare neither `summary` nor `description`. The story's
-/// rule is that each either gets one through the overlay or stays unexposed — and since 383 of the
-/// 392 are unexposed, that is very nearly free. This is the assertion that keeps it free rather
+/// rule is that each either gets one through the overlay or stays unexposed — and since 382 of the
+/// 391 are unexposed, that is very nearly free. This is the assertion that keeps it free rather
 /// than assumed: the day someone exposes one of the 23, the build fails until they write the
 /// sentence a model would otherwise have to guess from.
 #[test]

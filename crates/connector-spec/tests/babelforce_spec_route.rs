@@ -8,7 +8,7 @@
 //!
 //! # What C-417 changed here, and what it did not
 //!
-//! The connector now compiles from **five** documents rather than one, and publishes 392 operations
+//! The connector now compiles from **five** documents rather than one, and publishes 391 operations
 //! rather than nine. Every assertion below that counted has been restated as the claim it was
 //! standing in for, because each of them was a proxy for "the conversion did not widen selection by
 //! accident" and that sentence stopped being the question the day widening became the goal.
@@ -225,7 +225,7 @@ fn selection_stays_opt_in_and_the_nine_are_named_one_at_a_time() {
     // corpus be pointed at safely.
     assert!(
         !loaded.patch.select.is_empty(),
-        "no `[[patch.select]]` statement, so the 392 operations must have arrived by default — \
+        "no `[[patch.select]]` statement, so the 391 operations must have arrived by default — \
          which is the one thing selection must never do"
     );
 
@@ -238,7 +238,7 @@ fn selection_stays_opt_in_and_the_nine_are_named_one_at_a_time() {
         .patch
         .naming
         .as_ref()
-        .expect("`[patch.naming]` declares the rule the other 383 ids are derived by");
+        .expect("`[patch.naming]` declares the rule the other 382 ids are derived by");
 
     for (id, _, _) in SHIPPED {
         let pinned: Vec<&str> = naming

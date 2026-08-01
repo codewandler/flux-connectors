@@ -10,4 +10,4 @@ runtime = "http"
 base_url = "https://services.babelforce.com"
 api_version = "v2"
 module = "babelforce-auth.flux"
-operations = ["babelforce-authorize", "babelforce-revoke", "babelforce-token"]
+operations = ["babelforce-authorize", "babelforce-revoke"]

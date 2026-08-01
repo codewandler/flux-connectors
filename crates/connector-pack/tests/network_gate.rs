@@ -132,8 +132,8 @@ fn whole_catalogue() -> ToolRegistry {
 /// **The projected tool for one catalogued operation, exposed or not** — C-413, C-417.
 ///
 /// This used to read out of [`whole_catalogue`], and that was correct for exactly as long as every
-/// shipped operation was exposed. It no longer is: babelforce publishes 392 operations of which
-/// nine reach a model, so `pack` withholds 383 of them from the registry — and reading the gate out
+/// shipped operation was exposed. It no longer is: babelforce publishes 391 operations of which
+/// nine reach a model, so `pack` withholds 382 of them from the registry — and reading the gate out
 /// of the registry would have quietly stopped asserting it for **97% of the catalogue**, while the
 /// file's own header claims it covers "every shipped operation rather than a sampled one".
 ///
