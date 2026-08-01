@@ -144,7 +144,6 @@ _Seventeen connectors share structure that nothing currently names. `zendesk`, `
 
 ### the spec front-end — `[spec]` + patches, proven by retiring manager-sdk
 _[connector-pipeline.md](connector-pipeline.md) drew two front-ends over one IR: a hand-authored_
-- [C-4 — Ingest OpenAPI 3.x into the IR](C-4-openapi-ingest.md) · Spec · the trunk of the spec front-end — seam.rs:160 refuses every spec-backed provider until this lands, so the `[spec]` schema landed with C-3 has been unused ever since
 - [C-409 — The spec front-end, proven by retiring manager-sdk (epic)](C-409-spec-front-end-epic.md) · Spec · EPIC — the `[spec]` half of the pipeline was designed in C-2 and never built; all 53 providers are hand-authored and seam.rs:160 refuses a spec-backed one outright. babelforce forces it: 397 operations across 5 documents, which nobody is hand-authoring
 - [C-413 — An operation can be callable without being an LLM tool](C-413-callable-without-being-a-tool.md) · Spec · `expose: true` is hard-coded at connector-flux/src/op.rs:791 and graph.rs:1182, so every emitted op is a tool. That is why babelforce ships 9 of 163 — and it is the one thing that makes 397 survivable
 
@@ -224,6 +223,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-1 — Scaffold the Cargo workspace and the gate](C-1-scaffold-workspace.md) · Foundation · everything else builds on this
 - [C-2 — Define the Connector IR](C-2-connector-ir.md) · Spec · the contract every other crate speaks
 - [C-3 — Load and validate provider TOML](C-3-provider-toml-loader.md) · Spec
+- [C-4 — Ingest OpenAPI 3.x into the IR](C-4-openapi-ingest.md) · Spec · the trunk of the spec front-end — seam.rs:160 refuses every spec-backed provider until this lands, so the `[spec]` schema landed with C-3 has been unused ever since
 - [C-7 — Record provenance and write connectors.lock](C-7-provenance-lockfile.md) · Spec
 - [C-8 — Emit a Flux op for a GET with path and query params](C-8-flux-op-emitter.md) · Codegen · first end-to-end slice of codegen
 - [C-9 — Emit request bodies, headers, and response handling](C-9-bodies-and-responses.md) · Codegen

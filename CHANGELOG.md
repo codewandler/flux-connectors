@@ -26,6 +26,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A provider can point at a vendored OpenAPI document instead of writing every operation out**
+  (C-4). The `[spec]` front-end was designed in C-2 and never built: `SpecSource` and `Patch` landed
+  with C-3 and sat unused, and `connector-cli` refused every spec-backed provider with "spec ingest
+  (story C-4), which is not wired yet". That refusal is deleted. JSON **and YAML** parse — every
+  babelforce document is YAML — with `$ref` resolution including nested, repeated and cyclic refs.
+
+  **Ingest makes everything available and selects nothing.** A pointer with no patch is a connector
+  with **zero** operations, enforced structurally rather than by convention: an operation can only
+  enter through the patch list. That is what stops a 398-operation vendor document from becoming 398
+  LLM tools by default, and two tests hold it.
+
+  **Two grades of failure, and the split is the design.** A document that is not OpenAPI 3.x fails
+  the provider. One bad endpoint is a diagnostic naming method and path, and the operation is
+  *skipped* — never ingested half-formed. There is no "ingest it without its body" path: a `POST`
+  that quietly stopped sending a body is indistinguishable from a legitimately bodiless write.
+
+  Measured on the real corpus: 393 operations ingested and 5 diagnosed out of 398, the manager
+  document's 356 in 220 ms, largest `$ref` expansion 3,580 nodes against a 50,000 ceiling.
+
+  **`[spec] path` decides which document is compiled** — found in review, and it was not merely
+  unverified but *ignored*: the pin reached only an error label while the build took the last file in
+  the directory. A provider pinning `manager-2026-07-10` beside `user-2026-06-25` emitted `getUser`
+  out of the document it never named, exit 0, no diagnostic. `specs/<provider>/` is a cache of
+  *versions of one document*, so this was the ordinary pin, not an exotic one. Resolution lives in
+  the loader, because which document a connector compiles from is the provider file's decision and
+  choosing it in the CLI was the defect itself. A pin resolving to nothing refuses and lists what the
+  cache holds, and a declared `sha256` is now checked against the bytes actually ingested rather than
+  copied past them into `connectors.lock`.
+
 - **The five babelforce OpenAPI documents are vendored** (C-415), 890 KB under `specs/babelforce/` —
   the blocker `providers/babelforce.toml` has recorded since C-17, which said the spec was "not
   vendored in this repository, and it is not an oversight". The resolution splits what was one
