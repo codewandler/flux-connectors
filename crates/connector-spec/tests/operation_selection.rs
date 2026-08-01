@@ -53,23 +53,53 @@ const CANONICAL: usize = 397;
 
 /// **How much of the canonical surface a build can reach today, and why it is not all of it.**
 ///
-/// Ingest (C-4) skips an operation whose request body is `multipart/form-data`, with a diagnostic,
-/// rather than emitting it without its body — `body_encoding` is `json` or `form` and this IR has no
-/// third value. Five of the manager document's operations are file uploads, so selection never sees
-/// them: they are not a thing a selector failed to match, they are a thing ingest did not produce.
+/// Two causes, and they are different in kind — which is why the accounting below names **three**
+/// categories rather than writing the shortfall off as one number.
 ///
-/// So `392 + 5 = 397`, and both halves are asserted below rather than the shortfall being written
-/// off. Whoever teaches the IR to carry a multipart body closes this gap, and this constant is what
-/// tells them it closed.
-const REACHABLE: usize = 392;
+/// - **[`MULTIPART`] — five ingest cannot express.** Ingest (C-4) skips an operation whose request
+///   body is `multipart/form-data`, with a diagnostic, rather than emitting it without its body.
+///   Selection never sees them: they are not a thing a selector failed to match, they are a thing
+///   ingest did not produce.
+/// - **[`WITHHELD`] — four withheld by rule.** Three because an authentication endpoint describes
+///   *how to authenticate* and is never a connector operation; one because its response *delivers*
+///   a credential. Both rules are `AGENTS.md` § Authentication contract, owner-stated 2026-08-01.
+///   These *are* expressible; the selection deliberately omits them.
+///
+/// So `388 + 5 + 4 = 397`, and all three terms are asserted below rather than the shortfall being
+/// written off. Whoever teaches the IR to carry a multipart body moves the first term; nothing
+/// should ever move the second.
+const REACHABLE: usize = 388;
 
 /// The five manager operations ingest cannot express, by path.
+///
+/// **C-426 established these are not this repository's to close.** flux 0.46 cannot carry a
+/// multipart body at all: `http.request`'s `body` parameter is declared `{"type": "string"}` and
+/// read with `Value::as_str`, and `parse`'s `as_type` is a closed list of six — `f64`, `i64`,
+/// `bool`, `json`, `string`, `form` — the analyzer rejects anything outside
+/// (`flux_lang::analyze`). There is no part list, no per-part filename, no per-part content type
+/// and no boundary. Describing the body in the IR would emit a module that fails on a real call, so
+/// the five stay named here. The fix is a flux-side encoder, the same shape as the form/query gap
+/// `AGENTS.md` records under `zendesk-ticket-search`.
 const MULTIPART: [&str; 5] = [
     "/api/v2/agents/provision",
     "/api/v2/agents/provision/validate",
     "/api/v2/outbound/lists/{id}/leads/upload",
     "/api/v2/phonebook/bulk",
     "/api/v2/prompts",
+];
+
+/// The four operations withheld because of the credentials they carry, not because of any limit.
+///
+/// Unlike [`MULTIPART`] these are perfectly expressible — ingest produces them and a selector would
+/// match them. They are absent because selecting them would be a selection error. The three
+/// `/oauth/*` paths are authentication endpoints rather than operations; `/api/v2/user/account`
+/// returns the customer's REST API `accessToken` and the stream `token` in its 200 body. See
+/// `AGENTS.md` § Authentication contract and the two commented blocks in `providers/babelforce.toml`.
+const WITHHELD: [&str; 4] = [
+    "/api/v2/user/account",
+    "/oauth/authorize",
+    "/oauth/revoke",
+    "/oauth/token",
 ];
 
 fn root() -> PathBuf {
@@ -881,8 +911,8 @@ methods = ["GET"]
 /// - every operation of the 397 that ingest can express, and nothing else — `POST
 ///   /api/v1/webhook/zendesk` is excluded by stating the prefix that holds its 30 siblings, so the
 ///   exclusion is a statement about what is wanted rather than a list of what is not;
-/// - the five it cannot express are named, so `392 + 5 = 397` is an accounting rather than a
-///   shortfall nobody looked at;
+/// - the five it cannot express and the four it withholds are named, so `388 + 5 + 4 = 397` is an
+///   accounting rather than a shortfall nobody looked at;
 /// - the nine ids `providers/babelforce.toml` ships today, unmoved, and the only nine exposed;
 /// - no `internal` segment anywhere.
 ///
@@ -914,13 +944,36 @@ fn the_canonical_surface_is_selected_and_the_file_stays_reviewable() {
     assert_eq!(
         skipped,
         MULTIPART.into_iter().collect::<BTreeSet<_>>(),
-        "the gap between the selection and the canonical 397 is exactly the multipart uploads \
-         ingest skips; if this set moved, so did the accounting"
+        "the inexpressible half of the gap is exactly the multipart uploads ingest skips; if this \
+         set moved, so did the accounting"
     );
+
+    // The other half of the gap, and it is a *decision* rather than a limit: none of the four
+    // credential-carrying paths is selected. Asserted by name, because each is a path a widening
+    // prefix would sweep back in silently.
+    let selected: BTreeSet<&str> = connector
+        .operations
+        .iter()
+        .map(|operation| operation.path.as_str())
+        .collect();
+    let reached: Vec<&str> = WITHHELD
+        .into_iter()
+        .filter(|path| selected.contains(path))
+        .collect();
+    assert!(
+        reached.is_empty(),
+        "the canonical selection reaches operations withheld for the credentials they carry: \
+         {reached:?}. An `/oauth/*` endpoint describes how to authenticate and is never an \
+         operation; `/api/v2/user/account` delivers a credential in its response body"
+    );
+
     assert_eq!(
-        connector.operations.len() + MULTIPART.len(),
+        connector.operations.len() + MULTIPART.len() + WITHHELD.len(),
         CANONICAL,
-        "392 selected + 5 inexpressible = the 397 the scope constraint names"
+        "{REACHABLE} selected + {} inexpressible + {} withheld = the {CANONICAL} the scope \
+         constraint names",
+        MULTIPART.len(),
+        WITHHELD.len()
     );
 
     assert!(

@@ -10,4 +10,4 @@ runtime = "http"
 base_url = "https://services.babelforce.com"
 api_version = "v2"
 module = "babelforce-user.flux"
-operations = ["babelforce-user-me-get", "babelforce-get-user-customer", "babelforce-list-accounts", "babelforce-reset-password"]
+operations = ["babelforce-user-me-get", "babelforce-list-accounts", "babelforce-reset-password"]
