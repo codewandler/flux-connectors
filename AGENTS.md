@@ -837,6 +837,16 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
 
+**Two Node suites are part of CI and are not part of that block** — `crates/connectors-api/ui`
+(the host page) and `web/` (the public site). `ci.yml` runs `npm ci && npm test` in each, pinned.
+
+⚠ **In a fresh worktree neither has `node_modules`, so `npm test` fails with `MODULE_NOT_FOUND`
+rather than running** — which is not a pass and is easy to report as one. Measured 2026-08-01: a
+C-237 implementor grew `crates/connectors-api/src/index.html` by 457 lines, reported the Rust gate
+green, and its only test suite had never executed. CI would have caught it; the implementor's own
+report would not have. **If your change touches `crates/connectors-api/ui/` or `web/`, run
+`npm ci && npm test` there and quote the output** — a suite that cannot run is green by absence.
+
 Read `cargo test --workspace` correctly: it stops at the first failing test binary. A count of green
 summaries does not prove the remaining binaries ran. As a diagnostic, this must print nothing:
 

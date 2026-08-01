@@ -123,3 +123,22 @@ and is unreachable from the page. An operator can store a credential and cannot 
 - Deliberately **not** merged into the release that follows. An unreviewed, ungated diff touching the
   host's request path is not something to carry into a published version on the strength of it
   probably being fine.
+- **2026-08-01, from the implementor after it was resumed — worse than the parking note knew.**
+  - **There is no `BASE_PROOF` at all.** No failing-first run at the merge base was recorded.
+  - **`crates/connectors-api/src/index.html` grew by 457 lines and its only test suite never ran.**
+    `node --test` failed with `MODULE_NOT_FOUND` because a fresh worktree has no `node_modules`.
+    Not a code failure, and **not a pass**.
+  - The constraints that suite guards are the safety-relevant ones: `textContent` never
+    `innerHTML`, POST-not-link for an auth change, and the dev button only under `status.dev`.
+    **All three are unproven in this diff.**
+  - Four Rust tests do pass — `tests/dry_run.rs` (2) and `tests/catalogue_response.rs` (2) — so the
+    rail-data and dry-run half is real. The N+1 fix, the search, the credential removal and the
+    layout work are not claimed by anything that ran.
+- **Coordinator error, recorded because it cost something.** I reclaimed the implementor's worktree
+  on the reasoning that committing to `impl/C-237` preserved the work. The *content* was preserved —
+  `37ba8f7` is intact — but the agent was still resumable, and deleting the worktree ended its
+  ability to finish. The rule I was applying (reclaim only what is integrated or branch-preserved)
+  does not distinguish a live agent from a finished one, and it should have.
+- **To resume:** fresh worktree, `git merge --no-ff main` (it is behind C-437 and C-432),
+  `npm ci` in `crates/connectors-api/ui` **before** claiming any gate, then the base proof the story
+  never had.
