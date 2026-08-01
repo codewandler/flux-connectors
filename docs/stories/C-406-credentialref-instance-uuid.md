@@ -82,3 +82,10 @@ host concern rather than this crate's.
 - Ordering: this is independent of [C-403](C-403-flux-0-45-bump.md) — it touches the address model,
   not the engine line — but both land before a host can execute an operation against the right
   account.
+- **Sequenced behind [C-407](C-407-extract-the-credential-address-crate.md), noted 2026-08-01.** That
+  story extracts the credential address vocabulary into its own crate, i.e. it *moves* the very types
+  this story adds a component to. Implementing both at once means two agents editing
+  `crates/connector-spec/src/credential.rs` and `address` concurrently, and the merge would be
+  resolved by whoever went second guessing at the other's intent. Land C-407 first, then add the
+  instance component in its new home. There is a live `impl/C-406` branch and worktree from that
+  effort; it holds the story-filing commits, not an implementation of this story.
