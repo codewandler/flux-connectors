@@ -1,5 +1,5 @@
 ---
-id: C-406
+id: C-407
 title: "Extract the credential address vocabulary so the compiler leaves the publish closure"
 pillar: Build
 status: ready
