@@ -10,30 +10,86 @@
 
 use std::fmt::Write as _;
 
-use crate::pipeline::{Change, Plan, PlannedArtifact};
+use crate::pipeline::{Change, Orphan, Plan, PlannedArtifact};
 use crate::workspace::Workspace;
 
 /// Render every change a build would make.
+///
+/// An orphan ([`Plan::orphans`]) is counted here but described by [`orphan_refusal`], which is what
+/// the caller fails with. Two channels, one list: this line keeps the summary from claiming a clean
+/// tree, and the refusal on stderr carries the paths, so neither is complete-looking on its own and
+/// neither repeats the other.
 pub fn render(workspace: &Workspace, plan: &Plan) -> String {
-    if plan.is_up_to_date() {
-        return format!(
-            "{} up to date ({} checked)\n",
+    let mut out = String::new();
+
+    let changed = plan.changes().count();
+    if changed == 0 {
+        let _ = writeln!(
+            out,
+            "{} up to date ({} checked)",
             describe_count(plan.artifacts.len(), "artifact"),
+            describe_count(plan.providers.len(), "provider"),
+        );
+    } else {
+        for artifact in plan.changes() {
+            render_artifact(workspace, artifact, &mut out);
+        }
+        let _ = writeln!(
+            out,
+            "{} would change ({} checked)",
+            describe_count(changed, "artifact"),
             describe_count(plan.providers.len(), "provider"),
         );
     }
 
-    let mut out = String::new();
-    for artifact in plan.changes() {
-        render_artifact(workspace, artifact, &mut out);
+    if !plan.orphans.is_empty() {
+        let _ = writeln!(
+            out,
+            "{} under an artifact root claimed by no plan",
+            describe_count(plan.orphans.len(), "committed file"),
+        );
     }
+    out
+}
 
-    let changed = plan.changes().count();
-    let _ = writeln!(
-        out,
-        "{} would change ({} checked)",
-        describe_count(changed, "artifact"),
-        describe_count(plan.providers.len(), "provider"),
+/// Why `build` and `diff` stop when a committed file under an artifact root is claimed by nothing —
+/// C-429.
+///
+/// **The build refuses; it does not remove.** Deleting a committed file automatically is only as
+/// safe as the root it was judged against, and a root is derived from what the emitter says it
+/// writes — so an emitter bug becomes data loss instead of a failed build. `AGENTS.md`'s
+/// *Non-negotiable engineering rules* already decide this shape of question: a loud compile-time
+/// refusal is better than plausible but incorrect output. Removal is also the cheap half — one
+/// `git rm`, reviewed in the same diff as the change that orphaned the file.
+pub fn orphan_refusal(workspace: &Workspace, orphans: &[Orphan]) -> String {
+    let paths: Vec<String> = orphans
+        .iter()
+        .map(|orphan| workspace.display_path(&orphan.path).display().to_string())
+        .collect();
+    let width = paths.iter().map(String::len).max().unwrap_or_default();
+
+    let mut out = if orphans.len() == 1 {
+        "1 committed file sits under an artifact root and no plan claims it:\n\n".to_string()
+    } else {
+        format!(
+            "{} committed files sit under an artifact root and no plan claims them:\n\n",
+            orphans.len()
+        )
+    };
+    for (orphan, path) in orphans.iter().zip(&paths) {
+        let _ = writeln!(
+            out,
+            "  {path:width$}   (artifact root: {})",
+            workspace.display_path(&orphan.root).display(),
+        );
+    }
+    out.push_str(
+        "\nNothing writes these files any more, so `diff` cannot report them stale and `build` \
+         will not\noverwrite them — they ship exactly as they are, forever. Remove each one \
+         (`git rm <path>`)\nand run the build again.\n\n\
+         `build` refuses rather than deleting: an artifact root is derived from what the emitter \
+         says it\nwrites, so removing a file on a mis-derived root would turn an emitter bug into \
+         data loss.",
     );
     out
 }

@@ -302,6 +302,17 @@ pub fn parse(source: &str) -> Result<CoreCatalog> {
     Ok(catalog)
 }
 
+/// `web/public/v<VERSION>` — the directory this module publishes into, and nothing else does.
+///
+/// The **artifact root** of the core-catalogue family (C-429). One entry per record in the vendored
+/// snapshot, so the set shrinks whenever Flux retires a record; the whole point of a root is that
+/// the retired record's document is then reported rather than served forever. [`public_path`]
+/// refuses an `$id` that would land outside it, which is what makes the root exhaustive rather than
+/// merely usual.
+pub fn public_root(workspace: &Workspace) -> PathBuf {
+    workspace.site_public_path(format!("v{VERSION}"))
+}
+
 /// The public index, per-entry documents and their validating schemas.
 pub fn public_artifacts(
     workspace: &Workspace,
@@ -352,6 +363,12 @@ fn public_path(workspace: &Workspace, id: &str) -> Result<PathBuf> {
         || relative.contains(['\\', '?', '#'])
     {
         bail!("public specification id `{id}` cannot map to a safe output path");
+    }
+    // Inside the versioned root or nowhere: [`public_root`] is what `build` scans for documents no
+    // snapshot claims any more, and a record published beside it rather than under it would be
+    // outside every root and so unremovable by the only mechanism that looks.
+    if !relative.starts_with(&format!("v{VERSION}/")) {
+        bail!("public specification id `{id}` is outside the published v{VERSION} tree");
     }
     Ok(workspace.site_public_path(relative))
 }

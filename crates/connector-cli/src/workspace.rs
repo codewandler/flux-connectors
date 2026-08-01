@@ -103,6 +103,9 @@ impl Workspace {
     }
 
     /// `<root>/connectors`.
+    ///
+    /// The **artifact root** of the installable-unit family (C-429): every file in it is a module or
+    /// a manifest a build wrote, so one no plan claims is a unit whose service stopped existing.
     pub fn artifacts_dir(&self) -> PathBuf {
         self.root.join(ARTIFACTS_DIR)
     }
@@ -140,6 +143,17 @@ impl Workspace {
         self.root.join(CATALOG_DIR)
     }
 
+    /// `<root>/crates/catalog/ops` — every provider's renderings, one directory each.
+    ///
+    /// The **artifact root** of the rendering family (C-429): a `.flux` file anywhere below here is
+    /// a rendering, and one no plan claims is an orphan. Rooted at the parent rather than at
+    /// [`Self::catalog_ops_dir`] on purpose — a provider removed from `providers/` altogether takes
+    /// its own directory out of the plan, and a root that only existed while the provider did would
+    /// be exactly the class of orphan nobody finds.
+    pub fn catalog_ops_root(&self) -> PathBuf {
+        self.catalog_dir().join("ops")
+    }
+
     /// `<root>/crates/catalog/ops/<provider>` — that provider's per-operation renderings.
     ///
     /// One directory per provider, not one flat directory: 25 operations ship today and a
@@ -148,7 +162,17 @@ impl Workspace {
     /// `com.babelforce.api/manager/calls:v1` — is the natural second level, and it slots in below
     /// this one without moving anything above it.
     pub fn catalog_ops_dir(&self, provider: &str) -> PathBuf {
-        self.catalog_dir().join("ops").join(provider)
+        self.catalog_ops_root().join(provider)
+    }
+
+    /// `<root>/crates/catalog/src/generated` — one generated table per provider.
+    ///
+    /// The **artifact root** of that family (C-429). Its parent, `crates/catalog/src`, is not one:
+    /// it holds `lib.rs` and the hand-written half of the crate, and the one generated file directly
+    /// in it — [`Self::catalog_index_path`] — is a single file a full run always writes and so
+    /// cannot be orphaned.
+    pub fn catalog_generated_dir(&self) -> PathBuf {
+        self.catalog_dir().join("src").join("generated")
     }
 
     /// `<root>/crates/catalog/ops/<provider>/<operation>.flux`.
@@ -163,10 +187,7 @@ impl Workspace {
     /// exactly what it compiled. A single index would have to drop the providers the run did not
     /// look at.
     pub fn catalog_module_path(&self, provider: &str) -> PathBuf {
-        self.catalog_dir()
-            .join("src")
-            .join("generated")
-            .join(format!("{provider}.rs"))
+        self.catalog_generated_dir().join(format!("{provider}.rs"))
     }
 
     /// `<root>/crates/catalog/src/generated.rs` — the index naming every provider's module (C-104).

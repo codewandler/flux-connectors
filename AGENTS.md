@@ -194,6 +194,25 @@ One nearby file is intentionally hand-maintained: `assets/readme-snippet.flux` i
 for the README image, and tests keep it identical to the operation shown in the generated Zendesk
 module.
 
+### An artifact no plan claims is refused, not deleted (C-429)
+
+A full `build` or `diff` also asks the inverse question: which committed files sit under a directory
+the build owns that **no plan writes**? Four directories are artifact roots — `connectors/`,
+`crates/catalog/ops/`, `crates/catalog/src/generated/` and `web/public/v1/` — and each is derived
+from what the emitter says it writes rather than listed here, so a new family of artifacts brings its
+root with it. A file counts only if it shares an extension with something the build writes into that
+root, which is why `crates/catalog/ops/README.md` and `assets/brand/*.svg` are not reported.
+
+**`build` refuses and names the file; it never removes one.** Deleting a committed file is only as
+safe as the root it was judged against, and *Refuse ambiguous or unsafe output* decides that
+trade — the removal itself is one `git rm`, reviewed in the same diff as the change that orphaned
+the file. `diff` exits non-zero for the same reason `connectors.lock` exists: this is drift, and
+drift is detected rather than absorbed.
+
+**A scoped run reports nothing.** `--provider` and `--service` compiled a subset, so every other
+provider's artifacts would read as unclaimed. The check runs against a whole-catalogue plan or not at
+all, exactly as `connectors.lock` does one layer down.
+
 ### Vendored specs: the pulled bytes, never the pull configuration
 
 A vendor document under `specs/` is committed because builds are hermetic and offline, and this

@@ -73,6 +73,12 @@ pub fn run(invocation: &Invocation, out: &mut impl Write) -> Result<()> {
 }
 
 /// Compile every provider and write what changed.
+///
+/// **A build refuses outright when a committed file under an artifact root is claimed by no plan**
+/// (C-429), before writing anything at all. Two reasons it lands here rather than after the writes:
+/// a refusal that had already written half the run would leave the tree carrying both a partial
+/// build and the orphan, and the all-or-nothing property this module already holds is the one a
+/// reader will assume.
 fn build(invocation: &Invocation, out: &mut impl Write) -> Result<()> {
     let workspace = workspace_for(invocation)?;
     let plan = pipeline::plan_selected(
@@ -82,6 +88,7 @@ fn build(invocation: &Invocation, out: &mut impl Write) -> Result<()> {
     )?;
 
     report_diagnostics(&plan, out)?;
+    refuse_orphans(&workspace, &plan)?;
 
     if plan.is_up_to_date() {
         writeln!(
@@ -155,7 +162,22 @@ fn show_diff(invocation: &Invocation, out: &mut impl Write) -> Result<()> {
     )?;
     report_diagnostics(&plan, out)?;
     write!(out, "{}", diff::render(&workspace, &plan))?;
-    Ok(())
+    // After the render, not before: `diff` is a preview, and the preview is worth having even in the
+    // run that fails. The non-zero exit is the point — an orphan is drift in exactly the sense
+    // `connectors.lock` exists to catch, so CI must fail on it rather than print a warning nobody
+    // reads (C-429).
+    refuse_orphans(&workspace, &plan)
+}
+
+/// Stop, naming every committed file under an artifact root that the plan does not claim — C-429.
+///
+/// Silent on a scoped run, because [`pipeline::plan_selected`] leaves the list empty there: a
+/// `--provider` run compiled a subset and every other provider's artifacts would read as unclaimed.
+fn refuse_orphans(workspace: &Workspace, plan: &pipeline::Plan) -> Result<()> {
+    if plan.orphans.is_empty() {
+        return Ok(());
+    }
+    bail!("{}", diff::orphan_refusal(workspace, &plan.orphans))
 }
 
 /// Say what the vendored spec documents got wrong, before saying what the build did — C-4.
