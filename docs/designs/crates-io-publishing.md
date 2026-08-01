@@ -26,33 +26,51 @@ otherwise only be discovered at release time is moved onto every pull request.
 C-190 names three consumable crates. The dependency graph says four.
 
 ```
-connector-catalog                             (no dependencies at all)
-connector-spec   → connector-secrets          (CredentialRef, Layout, TenantLayout)
+connector-catalog                              (no dependencies at all)
+connector-address → connector-secrets          (CredentialRef, Layout, TenantLayout)
 connector-catalog, connector-secrets → connector-pack
 ```
 
-`connector-secrets` does not define credential addressing; it re-exports `CredentialRef` from
-`connector-spec` (deliberately — C-90 says there is one addressing scheme, not two). That type is in
-`connector-secrets`' *public API*, so `connector-spec` is published or nothing outside this
+`connector-secrets` does not define credential addressing; it re-exports `CredentialRef` from the
+crate that does (deliberately — C-90 says there is one addressing scheme, not two). That type is in
+`connector-secrets`' *public API*, so whatever crate owns it is published or nothing outside this
 workspace resolves. The `path` dependency that makes it work here does not travel in a `.crate`.
 
 Derived publish order:
 
 | # | crate | why it is here |
 |---|---|---|
-| 1 | `connector-catalog` | consumable; zero dependencies |
-| 2 | `connector-spec` | **not requested — forced** by `connector-secrets`' public API |
-| 3 | `connector-secrets` | consumable; needs `connector-spec` live |
+| 1 | `connector-address` | **not requested — forced** by `connector-secrets`' public API |
+| 2 | `connector-catalog` | consumable; zero dependencies |
+| 3 | `connector-secrets` | consumable; needs `connector-address` live |
 | 4 | `connector-pack` | consumable; needs `connector-catalog` and `connector-secrets` live |
 
-Not published: `connector-cli` (this repository's own build tool) and `connector-flux` (reachable
-only from it). Neither is in the closure of any consumable crate, so neither is forced.
+Not published: `connector-cli` (this repository's own build tool), `connector-flux` (reachable only
+from it) and `connector-spec` (the compiler). None is in the closure of any consumable crate, so
+none is forced.
 
 **This is a finding for C-190, not a decision taken here.** It changes that story's arithmetic:
 four new crates against the crates.io new-crate rate limit rather than three, and one more permanent
 name to settle. It also means `connector-catalog` is no longer quite the "publishable on its own"
 crate the notes assume — it still is, but `connector-secrets` is not, and `connector-pack` needs
 three predecessors live.
+
+### The forced crate used to be the compiler (C-407)
+
+Until C-407 the forced crate at position 2 was **`connector-spec`**: the connector IR, provider TOML
+and OpenAPI ingest, validation and the lockfile writer — 11,832 lines and 128 top-level `pub` items
+— published permanently so that a 726-line address module resolved for `connector-secrets`.
+
+The derivation was never wrong; it reported the edge faithfully. What was wrong was the edge. So the
+vocabulary moved into `connector-address`, a crate whose whole content is how a provider, a service,
+an operation and a tenant's credential are *named*, and the dependency **inverted**: `connector-spec`
+is now a consumer of it, because `Connector::gid_of` and `Connector::credential_ref_for` derive
+addresses from a loaded connector. Moving `credential` into `connector-secrets` instead was rejected
+— it would have pointed the compiler at a host library.
+
+An address vocabulary is a reasonable thing to have in a published API. A compiler is not, and
+`publish_closure.rs::no_machinery_crate_is_published` is what states that as a property rather than
+leaving it to whoever next reads a derived list.
 
 ### The order is derived, not listed
 

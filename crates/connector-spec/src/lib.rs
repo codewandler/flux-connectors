@@ -91,10 +91,8 @@
 //! file byte for byte — see the [`lock`] module docs for what is hashed, what is deliberately not,
 //! and why no timestamp appears anywhere in it.
 
-pub mod address;
 mod auth;
 pub mod config;
-pub mod credential;
 pub mod graph;
 pub mod inbound;
 mod ir;
@@ -102,7 +100,21 @@ pub mod lock;
 pub mod openapi;
 pub mod provider;
 
-pub use address::{Gid, Oip, Pid};
+// **The address vocabulary lives in `connector-address` and is re-exported here whole** (C-407).
+//
+// The modules moved out of this crate; the paths did not. `connector_spec::address::Gid`,
+// `connector_spec::credential::CredentialRef` and every name below still resolve, because this is a
+// packaging change and an import a consumer has to edit would mean it was done wrong.
+//
+// The edge points down, not up: this crate *derives* addresses from a loaded connector
+// ([`Connector::gid_of`], [`Connector::credential_ref_for`]) and owns none of their spelling.
+// `connector-secrets` — a published host library — needed the spelling and nothing else here, and
+// while the two shared a crate the derived publish closure put the whole compiler on crates.io to
+// deliver it.
+pub use connector_address::{
+    address, credential, Error as AddressError, Gid, Oip, Pid, DEFAULT_SERVICE,
+};
+
 pub use auth::{AuthMethod, AuthRequirement, AuthScheme, OAuth2Spec, OAuthGrant, OAuthRedirect};
 pub use config::{Binding, ConfigField, Format, Level, Position};
 pub use credential::{CredentialRef, InstanceId, Layout, TenantInstances, TenantLayout};
@@ -116,7 +128,7 @@ pub use inbound::{
 pub use ir::{
     BodyEncoding, Connector, ErrorEnvelope, HttpMethod, Idempotency, JsonSchema, Operation,
     Pagination, Param, ParamSet, Provenance, Quirks, RateLimit, Risk, Role, Runtime, Service,
-    DEFAULT_SERVICE, FREE_FORM_BODY, MIN_REPEATABILITY_CONDITION,
+    FREE_FORM_BODY, MIN_REPEATABILITY_CONDITION,
 };
 pub use lock::{sha256_hex, LockEntry, LockSpec, Lockfile, LOCKFILE_NAME, LOCKFILE_VERSION};
 pub use openapi::{Diagnostic, Ingested, Server, ServerVariable, SpecOperation};
@@ -173,15 +185,13 @@ pub enum Error {
     },
     /// A global address (pid, gid or oip) is not well-formed — see [`address`].
     ///
-    /// Carries the text and the reason separately so a caller can report the offending string
-    /// verbatim; an address a user typed is worth echoing back exactly as they typed it.
-    #[error("`{address}` is not a valid address: {reason}")]
-    InvalidAddress {
-        /// The address as it was given.
-        address: String,
-        /// Why it is not one.
-        reason: String,
-    },
+    /// **Raised by [`AddressError`], not by this enum** (C-407). The parsers moved to
+    /// `connector-address` with the grammar they enforce, and a second spelling of the same failure
+    /// here would be two names for one thing with nothing to say which a caller gets back.
+    /// [`Gid::parse`] and its siblings return [`AddressError`]; this variant folds one into the
+    /// loader's own error when a component reaches this crate unparsed.
+    #[error(transparent)]
+    InvalidAddress(#[from] AddressError),
     /// The IR could not be encoded — see [`Connector::canonical_json`].
     #[error("cannot serialize the connector IR: {0}")]
     Serialize(#[from] serde_json::Error),

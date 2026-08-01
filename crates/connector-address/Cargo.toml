@@ -1,0 +1,34 @@
+[package]
+name = "codewandler-connector-address"
+description = "How a connector, its services, its operations and a tenant's credentials are named: a small, validated address vocabulary."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+readme = "README.md"
+# The package name, not `connector-address`: docs.rs serves a crate under the name it was published
+# as. The four crates published before this one point at the unprefixed name, which is a mistake
+# only fixable in a later version of each — this one starts correct.
+documentation = "https://docs.rs/codewandler-connector-address"
+keywords = ["flux", "connector", "address", "credentials", "uri"]
+categories = ["api-bindings", "data-structures"]
+
+[lib]
+# Pinned so the published package name and the crate name are independent. The package is
+# `codewandler-*` on crates.io (C-195); the crate every dependent writes is `connector_address`.
+# Without this, renaming the package silently renames the crate and breaks every `use` of it.
+name = "connector_address"
+path = "src/lib.rs"
+
+[dependencies]
+# One dependency, and the whole point of this crate is that it is the only one (C-407). It exists so
+# that `connector-secrets` can re-export an address without dragging the compiler — 11,832 lines of
+# IR, provider TOML and OpenAPI ingest, validation and the lockfile writer — onto crates.io behind
+# it. A vocabulary crate that grew a parser, a client or a serialization format would be that leak
+# starting over, one edge at a time.
+#
+# `thiserror` is here rather than a hand-written `impl Display` because every other error in this
+# workspace is spelled that way, and it is already in the closure through `connector-secrets`.
+thiserror.workspace = true

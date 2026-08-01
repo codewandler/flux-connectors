@@ -305,8 +305,9 @@ anything else — if a future flux makes duplicates invisible, it says so rather
 ## Ports the host binds
 
 - **`CredentialStore`** — the adapter this repo already modelled and never wired to anything.
-  `crates/connector-spec/src/credential.rs` holds `CredentialRef`, the `Layout` trait and
-  `TenantLayout` (C-90). Managing expiring tokens was out of scope there and remains so.
+  `crates/connector-address/src/credential.rs` holds `CredentialRef`, the `Layout` trait and
+  `TenantLayout` (C-90; extracted out of `connector-spec` by C-407). Managing expiring tokens was
+  out of scope there and remains so.
 - **`HttpRequestTool`** — injected rather than constructed, so a host can supply a pre-configured one.
 
 ## Channels

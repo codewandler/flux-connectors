@@ -18,12 +18,21 @@ use std::path::{Path, PathBuf};
 const HOST_LIBRARY: &str = "codewandler-connector-secrets";
 
 /// The crates that make up the offline compiler. `connector-catalog` is in the list because it is
-/// the leaf the pipeline writes into and is documented as dependency-free.
+/// the leaf the pipeline writes into and is documented as dependency-free; `connector-address` is
+/// in it because it is the address vocabulary the compiler is written against, and a socket
+/// reachable from a crate every compiler crate links would end the offline guarantee from below.
+///
+/// **Being here is about sockets, not about publishing.** Two of these are published on purpose —
+/// `connector-catalog` is the crate a consumer adds, and `connector-address` is what
+/// `connector-secrets` re-exports — so this list is not the answer to "may this crate reach
+/// crates.io?". That question is `publish_closure.rs`'s `MACHINERY`, which deliberately holds a
+/// different set (C-407).
 const COMPILER_CRATES: &[&str] = &[
     "connector-cli",
     "codewandler-connector-spec",
     "connector-flux",
     "codewandler-connector-catalog",
+    "codewandler-connector-address",
 ];
 
 /// **Crates allowed to open sockets, named so the allowance is a decision rather than a silence.**

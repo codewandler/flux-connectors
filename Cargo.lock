@@ -326,6 +326,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
 
 [[package]]
+name = "codewandler-connector-address"
+version = "0.8.0"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "codewandler-connector-catalog"
 version = "0.8.0"
 dependencies = [
@@ -354,7 +361,7 @@ name = "codewandler-connector-secrets"
 version = "0.8.0"
 dependencies = [
  "async-trait",
- "codewandler-connector-spec",
+ "codewandler-connector-address",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -366,6 +373,7 @@ dependencies = [
 name = "codewandler-connector-spec"
 version = "0.8.0"
 dependencies = [
+ "codewandler-connector-address",
  "indexmap",
  "serde",
  "serde_json",

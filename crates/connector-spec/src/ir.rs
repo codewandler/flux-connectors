@@ -505,14 +505,14 @@ pub struct Provenance {
     pub toml_sha256: Option<String>,
 }
 
-/// The name of the implicit service every operation belongs to unless it names another.
-///
-/// **Reserved.** No `[[services]]` entry may declare it (the loader refuses one), because it is the
-/// name of the service that exists without being declared — a declaration of it would be a second,
-/// contradictable definition. It is also **elided from every rendered address**
-/// ([`crate::address::Gid`]): `default` is an internal name for "this provider has one API surface",
-/// and an address is a promise that would have to be broken the day the provider grows a second one.
-pub const DEFAULT_SERVICE: &str = "default";
+// The reserved service name, defined in `connector-address` and re-exported here so that
+// `crate::ir::DEFAULT_SERVICE` — which most of this crate spells — keeps resolving (C-407).
+//
+// It went down with the two address modules rather than staying with the IR because the rule it
+// carries is an *address* rule: it is elided from a gid and from a credential path, both grammars
+// are written against it, and a copy on this side of the crate boundary is a copy that can drift
+// from the one the elision is implemented against.
+pub use connector_address::DEFAULT_SERVICE;
 
 /// A named capability shape a [`Service`] claims to implement, checked at load — C-120.
 ///

@@ -367,7 +367,7 @@ pub enum Error {
     Tenant {
         /// The tenant id that was refused.
         tenant: String,
-        /// `connector_spec::credential::validate_tenant`'s own explanation.
+        /// `connector_address::credential::validate_tenant`'s own explanation.
         reason: String,
     },
 

@@ -21,6 +21,16 @@ name = "connector_spec"
 path = "src/lib.rs"
 
 [dependencies]
+# The address vocabulary (C-407): pid/gid/oip and the credential path. It used to be two modules of
+# this crate, and the edge now points the other way — this crate *derives* addresses from a loaded
+# connector and re-exports the vocabulary unchanged, so `connector_spec::address` and
+# `connector_spec::credential` still resolve for everything that already spelled them that way.
+#
+# It moved down because it was the only thing `connector-secrets` needed from here, and the publish
+# closure is derived: that one re-export put this entire crate — the IR, both front-ends, validation
+# and the lockfile writer — on crates.io permanently.
+connector-address.workspace = true
+
 thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true

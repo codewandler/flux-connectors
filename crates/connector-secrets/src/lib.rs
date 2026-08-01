@@ -1,6 +1,6 @@
 //! Where a connector's credential **address** resolves to a **value**.
 //!
-//! [`connector_spec::credential`] owns the address:
+//! [`connector_address::credential`] owns the address:
 //! `tenants/<tenant>/<authority>[/@instances/<uuid>][/<service>]/<credential>`, pure and validated —
 //! the instance being which of a tenant's connections, present only when it holds more than one
 //! (C-406), so a single-connection address is exactly what it always was. It deliberately owns
@@ -96,9 +96,14 @@ pub use secret::Secret;
 pub use vault::VaultStore;
 
 // The addressing, re-exported rather than redefined. There is one credential addressing scheme in
-// this ecosystem and it lives in `connector-spec`; a consumer of this crate should never need to
+// this ecosystem and it lives in `connector-address`; a consumer of this crate should never need to
 // name both crates to spell one address.
-pub use connector_spec::credential::{
+//
+// **These nine names are why `connector-address` exists** (C-407). The publish closure is derived
+// from the manifests, so this re-export decides what ships beside this crate: while the addressing
+// lived in `connector-spec`, it was the whole compiler, permanently, so that
+// `use connector_secrets::CredentialRef` resolved outside this workspace.
+pub use connector_address::credential::{
     validate_instance, validate_tenant, CredentialRef, InstanceId, Layout, TenantInstances,
     TenantLayout, INSTANCES_SEGMENT, MAX_TENANT, TENANTS_ROOT,
 };

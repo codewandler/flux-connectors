@@ -1,19 +1,25 @@
 //! Publishing is the one irreversible thing this repository can do, so the order it happens in and
 //! the metadata it burns are asserted here rather than trusted.
 //!
-//! Three properties, each of which has a way of being wrong that only shows up at release time:
+//! Four properties, each of which has a way of being wrong that only shows up at release time:
 //!
 //! 1. **The closure is the closure.** C-190 names three consumable crates —
-//!    `connector-catalog`, `connector-secrets`, `connector-pack` — but `connector-secrets`
-//!    re-exports `CredentialRef` from `connector-spec`, so `connector-spec` is published too or
-//!    `connector-secrets` does not resolve for anyone outside this workspace. The set is computed
-//!    from the manifests, not listed, so a new edge grows the closure instead of silently breaking
-//!    the next release.
-//! 2. **The order is a topological sort.** crates.io refuses a crate whose dependencies are not yet
+//!    `connector-catalog`, `connector-secrets`, `connector-pack` — and `connector-secrets`
+//!    re-exports the credential address vocabulary, so whatever crate owns that vocabulary is
+//!    published too or `connector-secrets` does not resolve for anyone outside this workspace. The
+//!    set is computed from the manifests, not listed, so a new edge grows the closure instead of
+//!    silently breaking the next release.
+//! 2. **No crate in the closure is the compiler.** The derivation above is faithful and has no
+//!    opinion: it grew the closure to include `connector-spec` — the IR, both front-ends, the
+//!    validator and the lockfile writer — because one re-export reached into it, and a release
+//!    would have put all of that on crates.io permanently. That is what C-407 extracted
+//!    `connector-address` to end, and [`no_machinery_crate_is_published`] is what stops the edge
+//!    growing back.
+//! 3. **The order is a topological sort.** crates.io refuses a crate whose dependencies are not yet
 //!    live, and a half-published closure cannot be rolled back. `scripts/publish-crates-io.sh`
 //!    derives its order from `cargo metadata`; this test recomputes it independently from the
 //!    manifests and requires the two to agree.
-//! 3. **The metadata is complete.** `description`, `license`, `repository`, `readme` and `keywords`
+//! 4. **The metadata is complete.** `description`, `license`, `repository`, `readme` and `keywords`
 //!    are what a crates.io page is made of, and none of them can be corrected in a version that has
 //!    already been published — only in the next one.
 //!
@@ -35,6 +41,33 @@ const ROOTS: &[&str] = &[
     "codewandler-connector-catalog",
     "codewandler-connector-secrets",
     "codewandler-connector-pack",
+];
+
+/// **The machinery: the crates that turn a provider definition into a generated artifact.** None of
+/// them may be published — see [`no_machinery_crate_is_published`].
+///
+/// This is not `dependency_fence.rs`'s `COMPILER_CRATES`, and the two must not be merged. That list
+/// answers *may this crate reach a socket?*, which is why `connector-catalog` is in it even though
+/// it is published on purpose. This one answers *is this crate the compiler?*
+const MACHINERY: &[&str] = &[
+    "codewandler-connector-spec",
+    "connector-flux",
+    "connector-cli",
+];
+
+/// Everything else this workspace builds: the address vocabulary, the generated data, the host
+/// libraries and the reference host.
+///
+/// Being named here is **not** permission to publish — `connectors-api` sets `publish = false`, and
+/// what actually reaches crates.io is [`ROOTS`] and what it reaches. It is only the statement that
+/// this crate is not part of the compiler, which is the half of the classification
+/// [`every_member_is_classified_as_machinery_or_not`] needs in order to be total.
+const NOT_MACHINERY: &[&str] = &[
+    "codewandler-connector-address",
+    "codewandler-connector-catalog",
+    "codewandler-connector-pack",
+    "codewandler-connector-secrets",
+    "connectors-api",
 ];
 
 /// Metadata every published crate must carry. Each of these is either required by crates.io or
@@ -107,6 +140,83 @@ fn the_closure_contains_every_crate_the_roots_reach() {
                  without it — the path dependency that makes it work here does not travel."
             );
         }
+    }
+}
+
+/// Acceptance (C-407): "the published closure contains no compiler crate. Assert the *property*,
+/// not the current membership."
+///
+/// The closure is **derived**, which is the right design and is also why it needs this: a
+/// derivation reports what the edges say and cannot object to them. One re-export of
+/// `CredentialRef` from `connector-secrets` was enough to put 11,832 lines of compiler — the IR,
+/// provider TOML and OpenAPI ingest, validation, the lockfile writer — into a set that, once a
+/// `vX.Y.Z` tag is pushed, is on crates.io permanently.
+///
+/// So the property is stated over the derived set rather than over a list of what it contains
+/// today: whatever the closure grows to, none of it may be the compiler. A future edge from a
+/// published crate into `connector-spec` fails here rather than at `git push --tags`.
+#[test]
+fn no_machinery_crate_is_published() {
+    let workspace = Workspace::read();
+    let closure: BTreeSet<String> = workspace.publish_order(ROOTS).into_iter().collect();
+
+    // A closure that came back empty would satisfy the loop below while proving nothing.
+    assert!(
+        closure.len() >= ROOTS.len(),
+        "the derived publish closure is {closure:?}, which does not even contain {ROOTS:?}; this \
+         test would pass on an empty set"
+    );
+
+    for name in MACHINERY {
+        let dragged_in: Vec<&str> = ROOTS
+            .iter()
+            .filter(|root| workspace.closure(root).contains(*name))
+            .copied()
+            .collect();
+        assert!(
+            !closure.contains(*name),
+            "`{name}` is part of this repository's compiler and it is in the publish closure, \
+             reached from {dragged_in:?}.\n\
+             Publishing is a consequence of pushing a `vX.Y.Z` tag and a published version cannot \
+             be withdrawn, so this edge would put a compiler on crates.io permanently. Extract the \
+             vocabulary the root actually needs into a crate of its own (C-407 did this for \
+             `connector-address`) rather than widening what ships.\n\
+             closure: {closure:?}"
+        );
+    }
+}
+
+/// [`MACHINERY`] is only a property while it is complete. Without this, a second emitter or a second
+/// front-end crate is simply not asked about: it is in neither list, so nothing objects when a
+/// published crate grows an edge into it.
+///
+/// Both directions, because each fails a different way. A member in neither list is a crate whose
+/// right to be published nobody decided; a list naming a crate that is not a member is a rename that
+/// silently emptied the fence.
+#[test]
+fn every_member_is_classified_as_machinery_or_not() {
+    let workspace = Workspace::read();
+    let members: BTreeSet<&str> = workspace.members().map(String::as_str).collect();
+
+    for name in &members {
+        let machinery = MACHINERY.contains(name);
+        let not = NOT_MACHINERY.contains(name);
+        assert!(
+            machinery != not,
+            "`{name}` is a workspace member named in {} of `MACHINERY` and `NOT_MACHINERY`.\n\
+             Name it in exactly one, with a comment saying why. A crate nobody classified is a \
+             crate that can join the publish closure without anyone deciding it may.",
+            if machinery { "both" } else { "neither" }
+        );
+    }
+
+    for name in MACHINERY.iter().chain(NOT_MACHINERY) {
+        assert!(
+            members.contains(name),
+            "`{name}` is classified here but is not a member of this workspace: {members:?}.\n\
+             A renamed or removed crate leaves a list that still looks like a fence and guards \
+             nothing."
+        );
     }
 }
 
@@ -309,6 +419,11 @@ impl Workspace {
                 .collect(),
             manifests: BTreeMap::new(),
         }
+    }
+
+    /// Every member of this workspace, by package name, in a stable order.
+    fn members(&self) -> impl Iterator<Item = &String> {
+        self.manifests.keys()
     }
 
     /// The workspace crates `name` depends on directly.
