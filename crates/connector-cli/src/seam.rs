@@ -63,15 +63,17 @@ pub struct ProviderInputs {
     /// **Every** vendored document under `specs/<name>/`, in discovery order.
     ///
     /// The whole cache rather than one chosen document, and the difference is a correctness one.
-    /// `specs/<provider>/` ordinarily holds several files — versions of one document — and only the
-    /// provider file's `[spec] path` says which of them the connector is compiled from. Handing the
-    /// loader a document this layer had already picked would move that decision out of the file that
-    /// owns it: `Provider::spec()` returns the **last by file stem**, so pinning
-    /// `specs/zendesk/2024-06-01.json` beside a newer `2025-01-01.json` compiled the newer one,
-    /// successfully and with no diagnostic. So the pin is resolved where the pin is read.
+    /// `specs/<provider>/` holds more files than a connector compiles: versions of one document, and
+    /// — since C-410 — the documents of the connector's other services. Only the provider file's
+    /// `[spec]` / `[[spec]]` entries say which of them the connector is built from and how many.
+    /// Handing the loader a document this layer had already picked would move that decision out of
+    /// the file that owns it, which is what discovery's `Provider::spec()` did before C-410 deleted
+    /// it: it returned the **last by file stem**, so pinning `specs/zendesk/2024-06-01.json` beside
+    /// a newer `2025-01-01.json` compiled the newer one, successfully and with no diagnostic. So the
+    /// pin is resolved where the pin is read.
     ///
     /// Populated for every provider whose cache directory holds anything, and *ingested* only when
-    /// `[spec]` asks for it — a distinction the loader makes, not this one (C-4).
+    /// a `[spec]` entry asks for it — a distinction the loader makes, not this one (C-4).
     pub specs: Vec<SpecInput>,
 }
 
@@ -163,18 +165,20 @@ pub struct ServiceArtifacts {
 ///
 /// # A provider that points at a spec is compiled through ingest (C-4)
 ///
-/// `connector_spec::provider::load_with_spec` is the spec front-end: it resolves the file's
-/// `[spec] path` against the cache, ingests **that** document into every operation the vendor
-/// declares, publishes the ones `[[patch.operations]]` selects, and validates the result through the
-/// same pass a hand-authored file goes through. This function's whole job on that path is to hand it
-/// the cache discovery already read.
+/// `connector_spec::provider::load_with_spec` is the spec front-end: it resolves each of the file's
+/// `[spec]` / `[[spec]]` pins against the cache, ingests **those** documents into every operation
+/// the vendor declares, publishes the ones `[[patch.operations]]` selects into the service each
+/// document names, and validates the result through the same pass a hand-authored file goes through.
+/// This function's whole job on that path is to hand it the cache discovery already read.
 ///
 /// **This layer chooses nothing.** It passes every document under `specs/<provider>/` and lets the
-/// loader resolve the pin, because which document a connector compiles from is the provider file's
-/// decision and only the provider file's. Choosing here is precisely the defect the resolution
-/// exists to prevent: `Provider::spec()` returns the **last by file stem**, so a pin at
-/// `specs/zendesk/2024-06-01.json` beside a newer `2025-01-01.json` compiled the newer one — exit 0,
-/// no diagnostic, an operation built from a document the file never named.
+/// loader resolve the pins, because which documents a connector compiles from — and how many — is
+/// the provider file's decision and only the provider file's. Choosing here is precisely the defect
+/// the resolution exists to prevent: discovery's `Provider::spec()` returned the **last by file
+/// stem**, so a pin at `specs/zendesk/2024-06-01.json` beside a newer `2025-01-01.json` compiled the
+/// newer one — exit 0, no diagnostic, an operation built from a document the file never named. For
+/// babelforce's five documents it selected the four-operation `user` one over the 356-operation
+/// `manager` one. C-410 deleted it rather than teaching it to choose better.
 ///
 /// **A document is read only because the file asked for one.** A cache directory holding files is
 /// not a declaration; `[spec] path` is. The loader makes that distinction, so passing the cache
@@ -193,9 +197,9 @@ pub fn load(inputs: &ProviderInputs) -> Result<Connector> {
 /// matched is legible before someone goes looking for the operation it names.
 pub fn load_reported(inputs: &ProviderInputs) -> Result<Loaded> {
     let label = inputs.label();
-    // The whole cache, unfiltered. Which document is compiled is `[spec] path`'s decision and the
-    // loader's to resolve — this layer picking one would be exactly the silent substitution the
-    // resolution exists to prevent. A provider with no cache passes an empty slice rather than
+    // The whole cache, unfiltered. Which documents are compiled is the `[spec]` entries' decision
+    // and the loader's to resolve — this layer picking one would be exactly the silent substitution
+    // the resolution exists to prevent. A provider with no cache passes an empty slice rather than
     // taking a different code path, so "the pin resolves to nothing" is one refusal in one place
     // whether the cache is empty or merely missing the pinned file.
     let cache: Vec<connector_spec::SpecDocument<'_>> = inputs

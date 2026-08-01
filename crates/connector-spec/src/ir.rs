@@ -485,6 +485,21 @@ pub struct Provenance {
     /// SHA-256 of the vendored spec bytes under `specs/`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spec_sha256: Option<String>,
+    /// **Every vendored document this connector compiles, one entry each** — C-410.
+    ///
+    /// The four fields above describe *a* spec, which was adequate while a connector compiled from
+    /// exactly one. babelforce compiles from five, pulled on two different dates, three of which
+    /// publish `info.version = "0.0.0-dev"`; one hash for the connector cannot answer the only
+    /// question a drift check asks, which is **which document moved**. So the per-document record is
+    /// this list, and it is filled for a single-document connector too — the singular fields are the
+    /// projection of the one-element case, not a separate truth. With several documents they are
+    /// `None`, because no single value of them is true and filling them from the first would record
+    /// one document's provenance as the whole connector's.
+    ///
+    /// Empty for a hand-authored connector, and elided from the encoded IR when empty, so landing
+    /// this field moves no `ir_sha256` in the repository.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub specs: Vec<crate::provider::SpecSource>,
     /// SHA-256 of the provider TOML bytes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub toml_sha256: Option<String>,

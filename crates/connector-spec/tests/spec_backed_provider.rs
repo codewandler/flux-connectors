@@ -96,10 +96,11 @@ fn a_spec_backed_provider_with_no_patch_publishes_nothing() {
 fn everything_the_document_declares_stays_available_to_patch() {
     let loaded = provider::load_with_spec("providers/zendesk.toml", POINTER, &cache())
         .expect("a pointer with no patch is a valid provider file");
-    let ingested = loaded
+    let ingested = &loaded
         .ingested
-        .as_ref()
-        .expect("a document was supplied, so it was ingested");
+        .first()
+        .expect("a document was supplied, so it was ingested")
+        .ingested;
     let mut available = ingested.operation_ids();
     available.sort_unstable();
     assert_eq!(
@@ -371,7 +372,7 @@ idempotency = \"idempotent\"
     let loaded = provider::load_with_spec("providers/zendesk.toml", definition, &cache())
         .expect("a hand-authored file loads whatever sits in the cache beside it");
     assert!(loaded.is_hand_authored());
-    assert!(loaded.ingested.is_none(), "nothing asked for an ingest");
+    assert!(loaded.ingested.is_empty(), "nothing asked for an ingest");
     assert!(loaded.diagnostics().is_empty());
     assert_eq!(loaded.connector.operations.len(), 1);
 }
@@ -541,5 +542,481 @@ idempotency = \"idempotent\"
     assert_eq!(
         load(&definition).canonical_json().expect("the IR encodes"),
         load(&definition).canonical_json().expect("the IR encodes"),
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// One connector, many documents — a document per service (C-410)
+// ---------------------------------------------------------------------------------------------
+
+/// The `manager` half of the two-document fixture: root `oauth2`, no operation override.
+///
+/// Modelled on babelforce's `manager-2026-07-10`, which declares root `oauth2` and **zero**
+/// operation-level overrides across all 356 of its operations.
+const MANAGER: &str = r#"{
+  "openapi": "3.0.3",
+  "info": { "title": "Acme Manager", "version": "0.0.0-dev" },
+  "servers": [{ "url": "https://services.acme.example" }],
+  "security": [{ "oauth2": [] }],
+  "paths": {
+    "/api/v2/users/{user_id}": {
+      "get": {
+        "operationId": "getUser",
+        "summary": "Fetch one managed user.",
+        "parameters": [
+          { "name": "user_id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ]
+      }
+    }
+  }
+}
+"#;
+
+/// The `user` half: a different request under the **same** `operationId`, with per-operation
+/// security instead of a root declaration.
+///
+/// This is babelforce's real collision reduced to one operation each: `getUser` is declared by
+/// `manager-2026-07-10` *and* by `user-2026-06-25`, and they are not the same call.
+const USER: &str = r#"{
+  "openapi": "3.0.3",
+  "info": { "title": "Acme User", "version": "0.0.0-dev" },
+  "servers": [{ "url": "https://services.acme.example" }],
+  "paths": {
+    "/api/v3/me": {
+      "get": {
+        "operationId": "getUser",
+        "summary": "Fetch the calling user.",
+        "security": [{ "bearerAuth": [] }, { "oauth2": [] }]
+      }
+    }
+  }
+}
+"#;
+
+const MANAGER_PATH: &str = "specs/acme/manager-2026-07-10.json";
+const USER_PATH: &str = "specs/acme/user-2026-06-25.json";
+
+/// A cache holding both documents, in the order the directory would yield them.
+fn two_documents() -> Vec<SpecDocument<'static>> {
+    vec![
+        SpecDocument {
+            path: MANAGER_PATH,
+            document: MANAGER,
+        },
+        SpecDocument {
+            path: USER_PATH,
+            document: USER,
+        },
+    ]
+}
+
+/// A connector declaring both documents, each joining its own service.
+///
+/// `default_auth` is stated at the connector level so the auth test below has something for an
+/// unstated operation to inherit.
+const TWO_SPECS: &str = r#"id = "acme"
+vendor = "Acme"
+base_url = "https://services.acme.example"
+
+[[auth]]
+name = "acme.oauth_token"
+scheme = { header = { name = "Authorization", prefix = "Bearer " } }
+env = ["ACME_OAUTH_TOKEN"]
+
+[[default_auth]]
+credentials = ["acme.oauth_token"]
+
+[[services]]
+name = "manager"
+description = "The management API."
+
+[[services]]
+name = "user"
+description = "The user API."
+
+[[spec]]
+path = "specs/acme/manager-2026-07-10.json"
+service = "manager"
+
+[[spec]]
+path = "specs/acme/user-2026-06-25.json"
+service = "user"
+"#;
+
+fn load_many(patch: &str) -> Connector {
+    provider::load_with_spec(
+        "providers/acme.toml",
+        &format!("{TWO_SPECS}{patch}"),
+        &two_documents(),
+    )
+    .unwrap_or_else(|error| panic!("providers/acme.toml does not load: {error}"))
+    .connector
+}
+
+fn refuse_many(patch: &str) -> String {
+    provider::load_with_spec(
+        "providers/acme.toml",
+        &format!("{TWO_SPECS}{patch}"),
+        &two_documents(),
+    )
+    .err()
+    .unwrap_or_else(|| panic!("this definition was expected not to load:\n{TWO_SPECS}{patch}"))
+    .to_string()
+}
+
+/// The patch set selecting `getUser` out of **both** documents.
+const BOTH_GET_USER: &str = r#"
+[[patch.operations]]
+service = "manager"
+select = "getUser"
+rename = "acme-manager-user-get"
+risk = "low"
+idempotency = "idempotent"
+
+[[patch.operations]]
+service = "user"
+select = "getUser"
+rename = "acme-user-me-get"
+risk = "low"
+idempotency = "idempotent"
+"#;
+
+/// **An unknown key inside a spec block still gets serde's error, in either spelling.**
+///
+/// The obvious way to accept both shapes is `#[serde(untagged)]`, and it is the wrong one: an
+/// untagged enum buffers the input and reports `data did not match any variant of untagged enum`,
+/// throwing away both the `deny_unknown_fields` key list and `toml`'s line, column and snippet.
+/// "Shape errors are serde's, because serde's are better" is the loader's stated design, and a
+/// mistyped `servicee` silently meaning "no service" is exactly the failure `deny_unknown_fields`
+/// exists to stop.
+#[test]
+fn an_unknown_key_in_a_spec_block_is_still_named_in_both_spellings() {
+    for spelling in ["[spec]", "[[spec]]"] {
+        let definition = format!(
+            "id = \"zendesk\"\nbase_url = \"https://acme.zendesk.com\"\n\n{spelling}\npath = \
+             \"{PINNED}\"\nservicee = \"support\"\n"
+        );
+        let rendered = provider::load("providers/zendesk.toml", &definition)
+            .expect_err("`servicee` is not a key any spec block accepts")
+            .to_string();
+        assert!(
+            rendered.contains("servicee"),
+            "{spelling} must name the offending key: {rendered}"
+        );
+        assert!(
+            rendered.contains("service"),
+            "{spelling} must list the keys that would have been valid: {rendered}"
+        );
+    }
+}
+
+/// **`[spec]` and a one-entry `[[spec]]` are one field in two spellings.**
+///
+/// The single table has to keep meaning exactly what it meant, because 53 shipped providers and two
+/// golden error files are written against it. So the array form is the general case and the table is
+/// its one-element instance — not a second code path that could drift from it.
+#[test]
+fn a_single_spec_table_and_a_one_entry_spec_array_compile_identically() {
+    let table = with(
+        "
+[[patch.operations]]
+select = \"showTicket\"
+rename = \"zendesk-ticket-show\"
+risk = \"low\"
+idempotency = \"idempotent\"
+",
+    );
+    let array = table.replace("[spec]\n", "[[spec]]\n");
+    assert_ne!(
+        table, array,
+        "the two spellings must really differ as bytes"
+    );
+
+    let from_table = load(&table);
+    let from_array = provider::load_with_spec("providers/zendesk.toml", &array, &cache())
+        .expect("`[[spec]]` with one entry is a valid provider file")
+        .connector;
+
+    assert_eq!(from_table.operations, from_array.operations);
+    assert_eq!(
+        from_table.provenance.specs, from_array.provenance.specs,
+        "one document is one provenance entry either way"
+    );
+    assert_eq!(
+        from_table.operations[0].service,
+        connector_spec::DEFAULT_SERVICE
+    );
+}
+
+/// **Both documents reach the IR, each as its own service.**
+///
+/// One document per connector was never decided, it was assumed, and the assumption costs babelforce
+/// 389 of its 398 operations. A connector whose vendor splits its API across five documents does not
+/// have to become five connectors.
+#[test]
+fn several_documents_each_become_one_service() {
+    let connector = load_many(BOTH_GET_USER);
+
+    let manager = connector
+        .operation("acme-manager-user-get")
+        .expect("the manager document's operation");
+    assert_eq!(manager.service, "manager");
+    assert_eq!(manager.path, "/api/v2/users/{user_id}");
+
+    let user = connector
+        .operation("acme-user-me-get")
+        .expect("the user document's operation");
+    assert_eq!(user.service, "user");
+    assert_eq!(user.path, "/api/v3/me");
+}
+
+/// **The same `operationId` in two documents is two operations, not one won by file order.**
+///
+/// `getUser` genuinely exists in babelforce's `manager-2026-07-10` and in its `user-2026-06-25`, as
+/// two different requests. Nothing downstream could tell a build that compiled the wrong one: the
+/// op id would be right and the request would not.
+#[test]
+fn one_operation_id_in_two_documents_is_two_operations() {
+    let connector = load_many(BOTH_GET_USER);
+    assert_eq!(connector.operations.len(), 2);
+    assert_ne!(
+        connector.operations[0].path, connector.operations[1].path,
+        "both patches were resolved against the same document"
+    );
+}
+
+/// **A patch names its document as soon as there is more than one.**
+///
+/// Not a style rule: with two documents declaring `getUser`, an unqualified `select` has two
+/// answers, and a loader that picked one would emit plausible, wrong Flux and exit 0.
+#[test]
+fn a_patch_that_names_no_service_is_refused_when_several_documents_are_declared() {
+    let rendered = refuse_many(
+        "
+[[patch.operations]]
+select = \"getUser\"
+rename = \"acme-user-get\"
+risk = \"low\"
+idempotency = \"idempotent\"
+",
+    );
+    assert!(rendered.contains("getUser"), "{rendered}");
+    assert!(rendered.contains("`service`"), "{rendered}");
+    assert!(
+        rendered.contains("manager") && rendered.contains("user"),
+        "the refusal must list the documents that could have been meant: {rendered}"
+    );
+}
+
+/// A `service` naming no declared document is loud, for the same reason a `select` naming no
+/// `operationId` is: that is how a patch set rots underneath a re-vendor.
+#[test]
+fn a_patch_naming_a_service_no_document_declares_is_refused() {
+    let rendered = refuse_many(
+        "
+[[patch.operations]]
+service = \"task-automation\"
+select = \"getUser\"
+rename = \"acme-user-get\"
+risk = \"low\"
+idempotency = \"idempotent\"
+",
+    );
+    assert!(rendered.contains("task-automation"), "{rendered}");
+    assert!(rendered.contains("manager"), "{rendered}");
+}
+
+/// Selecting one `operationId` twice **out of one document** is still the duplicate it always was —
+/// the key widened to `(service, select)`, it did not disappear.
+#[test]
+fn selecting_one_operation_twice_from_one_document_is_still_refused() {
+    let rendered = refuse_many(
+        "
+[[patch.operations]]
+service = \"manager\"
+select = \"getUser\"
+rename = \"acme-manager-user-get\"
+risk = \"low\"
+idempotency = \"idempotent\"
+
+[[patch.operations]]
+service = \"manager\"
+select = \"getUser\"
+rename = \"acme-manager-user-fetch\"
+risk = \"low\"
+idempotency = \"idempotent\"
+",
+    );
+    assert!(rendered.contains("more than once"), "{rendered}");
+    assert!(rendered.contains("manager"), "{rendered}");
+}
+
+/// A document joins a service; it does not declare one. A `[[spec]] service` that no `[[services]]`
+/// entry declares is refused, naming what the provider does declare.
+#[test]
+fn a_document_joining_an_undeclared_service_is_refused() {
+    let definition = TWO_SPECS.replace("service = \"user\"", "service = \"users\"");
+    let rendered = provider::load_with_spec("providers/acme.toml", &definition, &two_documents())
+        .expect_err("`users` is not a declared service")
+        .to_string();
+    assert!(rendered.contains("users"), "{rendered}");
+    assert!(rendered.contains("[[services]]"), "{rendered}");
+}
+
+/// Two documents joining one service is refused: a service is one name namespace, and two vendor
+/// documents can declare one `operationId`.
+#[test]
+fn two_documents_may_not_join_one_service() {
+    let definition = TWO_SPECS.replace(
+        "path = \"specs/acme/user-2026-06-25.json\"\nservice = \"user\"",
+        "path = \"specs/acme/user-2026-06-25.json\"\nservice = \"manager\"",
+    );
+    let rendered = provider::load_with_spec("providers/acme.toml", &definition, &two_documents())
+        .expect_err("two documents cannot share a service")
+        .to_string();
+    assert!(rendered.contains("two documents"), "{rendered}");
+    assert!(rendered.contains("manager"), "{rendered}");
+}
+
+/// **The documents' security models stay apart, and each operation resolves against the connector's
+/// `default_auth` rather than against another document's declaration.**
+///
+/// Babelforce's manager document declares root `oauth2` with zero operation overrides, while
+/// `task-automation` declares `bearerAuth`+`oauth2` on all 31 of its operations. One
+/// `LoadedProvider::ingested` slot would have let whichever was folded in last speak for both.
+///
+/// `Operation::auth` is three-state: absent means *inherit `default_auth`*, `[]` means *this
+/// operation needs no auth*. So the check is that an override stated on one service's patch does not
+/// reach the other service's operation, and that the unstated one still inherits.
+#[test]
+fn one_documents_security_does_not_overwrite_the_others() {
+    let loaded = provider::load_with_spec(
+        "providers/acme.toml",
+        &format!(
+            "{TWO_SPECS}
+[[patch.operations]]
+service = \"manager\"
+select = \"getUser\"
+rename = \"acme-manager-user-get\"
+risk = \"low\"
+idempotency = \"idempotent\"
+
+[[patch.operations]]
+service = \"user\"
+select = \"getUser\"
+rename = \"acme-user-me-get\"
+risk = \"low\"
+idempotency = \"idempotent\"
+auth = []
+"
+        ),
+        &two_documents(),
+    )
+    .expect("two documents with two security models is a valid provider");
+
+    let connector = &loaded.connector;
+    assert_eq!(
+        connector
+            .operation("acme-manager-user-get")
+            .expect("selected")
+            .auth,
+        None,
+        "the manager operation states nothing, so it inherits the connector's `default_auth`"
+    );
+    assert_eq!(
+        connector
+            .operation("acme-user-me-get")
+            .expect("selected")
+            .auth,
+        Some(Vec::new()),
+        "the user operation's own statement must not have been taken from the other document"
+    );
+
+    // And the ingests are kept apart rather than merged, which is what makes the above structural
+    // rather than incidental: each document stays available to inspect under its own service.
+    assert_eq!(loaded.ingested.len(), 2);
+    assert_eq!(
+        loaded
+            .ingested_for("manager")
+            .expect("the manager document")
+            .path,
+        MANAGER_PATH
+    );
+    assert_eq!(
+        loaded.ingested_for("user").expect("the user document").path,
+        USER_PATH
+    );
+}
+
+/// **Provenance is per document — one `sha256` each, so a drift check can say which one moved.**
+///
+/// A connector-wide hash cannot answer that question, and it is the only question a drift check is
+/// asked. babelforce's five documents were pulled on two different dates and three of them publish
+/// `info.version = "0.0.0-dev"`.
+#[test]
+fn each_document_carries_its_own_provenance_and_its_own_hash_is_checked() {
+    let honest = TWO_SPECS.replace(
+        "path = \"specs/acme/user-2026-06-25.json\"\nservice = \"user\"",
+        &format!(
+            "path = \"specs/acme/user-2026-06-25.json\"\nservice = \"user\"\nsha256 = \"{}\"\n\
+             fetched_at = \"2026-06-25T09:37:13Z\"",
+            connector_spec::sha256_hex(USER.as_bytes())
+        ),
+    );
+    let loaded = provider::load_with_spec("providers/acme.toml", &honest, &two_documents())
+        .expect("a declaration that matches its own document's bytes");
+
+    let specs = &loaded.connector.provenance.specs;
+    assert_eq!(specs.len(), 2, "one provenance entry per document");
+    assert_eq!(specs[0].path, MANAGER_PATH);
+    assert_eq!(specs[0].sha256, None);
+    assert_eq!(
+        specs[1].sha256.as_deref(),
+        Some(connector_spec::sha256_hex(USER.as_bytes()).as_str())
+    );
+    assert_eq!(specs[1].fetched_at.as_deref(), Some("2026-06-25T09:37:13Z"));
+
+    // The four connector-wide fields describe *a* spec, so with several documents no single value of
+    // them is true and none is invented.
+    assert_eq!(loaded.connector.provenance.spec_sha256, None);
+    assert_eq!(loaded.connector.provenance.fetched_at, None);
+
+    // And each hash is checked against **its own** document's bytes: the manager document's hash
+    // declared on the user entry is a refusal that names only the document that did not match.
+    let crossed = TWO_SPECS.replace(
+        "path = \"specs/acme/user-2026-06-25.json\"\nservice = \"user\"",
+        &format!(
+            "path = \"specs/acme/user-2026-06-25.json\"\nservice = \"user\"\nsha256 = \"{}\"",
+            connector_spec::sha256_hex(MANAGER.as_bytes())
+        ),
+    );
+    let rendered = provider::load_with_spec("providers/acme.toml", &crossed, &two_documents())
+        .expect_err("the manager document's hash is not the user document's")
+        .to_string();
+    assert!(rendered.contains(USER_PATH), "{rendered}");
+    assert!(
+        !rendered.contains(MANAGER_PATH),
+        "only the document that moved is named: {rendered}"
+    );
+}
+
+/// One document failing to resolve does not take the others with it: every problem in the file is
+/// reported at once, which is the contract the rest of this loader keeps.
+#[test]
+fn a_pin_that_resolves_to_nothing_names_only_that_document() {
+    let definition = TWO_SPECS.replace(
+        "specs/acme/user-2026-06-25.json",
+        "specs/acme/user-2025-01-01.json",
+    );
+    let rendered = provider::load_with_spec("providers/acme.toml", &definition, &two_documents())
+        .expect_err("one of the two pins resolves to nothing")
+        .to_string();
+    assert!(
+        rendered.contains("specs/acme/user-2025-01-01.json"),
+        "{rendered}"
+    );
+    assert!(
+        rendered.contains(MANAGER_PATH),
+        "the refusal lists the cache, which holds the document that did resolve: {rendered}"
     );
 }

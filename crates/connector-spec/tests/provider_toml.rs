@@ -278,9 +278,17 @@ fn a_spec_pointer_file_produces_the_patch_set() {
 
     assert!(!loaded.is_hand_authored());
 
-    let spec = loaded.spec.as_ref().expect("the spec pointer is present");
+    // A single `[spec]` table is the one-element case of `[[spec]]` — C-410.
+    assert_eq!(loaded.specs.len(), 1);
+    let spec = loaded.specs.first().expect("the spec pointer is present");
     assert_eq!(spec.path, "specs/babelforce/manager-0.7.0.openapi.json");
     assert_eq!(spec.upstream_version.as_deref(), Some("0.7.0"));
+    assert_eq!(
+        spec.service(),
+        connector_spec::DEFAULT_SERVICE,
+        "a document that names no service joins the reserved one, exactly as it did before the key \
+         existed"
+    );
 
     // `[spec]` folds into provenance, so drift-check (C-14) and the lockfile (C-7) read one place.
     let provenance = &loaded.connector.provenance;
@@ -291,6 +299,8 @@ fn a_spec_pointer_file_produces_the_patch_set() {
         Some("2026-07-30T09:00:00Z")
     );
     assert!(provenance.toml_sha256.is_some());
+    // And the per-document record carries the same document — one entry, not one per connector.
+    assert_eq!(provenance.specs, loaded.specs);
 
     // The connector carries no operations of its own: ingest fills them in and the overlay patches
     // them. That the file is still valid with an empty operation list is the point of this role.
