@@ -113,10 +113,11 @@ cargo run -p connector-cli -- build
 cargo run -p connector-cli -- diff
 ```
 
-`diff` must finish with `488 artifacts up to date (45 providers checked)` for the current catalogue.
-The artifact count may legitimately change when providers or operations change; do not encode it as
-a permanent invariant. It is also not currently checked against this file — see C-81 and the caveat
-under [Current project boundary](#current-project-boundary).
+`diff` must finish with `558 artifacts up to date (53 providers checked)` for the current catalogue
+(measured 2026-08-01, after C-189 made `connectors.lock` the 558th). The artifact count may
+legitimately change when providers or operations change; do not encode it as a permanent invariant.
+It is also not currently checked against this file — see C-81 and the caveat under
+[Current project boundary](#current-project-boundary).
 
 | Generated path | Source of truth |
 |---|---|
@@ -127,6 +128,7 @@ under [Current project boundary](#current-project-boundary).
 | `web/public/catalog.json` | Connector IR, `specs/flux/core-v1.json`, and public-catalogue emitter — **whole-catalogue** |
 | `web/public/v1/**/*.json` | `specs/flux/core-v1.json` and core-catalogue publisher — **whole-catalogue** |
 | `assets/readme-snippet-{light,dark}.svg` | `assets/readme-snippet.flux` and flux highlighter — **whole-catalogue** |
+| `connectors.lock` | Every provider's TOML, vendored documents, IR and emitted artifacts — **whole-catalogue** (C-7, written by C-189) |
 
 One nearby file is intentionally hand-maintained: `assets/readme-snippet.flux` is the checked source
 for the README image, and tests keep it identical to the operation shown in the generated Zendesk
@@ -156,7 +158,7 @@ on the strength of nobody having listed it.
 
 ### Whole-catalogue artifacts are coordinator-owned
 
-The four artifacts marked **whole-catalogue** above describe the catalogue *as a whole*. A scoped run
+The five artifacts marked **whole-catalogue** above describe the catalogue *as a whole*. A scoped run
 compiled a subset, so it cannot write one honestly — it would drop every provider it never looked at,
 and it would do so successfully. `build` therefore emits them **only on a full run**, and
 `--provider`/`--service` leave the committed files untouched rather than truncating them
@@ -182,14 +184,15 @@ cargo fmt --all --check
 ```
 
 `--no-fail-fast` is not optional here. Plain `cargo test --workspace` stops at the first failing
-binary, and the expected failures below are spread across **five** of them, so a run without it
+binary, and the expected failures below are spread across **six** of them, so a run without it
 reports a number that is simply wrong — see [Validation](#validation).
 
-**A story that adds a new provider leaves exactly eight tests red across five binaries, and that is
+**A story that adds a new provider leaves exactly nine tests red across six binaries, and that is
 the design working.** They are whole-catalogue staleness checks, and every one is red precisely
-because the implementor correctly did *not* write a whole-catalogue file. Measured, not predicted:
-add `providers/<id>.toml` + `specs/<id>/v1.json`, run `build --provider <id>`, then
-`cargo test --workspace --no-fail-fast`.
+because the implementor correctly did *not* write a whole-catalogue file. Measured, not predicted —
+re-measured on 2026-08-01 when C-189 made `connectors.lock` the fifth whole-catalogue artifact and
+so added the ninth row: add `providers/<id>.toml` + `specs/<id>/v1.json`, run
+`build --provider <id>`, then `cargo test --workspace --no-fail-fast`.
 
 | red test | binary | what it is reporting |
 |---|---|---|
@@ -201,11 +204,18 @@ add `providers/<id>.toml` + `specs/<id>/v1.json`, run `build --provider <id>`, t
 | `the_published_catalogue_carries_the_service` | `connector-cli::service_units` | committed `catalog.json` does not carry the new provider's service |
 | `every_shipped_operation_carries_its_metadata_and_its_flux` | `connector-cli::site_catalog` | committed `catalog.json` is missing the new provider's operations |
 | `the_build_writes_and_checks_site_catalog_json` | `connector-cli::site_catalog` | same, from the document-level check |
+| `the_committed_lockfile_is_a_fixed_point_of_a_build` | `connector-cli::lockfile` | committed `connectors.lock` has no row for the new provider (C-189) |
 
-Four of the eight are the *same* whole-tree fixed-point assertion written in four places; the rest
-are `catalog.json` and index staleness. Report them and stop; do **not** run a full build to silence
-them. The coordinator's full build at integration resolves all eight, and it is the only build that
-can, because it is the only one with every provider.
+Four of the nine are the *same* whole-tree fixed-point assertion written in four places; the rest
+are `catalog.json`, index and lockfile staleness. Report them and stop; do **not** run a full build
+to silence them. The coordinator's full build at integration resolves all nine, and it is the only
+build that can, because it is the only one with every provider.
+
+**A red beyond these nine is a real finding.** The measurement above also turned two other tests red
+— `every_shipped_provider_declares_an_authority_and_renders_a_credential_path` and
+`a_connector_arriving_with_no_response_shapes_is_caught` — because the throwaway provider used for
+it declared no authority and no response schemas. Those are the catalogue-wide quality gates doing
+their job on a deficient connector, not staleness, and they do not clear at integration.
 
 ### The scoped gate does answer "can my connector make a call at all" (C-233)
 
@@ -242,7 +252,7 @@ test of your own: `Rehearsal::of(id, provider, service, flux)` takes the emitted
 catalogue entry. `crates/connector-pack/tests/rehearsal.rs` is worked examples, including C-110's
 withdrawn documents as a known positive.
 
-**This is not one of the eight, and it must be green.** The eight are red because a whole-catalogue
+**This is not one of the nine, and it must be green.** The nine are red because a whole-catalogue
 artifact is deliberately stale; this one reads only per-provider artifacts, so a red here is a real
 finding about the connector in front of you.
 
@@ -252,8 +262,8 @@ The disjoint-write-set guarantee above is what lets provider stories run in para
 catalogue-walking assertion breaks it without touching a shared file.** A test that enumerates
 `providers/` and compares the result against a hand-written literal is invisible from its author's
 worktree, which holds one connector; invisible to the other implementor, whose diff is entirely
-disjoint; not among the eight staleness failures above, so it does not read as expected; and
-unresolvable the way those eight are, because they are *regenerated* and this is a literal in a
+disjoint; not among the nine staleness failures above, so it does not read as expected; and
+unresolvable the way those nine are, because they are *regenerated* and this is a literal in a
 shipped test. It surfaces for the first time at integration, attributed to whichever merge happened
 to be second.
 
@@ -652,6 +662,22 @@ These failures are recorded decisions. Do not “fix” one without reading its 
   operation that sends no body. Each refusal names its owning story.
 - **`check`, `fetch`, and `install` are unimplemented.** They exit explicitly and point to C-14 or
   C-15. Do not turn them into partial, best-effort behavior.
+- **~~`connectors.lock` is designed, hashed against, and never written.~~ CLOSED 2026-08-01 (C-189)
+  — this gap is no longer real.** `build` emits `connectors.lock` at the repository root on a full
+  run and `diff` reports a stale one, so vision principle 1 ("drift is detected, not absorbed") now
+  has its record. It had been fictional: `crates/connector-spec/src/lock.rs` was a complete, tested
+  hash domain whose writer was never built, and three CHANGELOG entries asserted byte-identity of a
+  file no build produced.
+
+  **What remains open is narrower: the record exists, the *verifier* does not.** Nothing recomputes
+  the recorded hashes and exits non-zero on a mismatch — that is `flux-connectors check` (C-14), and
+  until it lands the lockfile is checked only in the weaker sense that `diff` notices when a rebuild
+  would rewrite it. Two consequences worth knowing before extending it. `LockEntry::upstream_spec_sha256`
+  is still filled by nobody: `specs/<vendor>.provenance.toml` records the unscrubbed
+  `upstream_sha256` for a declared scrub, and wiring that input into the pipeline is C-25's. And the
+  whole-catalogue artifacts are not in any row — a [`LockEntry`] is one provider's, and
+  `web/public/catalog.json` belongs to no provider — so they are covered transitively through
+  `ir_sha256` and directly by `crates/connector-cli/tests/catalog_artifacts.rs`, not by the lockfile.
 
 ## Validation
 

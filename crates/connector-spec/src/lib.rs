@@ -118,7 +118,7 @@ pub use ir::{
     Pagination, Param, ParamSet, Provenance, Quirks, RateLimit, Risk, Role, Runtime, Service,
     DEFAULT_SERVICE, FREE_FORM_BODY, MIN_REPEATABILITY_CONDITION,
 };
-pub use lock::{sha256_hex, LockEntry, Lockfile, LOCKFILE_NAME, LOCKFILE_VERSION};
+pub use lock::{sha256_hex, LockEntry, LockSpec, Lockfile, LOCKFILE_NAME, LOCKFILE_VERSION};
 pub use openapi::{Diagnostic, Ingested, Server, ServerVariable, SpecOperation};
 pub use provider::{
     IngestedDocument, LoadedProvider, OperationPatch, ParamOmission, ParamPatch, ParamPosition,

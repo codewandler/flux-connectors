@@ -29,6 +29,7 @@
 //! |---|---|---|
 //! | [`toml_sha256`](LockEntry::toml_sha256) | the `providers/<id>.toml` bytes | the file is edited at all, comments included |
 //! | [`spec_sha256`](LockEntry::spec_sha256) | the vendored spec bytes under `specs/` | the vendored document changes |
+//! | [`specs`](LockEntry::specs) | each vendored document separately (C-410) | any one of them changes |
 //! | [`upstream_spec_sha256`](LockEntry::upstream_spec_sha256) | the *unscrubbed* upstream document | upstream moves (C-25) |
 //! | [`ir_sha256`](LockEntry::ir_sha256) | [`Connector::hash_domain`] | the compiled meaning changes |
 //! | [`generator`](LockEntry::generator) | — (an identity string) | the generator is rebuilt at a new version |
@@ -45,7 +46,10 @@
 //! # No IO
 //!
 //! Like the rest of this crate: [`Lockfile::to_toml`] renders text and [`Lockfile::parse`] reads
-//! it. Deciding where `connectors.lock` lives, and writing it, is `connector-cli`'s job.
+//! it. Deciding where `connectors.lock` lives, and writing it, is `connector-cli`'s job — and since
+//! C-189 it does it: the file sits at the repository root, `build` emits it on a **full** run, and
+//! `diff` reports a stale one like any other artifact. `crates/connector-cli/tests/lockfile.rs` is
+//! that half.
 
 use std::collections::BTreeMap;
 
@@ -233,13 +237,91 @@ pub struct LockEntry {
     /// storing it inside [`Provenance`](crate::Provenance) would have no fixed point. It sits here
     /// instead.
     pub ir_sha256: String,
-    /// SHA-256 of each generated artifact, keyed by file name (`zendesk.flux`,
-    /// `zendesk.connector.toml`).
+    /// **One row per vendored document the connector compiles** — the per-document counterpart to
+    /// the four scalars above, mirroring [`Provenance::specs`](crate::Provenance::specs) (C-410).
     ///
-    /// A map rather than two named fields, so a third artifact is a new key rather than a schema
+    /// The scalars describe *a* spec, which is only true while a connector compiles from exactly
+    /// one; with several, [`spec_sha256`](Self::spec_sha256) is `None`, because no single value of
+    /// it is true and filling it from the first document would record one document's provenance as
+    /// the whole connector's. Without this list such a connector would be recorded with **no spec
+    /// hash at all** — a row that looks complete and detects nothing.
+    ///
+    /// Filled for a single-document connector too, so `check` (C-14) has one shape to read rather
+    /// than two. Empty for a hand-authored connector, and elided when empty, so a row that has no
+    /// vendored document is unchanged by this field existing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub specs: Vec<LockSpec>,
+    /// SHA-256 of each generated artifact, keyed by **repository-relative path**
+    /// (`connectors/zendesk.flux`, `crates/catalog/src/generated/zendesk.rs`).
+    ///
+    /// A path rather than a bare file name, for two reasons. `check` has to *find* the file to
+    /// rehash it, and reconstructing a path from a stem means duplicating the layout rules that
+    /// live in `connector-cli`'s workspace module. And a provider emits into three directories, so
+    /// bare names collide: an operation named after its provider would render
+    /// `crates/catalog/ops/zendesk/zendesk.flux` under the same key as `connectors/zendesk.flux`,
+    /// and one of the two hashes would be silently dropped.
+    ///
+    /// A map rather than named fields, so a fourth artifact kind is a new key rather than a schema
     /// change, and a [`BTreeMap`] rather than a `HashMap`, so the rendering is sorted.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub artifacts: BTreeMap<String, String>,
+}
+
+/// One vendored document a connector compiles from, as `connectors.lock` records it.
+///
+/// Deliberately **not** [`SpecSource`](crate::provider::SpecSource), though it is the projection of
+/// one: that type carries `fetched_at`, and a fetch timestamp is the one provenance field that moves
+/// without any input changing. Re-vendoring a byte-identical document would rewrite the lockfile,
+/// which is the phantom drift this file exists to rule out. The projection is where that field is
+/// dropped, and a separate type is what keeps it dropped when `SpecSource` next grows a field.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LockSpec {
+    /// The vendored file, repository-relative — `specs/babelforce/manager-2026-07-10.openapi.yaml`.
+    ///
+    /// The identity of the row: `check` rehashes this path, and a document that moved is named by
+    /// it rather than by an index into a list.
+    pub path: String,
+    /// The [`Service`](crate::Service) this document's operations join, when it names one.
+    ///
+    /// Absent means the reserved [`DEFAULT_SERVICE`](crate::DEFAULT_SERVICE) — what a single
+    /// `[spec]` block has always meant. Recorded because an `operationId` is only unambiguous
+    /// inside one document's service, so "which document moved" and "which surface it feeds" are
+    /// the same question asked twice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service: Option<String>,
+    /// Where this document was fetched from, so C-14 can re-fetch and diff. Absent when the origin
+    /// is private and cannot be published — see `AGENTS.md`, *Vendored specs*.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_url: Option<String>,
+    /// The upstream version string the vendor published for this document (`info.version`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upstream_version: Option<String>,
+    /// SHA-256 of this document's vendored bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
+}
+
+impl LockSpec {
+    /// The service this document's operations join — [`DEFAULT_SERVICE`](crate::DEFAULT_SERVICE)
+    /// when the row names none.
+    pub fn service(&self) -> &str {
+        self.service.as_deref().unwrap_or(crate::DEFAULT_SERVICE)
+    }
+}
+
+impl From<&crate::provider::SpecSource> for LockSpec {
+    /// The projection that drops `fetched_at`. Written as a `From` rather than inline at the call
+    /// site so there is exactly one place the field list is decided.
+    fn from(source: &crate::provider::SpecSource) -> Self {
+        Self {
+            path: source.path.clone(),
+            service: source.service.clone(),
+            source_url: source.source_url.clone(),
+            upstream_version: source.upstream_version.clone(),
+            sha256: source.sha256.clone(),
+        }
+    }
 }
 
 impl LockEntry {
@@ -266,6 +348,7 @@ impl LockEntry {
             upstream_spec_sha256: None,
             toml_sha256: provenance.toml_sha256.clone(),
             ir_sha256: connector.ir_sha256()?,
+            specs: provenance.specs.iter().map(LockSpec::from).collect(),
             artifacts: BTreeMap::new(),
         })
     }

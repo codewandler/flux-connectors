@@ -8,7 +8,7 @@
 //!
 //! - it is invisible from the implementor's own worktree, which holds only their provider;
 //! - it is invisible to the other implementor, whose diff is entirely disjoint;
-//! - it is **not** among the eight whole-catalogue staleness failures `AGENTS.md` tabulates, so it
+//! - it is **not** among the nine whole-catalogue staleness failures `AGENTS.md` tabulates, so it
 //!   does not read as expected;
 //! - and the coordinator cannot resolve it the way those eight are resolved. They are *regenerated*;
 //!   this is a hand-written literal in a shipped test, and regenerating nothing fixes it.

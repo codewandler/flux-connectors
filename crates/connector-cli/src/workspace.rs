@@ -191,6 +191,33 @@ impl Workspace {
         self.root.join(SITE_DIR).join(SITE_CATALOG)
     }
 
+    /// `<root>/connectors.lock` — the drift record for the whole catalogue (C-7, written by C-189).
+    ///
+    /// At the repository root rather than under `connectors/`, and the name is
+    /// [`connector_spec::LOCKFILE_NAME`] rather than a literal here, so the writer and
+    /// `flux-connectors check` (C-14) cannot disagree about which file they mean. The root is where
+    /// a reader looks for a lockfile — it is a property of the repository, not of one directory of
+    /// artifacts — and it is the same place `Cargo.lock` sits.
+    ///
+    /// **Whole-catalogue**: it holds one row per provider, so only a full run can write it. See
+    /// [`crate::pipeline::plan_selected`].
+    pub fn lockfile_path(&self) -> PathBuf {
+        self.root.join(connector_spec::LOCKFILE_NAME)
+    }
+
+    /// `path` as `connectors.lock` keys it: repository-relative, `/`-separated on every platform.
+    ///
+    /// [`Self::display_path`] is the human-facing form and renders with the host's separator, which
+    /// is fine for a message and wrong for a hashed artifact — a lockfile built on Windows would
+    /// not be byte-identical to one built here, and every key would read as drift.
+    pub fn artifact_key(&self, path: &Path) -> String {
+        self.display_path(path)
+            .components()
+            .map(|component| component.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/")
+    }
+
     /// `<root>/specs/flux/core-v1.json` — the vendored output of
     /// `flux catalog core --format json`.
     pub fn core_catalog_source_path(&self) -> PathBuf {

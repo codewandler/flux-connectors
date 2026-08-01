@@ -2,7 +2,7 @@
 id: C-189
 title: "`connectors.lock` is designed, hashed against, and never written"
 pillar: Build
-status: ready
+status: in-progress
 priority: 3
 design:
 epic: connectors-v1
@@ -46,24 +46,62 @@ So provenance is computed on every build and discarded.
 
 ## Acceptance
 
-- [ ] **Decide, and record the reason:** write the lockfile, or delete the claim. Both are
+- [x] **Decide, and record the reason:** write the lockfile, or delete the claim. Both are
       legitimate; what is not legitimate is a third CHANGELOG entry asserting byte-identity of an
-      artifact no build produces.
-- [ ] **If written:** `build` emits `connectors.lock`, `diff` treats it as any other artifact (a
+      artifact no build produces. → **Written.** See *Progress* for the reason.
+- [x] **If written:** `build` emits `connectors.lock`, `diff` treats it as any other artifact (a
       stale one fails), and the committed file is a fixed point. The hash domain is `lock.rs`'s as it
-      stands — this story does not redesign it.
-- [ ] **If written:** a failing-first test asserting the file exists and matches a rebuild. Note the
+      stands — this story does not redesign it. → `crates/connector-cli/src/pipeline.rs:129`
+      (the plan entry) and `pipeline.rs:200` (`lock_entry`); `connectors.lock` is committed and
+      `cargo run -p connector-cli -- diff` reports `558 artifacts up to date (53 providers checked)`.
+- [x] **If written:** a failing-first test asserting the file exists and matches a rebuild. Note the
       ordering hazard — it is a **whole-catalogue** artifact like the index and `catalog.json`, so it
       is coordinator-owned and a `--provider` run must not truncate it (`AGENTS.md`'s scoped-build
-      contract).
+      contract). → `crates/connector-cli/tests/lockfile.rs`, seven tests; the scoping half is
+      `a_scoped_build_leaves_the_lockfile_byte_identical`.
 - [ ] **If deleted:** `lock.rs` says plainly that it is an unused design, the three CHANGELOG
       entries are corrected, and `vision.md` principle 1 says drift detection is **not yet**
-      enforced rather than implying it is.
-- [ ] Either way, `AGENTS.md`'s *Intentional gaps* names the outcome.
+      enforced rather than implying it is. → not applicable; the lockfile was written.
+- [x] Either way, `AGENTS.md`'s *Intentional gaps* names the outcome. → the gap is recorded as
+      CLOSED, with the two things that remain open named (C-14's verifier, C-25's
+      `upstream_spec_sha256`).
 
 ## Progress
 
-- (not started)
+**Written, not deleted.** The deciding fact is that the repository has since acquired a reason to
+need it: babelforce (C-416) is the first spec-backed connector, it pins a vendored document by path
+and `sha256`, and the standing direction is to source more providers from OpenAPI documents
+directly. Every one of those depends on being able to answer "has the upstream document moved, and
+is the artifact still the one that document produced". Deleting the design would have meant deciding
+where that answer lives instead, on the same day the first connector started needing it.
+
+What landed:
+
+- **`connectors.lock` is a planned artifact**, emitted on a full run only, and committed (907 lines,
+  53 rows). It is the 558th artifact; the count in `AGENTS.md` moved with it.
+- **Artifact hashes are keyed by repository-relative path**, not by bare file name as `lock.rs`'s
+  docstring example had it. `check` has to *find* a file to rehash it, and bare names collide across
+  the three directories a provider emits into — an operation named after its provider would render
+  `crates/catalog/ops/<id>/<id>.flux` under the same key as `connectors/<id>.flux`, silently
+  dropping one hash. `Workspace::artifact_key` normalises the separator so the key is the same on
+  every platform.
+- **`LockEntry::specs`** — a per-document row list, mirroring `Provenance::specs` (C-410). This is
+  the one addition beyond "write the file the design computes", and it is here rather than in C-14
+  because a connector compiling from several documents has `spec_sha256 == None` and would otherwise
+  be recorded with **no spec hash at all** — a row that looks complete and detects nothing. It is
+  `LockSpec`, not `SpecSource`, so `fetched_at` is dropped at a named boundary: a re-vendor of
+  byte-identical bytes must not rewrite the lockfile.
+- Nothing in the catalogue exercises the multi-document case today — babelforce pins **one** of its
+  five vendored documents — so the guarantee is held by a fixture,
+  `a_connector_compiled_from_several_documents_records_a_hash_for_each`.
+
+Measured, not predicted: a new provider now leaves **nine** tests red across **six** binaries, not
+eight across five. The ninth is `the_committed_lockfile_is_a_fixed_point_of_a_build`, and it clears
+at integration exactly as the other eight do.
+
+Deliberately not done, and named in `AGENTS.md`: `upstream_spec_sha256` is still filled by nobody
+(it needs `specs/<vendor>.provenance.toml` wired in — C-25), and no whole-catalogue artifact is in
+any row, because a `LockEntry` is one provider's.
 
 ## Notes
 
