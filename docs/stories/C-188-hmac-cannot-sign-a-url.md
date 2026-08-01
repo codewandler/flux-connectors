@@ -2,8 +2,7 @@
 id: C-188
 title: "HmacSpec can sign a body and a timestamp and nothing else, so a form-posting webhook vendor cannot be verified"
 pillar: Spec
-status: in-progress
-priority: 2
+status: done
 design: docs/designs/inbound-events.md
 epic: inbound-events
 areas: [connector-spec, connector-pack]
