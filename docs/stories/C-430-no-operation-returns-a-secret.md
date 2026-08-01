@@ -5,7 +5,7 @@ pillar: Spec
 status: ready
 priority: 1
 areas: [providers, connector-spec, connector-cli]
-note: "owner-stated 2026-08-01: 'we just cannot use ops which return secrets, so no refresh, no token exposed as ops'. Found by a catalogue-wide scan the same day: zoom-meeting-create and zoom-meeting-get return start_url, which their own description calls HOST-PRIVILEGED and says to treat as a credential; babelforce-get-user-customer returns accessToken. All three are live in v0.9.0"
+note: "owner-stated 2026-08-01. A SECOND, deeper scan found worse than the first: postmark-server-get and -list return `ApiTokens` — the server's live tokens IN PLAINTEXT, by the vendor's own description. With zoom's start_url that is four operations live in v0.9.0. babelforce's was withheld by C-426"
 ---
 
 # No operation returns a secret — and three shipped in v0.9.0 that do
@@ -26,7 +26,16 @@ only an OAuth problem:
 |---|---|---|
 | `zoom-meeting-create` | `start_url` | *"HOST-PRIVILEGED. Embeds the host's ZAK token: anyone holding this URL starts the meeting as its host. Treat it as a credential: do not log it, echo it…"* |
 | `zoom-meeting-get` | `start_url` | as above |
-| `babelforce-get-user-customer` | `accessToken` | described in the document as *"The unique Identifier (UUID) of the object"* — the description is generic and the field name is not |
+| `postmark-server-get` | `ApiTokens` | *"ACCOUNT-PRIVILEGED. This server's own live Server Token(s), **in plaintext** — the Account API's own mechanism for retrieving one. Treat it as a credential…"* |
+| `postmark-server-list` | `Servers.ApiTokens` | as above, for every server on the account |
+| ~~`babelforce-get-user-customer`~~ | `accessToken` | **withheld by C-426** — verified against the document, whose schema the vendor calls *"REST API access credentials"* |
+
+**The Postmark pair was missed by the first scan and is the worst of the set.** The first pass walked
+`properties` only one level deep; `ApiTokens` sits nested under `Servers`. It is not a URL embedding a
+token like Zoom's — it is an **array of live tokens in plaintext**, and the vendor describes the
+endpoint as the account API's own mechanism for retrieving one. A second, deeper scan is what found
+it, which is itself the argument for a gate: a one-level heuristic run by hand missed a plaintext
+credential array on the first attempt.
 
 **The Zoom pair is the one that matters, and it is not a new discovery** —
 [C-79](C-79-sensitive-response-fields.md) has carried *"Zoom's `start_url` carries a host-privileged
@@ -42,7 +51,7 @@ Every one of those is correctly documented in the connector. **A name-shaped heu
 rule** — the rule is about what the value *is*.
 
 ## Acceptance
-- [ ] The three operations no longer ship, each recorded as a named exclusion with its reason —
+- [ ] The **four** operations no longer ship, each recorded as a named exclusion with its reason —
       the same three-category accounting babelforce already uses (emitted / inexpressible / withheld).
 - [ ] **A gate fails the build when an operation's declared response carries a credential**, so this
       cannot recur silently as connectors widen. A failing-first test reinstates one of the three and

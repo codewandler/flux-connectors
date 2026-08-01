@@ -14,6 +14,17 @@
 
 ## [Unreleased]
 
+### Action needed
+
+- **Four babelforce operations have been withdrawn, and one class of them will keep being withdrawn.**
+  The three OAuth endpoints and the account-details call are gone. The OAuth ones describe *how to log
+  in* — that is something the platform does for you, not an operation you call — and the account call
+  returned live API credentials in its reply.
+
+  If you were calling any of them, there is no replacement and that is deliberate: an operation whose
+  answer contains a password, a token or a key is one we will not ship until the platform can hand you
+  a reference to the secret instead of the secret itself.
+
 ## [0.9.0] — 2026-08-01
 
 ### New

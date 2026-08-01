@@ -2,7 +2,7 @@
 id: C-426
 title: "`multipart/form-data` is inexpressible, and it is the last five operations between babelforce and full parity"
 pillar: Spec
-status: in-progress
+status: blocked
 priority: 1
 design: docs/designs/spec-front-end.md
 epic: spec-front-end

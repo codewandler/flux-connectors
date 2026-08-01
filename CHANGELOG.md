@@ -7,6 +7,39 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The babelforce auth-flow endpoints are withheld, and multipart is established as impossible**
+  (C-426). Four operations that shipped in v0.9.0 no longer do: `babelforce-authorize`,
+  `babelforce-revoke`, `babelforce-get-user-customer`, and — already withheld in v0.9.0 —
+  `/oauth/token`. **An authentication endpoint is never a connector operation**: it describes *how to
+  authenticate*, which the host performs, not something a caller invokes and reads a result from.
+  `babelforce-authorize` was the PKCE browser redirect; `babelforce-revoke` took a `client_secret` as
+  a plain operation argument.
+
+  `babelforce-get-user-customer` was withheld for the independent reason that its response carries a
+  credential — and it was verified against the document rather than accepted on a field name. The
+  containing schema is described *by the vendor* as **"REST API access credentials"**, and it carries
+  a second credential a name-scan would have missed, `stream.token` (*"Push API token"*). The
+  `format: uuid` description that would have excused it is contradicted by the document's own
+  example: 32 undashed hex characters, not a UUID.
+
+  The `auth` service is gone with them — a declared service with zero operations emits an empty
+  module, which an existing invariant refuses. **Drift detection on that document is not lost**: its
+  hashes stay in the provenance file and are checked against its bytes independently of the provider.
+
+  **`multipart/form-data` cannot be emitted, and the story stopped rather than pretending otherwise.**
+  Established against the pinned engine line before any emitter was written: `http.request`'s `body`
+  is declared `{"type": "string"}` and read with `as_str`, so a structured body is silently dropped to
+  *no body at all*; `parse`'s `as_type` is a closed, analyzer-enforced list that does not contain
+  `multipart`, so such a module could never pass the parse-and-analyze gate; and `multipart` appears
+  nowhere in flux 0.46 at all. The five uploads stay excluded with that as their recorded reason, and
+  the fix is an upstream flux encoder. Adding the IR variant would have let a connector describe a
+  request no emitted module could perform.
+
+  babelforce is now **388 emitted + 5 inexpressible + 4 withheld = 397**, three categories counted
+  from each exclusion's own reason rather than by position.
+
 ### Added
 
 - **The published crates are proved consumable from outside the workspace** (C-190). The claim that a
