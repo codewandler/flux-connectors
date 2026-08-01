@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Klaviyo",
     description: "Klaviyo marketing platform: read the account a key belongs to, read and create customer profiles, read lists, and post an event that can trigger a flow. Every request carries a dated API revision the vendor requires",
     authority: Some("com.klaviyo.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://a.klaviyo.com/api",
     auth: AUTH,
     operations: OPERATIONS,

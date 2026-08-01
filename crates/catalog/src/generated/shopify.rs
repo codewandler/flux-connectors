@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Shopify",
     description: "Shopify Admin REST API: read orders, products, customers and inventory levels, and update a product",
     authority: Some("com.shopify.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://{shop}.myshopify.com",
     auth: AUTH,
     operations: OPERATIONS,

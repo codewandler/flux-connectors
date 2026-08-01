@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Supabase",
     description: "Supabase project data and configuration: describe the tables the API exposes, read a table's rows, and read which sign-in methods the project has enabled. Reads only, through the project's public anon key, so every row returned is bounded by the project's own row-level-security policies",
     authority: Some("com.supabase.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://{project_ref}.supabase.co",
     auth: AUTH,
     operations: OPERATIONS,

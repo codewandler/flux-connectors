@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Fly.io",
     description: "Fly.io Machines: discover regions and inspect, create, start, stop, restart or delete Machines",
     authority: Some("io.fly.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.machines.dev/v1",
     auth: AUTH,
     operations: OPERATIONS,

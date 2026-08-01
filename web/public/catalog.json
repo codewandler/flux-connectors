@@ -7,6 +7,7 @@
       "authority": "com.airtable.api",
       "vendor": "Airtable",
       "description": "Airtable records: read, create, update and delete a record in a base's table",
+      "runtime": "http",
       "base_url": "https://api.airtable.com",
       "api_version": "v0",
       "hosts": [
@@ -529,6 +530,7 @@
       "authority": "com.anthropic.api",
       "vendor": "Anthropic",
       "description": "Anthropic platform: the live model catalogue, and organization info, workspaces and API keys from the Admin API",
+      "runtime": "http",
       "base_url": "https://api.anthropic.com",
       "api_version": "v1",
       "hosts": [
@@ -1017,6 +1019,7 @@
       "authority": "com.asana.api",
       "vendor": "Asana",
       "description": "Asana work management: read tasks and projects, create and update tasks, comment on a task",
+      "runtime": "http",
       "base_url": "https://app.asana.com",
       "api_version": "1.0",
       "hosts": [
@@ -1479,6 +1482,7 @@
       "authority": "com.babelforce.api",
       "vendor": "Babelforce",
       "description": "Babelforce voice platform: agent availability, live and reported calls, and the session variables a flow reads and writes",
+      "runtime": "http",
       "base_url": "https://services.babelforce.com",
       "api_version": "v2",
       "hosts": [
@@ -2629,6 +2633,7 @@
       "authority": "org.bitbucket.api",
       "vendor": "Bitbucket",
       "description": "Bitbucket Cloud repositories and pull requests for one pinned workspace: list the workspace's repositories, read one, list and read its open pull requests, open a pull request, comment on one, and approve one",
+      "runtime": "http",
       "base_url": "https://api.bitbucket.org/2.0",
       "api_version": "2.0",
       "hosts": [
@@ -3739,6 +3744,7 @@
       "authority": "com.box.api",
       "vendor": "Box",
       "description": "Box: browse folder contents, read file and folder metadata, create folders, and copy files",
+      "runtime": "http",
       "base_url": "https://api.box.com",
       "api_version": "2.0",
       "hosts": [
@@ -4315,6 +4321,7 @@
       "authority": "com.calendly.api",
       "vendor": "Calendly",
       "description": "Calendly scheduling: read the authenticated user, event types, scheduled events and their invitees",
+      "runtime": "http",
       "base_url": "https://api.calendly.com",
       "api_version": null,
       "hosts": [
@@ -5083,6 +5090,7 @@
       "authority": "com.clickup.api",
       "vendor": "ClickUp",
       "description": "ClickUp: list workspaces and a space's folders, and read, list, create and update tasks in a list",
+      "runtime": "http",
       "base_url": "https://api.clickup.com/api/v2",
       "api_version": "v2",
       "hosts": [
@@ -6044,6 +6052,7 @@
       "authority": "com.cloudflare.api",
       "vendor": "Cloudflare",
       "description": "Cloudflare zones and DNS: list zones, list and manage DNS records for a zone, and purge a zone's cache",
+      "runtime": "http",
       "base_url": "https://api.cloudflare.com/client/v4",
       "api_version": "v4",
       "hosts": [
@@ -6724,6 +6733,7 @@
       "authority": "com.atlassian.confluence",
       "vendor": "Confluence",
       "description": "Confluence Cloud wiki: find spaces, list the pages in one, read a page's metadata, publish a new page, and comment on one. Page and comment *content* cannot be read back — see the connector's notes",
+      "runtime": "http",
       "base_url": "https://{site}.atlassian.net/wiki",
       "api_version": "v2",
       "hosts": [
@@ -7714,6 +7724,7 @@
       "authority": "com.contentful.api",
       "vendor": "Contentful",
       "description": "Contentful headless CMS: read published content from the Content Delivery API, and create and publish entries through the Content Management API — two different hosts and two different tokens for one vendor",
+      "runtime": "http",
       "base_url": "https://api.contentful.com",
       "api_version": null,
       "hosts": [
@@ -8328,6 +8339,7 @@
       "authority": "com.datadoghq.api",
       "vendor": "Datadog",
       "description": "Datadog monitoring: list and inspect monitors, list and inspect incidents. Authenticates every request with an API key and an Application key together",
+      "runtime": "http",
       "base_url": "https://api.datadoghq.com",
       "api_version": null,
       "hosts": [
@@ -8729,6 +8741,7 @@
       "authority": "com.discord.api",
       "vendor": "Discord",
       "description": "Discord bot API v10: read the bot's own identity, list the guilds it has joined, read one guild and its channels, read a channel's recent messages, and post a message. Every request authenticates as a bot — `Authorization: Bot <token>`, never `Bearer`, which is Discord's scheme word for a different credential with different reach. Every Discord id is a snowflake and is carried as a string, because a 64-bit id does not survive a JSON number. Discord rate-limits per route and answers 429 with a `Retry-After` header instead of queueing: honour it rather than retrying immediately",
+      "runtime": "http",
       "base_url": "https://discord.com/api/v10",
       "api_version": "v10",
       "hosts": [
@@ -9635,6 +9648,7 @@
       "authority": "com.docusign.api",
       "vendor": "DocuSign",
       "description": "DocuSign eSignature REST API: list and read envelopes and their recipients, create an envelope from a template, and void one",
+      "runtime": "http",
       "base_url": "https://{account_host}/restapi/v2.1/accounts/{account_id}",
       "api_version": "v2.1",
       "hosts": [
@@ -10424,6 +10438,7 @@
       "authority": "com.dropbox.api",
       "vendor": "Dropbox",
       "description": "Dropbox: browse folder contents, read file and folder metadata, search files, create folders, and get temporary download links",
+      "runtime": "http",
       "base_url": "https://api.dropboxapi.com",
       "api_version": "2",
       "hosts": [
@@ -10960,6 +10975,7 @@
       "authority": "com.figma.api",
       "vendor": "Figma",
       "description": "Figma REST API: read a file, specific nodes, rendered images, a project's files and a file's comments — a read-only design surface",
+      "runtime": "http",
       "base_url": "https://api.figma.com",
       "api_version": "v1",
       "hosts": [
@@ -11604,6 +11620,7 @@
       "authority": "io.fly.api",
       "vendor": "Fly.io",
       "description": "Fly.io Machines: discover regions and inspect, create, start, stop, restart or delete Machines",
+      "runtime": "http",
       "base_url": "https://api.machines.dev/v1",
       "api_version": null,
       "hosts": [
@@ -12391,6 +12408,7 @@
       "authority": "com.freshdesk.api",
       "vendor": "Freshdesk",
       "description": "Freshdesk ticketing: list, read, create and update tickets and the contacts they belong to",
+      "runtime": "http",
       "base_url": "https://{domain}/api/v2",
       "api_version": "v2",
       "hosts": [
@@ -14498,6 +14516,7 @@
       "authority": "com.frontapp.api",
       "vendor": "Front",
       "description": "Front shared inbox: read and reply to conversations, and tag them",
+      "runtime": "http",
       "base_url": "https://api2.frontapp.com",
       "api_version": null,
       "hosts": [
@@ -15175,6 +15194,7 @@
       "authority": "com.github.api",
       "vendor": "GitHub",
       "description": "GitHub REST API: read repositories, issues and pull requests, and write issues and issue comments",
+      "runtime": "http",
       "base_url": "https://api.github.com",
       "api_version": null,
       "hosts": [
@@ -16115,6 +16135,7 @@
       "authority": "com.gitlab.api",
       "vendor": "GitLab",
       "description": "GitLab: read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only",
+      "runtime": "http",
       "base_url": "https://gitlab.com/api/v4",
       "api_version": "v4",
       "hosts": [
@@ -17251,6 +17272,7 @@
       "authority": "com.google.api",
       "vendor": "Google Workspace",
       "description": "Google Workspace: read and send Gmail messages, read and create Calendar events, read and rename Drive files",
+      "runtime": "http",
       "base_url": "https://www.googleapis.com",
       "api_version": null,
       "hosts": [
@@ -18252,6 +18274,7 @@
       "authority": "com.hubspot.api",
       "vendor": "HubSpot",
       "description": "HubSpot CRM: read contacts, companies and deals, and create and update contact records",
+      "runtime": "http",
       "base_url": "https://api.hubapi.com",
       "api_version": "v3",
       "hosts": [
@@ -18832,6 +18855,7 @@
       "authority": "com.intercom.api",
       "vendor": "Intercom",
       "description": "Intercom contacts and conversations: read and create contacts, read a conversation, reply to it, and note it",
+      "runtime": "http",
       "base_url": "https://api.intercom.io",
       "api_version": null,
       "hosts": [
@@ -19696,6 +19720,7 @@
       "authority": "com.atlassian.jira",
       "vendor": "Jira",
       "description": "Jira Cloud issue tracking: read and create issues, comment on them, and drive workflow transitions",
+      "runtime": "http",
       "base_url": "https://{site}.atlassian.net",
       "api_version": "2",
       "hosts": [
@@ -20452,6 +20477,7 @@
       "authority": "com.klaviyo.api",
       "vendor": "Klaviyo",
       "description": "Klaviyo marketing platform: read the account a key belongs to, read and create customer profiles, read lists, and post an event that can trigger a flow. Every request carries a dated API revision the vendor requires",
+      "runtime": "http",
       "base_url": "https://a.klaviyo.com/api",
       "api_version": null,
       "hosts": [
@@ -21445,6 +21471,7 @@
       "authority": "com.launchdarkly.api",
       "vendor": "LaunchDarkly",
       "description": "LaunchDarkly feature management: read projects, environments and feature flags, and toggle a flag on or off in one environment",
+      "runtime": "http",
       "base_url": "https://app.launchdarkly.com/api/v2",
       "api_version": "v2",
       "hosts": [
@@ -22237,6 +22264,7 @@
       "authority": "com.mailchimp.api",
       "vendor": "Mailchimp",
       "description": "Mailchimp Marketing API: check connectivity, read audiences and their contacts, add or update a contact, and list campaigns. Authenticates with a single API key sent as a bearer token, against a host whose datacentre label the operator supplies",
+      "runtime": "http",
       "base_url": "https://{dc}.api.mailchimp.com/3.0",
       "api_version": "3.0",
       "hosts": [
@@ -23348,6 +23376,7 @@
       "authority": "com.microsoft.graph",
       "vendor": "Microsoft Graph",
       "description": "Microsoft Graph: read and reply to Outlook mail, read and create Calendar events, read and rename OneDrive files",
+      "runtime": "http",
       "base_url": "https://graph.microsoft.com",
       "api_version": null,
       "hosts": [
@@ -24557,6 +24586,7 @@
       "authority": "com.miro.api",
       "vendor": "Miro",
       "description": "Miro boards and board items: discover boards, read items of any type, and create, update and delete sticky notes",
+      "runtime": "http",
       "base_url": "https://api.miro.com/v2",
       "api_version": "v2",
       "hosts": [
@@ -25630,6 +25660,7 @@
       "authority": "com.newrelic.api",
       "vendor": "New Relic",
       "description": "New Relic APM and alerting over the REST v2 API: list the applications an account is monitoring and read one in detail, read the account's alert policies and its current violations, and list or record deployment markers against an application. The account's region host is configured once, not chosen per call",
+      "runtime": "http",
       "base_url": "https://{host}/v2",
       "api_version": "2",
       "hosts": [
@@ -26392,6 +26423,7 @@
       "authority": "com.notion.api",
       "vendor": "Notion",
       "description": "Notion workspace: read a page's properties, query a database, search shared content, and create a page",
+      "runtime": "http",
       "base_url": "https://api.notion.com",
       "api_version": "v1",
       "hosts": [
@@ -26910,6 +26942,7 @@
       "authority": "com.okta.api",
       "vendor": "Okta",
       "description": "Okta identity management: read users and groups in an org, read a user's group memberships, and deactivate a user",
+      "runtime": "http",
       "base_url": "https://{domain}/api/v1",
       "api_version": "v1",
       "hosts": [
@@ -27567,6 +27600,7 @@
       "authority": "com.openai.api",
       "vendor": "OpenAI",
       "description": "OpenAI platform: list models, and create chat completions and embeddings",
+      "runtime": "http",
       "base_url": "https://api.openai.com",
       "api_version": "v1",
       "hosts": [
@@ -28082,6 +28116,7 @@
       "authority": "ai.openrouter.api",
       "vendor": "OpenRouter",
       "description": "OpenRouter model router: list models and their endpoints, create chat completions, and read credit balance",
+      "runtime": "http",
       "base_url": "https://openrouter.ai",
       "api_version": "v1",
       "hosts": [
@@ -28496,6 +28531,7 @@
       "authority": "com.pagerduty.api",
       "vendor": "PagerDuty",
       "description": "PagerDuty incident response: read incidents, services and who is on call, and acknowledge or resolve an incident",
+      "runtime": "http",
       "base_url": "https://api.pagerduty.com",
       "api_version": null,
       "hosts": [
@@ -29599,6 +29635,7 @@
       "authority": "com.postmarkapp.api",
       "vendor": "Postmark",
       "description": "Postmark transactional email: send a message, read delivery stats and bounces. Account: list and inspect servers, authenticated separately from sending",
+      "runtime": "http",
       "base_url": "https://api.postmarkapp.com",
       "api_version": null,
       "hosts": [
@@ -30465,6 +30502,7 @@
       "authority": "com.resend.api",
       "vendor": "Resend",
       "description": "Resend transactional email: send a message, read what happened to it, and list or inspect the domains a key may send from",
+      "runtime": "http",
       "base_url": "https://api.resend.com",
       "api_version": null,
       "hosts": [
@@ -31071,6 +31109,7 @@
       "authority": "com.salesforce.api",
       "vendor": "Salesforce",
       "description": "Salesforce REST API: read the authenticated identity, read/create/update an SObject record, and describe an SObject's schema",
+      "runtime": "http",
       "base_url": "https://{instance}.my.salesforce.com",
       "api_version": null,
       "hosts": [
@@ -31674,6 +31713,7 @@
       "authority": "com.sendgrid.api",
       "vendor": "SendGrid",
       "description": "SendGrid transactional email: read templates and bounce suppressions, validate an email address. Cannot send mail — see the header comment for why the send envelope is not expressible here",
+      "runtime": "http",
       "base_url": "https://api.sendgrid.com",
       "api_version": "v3",
       "hosts": [
@@ -32171,6 +32211,7 @@
       "authority": "io.sentry.api",
       "vendor": "Sentry",
       "description": "Sentry error tracking: read an issue and its latest event, triage an issue, read a project",
+      "runtime": "http",
       "base_url": "https://sentry.io",
       "api_version": "0",
       "hosts": [
@@ -32974,6 +33015,7 @@
       "authority": "com.shopify.api",
       "vendor": "Shopify",
       "description": "Shopify Admin REST API: read orders, products, customers and inventory levels, and update a product",
+      "runtime": "http",
       "base_url": "https://{shop}.myshopify.com",
       "api_version": "2024-10",
       "hosts": [
@@ -33756,6 +33798,7 @@
       "authority": "com.slack.api",
       "vendor": "Slack",
       "description": "Slack messaging: post messages, read conversation history, look up users, react",
+      "runtime": "http",
       "base_url": "https://slack.com",
       "api_version": "v1",
       "hosts": [
@@ -34474,6 +34517,7 @@
       "authority": "io.statuspage.api",
       "vendor": "Atlassian Statuspage",
       "description": "Atlassian Statuspage: read a status page's components and incidents, and open or update a publicly visible incident on it",
+      "runtime": "http",
       "base_url": "https://api.statuspage.io/v1/pages/{page_id}",
       "api_version": "v1",
       "hosts": [
@@ -35272,6 +35316,7 @@
       "authority": "com.stripe.api",
       "vendor": "Stripe",
       "description": "Stripe payments: read a balance, customer, charge, payment intent or refund; capture, cancel and refund a payment",
+      "runtime": "http",
       "base_url": "https://api.stripe.com",
       "api_version": "v1",
       "hosts": [
@@ -36339,6 +36384,7 @@
       "authority": "com.supabase.api",
       "vendor": "Supabase",
       "description": "Supabase project data and configuration: describe the tables the API exposes, read a table's rows, and read which sign-in methods the project has enabled. Reads only, through the project's public anon key, so every row returned is bounded by the project's own row-level-security policies",
+      "runtime": "http",
       "base_url": "https://{project_ref}.supabase.co",
       "api_version": "v1",
       "hosts": [
@@ -36664,6 +36710,7 @@
       "authority": "com.trello.api",
       "vendor": "Trello",
       "description": "Trello boards and cards: list the boards a token can see, read a board and its lists, read a list's cards, create a card, and archive one. Authenticates every request with an API key and a token together, both in the query string",
+      "runtime": "http",
       "base_url": "https://api.trello.com/1",
       "api_version": "1",
       "hosts": [
@@ -37502,6 +37549,7 @@
       "authority": "com.twilio.api",
       "vendor": "Twilio",
       "description": "Twilio programmable messaging and voice: read messages, calls and the authenticated account",
+      "runtime": "http",
       "base_url": "https://api.twilio.com/2010-04-01",
       "api_version": "2010-04-01",
       "hosts": [
@@ -38612,6 +38660,7 @@
       "authority": "com.typeform.api",
       "vendor": "Typeform",
       "description": "Typeform: read the authenticated account, forms and their responses, and delete responses",
+      "runtime": "http",
       "base_url": "https://api.typeform.com",
       "api_version": null,
       "hosts": [
@@ -39433,6 +39482,7 @@
       "authority": "com.vercel.api",
       "vendor": "Vercel",
       "description": "Vercel: list and inspect projects and deployments, and cancel an in-progress deployment",
+      "runtime": "http",
       "base_url": "https://api.vercel.com",
       "api_version": null,
       "hosts": [
@@ -39966,6 +40016,7 @@
       "authority": "com.webflow.api",
       "vendor": "Webflow",
       "description": "Webflow sites and CMS: discover sites, read a collection's own field schema, read collection items of any tenant-defined shape, and publish a site live",
+      "runtime": "http",
       "base_url": "https://api.webflow.com/v2",
       "api_version": "v2",
       "hosts": [
@@ -40615,6 +40666,7 @@
       "authority": "com.zendesk.api",
       "vendor": "Zendesk",
       "description": "Zendesk Support ticketing: search, read, update tickets and their comments",
+      "runtime": "http",
       "base_url": "https://{subdomain}.zendesk.com",
       "api_version": "v2",
       "hosts": [
@@ -41709,6 +41761,7 @@
       "authority": "us.zoom.api",
       "vendor": "Zoom",
       "description": "Zoom meeting scheduling: read, create and delete a meeting, and read a user",
+      "runtime": "http",
       "base_url": "https://api.zoom.us",
       "api_version": "v2",
       "hosts": [

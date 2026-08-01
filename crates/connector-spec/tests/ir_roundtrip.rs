@@ -80,6 +80,7 @@ fn babelforce() -> Connector {
     Connector {
         id: "babelforce".into(),
         authority: None,
+        runtime: connector_spec::Runtime::Http,
         api_version: None,
         services: Vec::new(),
         vendor: "Babelforce".into(),

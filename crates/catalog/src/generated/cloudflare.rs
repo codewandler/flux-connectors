@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Cloudflare",
     description: "Cloudflare zones and DNS: list zones, list and manage DNS records for a zone, and purge a zone's cache",
     authority: Some("com.cloudflare.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.cloudflare.com/client/v4",
     auth: AUTH,
     operations: OPERATIONS,

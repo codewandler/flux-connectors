@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Zoom",
     description: "Zoom meeting scheduling: read, create and delete a meeting, and read a user",
     authority: Some("us.zoom.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.zoom.us",
     auth: AUTH,
     operations: OPERATIONS,

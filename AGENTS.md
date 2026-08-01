@@ -583,8 +583,8 @@ These failures are recorded decisions. Do not “fix” one without reading its 
 - **Six declarable surfaces reach no artifact at all.** This is the largest real gap in the repository.
   The IR models each one and the loader validates it, and then neither `connectors/*.connector.toml`
   — whose emitted fields are exactly `generator`, `connector`, `service`, `gid`, `vendor`,
-  `description`, `base_url`, `api_version`, `module`, `operations`, `events`, `channels` — nor
-  `web/public/catalog.json` carries it:
+  `description`, `runtime`, `base_url`, `api_version`, `module`, `operations`, `events`, `channels`
+  — nor `web/public/catalog.json` carries it:
 
   | surface | declared today | where it stops |
   |---|---|---|

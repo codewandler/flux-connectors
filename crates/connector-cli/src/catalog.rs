@@ -80,6 +80,7 @@ pub fn render(connector: &Connector, renderings: &[OperationRendering]) -> Resul
         "    authority: {},\n",
         option_string(connector.authority.as_deref())
     ));
+    out.push_str(&format!("    runtime: {},\n", runtime(connector.runtime)));
     out.push_str(&format!("    base_url: {},\n", string(&connector.base_url)));
     out.push_str("    auth: AUTH,\n");
     out.push_str("    operations: OPERATIONS,\n");
@@ -502,6 +503,22 @@ fn risk(risk: Risk) -> &'static str {
     }
 }
 
+/// `connector_spec::Runtime` as the catalog's mirror — C-405. Exhaustive for the same reason
+/// [`risk`] is, and it is the mechanical half of "the two vocabularies do not drift": a variant
+/// added to the loader's enum fails to compile here until someone names its counterpart, and naming
+/// a counterpart `catalog::Runtime` does not have fails to compile in `crates/catalog`.
+fn runtime(runtime: connector_spec::Runtime) -> &'static str {
+    use connector_spec::Runtime;
+    match runtime {
+        Runtime::Http => "crate::Runtime::Http",
+        Runtime::Socket => "crate::Runtime::Socket",
+        Runtime::Process => "crate::Runtime::Process",
+        Runtime::Container => "crate::Runtime::Container",
+        Runtime::Plugin => "crate::Runtime::Plugin",
+        Runtime::Remote => "crate::Runtime::Remote",
+    }
+}
+
 /// `connector_spec::Idempotency` as the catalog's mirror. Exhaustive for the same reason.
 fn idempotency(idempotency: Idempotency) -> &'static str {
     match idempotency {
@@ -565,6 +582,7 @@ mod tests {
         Connector {
             id: "acme".to_string(),
             authority: None,
+            runtime: connector_spec::Runtime::Http,
             api_version: None,
             services: Vec::new(),
             vendor: "Acme".to_string(),

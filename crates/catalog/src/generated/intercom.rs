@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Intercom",
     description: "Intercom contacts and conversations: read and create contacts, read a conversation, reply to it, and note it",
     authority: Some("com.intercom.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.intercom.io",
     auth: AUTH,
     operations: OPERATIONS,

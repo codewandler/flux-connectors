@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Postmark",
     description: "Postmark transactional email: send a message, read delivery stats and bounces. Account: list and inspect servers, authenticated separately from sending",
     authority: Some("com.postmarkapp.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.postmarkapp.com",
     auth: AUTH,
     operations: OPERATIONS,

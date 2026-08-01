@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "SendGrid",
     description: "SendGrid transactional email: read templates and bounce suppressions, validate an email address. Cannot send mail — see the header comment for why the send envelope is not expressible here",
     authority: Some("com.sendgrid.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.sendgrid.com",
     auth: AUTH,
     operations: OPERATIONS,

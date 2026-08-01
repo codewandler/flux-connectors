@@ -103,6 +103,7 @@ fn bare(provenance: Provenance) -> Connector {
     Connector {
         id: "zendesk".into(),
         authority: None,
+        runtime: connector_spec::Runtime::Http,
         api_version: None,
         services: Vec::new(),
         vendor: "Zendesk".into(),

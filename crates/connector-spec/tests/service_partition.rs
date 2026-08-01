@@ -51,6 +51,7 @@ fn connector(services: Vec<Service>, operations: Vec<Operation>) -> Connector {
     Connector {
         id: "acme".to_owned(),
         authority: Some("com.acme".to_owned()),
+        runtime: connector_spec::Runtime::Http,
         api_version: Some("v1".to_owned()),
         services,
         vendor: "Acme".to_owned(),

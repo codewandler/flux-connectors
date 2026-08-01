@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "HubSpot",
     description: "HubSpot CRM: read contacts, companies and deals, and create and update contact records",
     authority: Some("com.hubspot.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.hubapi.com",
     auth: AUTH,
     operations: OPERATIONS,

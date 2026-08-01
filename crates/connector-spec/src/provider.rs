@@ -46,7 +46,7 @@ use crate::inbound::{
 use crate::lock::sha256_hex;
 use crate::{
     AuthMethod, AuthRequirement, AuthScheme, Connector, HttpMethod, Idempotency, JsonSchema,
-    Operation, Param, ParamSet, Provenance, Quirks, Risk, Role, Service, DEFAULT_SERVICE,
+    Operation, Param, ParamSet, Provenance, Quirks, Risk, Role, Runtime, Service, DEFAULT_SERVICE,
     MIN_REPEATABILITY_CONDITION,
 };
 
@@ -232,6 +232,13 @@ struct ProviderFile {
     id: String,
     #[serde(default)]
     authority: Option<String>,
+    /// **How the connector executes** — C-405. Absent means [`Runtime::Http`], and an unrecognised
+    /// word is refused *here*, by `serde`, exactly as an unknown [`Role`](crate::Role) is: the enum
+    /// is closed, so the error quotes what was written and lists every runtime that exists. There is
+    /// no arm in [`validate`] for it, and there must not be one — a runtime that fell back to `http`
+    /// on a typo is how a `process` connector ends up served by a multi-tenant host.
+    #[serde(default)]
+    runtime: Runtime,
     #[serde(default)]
     api_version: Option<String>,
     #[serde(default)]
@@ -360,6 +367,7 @@ fn assemble(file: ProviderFile, source: &str) -> LoadedProvider {
         connector: Connector {
             id: file.id,
             authority: file.authority,
+            runtime: file.runtime,
             api_version: file.api_version,
             services: file.services,
             vendor: file.vendor,

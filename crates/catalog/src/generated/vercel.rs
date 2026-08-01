@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Vercel",
     description: "Vercel: list and inspect projects and deployments, and cancel an in-progress deployment",
     authority: Some("com.vercel.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.vercel.com",
     auth: AUTH,
     operations: OPERATIONS,

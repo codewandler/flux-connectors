@@ -45,6 +45,12 @@ Everything else in `Connector` is identity (`id`, `authority`, `api_version`, `v
 `description`), a default (`default_auth`), or bookkeeping (`provenance`). Those seven are not
 surfaces; they are what a surface is addressed and versioned by.
 
+`runtime` (C-405) joins that list and is the one entry worth naming separately: it is not what a
+surface is *addressed* by but what it is *executed* by, and unlike the rest of the identity block a
+consumer acts on it before it calls anything. A host serving more than one tenant refuses a
+locally-executing connector, so the field is published into all three artifacts rather than kept as
+a fact of the IR.
+
 ## Members share one name namespace per service
 
 The five surfaces that name something callable or matchable — `operations`, `events`, `channels`,
@@ -84,8 +90,19 @@ Artifacts, abbreviated: **F** = `connectors/<provider>[-<service>].flux` · **M*
 | **quirks.pagination** | `[operations.quirks.pagination]` | **nothing** | **nothing** | **IR-only.** Declared by real providers |
 | **quirks.rate_limit** | `[operations.quirks.rate_limit]` | **nothing** | **nothing** | **IR-only**, and **declared by no provider at all** |
 | **quirks.error_envelope** | `[operations.quirks.error_envelope]` | **F** as *prose appended to the op's description* — nothing else | the model reading the tool contract | **prose only** |
+| **runtime** | `runtime` (connector level) | **M** + **R** + **J**, always stated · **nothing into F, by design** | a host deciding whether it may run the connector at all | **complete** (C-405) — the second surface after `operations` to reach every artifact a consumer reads |
 
 ### Where each cell was read
+
+- **runtime** — declared at `crates/connector-spec/src/ir.rs` (`Runtime`, `Connector::runtime`),
+  parsed and refused at `crates/connector-spec/src/provider.rs` (`ProviderFile::runtime` — a closed
+  enum, so an unrecognised word is `serde`'s rejection and lists the accepted set), emitted at
+  `crates/connector-cli/src/seam.rs` (`Manifest::runtime`, never skipped),
+  `crates/connector-cli/src/catalog.rs` (`fn runtime`, exhaustive) and
+  `crates/connector-cli/src/site.rs` (`ProviderEntry::runtime`). Held by
+  `crates/connector-cli/tests/runtime_axis.rs` and
+  `crates/connector-spec/tests/runtime_vocabulary.rs`. It reaches no `.flux`: the module is `op`
+  declarations, and how the connector executes is the host's decision to make before it loads one.
 
 - **operations** — `crates/connector-cli/src/seam.rs:285-296` (one `emit_operation` per operation),
   `:307-322` (the module), `:381` (manifest ids); `crates/connector-cli/src/catalog.rs:90-98`,

@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "PagerDuty",
     description: "PagerDuty incident response: read incidents, services and who is on call, and acknowledge or resolve an incident",
     authority: Some("com.pagerduty.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.pagerduty.com",
     auth: AUTH,
     operations: OPERATIONS,

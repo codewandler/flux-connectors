@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Front",
     description: "Front shared inbox: read and reply to conversations, and tag them",
     authority: Some("com.frontapp.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api2.frontapp.com",
     auth: AUTH,
     operations: OPERATIONS,

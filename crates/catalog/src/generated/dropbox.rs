@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Dropbox",
     description: "Dropbox: browse folder contents, read file and folder metadata, search files, create folders, and get temporary download links",
     authority: Some("com.dropbox.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.dropboxapi.com",
     auth: AUTH,
     operations: OPERATIONS,

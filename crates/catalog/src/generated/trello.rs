@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Trello",
     description: "Trello boards and cards: list the boards a token can see, read a board and its lists, read a list's cards, create a card, and archive one. Authenticates every request with an API key and a token together, both in the query string",
     authority: Some("com.trello.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.trello.com/1",
     auth: AUTH,
     operations: OPERATIONS,

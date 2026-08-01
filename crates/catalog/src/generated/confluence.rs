@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Confluence",
     description: "Confluence Cloud wiki: find spaces, list the pages in one, read a page's metadata, publish a new page, and comment on one. Page and comment *content* cannot be read back — see the connector's notes",
     authority: Some("com.atlassian.confluence"),
+    runtime: crate::Runtime::Http,
     base_url: "https://{site}.atlassian.net/wiki",
     auth: AUTH,
     operations: OPERATIONS,

@@ -102,6 +102,7 @@ never a tuple or a positional array.
 | `authority` | string \| null | The reverse-DNS authority the provider publishes under (`com.amazonaws`), or `null` when it declares none — every provider shipped today. |
 | `vendor` | string | Display name. |
 | `description` | string | One line. |
+| `runtime` | string | **How the connector executes** — flux's runtime axis, one of `http`, `socket`, `process`, `container`, `plugin`, `remote` (C-405). Always present and never `null`: a host serving more than one tenant refuses a locally-executing runtime, and inferring `http` from an absent key is exactly the derivation this field removes. `http` for every connector shipped today. |
 | `base_url` | string | Templating included: `https://{subdomain}.zendesk.com`. A service may override it. |
 | `api_version` | string \| null | The vendor's API version, as the default for this provider's services. |
 | `hosts` | array\<string\> | Hosts reached, templating intact. An array because C-10's `http_hosts` allowlist will hold more than one. |

@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Typeform",
     description: "Typeform: read the authenticated account, forms and their responses, and delete responses",
     authority: Some("com.typeform.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.typeform.com",
     auth: AUTH,
     operations: OPERATIONS,

@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Sentry",
     description: "Sentry error tracking: read an issue and its latest event, triage an issue, read a project",
     authority: Some("io.sentry.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://sentry.io",
     auth: AUTH,
     operations: OPERATIONS,

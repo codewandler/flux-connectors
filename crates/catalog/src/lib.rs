@@ -283,6 +283,63 @@ pub struct Credential {
     pub place: Placement,
 }
 
+/// **How a connector executes** — flux's runtime axis, as the catalogue publishes it (C-405).
+///
+/// The vocabulary mirrors flux's `docs/designs/ecosystem.md`, which replaces the plugin-versus-
+/// connector dichotomy with one axis: a plugin is a runtime kind a connector may declare, not a
+/// rival of one. It is the same closed set `connector_spec::Runtime` accepts at load; the emitter
+/// translates one into the other, so a variant that existed on only one side would not compile.
+///
+/// # What a consumer does with it
+///
+/// HTTP is easy to multi-tenant because the effect leaves the machine. Process spawning, container
+/// exec and raw sockets do not — they consume the host's own identity, network position, filesystem
+/// and descriptors — so **a host serving more than one tenant refuses a locally-executing runtime**.
+/// That refusal is mechanical only if the runtime is a declared fact, which is what this field is:
+/// before it existed a consumer derived [`Http`](Self::Http) and was right, and would have stayed
+/// right until the first connector that was not, at which point it was silently wrong for exactly
+/// the case the refusal exists to catch.
+///
+/// Deliberately carries **no** `is_local()` predicate. Which runtimes a deployment admits is the
+/// host's judgment (flux-exchange's `Deployment::admits`), and this crate publishes vendor facts;
+/// putting the policy here would make the catalogue an authority on a question it cannot see the
+/// inputs to.
+///
+/// Not `#[non_exhaustive]`, for the reason [`Placement`] is not: it is a closed set mirrored from a
+/// design, and a consumer matching exhaustively on it *should* be told when the set grows, because
+/// a new runtime is a new effect they have not decided about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Runtime {
+    /// A guarded HTTP request. Every connector this repository generates.
+    #[default]
+    Http,
+    /// A guarded dial — TCP, UDP or ICMP. **Locally executing.**
+    Socket,
+    /// A guarded, argv-only spawn under a sandbox backend. **Locally executing.**
+    Process,
+    /// A spawn inside docker or kubernetes. **Locally executing.**
+    Container,
+    /// The flux plugin protocol over stdio — a special case of [`Process`](Self::Process).
+    /// **Locally executing.**
+    Plugin,
+    /// Delegation to another substrate. Not locally executing: the effect leaves the machine.
+    Remote,
+}
+
+impl Runtime {
+    /// The token this runtime is published as, in `catalog.json` and in every `.connector.toml`.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Http => "http",
+            Self::Socket => "socket",
+            Self::Process => "process",
+            Self::Container => "container",
+            Self::Plugin => "plugin",
+            Self::Remote => "remote",
+        }
+    }
+}
+
 /// One connector, and every operation the catalog carries for it.
 ///
 /// `#[non_exhaustive]` for the same reason [`Operation`] is: C-37's `pid` lands here.
@@ -304,6 +361,9 @@ pub struct Provider {
     /// refuse. Refusing is the correct answer — a request sent without the credential it declares is
     /// the failure worth preventing — but the diagnostic must say *which* fact is missing.
     pub authority: Option<&'static str>,
+    /// **How this connector executes** — see [`Runtime`]. `Http` for every connector shipped today,
+    /// and stated rather than assumed, which is the whole of C-405.
+    pub runtime: Runtime,
     /// The API base URL, templating included.
     pub base_url: &'static str,
     /// Every credential the connector declares, in declaration order and keyed by

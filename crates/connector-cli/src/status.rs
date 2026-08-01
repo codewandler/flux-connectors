@@ -374,6 +374,7 @@ mod tests {
         Connector {
             id: "acme".to_string(),
             authority: None,
+            runtime: connector_spec::Runtime::Http,
             api_version: None,
             services: Vec::new(),
             vendor: "Acme".to_string(),

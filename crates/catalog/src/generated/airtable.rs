@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Airtable",
     description: "Airtable records: read, create, update and delete a record in a base's table",
     authority: Some("com.airtable.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.airtable.com",
     auth: AUTH,
     operations: OPERATIONS,

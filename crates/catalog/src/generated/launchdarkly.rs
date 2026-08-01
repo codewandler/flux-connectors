@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "LaunchDarkly",
     description: "LaunchDarkly feature management: read projects, environments and feature flags, and toggle a flag on or off in one environment",
     authority: Some("com.launchdarkly.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://app.launchdarkly.com/api/v2",
     auth: AUTH,
     operations: OPERATIONS,

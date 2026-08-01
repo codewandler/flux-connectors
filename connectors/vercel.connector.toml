@@ -4,6 +4,7 @@ generator = "flux-connectors 0.8.0"
 connector = "vercel"
 vendor = "Vercel"
 description = "Vercel: list and inspect projects and deployments, and cancel an in-progress deployment"
+runtime = "http"
 base_url = "https://api.vercel.com"
 module = "vercel.flux"
 operations = ["vercel-projects-list", "vercel-project-get", "vercel-deployments-list", "vercel-deployment-get", "vercel-deployment-cancel"]

@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Notion",
     description: "Notion workspace: read a page's properties, query a database, search shared content, and create a page",
     authority: Some("com.notion.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.notion.com",
     auth: AUTH,
     operations: OPERATIONS,

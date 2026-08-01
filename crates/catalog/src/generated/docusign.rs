@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "DocuSign",
     description: "DocuSign eSignature REST API: list and read envelopes and their recipients, create an envelope from a template, and void one",
     authority: Some("com.docusign.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://{account_host}/restapi/v2.1/accounts/{account_id}",
     auth: AUTH,
     operations: OPERATIONS,

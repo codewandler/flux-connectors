@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Google Workspace",
     description: "Google Workspace: read and send Gmail messages, read and create Calendar events, read and rename Drive files",
     authority: Some("com.google.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://www.googleapis.com",
     auth: AUTH,
     operations: OPERATIONS,

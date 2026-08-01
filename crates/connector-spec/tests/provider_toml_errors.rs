@@ -174,6 +174,10 @@ fn every_required_rejection_has_a_fixture() {
         // it does not load.
         "authored-input-schema",
         "body-declared-twice",
+        // C-405: the runtime axis is a closed set and an unrecognised word is refused rather than
+        // defaulted. A typo that quietly became `http` is how a `process` connector ends up served
+        // by a multi-tenant host, which is the one thing the declaration exists to prevent.
+        "unknown-runtime",
     ];
 
     let cases = cases();

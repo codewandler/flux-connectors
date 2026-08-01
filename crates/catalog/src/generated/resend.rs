@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "Resend",
     description: "Resend transactional email: send a message, read what happened to it, and list or inspect the domains a key may send from",
     authority: Some("com.resend.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.resend.com",
     auth: AUTH,
     operations: OPERATIONS,

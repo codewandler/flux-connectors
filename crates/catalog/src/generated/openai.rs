@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "OpenAI",
     description: "OpenAI platform: list models, and create chat completions and embeddings",
     authority: Some("com.openai.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://api.openai.com",
     auth: AUTH,
     operations: OPERATIONS,

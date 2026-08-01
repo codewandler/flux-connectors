@@ -10,6 +10,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     vendor: "GitLab",
     description: "GitLab: read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only",
     authority: Some("com.gitlab.api"),
+    runtime: crate::Runtime::Http,
     base_url: "https://gitlab.com/api/v4",
     auth: AUTH,
     operations: OPERATIONS,
