@@ -425,3 +425,29 @@ Design: [designs/connector-security-posture.md](designs/connector-security-postu
 lives, whether it can be rotated, where it is placed, and whether inbound events are verified — each
 distinguishing *unstated* from *stated poorly*, and nothing published claiming to describe a
 connector's actual security rather than what it declares.
+
+### A connector's presentation — a logo, and resources a listing can show
+
+Owner-asked on 2026-08-01: *"a connector should always come with a logo, multiple potential websites
+or resources (link, title, description) — having this metadata can help to individualize the listing
+later."* Measured the same day: a provider publishes **fifteen keys** into `catalog.json` and **not
+one is a link or an image**, so a listing rendering 54 connectors has a name, a sentence, and nothing
+else to tell them apart.
+
+The datum that shapes the epic is that this is not a research problem. **35 of the 54 provider files
+already carry a vendor documentation URL — in a comment.** An author went and found each one, judged
+it worth writing down, and wrote it where no artifact can reach it. And the field exists twice
+already, both times below the connector: a *config field* can say where its documentation lives, and
+a *webhook setup* can; a connector cannot.
+
+The logo is the one genuinely hard part, and it is a licensing question wearing a technical one — a
+vendor's mark is a third-party trademark and this repository is public, which is the same class of
+question C-415's spec vendoring turned out to be. So it is a decision story, answered before any image
+lands, rather than 54 files someone downloaded. Everything else here is small, and the links alone
+give a listing most of its individuality.
+
+Design: [designs/connector-presentation.md](designs/connector-presentation.md).
+
+**Done looks like:** a listing can show a connector as itself — its mark and the handful of links a
+person actually wants, each typed, each declared rather than inferred, and a connector that declares
+none rendered as *undeclared* rather than as broken.

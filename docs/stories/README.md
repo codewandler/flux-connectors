@@ -60,6 +60,11 @@ _A connector is more than a set of callable operations. It also has **schemas** 
 - [C-88 — Prove OAuth2 on one provider — the operator level is currently unexercised](C-88-prove-oauth2.md) · Spec · OAuth2Spec is a landed type NO shipped provider uses, so half the configuration model is proven only by a fixture. tests/auth_archetypes.rs asserts that gap and fails the day this lands
 - [C-89 — The hosted OAuth redirect has no home — OAuthRedirect is loopback-only](C-89-hosted-oauth-redirect.md) · Bridge · OAuthRedirect is {port, path} — a CLI shape. A hosted callback is https://app.example.com/oauth/callback, supplied by the host, and often must be pre-registered in the vendor's dashboard before the flow works at all
 
+### a connector's presentation — a logo, and resources a listing can show
+_Owner-stated 2026-08-01: *"a connector should always come with a logo, multiple potential websites or_
+- [C-436 — A connector cannot name a single link — not its homepage, not its API reference, not a status page](C-436-connector-resources.md) · Spec · a provider publishes fifteen keys into catalog.json and not one is a link. Meanwhile `docs_url` already exists TWICE at lower scopes — on ConfigField and on ManualSetup — so a field can say where its documentation lives and a connector cannot
+- [C-437 — Decide how a connector carries a logo — the licensing question comes before the file](C-437-decide-the-logo.md) · Build · DECISION. A vendor logo is a third-party trademark and this repository is public — the same CLASS of question C-415's spec vendoring turned out to be, where the answer was a split nobody had articulated. Not one an implementor should settle by adding 54 files
+
 ### a connector's security posture — publish the facts, and be careful about the grade
 _Owner-stated 2026-08-01: *"it would be great to have something like a security rating over a_
 - [C-432 — A token endpoint is a connector function that marks its response — not an operation we refuse](C-432-mark-a-response-as-carrying-a-credential.md) · Spec · OWNER RULING 2026-08-01, superseding the one recorded that morning: a token endpoint SHOULD be a connector function, marked as returning sensitive information. flux 0.47.1's credential_boundary REFUSES such a response outright when it is unmarked, so an unmarked one does not merely leak — the exchange fails
@@ -177,6 +182,11 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 _A connector is more than a set of callable operations. It also has **schemas** (what goes in, what_
 - [C-40 — Ship provider icons as bundle assets](C-40-provider-icons.md) · Build · alongside the .flux, never inside it
 - [C-41 — Move build output to a per-provider bundle directory](C-41-bundle-layout.md) · Build · breaking layout change — C-13, C-27 and C-33 all assume the flat shape
+
+### a connector's presentation — a logo, and resources a listing can show
+_Owner-stated 2026-08-01: *"a connector should always come with a logo, multiple potential websites or_
+- [C-438 — 35 of 54 provider files already carry a vendor documentation URL — in a comment](C-438-lift-the-comment-urls.md) · Spec · the epic's cheapest win and its best evidence: an author already went and found these links. They sit in prose where no artifact can reach them, which makes this a declaration problem rather than a research one
+- [C-439 — Render a connector as itself — the mark and the links, in both the explorer and the host](C-439-render-connector-presentation.md) · Surfaces · the point of the epic — 54 cards that today differ by a name and a sentence. Two surfaces render the catalogue and both must learn it, and C-408's rule applies: a connector that declares no logo is not a connector rendered as broken
 
 ### a connector's security posture — publish the facts, and be careful about the grade
 _Owner-stated 2026-08-01: *"it would be great to have something like a security rating over a_
