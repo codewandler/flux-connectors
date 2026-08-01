@@ -24,6 +24,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shifted would strand every credential already stored. The ambiguous case — several connections and
   none named — **refuses and lists the uuids that would have worked**, rather than guessing.
 
+### Changed
+
+- **The compiler leaves the crates.io publish closure** (C-407). `connector-secrets` re-exported
+  `CredentialRef`, so `connector-spec` was in its public API — and `connector-spec` is the connector
+  IR, both front-ends, validation and the lockfile writer: **11,832 lines with 128 public items,
+  published so that a credential address would resolve.** The roadmap recorded that as a fact of
+  life; it was a dependency-direction problem.
+
+  The address vocabulary moves to `codewandler-connector-address`, which both `connector-spec` and
+  `connector-secrets` depend on. `address.rs` travelled with `credential.rs` and that was not
+  optional — `CredentialRef::build` calls the address validators, so leaving it behind would have
+  made the new crate depend on the compiler, which is the cycle the extraction exists to break. The
+  closure is still four crates; which four changed:
+
+  ```
+  codewandler-connector-address → codewandler-connector-catalog
+    → codewandler-connector-secrets → codewandler-connector-pack
+  ```
+
+  Consumers see no change: `connector-secrets` re-exports the same nine names, and `connector-spec`
+  re-exports the vocabulary so `connector_spec::credential::…` and `connector_spec::address::…` still
+  resolve everywhere they already did. The proof is a test over the **derived** closure —
+  `publish_closure.rs::no_machinery_crate_is_published` — rather than a hand-written list, so the
+  edge cannot grow back unnoticed.
+
+  **This does not undo what is already out.** `codewandler-connector-spec` 0.7.0 and 0.8.0 are live
+  on crates.io and cannot be withdrawn. C-407 stops the next version shipping.
+
 ### Added
 
 - **One statement selects many operations, names them, and states their risk** (C-411, C-412, C-414).

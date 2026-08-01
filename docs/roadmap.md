@@ -95,14 +95,27 @@ limit resumes rather than stranding a half-published set that cannot be withdraw
 [AGENTS.md § Publishing contract](../AGENTS.md) and
 [designs/crates-io-publishing.md](designs/crates-io-publishing.md).
 
-**The closure is four crates, not three** — `connector-secrets` re-exports `CredentialRef` from
-`connector-spec`, so `connector-spec` is in its public API and must ship or nothing outside this
-workspace resolves. In dependency order:
+**The closure is four crates, and which four changed at C-407.** `connector-secrets` re-exports
+`CredentialRef`, so whichever crate owns that vocabulary is in its public API and must ship or
+nothing outside this workspace resolves. Until C-407 that crate was `connector-spec` — the connector
+IR, both front-ends, validation and the lockfile writer, 11,832 lines of compiler shipped so that a
+credential address would resolve. This paragraph used to record that as a fact of life; it was a
+dependency-direction problem, and extracting the vocabulary into `connector-address` ended it. In
+dependency order:
 
 ```
-codewandler-connector-catalog → codewandler-connector-spec
+codewandler-connector-address → codewandler-connector-catalog
   → codewandler-connector-secrets → codewandler-connector-pack
 ```
+
+The order is **derived from the manifests** by `scripts/publish-crates-io.sh --print-order`, never
+hand-listed, and `crates/connector-cli/tests/publish_closure.rs::no_machinery_crate_is_published`
+fails if a machinery crate finds its way back in. `connector-spec`, `connector-flux` and
+`connector-cli` are now all unpublished, which is the direction this family was already heading: the
+repository ships **data and address vocabulary**, not the machinery that produces them.
+
+`codewandler-connector-spec` 0.7.0 and 0.8.0 are already on crates.io and cannot be withdrawn. C-407
+stops the *next* version shipping; it does not undo the two that went out.
 
 The `codewandler-` prefix matches the flux family and was chosen deliberately: bare `connector-*`
 names are a contested namespace, and `connector-cli` is already taken on crates.io by an unrelated

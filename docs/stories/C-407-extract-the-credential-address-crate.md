@@ -3,7 +3,6 @@ id: C-407
 title: "Extract the credential address vocabulary so the compiler leaves the publish closure"
 pillar: Build
 status: in-progress
-priority: 1
 note: "OWNER-DECIDED 2026-08-01: this lands BEFORE the v0.9.0 tag, so codewandler-connector-spec never becomes a published surface. Its own figures were stale — the module is 726 lines, not 387, and the crate it drags in is 11,832 lines with 128 public items, not 4,000"
 ---
 

@@ -2,10 +2,10 @@
 id: C-428
 title: "Move the flux pin from 0.45 to 0.46 — and it is blocked on flux-web, not on us"
 pillar: Build
-status: blocked
+status: ready
 priority: 1
 epic: connectors-api
-note: "flagged by review 2026-08-01: flux released 0.46.0 today and this repo pins 0.45, so ^0.45 will not resolve it. BLOCKED UPSTREAM — codewandler-flux-web has no 0.46.0 on crates.io (verified against the sparse index), and connectors-api needs it for the Egress. Five of six flux crates are ready; the sixth is not"
+note: "UNBLOCKED and now a RELEASE PREREQUISITE, not a follow-up: connector-pack's public API returns `flux_core::Result<Arc<dyn Tool>>`, so a pack published against 0.45 cannot link into a host on 0.46 — cargo resolves two flux copies and the types do not unify. Shipping v0.9.0 on 0.45 would hand flux-exchange a crate it cannot use"
 ---
 
 # Move the flux pin from 0.45 to 0.46 — and it is blocked on flux-web, not on us
@@ -46,8 +46,10 @@ possible at all. So the engine line cannot move wholesale today, and moving five
 the line, which is the exact defect `crates/connector-cli/tests/flux_engine_line.rs` exists to refuse.
 
 ## Acceptance
-- [ ] `codewandler-flux-web` **0.46.0** is published upstream. Until then this story stays `blocked`
-      and the pin stays at 0.45 — a split line is worse than a stale one.
+- [x] `codewandler-flux-web` **0.46.0** is published upstream — confirmed on the sparse index
+      2026-08-01. The earlier reading was taken during a window that has since closed; the publish run
+      completed successfully. A split line would still be worse than a stale one, so all six move
+      together or none do.
 - [ ] All six pins move together, in one commit: `flux-lang`, `flux-core`, `flux-runtime`,
       `flux-web`, `flux-system`, `flux-credentials`.
 - [ ] `crates/connector-cli/tests/flux_engine_line.rs` passes — it records the engine line once and
@@ -65,8 +67,18 @@ the line, which is the exact defect `crates/connector-cli/tests/flux_engine_line
 ## Notes
 - **Precedent: [C-403](C-403-move-the-flux-pin-to-0-45.md)**, which moved 0.41 → 0.45 and is the
   model for this — including that it is one commit that moves every pin, never a partial bump.
-- Deliberately **not** folded into the `v0.9.0` release. That release already regenerates every
-  artifact for babelforce's widening; changing the emit target in the same commit would put two
-  independent reasons behind any artifact that moved. Ship the release on 0.45, bump immediately
-  after.
+- **The coordinator's original deferral was wrong and is reversed.** The reasoning — don't change the
+  emit target in the same regeneration as babelforce's widening — was sound about *attribution* and
+  wrong about *sequence*. `connector-pack`'s public API returns
+  `flux_core::Result<Arc<dyn Tool>>` (`crates/connector-pack/src/lib.rs:852`) and
+  `impl FnOnce(&mut ToolRegistry) -> flux_core::Result<()>` (`:752`). A pack compiled against flux
+  0.45 and a host on 0.46 resolve **two** copies of `flux-core`/`flux-runtime`, and `Arc<dyn Tool>`
+  from one does not unify with the other. That is verbatim why
+  [C-403](C-403-move-the-flux-pin-to-0-45.md) existed: *"connector-pack hands out
+  `Arc<dyn flux_runtime::Tool>`, so no consumer can link the pack and current flux together."*
+  Publishing v0.9.0 on 0.45 would hand flux-exchange a crate it **cannot link**, which is the entire
+  purpose of the release.
+- Attribution is still preserved, just by ordering rather than by deferral: this lands **after**
+  C-417's widening is merged, as its own commit. Anything that moves on the flux bump alone is then
+  attributable to the bump, because babelforce's regeneration is already in.
 - The right upstream ask is narrow: publish `codewandler-flux-web` 0.46.0. Everything else is ready.
