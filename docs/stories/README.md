@@ -200,6 +200,7 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-24 — Verify generated connectors against recorded HTTP fixtures](C-24-fixture-verification.md) · Build · proves a connector *works*, not merely that it parses — without live credentials
 - [C-46 — Generic connectors — http, a2a, mcp and friends](C-46-generic-connectors.md) · Spec · extends the charter — a provider need not be a vendor · **not** mysql, see Notes
 - [C-50 — Offer AWS as a provider with s3 and bedrock as services](C-50-aws-services.md) · Spec · first multi-service provider · SigV4 signs the request, not a header
+- [C-443 — An operation should declare the scope it requires, so a host can request least privilege](C-443-per-operation-required-scopes.md) · Spec · the idea is right and the prerequisite is missing: NO provider declares an [auth.oauth2] block, so there is no acquisition to minimize, and the one spec-backed vendor's per-operation scope is literally '*'. Blocked on C-440
 
 ### generated connector tests — what can be derived, and what must never be
 _> **C-423 measured this. The answer is a negative: do not generate.** The numbers below replace the_
