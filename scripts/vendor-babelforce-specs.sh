@@ -8,10 +8,29 @@
 # is this script rather than a hand edit — a hand edit is not reproducible, cannot be re-run against a
 # fresh pull, and cannot be reviewed as a diff against a stated rule.
 #
-# The rule, in one sentence: a **credential literal** is the inline scalar value of a key named
-# `accessId`, `accessToken` or `token` that is at least sixteen characters of hex digits and dashes,
-# and every such literal is replaced — wherever it occurs, under any key — by the same literal with
-# every hex digit zeroed. Two consequences are the point of spelling it that way:
+# Three classes of thing come out, discovered from the source rather than hardcoded here — no secret,
+# address or number is written into this repository, not even into the thing that removes them:
+#
+#   1. **Credentials.** The inline scalar value of a key named `accessId`, `accessToken` or `token`
+#      that is at least sixteen characters of hex digits and dashes. Replaced by the same literal with
+#      every hex digit zeroed.
+#   2. **Email addresses.** Any address that is not on the short `publishable_addresses` allowlist —
+#      so a new one in a future pull comes out by default. This class is **not** credentials, and that
+#      is exactly why it needs stating: `will+test@babelforce.com` is a named individual's work
+#      address and `trautomations@…​.iam.gserviceaccount.com` is an internal GCP service-account
+#      identity. Neither is a secret; both are things a public repository must not carry, and
+#      repository history makes either expensive to undo once pushed.
+#   3. **Telephone numbers.** Any phone-keyed value that is not one of the constructed
+#      `+49 30 0000 00xx` numbers the call examples are written against.
+#
+# What is deliberately **kept**: `Testers Inc.`, `Will Tester`, `firstName: Will`. Once the address
+# and the number are gone these are fixture labels with nothing contactable behind them — `Tester`
+# and `Testers Inc.` are self-evidently constructed, and a bare first name identifies nobody. Removing
+# them would cost the examples their readability and buy no privacy. Recorded here so the decision is
+# reviewable rather than merely observable.
+#
+# The credential rule, in one sentence, because two consequences are the point of spelling it that
+# way: every such literal is replaced *wherever it occurs, under any key*.
 #
 #   - **Only values are scrubbed.** A schema property declaration (`accessId:` with the value on the
 #     following lines) carries no inline scalar and is left alone, so `components.securitySchemes` and
@@ -76,6 +95,27 @@ credential_keys='accessId|accessToken|token'
 # shortest credential in them (a 32-character token).
 credential_shape='[0-9a-fA-F][0-9a-fA-F-]{15,}'
 
+# A key whose inline scalar value is treated as a telephone number.
+phone_keys='phone|phoneNumber|msisdn|number|from|to'
+
+# Addresses that may be published as they stand. Everything else that looks like an email address is
+# scrubbed, so a new address in a future pull comes out by default rather than travelling on the
+# strength of nobody having noticed it.
+#
+#   - `support@babelforce.com` is `info.contact.email`: the vendor's own published support contact,
+#     a role address rather than a person, and real API metadata a caller wants.
+#   - Anything at a domain RFC 2606 reserves for documentation is fictional by construction, which is
+#     what an example address ought to be. Matched structurally rather than enumerated, so the
+#     replacement below needs no entry of its own and neither does the next example address upstream
+#     writes.
+publishable_addresses='support@babelforce.com'
+reserved_domains='example.com|example.net|example.org'
+redacted_address='redacted@example.com'
+
+# Numbers that may be published as they stand: the constructed `+49 30 0000 00xx` family the call
+# examples are written against. They carry no subscriber and are what makes those examples readable.
+synthetic_numbers='+493000000000 +493000000001 +493000000099'
+
 # Internal markers, mirroring `manager-sdk/scripts/leak-markers.regex` — which is the authority and
 # stays internal, so this is a copy rather than a reference.
 #
@@ -90,8 +130,15 @@ markers='gitlab|nexus|\.dkr\.ecr|amazonaws\.com|latest\.dev|rc\.dev|preproductio
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
+# Escape a literal for use inside an ERE pattern. Not optional: `will+test@babelforce.com` contains a
+# `+`, which is a repetition operator, so an unescaped literal would match `willtest@…`, `willtttest@…`
+# and never the address itself — a substitution that silently does nothing.
+ere_escape() {
+    printf '%s' "$1" | sed -E 's/[][()|.*+?^$\\{}]/\\&/g'
+}
+
 # ---------------------------------------------------------------------------------------------
-# 1. Discover the credential literals, across all five documents at once.
+# 1. Discover what has to come out, across all five documents at once.
 # ---------------------------------------------------------------------------------------------
 sources=()
 for name in "${documents[@]}"; do
@@ -103,33 +150,90 @@ for name in "${documents[@]}"; do
     sources+=("$file")
 done
 
+# `kind<TAB>literal<TAB>replacement`, one per line. Three discovery passes write into it and one
+# substitution pass reads it, so adding a fourth class of thing-that-must-not-ship is a new pass here
+# and nothing else.
+: >"$work/substitutions"
+
+# (a) Credentials. Zeroed rather than deleted: the shape and the length still say "a 32-character
+#     token belongs here" while the entropy is gone.
 grep -hE "^[[:space:]]*(${credential_keys}):[[:space:]]*${credential_shape}[[:space:]]*$" "${sources[@]}" |
     sed -E -e 's/^[^:]*:[[:space:]]*//' -e 's/[[:space:]]+$//' |
-    sort -u >"$work/literals"
+    sort -u >"$work/credentials"
 
-if [ ! -s "$work/literals" ]; then
+if [ ! -s "$work/credentials" ]; then
     echo "no credential literals found under keys (${credential_keys}) — the discovery rule has" >&2
     echo "gone stale against the upstream documents. Refusing to vendor unscrubbed bytes." >&2
     exit 1
 fi
 
+while read -r literal; do
+    printf 'credential\t%s\t%s\n' "$literal" "$(printf '%s' "$literal" | sed 's/[0-9a-fA-F]/0/g')" \
+        >>"$work/substitutions"
+done <"$work/credentials"
+
+# (b) Email addresses. Not credentials — which is exactly why they need saying out loud: a named
+#     individual's work address and an internal GCP service-account identity are both things a public
+#     repository must not carry, and neither is a secret. The allowlist is what makes this fail closed:
+#     an address is scrubbed unless somebody has deliberately declared it publishable.
+grep -hoE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' "${sources[@]}" |
+    sort -u >"$work/addresses"
+
+while read -r address; do
+    case " $publishable_addresses " in
+    *" $address "*) continue ;;
+    esac
+    if printf '%s' "$address" | grep -qE "@(${reserved_domains})\$"; then
+        continue
+    fi
+    printf 'address\t%s\t%s\n' "$address" "$redacted_address" >>"$work/substitutions"
+done <"$work/addresses"
+
+# (c) Telephone numbers. The documents use one constructed family (`+49 30 0000 00xx`) for every call
+#     example; those are worth keeping, because they are what makes the examples readable. Anything
+#     else under a phone key is treated as a real subscriber number and zeroed like a credential.
+grep -hE "^[[:space:]]*(${phone_keys}):[[:space:]]*'?\+?[0-9]{8,}'?[[:space:]]*$" "${sources[@]}" |
+    sed -E -e 's/^[^:]*:[[:space:]]*//' -e "s/'//g" -e 's/[[:space:]]+$//' |
+    sort -u >"$work/numbers"
+
+while read -r number; do
+    case " $synthetic_numbers " in
+    *" $number "*) continue ;;
+    esac
+    printf 'number\t%s\t%s\n' "$number" "$(printf '%s' "$number" | sed 's/[0-9]/0/g')" \
+        >>"$work/substitutions"
+done <"$work/numbers"
+
 # ---------------------------------------------------------------------------------------------
-# 2. Build the substitution: every literal, under any key, zeroed and quoted.
+# 2. Build the substitution: every literal, wherever it occurs, replaced in kind.
 # ---------------------------------------------------------------------------------------------
 : >"$work/scrub.sed"
 : >"$work/redactions"
-while read -r literal; do
-    zeroed=$(printf '%s' "$literal" | sed 's/[0-9a-fA-F]/0/g')
-    # The format string is single-quoted deliberately: in double quotes bash collapses `\\1` to `\1`
-    # before printf sees it, and printf then reads `\1` as an *octal escape* — which silently emits a
-    # 0x01 byte in place of the backreference and rewrites `accessId: <literal>` to a line with no key
-    # at all. The `no_control_character` guard below is what caught it.
-    printf 's|^([[:space:]]*[A-Za-z_][A-Za-z0-9_]*):[[:space:]]*%s[[:space:]]*$|\\1: '\''%s'\''|\n' \
-        "$literal" "$zeroed" >>"$work/scrub.sed"
+while IFS=$'\t' read -r kind literal replacement; do
+    pattern=$(ere_escape "$literal")
+
+    # The format strings are single-quoted deliberately: in double quotes bash collapses `\\1` to
+    # `\1` before printf sees it, and printf then reads `\1` as an *octal escape* — which silently
+    # emits a 0x01 byte in place of the backreference and rewrites `accessId: <literal>` to a line
+    # with no key at all. The control-character guard below is what caught it.
+    case "$kind" in
+    address)
+        # Global and unanchored: an address in a description is as public as one in an example, and
+        # the literal is distinctive enough that a substring match cannot catch anything else.
+        printf 's|%s|%s|g\n' "$pattern" "$replacement" >>"$work/scrub.sed"
+        ;;
+    *)
+        # Anchored to a whole `key: value` line, so a substitution can never rewrite part of a longer
+        # scalar. The optional quotes are for the phone numbers, which upstream already quotes.
+        printf 's|^([[:space:]]*[A-Za-z_][A-Za-z0-9_]*):[[:space:]]*'\''?%s'\''?[[:space:]]*$|\\1: '\''%s'\''|\n' \
+            "$pattern" "$replacement" >>"$work/scrub.sed"
+        ;;
+    esac
+
     digest=$(printf '%s' "$literal" | sha256sum | cut -d' ' -f1)
     occurrences=$(grep -cF "$literal" "${sources[@]}" | awk -F: '{ total += $2 } END { print total }')
-    printf '%s %s %s\n' "$digest" "$zeroed" "$occurrences" >>"$work/redactions"
-done <"$work/literals"
+    printf '%s\t%s\t%s\t%s\n' "$kind" "$digest" "$replacement" "$occurrences" >>"$work/redactions"
+done <"$work/substitutions"
 
 # ---------------------------------------------------------------------------------------------
 # 3. Scrub, verify, and write.
@@ -145,13 +249,13 @@ for name in "${documents[@]}"; do
 
     sed -E -f "$work/scrub.sed" "$upstream" >"$work/$name.yaml"
 
-    # Fail-closed: no literal may survive, anywhere, under any key.
-    while read -r literal; do
+    # Fail-closed: no literal of any kind may survive, anywhere, under any key.
+    while IFS=$'\t' read -r kind literal _; do
         if grep -qF "$literal" "$work/$name.yaml"; then
-            echo "a credential literal survived the scrub in $name.openapi.yaml — refusing to write" >&2
+            echo "a scrubbed $kind literal survived in $name.openapi.yaml — refusing to write" >&2
             exit 1
         fi
-    done <"$work/literals"
+    done <"$work/substitutions"
 
     if grep -qE "$markers" "$work/$name.yaml"; then
         echo "an internal marker appears in $name.openapi.yaml — refusing to write:" >&2
@@ -219,24 +323,32 @@ done
 # document unattended; what `upstream_sha256` buys back is that it can still *detect* the drift, since
 # the hash of the unscrubbed bytes is what upstream served (`LockEntry::upstream_spec_sha256`, C-25).
 #
-# `[[redaction]]` records the scrub itself, by digest. A credential literal cannot be written down
-# here — that is the entire point — so what is recorded is its SHA-256, which is enough for
-# `crates/connector-spec/tests/vendored_specs.rs` to refuse the literal's return under any key, in any
-# document, forever, while publishing nothing.
+# `[[redaction]]` records the scrub itself, by digest, in three kinds — `credential`, `address` and
+# `number`. A scrubbed literal cannot be written down here, which is the entire point, so what is
+# recorded is its SHA-256. That is enough for `crates/connector-spec/tests/vendored_specs.rs` to refuse
+# the literal's return under any key, in any document, forever, while publishing nothing.
+#
+# The `address` and `number` kinds are not credentials, and are removed anyway: a named individual's
+# work address and an internal service-account identity are both things a public repository must not
+# carry, and repository history makes either expensive to undo once pushed.
 
 version = 1
 HEADER
     cat "$work/provenance-entries"
-    while read -r digest zeroed occurrences; do
+    while IFS=$'\t' read -r kind digest replacement occurrences; do
         cat <<ENTRY
 
 [[redaction]]
+kind = "$kind"
 sha256 = "$digest"
-replaced_with = "$zeroed"
+replaced_with = "$replacement"
 occurrences = $occurrences
 ENTRY
     done <"$work/redactions"
 } >"$provenance"
 
 echo "vendored ${#documents[@]} documents into $out_dir"
-echo "redacted $(wc -l <"$work/literals") credential literals; provenance in $provenance"
+echo "redacted $(wc -l <"$work/substitutions") literals" \
+    "($(grep -c '^credential' "$work/substitutions") credential," \
+    "$(grep -c '^address' "$work/substitutions") address," \
+    "$(grep -c '^number' "$work/substitutions") number); provenance in $provenance"

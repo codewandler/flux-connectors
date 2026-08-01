@@ -931,7 +931,7 @@ components:
           type: object
           additionalProperties: true
           example:
-            iss: trautomations@taskrouterautomations.iam.gserviceaccount.com
+            iss: redacted@example.com
             aud: https://oauth2.googleapis.com/token
             scope: https://www.googleapis.com/auth/spreadsheets
         header:

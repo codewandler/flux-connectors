@@ -1,5 +1,5 @@
-//! The vendored babelforce documents carry no credential and no internal marker, and say where they
-//! came from.
+//! The vendored babelforce documents carry no credential, no personal identity and no internal
+//! marker, and say where they came from.
 //!
 //! `providers/babelforce.toml` spent five paragraphs explaining why the one authoritative description
 //! of this API was *not* in the repository: the upstream document embeds a credential-shaped example
@@ -12,18 +12,24 @@
 //! rule does not recognise. A test that re-derived the answer from the script would agree with the
 //! script in both cases.
 //!
-//! # The four gates, and why each is not redundant with the others
+//! # The gates, and why each is not redundant with the others
 //!
 //! - [`no_credential_shaped_example_value_survives`] is **shape-based and forward-looking**. It knows
 //!   no secrets; it refuses any hex-and-dash value of sixteen characters or more under a
-//!   credential-named key. A future pull that introduces a *new* token fails here, which is the only
-//!   one of these gates that can catch something nobody has seen yet.
-//! - [`the_known_credential_literals_can_never_reappear`] is **exact and backward-looking**. It reads
-//!   the SHA-256 of each scrubbed literal from the provenance file and refuses that literal's return
-//!   anywhere, under any key, in any document. The digests are safe to publish and the literals are
-//!   not, which is the whole reason the denylist is spelled in digests. This gate is what catches the
-//!   case the shape gate structurally cannot: in these documents the `accessId` value is **reused as
-//!   a plain `id:`** three lines above itself, and a key-scoped rule would have left it there.
+//!   credential-named key. A future pull that introduces a *new* token fails here, which is what these
+//!   shape gates can do and the exact gate below cannot: catch something nobody has seen yet.
+//! - [`no_personal_identity_survives_in_a_vendored_document`] is the same instrument pointed at a
+//!   different class. Neither an email address nor a telephone number is a credential, and that
+//!   distinction is not the one that matters in a public repository: the upstream documents carry a
+//!   named individual's work address and an internal GCP service-account identity. Both halves are
+//!   allowlists, so a new address or number in a future pull fails by default rather than travelling
+//!   on the strength of nobody having listed it.
+//! - [`no_scrubbed_literal_can_ever_reappear`] is **exact and backward-looking**. It reads the SHA-256
+//!   of each scrubbed literal from the provenance file and refuses that literal's return anywhere,
+//!   under any key, in any document. The digests are safe to publish and the literals are not, which
+//!   is the whole reason the denylist is spelled in digests. This gate is what catches the case the
+//!   shape gates structurally cannot: in these documents the `accessId` value is **reused as a plain
+//!   `id:`** three lines above itself, and a key-scoped rule would have left it there.
 //! - [`the_declarations_survive_the_scrub`] is the **counterweight**. Every gate above is satisfied by
 //!   deleting the documents, and a scrub that removed the `accessId`/`accessToken` declarations would
 //!   be a silent regression rather than a safety win: `providers/babelforce.toml` excludes the
@@ -59,6 +65,36 @@ const DOCUMENTS: [&str; 5] = [
 
 /// Keys whose inline scalar value is a credential in these documents.
 const CREDENTIAL_KEYS: [&str; 3] = ["accessId", "accessToken", "token"];
+
+/// Keys whose inline scalar value is a telephone number in these documents.
+const PHONE_KEYS: [&str; 6] = ["phone", "phoneNumber", "msisdn", "number", "from", "to"];
+
+/// Email addresses a vendored document may carry, named one by one.
+///
+/// An allowlist rather than a denylist, and that direction is the whole point: a future pull that
+/// introduces a new address is scrubbed by default and fails here if it is not, instead of travelling
+/// into a public repository because nobody had thought to name it.
+const PUBLISHABLE_ADDRESSES: [&str; 1] = [
+    // The vendor's own published support contact — this is `info.contact.email`, real API metadata
+    // rather than an individual, and removing it would delete something a caller wants.
+    "support@babelforce.com",
+];
+
+/// Domains RFC 2606 reserves for documentation. An address at one of these is fictional by
+/// construction, which is what an example address ought to be — so `jordan.lee@example.com` needs no
+/// individual entry, and neither does the scrub's own `redacted@example.com` replacement.
+///
+/// This is the same shape as the credential rule: the predicate accepts the redacted form
+/// structurally rather than by enumerating it, so the gate and the scrub stay exact complements.
+const RESERVED_EMAIL_DOMAINS: [&str; 3] = ["example.com", "example.net", "example.org"];
+
+/// Telephone numbers a vendored document may carry.
+///
+/// The documents use one synthetic family — `+49 30 0000 00xx`, a Berlin prefix followed by zeros —
+/// for every call example. Those are constructed, carry no subscriber, and are worth keeping: they
+/// are what makes the call examples readable. Anything else under a phone key is treated as a real
+/// number and scrubbed.
+const SYNTHETIC_NUMBERS: [&str; 3] = ["+493000000000", "+493000000001", "+493000000099"];
 
 /// Hosts a vendored document may name.
 ///
@@ -205,6 +241,60 @@ fn is_credential_shaped(value: &str) -> bool {
     value.len() >= 16
         && value.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
         && value.chars().any(|c| c.is_ascii_hexdigit() && c != '0')
+}
+
+/// Whether a scalar is email-shaped: something, an `@`, and a dotted domain.
+///
+/// Deliberately loose. The question this answers is "could a human read an identity out of this",
+/// not "is this RFC 5322 valid", and a loose predicate over-reports into an allowlist rather than
+/// under-reporting into a public repository.
+fn is_email_shaped(value: &str) -> bool {
+    let Some((local, domain)) = value.split_once('@') else {
+        return false;
+    };
+    !local.is_empty()
+        && domain.contains('.')
+        && !domain.starts_with('.')
+        && !domain.ends_with('.')
+        && !domain.contains(' ')
+        && !local.contains(' ')
+}
+
+/// Every email-shaped token in `text`, wherever it sits — an inline scalar, a sentence of prose, a
+/// description. The scrub is value-scoped, so the gate must be text-scoped or it would agree with the
+/// scrub about exactly the places the scrub looked.
+fn email_tokens(text: &str) -> BTreeSet<String> {
+    text.split(|c: char| c.is_whitespace() || matches!(c, '\'' | '"' | ',' | ';' | '<' | '>' | '('))
+        .map(|token| token.trim_end_matches(['.', ')', ']', '}']))
+        .filter(|token| is_email_shaped(token))
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Every run of eight or more decimal digits in `text`, with any leading `+` kept.
+///
+/// Eight is below the shortest national subscriber number worth worrying about and above the
+/// timestamps and counts these documents are full of.
+fn digit_runs(text: &str) -> BTreeSet<String> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut runs = BTreeSet::new();
+    let mut index = 0;
+    while index < chars.len() {
+        if !chars[index].is_ascii_digit() {
+            index += 1;
+            continue;
+        }
+        let start = index;
+        while index < chars.len() && chars[index].is_ascii_digit() {
+            index += 1;
+        }
+        if index - start >= 8 {
+            let plus = start > 0 && chars[start - 1] == '+';
+            let from = if plus { start - 1 } else { start };
+            runs.insert(chars[from..index].iter().collect::<String>());
+        }
+    }
+    runs
 }
 
 /// Every maximal hex-and-dash run of sixteen characters or more in `text`.
@@ -358,6 +448,69 @@ fn no_credential_shaped_example_value_survives() {
     );
 }
 
+// ---------------------------------------------------------------------------------------------
+// Personal and internal identities
+// ---------------------------------------------------------------------------------------------
+
+/// No address or telephone number that identifies a person or an internal system survives.
+///
+/// Neither is a credential, and this gate exists because that distinction is not the one that
+/// matters here. The story's Goal is "nothing in them that a public repository must not carry", and
+/// a named individual's work address sits inside that sentence as squarely as a token does — as does
+/// an internal GCP service-account identity, which names a project as well as a role. Repository
+/// history makes both expensive to undo once pushed, which is why this is a gate and not a follow-up.
+///
+/// Allowlist-shaped in both halves, so a new address or a new number in a future pull fails here by
+/// default rather than travelling on the strength of nobody having listed it.
+#[test]
+fn no_personal_identity_survives_in_a_vendored_document() {
+    let mut hits: Vec<String> = Vec::new();
+
+    for (name, text) in vendored() {
+        for token in email_tokens(&text) {
+            let domain = token
+                .split_once('@')
+                .map(|(_, domain)| domain)
+                .unwrap_or("");
+            let publishable = PUBLISHABLE_ADDRESSES.contains(&token.as_str())
+                || RESERVED_EMAIL_DOMAINS.contains(&domain);
+            if !publishable {
+                hits.push(format!("{name} — the address `{token}`"));
+            }
+        }
+
+        for (number, line) in text.lines().enumerate() {
+            let Some((key, value)) = inline_scalar(line) else {
+                continue;
+            };
+            if !PHONE_KEYS.contains(&key) {
+                continue;
+            }
+            let digits = value.trim_start_matches('+');
+            let is_number = digits.len() >= 8 && digits.chars().all(|c| c.is_ascii_digit());
+            let is_scrubbed = digits.chars().all(|c| c == '0');
+            if is_number && !is_scrubbed && !SYNTHETIC_NUMBERS.contains(&value) {
+                hits.push(format!("{name}:{} — the number under `{key}`", number + 1));
+            }
+        }
+    }
+
+    assert!(
+        hits.is_empty(),
+        "a vendored document carries an address or a telephone number that identifies someone. This \
+         repository is public, and repository history makes this expensive to undo after a push. \
+         Re-run `scripts/vendor-babelforce-specs.sh <path-to-manager-sdk/specs>`. If the value is \
+         genuinely publishable — a vendor's own support contact, a reserved example domain, a \
+         constructed test number — add it to `PUBLISHABLE_ADDRESSES` or `SYNTHETIC_NUMBERS` with a \
+         note saying which it is.\n  {}",
+        hits.join("\n  ")
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// The exact denylist
+// ---------------------------------------------------------------------------------------------
+
 /// The literals that *were* scrubbed cannot come back, under any key, in any document.
 ///
 /// The denylist is the set of SHA-256 digests the scrub recorded in the provenance file. A digest is
@@ -366,8 +519,13 @@ fn no_credential_shaped_example_value_survives() {
 /// This is the gate that covers the reuse case, and the reuse case is not hypothetical: in these
 /// documents the `accessId` value is also the `customer.id` of the same example account, three lines
 /// above. A rule scoped to credential-named keys would have scrubbed one and left the other.
+///
+/// It covers every kind the scrub removes — credentials, addresses, telephone numbers — because the
+/// denylist is a set of digests and does not care what the preimage was. The three candidate
+/// extractors below are what make that true in practice: a literal is only refused if the scan can
+/// see it, so each kind the scrub can remove needs a scan that can find it.
 #[test]
-fn the_known_credential_literals_can_never_reappear() {
+fn no_scrubbed_literal_can_ever_reappear() {
     let denied: BTreeMap<String, String> = provenance()
         .get("redaction")
         .and_then(toml::Value::as_array)
@@ -400,8 +558,12 @@ fn the_known_credential_literals_can_never_reappear() {
 
     let mut hits: Vec<String> = Vec::new();
     for (name, text) in vendored() {
-        for run in hex_runs(&text) {
-            let digest = sha256_hex(run.as_bytes());
+        let mut candidates = hex_runs(&text);
+        candidates.extend(email_tokens(&text));
+        candidates.extend(digit_runs(&text));
+
+        for candidate in candidates {
+            let digest = sha256_hex(candidate.as_bytes());
             if let Some(replacement) = denied.get(&digest) {
                 hits.push(format!(
                     "{name} — a literal digesting to {digest}, which the scrub replaced with `{replacement}`"
@@ -412,7 +574,7 @@ fn the_known_credential_literals_can_never_reappear() {
 
     assert!(
         hits.is_empty(),
-        "a credential literal that was scrubbed out has reappeared in a vendored document:\n  {}",
+        "a literal that was scrubbed out has reappeared in a vendored document:\n  {}",
         hits.join("\n  ")
     );
 }

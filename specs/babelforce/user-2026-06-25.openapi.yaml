@@ -269,7 +269,7 @@ components:
       example:
         user:
           id: 8b41513d-a95c-4c48-a48c-168d66320dca
-          username: will+test@babelforce.com
+          username: redacted@example.com
           roles:
             - manager
             - owner
@@ -278,10 +278,10 @@ components:
         customer:
           id: '00000000-0000-0000-0000-000000000000'
           company: Testers Inc.
-          phone: '442076386622'
+          phone: '000000000000'
           firstName: Will
           lastName: Tester
-          email: will+test@babelforce.com
+          email: redacted@example.com
           dateCreated: 2021-02-03T16:47:42.000Z
           settings:
             enabled: true
@@ -309,7 +309,7 @@ components:
         item:
           user:
             id: 8b41513d-a95c-4c48-a48c-168d66320dca
-            username: will+test@babelforce.com
+            username: redacted@example.com
             roles:
               - manager
               - owner
@@ -318,10 +318,10 @@ components:
           customer:
             id: '00000000-0000-0000-0000-000000000000'
             company: Testers Inc.
-            phone: '442076386622'
+            phone: '000000000000'
             firstName: Will
             lastName: Tester
-            email: will+test@babelforce.com
+            email: redacted@example.com
             dateCreated: 2021-02-03T16:47:42.000Z
             settings:
               enabled: true
