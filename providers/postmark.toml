@@ -162,6 +162,7 @@ default_auth = [{ credentials = ["postmark.server_token"] }]
 # `account` surface was withheld because eliding it now would move every operation's gid.
 [[services]]
 name = "server"
+tags = ["email"]
 description = "Postmark's own \"Server API\" naming: send mail and read one server's delivery stats and bounces. Authenticates with the Server Token; the Account Token cannot reach this surface at all"
 
 # **There is deliberately no `[[services]]` entry for `account`.** Both of the Account API operations

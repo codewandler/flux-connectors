@@ -126,6 +126,15 @@ description = "LaunchDarkly API access token, sent as the entire value of the Au
 # Operations — 5: four reads, one high-risk write
 # ---------------------------------------------------------------------------------------------
 
+[[services]]
+# C-153. `default` is the reserved implicit service, and a provider with one API surface
+# declares no services at all — so this entry exists for exactly one reason: a tag attaches
+# to a service, and there is no other service here to attach it to. It carries `tags` and
+# nothing else, which is what keeps `default` implicit and this file emitting the same
+# `launchdarkly.flux` it emitted before.
+name = "default"
+tags = ["developer-tools"]
+
 [[operations]]
 id = "launchdarkly-project-list"
 method = "GET"

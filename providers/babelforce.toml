@@ -139,6 +139,7 @@ default_auth = [{ credentials = ["babelforce.access_token"] }]
 
 [[services]]
 name = "manager"
+tags = ["telephony"]
 description = "The manager API: agents, calls, sessions, outbound, phonebook, reporting and account administration"
 
 # **There is deliberately no `[[services]]` entry for `auth`.** All three `/oauth/*` endpoints are
@@ -151,10 +152,12 @@ description = "The manager API: agents, calls, sessions, outbound, phonebook, re
 
 [[services]]
 name = "user"
+tags = ["telephony"]
 description = "The signed-in user and the accounts they can reach"
 
 [[services]]
 name = "task-automation"
+tags = ["telephony"]
 description = "Task automation: submission, scripts, secrets and metrics"
 # `/api/v3`, not the connector's `v2`. Stated rather than inherited, because the gid a caller sees
 # for this service should be the version the vendor actually serves it under.
@@ -162,6 +165,7 @@ api_version = "v3"
 
 [[services]]
 name = "task-schedule"
+tags = ["telephony"]
 description = "Scheduled tasks: creating, listing and cancelling a schedule"
 api_version = "v3"
 

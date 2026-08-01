@@ -351,8 +351,11 @@ fn no_inbound_surface_is_declared() {
         connector.channels.is_empty(),
         "this connector declares a channel binding — same hazard as an event"
     );
+    // Since C-153 a single-surface provider does carry one `[[services]]` entry, holding only the
+    // `tags` it has nowhere else to put. What this story needs is that no *named* service appears —
+    // `is_default_only` is that claim, and it is the one the manifest round-trip actually rests on.
     assert!(
-        connector.services.is_empty(),
+        connector.is_default_only(),
         "this connector declares a named service — it must stay single-surface (the reserved \
          default service) for this story"
     );

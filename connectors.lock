@@ -6,8 +6,8 @@ version = 1
 [[provider]]
 id = "airtable"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "3484b14b7af956dce8f144300db4d5e78a6b06edb789d3f8b59ef9906f49f8e3"
-ir_sha256 = "d5e3240f7b41245e6bd64ce27947648f23a3c6eebe6116a2b0c815a79ced5ad5"
+toml_sha256 = "22cb3c380f752876848aac9533c2d2c13d983960d6d6553206f3a65608566fd1"
+ir_sha256 = "978e4c3e3392b6fb8672e4613182b393fd39f09a1ca1bce73f425b8a425c8675"
 
 [provider.artifacts]
 "connectors/airtable.connector.toml" = "17393c40b92331706f5c58764a98ca065d95e30f2f6577a276d793fb9f985e23"
@@ -21,8 +21,8 @@ ir_sha256 = "d5e3240f7b41245e6bd64ce27947648f23a3c6eebe6116a2b0c815a79ced5ad5"
 [[provider]]
 id = "algolia"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "1fe53f1801a901ee4d6bc5cb76d6c2c39da9ce0e70b879528473ced13dd7d2a1"
-ir_sha256 = "8fa16686ab119b233f7f463e4ab0e3c284a0cd1f7af40320939e0fafcfe431f9"
+toml_sha256 = "3c523608929254f5a730242e2378a4a3919a2c4c01838d92a1c459dc35ac11db"
+ir_sha256 = "a1ffd1a0d6e3dc59156900767ff419581b8ae9963e96584061a6b2b75076c6c7"
 
 [provider.artifacts]
 "connectors/algolia.connector.toml" = "b9f706f35f86fa26d90e49829e53d99d67d4777e1e4cc428979e506a8f2ee80d"
@@ -37,8 +37,8 @@ ir_sha256 = "8fa16686ab119b233f7f463e4ab0e3c284a0cd1f7af40320939e0fafcfe431f9"
 [[provider]]
 id = "anthropic"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "ef94c218b0d19bf5f95e5956f8ac429ba083744c106d8985726937e9e12a8a7b"
-ir_sha256 = "888a0f11c1a3f9fa9ada5ce00408f37aecf73f71a944cb718fbf9fdbb4e79b6e"
+toml_sha256 = "02094a5c7527aaa20b3743d8d214c68bd9be78667763b5b4e81ff0e657d3c273"
+ir_sha256 = "af403dd33ac540bc9316913c4666a0c6aa9305fd1886b2108a3b7a6b141c475c"
 
 [provider.artifacts]
 "connectors/anthropic-admin.connector.toml" = "7994ec1da77adb89818a202621cb0f5a32056d45dfcf3ce8100f1b8b3fd5cc63"
@@ -55,8 +55,8 @@ ir_sha256 = "888a0f11c1a3f9fa9ada5ce00408f37aecf73f71a944cb718fbf9fdbb4e79b6e"
 [[provider]]
 id = "asana"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "fc7f6c4fd29a3f1269a6eece1e94ce4a634ede09f3fc1a72beb7aff957312589"
-ir_sha256 = "44dcf9556ac04eef1d9c529533b46f768b91a0bb1465056d9c58e602e16882a7"
+toml_sha256 = "9750c0b0339c8a95d640be5918d1e55c71d1d67de2e6bff5612b2823ff63115e"
+ir_sha256 = "1eab5cf0017fd99d07aa7e4b1816fad428624d069aa2215884770adee9d569cb"
 
 [provider.artifacts]
 "connectors/asana.connector.toml" = "0b668e23f9f63e42eb29d8bb8671a156e55f1487f2df6679d99055da692a1f2d"
@@ -71,8 +71,8 @@ ir_sha256 = "44dcf9556ac04eef1d9c529533b46f768b91a0bb1465056d9c58e602e16882a7"
 [[provider]]
 id = "babelforce"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "8faa3a10db2f59d00f24795903516808ac5150742990ff5fa81c2aea2d1fc791"
-ir_sha256 = "ad38943aa39cb463f20e1606f3be9f45614875c76f2dc18c1680c92c189cbc88"
+toml_sha256 = "1dc1f5684598d5da0cee7768730e814ee8fd7c40bb1cd7dad07e61cc278cc16c"
+ir_sha256 = "d2640a8f15bb710ee9d27bf70ff69fee25b88608ee94c6ae5c343c73d789330b"
 
 [[provider.specs]]
 path = "specs/babelforce/manager-2026-07-10.openapi.yaml"
@@ -500,8 +500,8 @@ sha256 = "031327359000bd70d6b2ab012868971cc834812e5f61f5157531e7cb5daa4d85"
 [[provider]]
 id = "bitbucket"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "15cee848a4ed05cc797f7e31cf80717d02eef93705587cfb3bee8b3904e117d9"
-ir_sha256 = "36e37d7ea2a906af0f05a9bcc92f71c3f7e05727084d7264ac03f6867f905609"
+toml_sha256 = "ffe5fa21be56f9754b6dda37d8d67d6d1227ebb18dda7f34b3d6914c007b1151"
+ir_sha256 = "dd0cfbd4c6dae8ca085e39ffdd38aea2d650820e9b42e2f8cf774b2124b116d4"
 
 [provider.artifacts]
 "connectors/bitbucket.connector.toml" = "b28d10fd10b86dc55e7d2d240850d9be700d7ddd5281902d6ded2ad254141c60"
@@ -518,8 +518,8 @@ ir_sha256 = "36e37d7ea2a906af0f05a9bcc92f71c3f7e05727084d7264ac03f6867f905609"
 [[provider]]
 id = "box"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "841de329dcf79635e92c77ec6291e9c8a3e4ad1e68536053405ebd4c2b4bb358"
-ir_sha256 = "572787d7a7dbeba757a0decc49a14efd7f521ecb08e4adec13910424f89dd6e2"
+toml_sha256 = "9e20a00865d860d94ffdfa8ba98af504d3af8b8f9ceb22caf75549339fd4a87b"
+ir_sha256 = "126f3d509eb2e13ef0158cab4640b209a01265035bc2acd43bdb0f93a46f56f0"
 
 [provider.artifacts]
 "connectors/box.connector.toml" = "76984c33132d3bcc4f7ad5b0887a75e993b1b0569a136bb02d6317b464d58c08"
@@ -535,8 +535,8 @@ ir_sha256 = "572787d7a7dbeba757a0decc49a14efd7f521ecb08e4adec13910424f89dd6e2"
 [[provider]]
 id = "calendly"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "f2e0037c9a63b429d7ade72931427efac399d92e9bd107fc29c3d83aa7721bcc"
-ir_sha256 = "b98c02d7e2ac5e1e4d229c20a4142cda2222f737b784e2d794d92ec2268f1401"
+toml_sha256 = "c9783e894940e1e60f41508e6bbc82f407a3375c1e01b844a3bd57a05ffdbdd8"
+ir_sha256 = "f9a2cf657c8b0ad012a847e9d0bf1be25d7816bd46b5a8a95d9b18a6a8095f54"
 
 [provider.artifacts]
 "connectors/calendly.connector.toml" = "1132c31ec24c82f05c5cc820c99733c3e3aea8b98e1a59395c63a5b691faf9a1"
@@ -551,8 +551,8 @@ ir_sha256 = "b98c02d7e2ac5e1e4d229c20a4142cda2222f737b784e2d794d92ec2268f1401"
 [[provider]]
 id = "clickup"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "31b2c4a8b688570a24805335cbb860ef972fe2214b377d11eb78211dfcd24cc2"
-ir_sha256 = "4d7187a930b4fe2926fd0e28ed22854ab73b4a9380acd516cd7aca2b2e262f14"
+toml_sha256 = "f069c28c35c120429099065b980a5ac11e45c9ce2b05a0c6ebb094edc91e35ad"
+ir_sha256 = "e6ea84606886ae4d6fa1b742b4dfeef09ce5a999dc816ec182ab7476450271f0"
 
 [provider.artifacts]
 "connectors/clickup.connector.toml" = "3874befefee11daba96da05541af8e967b57a08ac1cb215a319994fb07a6dd45"
@@ -568,8 +568,8 @@ ir_sha256 = "4d7187a930b4fe2926fd0e28ed22854ab73b4a9380acd516cd7aca2b2e262f14"
 [[provider]]
 id = "cloudflare"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "49851190c8cefd08b5696bf1dcfa6111fede4fd8b137f371612ea813abed1ce7"
-ir_sha256 = "7b00794fe69aeba05356ce6a6ca9283c11a87c35f1849b0a42dfb8ec65bba68f"
+toml_sha256 = "37f1677679c9913f7915f3cf44ace271380076fd875396e1b3475c35858cbf16"
+ir_sha256 = "36e65779c766372905a76e3087a9c78b3621803f8b91cc451fbde4de90b7aedb"
 
 [provider.artifacts]
 "connectors/cloudflare.connector.toml" = "7054804e5e6694a6f06a337c4db675d471af7a0c9aa289941a2e81eba8901eca"
@@ -584,8 +584,8 @@ ir_sha256 = "7b00794fe69aeba05356ce6a6ca9283c11a87c35f1849b0a42dfb8ec65bba68f"
 [[provider]]
 id = "confluence"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "d7c80049a77ebc8c52ee56bb9893814ad035223cf61829ed54db5b74ba344f77"
-ir_sha256 = "6b8a21270674e55c9f976800fe08637abd685912b58212a0b97e2d393ff8a6ce"
+toml_sha256 = "48ece4f820a4c68cd872deb120eebcc50daba287ed08eea31ed8fdfa98d80d74"
+ir_sha256 = "86a07dc5cf2a23d48410bf13c7e2dee7c2b4bf1d8922851e4d4280a4b517ea65"
 
 [provider.artifacts]
 "connectors/confluence.connector.toml" = "99ca5e3f84c965bb68ae5b9cb0ff0d4d029173911c189dd47e7fd5c88ded15fc"
@@ -601,8 +601,8 @@ ir_sha256 = "6b8a21270674e55c9f976800fe08637abd685912b58212a0b97e2d393ff8a6ce"
 [[provider]]
 id = "contentful"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "11c9ef055e390bbb23a69213af3797c9e147fac90ac4b425fca6ab66783b348c"
-ir_sha256 = "bd45c031d735f983c917ad2099fe38c4b19e18fab3302375426625ae2ce0a063"
+toml_sha256 = "601690bef90e7a0b2c0183b92c1d3860358beb972bb145d23c9ae1ece4d7a203"
+ir_sha256 = "3db5de5c90c8c890a41a58d1ea0cbb2601ee310a65088376e6c0647050cd8d2b"
 
 [provider.artifacts]
 "connectors/contentful-delivery.connector.toml" = "35ecc7471fefd68a1596f25efcf9d0dc9a6c8c5ae8164785f927279ccc508dbe"
@@ -619,8 +619,8 @@ ir_sha256 = "bd45c031d735f983c917ad2099fe38c4b19e18fab3302375426625ae2ce0a063"
 [[provider]]
 id = "datadog"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "88c263372c62cbee02f324bf9741d4f8456bc6f0d9f1875c9cdb6661ea639a36"
-ir_sha256 = "ac61454bcfea29fd6423e3d210115d4fb3134bb83734216020d4a786e69680c8"
+toml_sha256 = "7bb164b80e5e67318e094e09ecef0c733d0292d1ca117a01d329377049f3b068"
+ir_sha256 = "55e2517f5dd41780cb9d7c349b0d3f3ec6f430ce78015e7631d42f82e0c62d45"
 
 [provider.artifacts]
 "connectors/datadog.connector.toml" = "3de09405c0ad8e9f0642795d5d633e576061db0283136314e1115e6ead44da4a"
@@ -634,8 +634,8 @@ ir_sha256 = "ac61454bcfea29fd6423e3d210115d4fb3134bb83734216020d4a786e69680c8"
 [[provider]]
 id = "discord"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "8e370a2f657643a9017cac35b147da7bb6abbfa8019e7fb6e5af06a1eb24536e"
-ir_sha256 = "6b9fd39a405f857b8551f7360e80a7321b6c64610da2bbbcb791723233f4a1a7"
+toml_sha256 = "d38ebb4f5c4917189725083d1c86858528ac53511455c5d85d9edc0c5393a0e7"
+ir_sha256 = "565f37f27ac8b45053dc659fc0c55b76240737d8334435e458c73e71e0444495"
 
 [provider.artifacts]
 "connectors/discord.connector.toml" = "4fb1dc5ea77cf2ed0574272fec49cd60c008907459f686dd1ad80290141131ef"
@@ -651,8 +651,8 @@ ir_sha256 = "6b9fd39a405f857b8551f7360e80a7321b6c64610da2bbbcb791723233f4a1a7"
 [[provider]]
 id = "docusign"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "219afb0284c1669736a52efcecfa278e6133d4356f71fe819ccffef5c28f264f"
-ir_sha256 = "2bd6c598ba496414af7beae9d35823605975bb9d5220a41e1b1d1202db0ce5b1"
+toml_sha256 = "45c6b9a98b206f4c53820b58db7bb75660ed46ec52fd8bb6adcdc13a7bd823c6"
+ir_sha256 = "2972d3b39783f6cf274a726767f10b9cd9885d4e7eb03c8827502c7c10d05154"
 
 [provider.artifacts]
 "connectors/docusign.connector.toml" = "af0c78feb4579f6d6df853c3e472ea940fafd83b8fadf5a1545e9133237e4e12"
@@ -668,8 +668,8 @@ ir_sha256 = "2bd6c598ba496414af7beae9d35823605975bb9d5220a41e1b1d1202db0ce5b1"
 [[provider]]
 id = "dropbox"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "9fe96a1b09706cd7533b78a30337d9c0a4690c926108e7918e59667523f9e913"
-ir_sha256 = "ac7a7badcd23d38fcf7c2d3fd0a1caa1a6c32a24f74d586fb4c39c303dfb44c8"
+toml_sha256 = "c2b458b28bdb9d576d25a44c5006875f7e8319c503e96d42d842a5addf38129c"
+ir_sha256 = "fc9aaa9eac7a8ee3c2e2cac91cfe524ee5fdcbec5688aae851ba0454e45b83fd"
 
 [provider.artifacts]
 "connectors/dropbox.connector.toml" = "311a67cfd9c7ecd67034ba8e16ee6a39ef3d8a90d6ef42bcc0f1024115da526c"
@@ -685,8 +685,8 @@ ir_sha256 = "ac7a7badcd23d38fcf7c2d3fd0a1caa1a6c32a24f74d586fb4c39c303dfb44c8"
 [[provider]]
 id = "figma"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "e4cf035511a433117dae791c3f1f3b3e0d71d963a1319344d44c47a359164de2"
-ir_sha256 = "bc0da6645f71c7257b5324e94a713df7d2a740ec6d78505947e4ae3bd93c5179"
+toml_sha256 = "30b9fcc390170987e4cd5f882f86f91d7208569319ce576a6f33e4d8ccc396ea"
+ir_sha256 = "bc1e4972649fe44c2d27b804cec009126771a1e466242fdc94a7dcdbdfa175a0"
 
 [provider.artifacts]
 "connectors/figma.connector.toml" = "c530e0456bde4041a731f91f097a86cc36a22e33d870d4a60f2040f55a80b64b"
@@ -702,8 +702,8 @@ ir_sha256 = "bc0da6645f71c7257b5324e94a713df7d2a740ec6d78505947e4ae3bd93c5179"
 [[provider]]
 id = "fly"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "5c8deb37e86cf762219027f3955f499181228a7077b0125c3337961bce856884"
-ir_sha256 = "5b15b4ce14c740444ff27f3cc299d957fd0dc7f0c63fa4e4739ab486b7d16864"
+toml_sha256 = "84dd3689b4643c640f63e2ebf1a261f8197184ccd842e25fa46056e74491d77d"
+ir_sha256 = "7ba5334935be35a7619f205ed2c86af13daef982891ed2dbe2ae43738794ea5e"
 
 [provider.artifacts]
 "connectors/fly-machines.connector.toml" = "3c883dc3421f7be51d39f0b040f725f5e3bf2ddb9400d1d2bc13edfd1628964f"
@@ -722,8 +722,8 @@ ir_sha256 = "5b15b4ce14c740444ff27f3cc299d957fd0dc7f0c63fa4e4739ab486b7d16864"
 [[provider]]
 id = "freshdesk"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "e428cb64530e69dc3cf2487dacaa1403770b0cc6ad3fff5b94b12553ee649dd1"
-ir_sha256 = "a9c3b502a5fed24fae98af074f1cd02a25aa7973834b32e017ae55665f19073e"
+toml_sha256 = "00eff58d5a908468816950188d5b47722578fbb661cbac08df11dd5d472d5e61"
+ir_sha256 = "2d8d8ee839fa2af95510e45ae5ff834edb9fcad0a3c64db692d70fe7d5bc20bf"
 
 [provider.artifacts]
 "connectors/freshdesk.connector.toml" = "5ab840c6094aa4ef74ce9309d200cdc7941eaa8942e8eb14e0c7976911019a61"
@@ -742,8 +742,8 @@ ir_sha256 = "a9c3b502a5fed24fae98af074f1cd02a25aa7973834b32e017ae55665f19073e"
 [[provider]]
 id = "front"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "a86b6fa719aec9a25a0cadcd654f9f50cebd7dc325a86944e43621aa2f30b02d"
-ir_sha256 = "ac847374c561336618bddfdf3b0803e338094ab355a79fe2590c6e70a3f64e91"
+toml_sha256 = "ee5ab997a9827e78446d6b5d56eda31ed373769a0aad2de45e7c8f301125d203"
+ir_sha256 = "b11b52ae96051658836ef238f699c31fd27744860a8c56479fc98cc2af6f358d"
 
 [provider.artifacts]
 "connectors/front.connector.toml" = "c592c9260ac7b65c745020ef86c7eff264fd28d14f5ff426d0dc31a69fde8a57"
@@ -759,8 +759,8 @@ ir_sha256 = "ac847374c561336618bddfdf3b0803e338094ab355a79fe2590c6e70a3f64e91"
 [[provider]]
 id = "github"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "26ba723840ae6aeafb7a4b194e01006a122e87a7dd669140365c5091c1274079"
-ir_sha256 = "c8c2daa6f6315b9a5bae0309647466582b4c2b8d3303a758c86b17e741b896f8"
+toml_sha256 = "d20aef0c28536086333009d6e7c8a124c888601833cbfd31deb261da477df439"
+ir_sha256 = "e872bfe42b17fbad6c39a366bf06bef18d55732ba086fe9160fcb5081076f3d4"
 
 [provider.artifacts]
 "connectors/github.connector.toml" = "5442e6918bc0f6a94d72e9f4ae3c72096a16bba04b209d41e17c6bcb675e8dac"
@@ -775,8 +775,8 @@ ir_sha256 = "c8c2daa6f6315b9a5bae0309647466582b4c2b8d3303a758c86b17e741b896f8"
 [[provider]]
 id = "gitlab"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "14f989d6f90f25ffba971aad67fc712ad79dc8bf43fcac04fc7029874c639a96"
-ir_sha256 = "6958292d2c30316490c0cf5d3bb0aa5dc907e2c88d9fb64acc87ed4406af25a6"
+toml_sha256 = "0fa43ead55b1bc6e5d58d544f0cb0953a294b6024a6c848cb804705cbb7fb5fa"
+ir_sha256 = "01733f9793386cbb510908a090a93e64ed7a5e4f3700030906afee8e689662cf"
 
 [provider.artifacts]
 "connectors/gitlab.connector.toml" = "956d0a83c27e1cb49fd9750a931ead90f6b2d935818bee383d8c2ef19276d85b"
@@ -793,8 +793,8 @@ ir_sha256 = "6958292d2c30316490c0cf5d3bb0aa5dc907e2c88d9fb64acc87ed4406af25a6"
 [[provider]]
 id = "google"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "aa6772dffdcb28ab34e36b0e85c6b00102eca009a9c18a42dd6619b0b7dc44c6"
-ir_sha256 = "f786aa672b7ac0b522726ee02ff430997c7feb3aa53a9ae467fe5cf322e25ce1"
+toml_sha256 = "06e73153855185c69e2bb627e156462f3728f5e546bb695020a169e570e2e4ce"
+ir_sha256 = "84e220f1a2f53f437e53f67c5c9970a91798609670868fefa9d5f3d86131a2d5"
 
 [provider.artifacts]
 "connectors/google-calendar.connector.toml" = "819361bda5fc7f3e05678b5f0743f73cb0220c5dccce7eff1afafca6920f8d64"
@@ -816,8 +816,8 @@ ir_sha256 = "f786aa672b7ac0b522726ee02ff430997c7feb3aa53a9ae467fe5cf322e25ce1"
 [[provider]]
 id = "hubspot"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "3624a487cd10d20536d132744a2244235156a7a38ed73806eebcf1d33862df8f"
-ir_sha256 = "621b2d148b163faee8bff8c6e93ca1086773096a47ff772ca319160a818f1e62"
+toml_sha256 = "546e5a6a7123bdc47e293a4e05d3e43a8d37b90dea3fc3c9cd5415e2b31b177c"
+ir_sha256 = "f669d3b207b14b9eafb88a9ee357cb80711562924177e82b73362660971f704d"
 
 [provider.artifacts]
 "connectors/hubspot.connector.toml" = "ea0e803cc6b14d863ccbf1977d0dfbb7a92207c4da4d63be91538bfc52a1cea8"
@@ -832,8 +832,8 @@ ir_sha256 = "621b2d148b163faee8bff8c6e93ca1086773096a47ff772ca319160a818f1e62"
 [[provider]]
 id = "intercom"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "c95db30186df5b6bf80cd5a88c451234074b3454aa665eacea5525b800ce25c5"
-ir_sha256 = "04aeab1f397948f7a5dc82e643ae5b97e8cc7b7dde5d795cfbd9cc968bedd200"
+toml_sha256 = "025eecdf3cb4397e64f70136151817cab89fe4ff0f862f10dafd4341d6b6af40"
+ir_sha256 = "956894b59b8eb06183cc5944d5977cc9029830a200590df7373dbb05e1947ef4"
 
 [provider.artifacts]
 "connectors/intercom.connector.toml" = "b60702cb0b542cfd6f56275543304a4ef04dd0cedb00cf1a32fcd89138975af8"
@@ -848,8 +848,8 @@ ir_sha256 = "04aeab1f397948f7a5dc82e643ae5b97e8cc7b7dde5d795cfbd9cc968bedd200"
 [[provider]]
 id = "jira"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "8966c0bdd9b073e3bf05ec715f12156b6b511757006e89bb0b53b265031d3cb6"
-ir_sha256 = "7ab297efa57391676774018485de0b5f1fd7f134da11730a7c90d735295cb63f"
+toml_sha256 = "b68281f3d8d567c142906c5357679a98366f07b4438b581f10fbd8a8775508c9"
+ir_sha256 = "a34ae5dfaba54e9b624c93f4cc429eabddfd5c261f32bab31d0d50019cf5a3f1"
 
 [provider.artifacts]
 "connectors/jira.connector.toml" = "78594e50f62dc5d658f9c5e77d2caa7dc7b430c28f6bb841fa1de5f59d39a03f"
@@ -865,8 +865,8 @@ ir_sha256 = "7ab297efa57391676774018485de0b5f1fd7f134da11730a7c90d735295cb63f"
 [[provider]]
 id = "klaviyo"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "426c66ce46e652f3f51178f006cc2478688b6686b714ae9bf4508766adbbe460"
-ir_sha256 = "2314518aeabde59d7a293d6786b496a3839ab871f7dabc681db6307ff1675c8f"
+toml_sha256 = "0363acfd6bad55929b8c6ddca736a0f15b2b203448438e3cc2956db88a20c4c4"
+ir_sha256 = "c93b7029576a6765663072aa0571d0e0b9230733ca718c1e56cf5723100025d9"
 
 [provider.artifacts]
 "connectors/klaviyo.connector.toml" = "d167f5f730636d2789587dce1f312573f14e452e835c4742484c90c971b4b77a"
@@ -882,8 +882,8 @@ ir_sha256 = "2314518aeabde59d7a293d6786b496a3839ab871f7dabc681db6307ff1675c8f"
 [[provider]]
 id = "launchdarkly"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "7c3297e77ba45a39b682c492be61c1c096c1c4e8674942fcee08ef251acc2d2d"
-ir_sha256 = "66b9c5e0e91608fe117a4d0ea3318e2081508936d1fc0742b21343889b419a79"
+toml_sha256 = "dd6b515656667fa2b594a072ed7ea330a12effc3bd53f1e458647d5fdfa570ee"
+ir_sha256 = "26ee831b4d6f4c547c98c80c16cdf14c95652861e042cca4be55b838c633264b"
 
 [provider.artifacts]
 "connectors/launchdarkly.connector.toml" = "766513d64d93a2b4615cda7c2ba2467e3c1a2a765ae2051cc9416ec3f1e4ae1a"
@@ -898,8 +898,8 @@ ir_sha256 = "66b9c5e0e91608fe117a4d0ea3318e2081508936d1fc0742b21343889b419a79"
 [[provider]]
 id = "mailchimp"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "09f47fad92fdc9ea5a74c7c339dd59eee2fc9d9392944a756f2b6d3b1abc96e5"
-ir_sha256 = "9ef286ca695b811c9a6b5eb326e5f3960c3fce8310ed108dacd547d401c2a98d"
+toml_sha256 = "cee2d81c5007e48bb75c96b6c1b9bf2e96dd6b4e1b1fedad084485cdeee63ffe"
+ir_sha256 = "2d84a248349945f1cb3f9fb91315b4d8fa86fc7a9a086e5ac68753289de7c0b7"
 
 [provider.artifacts]
 "connectors/mailchimp.connector.toml" = "30c4512b11693f971b67dfc945b1e56c211cd14c9fe4f5153a7fd6ac2f5e866c"
@@ -916,8 +916,8 @@ ir_sha256 = "9ef286ca695b811c9a6b5eb326e5f3960c3fce8310ed108dacd547d401c2a98d"
 [[provider]]
 id = "microsoft_graph"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "18fd0dffe44ea687d2d9dafecd5aa9060f4e0bb82e803767f143cceca8e734e9"
-ir_sha256 = "7acd2c2f2ef0beed39cde1af653b76bc2fd54eeab5489eb90c81de0ece662406"
+toml_sha256 = "72f03593a18b05abba3ae993573cd280c486323b3c49f399384265743f491473"
+ir_sha256 = "403b757cc99464fdedac241114f28ffe629ebcddc5f29a13363bc5e181ca4e85"
 
 [provider.artifacts]
 "connectors/microsoft_graph-calendar.connector.toml" = "cbb37c82fd8f4d0849cbb0029e4be7b116bf1086ae90c7429d74e671dbdb5c7e"
@@ -939,8 +939,8 @@ ir_sha256 = "7acd2c2f2ef0beed39cde1af653b76bc2fd54eeab5489eb90c81de0ece662406"
 [[provider]]
 id = "miro"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "3e18ab73a71cd5bc5513d9c8b179347db423294b929814e12e76e764985ac6f8"
-ir_sha256 = "cee10dd33a99c1f14c6315bca46382f3df7ddae6549a744bf74bdcae6e813ffe"
+toml_sha256 = "8d7c0bcac0538a1666b71cb445d79f91554a4baa82fb3db9b1f902885bc24abd"
+ir_sha256 = "607dd6d01092730a0e2e0bead3ae8aeb70a3c39ba9cbeacbb645dd3d2fcbf12e"
 
 [provider.artifacts]
 "connectors/miro.connector.toml" = "5d83e0571d9ce0072321d2ae895e4a8825e2506a5c3e2e5d5b79876e38cd365a"
@@ -956,8 +956,8 @@ ir_sha256 = "cee10dd33a99c1f14c6315bca46382f3df7ddae6549a744bf74bdcae6e813ffe"
 [[provider]]
 id = "newrelic"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "6621ae4f2f5de31d1021f0295b2a0bae05c844830f17328bb1755ae02f4ef258"
-ir_sha256 = "3628ebe02456134e584b1979f3e8eb5e4594981ac87daa2c154884c501585f13"
+toml_sha256 = "25929bcf665b41f7aa12ecd5e102c400f9f720a612bad0cf5e1a8bbfd4d6ed3a"
+ir_sha256 = "1021e6313f4058171b990f39689b2aca6ab1dbd28db30d00c29e6a8207ae7dd1"
 
 [provider.artifacts]
 "connectors/newrelic.connector.toml" = "9ed4043e61d91aec2a8489e8fe651ce210999e86a48b0b225ef74a3d4459559c"
@@ -973,8 +973,8 @@ ir_sha256 = "3628ebe02456134e584b1979f3e8eb5e4594981ac87daa2c154884c501585f13"
 [[provider]]
 id = "notion"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "9ec68002483de015df06b61bd8d377c2de213cd2488e675e3ca747f691b9ad20"
-ir_sha256 = "5199f63e5fe9d3fc7750a7c8625ca2327a141bc2691e5d3a870067ee5910d2a9"
+toml_sha256 = "9a86aef6128026313f7226b0af4c6517ee62f48f14f95024b3f662180ee3ff7a"
+ir_sha256 = "3b395de06e49f97e1f19ac6fcb7bfd16c83fe7929bf7136965865112e447696e"
 
 [provider.artifacts]
 "connectors/notion.connector.toml" = "f5375df05b082a3856b5dd85c4b817d380b971c2d674011cecd76250fd1c25ba"
@@ -989,8 +989,8 @@ ir_sha256 = "5199f63e5fe9d3fc7750a7c8625ca2327a141bc2691e5d3a870067ee5910d2a9"
 [[provider]]
 id = "okta"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "234c0ea8a943ae20a88df63ed365013936c9686c7fb022d8b2abf51f790c6a05"
-ir_sha256 = "77816600f2c4335cabc66f4dbc64e9f24c86c7f78cd33dd050d268b5aa319e71"
+toml_sha256 = "1f1191373c8e93ff029332ae363feb888a65025fa01188df713958004b88996b"
+ir_sha256 = "c21e7e527a35e44f6eb3942446f16a026f9ce084d62ad40f4290b8b1a16f4fd7"
 
 [provider.artifacts]
 "connectors/okta.connector.toml" = "f639461c604f90b6b47b9aa86563601326074681dba2e8f7dd71a1942d1749b6"
@@ -1005,8 +1005,8 @@ ir_sha256 = "77816600f2c4335cabc66f4dbc64e9f24c86c7f78cd33dd050d268b5aa319e71"
 [[provider]]
 id = "openai"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "ecdce849095893b7040954762306afb562475938965c2dcfa66d4e20a774469b"
-ir_sha256 = "4a1c9e7b016732a7e9584fcd0ee0a5e21a48aab83ddaa61b4510c4e316f936c2"
+toml_sha256 = "1e1bf6c16f8274624b82a339c785443dcb80b9589c5c8c68aaaac34fc6ebc67c"
+ir_sha256 = "121938d01fad700391d7449e114e5c1b84b360136cd89735b3d1627f9f964801"
 
 [provider.artifacts]
 "connectors/openai.connector.toml" = "10cf67a7bf311ed3d5ac931eb00804341d8590b9bd51fc5d44d625332e45afdb"
@@ -1020,8 +1020,8 @@ ir_sha256 = "4a1c9e7b016732a7e9584fcd0ee0a5e21a48aab83ddaa61b4510c4e316f936c2"
 [[provider]]
 id = "openrouter"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "5c5395b0364f8d43175aa5ce43e24f48499f17ee22e28a393da64c2465fffab0"
-ir_sha256 = "02423553ec1c4115e224ade3f1036b58556b1a52d4b4ef438778ad48f62e29ae"
+toml_sha256 = "22c849ea4e399d3336f1ec5734f64108d9236c1b217c308935064f3eacbe5325"
+ir_sha256 = "6682f9cb6866b240fb9b4b49e11f799017641ce0b455cc0ee6da954a797a369c"
 
 [provider.artifacts]
 "connectors/openrouter.connector.toml" = "a0442731f196682ba68ca698768116f015369dcd6458779a43e3c6b4cf4c7f17"
@@ -1035,8 +1035,8 @@ ir_sha256 = "02423553ec1c4115e224ade3f1036b58556b1a52d4b4ef438778ad48f62e29ae"
 [[provider]]
 id = "pagerduty"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "7e625f6ae0d21a5410492f0b9e5731345114ae0ce4219aeba4fdd7c05afddd9b"
-ir_sha256 = "b5cc0dc8180a456b2914ab3f4b1387c2bd43dcdf341c6997a1d6dd6057ace0b8"
+toml_sha256 = "fe395843e9d65a13bc0aa701b3e51ed858a00fac98ff7a5e9dc4c8920bee067b"
+ir_sha256 = "6deaefbf85350dbc332fe45215fa2d11e3f154d4038b10e534e2ae826375994a"
 
 [provider.artifacts]
 "connectors/pagerduty.connector.toml" = "06a5a802ba22b627e87f853e6ef705813aa56f4df3a6b134cd8ca92eb775e539"
@@ -1052,8 +1052,8 @@ ir_sha256 = "b5cc0dc8180a456b2914ab3f4b1387c2bd43dcdf341c6997a1d6dd6057ace0b8"
 [[provider]]
 id = "postmark"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "b78bac82b60807b6298e8238cdafb609fe297f0914efe9ddcde288660100fb68"
-ir_sha256 = "8a9eb54e7c1b8116cf49ce0e6123fd5fcf7271969a7a15e49d76837826d68657"
+toml_sha256 = "245b9b15ffad1f2ed50febba95ed19fe4bf97e222ec640e8587de982029201b3"
+ir_sha256 = "1087135ca0b4b74551a6e497f9d294dc415ace7dbe8d9170fefbe0f6e2cce645"
 
 [provider.artifacts]
 "connectors/postmark-server.connector.toml" = "ee504214429f120fff2a5fae9c2aaf8737cafff6a61fc88a23ccb0cab3bbee21"
@@ -1067,8 +1067,8 @@ ir_sha256 = "8a9eb54e7c1b8116cf49ce0e6123fd5fcf7271969a7a15e49d76837826d68657"
 [[provider]]
 id = "resend"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "15c3f34e0863d4254b56ca5fe3e89b1039ae422730e693a0d4ac601c7569509c"
-ir_sha256 = "743e6ea6460ae6baf6fe2943c8b842b4fde5953a77bced7a252e3d1596bf3ea7"
+toml_sha256 = "65aa58bec366267c24f067f9b89b888b636b397d99ab113c771d61fd138d90c1"
+ir_sha256 = "f1e6000c1c1117eb2fafb0d9aacba71def582c80ce40d335c5fb430c2a901ac3"
 
 [provider.artifacts]
 "connectors/resend.connector.toml" = "32351f46dbfac18511a863208930f946674e9d196cd82e2ca6049a876426aa4d"
@@ -1082,8 +1082,8 @@ ir_sha256 = "743e6ea6460ae6baf6fe2943c8b842b4fde5953a77bced7a252e3d1596bf3ea7"
 [[provider]]
 id = "salesforce"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "ee3a425373a1c4137f0d89b3cb6f4038e593d1de48b98eadfb6d30376a722610"
-ir_sha256 = "4def0a31d43d6bd06c73e0f33116213c5308cf0a60de3bfa0da8d6fd23193846"
+toml_sha256 = "8c09d95ce6bdb8976358d9adaccde4738977f7fd346137bb5c3e067f818c1552"
+ir_sha256 = "27d4989e68add9c9fd32882b5fd29e3dea87e33a4bf79d58c706e9cd54fb4a7f"
 
 [provider.artifacts]
 "connectors/salesforce.connector.toml" = "9d4c87a6d36b9fa4183a6931da384856dbc4a100616ec6811d7f3296561909a4"
@@ -1098,8 +1098,8 @@ ir_sha256 = "4def0a31d43d6bd06c73e0f33116213c5308cf0a60de3bfa0da8d6fd23193846"
 [[provider]]
 id = "sendgrid"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "0cc973d4019218e193f861251f8615e44e4e6f2703dc5d61118501204eda5f8c"
-ir_sha256 = "3968561f9c3c5eac3b7e065a24d58237f9b2d2efabce990f55fbc45e2b1c7ec2"
+toml_sha256 = "c17a66084292e349a316ea98a1224b84bbd4efa1b56539869420f4e4f6c6a83d"
+ir_sha256 = "7bf13309b5db59f012dc699165ce1c220fda509b01066815dee9ed2dfe0e25cb"
 
 [provider.artifacts]
 "connectors/sendgrid.connector.toml" = "f1129dc889002c0c6cb49ffe4c907442d5979164d4c13106a5c6a164386619a6"
@@ -1113,8 +1113,8 @@ ir_sha256 = "3968561f9c3c5eac3b7e065a24d58237f9b2d2efabce990f55fbc45e2b1c7ec2"
 [[provider]]
 id = "sentry"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "a9182c490f1e8be5c117c0768d024e24aec274f7afdffb0cd2658ee0c4b2bf3a"
-ir_sha256 = "2fcfa58cfb3693dd8631c2806ef22d3eec4aa7a0d001b36e5f61008c57c77ba2"
+toml_sha256 = "bbc80e96499bc6448a68cafec69035e890900e0e3a9dfca0298b42f72a5b0f37"
+ir_sha256 = "69c30f30ca6ddf73b288772ee00fb8fddca8d0b30c3ae57e8d2e3c196f89575d"
 
 [provider.artifacts]
 "connectors/sentry.connector.toml" = "8aa9f1e9c79a41940d5ed058005af0d248562079608cd7f32d170438f441198c"
@@ -1128,8 +1128,8 @@ ir_sha256 = "2fcfa58cfb3693dd8631c2806ef22d3eec4aa7a0d001b36e5f61008c57c77ba2"
 [[provider]]
 id = "shopify"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "0718352beace97ef44f60ba2e7d418cc6d03aa36ac3900e5c606883d00508be2"
-ir_sha256 = "56ba7d82cc09d1a6905beedd9aadf3aa8f4398a6b0b67c6a601ef4946e0f13a5"
+toml_sha256 = "e9c32d840ab60cf6ea8c91c1908f5b54760924702d9182029f3cfea6e50f85f0"
+ir_sha256 = "40441431369521371f9bc2e956264bb8ffb36e239078b951e7dc07e7212dcff8"
 
 [provider.artifacts]
 "connectors/shopify.connector.toml" = "f7b644ab702bc80f7245b3363df71216a477cb98b1c514f53d3059cf8d9e8b6c"
@@ -1144,8 +1144,8 @@ ir_sha256 = "56ba7d82cc09d1a6905beedd9aadf3aa8f4398a6b0b67c6a601ef4946e0f13a5"
 [[provider]]
 id = "slack"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "671479364ac49ebda167eef43621191272436da6ed34e03a790801a6464dd246"
-ir_sha256 = "073c7b3de7409855fbbf3dd6448f2fe15e8c432723f5467a818bb85e7b16dced"
+toml_sha256 = "4322a7f7757e23e48c8b612ac7a26067bbde9493d68b65572a6277f693864cd5"
+ir_sha256 = "03fb667b17b1cf317884dc404a9f106c7e0d4233432a30f68b84224d788cf4ab"
 
 [provider.artifacts]
 "connectors/slack.connector.toml" = "15997591228f9c9233d24478a243bfae932b49e2a786e8df5ee12581014555b1"
@@ -1159,8 +1159,8 @@ ir_sha256 = "073c7b3de7409855fbbf3dd6448f2fe15e8c432723f5467a818bb85e7b16dced"
 [[provider]]
 id = "statuspage"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "a2eba81bbfd7493daec5926ca2a7a3735871586a27f85115368fe59b76891291"
-ir_sha256 = "ab9a1c9326d18a4c27d62d213f444faa1fcf1f491ecf56cbdd3b5d38b8584932"
+toml_sha256 = "a9461b9606ed83416fe46db97245366caafc05597398d4792f0f7653f7835629"
+ir_sha256 = "b3cca5d785c5d30e870c443d0d52b929831298f897f2bd2292033f982428acda"
 
 [provider.artifacts]
 "connectors/statuspage.connector.toml" = "b9f11f3619ee7c083fae3e43fa368918bfcd879392ecbc6bc0e03febb79bcac6"
@@ -1175,8 +1175,8 @@ ir_sha256 = "ab9a1c9326d18a4c27d62d213f444faa1fcf1f491ecf56cbdd3b5d38b8584932"
 [[provider]]
 id = "stripe"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "122a48b94c4aa68b3d7ab001e443c9f12160053464fbb38957946d1493f87cbe"
-ir_sha256 = "546a63b833ea1ffc36496be96ab1506daf848df8feb1e56844802b09c9447d78"
+toml_sha256 = "a82728c16b9fff85875fc3125919e0036529c7f32c5e280de8c3b443e022e6ad"
+ir_sha256 = "fc8579ed06ff720cf441afec3462c17d824ebc8a3257cb8e466373282b8c34ee"
 
 [provider.artifacts]
 "connectors/stripe.connector.toml" = "e88bf8b47a0c9bdd84b81cbd86a6ba6b72ec23fec2a36152f7b9fed8131d08dd"
@@ -1194,8 +1194,8 @@ ir_sha256 = "546a63b833ea1ffc36496be96ab1506daf848df8feb1e56844802b09c9447d78"
 [[provider]]
 id = "supabase"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "d54754130657711701527d0fc14bceb746f7b9eff7697b3c54b973d61c25267a"
-ir_sha256 = "eef4dc7a74380fec8ed2c92ee8f3699121a88dd0576ddcfbeb60668ea1a98b8a"
+toml_sha256 = "7bff958f034fdeef495565ef14d84f286b281f2bc6cd0371846a253ac06dd376"
+ir_sha256 = "0288bf77b71bf148a07b2dd5f61256b3db62365df9d8acba169809fa6ddd2b94"
 
 [provider.artifacts]
 "connectors/supabase.connector.toml" = "c87d35f6c9719ccece575dadca6f44af78462ff68ef0b9f793ef3e1d331bc68d"
@@ -1208,8 +1208,8 @@ ir_sha256 = "eef4dc7a74380fec8ed2c92ee8f3699121a88dd0576ddcfbeb60668ea1a98b8a"
 [[provider]]
 id = "trello"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "e5baa6d57e5fb65b37b8b916889fcb13a70cf83690cbecd40b5507d681495b52"
-ir_sha256 = "9a1d597148ebbaa1d6f80b0a4c49337986adeb2334edb45cb82a103e29ffea8d"
+toml_sha256 = "fdc5108ca3cea1a05c0a7ec407e50276addd2419e208d1ca1d5a2d1e1c6a13ed"
+ir_sha256 = "1302d7ddb1fa122184a3b12243257e36b40ad4e3b1fb8178a046ae25ab3ed069"
 
 [provider.artifacts]
 "connectors/trello.connector.toml" = "a327ad58c22b4f0ccf8bd5a23c93c3e9e9d41b44e7eb55bad9c42327b95f18a3"
@@ -1225,8 +1225,8 @@ ir_sha256 = "9a1d597148ebbaa1d6f80b0a4c49337986adeb2334edb45cb82a103e29ffea8d"
 [[provider]]
 id = "twilio"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "8e4a1eefc9e5aff9a4ff3e72ce60d45e8a1345442fb4057853c8bb7beb69eecf"
-ir_sha256 = "09e1129bac04484a4ac69e4a05db3772ef58892a3301ea30925e32e43dabe3ae"
+toml_sha256 = "5f7ae00a6ea2c08e80860ca2063e43cfc3757a1406f59e2845903411bbc73618"
+ir_sha256 = "ed7f43a8d72a234123dc5780becfd1daad588d6d6e81a325342938427c5f379d"
 
 [provider.artifacts]
 "connectors/twilio.connector.toml" = "e2c5b5975da06f070339e389e712ca788c7fb20da09bae19b63b213bc15bf79f"
@@ -1241,8 +1241,8 @@ ir_sha256 = "09e1129bac04484a4ac69e4a05db3772ef58892a3301ea30925e32e43dabe3ae"
 [[provider]]
 id = "typeform"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "a7bd4d5d172e318bd9edc3157d56fbc3aff232a32d3f46582893e91362c4def7"
-ir_sha256 = "e5ff5af08b82b0ede59cbf2969c60b61cef99308457d5c579da390b710d89133"
+toml_sha256 = "a4f08ef2ccb81536946a24e3ea5e6f08e6080d78058c4e6af122a43db2b82491"
+ir_sha256 = "65c5e9d2def5b67648dbee4a5927e4a5de737c5d44aaffa8101a5bf70201489d"
 
 [provider.artifacts]
 "connectors/typeform.connector.toml" = "fe5432088251a61f2372eba608c75ff53df5e7ef6c1106670dab18742a238817"
@@ -1257,8 +1257,8 @@ ir_sha256 = "e5ff5af08b82b0ede59cbf2969c60b61cef99308457d5c579da390b710d89133"
 [[provider]]
 id = "vercel"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "55d64aadf1dfbd566f55dfbef7807b698f1bd4b0ba55b1f74390d55f4e68508a"
-ir_sha256 = "593a7ada80e5298eb83107cd6090fb354b4e3c90dde3ff9177774aaecc7d74ee"
+toml_sha256 = "497638e2bc601300925919e6e8d47e9c379ad06c01f374e8afd2a307f61d9393"
+ir_sha256 = "d546ffffc9468c0599d8bea309231b83ce507cc6cb91f8f01b4504c9380b5178"
 
 [provider.artifacts]
 "connectors/vercel.connector.toml" = "4f30ac0c5dc87a514c9d2b183c1713a93767d7bd4618c26646cc6febcf847906"
@@ -1273,8 +1273,8 @@ ir_sha256 = "593a7ada80e5298eb83107cd6090fb354b4e3c90dde3ff9177774aaecc7d74ee"
 [[provider]]
 id = "webflow"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "3213efbf0cf9e2a71a51c5baabeab721c33a39c97853d7d13bb6d9af07039724"
-ir_sha256 = "29daf762f3d1afcc42b7ca4177a6663e3b27db395399428103f1f00b833e268d"
+toml_sha256 = "30bcc6c568f98dd4c9c46f04a0aef46da51f64a0a982e3d500ed5be94c6c4899"
+ir_sha256 = "6c7fe085587fd397ec005ab0be097b02b286bfecaa86f9064b67d1e72696a564"
 
 [provider.artifacts]
 "connectors/webflow.connector.toml" = "135f8c072e7d663c3efd11865b57e24c587482b28048c10c299566b2fc0871ed"
@@ -1290,8 +1290,8 @@ ir_sha256 = "29daf762f3d1afcc42b7ca4177a6663e3b27db395399428103f1f00b833e268d"
 [[provider]]
 id = "zendesk"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "1d303010d4b0755a574e13266c904f68db86686dac8cfabb613c924f3761bdea"
-ir_sha256 = "c31d5b9a4039b8b67a3f79c5e5a98059ed5053885ae96a4480cdcf0208233fe2"
+toml_sha256 = "10c41a95d71ec88db9de2e65429913afcdb8fa938ea6fffbbf3c009c79ee3041"
+ir_sha256 = "319f8426ff844bf889c176c277f3c91797b56e5752f0d0af70bc33aa3a904f60"
 
 [provider.artifacts]
 "connectors/zendesk.connector.toml" = "a664a8abb45357847e2cd4f537d82da667176bb5cfd2a8f14d61385a01885a46"
@@ -1308,8 +1308,8 @@ ir_sha256 = "c31d5b9a4039b8b67a3f79c5e5a98059ed5053885ae96a4480cdcf0208233fe2"
 [[provider]]
 id = "zoom"
 generator = "flux-connectors 0.10.1"
-toml_sha256 = "31056b0cbcee6d719c6fc6644170083dcf5e3d98ac9dc3e499ba7ac912c8890a"
-ir_sha256 = "6d3093ff4f0a60537357c0a4316855e541ddfb39c0385e7df8c8ed8bb514f8f0"
+toml_sha256 = "fc8867066342e5365e3840067185413046c0baacae67549962f9d4e9322f1f72"
+ir_sha256 = "466a1dd58d8035753b96d741ba5fd87ef9408dccbfa1950e583effa0b7cee916"
 
 [provider.artifacts]
 "connectors/zoom.connector.toml" = "5a288c08579880556e34d0eb00f971414feb8ecf8340935982ae9f89cc670479"
