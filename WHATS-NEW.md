@@ -14,6 +14,8 @@
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-08-01
+
 ### Improved
 
 - **A connector can no longer make two contradictory claims about one response.** Saying "this reply

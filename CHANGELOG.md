@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-08-01
+
 ### Fixed
 
 - **One credential fact, two dispositions, and the loader refuses an operation claiming both**
