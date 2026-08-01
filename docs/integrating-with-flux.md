@@ -35,36 +35,86 @@ different execution model that is not finished; do not plan around it.
 The publish closure is four crates — `connector-address`, `connector-catalog`, `connector-secrets`,
 `connector-pack` — published as `codewandler-connector-*` by CI on a `vX.Y.Z` tag.
 
-**They are on crates.io.** Four crates went out on **2026-07-31**, first at **0.7.0** and then at
-**0.8.0** the same day ([C-190](stories/C-190-publish-catalog-pack-secrets.md)), so a registry
-dependency works and the `path`/`git` workaround this section used to require is gone. Check
-crates.io for the current version rather than trusting the pin below.
+**They are on crates.io at 0.9.0**, published 2026-08-01. Everything in this step was verified by
+building a crate **outside this workspace** against the registry versions — not read off the
+manifests here ([C-190](stories/C-190-publish-catalog-pack-secrets.md)).
 
-> **The membership changed after 0.8.0** ([C-407](stories/C-407-extract-the-credential-address-crate.md)).
-> The fourth crate used to be `codewandler-connector-spec` — the compiler — which was published only
-> because `connector-secrets` re-exported the credential address vocabulary out of it. That
-> vocabulary is `codewandler-connector-address` now, and the next tag publishes it in
-> `connector-spec`'s place. `codewandler-connector-spec` 0.7.0 and 0.8.0 stay on crates.io, because
-> a published version cannot be withdrawn; nothing new is published from it.
+#### The minimum
 
 ```toml
 [dependencies]
-codewandler-connector-pack    = "0.8"          # brings the catalogue and secrets with it
-codewandler-flux-runtime      = "0.45"         # your host already has this
-codewandler-flux-spec         = "1.3"          # its own line, not the engine's
+codewandler-connector-catalog = "0.9.0"   # lib `catalog`
+codewandler-connector-pack    = "0.9.0"   # lib `connector_pack`
+codewandler-flux-runtime      = "0.46"    # the engine line — see below, it is not optional
 ```
 
-> **The flux line above is what this repository is on, and it is ahead of what is published**
-> (C-403). `codewandler-connector-pack` **0.8.0**, the version live on crates.io today, requires
-> `codewandler-flux-runtime ^0.41` — and a `0.x` requirement is semver-incompatible across minor
-> versions, so **that published pack cannot be linked by a host on flux 0.45 at all**. Two versions
-> of `flux-runtime` are two distinct `Tool` traits; there is no feature flag or unification that
-> rescues it. `main` is on 0.45 and the next `vX.Y.Z` tag republishes the closure against it. Until
-> that tag, pair pack 0.8.0 with flux 0.41 or build the pack from this repository.
+Three dependencies is the whole minimum for Path A plus Path B, and it compiles: `catalog::operation`,
+`connector_pack::pack`, and every credential and configuration name the ports need
+(`Credentials`, `Configuration`, `MemoryConfig`, `CredentialRef`, `Secret`, `SecretStore`,
+`MemoryStore`, `StoreError`, `TenantLayout`) come off those two crates. Rust 1.87 or newer.
 
-Rust 1.87 or newer. `connector-pack` re-exports the credential vocabulary
-(`CredentialRef`, `Layout`, `Secret`, `SecretStore`, `MemoryStore`, `TenantLayout`) so a host binding
-the ports never has to name three crates to spell one address.
+**Name the packages, `use` the libs.** The manifest keys carry the `codewandler-` prefix and the
+externs do not — `use catalog::…`, `use connector_pack::…`. That is `[lib] name` doing its job, and
+it needs no `package =` alias in *your* manifest: cargo binds the extern to the dependency's lib
+name unless you rename it yourself. If you write `catalog = { package = "codewandler-connector-catalog", … }`
+that also works; if you rename it to anything else, you have renamed the extern.
+
+#### The flux line is a hard constraint, not a suggestion
+
+`connector-pack` 0.9.0 requires `codewandler-flux-core`, `-runtime` and `-lang` at **`^0.46`**, and
+`codewandler-flux-spec` at `^1.3`. `pack()` returns
+`impl FnOnce(&mut ToolRegistry) -> flux_core::Result<()>`, so those types are in your signature
+whether you name the crates or not. **A `0.x` requirement is semver-incompatible across minor
+versions**, so a host on any other engine line does not get a warning — it gets two engines. Pinning
+`codewandler-flux-runtime = "0.45"` beside pack 0.9.0 resolves both and fails like this:
+
+```text
+error[E0308]: mismatched types
+  |     let _ = install(&mut registry);
+  |             ------- ^^^^^^^^^^^^^ expected `flux_runtime::ToolRegistry`, found `ToolRegistry`
+note: there are multiple different versions of crate `flux_runtime` in the dependency graph
+```
+
+There is no feature flag and no unification that rescues it. `cargo tree -d` on a correct consumer
+reports **no duplicated `codewandler-*` crate at all**; if yours names one, that is the bug.
+
+You only need to *name* `codewandler-flux-core` (to spell `flux_core::Result`) or
+`codewandler-flux-spec` (to build a `ToolSpec` yourself, e.g. for a stand-in transport). Both are on
+the same lines as above. A host that gets its `Arc<dyn Tool>` from flux-web needs neither.
+
+#### What you do not need to name
+
+`connector-pack` re-exports the vocabulary, so one address is spelled from one crate:
+
+| You want | Comes from |
+|---|---|
+| `CredentialRef`, `InstanceId`, `Layout`, `TenantLayout`, `TenantInstances`, `Secret`, `SecretStore`, `StoreError`, `MemoryStore`, `FileStore` (unix) | `connector_pack` — no extra dependency |
+| `TENANTS_ROOT`, `INSTANCES_SEGMENT`, `MAX_TENANT`, `validate_tenant`, `validate_instance` | `codewandler-connector-secrets` — add it |
+| `VaultStore` | `codewandler-connector-secrets` with `features = ["vault"]` — the dependency alone is not enough |
+| `Pid`, `Gid`, `Oip` — the **identifier** half of the vocabulary | `codewandler-connector-address` — add it; it is *not* re-exported by either crate above |
+
+So `codewandler-connector-address` is a dependency you add **only** for `Pid`/`Gid`/`Oip`. Its
+credential half reaches you through `connector-secrets`, and the part of that a host binding the
+ports actually touches reaches you through `connector-pack`. `use connector_secrets::Pid` does not
+compile — `no Pid in the root` — which is the check worth knowing before you go looking for it.
+
+#### `connector-secrets` brings no Vault client
+
+`vault` is off by default (published feature map: `default = []`, `vault = ["dep:reqwest",
+"dep:serde_json"]`). On a consumer that adds all three crates, `cargo tree -i reqwest` answers
+`package ID specification 'reqwest' did not match any packages`, and the resolved graph contains no
+`rustls`, `hyper`, `native-tls` or `openssl` either. A host that wants only the trait, the addressing
+and `MemoryStore` links no HTTP stack.
+
+> **`codewandler-connector-spec` is no longer in the closure**
+> ([C-407](stories/C-407-extract-the-credential-address-crate.md)). The fourth crate used to be the
+> compiler, published only because `connector-secrets` re-exported the credential address vocabulary
+> out of it. That vocabulary is `codewandler-connector-address` now. `codewandler-connector-spec`
+> 0.7.0 and 0.8.0 stay on crates.io because a published version cannot be withdrawn; it shipped
+> nothing at 0.9.0 and nothing new is published from it. `connector-flux` and `connector-cli` have
+> never been published. The unprefixed `connector-cli` **does** exist on crates.io and is **an
+> unrelated crate** — `github.com/dickwu/tauri-connector`, a Tauri plugin CLI. Never depend on an
+> unprefixed name expecting this repository; the prefix is the identity.
 
 ### Step 1 — supply the transport
 
@@ -286,15 +336,15 @@ before "fixing" one.
 
 | # | Gap | Effect on a host | Owner |
 |---|---|---|---|
-| 1 | **No `http.request` implementation in the *publishable* dependency graph.** `Egress::new` takes a configured `Arc<dyn Tool>` and none of the four published crates supplies one. `codewandler-flux-web` **is** in `Cargo.lock` (0.45.0), but only through `crates/connectors-api`, the `publish = false` reference host. | Path A needs a transport you bring. Trivial if your host links flux-web; otherwise you must not substitute a hand-rolled client — a demo of a substitute demonstrates the substitute. | [connectors-app.md](designs/connectors-app.md) |
-| 2 | ~~**The crates are unpublished.**~~ **Closed.** All four are on crates.io, first published 2026-07-31 (0.7.0) and now at 0.8.0. | None. Depend on `codewandler-connector-*` from the registry. | [C-190](stories/C-190-publish-catalog-pack-secrets.md), still `ready` on the board although its outcome has shipped |
+| 1 | **No `http.request` implementation in the *publishable* dependency graph.** `Egress::new` takes a configured `Arc<dyn Tool>` and none of the four published crates supplies one — confirmed from a consumer's own resolved graph, which contains no HTTP client at all. `codewandler-flux-web` **is** in `Cargo.lock` (0.46.0), but only through `crates/connectors-api`, the `publish = false` reference host. | Path A needs a transport you bring. Trivial if your host links flux-web; otherwise you must not substitute a hand-rolled client — a demo of a substitute demonstrates the substitute. | [connectors-app.md](designs/connectors-app.md) |
+| 2 | ~~**The crates are unpublished.**~~ **Closed, and proved consumable.** All four are on crates.io — first 2026-07-31 (0.7.0), now **0.9.0**, which is the first release whose closure is `connector-address` rather than `connector-spec`. A crate built outside this workspace against the registry versions compiles and runs: `catalog::operation`, `connector_pack::pack(&["zendesk"], …)`, one flux engine line, no HTTP client. | None. Depend on `codewandler-connector-*` from the registry, and read [Step 0](#step-0--get-the-crates) for the engine line you are thereby committing to. | [C-190](stories/C-190-publish-catalog-pack-secrets.md) |
 | 3 | **Six declared surfaces reach no artifact.** `config` (112 fields / 40 providers), `verify` (40 providers), service `roles`, `quirks.pagination`, `graphs`, `quirks.rate_limit` are in the IR and validated by the loader, and appear in neither the manifest nor the catalogue. | A host **cannot render a settings page**, cannot discover the "Test connection" operation, cannot page a list — for connectors that declare all of it. You must supply endpoint values (Step 3) knowing only the variable names, read off each operation's emitted Flux. `site.rs` also collapses the whole `OAuth2Spec` to `oauth2: bool`, so **no host can build an authorize URL from the published catalogue.** | [C-87](stories/C-87-configuration-codegen.md) `ready`, [connector-surfaces.md](designs/connector-surfaces.md) |
 | 4 | **Published `status.works` is false for every one of the 299 operations**, on a catalog-scoped `credential-not-injected` issue describing the module path. `unbound-base-url-template` reads as stale too, since C-193 closed it for the pack. | A host filtering the catalogue on `works` installs nothing, including operations the pack executes correctly. Filter on issue `code`/`scope`; treat `unencodable-query-value` and `no-credential` as real, `credential-not-injected` as Path-C-only. | none filed — worth one |
 | 5 | **The `.flux` module path is unauthenticated and uninstallable.** | Path C is unavailable. | [C-10](stories/C-10-auth-injection-and-manifest.md), [C-15](stories/C-15-install-and-live-e2e.md) |
 | 6 | **No inbound adapter.** Events and channels are published and unconsumed. | Webhooks, Socket Mode and polling are yours to build. | [C-118](stories/C-118-connector-channel-adapter.md) `ready` |
 | 7 | **`zendesk-ticket-search` is non-functional; `form` bodies share the gap.** Query values are not percent-encoded and flux exposes no encoder a Flux *program* can call. `&`, `#` and `+` corrupt the request; `x&per_page=1` injects a parameter. | Do not expose that operation. The body half now exists upstream as `L-101` and arrives when flux-lang publishes it; the query half is still open. | [query-encoding-flux-stories.md](designs/query-encoding-flux-stories.md) |
 | 8 | **Freshdesk declares no credential**, deliberately: its API key occupies the Basic *username* position, which the model treats as non-secret config, so emitting it would bypass secret gating and redaction. | All 9 of its operations fail closed with a `401`. | [C-16](stories/C-16-design-auth-seam.md) |
-| 9 | ~~**No response shaping.**~~ **Closed by the bump it was waiting for** (C-403). This repository is on flux-web **0.45.0**, and since **0.43.0** `http.request`'s canonical `ToolResult.content` is the record `{status, headers, body}` — JSON encoded, `body` **parsed** when the response is a JSON object or array — with the flat `HTTP {status}\n{headers}\n{body}` block kept as the model-facing `view`. `connector-pack` returns the result unchanged, so that record is what a host gets. | **Read the record, not the block.** A caller selects `$resp.body.data.id` directly; a host that scanned the block for a status line gets no compile error from the change and must be updated. `crates/connectors-api/tests/live_egress.rs::the_response_comes_back_as_a_record_not_a_flat_string` pins the shape. A `404` is still a *result*, not an error. **One thing this did not close:** `Graph` → composite-op lowering is still refused, and its refusal text still cites the flat string — the prerequisite has landed, the lowering has not. | [C-404](stories/C-404-enable-graph-lowering.md) for the lowering; the shape itself is closed |
+| 9 | ~~**No response shaping.**~~ **Closed by the bump it was waiting for** (C-403). This repository is on flux-web **0.46.0**, and since **0.43.0** `http.request`'s canonical `ToolResult.content` is the record `{status, headers, body}` — JSON encoded, `body` **parsed** when the response is a JSON object or array — with the flat `HTTP {status}\n{headers}\n{body}` block kept as the model-facing `view`. `connector-pack` returns the result unchanged, so that record is what a host gets. | **Read the record, not the block.** A caller selects `$resp.body.data.id` directly; a host that scanned the block for a status line gets no compile error from the change and must be updated. `crates/connectors-api/tests/live_egress.rs::the_response_comes_back_as_a_record_not_a_flat_string` pins the shape. A `404` is still a *result*, not an error. **One thing this did not close:** `Graph` → composite-op lowering is still refused, and its refusal text still cites the flat string — the prerequisite has landed, the lowering has not. | [C-404](stories/C-404-enable-graph-lowering.md) for the lowering; the shape itself is closed |
 | 10 | **No token refresh, no OAuth acquisition, no multi-tenancy in one pack.** Out of scope since C-90: the store hands back a value and keeping it current is the host's. One `Credentials`/`Configuration` pair serves one tenant. | Build a pack per tenant; own your refresh loop. | by design |
 | 11 | **The reference host is not a product.** `crates/connectors-api` (C-200) binds the ports, runs the loop and has sent real bytes — the first went to `api.anthropic.com` on 2026-07-31, recorded in that crate's README — but it is `publish = false`, loopback-only, and holds credentials in a 0600 file. | The seams are demonstrated, not merely stubbed; what is *not* demonstrated is a deployed multi-tenant host. Read `crates/connectors-api` as an exercise of the seam, not as something to run in production. | [connectors-app.md](designs/connectors-app.md) |
 | 12 | **OpenAPI ingest is not wired.** All 53 providers are hand-authored and no vendor spec is vendored. | Drift from a vendor's real API is undetectable by machine. | [C-14](stories/C-14-fetch-and-drift-check.md) |
