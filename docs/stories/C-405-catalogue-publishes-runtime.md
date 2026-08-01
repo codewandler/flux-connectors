@@ -2,8 +2,7 @@
 id: C-405
 title: "The catalogue publishes each connector's runtime"
 pillar: Bridge
-status: ready
-priority: 5
+status: done
 note: "catalog::Provider has no runtime field, so a host cannot read how a connector executes — it has to derive it. That makes the multi-tenant refusal rule untestable against real catalogue data"
 ---
 

@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The catalogue publishes each connector's runtime** (C-405). `http`, `socket`, `process`,
+  `container`, `plugin` or `remote` — a closed set with `http` the default, reaching the manifest,
+  `catalog.json` and the Rust catalogue. A host that must refuse a locally-executing runtime when it
+  serves more than one tenant can now read that fact instead of deriving it: every shipped connector
+  is HTTP, so the derivation was right today and would have gone silently wrong for exactly the case
+  the refusal exists to catch. An unknown runtime is refused at parse and names the accepted set,
+  never defaulted — a typo falling back to `http` is the failure this closes.
+
 ### Changed
 
 - **The flux engine line moves from 0.41 to 0.45 (C-403).** All seven `codewandler-flux-*` pins
