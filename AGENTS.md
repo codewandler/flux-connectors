@@ -890,14 +890,22 @@ happens. This contract is only about *how*.
 
 Owner-stated 2026-08-01, after a coordinator handed the tag push back three times. **Cutting a
 release is autonomous work.** Nothing here waits for a human, and the operator does not run commands
-on the agent's behalf. There is no `cut-release.sh` in this repository yet — the steps below are done
-by hand, in order, and a script that does them is worth filing.
+on the agent's behalf.
+
+It was nine hand-run steps until C-427. The mechanical ones are now
+[`scripts/cut-release.sh`](scripts/cut-release.sh); what is left below is the part that is a
+judgement rather than a sequence.
+
+### Two decisions the script does not make
 
 **The bump.** Cargo pre-1.0 SemVer, the same rule flux uses: for `0.y.z` the **minor** position is
 the breaking signal. Scan `[Unreleased]` and the commits since the last tag — any breaking change is
-a minor, additive and fixes only is a patch. Never use the patch position as a rolling counter.
+a minor, additive and fixes only is a patch. Never use the patch position as a rolling counter. The
+script takes `patch`, `minor` or an explicit `X.Y.Z`, and **refuses `major`** while this line is
+pre-1.0: reaching 1.0.0 is a decision, so it has to be spelled out.
 
-**Two changelogs, two audiences**, and every release touches both:
+**Whether the customer changelog says the right thing.** Two changelogs, two audiences, and every
+release touches both:
 
 - `CHANGELOG.md` — the **engineering** log. Story IDs, crate names, file paths, the reasoning behind
   a decision. This is where a future implementor looks to find out why.
@@ -908,27 +916,55 @@ a minor, additive and fixes only is a patch. Never use the patch position as a r
   An internal-only release may legally have an empty customer section — a *user-visible* change
   missing one is the defect this file exists to prevent.
 
-Then, in order:
+The script promotes both `[Unreleased]` sections and warns loudly when the customer one is empty. It
+cannot tell whether the words are right, so **step 1 is still yours**: polish both and check them
+against the diff, not against memory.
 
-1. **Polish both changelogs and check them against the diff**, not against memory. Promote
-   `[Unreleased]` to `## [X.Y.Z] — <date>` in each.
-2. **Bump the version** in `[workspace.package]` and `README.md`, then **regenerate every artifact**:
-   `cargo run -p connector-cli -- build`. This is not optional bookkeeping — 120 generated manifests
-   carry `generator = "flux-connectors <version>"`, and `connectors.lock` hashes them, so a bump that
-   does not regenerate leaves the tree inconsistent with itself and `diff` red.
-3. **Gate green**, all of it, then commit — `Release vX.Y.Z`, matching the shape of previous release
-   commits.
-4. **Annotated tag** `vX.Y.Z`, with a body: a one-line headline, then what changed. `git show v0.8.0`
-   is the model.
-5. **Push `main`, then push the tag.** Pushing the tag **is** the crates.io publication — see
-   [§ Publishing contract](#publishing-contract). It is not a reversible step and it is still the
-   agent's to take.
-6. **Watch the CI run** (`gh run watch`, `gh run list --workflow=crates.io`). The workflow is
+### Then, in order
+
+1. **Polish both changelogs against the diff.** Leave the `## [Unreleased]` headers alone — promoting
+   them is the script's job, and it is the step that goes wrong twice if done by hand as well.
+2. **Cut**, from a tree whose committed state is what you mean to release:
+
+   ```bash
+   scripts/cut-release.sh minor       # or patch, or an explicit 0.10.0
+   ```
+
+   That promotes both changelogs, bumps `[workspace.package].version`, every internal
+   path-dependency requirement in `[workspace.dependencies]` and `README.md`, re-locks the
+   workspace, **regenerates every artifact**, runs the full [gate](#validation), commits
+   `Release vX.Y.Z` and creates the annotated tag. It **does not push and never publishes**.
+
+   Three properties are worth knowing rather than rediscovering, and each is pinned by
+   `crates/connector-cli/tests/cut_release.rs`:
+
+   - **Regeneration is not optional bookkeeping, and the script refuses to skip it.** This
+     repository is a compiler whose output records the compiler's own version — every generated
+     `connectors/*.connector.toml` carries `generator = "flux-connectors <version>"` and
+     `connectors.lock` hashes them (C-189), so a bump without a rebuild leaves the tree inconsistent
+     with itself and `diff` red *after* the commit. Cutting v0.9.0 by hand rewrote 184 artifacts
+     here. The script rebuilds, then requires `diff` to report everything up to date and no artifact
+     to still name the old version.
+   - **It is transactional.** Any failure — a red gate, an interrupt — restores the tree to exactly
+     what it was, so a failed cut is safe to re-run. Without that, the second run promotes
+     `[Unreleased]` again and mints a phantom version section.
+   - **It touches only the release files.** Agents work concurrently here, so it commits by explicit
+     pathspec (nothing another session merely *staged* rides along) and it **refuses to start** if
+     a file it would rewrite — the manifest, the lockfile, the README, any generated artifact — is
+     already dirty. Commit or stash that work first; a release is cut on top of committed work.
+3. **Review what it made, while it is still local**: `git show`, and `git tag -l -n99 vX.Y.Z`. The
+   tag body defaults to the customer-changelog section just promoted; `git show v0.8.0` is the model
+   for the voice. Reword with `git commit --amend` and `git tag -a -f vX.Y.Z`, or pass the tag body
+   in up front with `--notes FILE`.
+4. **Push `main`, then push the tag.** Pushing the tag **is** the crates.io publication — see
+   [§ Publishing contract](#publishing-contract). It is not a reversible step, it is deliberately
+   outside the script, and it is still the agent's to take.
+5. **Watch the CI run** (`gh run watch`, `gh run list --workflow=crates.io`). The workflow is
    idempotent and skips anything already live, because crates.io rate-limits *new* crates to a burst
    and then roughly one per ten minutes — a first release of several crates is **expected** to need a
    `workflow_dispatch` resume. Resuming is part of cutting the release, not a follow-up someone else
    does.
-7. **Only once the publish is actually green**, `gh release create vX.Y.Z` with notes derived from
+6. **Only once the publish is actually green**, `gh release create vX.Y.Z` with notes derived from
    the changelog entries — headed `## Release Notes` and using the customer voice, as flux's releases
    do. A release announcing crates that failed to upload is worse than a late one.
 
