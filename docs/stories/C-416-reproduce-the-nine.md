@@ -2,12 +2,12 @@
 id: C-416
 title: "Reproduce babelforce's nine operations through the spec route, byte-identical"
 pillar: Spec
-status: in-progress
+status: done
 priority: 3
 design: docs/designs/spec-front-end.md
 epic: spec-front-end
 areas: [providers, connector-spec]
-note: "the migration safety net and C-6's real test — providers/babelforce.toml:14 has said since C-17 that 'the operation set below is the selection to reproduce'. If the spec route cannot reproduce nine hand-checked operations, it must not be trusted with 397"
+note: "DONE — babelforce became the first spec-backed connector; the deliberate non-byte-identical result retained nine vendor response schemas instead of deleting information to preserve a hash"
 ---
 
 # Reproduce babelforce's nine operations through the spec route, byte-identical

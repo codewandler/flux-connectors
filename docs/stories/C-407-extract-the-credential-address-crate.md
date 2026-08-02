@@ -2,7 +2,7 @@
 id: C-407
 title: "Extract the credential address vocabulary so the compiler leaves the publish closure"
 pillar: Build
-status: in-progress
+status: done
 note: "OWNER-DECIDED 2026-08-01: this lands BEFORE the v0.9.0 tag, so codewandler-connector-spec never becomes a published surface. Its own figures were stale — the module is 726 lines, not 387, and the crate it drags in is 11,832 lines with 128 public items, not 4,000"
 ---
 
@@ -70,11 +70,10 @@ authority), so the edge cannot simply be deleted.
       contains no compiler crate. Assert the *property*, not the current membership.
 - [x] `cargo run -p connector-cli -- diff` clean; no artifact moves. This is a crate boundary change,
       not a semantic one.
-- [ ] `docs/roadmap.md`'s "the closure is four crates, not three" paragraph is corrected — it records
+- [x] `docs/roadmap.md`'s "the closure is four crates, not three" paragraph is corrected — it records
       the leak as a reason, and after this it is no longer true.
-      **Not done: `docs/roadmap.md` is a fenced file for this implementor.** The paragraph at
-      `docs/roadmap.md:98` still states the leak as a fact of life and is now false. Left for the
-      coordinator, who owns that file.
+      The coordinator-owned paragraph now records the derived order
+      `address → catalog → secrets → pack` and that `connector-spec` is unpublished.
 
 ## Progress
 

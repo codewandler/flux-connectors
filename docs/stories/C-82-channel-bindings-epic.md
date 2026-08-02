@@ -30,8 +30,8 @@ Let a connector **describe** a flux ingress surface, so that `flux-channels` gai
       stated verification, a poll with no cursor — each is refused at load.
 - [x] Slack ships both of its real transports (Socket Mode and the Events API) from one event set,
       one payload map and one reply — proving inbound is an abstraction over transports.
-- [ ] Bindings reach the manifest and `catalog.json` — [C-83](C-83-channel-binding-codegen.md).
-- [ ] The flux-side generic channel kind is designed and its stories filed —
+- [x] Bindings reach the manifest and `catalog.json` — [C-83](C-83-channel-binding-codegen.md).
+- [x] The flux-side generic channel kind is designed and its stories filed —
       [C-84](C-84-flux-connector-channel-seam.md).
 - [ ] The delivery envelope gap is filed — [C-85](C-85-delivery-envelope.md).
 

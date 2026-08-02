@@ -462,8 +462,8 @@ cannot separate, and it is gameable in the direction that improves the grade wit
 connector. So the facts are published per axis, each traceable to a declaration the loader enforces,
 and whether a composed grade ships is decided in the open once those facts exist.
 
-One axis turned out to be load-bearing at runtime rather than descriptive: flux 0.47.1's credential
-boundary **refuses** a response carrying credential-shaped material instead of redacting it, so an
+One axis turned out to be load-bearing at runtime rather than descriptive: flux's credential
+boundary (unchanged in the current 0.49.0 source) **refuses** a response carrying credential-shaped material instead of redacting it, so an
 operation that returns a token and does not say so does not leak — it fails.
 
 Design: [designs/connector-security-posture.md](designs/connector-security-posture.md).

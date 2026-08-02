@@ -5,7 +5,7 @@ pillar: Spec
 status: blocked
 priority: 5
 areas: [providers]
-note: "BLOCKED — its own Notes say it must not start before C-127 (still ready), the acceptable-use question is unanswered, and C-206 (found here) must settle how a genuinely-public endpoint is published. Charter question too: vision.md scopes connectors to paid SaaS"
+note: "BLOCKED — C-403 made response extraction mechanically possible, but C-127 still must publish the truthful output contract; acceptable use and the paid-SaaS charter question remain. C-206 settled unauthenticated operations: declare auth = [] per operation"
 ---
 
 # The brave connector — Brave Talk's room-token HTTP surface
@@ -49,21 +49,19 @@ POST    https://8x8.vc/<tenant>/conference-request/v1?room=<room>
 
 ## Notes — two blockers and a constraint, all real
 
-**1 · The CSRF token cannot be extracted in emitted Flux today.** The `PUT` needs the
-`x-csrf-token` from the `OPTIONS` response, and `http.request` returns **one flat string**
-(`HTTP {status}\n{headers}\n{body}`), so no emitted operation can select a field out of a prior
-response — the constraint `crates/connector-flux/src/op.rs` records. A two-call handshake with a
-value threaded between them is precisely the case that does not work.
+**1 · The response contract must be published truthfully before this ships.** C-403 changed
+`http.request` to the canonical `{status, headers, body}` record, so the `OPTIONS` response can now
+carry `x-csrf-token` structurally. C-127 remains open because the catalogue still describes the
+vendor body rather than the effective envelope; shipping a handshake whose next input lives in
+`headers` before that contract is exposed would move the silent failure from runtime to guidance.
 
 This is the same limitation [C-127](C-127-truthful-output-typing.md) is about, and the
-[Tool pack](../designs/connector-tool-pack.md) is what would fix it: a Tool is Rust and can parse the
-response. **This story should not start before that lands**, or it will produce operations that
-compile and cannot be composed.
+[Tool pack](../designs/connector-tool-pack.md) returns that same record. **This story should not start
+before C-127 lands**, so a caller is told where the threaded value actually is.
 
-**2 · The endpoint is unauthenticated, and the auth model assumes a credential.** There is no API
-key here — the handshake is public, which is how the open-source `brave/brave-talk` client works.
-Whether this repo's `[[auth]]` model can express "no credential" without a consumer treating it as a
-mistake is an open question that should be answered before the TOML is written, not during.
+**2 · The endpoint is unauthenticated, and C-206 settled how to say so.** There is no API key here —
+the handshake is public, which is how the open-source `brave/brave-talk` client works. Each operation
+must declare `auth = []`; omission and connector-level `default_auth = []` do not carry that fact.
 
 **3 · Acceptable use — the reason this is `backlog` and not `ready`.** flux's own design says
 plainly:
@@ -89,17 +87,16 @@ to build.**
   p4, `D-206` Brave Talk p5), so this connector's counterpart is being built there. The XMPP stream
   stays in flux; this story remains only the three HTTP calls.
 
-- **Two of the three blockers named above still stand**, and scheduling does not clear them:
-  1. **The CSRF token still cannot be extracted.** `http.request` returns one flat string, and while
-     the Tool pack (C-115) is Rust and *could* parse a response, nothing does yet —
-     [C-127](C-127-truthful-output-typing.md) owns that. A two-call handshake threading a value
-     between the calls is exactly the case that does not work.
+- **Two blockers still stand**, and scheduling does not clear them:
+  1. **C-127's truthful output contract remains open.** C-403 closed the old flat-string premise;
+     the remaining requirement is to publish the `{status, headers, body}` envelope so a caller can
+     find and thread the CSRF header without guessing.
   2. **The acceptable-use question is unanswered.** flux's own design says to read Brave's ToS before
      this is more than a spike, and publishing in a *public catalogue* is a different act from one
      spike against your own room.
 
-  The third — "the auth model assumes a credential" — is now easier to check, since C-55 and C-91
-  both landed and the auth axes are better exercised.
+  The third — "the auth model assumes a credential" — is closed by C-206: write `auth = []` on each
+  unauthenticated operation.
 
 - **The alternative is still the better connector**: an own 8x8 JaaS tenant is a paid SaaS product
   with a real credential, squarely in charter, and free of all three problems.

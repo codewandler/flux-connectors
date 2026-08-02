@@ -2,10 +2,10 @@
 id: C-158
 title: "The site's TypeScript catalogue types are a third hand-enumeration with nothing holding them"
 pillar: Codegen
-status: in-progress
+status: done
 priority: 3
 areas: [web, connector-cli]
-note: "found by C-151, which had just derived the Rust side's field list from deny_unknown_fields' own error. web/data/catalog.mts restates the same shape a third time in another language, and NOTHING in the gate fails if it omits a published key"
+note: "DONE — the catalogue/type agreement test caught three existing omissions when it landed and caught Provider.config_choices again before v0.12.1; C-453 also put its Node gate in the release transaction"
 ---
 
 # The site's TypeScript catalogue types are a third hand-enumeration with nothing holding them

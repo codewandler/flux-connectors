@@ -41,10 +41,12 @@ closing the last gap between the babelforce connector and manager-sdk's canonica
       applies the same rule (`runtime.rs:4187`, "a nested field is an error").
 
 ## Progress
-- **The feasibility question is answered, and the answer is no.** flux **cannot** carry a
-  `multipart/form-data` body on the pinned engine line (`ENGINE_LINE = "0.46"`), so describing one in
-  the IR would produce a module that fails on a real call. Three independent confirmations, read off
-  the vendored `codewandler-flux-*-0.46.0` sources:
+- **The feasibility question is answered, and the answer is no.** The current engine line is 0.49;
+  C-455 rechecked that `http.request` still accepts a string body and the analyzer still has no
+  multipart serializer; this finding was first measured against 0.46 and survived both bumps.
+  flux therefore still cannot carry a `multipart/form-data` body, and describing one in the IR would
+  produce a module that fails on a real call. Three independent confirmations, read off the vendored
+  `codewandler-flux-*-0.46.0` sources:
   1. `http.request`'s `body` parameter is declared `{"type": "string"}` and read with
      `params.get("body").and_then(Value::as_str)` (`flux-web-0.46.0/src/http.rs:119,229-232`). A
      structured body is not merely unsupported — it is silently dropped to *no body at all*. There is

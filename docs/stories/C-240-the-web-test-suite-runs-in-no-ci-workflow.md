@@ -2,12 +2,12 @@
 id: C-240
 title: "The site's 32-test explorer suite runs in no CI workflow, so it guards nothing that a push can see"
 pillar: Build
-status: in-progress
+status: done
 priority: 1
 design:
 epic:
 areas: [build, web]
-note: "found while planning the host explorer 2026-07-31 and verified: .github/workflows/pages.yml runs `npm ci` and `npm run build` and stops. ci.yml is Rust-only. The suite is green today at 32/32 — locally, on whoever remembers"
+note: "DONE — ci.yml builds then runs the explorer suite on pull requests; C-453 additionally made the same Node gate part of scripts/cut-release.sh before any tag exists"
 ---
 
 # The web test suite runs in no CI workflow

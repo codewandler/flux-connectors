@@ -41,9 +41,9 @@ half-built toward, and it produces a written answer rather than code.
 - **The cost accounting is genuinely vendor-specific truth.** `openrouter_reported_cost` in
   `crates/flux-providers/src/lib.rs` exists because a live probe found that for non-BYOK calls
   `upstream_inference_cost` *duplicates* `cost`, so summing unconditionally double-counts.
-- **`http.request` returns one flat string** (`HTTP {status}\n{headers}\n{body}`), so an emitted op
-  cannot even field-select a completion out of its own response — the constraint
-  `crates/connector-flux/src/op.rs` already records.
+- **C-403 closed the old flat-string limitation.** `http.request` now returns
+  `{status, headers, body}`, so field selection is no longer evidence against connector-served
+  inference. Streaming, the native tool loop, caching and usage/cost remain independent objections.
 - **flux already has native providers** for `openai`, `openrouter`, `anthropic`, `codex`, `ollama` and
   `bedrock`. A connector path would be a second, worse implementation of a solved problem.
 

@@ -26,8 +26,9 @@ a flow editor renders, without inventing a language in front of Flux.
 - [x] Every node reference resolves to a member of the graph's own service; graphs join the shared
       member namespace; a graph is in the hash domain.
 - [x] Boundary nodes (`trigger`, `schedule`, `endpoint`) take no inputs and sit in no region.
-- [ ] Lowering to a composite `op` — [C-95](C-95-graph-lowering.md).
-- [ ] The node-id ↔ AST-path map — [C-96](C-96-graph-node-path-map.md).
+- [x] Lowering to a composite `op` — [C-95](C-95-graph-lowering.md). The lowering still refuses an
+      operation-output selector; C-404 owns lifting that spent guard now the response is a record.
+- [x] The node-id ↔ AST-path map — [C-96](C-96-graph-node-path-map.md).
 - [ ] The operator program pattern — [C-97](C-97-graph-boundary-program.md).
 - [ ] The richer node kinds flux-lang already has — [C-98](C-98-richer-node-kinds.md).
 
@@ -35,9 +36,10 @@ a flow editor renders, without inventing a language in front of Flux.
 - 2026-07-30 — **The IR landed.** `crates/connector-spec/src/graph.rs`; `Connector::graphs`,
   `graphs_of`, `graph`. 18 tests in `tests/graphs.rs`, including a worked
   trigger → operation → gate → operation example. No artifact changed.
-- 2026-07-30 — The design records the blocker that most threatens the idea: **`http.request` returns
-  one flat string**, so a `Select` wired to an `Operation` output cannot lower until it returns a
-  record. The IR may declare the port; C-95's lowering must refuse it.
+- 2026-07-30 — C-95 correctly refused a `Select` wired to an `Operation` output while
+  `http.request` returned a flat string.
+- 2026-08-02 — That premise is closed: C-403 pins the canonical `{status, headers, body}` record.
+  [C-404](C-404-enable-graph-lowering.md) is ready to lift the refusal and prove it on a shipped graph.
 
 ## Notes
 - **flux-lang has 43 node kinds; this repository constructs nine.** Every node here already exists in

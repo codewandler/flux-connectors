@@ -52,9 +52,10 @@ ship the first non-text one.
       reader.
 - [ ] `openai-audio-speech` ships: `POST /v1/audio/speech`, with `model`, `input` and `voice`, declared
       `risk` and `idempotency` chosen deliberately.
-- [ ] **The response is audio bytes, and that must be honest.** `http.request` returns one flat string
-      (`HTTP {status}\n{headers}\n{body}`), so binary audio through the emitted path is at best a
-      lossy string. Either declare that plainly in the operation's description, or refuse to ship the
+- [ ] **The response is audio bytes, and that must be honest.** On the pinned flux-web 0.49.0,
+      `http.request` reads bytes then applies `String::from_utf8_lossy` before placing text in the
+      `{status, headers, body}` record (unchanged in flux-web 0.49.0), so binary audio is still lossy. Either declare that plainly in
+      the operation's description, or refuse to ship the
       operation on the composite path and say why — do **not** publish an operation whose result a
       caller cannot use. See [C-127](C-127-truthful-output-typing.md); this is the same trap in a
       sharper form, because the payload is not even text.
@@ -65,11 +66,10 @@ ship the first non-text one.
 
 ## Notes
 
-- **Do the honesty check before the plumbing.** If binary audio cannot survive `http.request`'s flat
-  string, then the *declaration* is still worth having — a host using the Tool pack can parse and return
-  bytes ([C-115](C-115-request-delegation.md) is Rust) — but the composite `.flux` path cannot, and the
-  catalogue must not imply otherwise. That asymmetry is exactly what C-127 exists to express, so these
-  two stories should be read together.
+- **Do the honesty check before the plumbing.** C-403 changed the envelope, not the byte handling:
+  flux-web 0.49.0 still converts arbitrary response bytes with `String::from_utf8_lossy`. The Tool
+  pack delegates to the same implementation, so neither surface preserves audio bytes today. C-127
+  owns publishing that effective contract rather than implying the vendor response schema survives.
 - **Modality belongs to a model, not to a service.** `openai`'s one service publishes chat, embeddings
   and speech; they differ by *model*, not by surface. That is why this is not just another tag.
 - `openai-models-list` is what makes the pool live where flux's static tables go stale — C-121 records
@@ -96,8 +96,9 @@ ship the first non-text one.
 
 - **This changes the story's worked example, not its design.** Both are still one request and one
   response, so both are connector-shaped, and the honesty problem is unchanged and now sharper:
-  `POST /api/v3/tts` answers **`audio/wav`**, and `http.request` returns one flat string. Binary audio
-  through the composite path is not merely lossy — it is not usable at all. Either the operation
+  `POST /api/v3/tts` answers **`audio/wav`**, and flux-web 0.49.0 converts the response bytes with
+  `String::from_utf8_lossy` before placing them under the record's `body`. Binary audio through
+  either current path is not usable. Either the operation
   declares that plainly, or it does not ship on that path. See
   [C-127](C-127-truthful-output-typing.md).
 

@@ -233,7 +233,7 @@ pub fn emit_operation(connector: &Connector, operation: &Operation) -> Result<St
 /// `flux_lang::format_cst::format_module` re-prints parsed *text* and is the one a human editing a
 /// generated file runs, so it is the one the C-11 canonicality gate compares against
 /// (`tests/op_emitter.rs`, every per-provider `…_emits_an_analyzable_module`). Measured on
-/// flux-lang 0.47.1: a list expression is `[ a, b ]` from the AST printer and `[a, b]` from the CST
+/// flux-lang 0.49.0: a list expression is `[ a, b ]` from the AST printer and `[a, b]` from the CST
 /// formatter, while a record is `{ a: b }` from both. So the moment a body carried an array, the
 /// emitter's own documented promise — *"flux-lang's own formatter leaves it unchanged"* — stopped
 /// being true, and it stopped being true for the whole module rather than for the array.

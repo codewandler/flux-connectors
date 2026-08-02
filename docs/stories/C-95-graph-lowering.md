@@ -6,7 +6,7 @@ status: done
 design: docs/designs/flow-graph.md
 epic: flow-graph
 areas: [connector-flux]
-note: "owns symbol generation and region nesting. MUST refuse a Select wired to an Operation output until http.request returns a record — today the response is one flat string"
+note: "lowering landed with the then-correct Operation-output refusal; C-403 later made http.request return a record, and ready story C-404 now owns lifting that spent guard on a real graph"
 ---
 
 # Lower a flow graph to a composite Flux op
@@ -31,6 +31,8 @@ of interpreting config.
       to `null` on every response. Splitting it needs an `expr` escape that is not a fixed point of
       flux's formatter. This is a refusal, not a degradation — emitting a selector that always yields
       null is precisely the plausible-but-wrong output `AGENTS.md` forbids.
+      **Historical acceptance:** this was correct when C-95 landed. C-403 closed the premise and
+      C-404 owns removing the refusal without erasing why it existed.
 - [x] Golden `.flux` files for the worked example and one region-per-kind — *three* of the four
       kinds; `throttle` cannot be spelled by flux-lang 0.39 (see Progress) and is pinned as a
       refusal instead.

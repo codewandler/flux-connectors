@@ -23,6 +23,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Forgotten worktrees and their story state are reconciled before release** (C-454). Five stories
+  whose implementations and Progress were complete now say `done`; blocker chains and epic
+  checklists match the commits already on `main`. All 75 merged local branch pointers were removed.
+  Recoverable Git objects were reviewed before pruning: completed work was already superseded,
+  C-403's leftover would have reverted the engine and response contract, and the unsanitized C-25
+  document was never merged. A concurrently-created Flux 0.49 worktree was detected and integrated
+  as C-455 instead of being mistaken for stale debris.
+
 - **A release cut now runs both Node consumer gates before it creates a tag** (C-453). v0.12.0
   demonstrated the hole: its crates.io workflow published successfully while CI's public-site job
   found three red assertions. `scripts/cut-release.sh` now runs the public-site build and 42 tests

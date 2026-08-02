@@ -2,12 +2,12 @@
 id: C-191
 title: "Publish the explorer components as an npm package — C-142's deferral condition is met"
 pillar: Surfaces
-status: blocked
+status: ready
 priority: 2
 design: docs/designs/explorer-ux.md
 epic: explorer-ux
 areas: [web]
-note: "BLOCKED on C-158 only. C-205 is DONE (the web gate is green -- verified 32/32 on 2026-07-31, and the earlier red reading was npm test run without the npm run build that precedes it). C-142 deferred extraction until a second consumer exists; babelforce's console is one, and C-238 makes this host a second"
+note: "READY — both blockers are done: C-205 repaired the prose guard and C-158 holds TypeScript declarations to catalog.json; C-453 re-proved that gate at 42/42 and put it in the release transaction"
 ---
 
 # Publish the explorer components as an npm package
@@ -62,6 +62,9 @@ repository where this repository's test cannot see it.
   connector-shaped data — worth knowing when deciding what the package's surface must be.
 
 ## Progress
+
+- **2026-08-02 — unblocked.** C-205 and C-158 are both `done`; the web build and all 42 tests pass
+  on the release candidate. The remaining work is the package described by Acceptance.
 
 - **2026-07-31 — dispatched, and parked without a diff.** Two independent blockers, both traced to
   the merge base by the implementor and both re-verified by the coordinator against a clean `main`.

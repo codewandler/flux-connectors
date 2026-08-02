@@ -36,7 +36,7 @@ minor line. The connector release is therefore a minor bump, never a patch.
       appears anywhere.
 - [x] Generated artifacts are rebuilt and `connector-cli diff` reports a fixed point.
 - [ ] The full Rust gate, public-site gate, host-page gate and crates.io dry-run closure are green.
-- [ ] The engineering and customer changelogs state the compatibility break and the required
+- [x] The engineering and customer changelogs state the compatibility break and the required
       downstream action.
 - [ ] A minor release is tagged and pushed through CI; all four published crates are visible on
       crates.io before flux-exchange is changed.
@@ -52,7 +52,7 @@ minor line. The connector release is therefore a minor bump, never a patch.
   `connector-cli diff` reports `951 artifacts up to date (54 providers checked)`.
 
 ## Notes
-- Precedent: [[C-431]], the 0.46 → 0.47 engine move. The value is compatibility at the public trait
+- Precedent: [C-431](C-431-move-the-flux-pin-to-0-47.md), the 0.46 → 0.47 engine move. The value is compatibility at the public trait
   seam; any behavioural difference discovered by the gate is recorded rather than assumed.
-- The dirty primary checkout is user-owned. This work runs from committed `a835478` in an isolated
-  worktree and includes none of that checkout's uncommitted generated output.
+- C-454 integrated commit `6e421af` from the isolated worktree into `main`; its later interrupted
+  release transaction is regenerated rather than copied.

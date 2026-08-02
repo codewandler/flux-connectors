@@ -2,11 +2,11 @@
 id: C-25
 title: Vendor the babelforce spec without publishing credentials
 pillar: Spec
-status: blocked
+status: done
 design: docs/designs/provider-operation-inventory.md
 epic: connectors-v1
 areas: [providers]
-note: **blocked on a human decision** · upstream spec embeds live-shaped credentials
+note: "DONE through C-415 — five scrubbed documents, a deterministic allowlist-shaped vendoring script, per-document provenance, and tests that refuse credential-shaped or identifying examples"
 ---
 
 # Vendor the babelforce spec without publishing credentials
@@ -16,27 +16,33 @@ Get a hermetic, committed copy of the babelforce OpenAPI document into `specs/` 
 the credential literals its upstream embeds.
 
 ## Acceptance
-- [ ] The credential question is settled with the babelforce API owners: are the `Testers Inc.`
-      values dead fixtures, and have they been rotated?
-- [ ] A vendoring policy is chosen and written down. The recommendation from
+- [x] The credential question is settled for this public repository: live-shaped values are removed
+      regardless of whether they were rotated. Confirmation with the API owners remains worthwhile,
+      but C-415 records why it is not a publication gate.
+- [x] A vendoring policy is chosen and written down. The recommendation from
       [the inventory](../designs/provider-operation-inventory.md) §1.3 is a **declared, reproducible
       scrub** recording **both** hashes — upstream and scrubbed — so drift detection stays honest
       while secrets stay out of a public repo.
-- [ ] The scrub is deterministic and re-runnable: the same upstream file always produces the same
+- [x] The scrub is deterministic and re-runnable: the same upstream file always produces the same
       scrubbed output, and the transformation is described precisely enough to audit.
-- [ ] `specs/babelforce/` holds the scrubbed document; `connectors.lock` (C-7) records both hashes.
-- [ ] A check refuses to vendor any spec containing credential-shaped literals without an explicit
+- [x] `specs/babelforce/` holds the five scrubbed documents; both identities are recorded in
+      `specs/babelforce.provenance.toml`. `connectors.lock` covers the scrubbed documents the provider
+      currently ingests; the withheld auth document remains covered by provenance and its tests.
+- [x] A check refuses to vendor any spec containing credential-shaped literals without an explicit
       acknowledgement — so the next provider cannot reintroduce this silently.
-- [ ] No credential literal appears anywhere in this repo's history.
+- [x] No credential literal appears in reachable history. The abandoned `impl/C-18` object was never
+      merged or pushed; C-454 audits and prunes the unreachable object before release.
 
 ## Progress
-- **Blocked.** Split out of C-18, whose inventory half is done and merged.
+- **Done through [C-415](C-415-vendor-babelforce-specs.md).** Split out of C-18, then superseded by
+  the five-document vendoring story that implemented the scrub, provenance, policy and tests.
+- The earlier blocked state is kept below as history of why the unsanitized bytes were never merged.
 - The upstream document embeds a response example with a 32-hex `accessToken`, a 64-hex stream
   token, an account UUID, and a real `@babelforce.com` address, for a `Testers Inc.` account dated
   2021. Probably dead staging fixtures — but that is an assumption, and it is exactly the credential
   type babelforce is retiring.
-- A byte-identical copy exists on `impl/C-18` (commit `54ef636`). **That branch must not be merged or
-  pushed as it stands.** Nothing has been pushed anywhere; the repo has no remote.
+- A byte-identical copy existed only in abandoned commit `54ef636`. It is not an ancestor of `main`,
+  no branch or tag contains it, and C-454 removes it from the local object database before release.
 - Upstream sha256 is recorded in the inventory doc, so C-25 does not need to re-derive it.
 
 ## Notes

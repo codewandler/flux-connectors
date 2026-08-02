@@ -84,7 +84,7 @@ const UNREAD: [(HttpMethod, &str); 3] = [
 ///   `BodyEncoding` is `Json | Form` and this IR has no third value. Five manager operations are
 ///   file uploads. That is an **IR gap, not a selection gap** — nothing here failed to match them,
 ///   ingest never produced them. C-426 went to close it and found the gap is **not this
-///   repository's**: flux 0.47 cannot carry a multipart body, so the IR variant would describe a
+///   repository's**: flux 0.49 cannot carry a multipart body, so the IR variant would describe a
 ///   request no emitted module could perform. See the entries themselves.
 /// - **Four are withheld by rule** ([`Gap::Withheld`]). Three `/oauth/*` endpoints, because an
 ///   authentication endpoint describes how to authenticate rather than being an operation; and

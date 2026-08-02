@@ -2,9 +2,9 @@
 id: C-404
 title: "Enable the Graph → composite-operation lowering now that a response is a record"
 pillar: Codegen
-status: blocked
+status: ready
 priority: 2
-note: "the lowering is BUILT and has zero providers using it, because a composite op could not read a field out of a previous step's flat-string response. flux 0.43 made the response a record; C-403 is what brings that here"
+note: "READY — C-403 landed the canonical {status, headers, body} response record and its host test; the lowering and its old refusal exist, so this story now removes the spent guard and proves a real graph"
 ---
 
 # Enable the Graph → composite-operation lowering
@@ -38,8 +38,9 @@ to the same Flux as vendor ones and are indistinguishable from them to a caller.
       member, or the rule is written down if it is something else.
 
 ## Progress
-- (blocked on C-403)
+- **2026-08-02 — unblocked.** C-403 is `done`; `docs/integrating-with-flux.md` and
+  `live_egress::the_response_comes_back_as_a_record_not_a_flat_string` pin the record response.
 
 ## Notes
-- Do not start before C-403. The lowering's refusal is *correct* for the pinned flux, and lifting it
-  first would ship a composite that cannot run.
+- C-403 was the prerequisite and is now done. Preserve the refusal's history when lifting it so the
+  safety decision remains reviewable.

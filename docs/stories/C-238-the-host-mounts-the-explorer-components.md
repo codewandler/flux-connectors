@@ -7,7 +7,7 @@ priority: 2
 design: docs/designs/host-explorer.md
 epic: host-explorer
 areas: [host, web]
-note: "phase 2 — BLOCKED on C-158 then C-191. C-142 already detached the components from VitePress for exactly this, and their README marks the page tier as 'the one a host may reasonably decline'"
+note: "phase 2 — BLOCKED only on C-191 now that C-158 is done. C-142 already detached the components from VitePress for exactly this, and their README marks the page tier as 'the one a host may reasonably decline'"
 ---
 
 # The host mounts the explorer components rather than restating them
@@ -95,8 +95,7 @@ execute.
 
 ## Notes
 
-- **Blocked, in order:** [C-158](C-158-typescript-catalogue-types-drift.md)
-  then [C-191](C-191-publish-the-explorer-components.md). C-191's other blocker, C-205, is done, and
+- **Blocked only on [C-191](C-191-publish-the-explorer-components.md).** C-158 and C-205 are done, and
   this story makes the console C-191's **second consumer** — the integration proof its acceptance
   asks for and cannot get from the site alone.
 - **The build root goes at `crates/connectors-api/ui/`, not under `web/`.** A credential-collecting

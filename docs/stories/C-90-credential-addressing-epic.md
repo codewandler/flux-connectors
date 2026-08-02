@@ -29,8 +29,8 @@ store can be wrapped in a convention rather than each deployment inventing one.
 - [x] `parse(render(r)) == r` as a property over a hostile corpus, with the validator as the gate.
 - [x] Derivation from a `Connector`, with the three outcomes distinguishable — a bad tenant is the
       caller's error, a missing authority is `Ok(None)`, a path is neither.
-- [ ] A `SecretStore` trait and a Vault implementation — [C-91](C-91-connector-secrets-crate.md).
-- [ ] Every provider declares an authority, so every provider has a path —
+- [x] A `SecretStore` trait and a Vault implementation — [C-91](C-91-connector-secrets-crate.md).
+- [x] Every provider declares an authority, so every provider has a path —
       [C-92](C-92-authorities-for-every-provider.md).
 - [ ] The flux adapter — [C-93](C-93-flux-credential-store-adapter.md).
 
