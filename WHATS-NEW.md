@@ -14,6 +14,8 @@
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-08-02
+
 ### Action needed
 
 - **Rust consumers that construct connector provenance directly must add one field.**
