@@ -12,6 +12,33 @@
 
 # What's new in flux-connectors
 
+## 0.11.0
+
+### New
+
+- **Anthropic's Admin API now covers who is in your organization.** Six more read operations: list
+  organization members and read one by id, list the members of a workspace and read one by id, read a
+  single workspace, and list outstanding invites. These join the existing organization, workspace and
+  API-key reads.
+
+  Two things to know. Every one of these calls returns the whole first page and no more — this
+  connector cannot yet ask for the next one, and each call says so in its own description, so a large
+  organization will see a partial list rather than an error. And these responses carry real people's
+  names and email addresses; every such field is marked so, and the marking is enforced by a test
+  rather than by review.
+
+- **Every connector now says what kind of thing it is.** All 54 carry a domain label — telephony,
+  payments, support, observability and twenty-odd more — so a catalogue can be filtered by domain
+  instead of scrolled. Providers whose surfaces differ are labelled per surface: Google's mail is
+  email, its Drive is storage. Nothing you can call has changed; this is descriptive.
+
+### Action needed
+
+- **If you build against the `codewandler-connector-spec` crate and construct a `Service` value
+  directly, your build will break.** The struct gained a `tags` field; add `tags: Vec::new()` or use
+  `..Default::default()`. Reading and writing connector files is unaffected.
+
+
 ## [Unreleased]
 
 ## [0.10.1] — 2026-08-01

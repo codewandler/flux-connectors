@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed — breaking for `codewandler-connector-spec` consumers
+
+- **`Service` gained a public `tags` field** (C-153), and the struct is not `#[non_exhaustive]`, so
+  any downstream code constructing a `Service` with a struct literal will no longer compile. Four
+  literals inside this workspace needed the field added. Add `tags: Vec::new()` (or `..Default::default()`).
+  Serialization is unaffected — the field is `skip_serializing_if`, so a service declaring no tag
+  encodes exactly as before.
+
 ### Documented
 
 - **The Managed Agents surface, inventoried before any TOML — and it contradicts its own epic's
@@ -26,6 +34,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   No provider TOML was written, which is the outcome C-130's precedent exists to make legible.
 
 ### Added
+
+- **The Anthropic Admin service goes from three reads to nine** (C-441). Organization members (list
+  and get), workspace members (list and get), one workspace by id, and outstanding invites. Every one
+  is an authenticated, idempotent `GET` against `anthropic.admin_key`, and every one is
+  **unparameterized** — C-30 leaves no query encodable, so each list declares its `first_id` /
+  `last_id` / `has_more` cursor fields as *unusable here* and says in its description that the call is
+  unpaginated. No write was added: the mutating surface still needs a request/response shape decision
+  nobody has made.
+
+  **Every field that names or contacts a person carries the personal-data sentence**, pinned by JSON
+  Pointer in `crates/connector-spec/tests/anthropic_admin_surface.rs` rather than left to review. Two
+  shipped lists (`anthropic-workspaces-list`, `anthropic-api-keys-list`) had bare cursor fields with
+  no descriptions and were brought up to the same convention.
+
 
 - **A service says what kind of thing it is, so 54 providers can be filtered by domain** (C-153).
   `Tag` is a closed 27-value vocabulary on a service, beside `roles` — `telephony` for babelforce and

@@ -277,7 +277,7 @@ roles = ["llm_catalogue"]
 [[services]]
 name = "admin"
 tags = ["ai"]
-description = "Admin API: organization info, workspaces, and API keys — read-only"
+description = "Admin API: organization info and members, workspaces and their members, API keys, and outstanding invites — read-only"
 
 # ---------------------------------------------------------------------------------------------
 # Operations — the models service (2), then the admin service (9). All eleven are GET, all

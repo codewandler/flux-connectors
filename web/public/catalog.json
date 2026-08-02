@@ -1223,7 +1223,7 @@
         },
         {
           "name": "admin",
-          "description": "Admin API: organization info, workspaces, and API keys — read-only",
+          "description": "Admin API: organization info and members, workspaces and their members, API keys, and outstanding invites — read-only",
           "base_url": "https://api.anthropic.com",
           "hosts": [
             "api.anthropic.com"

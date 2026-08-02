@@ -2,7 +2,7 @@
 id: C-441
 title: "Widen the Anthropic Admin service to the members, workspace and invite reads it does not have"
 pillar: Spec
-status: in-progress
+status: done
 priority: 2
 epic: provider-roles
 areas: [providers]

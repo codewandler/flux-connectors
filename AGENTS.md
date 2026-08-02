@@ -173,7 +173,7 @@ cargo run -p connector-cli -- build
 cargo run -p connector-cli -- diff
 ```
 
-`diff` must finish with `558 artifacts up to date (53 providers checked)` for the current catalogue
+`diff` must finish with `951 artifacts up to date (54 providers checked)` for the current catalogue
 (measured 2026-08-01, after C-189 made `connectors.lock` the 558th). The artifact count may
 legitimately change when providers or operations change; do not encode it as a permanent invariant.
 It is also not currently checked against this file — see C-81 and the caveat under
