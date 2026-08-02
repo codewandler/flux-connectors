@@ -2,7 +2,7 @@
 id: C-446
 title: "Can HmacSpec express the Managed Agents webhook signature, and what is the event set?"
 pillar: Spec
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/managed-agents-verification.md
 epic: anthropic-managed-agents
