@@ -26,9 +26,15 @@
   }
   header h1 { font-size: 1rem; margin: 0; font-weight: 650; }
   header .note { color: var(--warn); font-size: .8rem; }
-  main { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 0; min-height: calc(100vh - 57px); }
+  main { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: 0; min-height: calc(100vh - 57px); }
   @media (max-width: 720px) { main { grid-template-columns: 1fr; } }
-  #list { border-right: 1px solid var(--line); overflow-y: auto; max-height: calc(100vh - 57px); }
+  #rail { border-right: 1px solid var(--line); display: flex; flex-direction: column; max-height: calc(100vh - 57px); }
+  #controls { padding: .6rem .7rem; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: .45rem; }
+  #controls .bands { display: flex; gap: .3rem; flex-wrap: wrap; }
+  #controls button { font-size: .74rem; padding: .2rem .5rem; }
+  #controls button.on { border-color: var(--accent); color: var(--accent); }
+  #showing { color: var(--muted); font-size: .74rem; }
+  #list { overflow-y: auto; }
   #detail { padding: 1.25rem; overflow-y: auto; max-height: calc(100vh - 57px); }
   .conn {
     padding: .6rem .9rem; border-bottom: 1px solid var(--line); cursor: pointer;
@@ -50,18 +56,19 @@
   .dot.no-credential { background: transparent; border: 1px solid var(--warn); }
   .state { font-size: .78rem; }
   .op.uncallable .id { opacity: .55; }
-  .op .needs { font-size: .7rem; color: var(--warn); margin-left: .4rem; }
+  .op .needs { font-size: .7rem; color: var(--warn); }
   h2 { font-size: 1.1rem; margin: 0 0 .2rem; }
   .muted { color: var(--muted); }
   .sub { color: var(--muted); font-size: .85rem; margin-bottom: 1rem; }
   section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .9rem; margin-bottom: 1rem; }
   section h3 { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 .6rem; }
-  code, pre, input, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem; }
+  code, pre, input, textarea, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem; }
   pre { background: var(--code); padding: .7rem; border-radius: 6px; overflow-x: auto; margin: 0; }
-  input, select {
+  input, select, textarea {
     font: inherit; padding: .35rem .5rem; border: 1px solid var(--line);
     border-radius: 5px; background: var(--bg); color: var(--ink); width: 100%;
   }
+  textarea { resize: vertical; line-height: 1.45; }
   button {
     font: inherit; font-size: .85rem; padding: .35rem .8rem; border-radius: 5px;
     border: 1px solid var(--accent); background: var(--accent); color: var(--bg);
@@ -69,17 +76,44 @@
   }
   button.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
   button:disabled { opacity: .5; cursor: default; }
-  .row { display: flex; gap: .5rem; align-items: center; margin-bottom: .5rem; }
+  .row { display: flex; gap: .5rem; align-items: center; margin-bottom: .5rem; flex-wrap: wrap; }
   .row label { flex: 0 0 12rem; font-size: .82rem; }
   table { width: 100%; border-collapse: collapse; font-size: .85rem; }
   td, th { text-align: left; padding: .3rem .4rem; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { color: var(--muted); font-weight: 550; font-size: .78rem; }
-  .op { padding: .45rem .5rem; border-bottom: 1px solid var(--line); cursor: pointer; display: flex; gap: .5rem; align-items: baseline; }
+  /* One service's operations. `service` is the addressing level C-49 established: contentful's
+     `delivery` and `management` are two APIs against two different spaces, and a flat list of ~30
+     rows says nothing about which call goes where. */
+  .service { margin-bottom: .8rem; }
+  .service h4 {
+    font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted);
+    margin: 0 0 .2rem; display: flex; gap: .4rem; align-items: baseline; flex-wrap: wrap;
+  }
+  .op { padding: .45rem .5rem; border-bottom: 1px solid var(--line); cursor: pointer; display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; }
   .op:hover { background: var(--code); }
   .op .id { font-family: ui-monospace, monospace; font-size: .82rem; }
-  .op .risk { font-size: .7rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); margin-left: auto; }
+  .op .desc { font-size: .8rem; flex: 1 1 14rem; }
+  .op .meta { margin-left: auto; display: flex; gap: .4rem; align-items: baseline; flex-wrap: wrap; }
+  .risk, .chip { font-size: .7rem; letter-spacing: .03em; color: var(--muted); }
+  .risk { text-transform: uppercase; }
+  .chip { border: 1px solid var(--line); border-radius: 4px; padding: 0 .25rem; }
+  /* An absence the host stated, drawn as an absence. Never the warning colour: "this catalogue
+     does not carry that field" is not a defect in the connector — see `published` below. */
+  .unpublished { color: var(--muted); font-style: italic; opacity: .8; }
+  .response { display: flex; flex-direction: column; gap: .4rem; }
+  .response-status { font-weight: 600; font-size: .85rem; }
+  .response-headers summary { cursor: pointer; color: var(--muted); font-size: .78rem; }
   .err { color: var(--warn); white-space: pre-wrap; }
   .ok { color: var(--accent); }
+  /* **Layout hygiene, borrowed rather than rediscovered.** `OperationRow.vue`'s comment records
+     what the absence of these three rules cost the site: a grid or flex child defaults to
+     `min-width: auto` and refuses to shrink below its content, and a path like
+     `/v0/{baseId}/{tableIdOrName}/{recordId}` offers no break opportunity — so every row forced its
+     track wider than the viewport and the page scrolled sideways by ~193px. `min-width: 0` on the
+     children, `flex-wrap: wrap` on the rows above, `overflow-wrap: anywhere` on the strings that
+     have nowhere to break. */
+  main > *, #rail > *, .row > *, .op > *, .conn > *, .response > * { min-width: 0; }
+  .mono, code, pre, .op .id, .op .desc, .addr, .response-status { overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -90,7 +124,10 @@
   <span class="muted" id="who"></span>
 </header>
 <main>
-  <div id="list"></div>
+  <div id="rail">
+    <div id="controls"></div>
+    <div id="list"></div>
+  </div>
   <div id="detail"><p class="muted">Pick a connector.</p></div>
 </main>
 
@@ -114,7 +151,29 @@ const api = async (method, path, body) => {
   return data;
 };
 
-let connectors = [], current = null;
+let connectors = [], current = null, query = '', band = 'all';
+
+// **A field the host did not publish is not a fact about the connector** (C-408).
+//
+// `web/data/catalog.mts` spells this `Published<T> = T | null | undefined` with one predicate over
+// it, because a source that omits a key and a source that writes `null` are saying the same thing
+// and no consumer should have to know which its source chose. The public explorer learned the cost
+// from a second consumer: flux-exchange's console publishes no `auth`, so `ProviderCard` rendered
+// "not configured" in the danger colour on every card — a red claim that service never made.
+//
+// This is the other surface that reads a catalogue, so it is the other surface with the mistake
+// available, and it has no second consumer to find it. Hence the same rule, drawn muted and never
+// in the warning colour: an absence the source stated is not a defect.
+const UNPUBLISHED = 'not published';
+const published = v => v !== null && v !== undefined && v !== '';
+const fact = (value, className = '') => published(value)
+  ? el('span', { className }, String(value))
+  : el('span', {
+      className: 'unpublished',
+      title: 'The host served no value for this field. That is a fact about the catalogue, not about the connector.',
+    }, UNPUBLISHED);
+const joined = (value, separator = ' · ') =>
+  published(value) && value.length ? value.join(separator) : null;
 
 // The four answers to "is there anything for me to do here?", plus the partial one. Keyed by the
 // server's own `wiring` token — the same vocabulary the published catalogue uses for the two
@@ -140,16 +199,88 @@ const WIRING = {
 };
 const wiringOf = c => (WIRING[c.wiring] ?? (() => ['muted', c.wiring]))(c);
 
+// **Which connectors the rail is showing** — the operator's real first question at 54 of them.
+//
+// Keyed on the host's own `wiring` tokens rather than on a second classification, for the reason
+// the sentences above are: two surfaces describing one fact, joined by a string neither declares to
+// the other. *"Which of these still need setup"* is `not-wired` and `partly-wired` — the two states
+// where there is work an operator can actually do; `no-credential` is deliberately not one of them,
+// because there is nothing they can do about it, and putting it in the setup list is how somebody
+// spends an afternoon looking for freshdesk's token.
+const BANDS = [
+  ['all', 'All', () => true],
+  ['setup', 'Needs setup', c => c.wiring === 'not-wired' || c.wiring === 'partly-wired'],
+  ['ready', 'Ready', c => c.wiring === 'wired' || c.wiring === 'no-credential-required'],
+  ['blocked', 'Blocked', c => c.wiring === 'no-credential'],
+];
+
+// **SEARCH, and a knowing duplicate.** `web/data/catalog.mts` already has `narrowView`, `facet`,
+// `serviceFacet` and `sortOperations` as pure functions over the catalogue shape, and this page
+// hand-rolls the subset it needs instead. That is deliberate and it is C-236 phase 1: this file has
+// no build step, no npm and no module system, so importing them is not available to it, and porting
+// the components here would make both this story and C-238 harder. **C-238 deletes this half.**
+// Nobody should defend the duplication on its merits — it is scaffolding with an owner.
+//
+// What a person actually types is a connector name, a vendor, or an operation id they know from a
+// tool call. All three are indexed; the id is the one a vendor-keyed search would miss, and it is
+// the one an operator has in front of them when something failed.
+const index = new Map();
+const indexOf = c => [
+  c.id, c.vendor, c.description,
+  ...(c.operations ?? []).flatMap(o => [o.id, o.tool, o.service, o.description]),
+].filter(published).join(' ').toLowerCase();
+
 async function load() {
   connectors = await api('GET', '/v1/connectors');
+  index.clear();
+  for (const c of connectors) index.set(c.id, indexOf(c));
   const ops = connectors.reduce((n, c) => n + c.operation_count, 0);
   $('#counts').textContent = `${connectors.length} connectors · ${ops} operations`;
+  renderControls();
   renderList();
+}
+
+/** The rail's controls, built once — a signed-out page has nothing to search. */
+function renderControls() {
+  const controls = $('#controls');
+  if ($('#search')) return;
+  const search = el('input', {
+    id: 'search', type: 'search', autocomplete: 'off',
+    placeholder: 'Search connectors, vendors, operations',
+  });
+  search.oninput = () => { query = search.value; renderList(); };
+  const bands = el('div', { className: 'bands' });
+  for (const [key, label] of BANDS) {
+    const button = el('button', { className: 'ghost' + (band === key ? ' on' : '') }, label);
+    button.onclick = () => {
+      band = key;
+      for (const other of bands.children) other.className = 'ghost';
+      button.className = 'ghost on';
+      renderList();
+    };
+    bands.append(button);
+  }
+  controls.replaceChildren(search, bands, el('div', { id: 'showing' }));
+}
+
+/** The connectors the current search and band admit, in the catalogue's own order. */
+function matching() {
+  const holds = (BANDS.find(entry => entry[0] === band) ?? BANDS[0])[2];
+  const needle = query.trim().toLowerCase();
+  return connectors.filter(c =>
+    holds(c) && (!needle || (index.get(c.id) ?? '').includes(needle)));
 }
 
 function renderList() {
   const list = $('#list');
-  list.replaceChildren(...connectors.map(c => {
+  const shown = matching();
+  const counter = $('#showing');
+  if (counter) {
+    counter.textContent = shown.length === connectors.length
+      ? `${connectors.length} connectors`
+      : `${shown.length} of ${connectors.length} connectors`;
+  }
+  list.replaceChildren(...shown.map(c => {
     const node = el('div', { className: 'conn' + (current === c.id ? ' on' : ''), title: wiringOf(c)[1] },
       el('span', { className: 'dot ' + c.wiring }),
       el('span', { className: 'name' }, c.vendor),
@@ -162,6 +293,28 @@ function renderList() {
   }));
 }
 
+// **Why an operation cannot be called, in the vocabulary the host sent** (C-235).
+//
+// An empty `requires` has two opposite meanings and the token is what separates them, so the token
+// is what this reads. The page used to render the empty list straight into `'needs ' + ''` — the
+// word "needs" with nothing after it — for every one of freshdesk's operations, which an operator
+// quite reasonably reads as *nothing is needed*. That is the exact conclusion C-235 exists to stop
+// them drawing: the request goes out unauthenticated and the vendor refuses it.
+const REQUIREMENT = {
+  'no-credential': () => 'credential withheld — this repository does not hold what the vendor '
+                       + 'wants, so the call is refused',
+  'no-credential-required': () => null,
+};
+const requirementOf = o => {
+  const stated = REQUIREMENT[o.requirement];
+  if (stated) return stated(o);
+  if (o.callable) return null;
+  // `requires` is an OR over mechanisms, each an AND of credentials that must travel together, so
+  // it is rendered as such rather than flattened.
+  const ways = (o.requires ?? []).map(m => m.join(' + ')).join(' or ');
+  return ways ? 'needs ' + ways : 'needs a credential this connector does not name';
+};
+
 async function show(id) {
   current = id;
   renderList();
@@ -169,7 +322,7 @@ async function show(id) {
   const d = $('#detail');
   d.replaceChildren();
   const [tone, sentence] = wiringOf(c);
-  d.append(el('h2', {}, c.vendor), el('div', { className: 'sub' }, c.description),
+  d.append(el('h2', {}, c.vendor), el('div', { className: 'sub' }, fact(c.description)),
     el('p', { className: 'state ' + tone, style: 'margin:-.7rem 0 1rem' }, sentence));
 
   // --- credentials -------------------------------------------------------
@@ -199,20 +352,36 @@ async function show(id) {
       } catch (e) { status.textContent = e.message; status.className = 'err'; }
       save.disabled = false;
     };
+    // **The other half of storing one.** `DELETE /v1/credentials/{provider}/{credential}` has been
+    // served since C-203 and nothing on this page could reach it, so an operator could put a
+    // credential in and not take it back out — on the one surface whose whole job is holding them.
+    const remove = el('button', { className: 'ghost' }, 'Remove');
+    remove.disabled = !cr.stored;
+    remove.onclick = async () => {
+      remove.disabled = true;
+      try {
+        await api('DELETE', `/v1/credentials/${c.id}/${cr.name}`);
+        await load();
+        await show(c.id);
+      } catch (e) {
+        status.textContent = e.message; status.className = 'err';
+        remove.disabled = false;
+      }
+    };
     creds.append(
-      el('div', { className: 'row' }, el('label', {}, cr.name), input, save, status),
-      el('div', { className: 'muted mono', style: 'margin:-.25rem 0 .6rem 12.5rem;font-size:.75rem' },
+      el('div', { className: 'row' }, el('label', {}, cr.name), input, save, remove, status),
+      el('div', { className: 'muted mono addr', style: 'margin:-.25rem 0 .6rem 12.5rem;font-size:.75rem' },
         (cr.address ?? 'no address — connector declares no authority') + ' · ' + cr.placement
         + (cr.needs_username ? ' · needs a username via config' : '')));
   }
   d.append(creds);
 
   // --- configuration -----------------------------------------------------
-  const tpl = [...c.base_url.matchAll(/\{(\w+)\}/g)].map(m => m[1]);
+  const tpl = [...(c.base_url ?? '').matchAll(/\{(\w+)\}/g)].map(m => m[1]);
   if (tpl.length || c.credentials.some(cr => cr.needs_username) || c.settings.length) {
     const cfg = el('section', {}, el('h3', {}, 'Configuration'),
       el('p', { className: 'muted', style: 'margin-top:-.3rem;font-size:.82rem' },
-        `Base URL: ${c.base_url}`));
+        'Base URL: ', fact(c.base_url, 'mono')));
     const kind = el('select', {}, el('option', { value: 'endpoint' }, 'endpoint'),
                                    el('option', { value: 'username' }, 'username'));
     const service = el('input', { value: 'default', placeholder: 'service' });
@@ -269,50 +438,242 @@ async function show(id) {
   }
 
   // --- operations --------------------------------------------------------
-  // The honest unit is the operation, so each one says for itself whether it can be called and,
-  // when it cannot, which credential is missing. `requires` is an OR over mechanisms, each an AND
-  // of names that must travel together, so it is rendered as such rather than flattened.
+  // **No request is made here, and that is the story** (C-237). This list used to run
+  // `Promise.all(c.operations.map(o => api('GET', '/v1/operations/' + o.id)))` — one request per
+  // operation in the connector, ~30 for the largest, to read `tool`, `description` and `risk`.
+  // C-212 added `requires` and `callable` to `operations[]` *specifically* so that would not be
+  // needed and this page kept doing it anyway; C-237 put the other five fields there too, so
+  // opening a connector costs nothing beyond the connector itself. The one request left is the one
+  // an operator asks for: expanding an operation fetches its Flux and its parameter schema, which
+  // are the two things the list deliberately does not carry.
+  //
+  // The honest unit is still the operation: each says for itself whether it can be called and, when
+  // it cannot, why — in the host's own vocabulary, via `requirementOf`.
   const opsSection = el('section', {}, el('h3', {}, `Operations · ${c.callable_operations} of ${c.operation_count} callable`));
-  const holder = el('div', {}, el('span', { className: 'muted' }, 'loading…'));
-  opsSection.append(holder);
+  const services = new Map();
+  for (const o of c.operations ?? []) {
+    const key = published(o.service) ? o.service : '';
+    if (!services.has(key)) services.set(key, []);
+    services.get(key).push(o);
+  }
+  // `default` first — it is the service an operation belongs to unless its connector says
+  // otherwise — then alphabetically, so `delivery` and `management` sit in a stable order.
+  const order = ([a], [b]) => (a === 'default' ? -1 : b === 'default' ? 1 : a.localeCompare(b));
+  for (const [service, ops] of [...services].sort(order)) {
+    const group = el('div', { className: 'service' });
+    group.dataset.service = service;
+    group.append(el('h4', {},
+      service === '' ? fact(null) : service,
+      el('span', { className: 'chip' }, `${ops.length}`)));
+    for (const o of [...ops].sort((a, b) => (a.tool ?? a.id).localeCompare(b.tool ?? b.id))) {
+      const needs = requirementOf(o);
+      const node = el('div', { className: 'op' + (o.callable ? '' : ' uncallable') });
+      node.dataset.operation = o.id;
+      node.append(
+        el('span', { className: 'id' }, published(o.tool) ? o.tool : o.id),
+        fact(o.description, 'muted desc'),
+        needs ? el('span', { className: 'needs' }, needs) : '',
+        el('span', { className: 'meta' },
+          fact(o.risk, 'risk'),
+          fact(o.idempotency, 'chip'),
+          fact(joined(o.hosts), 'chip')));
+      node.onclick = () => expand(o, opsSection);
+      group.append(node);
+    }
+    opsSection.append(group);
+  }
   d.append(opsSection);
-  const details = await Promise.all(c.operations.map(o => api('GET', `/v1/operations/${o.id}`)));
-  holder.replaceChildren(...details.map((o, i) => {
-    const w = c.operations[i];
-    const node = el('div', { className: 'op' + (w.callable ? '' : ' uncallable') },
-      el('span', { className: 'id' }, o.tool),
-      w.callable ? '' : el('span', { className: 'needs' },
-        'needs ' + w.requires.map(m => m.join(' + ')).join(' or ')),
-      el('span', { className: 'muted', style: 'font-size:.8rem' }, o.description),
-      el('span', { className: 'risk' }, o.risk));
-    node.onclick = () => playground(o, opsSection);
-    return node;
-  }));
 }
 
-async function playground(op, after) {
-  let panel = $('#play');
-  if (panel) panel.remove();
-  panel = el('section', { id: 'play' }, el('h3', {}, 'Run ' + op.tool));
-  const params = el('input', { value: '{}', className: 'mono' });
+/** The one per-operation request the console makes, and only for an operation somebody opened. */
+async function expand(operation, after) {
+  const open = $('#play');
+  if (open) open.remove();
+  const detail = await api('GET', `/v1/operations/${operation.id}`);
+  playground(detail, after);
+}
+
+/**
+ * Format whatever a vendor returned as a body. JSON is indented; anything else is left alone.
+ */
+const formatBody = body => typeof body === 'string' ? body : JSON.stringify(body, null, 2);
+
+/**
+ * **The response, read rather than dumped.**
+ *
+ * `exec::Outcome::content` is the JSON-encoded `{status, headers, body}` flux's `http.request` made
+ * canonical in C-403, and this page wrote the whole document into one `<pre>`. Splitting it is a
+ * read, never a rewrite: **the redactor's output passes through unchanged**, because it is what
+ * stops a vendor echoing a token onto this surface, and a page that re-serialised it would be a
+ * second rendering the redactor never saw.
+ *
+ * A response that is not that document is shown whole. Dropping what could not be parsed is how an
+ * operator stops trusting the panel, and the thing most likely to arrive in an unexpected shape is
+ * a failure — the one they most need to read.
+ */
+function renderResponse(out, outcome) {
+  out.replaceChildren();
+  out.className = 'response' + (outcome.is_error ? ' err' : '');
+  const content = outcome.content ?? '';
+  let document_ = null;
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && typeof parsed === 'object' && 'status' in parsed) document_ = parsed;
+  } catch { /* not the canonical document — shown whole below */ }
+
+  if (!document_) {
+    out.append(el('pre', { className: 'response-body' }, content));
+    return;
+  }
+  const headers = Object.entries(document_.headers ?? {});
+  out.append(
+    el('div', { className: 'response-status ' + (document_.status < 400 ? 'ok' : 'err') },
+      `HTTP ${document_.status}`),
+    el('details', { className: 'response-headers' },
+      el('summary', {}, `${headers.length} response headers`),
+      el('pre', {}, headers.map(([name, value]) => `${name}: ${value}`).join('\n'))),
+    el('pre', { className: 'response-body' }, formatBody(document_.body)));
+}
+
+/**
+ * **The rehearsed request — what this call would send, without sending it.**
+ *
+ * `POST /v1/operations/{id}/dry-run` is C-145's seam: it reaches no socket and reads no secret,
+ * placing each declared credential's *reference* where its value would go. So it answers before a
+ * token exists, which is exactly when an operator most needs *"why will this not work"* answered.
+ * The refusals are the valuable half and are shown verbatim — `crates/connectors-api/tests/dry_run.rs`
+ * holds them to naming the field, its service and the operation, which is what this copy promises.
+ */
+function renderRehearsal(out, rehearsal) {
+  const request = rehearsal.request ?? {};
+  const headers = Object.entries(request.headers ?? {});
+  const credentials = rehearsal.credentials ?? [];
+  out.replaceChildren(
+    el('div', { className: 'response-status' }, 'Not sent — this is the request it would build'),
+    el('pre', { className: 'response-body' },
+      `${request.method ?? ''} ${request.url ?? ''}\n`
+      + headers.map(([name, value]) => `${name}: ${value}`).join('\n')
+      + (published(request.body) ? `\n\n${request.body}` : '')),
+    el('p', { className: 'muted', style: 'font-size:.78rem;margin:.2rem 0 0' },
+      credentials.length
+        ? credentials.map(c => `${c.credential} → ${c.place} ${c.target}`).join(' · ')
+          + ' — shown as a reference; no stored value was read'
+        : 'This call carries no credential.'));
+}
+
+function playground(op, after) {
+  const panel = el('section', { id: 'play' }, el('h3', {}, 'Run ' + (published(op.tool) ? op.tool : op.id)));
   const run = el('button', {}, 'Send');
-  const out = el('pre', {}, '');
+  const rehearse = el('button', { className: 'ghost' }, 'Dry run');
+  const out = el('div', { className: 'response' });
+  const problem = el('p', { className: 'err', style: 'font-size:.82rem;margin:.2rem 0' });
+
+  // **The raw body is the source of truth, and it is a textarea** (C-237). It was a single-line
+  // `<input value="{}">`, which cannot hold a real body, and whatever was in it went out unparsed —
+  // so a missing brace was diagnosed by the vendor, as a 400 about a document it never received.
+  const params = el('textarea', { className: 'mono', rows: 8, spellcheck: false });
+  params.value = '{}';
+
+  const parse = () => {
+    const text = params.value.trim() || '{}';
+    try { return { body: JSON.parse(text) }; }
+    catch (e) { return { error: e.message }; }
+  };
+  const validate = () => {
+    const result = parse();
+    problem.textContent = result.error ? `That is not valid JSON — ${result.error}` : '';
+    run.disabled = Boolean(result.error);
+    rehearse.disabled = Boolean(result.error);
+    return result;
+  };
+  params.oninput = validate;
+
+  // **A schema-driven form, with no codegen.** `input_schema` is `connector_pack::project`'s
+  // answer, which is flux's own `OpSpec::lower` — the same schema a model is handed. A composite op
+  // declaration has no optional-parameter concept, so **every declared parameter is required by
+  // construction** and the form is flat: one control per property, no optionality logic to get
+  // wrong. The controls write into the textarea rather than replacing it, so the raw-JSON escape
+  // hatch stays the thing that is sent.
+  const properties = op.input_schema?.properties ?? {};
+  const names = Object.keys(properties);
+  const controls = new Map();
+  const compose = () => {
+    const draft = {};
+    for (const [name, control] of controls) {
+      if (control.value === '') continue;
+      const declared = properties[name]?.type;
+      // A `string` slot is taken literally — a JSON parse would turn the ticket subject `123` into
+      // a number. Anything else is read as JSON and falls back to the text as typed.
+      if (declared === 'string') { draft[name] = control.value; continue; }
+      try { draft[name] = JSON.parse(control.value); }
+      catch { draft[name] = control.value; }
+    }
+    params.value = JSON.stringify(draft, null, 2);
+    validate();
+  };
+  const form = el('div', {});
+  for (const name of names) {
+    const declared = properties[name] ?? {};
+    const control = el('input', { placeholder: declared.type ?? 'value' });
+    control.oninput = compose;
+    controls.set(name, control);
+    form.append(el('div', { className: 'row' },
+      el('label', { className: 'mono' }, name),
+      control,
+      el('span', { className: 'muted', style: 'font-size:.75rem;flex:1 1 8rem' },
+        [declared.type, declared.description].filter(published).join(' — '))));
+  }
+
   run.onclick = async () => {
-    run.disabled = true; out.textContent = 'sending…'; out.className = '';
+    const result = validate();
+    if (result.error) return;
+    run.disabled = true;
+    out.replaceChildren(el('span', { className: 'muted' }, 'sending…'));
     try {
-      const body = JSON.parse(params.value || '{}');
-      const r = await api('POST', `/v1/operations/${op.id}/execute`, body);
-      out.textContent = r.content;
-      out.className = r.is_error ? 'err' : '';
-    } catch (e) { out.textContent = e.message; out.className = 'err'; }
+      const r = await api('POST', `/v1/operations/${op.id}/execute`, result.body);
+      renderResponse(out, r);
+    } catch (e) {
+      out.replaceChildren(el('pre', { className: 'response-body err' }, e.message));
+    }
     run.disabled = false;
   };
+
+  rehearse.onclick = async () => {
+    const result = validate();
+    if (result.error) return;
+    rehearse.disabled = true;
+    out.replaceChildren(el('span', { className: 'muted' }, 'rehearsing…'));
+    try {
+      renderRehearsal(out, await api('POST', `/v1/operations/${op.id}/dry-run`, result.body));
+    } catch (e) {
+      // The refusal *is* the answer here: `MissingConfig` names the unbound field and its service,
+      // `MissingCredential` names the address to store a value at. Shown as written.
+      out.replaceChildren(el('pre', { className: 'response-body err' }, e.message));
+    }
+    rehearse.disabled = false;
+  };
+
   panel.append(
-    el('p', { className: 'muted', style: 'margin-top:-.3rem;font-size:.82rem' }, op.description),
-    el('div', { className: 'row' }, el('label', {}, 'parameters (JSON)'), params, run),
+    el('p', { className: 'muted', style: 'margin-top:-.3rem;font-size:.82rem' }, fact(op.description)),
+    el('div', { className: 'row' },
+      el('span', { className: 'chip' }, published(op.service) ? op.service : UNPUBLISHED),
+      el('span', { className: 'risk' }, published(op.risk) ? op.risk : UNPUBLISHED),
+      el('span', { className: 'chip' }, published(op.idempotency) ? op.idempotency : UNPUBLISHED),
+      el('span', { className: 'chip' }, joined(op.hosts) ?? UNPUBLISHED)),
+    names.length
+      ? el('p', { className: 'muted', style: 'font-size:.78rem;margin:.4rem 0 .2rem' },
+          `${names.length} declared parameter${names.length === 1 ? '' : 's'}, all required`)
+      : el('p', { className: 'muted', style: 'font-size:.78rem;margin:.4rem 0 .2rem' },
+          'This operation declares no parameters.'),
+    form,
+    el('div', { className: 'row' }, el('label', {}, 'parameters (JSON)'), params),
+    problem,
+    el('div', { className: 'row' }, run, rehearse,
+      el('span', { className: 'muted', style: 'font-size:.75rem' },
+        'A dry run builds the request and stops. It reaches no vendor and reads no stored value.')),
     out,
     el('details', {}, el('summary', { className: 'muted', style: 'font-size:.8rem;cursor:pointer' },
-      'the Flux this was compiled from'), el('pre', {}, op.flux)));
+      'the Flux this was compiled from'), el('pre', {}, published(op.flux) ? op.flux : UNPUBLISHED)));
   after.after(panel);
 }
 

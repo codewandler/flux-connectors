@@ -100,8 +100,11 @@ pub fn router(app: App) -> Router {
             "/v1/config/{provider}/{service}/{kind}/{field}",
             put(api::put_config),
         )
-        // What it is all for.
-        .route("/v1/operations/{operation}/execute", post(api::execute));
+        // What it is all for — and, beside it, the same call rehearsed. `dry-run` reaches no socket
+        // and reads no secret (C-145), so it sits under the same `Principal` gate as everything
+        // else here and nowhere near a lower one.
+        .route("/v1/operations/{operation}/execute", post(api::execute))
+        .route("/v1/operations/{operation}/dry-run", post(api::dry_run));
 
     // **The dev door, built into the table or not built at all.**
     //

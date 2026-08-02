@@ -191,10 +191,49 @@ pub struct ChoiceView {
 /// belong to the same surface. Anthropic declares `api_key`, which nearly every operation carries,
 /// and `admin_key`, which belongs to the management API; requiring both made a connector with the
 /// first one stored read as entirely unwired.
+///
+/// # Why this carries the operation's own facts too — C-237
+///
+/// C-212 added [`requires`](Self::requires) and [`callable`](Self::callable) so the page would not
+/// have to fetch every operation to find out which of them it could run, and its Progress note says
+/// exactly that. The page kept fetching them anyway, for `tool`, `description` and `risk` — up to
+/// ~30 requests per connector click, to read three fields off a catalogue entry this function
+/// already holds. So the five fields the list actually renders travel with the list.
+///
+/// **What deliberately does not travel here** is `flux` and `input_schema`. Those are the two the
+/// operator reads *one at a time*, when they expand an operation, and they are by far the largest —
+/// `flux` alone is a whole rendered declaration. Putting them here would trade an N+1 for a
+/// response nobody wants all of. `GET /v1/operations/{id}` remains the expansion, and it is now the
+/// only reason to call it. `tests/catalogue_response.rs` states the size this leaves the list at.
 #[derive(Serialize)]
 pub struct OperationWiring {
     /// The Flux symbol, as [`ConnectorView::operations`]'s predecessor carried it.
     id: &'static str,
+    /// The dotted name a caller actually invokes — `zendesk.ticket.show`.
+    ///
+    /// Derived here rather than by the page: it is [`connector_pack::dotted_name`]'s answer, and a
+    /// page deriving its own would be a second spelling of the name a tool registers under.
+    tool: String,
+    /// **The service this operation belongs to** — the addressing level C-49 established.
+    ///
+    /// `OperationView` has always carried it and the page discarded it, so ~30 operations rendered
+    /// as one flat list when contentful's `delivery` and `management` are two different APIs
+    /// against two different spaces.
+    service: &'static str,
+    /// What the operation does, in the catalogue's own words. [`Published`] on the page: a
+    /// catalogue that does not carry one is not an operation without one.
+    ///
+    /// [`Published`]: https://github.com/codewandler/flux-connectors/blob/main/docs/stories/C-408-components-cannot-say-unpublished.md
+    description: &'static str,
+    /// `low`, `medium` or `high`, lowercased exactly as [`OperationView::risk`] renders it.
+    risk: String,
+    /// `idempotent` or `nonidempotent`, lowercased exactly as [`OperationView::idempotency`] does.
+    ///
+    /// The one fact that says whether a retry is safe, and the page threw it away.
+    idempotency: String,
+    /// The hosts this operation reaches. Never empty for a shipped operation —
+    /// `connector_pack::Operation::project` refuses one with no declared host.
+    hosts: &'static [&'static str],
     /// What the operation needs, in the catalogue's own shape: the outer list is an **OR** over
     /// ways to authenticate, each inner list an **AND** of credentials that must travel together.
     /// Empty means the operation needs no credential.
@@ -377,11 +416,21 @@ async fn view_of(
         .map(|credential| credential.name)
         .collect();
 
-    let operations: Vec<OperationWiring> = provider
-        .operations
-        .iter()
-        .map(|operation| OperationWiring {
+    // **The whole list, whole** (C-237). A `for` rather than a `map` because `dotted_name` can
+    // refuse, and a name this host cannot compose is a catalogue defect worth reporting as one
+    // rather than eliding into an operation the page cannot invoke.
+    let mut operations = Vec::with_capacity(provider.operations.len());
+    for operation in provider.operations {
+        let tool = connector_pack::dotted_name(operation.id)
+            .map_err(|error| Failure(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?;
+        operations.push(OperationWiring {
             id: operation.id,
+            tool,
+            service: operation.service,
+            description: operation.description,
+            risk: format!("{:?}", operation.risk).to_lowercase(),
+            idempotency: format!("{:?}", operation.idempotency).to_lowercase(),
+            hosts: operation.hosts,
             requires: operation.credentials,
             requirement: operation.credential_requirement,
             callable: is_callable(
@@ -389,8 +438,8 @@ async fn view_of(
                 operation.credential_requirement,
                 &stored,
             ),
-        })
-        .collect();
+        });
+    }
 
     Ok(ConnectorView {
         id: provider.id,
@@ -439,6 +488,16 @@ pub struct OperationView {
     credentials: &'static [&'static [&'static str]],
     /// The dotted name it registers under, which is what a caller actually invokes.
     tool: String,
+    /// **The parameters this operation takes, as a JSON Schema** — C-237.
+    ///
+    /// [`connector_pack::project`]'s answer, which is flux's own `OpSpec::lower` and therefore the
+    /// exact schema a model is handed. No codegen and no second derivation: the page draws one
+    /// control per property and every declared parameter is required by construction, because a
+    /// composite op declaration has no optional-parameter concept.
+    ///
+    /// It is on *this* view rather than on [`OperationWiring`] for the reason that type documents:
+    /// this is the response an operator asks for one operation at a time.
+    input_schema: Value,
     /// The operation's own emitted Flux — the human-readable contract behind the request.
     flux: &'static str,
 }
@@ -463,6 +522,11 @@ pub async fn operation(
     })?;
     let tool = connector_pack::dotted_name(entry.id)
         .map_err(|error| Failure(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?;
+    // The projection, for its schema alone. It is the same function `resolve` runs on the way to a
+    // real call, so a schema the page draws a form from is the contract the call will be checked
+    // against rather than a description of it.
+    let spec = connector_pack::project(entry)
+        .map_err(|error| Failure(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?;
 
     Ok(Json(OperationView {
         id: entry.id,
@@ -474,6 +538,7 @@ pub async fn operation(
         hosts: entry.hosts,
         credentials: entry.credentials,
         tool,
+        input_schema: spec.input_schema,
         flux: entry.flux,
     }))
 }
@@ -648,6 +713,26 @@ pub async fn execute(
     Ok(Json(outcome))
 }
 
+/// **Rehearse an operation: the exact request, without sending it** (C-237, over C-145's seam).
+///
+/// The route that answers *"why will this not work"* precisely. Everything it can refuse names the
+/// missing fact rather than a status code — the unbound configuration field and the service it
+/// belongs to, the credential address with nothing at it — and it reaches no socket and no secret
+/// store to do it. See [`exec::dry_run`].
+pub async fn dry_run(
+    State(app): State<App>,
+    principal: Principal,
+    Path(operation): Path<String>,
+    Json(params): Json<Value>,
+) -> Result<Json<Value>, Failure> {
+    Ok(Json(exec::dry_run(
+        &app,
+        principal.tenant(),
+        &operation,
+        &params,
+    )?))
+}
+
 // ---------------------------------------------------------------------------------------------
 // The three states, against fixtures
 // ---------------------------------------------------------------------------------------------
@@ -694,6 +779,15 @@ mod tests {
     ) -> OperationWiring {
         OperationWiring {
             id,
+            // The five C-237 added travel with the list and none of them takes part in a wiring
+            // decision, so they are filled with the shape rather than with a value under test. A
+            // fixture that varied them would be asserting about the serializer.
+            tool: id.replace('-', "."),
+            service: connector_pack::DEFAULT_SERVICE,
+            description: "a fixture operation",
+            risk: "low".to_owned(),
+            idempotency: "idempotent".to_owned(),
+            hosts: &["api.vendor.test"],
             requires,
             requirement,
             callable: is_callable(requires, requirement, stored),
