@@ -52,7 +52,7 @@ verification answer"*, and *"Never present an unverified event as trusted."*
 - [x] A **verdict**: expressible in `HmacSpec` today, or not. If not, the missing axis is named
       exactly, in the shape C-141/C-188 used, and a follow-up story is filed.
       → **not expressible**, and the design separates two gaps. **Gap B**, unconditional and the actual
-      blocker, is filed as [C-447](C-447-verification-scheme-is-unmodelled.md): `VerificationScheme`
+      blocker, is filed as [C-450](C-450-verification-scheme-is-unmodelled.md): `VerificationScheme`
       has no state for *"the vendor signs, and we cannot model how"*. **Gap A** — `signed` cannot
       interpolate a selected per-delivery value such as `webhook-id` — is C-141/C-188's class and is
       **deliberately not filed**, because whether `webhook-id` is signed is unverified.
@@ -86,7 +86,7 @@ verification answer"*, and *"Never present an unverified event as trusted."*
       `crates/connector-spec/tests/verification_conformance.rs`, which is where C-60 put the real
       vendor vectors.
       → **nothing landed in the loader.** The story's answer is a negative result and a filed gap, so
-      this is vacuous; C-447 carries the failing-first requirement instead.
+      this is vacuous; C-450 carries the failing-first requirement instead.
 - [x] Gated on [C-444](C-444-decide-managed-agents-charter.md) for the **socket** half only — the
       webhook half is management-plane and may proceed regardless.
       → respected. C-444 is still `ready`, so the socket half is answered *on paper only* and nothing
@@ -96,14 +96,14 @@ verification answer"*, and *"Never present an unverified event as trusted."*
 
 **Answered, as a negative result, in
 [docs/designs/managed-agents-verification.md](../designs/managed-agents-verification.md). One gap
-filed: [C-447](C-447-verification-scheme-is-unmodelled.md). Docs-only — nothing landed in the loader,
+filed: [C-450](C-450-verification-scheme-is-unmodelled.md). Docs-only — nothing landed in the loader,
 so there is no failing-first test and none is owed.**
 
 - **The premise moved, and the story is better for it.** The story predicted `HmacSpec` would be one
   axis short because a *delivery id* is signed. That may be true and **cannot be established**: the
   bundled reference does not publish the signed string at all. The blocking gap is one layer up —
   `VerificationScheme` cannot express *"the vendor signs, and we cannot model how"*, so the only
-  declarations that load today are a guess or a lie. That is C-447, and it is a different class from
+  declarations that load today are a guess or a lie. That is C-450, and it is a different class from
   C-141/C-188 (which widened `HmacSpec` because a vendor's *parameters* did not fit).
 - **`verification = "none"` was the tempting wrong answer and is refused with its reason written
   down.** It would be a **false** statement, not a conservative one — the vendor signs every delivery,
@@ -114,7 +114,7 @@ so there is no failing-first test and none is owed.**
   than refusing. (This bullet said "five of nine" on the first pass and was wrong — corrected against
   `sed -n '152,237p' crates/connector-spec/src/inbound.rs | grep -c "^    pub "` → `9`.)
 - **The interim state is Twilio's between C-109 and C-188:** declare the events, declare no
-  `[[channels]]` binding for the webhook half. C-447's own § *Why this is worth a state rather than an
+  `[[channels]]` binding for the webhook half. C-450's own § *Why this is worth a state rather than an
   omission* records what that costs.
 - **Two loader facts were read rather than assumed**, and one contradicted the epic design:
   - two bindings over **disjoint** event vocabularies on one service needs **no model change**
@@ -127,7 +127,7 @@ so there is no failing-first test and none is owed.**
   socket binding's reply may be unbindable — a third gap of a different kind (a value constant for the
   *connection*, not present in the *event*). The reference shows example frames, not a schema, so this
   is an open question and an implementor must not be sent at it before it is settled.
-- **Board not regenerated.** `docs/stories/README.md` is coordinator-owned; C-447's row and this
+- **Board not regenerated.** `docs/stories/README.md` is coordinator-owned; C-450's row and this
   story's status change need `/track:board` at integration.
 
 ## Notes

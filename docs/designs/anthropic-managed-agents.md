@@ -101,7 +101,9 @@ partition — which is why C-445 recorded it rather than leaving it to be discov
 
 `slack.toml:450` already records the rule: *"No `verification`: nothing arrives unsolicited over a
 socket we opened and authenticated."* That holds here — the SSE stream is opened with the caller's
-own API key. The webhook half is the opposite and must state an HMAC scheme or state
+own API key. **C-446 sharpens it:** declaring verification on a `socket` binding is not merely
+unnecessary, it is a **loader error** —
+`crates/connector-spec/tests/channel_bindings.rs::verification_on_a_transport_that_cannot_use_it_is_refused`. The webhook half is the opposite and must state an HMAC scheme or state
 `verification = "none"` deliberately; silence is refused at load.
 
 **This is where the epic earns its keep, and also where it is most likely to be refused.** The

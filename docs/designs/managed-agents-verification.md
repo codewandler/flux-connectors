@@ -18,7 +18,7 @@
 
 **Not expressible.** The Managed Agents webhook signature cannot be declared in `HmacSpec` as it
 stands, and — separately and more immediately — it cannot be declared *at all* today, because the
-model has no way to say the one true thing about it. [C-447](../stories/C-447-verification-scheme-is-unmodelled.md)
+model has no way to say the one true thing about it. [C-450](../stories/C-450-verification-scheme-is-unmodelled.md)
 is the gap.
 
 Read § *Two independent gaps* for which is which. The distinction matters: one is conditional on a
@@ -140,9 +140,9 @@ misuse the story named in advance.
 
 The three states answer *"what does the vendor publish?"*. The missing fourth answers *"can this
 repository express it?"* — and those are different questions that have been collapsed into one field.
-Filed as **[C-447](../stories/C-447-verification-scheme-is-unmodelled.md)**.
+Filed as **[C-450](../stories/C-450-verification-scheme-is-unmodelled.md)**.
 
-**Until C-447 lands, the Managed Agents webhook binding is not declarable, and the correct interim
+**Until C-450 lands, the Managed Agents webhook binding is not declarable, and the correct interim
 state is to declare the events and no `[[channels]]` binding for them** — exactly what Twilio did
 between C-109 and C-188, and what C-60 did for Stripe. The events are still useful: they reach the
 manifest and the catalogue, and a binding can be added the day the gap closes.
@@ -297,7 +297,7 @@ discovers it mid-story is an implementor who will be tempted to invent the missi
 Settled:
 
 - The webhook signature is **not expressible** today, for a reason that is a model gap rather than a
-  research failure, and C-447 is that gap.
+  research failure, and C-450 is that gap.
 - `verification = "none"` is **refused as a workaround**, with the reason written down.
 - The two event vocabularies are enumerated and are **separate namespaces**.
 - Two bindings over two event sets on one service **needs no model change**.

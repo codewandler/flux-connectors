@@ -1,5 +1,5 @@
 ---
-id: C-447
+id: C-450
 title: "The verification tri-state cannot say \"the vendor signs, and we cannot model how\""
 pillar: Spec
 status: ready
