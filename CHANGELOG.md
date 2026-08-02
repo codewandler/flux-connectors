@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The board header describes the released repository instead of its initial scaffold** (C-454
+  follow-up). It now carries the measured v0.13.0 catalogue snapshot and the complete Rust, Node and
+  packaging gate.
+
 ## [0.13.0] — 2026-08-02
 
 ### Changed — breaking for `connector-pack` consumers

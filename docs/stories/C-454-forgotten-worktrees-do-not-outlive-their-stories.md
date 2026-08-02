@@ -105,3 +105,7 @@ release path.
   are green. The public site built and passed 42 tests; the host UI passed 15 tests.
 - 2026-08-02 — `scripts/publish-crates-io.sh --dry-run` packaged and verified the four-crate closure
   without uploading it.
+- 2026-08-02 — The post-release audit found the hand-written board header still describing the
+  initial scaffold. `ls providers/*.toml | wc -l` returned 54 and `connector-cli diff` reported
+  `951 artifacts up to date (54 providers checked)`; the header now records that measured v0.13.0
+  snapshot and the actual Rust, Node and publish-dry-run gates.

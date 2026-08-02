@@ -2,7 +2,7 @@
 id: C-455
 title: "Move the connector seam to flux 0.49, then publish it before exchange moves"
 pillar: Build
-status: in-progress
+status: done
 priority: 0
 epic: connectors-api
 areas: [build, release]
@@ -38,7 +38,7 @@ minor line. The connector release is therefore a minor bump, never a patch.
 - [x] The full Rust gate, public-site gate, host-page gate and crates.io dry-run closure are green.
 - [x] The engineering and customer changelogs state the compatibility break and the required
       downstream action.
-- [ ] A minor release is tagged and pushed through CI; all four published crates are visible on
+- [x] A minor release is tagged and pushed through CI; all four published crates are visible on
       crates.io before flux-exchange is changed.
 
 ## Progress
@@ -53,6 +53,10 @@ minor line. The connector release is therefore a minor bump, never a patch.
 - 2026-08-02 — The full Rust gate is green with `--no-fail-fast`; the public site built and passed
   42 tests, the host UI passed 15, and the four-crate crates.io closure packaged and verified under
   `--dry-run` without uploading.
+- 2026-08-02 — `v0.13.0` was cut at `ae8eaca`, pushed, and published by crates.io workflow
+  `30730468297`, which confirmed all four crates. Registry search reports 0.13.0 for address, catalog,
+  secrets and pack. CI workflow `30730467590` and Pages workflow `30730467582` are green, and the
+  GitHub release is live.
 
 ## Notes
 - Precedent: [C-431](C-431-move-the-flux-pin-to-0-47.md), the 0.46 → 0.47 engine move. The value is compatibility at the public trait
