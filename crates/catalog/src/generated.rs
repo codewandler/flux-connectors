@@ -17,6 +17,7 @@ pub(crate) mod airtable;
 pub(crate) mod algolia;
 pub(crate) mod anthropic;
 pub(crate) mod asana;
+pub(crate) mod asterisk;
 pub(crate) mod babelforce;
 pub(crate) mod bitbucket;
 pub(crate) mod r#box;
@@ -78,6 +79,7 @@ pub(crate) static PROVIDERS: &[&Provider] = &[
     &algolia::PROVIDER,
     &anthropic::PROVIDER,
     &asana::PROVIDER,
+    &asterisk::PROVIDER,
     &babelforce::PROVIDER,
     &bitbucket::PROVIDER,
     &r#box::PROVIDER,

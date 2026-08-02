@@ -1,7 +1,7 @@
 op asterisk-ari-channels-ring-stop(channelId: String) -> Any
   description "Stop ringing indication on a channel if locally generated."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 

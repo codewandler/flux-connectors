@@ -1,7 +1,7 @@
 op asterisk-ari-asterisk-delete-object(configClass: String, objectType: String, id: String) -> Any
   description "Delete a dynamic configuration object."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 

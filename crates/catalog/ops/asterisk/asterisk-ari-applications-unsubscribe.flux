@@ -1,7 +1,7 @@
 op asterisk-ari-applications-unsubscribe(applicationName: String, eventSource: List<String>) -> Any
   description "Unsubscribe an application from an event source."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 

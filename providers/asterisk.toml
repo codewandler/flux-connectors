@@ -24,7 +24,7 @@ path = "specs/asterisk/ari-22.10.1.openapi.json"
 source_url = "https://github.com/asterisk/asterisk/tree/f0e408a7b0d829c85bf15fa4b487870a50cb3000/rest-api"
 upstream_version = "22.10.1"
 fetched_at = "2026-08-02T14:50:00Z"
-sha256 = "a34fc7acc7b9a8cf913ac026802d86646833c892948dcf906258db7604fea637"
+sha256 = "7ea540678f8f9930d5582161c7cb0dc1cbf09674c2bc5b5466f94c854210f53e"
 
 # The normalizer gives every operation a collision-free `<resource>-<nickname>` id. One declared
 # naming rule turns that into the public `asterisk-ari-<resource>-<nickname>` namespace; no public
@@ -34,8 +34,8 @@ rule = "kebab"
 prefix = "asterisk-ari"
 
 # All REST calls are catalogued and callable. The broad method classes make the conservative safety
-# decision reviewable in four blocks: reads are low/idempotent by construction, POST may create or
-# affect live PBX state, PUT is a repeatable high-risk write, and DELETE is destructive/repeatable.
+# decision reviewable in four blocks: reads are low/idempotent by construction, while POST, PUT and
+# DELETE never invite an automatic replay against live PBX state. DELETE remains destructive.
 # Only the bounded subset below reaches a model as tools.
 [[patch.select]]
 methods = ["GET"]
@@ -50,13 +50,13 @@ expose = false
 [[patch.select]]
 methods = ["PUT"]
 risk = "high"
-idempotency = "idempotent"
+idempotency = "non_idempotent"
 expose = false
 
 [[patch.select]]
 methods = ["DELETE"]
 risk = "destructive"
-idempotency = "idempotent"
+idempotency = "non_idempotent"
 expose = false
 
 # A useful bounded model surface. Named-operation callers retain all 108 operations through

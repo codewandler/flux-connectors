@@ -1,7 +1,7 @@
 op asterisk-ari-recordings-unmute(recordingName: String) -> Any
   description "Unmute a live recording."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 

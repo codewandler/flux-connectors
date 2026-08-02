@@ -327,10 +327,24 @@ def normalize(source: Path) -> tuple[dict[str, Any], dict[str, int | list[str]]]
                             fail(f"{where}: more than one body parameter")
                         if multiple:
                             fail(f"{parameter_where}: body parameters cannot set allowMultiple")
+                        # ARI's legacy `containers` type is not an unnamed free-form body. In every
+                        # pinned occurrence the parameter name is the top-level JSON key (usually
+                        # `variables`, once `fields`), which the source descriptions state
+                        # explicitly. Preserve that wrapper; otherwise OpenAPI ingest has to call
+                        # the whole body `body`, colliding with endpoints whose query parameter is
+                        # also named `body` and making their composed input schema ambiguous.
+                        body_schema = translated
+                        if data_type == "containers":
+                            body_schema = {
+                                "type": "object",
+                                "properties": {name: translated},
+                            }
+                            if required:
+                                body_schema["required"] = [name]
                         request_body = {
                             "description": description,
                             "required": required,
-                            "content": {"application/json": {"schema": translated}},
+                            "content": {"application/json": {"schema": body_schema}},
                             "x-ari-name": name,
                             "x-ari-data-type": data_type,
                         }

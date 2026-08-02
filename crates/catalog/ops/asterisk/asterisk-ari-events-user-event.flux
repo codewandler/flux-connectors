@@ -1,4 +1,4 @@
-op asterisk-ari-events-user-event(eventName: String, application: String, source: List<String>, body: Any) -> Any
+op asterisk-ari-events-user-event(eventName: String, application: String, source: List<String>, variables: Any) -> Any
   description "Generate a user event."
   risk "high"
   idempotency "non_idempotent"
@@ -11,6 +11,6 @@ op asterisk-ari-events-user-event(eventName: String, application: String, source
   when source
     url = fmt("{url}{sep}source={source}")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response

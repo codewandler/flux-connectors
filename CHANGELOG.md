@@ -7,6 +7,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed — breaking for Zendesk catalogue consumers
+
+- **Every Zendesk operation now comes from its vendored first-party API description** (C-487).
+  The seven remaining hand-authored Support calls and two Messaging transcriptions have been
+  replaced by selected operations, and response-only recursive schemas are represented by a bounded
+  prefix while request recursion still fails closed. The three hand-authored ticket-update variants
+  collapse to the one `UpdateTicket` operation the vendor document actually declares, taking the
+  Zendesk surface from 37 to 35 operations. This greenfield catalogue keeps no compatibility aliases.
+
+### Added
+
+- **Asterisk ARI is a spec-generated REST connector with all 108 ordinary HTTP operations**
+  (C-483–C-486). Eleven official Asterisk 22.10.1 Swagger documents are vendored and normalized
+  deterministically; Basic credentials and the configured TLS authority compose through the normal
+  connector request path. Fifteen operations are exposed to model discovery while callers can
+  resolve the complete catalogue by name. The one WebSocket upgrade is deliberately absent: event
+  delivery is deferred until connector channels have a settled contract.
+
+### Fixed
+
+- **Connector Basic authentication now accepts configured TLS authorities with literal ports.**
+  This permits deployments such as ARI's HTTPS listener without weakening the rule that credentials
+  are never sent over plain HTTP.
+
 ## [0.14.0] — 2026-08-02
 
 ### Changed — breaking for `connector-pack` consumers

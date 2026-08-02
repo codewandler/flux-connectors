@@ -46,7 +46,7 @@ const SELECTED: [(&str, &str, &str, &[&str]); 4] = [
     ),
 ];
 
-const CYCLE_DEFERRED: [(&str, &str); 4] = [
+const EXPANSION_DEFERRED: [(&str, &str); 4] = [
     ("GetCustomers", "/v1/customers"),
     ("GetPaymentIntents", "/v1/payment_intents"),
     ("GetInvoices", "/v1/invoices"),
@@ -231,14 +231,14 @@ fn the_vendored_document_is_pinned_and_selected_gets_have_only_the_declared_norm
 }
 
 #[test]
-fn the_original_billing_lists_are_explicitly_deferred_on_the_pinned_response_cycle() {
+fn the_original_billing_lists_remain_explicitly_deferred_at_the_expansion_bound() {
     let path = root().join("specs/stripe/openapi-2026-08-02.json");
     let text = std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
     let document: serde_json::Value = serde_json::from_str(&text).expect("Stripe JSON");
     let ingested = connector_spec::openapi::ingest(&text).expect("Stripe OpenAPI parses");
 
-    for (operation_id, path) in CYCLE_DEFERRED {
+    for (operation_id, path) in EXPANSION_DEFERRED {
         assert_eq!(
             document["paths"][path]["get"]["operationId"],
             serde_json::json!(operation_id),
@@ -251,10 +251,9 @@ fn the_original_billing_lists_are_explicitly_deferred_on_the_pinned_response_cyc
         assert!(
             ingested.diagnostics.iter().any(|diagnostic| {
                 diagnostic.location == format!("GET {path}")
-                    && diagnostic.problem.contains("$ref` cycle")
-                    && diagnostic.problem.contains("file_link")
+                    && diagnostic.problem.contains("more than 50000 nodes")
             }),
-            "{operation_id} must remain deferred for the measured file/file_link response cycle"
+            "{operation_id} must remain deferred rather than bypassing the resolver's expansion bound"
         );
     }
 }

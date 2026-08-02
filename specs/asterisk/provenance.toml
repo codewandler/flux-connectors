@@ -14,8 +14,8 @@ source_operation_count = 109
 rest_operation_count = 108
 deferred_operation_ids = ["events-eventWebsocket"]
 normalized_path = "specs/asterisk/ari-22.10.1.openapi.json"
-normalized_sha256 = "a34fc7acc7b9a8cf913ac026802d86646833c892948dcf906258db7604fea637"
-normalized_bytes = 243943
+normalized_sha256 = "7ea540678f8f9930d5582161c7cb0dc1cbf09674c2bc5b5466f94c854210f53e"
+normalized_bytes = 244620
 
 [[source_files]]
 path = "COPYING"

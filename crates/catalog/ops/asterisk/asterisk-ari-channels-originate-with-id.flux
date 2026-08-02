@@ -1,4 +1,4 @@
-op asterisk-ari-channels-originate-with-id(channelId: String, endpoint: String, extension: String, context: String, priority: Number, label: String, app: String, appArgs: String, callerId: String, timeout: Number, otherChannelId: String, originator: String, formats: String, body: Any) -> Any
+op asterisk-ari-channels-originate-with-id(channelId: String, endpoint: String, extension: String, context: String, priority: Number, label: String, app: String, appArgs: String, callerId: String, timeout: Number, otherChannelId: String, originator: String, formats: String, variables: Any) -> Any
   description "Create a new channel (originate with id)."
   risk "high"
   idempotency "non_idempotent"
@@ -41,6 +41,6 @@ op asterisk-ari-channels-originate-with-id(channelId: String, endpoint: String, 
   when formats
     url = fmt("{url}{sep}formats={formats}")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response

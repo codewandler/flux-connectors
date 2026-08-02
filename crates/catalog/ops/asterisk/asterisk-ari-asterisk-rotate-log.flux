@@ -1,7 +1,7 @@
 op asterisk-ari-asterisk-rotate-log(logChannelName: String) -> Any
   description "Rotates a log channel."
   risk "high"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 

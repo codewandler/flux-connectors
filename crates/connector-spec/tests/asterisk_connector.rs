@@ -40,14 +40,14 @@ fn every_non_websocket_ari_operation_is_selected_from_the_vendor_document() {
 }
 
 #[test]
-fn safety_metadata_is_conservative_by_http_method() {
+fn safety_metadata_never_invites_an_automatic_write_replay() {
     let connector = shipped_provider::load("asterisk").connector;
     for operation in &connector.operations {
         let expected = match operation.method {
             HttpMethod::Get => (Risk::Low, Idempotency::Idempotent),
             HttpMethod::Post => (Risk::High, Idempotency::NonIdempotent),
-            HttpMethod::Put => (Risk::High, Idempotency::Idempotent),
-            HttpMethod::Delete => (Risk::Destructive, Idempotency::Idempotent),
+            HttpMethod::Put => (Risk::High, Idempotency::NonIdempotent),
+            HttpMethod::Delete => (Risk::Destructive, Idempotency::NonIdempotent),
             other => panic!("ARI normalized an unsupported method {other:?}"),
         };
         assert_eq!(

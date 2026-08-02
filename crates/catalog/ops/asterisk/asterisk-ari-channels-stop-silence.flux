@@ -1,7 +1,7 @@
 op asterisk-ari-channels-stop-silence(channelId: String) -> Any
   description "Stop playing silence to a channel."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 

@@ -1,7 +1,7 @@
 op asterisk-ari-device-states-delete(deviceName: String) -> Any
   description "Destroy a device-state controlled by ARI."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 

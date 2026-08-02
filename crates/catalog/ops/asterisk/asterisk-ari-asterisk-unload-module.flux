@@ -1,7 +1,7 @@
 op asterisk-ari-asterisk-unload-module(moduleName: String) -> Any
   description "Unload an Asterisk module."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 

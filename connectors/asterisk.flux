@@ -38,7 +38,7 @@ op asterisk-ari-bridges-list -> Any
   response = http.request(method: "GET", url)
   return response
 
-op asterisk-ari-bridges-create(type: String, bridgeId: String, name: String, body: Any) -> Any
+op asterisk-ari-bridges-create(type: String, bridgeId: String, name: String, variables: Any) -> Any
   description "Create a new bridge."
   risk "high"
   idempotency "non_idempotent"
@@ -57,14 +57,14 @@ op asterisk-ari-bridges-create(type: String, bridgeId: String, name: String, bod
   when name
     url = fmt("{url}{sep}name={name}")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response
 
 op asterisk-ari-bridges-destroy(bridgeId: String) -> Any
   description "Shut down a bridge."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose true
 
@@ -85,7 +85,7 @@ op asterisk-ari-channels-list -> Any
   response = http.request(method: "GET", url)
   return response
 
-op asterisk-ari-channels-originate(endpoint: String, extension: String, context: String, priority: Number, label: String, app: String, appArgs: String, callerId: String, timeout: Number, channelId: String, otherChannelId: String, originator: String, formats: String, body: Any) -> Any
+op asterisk-ari-channels-originate(endpoint: String, extension: String, context: String, priority: Number, label: String, app: String, appArgs: String, callerId: String, timeout: Number, channelId: String, otherChannelId: String, originator: String, formats: String, variables: Any) -> Any
   description "Create a new channel (originate)."
   risk "high"
   idempotency "non_idempotent"
@@ -131,14 +131,14 @@ op asterisk-ari-channels-originate(endpoint: String, extension: String, context:
   when formats
     url = fmt("{url}{sep}formats={formats}")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response
 
 op asterisk-ari-channels-hangup(channelId: String, reason_code: String, reason: String) -> Any
   description "Delete (i.e. hangup) a channel."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose true
 
@@ -204,7 +204,7 @@ op asterisk-ari-playbacks-get(playbackId: String) -> Any
 op asterisk-ari-playbacks-stop(playbackId: String) -> Any
   description "Stop a playback."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose true
 
@@ -258,7 +258,7 @@ op asterisk-ari-applications-get(applicationName: String) -> Any
 op asterisk-ari-applications-filter(applicationName: String, body: Any) -> Any
   description "Filter application events types."
   risk "high"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -284,7 +284,7 @@ op asterisk-ari-applications-subscribe(applicationName: String, eventSource: Lis
 op asterisk-ari-applications-unsubscribe(applicationName: String, eventSource: List<String>) -> Any
   description "Unsubscribe an application from an event source."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -305,24 +305,24 @@ op asterisk-ari-asterisk-get-object(configClass: String, objectType: String, id:
   response = http.request(method: "GET", url)
   return response
 
-op asterisk-ari-asterisk-update-object(configClass: String, objectType: String, id: String, body: Any) -> Any
+op asterisk-ari-asterisk-update-object(configClass: String, objectType: String, id: String, fields: Any) -> Any
   description "Create or update a dynamic configuration object."
   risk "high"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
   base = "https://{host}:8089/ari"
   url = fmt("{base}/asterisk/config/dynamic/{configClass}/{objectType}/{id}")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { fields }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
   return response
 
 op asterisk-ari-asterisk-delete-object(configClass: String, objectType: String, id: String) -> Any
   description "Delete a dynamic configuration object."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -373,7 +373,7 @@ op asterisk-ari-asterisk-add-log(logChannelName: String, configuration: String) 
 op asterisk-ari-asterisk-delete-log(logChannelName: String) -> Any
   description "Deletes a log channel."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -385,7 +385,7 @@ op asterisk-ari-asterisk-delete-log(logChannelName: String) -> Any
 op asterisk-ari-asterisk-rotate-log(logChannelName: String) -> Any
   description "Rotates a log channel."
   risk "high"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -433,7 +433,7 @@ op asterisk-ari-asterisk-load-module(moduleName: String) -> Any
 op asterisk-ari-asterisk-reload-module(moduleName: String) -> Any
   description "Reload an Asterisk module."
   risk "high"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -445,7 +445,7 @@ op asterisk-ari-asterisk-reload-module(moduleName: String) -> Any
 op asterisk-ari-asterisk-unload-module(moduleName: String) -> Any
   description "Unload an Asterisk module."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -493,7 +493,7 @@ op asterisk-ari-bridges-get(bridgeId: String) -> Any
   response = http.request(method: "GET", url)
   return response
 
-op asterisk-ari-bridges-create-with-id(bridgeId: String, type: String, name: String, body: Any) -> Any
+op asterisk-ari-bridges-create-with-id(bridgeId: String, type: String, name: String, variables: Any) -> Any
   description "Create a new bridge."
   risk "high"
   idempotency "non_idempotent"
@@ -509,7 +509,7 @@ op asterisk-ari-bridges-create-with-id(bridgeId: String, type: String, name: Str
   when name
     url = fmt("{url}{sep}name={name}")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response
 
@@ -555,7 +555,7 @@ op asterisk-ari-bridges-start-moh(bridgeId: String, mohClass: String) -> Any
 op asterisk-ari-bridges-stop-moh(bridgeId: String) -> Any
   description "Stop playing music on hold to a bridge."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -699,7 +699,7 @@ op asterisk-ari-bridges-get-bridge-vars(bridgeId: String, variables: List<String
   response = http.request(method: "GET", url)
   return response
 
-op asterisk-ari-bridges-set-bridge-vars(bridgeId: String, body: Any) -> Any
+op asterisk-ari-bridges-set-bridge-vars(bridgeId: String, variables: Any) -> Any
   description "Set the values of multiple bridge variables or functions."
   risk "high"
   idempotency "non_idempotent"
@@ -709,14 +709,14 @@ op asterisk-ari-bridges-set-bridge-vars(bridgeId: String, body: Any) -> Any
   base = "https://{host}:8089/ari"
   url = fmt("{base}/bridges/{bridgeId}/variables")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response
 
 op asterisk-ari-bridges-clear-video-source(bridgeId: String) -> Any
   description "Removes any explicit video source in a multi-party mixing bridge. This operation has no effect on bridges with two or fewer participants. When no explicit video source is set, talk detection will be used to determine the active video stream."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -737,7 +737,7 @@ op asterisk-ari-bridges-set-video-source(bridgeId: String, channelId: String) ->
   response = http.request(method: "POST", url)
   return response
 
-op asterisk-ari-channels-create(endpoint: String, app: String, appArgs: String, channelId: String, otherChannelId: String, originator: String, formats: String, body: Any) -> Any
+op asterisk-ari-channels-create(endpoint: String, app: String, appArgs: String, channelId: String, otherChannelId: String, originator: String, formats: String, variables: Any) -> Any
   description "Create channel."
   risk "high"
   idempotency "non_idempotent"
@@ -762,11 +762,11 @@ op asterisk-ari-channels-create(endpoint: String, app: String, appArgs: String, 
   when formats
     url = fmt("{url}{sep}formats={formats}")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response
 
-op asterisk-ari-channels-external-media(channelId: String, app: String, external_host: String, encapsulation: String, transport: String, connection_type: String, format: String, direction: String, data: String, transport_data: String, body: Any) -> Any
+op asterisk-ari-channels-external-media(channelId: String, app: String, external_host: String, encapsulation: String, transport: String, connection_type: String, format: String, direction: String, data: String, transport_data: String, variables: Any) -> Any
   description "Start an External Media session."
   risk "high"
   idempotency "non_idempotent"
@@ -800,7 +800,7 @@ op asterisk-ari-channels-external-media(channelId: String, app: String, external
   when transport_data
     url = fmt("{url}{sep}transport_data={transport_data}")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response
 
@@ -816,7 +816,7 @@ op asterisk-ari-channels-get(channelId: String) -> Any
   response = http.request(method: "GET", url)
   return response
 
-op asterisk-ari-channels-originate-with-id(channelId: String, endpoint: String, extension: String, context: String, priority: Number, label: String, app: String, appArgs: String, callerId: String, timeout: Number, otherChannelId: String, originator: String, formats: String, body: Any) -> Any
+op asterisk-ari-channels-originate-with-id(channelId: String, endpoint: String, extension: String, context: String, priority: Number, label: String, app: String, appArgs: String, callerId: String, timeout: Number, otherChannelId: String, originator: String, formats: String, variables: Any) -> Any
   description "Create a new channel (originate with id)."
   risk "high"
   idempotency "non_idempotent"
@@ -859,7 +859,7 @@ op asterisk-ari-channels-originate-with-id(channelId: String, endpoint: String, 
   when formats
     url = fmt("{url}{sep}formats={formats}")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response
 
@@ -959,7 +959,7 @@ op asterisk-ari-channels-hold(channelId: String) -> Any
 op asterisk-ari-channels-unhold(channelId: String) -> Any
   description "Remove a channel from hold."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -986,7 +986,7 @@ op asterisk-ari-channels-start-moh(channelId: String, mohClass: String) -> Any
 op asterisk-ari-channels-stop-moh(channelId: String) -> Any
   description "Stop playing music on hold to a channel."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -1028,7 +1028,7 @@ op asterisk-ari-channels-mute(channelId: String, direction: String) -> Any
 op asterisk-ari-channels-unmute(channelId: String, direction: String) -> Any
   description "Unmute a channel."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -1151,7 +1151,7 @@ op asterisk-ari-channels-ring(channelId: String) -> Any
 op asterisk-ari-channels-ring-stop(channelId: String) -> Any
   description "Stop ringing indication on a channel if locally generated."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -1187,7 +1187,7 @@ op asterisk-ari-channels-start-silence(channelId: String) -> Any
 op asterisk-ari-channels-stop-silence(channelId: String) -> Any
   description "Stop playing silence to a channel."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -1295,7 +1295,7 @@ op asterisk-ari-channels-get-channel-vars(channelId: String, variables: List<Str
   response = http.request(method: "GET", url)
   return response
 
-op asterisk-ari-channels-set-channel-vars(channelId: String, body: Any) -> Any
+op asterisk-ari-channels-set-channel-vars(channelId: String, variables: Any) -> Any
   description "Set the values of multiple channel variables or functions."
   risk "high"
   idempotency "non_idempotent"
@@ -1305,7 +1305,7 @@ op asterisk-ari-channels-set-channel-vars(channelId: String, body: Any) -> Any
   base = "https://{host}:8089/ari"
   url = fmt("{base}/channels/{channelId}/variables")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response
 
@@ -1324,7 +1324,7 @@ op asterisk-ari-device-states-get(deviceName: String) -> Any
 op asterisk-ari-device-states-update(deviceName: String, deviceState: String) -> Any
   description "Change the state of a device controlled by ARI. (Note - implicitly creates the device state)."
   risk "high"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -1336,7 +1336,7 @@ op asterisk-ari-device-states-update(deviceName: String, deviceState: String) ->
 op asterisk-ari-device-states-delete(deviceName: String) -> Any
   description "Destroy a device-state controlled by ARI."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -1345,7 +1345,7 @@ op asterisk-ari-device-states-delete(deviceName: String) -> Any
   response = http.request(method: "DELETE", url)
   return response
 
-op asterisk-ari-endpoints-refer(to: String, from: String, refer_to: String, to_self: Bool, body: Any) -> Any
+op asterisk-ari-endpoints-refer(to: String, from: String, refer_to: String, to_self: Bool, variables: Any) -> Any
   description "Refer an endpoint or technology URI to some technology URI or endpoint."
   risk "high"
   idempotency "non_idempotent"
@@ -1358,14 +1358,14 @@ op asterisk-ari-endpoints-refer(to: String, from: String, refer_to: String, to_s
   when to_self
     url = fmt("{url}{sep}to_self={to_self}")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response
 
-op asterisk-ari-endpoints-send-message(to: String, from: String, body: String, body_2: Any) -> Any
+op asterisk-ari-endpoints-send-message(to: String, from: String, body: String, variables: Any) -> Any
   description "Send a message to some technology URI or endpoint."
   risk "high"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -1375,7 +1375,7 @@ op asterisk-ari-endpoints-send-message(to: String, from: String, body: String, b
   when body
     url = fmt("{url}{sep}body={body}")
   content_type = "application/json"
-  payload = parse(body_2, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
   return response
 
@@ -1403,7 +1403,7 @@ op asterisk-ari-endpoints-get(tech: String, resource: String) -> Any
   response = http.request(method: "GET", url)
   return response
 
-op asterisk-ari-endpoints-refer-to-endpoint(tech: String, resource: String, from: String, refer_to: String, to_self: Bool, body: Any) -> Any
+op asterisk-ari-endpoints-refer-to-endpoint(tech: String, resource: String, from: String, refer_to: String, to_self: Bool, variables: Any) -> Any
   description "Refer an endpoint or technology URI to some technology URI or endpoint."
   risk "high"
   idempotency "non_idempotent"
@@ -1416,14 +1416,14 @@ op asterisk-ari-endpoints-refer-to-endpoint(tech: String, resource: String, from
   when to_self
     url = fmt("{url}{sep}to_self={to_self}")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response
 
-op asterisk-ari-endpoints-send-message-to-endpoint(tech: String, resource: String, from: String, body: String, body_2: Any) -> Any
+op asterisk-ari-endpoints-send-message-to-endpoint(tech: String, resource: String, from: String, body: String, variables: Any) -> Any
   description "Send a message to some endpoint in a technology."
   risk "high"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -1433,7 +1433,7 @@ op asterisk-ari-endpoints-send-message-to-endpoint(tech: String, resource: Strin
   when body
     url = fmt("{url}{sep}body={body}")
   content_type = "application/json"
-  payload = parse(body_2, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
   return response
 
@@ -1449,7 +1449,7 @@ op asterisk-ari-events-claim-channel(channelId: String, application: String) -> 
   response = http.request(method: "POST", url)
   return response
 
-op asterisk-ari-events-user-event(eventName: String, application: String, source: List<String>, body: Any) -> Any
+op asterisk-ari-events-user-event(eventName: String, application: String, source: List<String>, variables: Any) -> Any
   description "Generate a user event."
   risk "high"
   idempotency "non_idempotent"
@@ -1462,7 +1462,7 @@ op asterisk-ari-events-user-event(eventName: String, application: String, source
   when source
     url = fmt("{url}{sep}source={source}")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response
 
@@ -1481,7 +1481,7 @@ op asterisk-ari-mailboxes-get(mailboxName: String) -> Any
 op asterisk-ari-mailboxes-update(mailboxName: String, oldMessages: Number, newMessages: Number) -> Any
   description "Change the state of a mailbox. (Note - implicitly creates the mailbox)."
   risk "high"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -1493,7 +1493,7 @@ op asterisk-ari-mailboxes-update(mailboxName: String, oldMessages: Number, newMe
 op asterisk-ari-mailboxes-delete(mailboxName: String) -> Any
   description "Destroy a mailbox."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -1529,7 +1529,7 @@ op asterisk-ari-recordings-get-live(recordingName: String) -> Any
 op asterisk-ari-recordings-cancel(recordingName: String) -> Any
   description "Stop a live recording and discard it."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -1553,7 +1553,7 @@ op asterisk-ari-recordings-mute(recordingName: String) -> Any
 op asterisk-ari-recordings-unmute(recordingName: String) -> Any
   description "Unmute a live recording."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -1577,7 +1577,7 @@ op asterisk-ari-recordings-pause(recordingName: String) -> Any
 op asterisk-ari-recordings-unpause(recordingName: String) -> Any
   description "Unpause a live recording."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
@@ -1613,7 +1613,7 @@ op asterisk-ari-recordings-get-stored(recordingName: String) -> Any
 op asterisk-ari-recordings-delete-stored(recordingName: String) -> Any
   description "Delete a stored recording."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 

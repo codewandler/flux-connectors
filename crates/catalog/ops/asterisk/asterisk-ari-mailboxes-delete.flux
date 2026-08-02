@@ -1,7 +1,7 @@
 op asterisk-ari-mailboxes-delete(mailboxName: String) -> Any
   description "Destroy a mailbox."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 

@@ -1,7 +1,7 @@
 op asterisk-ari-mailboxes-update(mailboxName: String, oldMessages: Number, newMessages: Number) -> Any
   description "Change the state of a mailbox. (Note - implicitly creates the mailbox)."
   risk "high"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 

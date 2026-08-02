@@ -105,7 +105,13 @@ fn everything_the_document_declares_stays_available_to_patch() {
     available.sort_unstable();
     assert_eq!(
         available,
-        vec!["createTicket", "deleteTicket", "listTickets", "showTicket"]
+        vec![
+            "createTicket",
+            "deleteTicket",
+            "listTickets",
+            "showOrganization",
+            "showTicket"
+        ]
     );
     assert!(
         loaded.connector.operations.is_empty(),

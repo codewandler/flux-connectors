@@ -1,4 +1,4 @@
-op asterisk-ari-channels-external-media(channelId: String, app: String, external_host: String, encapsulation: String, transport: String, connection_type: String, format: String, direction: String, data: String, transport_data: String, body: Any) -> Any
+op asterisk-ari-channels-external-media(channelId: String, app: String, external_host: String, encapsulation: String, transport: String, connection_type: String, format: String, direction: String, data: String, transport_data: String, variables: Any) -> Any
   description "Start an External Media session."
   risk "high"
   idempotency "non_idempotent"
@@ -32,6 +32,6 @@ op asterisk-ari-channels-external-media(channelId: String, app: String, external
   when transport_data
     url = fmt("{url}{sep}transport_data={transport_data}")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response

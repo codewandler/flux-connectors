@@ -1,7 +1,7 @@
 op asterisk-ari-channels-unmute(channelId: String, direction: String) -> Any
   description "Unmute a channel."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 

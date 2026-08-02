@@ -1,7 +1,7 @@
 op asterisk-ari-recordings-unpause(recordingName: String) -> Any
   description "Unpause a live recording."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 

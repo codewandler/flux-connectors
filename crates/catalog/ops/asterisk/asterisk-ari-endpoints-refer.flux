@@ -1,4 +1,4 @@
-op asterisk-ari-endpoints-refer(to: String, from: String, refer_to: String, to_self: Bool, body: Any) -> Any
+op asterisk-ari-endpoints-refer(to: String, from: String, refer_to: String, to_self: Bool, variables: Any) -> Any
   description "Refer an endpoint or technology URI to some technology URI or endpoint."
   risk "high"
   idempotency "non_idempotent"
@@ -11,6 +11,6 @@ op asterisk-ari-endpoints-refer(to: String, from: String, refer_to: String, to_s
   when to_self
     url = fmt("{url}{sep}to_self={to_self}")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response

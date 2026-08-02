@@ -1,7 +1,7 @@
 op asterisk-ari-channels-stop-moh(channelId: String) -> Any
   description "Stop playing music on hold to a channel."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 

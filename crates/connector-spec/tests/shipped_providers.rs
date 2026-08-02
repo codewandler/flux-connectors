@@ -103,7 +103,7 @@ fn operation_selection_stays_curated() {
         // adds 7 Help Center operations, and C-464 adds 9 Messaging operations. Two message
         // operations use bounded inline schemas because their pinned OpenAPI responses are
         // recursive; the other 28 are exact selections or the seven original Support operations.
-        ("zendesk", 37),
+        ("zendesk", 35),
         ("freshdesk", 9),
         // **Not a curated count — a coverage one.** C-417 widened babelforce to the whole surface
         // `manager-sdk` covers: the five vendored documents declare 398 operations, the canonical

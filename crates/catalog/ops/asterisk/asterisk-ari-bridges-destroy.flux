@@ -1,7 +1,7 @@
 op asterisk-ari-bridges-destroy(bridgeId: String) -> Any
   description "Shut down a bridge."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose true
 

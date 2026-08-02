@@ -1,7 +1,7 @@
 op asterisk-ari-channels-hangup(channelId: String, reason_code: String, reason: String) -> Any
   description "Delete (i.e. hangup) a channel."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose true
 

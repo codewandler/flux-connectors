@@ -1,7 +1,7 @@
 op asterisk-ari-recordings-cancel(recordingName: String) -> Any
   description "Stop a live recording and discard it."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 

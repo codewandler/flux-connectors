@@ -14,6 +14,22 @@
 
 ## [Unreleased]
 
+### New
+
+- **Asterisk ARI is now available as a complete REST connector.** It covers all 108 ordinary HTTP
+  operations documented by Asterisk 22.10.1, including channels, bridges, endpoints, recordings,
+  playback, device state, mailboxes and administration. Connection setup uses an HTTPS endpoint plus
+  Asterisk Basic credentials. The event WebSocket is intentionally not included; inbound eventing
+  will follow once channels have a stable design.
+
+### Improved
+
+- **Zendesk's 35 operations now all follow Zendesk's own API descriptions.** Support and Messaging
+  no longer rely on handwritten request copies, and recursive response data remains visible without
+  weakening request validation. Three redundant ticket-update variants are now the single update
+  operation Zendesk documents; this greenfield catalogue does not retain aliases for the removed
+  copies.
+
 ## [0.14.0] — 2026-08-02
 
 ### Action needed

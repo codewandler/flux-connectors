@@ -1,7 +1,7 @@
 op asterisk-ari-playbacks-stop(playbackId: String) -> Any
   description "Stop a playback."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose true
 

@@ -47,7 +47,8 @@ is retained and the operation is catalogued; no special cross-repository downloa
 The generic HTTP result is the only execution contract this release claims.
 
 All 108 operations are catalogued and addressable. Broad selectors conservatively classify POST
-and PUT as high-risk writes, DELETE as destructive, and GET as low-risk reads. A bounded useful set
+and PUT as non-replayable high-risk writes, DELETE as destructive and non-replayable, and GET as
+low-risk reads. A bounded useful set
 may be exposed to model tool registries; `expose = false` is not an execution refusal because the
 host's named-operation resolution path remains available.
 

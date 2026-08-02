@@ -1,7 +1,7 @@
 op asterisk-ari-recordings-delete-stored(recordingName: String) -> Any
   description "Delete a stored recording."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 

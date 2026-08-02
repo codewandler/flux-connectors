@@ -1,4 +1,4 @@
-op asterisk-ari-channels-create(endpoint: String, app: String, appArgs: String, channelId: String, otherChannelId: String, originator: String, formats: String, body: Any) -> Any
+op asterisk-ari-channels-create(endpoint: String, app: String, appArgs: String, channelId: String, otherChannelId: String, originator: String, formats: String, variables: Any) -> Any
   description "Create channel."
   risk "high"
   idempotency "non_idempotent"
@@ -23,6 +23,6 @@ op asterisk-ari-channels-create(endpoint: String, app: String, appArgs: String, 
   when formats
     url = fmt("{url}{sep}formats={formats}")
   content_type = "application/json"
-  payload = parse(body, as: "json")
+  payload = { variables }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response

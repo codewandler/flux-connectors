@@ -1,7 +1,7 @@
 op asterisk-ari-applications-filter(applicationName: String, body: Any) -> Any
   description "Filter application events types."
   risk "high"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 

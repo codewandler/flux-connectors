@@ -1,7 +1,7 @@
 op asterisk-ari-channels-unhold(channelId: String) -> Any
   description "Remove a channel from hold."
   risk "destructive"
-  idempotency "idempotent"
+  idempotency "non_idempotent"
   effects ["network"]
   expose false
 
