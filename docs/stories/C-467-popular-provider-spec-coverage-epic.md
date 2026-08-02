@@ -2,7 +2,7 @@
 id: C-467
 title: "Five popular providers gain curated coverage from first-party API specs (epic)"
 pillar: Agent
-status: in-progress
+status: done
 design: docs/designs/popular-provider-spec-coverage.md
 epic: popular-provider-spec-coverage
 areas: [providers, openapi]
@@ -24,7 +24,7 @@ API assumptions with pinned, reproducible first-party OpenAPI evidence.
 - [x] C-474 integrates the five disjoint changes, regenerates all whole-catalogue artifacts and proves
       the complete Rust and web gates.
 - [x] The public catalogue distinguishes spec-backed provenance without exposing internal planning.
-- [ ] Release handling follows the repository contract: one integrated release for this existing-
+- [x] Release handling follows the repository contract: one integrated release for this existing-
       provider wave; every genuinely new provider in later work is released immediately after it lands.
 
 ## Progress
@@ -38,4 +38,7 @@ API assumptions with pinned, reproducible first-party OpenAPI evidence.
 - 2026-08-02: integrated counts re-measured from `web/public/catalog.json`: GitHub 9, Stripe 12,
   Microsoft Graph 12, OpenAI 8, and Twilio 9. Each provider contributes exactly four new
   spec-backed operations, the public catalogue carries per-operation provenance, and the complete
-  Rust and Node gates are green. The release checkbox remains open until v0.14.0 is published.
+  Rust and Node gates are green. The release checkbox remained open until v0.14.0 was published.
+- 2026-08-02: the integrated existing-provider wave shipped as v0.14.0 at `27573af`; crates.io
+  workflow `30751836595` completed successfully and the GitHub release is public. Future genuinely
+  new providers retain the immediate-release trigger.
