@@ -94,15 +94,7 @@ const MESSAGING_OPERATIONS: [(&str, &str, HttpMethod, &str); 9] = [
     ),
 ];
 
-const HELP_CENTER_HASHES: [(&str, &str); 9] = [
-    (
-        "connectors/zendesk-help-center.flux",
-        "13f2a3f9581a2a4eaec25945e5fc6fd8636ddb555ed3e7311f0b5186f2e434fc",
-    ),
-    (
-        "connectors/zendesk-help-center.connector.toml",
-        "b3711bc0c88a0438b3052ca17b1092343f209a946490b34124186119a8e26448",
-    ),
+const HELP_CENTER_OPERATION_HASHES: [(&str, &str); 7] = [
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-article-create.flux",
         "e3adcac4ed72f06d04001665206b9fd831f692059bf259c15656d29677d6cd54",
@@ -438,9 +430,12 @@ fn every_write_has_a_nonvacuous_narrow_body_and_an_explicit_retry_contract() {
 }
 
 #[test]
-fn every_existing_help_center_rendering_and_artifact_is_byte_identical() {
+fn every_existing_help_center_operation_rendering_is_byte_identical() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    for (relative, expected) in HELP_CENTER_HASHES {
+    // Whole-service artifacts intentionally carry the generator version and the provider-wide
+    // source hash, so an unrelated sibling spec or an ordinary release must move them. The
+    // per-operation renderings are the compatibility surface C-464 promised to preserve.
+    for (relative, expected) in HELP_CENTER_OPERATION_HASHES {
         let path = root.join(relative);
         let bytes = std::fs::read(&path)
             .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
