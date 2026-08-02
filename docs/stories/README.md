@@ -39,7 +39,6 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 
 ### Asterisk ARI — generated REST, with eventing deferred
 _The first-party Swagger descriptions are the source; this repository normalizes and compiles them._
-- [C-485 — Generate the complete Asterisk ARI REST provider](C-485-generate-asterisk-ari-provider.md) · Connector · all 108 non-WebSocket operations; Basic auth and configured deployment authority; no eventing
 - [C-486 — Integrate and release the Asterisk ARI connector](C-486-integrate-release-asterisk-ari.md) · Build · coordinator-owned catalogue regeneration, full gates and immediate new-provider release
 
 ### Anthropic Managed Agents — the first vendor that declares both transports and its own event set

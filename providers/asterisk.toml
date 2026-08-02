@@ -1,0 +1,152 @@
+# Asterisk REST Interface 22.10.1 — generated from Asterisk's first-party Swagger descriptions.
+#
+# The vendor publishes eleven legacy Swagger 1.1/1.2 documents rather than OpenAPI 3. They remain
+# committed byte-for-byte under `specs/asterisk/api-docs/`; `scripts/normalize-asterisk-ari.py`
+# deterministically joins them into the OpenAPI 3 document selected below. The source census is 109
+# operations: 108 ordinary HTTP calls selected here and one `GET /events` WebSocket deliberately
+# deferred to future channel work.
+
+id = "asterisk"
+vendor = "Asterisk"
+authority = "org.asterisk.ari"
+api_version = "22.10.1"
+base_url = "https://{host}:8089/ari"
+description = "Control an Asterisk deployment through the complete ARI REST surface: applications, system configuration, bridges, channels, endpoints, mailboxes, playback, recordings, sounds, and outbound user events"
+verify = "asterisk-ari-asterisk-ping"
+default_auth = [{ credentials = ["asterisk.password"] }]
+
+[[services]]
+name = "default"
+tags = ["telephony"]
+
+[[spec]]
+path = "specs/asterisk/ari-22.10.1.openapi.json"
+source_url = "https://github.com/asterisk/asterisk/tree/f0e408a7b0d829c85bf15fa4b487870a50cb3000/rest-api"
+upstream_version = "22.10.1"
+fetched_at = "2026-08-02T14:50:00Z"
+sha256 = "a34fc7acc7b9a8cf913ac026802d86646833c892948dcf906258db7604fea637"
+
+# The normalizer gives every operation a collision-free `<resource>-<nickname>` id. One declared
+# naming rule turns that into the public `asterisk-ari-<resource>-<nickname>` namespace; no public
+# id is inferred silently and collisions fail the load.
+[patch.naming]
+rule = "kebab"
+prefix = "asterisk-ari"
+
+# All REST calls are catalogued and callable. The broad method classes make the conservative safety
+# decision reviewable in four blocks: reads are low/idempotent by construction, POST may create or
+# affect live PBX state, PUT is a repeatable high-risk write, and DELETE is destructive/repeatable.
+# Only the bounded subset below reaches a model as tools.
+[[patch.select]]
+methods = ["GET"]
+expose = false
+
+[[patch.select]]
+methods = ["POST"]
+risk = "high"
+idempotency = "non_idempotent"
+expose = false
+
+[[patch.select]]
+methods = ["PUT"]
+risk = "high"
+idempotency = "idempotent"
+expose = false
+
+[[patch.select]]
+methods = ["DELETE"]
+risk = "destructive"
+idempotency = "idempotent"
+expose = false
+
+# A useful bounded model surface. Named-operation callers retain all 108 operations through
+# connector-pack resolve; these fifteen are the common discovery/control actions advertised in a
+# model prompt.
+[[patch.operations]]
+select = "applications-list"
+expose = true
+
+[[patch.operations]]
+select = "asterisk-ping"
+expose = true
+
+[[patch.operations]]
+select = "bridges-list"
+expose = true
+
+[[patch.operations]]
+select = "bridges-create"
+expose = true
+
+[[patch.operations]]
+select = "bridges-destroy"
+expose = true
+
+[[patch.operations]]
+select = "channels-list"
+expose = true
+
+[[patch.operations]]
+select = "channels-originate"
+expose = true
+
+[[patch.operations]]
+select = "channels-hangup"
+expose = true
+
+[[patch.operations]]
+select = "deviceStates-list"
+expose = true
+
+[[patch.operations]]
+select = "endpoints-list"
+expose = true
+
+[[patch.operations]]
+select = "mailboxes-list"
+expose = true
+
+[[patch.operations]]
+select = "playbacks-get"
+expose = true
+
+[[patch.operations]]
+select = "playbacks-stop"
+expose = true
+
+[[patch.operations]]
+select = "recordings-listStored"
+expose = true
+
+[[patch.operations]]
+select = "sounds-list"
+expose = true
+
+[[auth]]
+name = "asterisk.password"
+scheme = "basic"
+user_env = ["ASTERISK_ARI_USERNAME"]
+env = ["ASTERISK_ARI_PASSWORD"]
+description = "Asterisk ARI Basic authentication password, paired with the deployment's ARI username"
+
+[[config]]
+name = "host"
+label = "Asterisk host"
+help = "The hostname of the TLS-enabled Asterisk HTTP service without a scheme, port, or `/ari`"
+example = "pbx.example.com"
+binds = "endpoint.host"
+
+[[config]]
+name = "username"
+label = "ARI username"
+help = "The username configured for ARI in Asterisk's `ari.conf`"
+example = "flux"
+binds = "username.asterisk.password"
+
+[[config]]
+name = "password"
+label = "ARI password"
+help = "The password configured beside the ARI username in Asterisk's `ari.conf`"
+format = "token"
+secret = true
+binds = "credential.asterisk.password"

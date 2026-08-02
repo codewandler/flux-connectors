@@ -53,11 +53,12 @@ host's named-operation resolution path remains available.
 
 ## Endpoint and authentication
 
-ARI uses HTTP Basic authentication and a deployment-specific base URL. The connector asks for one
-username, one password, and one endpoint authority (`host[:port]`) and renders the default ARI form
-`http://{authority}/ari`. Existing connector-pack URL and private-network guards remain authoritative;
-this provider gets no bypass. Supporting a caller-selectable HTTP/HTTPS scheme is separate endpoint-
-configuration work and is not disguised as an Asterisk runtime requirement.
+ARI uses HTTP Basic authentication and a deployment-specific host. The connector asks for one
+username, one password, and one host and renders the TLS-enabled ARI form
+`https://{host}:8089/ari`. This preserves the catalogue's rule that credentials are never sent over
+plain HTTP; existing connector-pack URL and private-network guards remain authoritative, and this
+provider gets no bypass. Supporting a caller-selectable scheme or non-default port is separate
+endpoint-configuration work and is not disguised as an Asterisk runtime requirement.
 
 ## Ownership and write sets
 

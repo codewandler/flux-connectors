@@ -2,7 +2,7 @@
 id: C-485
 title: "Generate the complete Asterisk ARI REST provider"
 pillar: Connector
-status: ready
+status: in-progress
 priority: 1
 design: docs/designs/asterisk-ari-rest.md
 epic: asterisk-ari-rest
@@ -34,6 +34,8 @@ existing spec selection and HTTP execution path.
 
 - 2026-08-02: scoped after the owner explicitly deferred eventing and rejected a cross-repository
   plugin implementation.
+- 2026-08-02: implementation started from `36a3a3d`; C-484 owns the normalized source document and
+  this story owns only the provider, provider-specific proof, and scoped generated artifacts.
 
 ## Notes
 

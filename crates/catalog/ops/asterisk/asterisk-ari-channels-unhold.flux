@@ -1,0 +1,11 @@
+op asterisk-ari-channels-unhold(channelId: String) -> Any
+  description "Remove a channel from hold."
+  risk "destructive"
+  idempotency "idempotent"
+  effects ["network"]
+  expose false
+
+  base = "https://{host}:8089/ari"
+  url = fmt("{base}/channels/{channelId}/hold")
+  response = http.request(method: "DELETE", url)
+  return response

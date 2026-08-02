@@ -739,7 +739,7 @@ fn validate_header(value: &str) -> Result<(), String> {
 ///
 /// ```text
 /// subdomain = "acme.zendesk.com@evil.example"
-///   -> https://acme.zendesk.com@evil.example.zendesk.com/api/v2/tickets/1.json
+///   -> https://acme.zendesk.com@evil.example.zendesk.com/api/v2/tickets/1
 ///      authority: evil.example.zendesk.com
 /// ```
 ///
@@ -782,6 +782,46 @@ fn validate_authority(authority: &str) -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+/// Validate an authority whose **template**, rather than a configured value, may state a port.
+///
+/// Asterisk ARI is the first shipped case: `https://{host}:8089/ari`. The existing host predicate
+/// correctly refuses `host = "evil.example:8089"`, because a configured colon can redirect a
+/// request to a different port. Applying that same predicate to the finished authority also refused
+/// the emitter-authored `:8088`, though no configured byte introduced it. This split retains the
+/// safety property: only one decimal port written literally in the connector is admitted, while
+/// every substituted host value remains subject to [`validate_authority`].
+fn validate_templated_authority(template: &str, composed: &str) -> Result<(), String> {
+    let Some((_template_host, template_port)) = template.rsplit_once(':') else {
+        return validate_authority(composed);
+    };
+    if template_port.contains(MARK)
+        || template_port.is_empty()
+        || !template_port.chars().all(|c| c.is_ascii_digit())
+    {
+        return validate_authority(composed);
+    }
+    let port: u16 = template_port
+        .parse()
+        .map_err(|_| format!("the declared port {template_port:?} is not between 1 and 65535"))?;
+    if port == 0 {
+        return Err("the declared port 0 is not between 1 and 65535".to_owned());
+    }
+    let Some((composed_host, composed_port)) = composed.rsplit_once(':') else {
+        return Err(format!(
+            "the template declares port {template_port}, but the composed authority {composed:?} does not"
+        ));
+    };
+    if composed_port != template_port {
+        return Err(format!(
+            "the template declares port {template_port}, but the composed authority uses {composed_port:?}"
+        ));
+    }
+    // The composed host half still includes every substituted value; validating it proves no
+    // configured value introduced a delimiter. The template was read only to establish that the
+    // port was literal.
+    validate_authority(composed_host)
 }
 
 /// The sentinel that stands in for a placeholder while a template is being read positionally.
@@ -1534,7 +1574,7 @@ impl Build<'_> {
             position: Slot::Host.word(),
             reason,
         };
-        validate_authority(&composed).map_err(refuse)?;
+        validate_templated_authority(template_authority, &composed).map_err(refuse)?;
 
         // A restatement of the property, executed rather than asserted in prose: no character the
         // rule above permits can delimit, so reading the finished URL the way a transport does must
@@ -1835,6 +1875,24 @@ mod tests {
             assert!(
                 validate_authority(escaping).is_err(),
                 "{escaping:?} escapes the authority and must be refused"
+            );
+        }
+    }
+
+    #[test]
+    fn a_literal_port_is_not_mistaken_for_a_configured_host_delimiter() {
+        let template = format!("{}host{}:8089", MARK, MARK);
+        assert!(validate_templated_authority(&template, "127.0.0.1:8089").is_ok());
+        assert!(validate_templated_authority(&template, "pbx.internal:8089").is_ok());
+
+        for escaped in [
+            "pbx.internal:8088",
+            "pbx.internal:8089@evil.example:8089",
+            "pbx.internal:8089/path:8089",
+        ] {
+            assert!(
+                validate_templated_authority(&template, escaped).is_err(),
+                "{escaped:?} moved the declared authority"
             );
         }
     }
