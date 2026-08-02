@@ -19,6 +19,20 @@
 
 # What's new in flux-connectors
 
+## Unreleased
+
+### New
+
+- **A connector can now address an envelope-shaped API.** Some vendors want a request body whose
+  fields sit inside nested arrays — SendGrid's send is the clearest example. That shape could not be
+  expressed before, and a connector for such a vendor would have produced a request the vendor
+  rejects. It works now, for a body whose shape the connector file spells out.
+
+  One limit worth knowing: this covers a fixed shape, not a variable-length list. A send to one
+  recipient is declared as one; a send to two is declared as two. Passing "however many recipients
+  the caller has" still is not possible, and a connector that needs it will say so rather than build
+  the wrong request.
+
 ## 0.11.0
 
 ### New

@@ -7,6 +7,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A request body can carry an array, at a declared length** (C-185). A `wire` path segment may now
+  carry a bracketed index, so `personalizations[0].to[0].email` puts a caller's value inside two
+  nested arrays of objects — SendGrid's envelope shape, which previously could not be addressed at
+  all: every segment was an object key, so the body came out as `{"personalizations": {"0": …}}`, a
+  400 rather than a shorthand.
+
+  **What it solves is the fixed-length envelope, not the caller-supplied batch**, and keeping those
+  apart is the point. The indices come from the provider file, so an array's length is a property of
+  the declaration. A batch — n items in, n elements built — would need the emitter to compute over
+  caller data, which is the expression language `AGENTS.md` §Flow graph refuses. An index may address
+  a whole element (`properties.title[0]`), which splits the difference: this repository supplies the
+  array wrapper, the caller supplies the element.
+
+  Five refusals, each because the alternative is a request the vendor answers with a 200 and ignores:
+  a hole in the indices, a bare numeric segment (which used to build an object keyed `"0"`), an array
+  directly inside an array, a root-level array, and an indexed path under `form` encoding.
+
+
 ## [0.11.0] — 2026-08-02
 
 ### Changed — breaking for `codewandler-connector-spec` consumers
