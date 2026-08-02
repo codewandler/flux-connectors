@@ -65,6 +65,9 @@ and tagging remain outside this implementation until explicitly requested.
   `scripts/publish-crates-io.sh --dry-run`; it stopped before packaging because Cargo refuses a
   dry-run from an uncommitted `Cargo.toml`. No `--allow-dirty`, commit, tag, push, or publication was
   performed. The preflight becomes runnable after an explicitly authorized commit.
+- 2026-08-02 — After commit, `scripts/publish-crates-io.sh --dry-run` packaged and verified the full
+  four-crate closure against registry Flux 0.52 and ended with `all 4 crates package and verify
+  (nothing uploaded)`. A version bump, release tag, push, and CI publication still remain.
 
 ## Notes
 - Precedent: [C-455](C-455-move-the-flux-engine-line-to-049.md), the 0.47 → 0.49 move.
