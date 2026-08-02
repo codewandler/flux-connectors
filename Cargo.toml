@@ -79,20 +79,16 @@ connector-secrets = { package = "codewandler-connector-secrets", version = "0.15
 # agree with them, and the lock is required to carry one engine line rather than two. So a bump is a
 # value change in one constant, and this test names every requirement still behind it.
 #
-# **The line is `0.49`, and it moves as one compatibility unit** (C-455). `connector-pack`
+# **The line is `0.52`, and it moves as one compatibility unit** (C-488). `connector-pack`
 # hands a host `Arc<dyn flux_runtime::Tool>` and `flux_core::Result`; a `0.x` requirement is
-# `>=0.N.0, <0.N+1.0` to cargo, so a pack built on 0.47 and a host on 0.49 are two unrelated traits in
+# `>=0.N.0, <0.N+1.0` to cargo, so a pack built on 0.49 and a host on 0.52 are two unrelated traits in
 # one graph. Staying a minor behind is therefore not a conservative choice, it is an unlinkable one —
 # which is why every pin below moves together or none does.
 #
-# **What 0.49 changes at this boundary is measured, not inferred from the release headline**
-# (C-455). A `diff -qr` over the registry sources cargo resolved, 0.47.1 against 0.49.0, finds no
-# `src/` difference in `flux-core`, `flux-web` or `flux-credentials`; `flux-runtime` adds one
-# unauthenticated-participant identity constructor; `flux-lang` adds its canonicalizer and CLI;
-# `flux-system` adds UDP and raw-ICMP dial variants. The last is a breaking exhaustive-match change,
-# but this workspace constructs `System` and never matches `DialTarget`. The workspace build and all
-# engine-line tests are green, and `connector-cli diff` reports all 951 artifacts byte-current. The
-# value of this move is therefore the public trait seam first; no connector operation changes.
+# **What 0.52 changes at this boundary is measured, not inferred from a release headline**
+# (C-488). The story records the registry-source comparison and the workspace gate. The value of
+# this move is the public trait seam first; any connector-visible difference must be named rather
+# than assumed absent.
 #
 # Flux-Lang: the emit target. Pinned deliberately — bumping this is a reviewed change, and
 # `flux-connectors check` verifies generated artifacts still match the pin (C-14).
@@ -104,7 +100,7 @@ connector-secrets = { package = "codewandler-connector-secrets", version = "0.15
 #     working tree rather than to a reviewed release.
 # flux publishes flux-lang to crates.io, so the registry pin is the only form that resolves
 # everywhere. The lib name stays `flux_lang`; only the *package* carries the vanity prefix.
-flux-lang = { package = "codewandler-flux-lang", version = "0.49" }
+flux-lang = { package = "codewandler-flux-lang", version = "0.52" }
 
 # The flux *runtime* seam, used by `connector-pack` alone (C-114). AGENTS.md's "flux-connectors does
 # not depend on the flux runtime" holds for the compiler — `connector-spec`, `connector-flux` and
@@ -129,8 +125,8 @@ flux-lang = { package = "codewandler-flux-lang", version = "0.49" }
 # What has not changed: `flux-spec` moves on its own `1.x` line and is **not** an engine crate. It is
 # the frozen wire vocabulary a guest plugin compiles against, so `SPEC_LINE` is recorded beside
 # `ENGINE_LINE` rather than derived from it.
-flux-core = { package = "codewandler-flux-core", version = "0.49" }
-flux-runtime = { package = "codewandler-flux-runtime", version = "0.49" }
+flux-core = { package = "codewandler-flux-core", version = "0.52" }
+flux-runtime = { package = "codewandler-flux-runtime", version = "0.52" }
 flux-spec = { package = "codewandler-flux-spec", version = "1.3" }
 # **The transport, and the only concrete `Egress` there is** (C-202). `flux-web` owns
 # `http.request` — the tool `connector-pack`'s own doc-comments name and that nothing in this
@@ -141,17 +137,17 @@ flux-spec = { package = "codewandler-flux-spec", version = "1.3" }
 # pack takes a transport, it does not link one. `dependency_fence.rs` holds the compiler crates away
 # from it.
 #
-# On the engine line, matching `flux-runtime`: flux-web 0.49.0 requires its engine peers on 0.49,
+# On the engine line, matching `flux-runtime`: flux-web 0.52.0 requires its engine peers on 0.52,
 # so it resolves inside the line this workspace pins and drags no off-line crate into the lock. That
 # is checked rather than trusted: `the_lock_carries_one_engine_line` rejects a transitive second line
-# (C-403), and C-455's targeted update moved eleven `codewandler-flux-*` packages together.
+# (C-403), while C-488's targeted update proves the current resolved unit moves together.
 #
 # **flux-web 0.43 is the substantive break this pin absorbs.** `http.request`'s canonical `content`
 # is now the record `{status, headers, body}` rather than one flat `HTTP {status}\n{headers}\n{body}`
 # string, with the block kept as the model-facing `view`. `connector-pack` returns that result
 # unchanged, so the shape a consumer sees changed with no compile error anywhere; it is pinned by
 # `crates/connectors-api/tests/live_egress.rs::the_response_comes_back_as_a_record_not_a_flat_string`.
-flux-web = { package = "codewandler-flux-web", version = "0.49" }
+flux-web = { package = "codewandler-flux-web", version = "0.52" }
 
 # `ToolContext::new` takes an `Arc<System>` (C-116). It was a **dev-dependency of `connector-pack`
 # only**; `connectors-api` now needs it in shipped code, because a host that dispatches a tool must
@@ -166,7 +162,7 @@ flux-web = { package = "codewandler-flux-web", version = "0.49" }
 # **The "no non-test code links it" clause is gone, and its disappearance is the point.** It was
 # true while this workspace had no host; C-202 gave it one, and leaving the claim standing would
 # have made the manifest assert a fence the code no longer keeps.
-flux-system = { package = "codewandler-flux-system", version = "0.49" }
+flux-system = { package = "codewandler-flux-system", version = "0.52" }
 
 # Shared third-party.
 anyhow = "1"
@@ -224,7 +220,7 @@ urlencoding = "2"
 #
 # It still resolves nothing new and adds no crate — `flux-web` pulls `flux-plugin`, which depends on
 # it — and it still carries `generate_pkce()`, `generate_state()` and `oauth_authorize_url()`.
-flux-credentials = { package = "codewandler-flux-credentials", version = "0.49" }
+flux-credentials = { package = "codewandler-flux-credentials", version = "0.52" }
 
 # **The `id_token` verifier.** The C-203 manifest recorded "no JWT library" as deliberate, on the
 # reasoning that identity would be read from the userinfo endpoint over TLS. C-204 reverses that on

@@ -33,9 +33,9 @@ use std::path::{Path, PathBuf};
 
 /// **The flux engine line this repository is built against.** Bumping flux starts here.
 ///
-/// A `0.x` line, so this is the whole compatibility unit: `"0.49"` admits every `0.49.z` and
+/// A `0.x` line, so this is the whole compatibility unit: `"0.52"` admits every `0.52.z` and
 /// nothing else.
-const ENGINE_LINE: &str = "0.49";
+const ENGINE_LINE: &str = "0.52";
 
 /// **The `flux-spec` line**, which is not the engine's — see this module's documentation.
 const SPEC_LINE: &str = "1.3";

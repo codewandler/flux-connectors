@@ -7,6 +7,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed — breaking for `connector-pack` consumers
+
+- **The connector runtime seam moves from Flux 0.49 to Flux 0.52** (C-488). `connector-pack`
+  exchanges Flux `Tool`, `ToolSpec`, `ToolContext`, and result types with its host, so downstream
+  hosts must move their engine pins with this connector release; mixing these pre-1.0 minor lines
+  resolves distinct, unlinkable traits.
+
+  The six authored engine requirements and twelve resolved Flux packages move as one registry-only
+  unit, while the independent `flux-spec` line remains at 1.3. The registry-source comparison found
+  byte-identical `src/` trees for `flux-lang` and `flux-credentials`; additions in core, runtime,
+  system, and web compile without a connector source change. The engine-line tests and workspace
+  build pass, and `connector-cli diff` reports all 1114 artifacts up to date across 55 providers, so
+  no connector operation bytes change.
+
 ## [0.15.0] — 2026-08-02
 
 ### Changed — breaking for Zendesk catalogue consumers

@@ -11,7 +11,7 @@ the stories, not the generated region. New work? Copy [`_TEMPLATE.md`](_TEMPLATE
 
 **Snapshot: v0.15.0 (2026-08-02).** Measured with `ls providers/*.toml | wc -l` and
 `cargo run -p connector-cli -- diff`: 55 provider definitions compile to a fixed point of 1114
-artifacts. The publishable host seam is on Flux 0.49, and the generated board below is the current
+artifacts. The next publishable host seam is prepared on Flux 0.52, and the generated board below is the current
 story state rather than the original scaffold plan.
 
 Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·

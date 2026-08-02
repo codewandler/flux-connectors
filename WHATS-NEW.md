@@ -14,6 +14,13 @@
 
 ## [Unreleased]
 
+### Action needed
+
+- **Upgrade a host's Flux engine to 0.52 when adopting this release.** The connector pack and its
+  host exchange Flux runtime objects directly, so they must use the same engine generation. A host
+  that stays on Flux 0.49 will not link with the updated pack. Connector operations and generated
+  modules are unchanged by this compatibility move.
+
 ## [0.15.0] — 2026-08-02
 
 ### New
