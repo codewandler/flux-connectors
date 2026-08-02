@@ -120,10 +120,12 @@ per service. The full surface table is
 
 The charter boundary comes first for any proposed provider:
 
-- **Generated connectors belong here:** HTTP-based SaaS services such as Zendesk, Freshdesk,
-  Salesforce, Intercom, OpenAI, Anthropic, and OpenRouter.
+- **Generated connectors belong here:** spec-described HTTP APIs such as Zendesk, Freshdesk,
+  Salesforce, Intercom, OpenAI, Anthropic, OpenRouter, and Asterisk ARI. The deployment being
+  self-hosted does not move an ordinary REST surface across the repository boundary.
 - **Hand-written technology adapters belong in `../flux/plugins`:** Docker, Kubernetes, SQL,
-  Prometheus, Loki, Vault, Asterisk, and other stateful or protocol-rich systems.
+  Prometheus, Loki, Vault, and other stateful or protocol-rich systems. Asterisk AMI would be such
+  an adapter; Asterisk ARI is not.
 
 If the target is a technology rather than a service, stop and place the work in flux unless an
 accepted design explicitly changes this charter.
