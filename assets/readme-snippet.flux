@@ -1,14 +1,13 @@
-op zendesk-ticket-comment-add(ticket_id: Number, updated_stamp: String, body: String, public: Bool) -> Any
-  description "Add a comment to a ticket; the comment is an internal note unless public is explicitly true"
+op zendesk-ticket-update(ticket_id: Number, ticket: Any) -> Any
+  description "Update Ticket"
   risk "medium"
-  idempotency "conditional"
+  idempotency "non_idempotent"
   effects ["network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/tickets/{ticket_id}.json")
+  url = fmt("{base}/api/v2/tickets/{ticket_id}")
   content_type = "application/json"
-  safe_update = true
-  payload = { ticket: { comment: { body, public }, safe_update, updated_stamp } }
+  payload = { ticket }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
   return response

@@ -82,7 +82,7 @@ fn a_templated_host_is_substituted_into_the_request_url() {
         .expect("the request builds");
 
     assert_eq!(
-        request.url, "https://acme.zendesk.com/api/v2/tickets/1.json",
+        request.url, "https://acme.zendesk.com/api/v2/tickets/1",
         "the host a request reaches must be the tenant's, not the template's"
     );
 }
@@ -97,7 +97,7 @@ fn the_permission_subject_is_the_host_the_request_reaches() {
 
     assert_eq!(
         subjects,
-        vec!["https://acme.zendesk.com/api/v2/tickets/1.json".to_string()],
+        vec!["https://acme.zendesk.com/api/v2/tickets/1".to_string()],
         "the gate must be shown the host the request actually reaches"
     );
 }

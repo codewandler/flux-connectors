@@ -11,20 +11,26 @@ use serde_json::json;
 #[path = "support/shipped_provider.rs"]
 mod shipped_provider;
 
-const SUPPORT_OPERATIONS: [&str; 13] = [
-    "zendesk-test",
-    "zendesk-ticket-search",
-    "zendesk-ticket-show",
-    "zendesk-ticket-comment-list",
-    "zendesk-ticket-update",
-    "zendesk-ticket-comment-add",
-    "zendesk-ticket-tag-add",
+const SUPPORT_OPERATIONS: [&str; 19] = [
     "zendesk-ticket-audit-list",
     "zendesk-incremental-ticket-list",
     "zendesk-incremental-user-list",
     "zendesk-incremental-organization-list",
     "zendesk-incremental-ticket-event-list",
     "zendesk-custom-object-list",
+    "zendesk-ticket-recent-list",
+    "zendesk-view-ticket-list",
+    "zendesk-user-show",
+    "zendesk-organization-show",
+    "zendesk-group-list",
+    "zendesk-ticket-field-list",
+    "zendesk-ticket-form-list",
+    "zendesk-custom-status-list",
+    "zendesk-test",
+    "zendesk-ticket-search",
+    "zendesk-ticket-show",
+    "zendesk-ticket-comment-list",
+    "zendesk-ticket-update",
 ];
 
 const HELP_CENTER_OPERATIONS: [&str; 7] = [
@@ -126,7 +132,7 @@ const HELP_CENTER_OPERATION_HASHES: [(&str, &str); 7] = [
 ];
 
 #[test]
-fn recursive_message_responses_remain_an_explicit_mixed_front_end_boundary() {
+fn recursive_message_responses_are_bounded_and_patch_selectable() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("specs/zendesk/messaging-2026-08-02.openapi.yaml");
@@ -139,16 +145,25 @@ fn recursive_message_responses_remain_an_explicit_mixed_front_end_boundary() {
         .collect::<Vec<_>>()
         .join("\n");
     for expected in ["PostMessage", "ListMessages"] {
-        assert!(
-            ingested.operation(expected).is_none(),
-            "{expected} became patch-selectable; replace its hand-authored bounded operation with an exact selection"
+        let response = ingested
+            .operation(expected)
+            .and_then(|operation| operation.response_schema.as_ref())
+            .unwrap_or_else(|| panic!("{expected} must remain patch-selectable"));
+        assert_eq!(
+            response.pointer(
+                "/properties/messages/items/properties/quotedMessage/allOf/0/oneOf/0/properties/message/allOf/0"
+            ),
+            Some(&json!(true)),
+            "{expected} did not bound the recursive message continuation: {response}"
         );
     }
     assert!(
-        diagnostics.contains("$ref` cycle: #/components/schemas/message")
-            && diagnostics.contains("quotedMessageMessage")
-            && diagnostics.contains("operation was skipped"),
-        "the mixed-front-end rationale changed:\n{diagnostics}"
+        !diagnostics.lines().any(|line| {
+            (line.contains("POST /v2/apps/{appId}/conversations/{conversationId}/messages")
+                || line.contains("GET /v2/apps/{appId}/conversations/{conversationId}/messages"))
+                && line.contains("cycle")
+        }),
+        "the bounded response cycle must not skip either operation:\n{diagnostics}"
     );
 }
 
@@ -183,8 +198,8 @@ fn messaging_is_a_named_service_without_moving_support_or_help_center() {
             .operations_of(DEFAULT_SERVICE)
             .map(|operation| operation.id.as_str())
             .collect::<Vec<_>>()
-            .starts_with(&SUPPORT_OPERATIONS),
-        "the pre-Messaging Support operation prefix moved"
+            == SUPPORT_OPERATIONS,
+        "the Support operation set changed"
     );
     assert_eq!(
         connector
@@ -233,25 +248,11 @@ fn nine_exact_operation_ids_are_selected_and_all_webhook_lifecycle_operations_st
         .iter()
         .filter(|patch| patch.service.as_deref() == Some("messaging"))
         .collect();
-    let patch_selected = MESSAGING_OPERATIONS
-        .iter()
-        .filter(|(select, _, _, _)| !matches!(*select, "PostMessage" | "ListMessages"));
-    assert_eq!(selected.len(), 7);
-    for (patch, (select, rename, _, _)) in selected.into_iter().zip(patch_selected) {
-        assert_eq!(patch.select, *select);
-        assert_eq!(patch.rename.as_deref(), Some(*rename));
+    assert_eq!(selected.len(), 9);
+    for (patch, (select, rename, _, _)) in selected.into_iter().zip(MESSAGING_OPERATIONS) {
+        assert_eq!(patch.select, select);
+        assert_eq!(patch.rename.as_deref(), Some(rename));
         assert_eq!(patch.omit.path, ["appId"]);
-    }
-
-    for cycle_bound in ["PostMessage", "ListMessages"] {
-        assert!(
-            loaded
-                .patch
-                .operations
-                .iter()
-                .all(|patch| patch.select != cycle_bound),
-            "{cycle_bound} cannot be selected while its response graph is recursive"
-        );
     }
 
     for withheld in [

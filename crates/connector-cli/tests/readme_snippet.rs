@@ -24,7 +24,7 @@ use connector_cli::pipeline;
 use connector_cli::workspace::Workspace;
 
 /// The operation the README shows, named once.
-const SNIPPET_OPERATION: &str = "zendesk-ticket-comment-add";
+const SNIPPET_OPERATION: &str = "zendesk-ticket-update";
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

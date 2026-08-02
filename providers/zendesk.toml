@@ -1,13 +1,6 @@
-# Zendesk Support and Help Center — seven published Support operations remain hand-authored; new
-# reads select from pinned first-party OpenAPI documents without moving Support's addresses.
-#
-# Transcribed from `docs/designs/provider-operation-inventory.md` §3, which derives the operation
-# set from `../flux/plugins/zendesk/src/main.rs` (687 lines). The plugin *is* the requirement: a
-# connector replaces it only if it covers the same surface, so all 7 of its operations are taken.
-#
-# C-461 deliberately does not convert the seven operations below: C-6 owns measuring that conversion
-# and proving it preserves their already-published contracts. This file therefore exercises the
-# supported mixed front-end — unchanged inline operations plus exact opt-in spec selections.
+# Zendesk Support, Help Center, and Messaging — every operation is selected explicitly from a
+# pinned first-party OpenAPI document. The connector is curated rather than exhaustive: vendoring a
+# document makes its operations available for review and exposes none by itself.
 
 id = "zendesk"
 vendor = "Zendesk"
@@ -47,8 +40,7 @@ base_url = "https://{subdomain}.zendesk.com"
 
 description = "Zendesk Support ticketing: search, read and update tickets and comments; inspect audits, incremental exports and custom-object definitions"
 # The "Test connection" operation: a bounded read of the authenticated user. It existed already —
-# `zendesk-test` is named for it — but nothing declared which op played the role, so no host could
-# find it.
+# `zendesk-test` is named for it and selects the vendor's `ShowCurrentUser` operation directly.
 verify = "zendesk-test"
 
 # Every operation authenticates the same way — the inventory records requirement-set shape `single`
@@ -59,7 +51,7 @@ default_auth = [{ credentials = ["zendesk.api_token"] }]
 # First-party Ticketing OpenAPI — vendored, scrubbed and provenanced by C-459.
 #
 # This is evidence, not an exposure list. The full document publishes nothing by default; the
-# fourteen exact `[[patch.operations]]` blocks below are the entire selected Support surface.
+# nineteen exact `[[patch.operations]]` blocks below are the entire selected Support surface.
 # `upstream_sha256` belongs in
 # `specs/zendesk.provenance.toml`; this pointer carries the public `SpecSource` fields and the hash
 # of the scrubbed bytes builds actually ingest.
@@ -255,6 +247,51 @@ risk = "low"
 idempotency = "idempotent"
 omit.query = ["status_categories", "active", "default"]
 
+# C-487 retires the original seven hand-authored Support operations in favour of the five vendor
+# operations they actually represented. The official paths omit the historical `.json` suffix and
+# the official schemas carry their own requiredness; this greenfield connector accepts both as the
+# source contract. In particular, the three former ticket-update/comment/tag aliases were all the
+# same `UpdateTicket` request and are now one honest operation.
+[[patch.operations]]
+select = "ShowCurrentUser"
+service = "default"
+rename = "zendesk-test"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["include"]
+
+[[patch.operations]]
+select = "ListSearchResults"
+service = "default"
+rename = "zendesk-ticket-search"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["sort_by", "sort_order", "include"]
+
+[[patch.operations]]
+select = "ShowTicket"
+service = "default"
+rename = "zendesk-ticket-show"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["include", "reduced_payload_size", "remove_duplicate_fields"]
+
+[[patch.operations]]
+select = "ListTicketComments"
+service = "default"
+rename = "zendesk-ticket-comment-list"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["include", "sort_order", "page"]
+
+[[patch.operations]]
+select = "UpdateTicket"
+service = "default"
+rename = "zendesk-ticket-update"
+risk = "medium"
+idempotency = "non_idempotent"
+omit.body = ["system_metadata"]
+
 # ---------------------------------------------------------------------------------------------
 # First-party Help Center OpenAPI — a named sibling, never an expansion of Support by accident.
 #
@@ -418,6 +455,30 @@ auth = [{ credentials = ["zendesk.messaging_key"] }]
 omit.path = ["appId"]
 omit.query = ["page"]
 
+# Both message responses recurse through
+# `message -> quotedMessage -> quotedMessageMessage -> message`. OpenAPI ingest retains the useful
+# first occurrence and bounds the repeated continuation with JSON Schema `true`, so the request and
+# every non-recursive response member now come directly from the pinned first-party document.
+[[patch.operations]]
+select = "PostMessage"
+service = "messaging"
+rename = "zendesk-messaging-message-create"
+risk = "high"
+idempotency = "non_idempotent"
+auth = [{ credentials = ["zendesk.messaging_key"] }]
+omit.path = ["appId"]
+omit.body = ["destination", "metadata", "override", "schema"]
+
+[[patch.operations]]
+select = "ListMessages"
+service = "messaging"
+rename = "zendesk-messaging-message-list"
+risk = "low"
+idempotency = "idempotent"
+auth = [{ credentials = ["zendesk.messaging_key"] }]
+omit.path = ["appId"]
+omit.query = ["page"]
+
 [[patch.operations]]
 select = "CreateUser"
 service = "messaging"
@@ -495,46 +556,8 @@ user_env = ["ZENDESK_MESSAGING_KEY_ID"]
 description = "App-scoped Zendesk Messaging API key id and secret"
 
 # ---------------------------------------------------------------------------------------------
-# Operations — 7 of 7 (inventory §3.2)
-#
-# Op ids are hyphen-separated, not dotted. flux-lang's `is_valid_decl_name` admits ASCII
-# alphanumerics, `_` and `-` only, so `op zendesk.ticket.show` is undeclarable and a dotted `$a.b`
-# in expression position is field-access sugar rather than a name (C-8,
-# `crates/connector-flux/src/names.rs`). C-23 settles the canonical rule; this file follows the
-# form C-8's golden modules already emit.
+# Services and configuration
 # ---------------------------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------------------------
-# RESPONSE SHAPES (C-126) — where they come from, and the one thing they all have in common.
-#
-# Every schema below is read from Zendesk's own API reference, per resource:
-#
-#   users               developer.zendesk.com/api-reference/ticketing/users/users/
-#   search              developer.zendesk.com/api-reference/ticketing/ticket-management/search/
-#   tickets             developer.zendesk.com/api-reference/ticketing/tickets/tickets/
-#   ticket comments     developer.zendesk.com/api-reference/ticketing/tickets/ticket_comments/
-#
-# **Zendesk envelopes everything, and that is what a consumer cannot infer.** A ticket read answers
-# `{"ticket": {…}}`, a comment list answers `{"comments": […]}`, and — the one that actually surprises
-# people — a ticket *update* answers `{"ticket": {…}, "audit": {…}}`. The reference is explicit: "An
-# `audit` object is generated and included in the response when you update a ticket." Every write
-# below is a `PUT` on the same ticket resource, so every one of them returns that pair.
-#
-# Three fields are deliberately declared with a type looser than a reader might expect, because the
-# vendor's own table is looser:
-#
-# - `tags` on a ticket: Zendesk's field table leaves the type cell **empty**. Every documented example
-#   shows an array of strings, so `array` is recorded and `items` is not invented.
-# - `facets` on a search: the table says *string*, the example shows `null`. Recorded as neither —
-#   only that the member exists.
-# - `satisfaction_rating`: documented as an object, but the prose says it may instead hold the state
-#   `"offered"`/`"unoffered"` and is null on plans without CSAT. Left off rather than typed wrongly.
-#
-# These schemas describe what Zendesk *sends*. They are not the operations' output type: `http.request`
-# returns one flat string today, so `.ticket.id` against the emitted Flux resolves to nothing. C-127
-# owns that distinction — see `docs/designs/member-io-schemas.md` §2.
-# ---------------------------------------------------------------------------------------------
-
 [[services]]
 # C-458's explicit legacy marker is what lets the already-published, address-elided Support service
 # coexist with Help Center. `service = "default"` serializes back to the same operation ownership;
@@ -557,427 +580,6 @@ base_url = "https://{subdomain}.zendesk.com/sc"
 api_version = "v2"
 tags = ["messaging"]
 
-# The source response graph for both message endpoints is recursive:
-# `message -> quotedMessage -> quotedMessageMessage -> message`. OpenAPI ingest deliberately skips a
-# schema with no finite resolved form, so these two operations use the supported mixed front-end:
-# paths, methods, bodies and bounded response members are transcribed from the pinned document while
-# the seven cycle-free siblings remain exact `[[patch.operations]]` selections. The bounded message
-# shape stops before `quotedMessage`; no credential-shaped member is omitted.
-
-[[operations]]
-id = "zendesk-messaging-message-create"
-service = "messaging"
-method = "POST"
-path = "/v2/apps/{appId}/conversations/{conversationId}/messages"
-description = "Send an externally visible text message to one conversation as the stated author"
-risk = "high"
-idempotency = "non_idempotent"
-auth = [{ credentials = ["zendesk.messaging_key"] }]
-
-[[operations.params.path]]
-name = "conversationId"
-description = "The conversation id; caller values containing a path delimiter are refused"
-required = true
-schema = { type = "string" }
-
-[[operations.params.body]]
-name = "author"
-description = "The message author; business sends on behalf of the business and user identifies an end user"
-required = true
-schema = { type = "object", required = ["type"], properties = { type = { type = "string", enum = ["business", "user"] } } }
-
-[[operations.params.body]]
-name = "content"
-description = "A non-empty text message"
-required = true
-schema = { type = "object", required = ["type", "text"], properties = { type = { type = "string", const = "text" }, text = { type = "string", minLength = 1, maxLength = 4096 } } }
-
-[operations.response_schema]
-type = "object"
-properties = { messages = { type = "array", description = "Messages created by this request", items = { type = "object", properties = { id = { type = "string" }, received = { type = "string", format = "date-time" }, author = { type = "object" }, content = { type = "object" }, deleted = { type = "boolean" } } } } }
-
-[[operations]]
-id = "zendesk-messaging-message-list"
-service = "messaging"
-method = "GET"
-path = "/v2/apps/{appId}/conversations/{conversationId}/messages"
-description = "List messages in one conversation without exposing deep-object cursor pagination"
-risk = "low"
-idempotency = "idempotent"
-auth = [{ credentials = ["zendesk.messaging_key"] }]
-
-[[operations.params.path]]
-name = "conversationId"
-description = "The conversation id; caller values containing a path delimiter are refused"
-required = true
-schema = { type = "string" }
-
-[operations.response_schema]
-type = "object"
-properties = { messages = { type = "array", description = "Messages in this page, without recursively expanding quoted messages", items = { type = "object", properties = { id = { type = "string" }, received = { type = "string", format = "date-time" }, author = { type = "object" }, content = { type = "object" }, deleted = { type = "boolean" } } } }, meta = { type = "object" }, links = { type = "object" } }
-
-[[operations]]
-id = "zendesk-test"
-service = "default"
-method = "GET"
-path = "/api/v2/users/me.json"
-description = "Verify credentials by fetching the authenticated Zendesk user"
-risk = "low"
-idempotency = "idempotent"
-
-# `{"user": {…}}`. The reference for this endpoint says it "returns user information and an
-# `authenticity_token`" — a member no other user read carries, and one nothing here should ever log:
-# it is a CSRF token for Zendesk's own web session, not a credential this connector uses.
-#
-# `role` is the field a flow branches on when it needs to know whether the token is an agent's or an
-# end user's, and it is the reason this operation is the verify: a 200 with `role: "end-user"` means
-# the credentials work and cannot read a ticket.
-[operations.response_schema]
-type = "object"
-required = ["user"]
-properties = { user = { type = "object", required = ["id"], properties = { id = { type = "integer", description = "The authenticated user's id" }, name = { type = "string" }, email = { type = "string" }, role = { type = "string", description = "`admin`, `agent` or `end-user`. An end-user token authenticates successfully and can read almost nothing" }, active = { type = "boolean" }, suspended = { type = "boolean" }, verified = { type = "boolean" }, organization_id = { type = "integer" }, time_zone = { type = "string" }, locale = { type = "string" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, url = { type = "string" }, authenticity_token = { type = "string", description = "A CSRF token for Zendesk's own web session, returned only by this endpoint. It is not a credential for this API and must not be stored or logged" } } } }
-
-# ---------------------------------------------------------------------------------------------
-
-[[operations]]
-id = "zendesk-ticket-search"
-service = "default"
-method = "GET"
-path = "/api/v2/search.json"
-description = "Search tickets with Zendesk search syntax, e.g. `type:ticket status:new`"
-risk = "low"
-idempotency = "idempotent"
-
-# KNOWN NON-FUNCTIONAL until C-28 resolves it. Zendesk search expressions are colon-heavy and the
-# plugin percent-encodes them strictly — spaces as `%20` never `+`, colons as `%3A`
-# (`main.rs:426-441`, inventory §3.3.5). The emitted URL is assembled with `fmt`, which does no
-# percent-encoding, and flux has no op that does. The operation is declared because dropping it
-# would leave the connector short of the plugin it replaces; it is expected to mis-query until the
-# encoding gap is closed.
-[[operations.params.query]]
-name = "query"
-description = "Zendesk search expression"
-required = true
-schema = { type = "string" }
-
-[[operations.params.query]]
-name = "page"
-description = "Page number, 1-based"
-required = false
-schema = { type = "integer", minimum = 1, default = 1 }
-
-[[operations.params.query]]
-name = "per_page"
-description = "Results per page; Zendesk caps this at 100"
-required = false
-schema = { type = "integer", minimum = 1, maximum = 100, default = 100 }
-
-# The search envelope. `results` is the only heterogeneous collection in this connector: Zendesk
-# documents it as "tickets, users, groups, or organizations, as specified by the `result_type`
-# property in each result object", so the discriminator is the thing worth recording. A consumer that
-# assumed tickets — which is what this operation's own `query` is meant to ask for — would be right
-# only for as long as the query says `type:ticket`, and this operation cannot reliably encode a query
-# at all (see above).
-[operations.response_schema]
-type = "object"
-required = ["results"]
-properties = { results = { type = "array", description = "The matches, heterogeneous: each item carries a `result_type` naming what it is — `ticket`, `user`, `group` or `organization` — and its remaining fields are that resource's. Read `result_type` before reading anything else", items = { type = "object" } }, count = { type = "integer", description = "Total matches across all pages, not the size of this page" }, next_page = { type = "string", description = "URL of the following page, or null on the last page" }, previous_page = { type = "string", description = "URL of the preceding page, or null on the first page" }, facets = { description = "Present in every response and effectively unusable: Zendesk's own field table types it as a string while its example shows null, so no type is declared here rather than one of the two being guessed at" } }
-
-[operations.quirks.pagination]
-page = { page_param = "page", size_param = "per_page", page_size = 100, max_pages = 10 }
-
-# ---------------------------------------------------------------------------------------------
-
-[[operations]]
-id = "zendesk-ticket-show"
-service = "default"
-method = "GET"
-path = "/api/v2/tickets/{ticket_id}.json"
-description = "Show one ticket"
-risk = "low"
-idempotency = "idempotent"
-
-[[operations.params.path]]
-name = "ticket_id"
-description = "The ticket id"
-required = true
-schema = { type = "integer", format = "uint64", minimum = 1 }
-
-# `{"ticket": {…}}`, from the tickets reference. The enumerated subset is what a support flow reads or
-# branches on; `status` and `priority` carry their documented enums, because a flow gating on
-# "solved" needs to know the vendor's spelling and that `closed` is a different, terminal state.
-#
-# `custom_fields` is an **array** of `{id, value}` pairs, not an object keyed by field name. That is
-# the single most likely thing for a consumer to get wrong here, and reading it wrongly silently
-# yields nothing rather than failing.
-[operations.response_schema]
-type = "object"
-required = ["ticket"]
-properties = { ticket = { type = "object", required = ["id"], properties = { id = { type = "integer" }, subject = { type = "string" }, description = { type = "string", description = "The first comment's text, as plain text. It is the ticket's opening message and does not change when later comments are added" }, status = { type = "string", description = "One of `new`, `open`, `pending`, `hold`, `solved`, `closed`. `closed` is terminal — a closed ticket cannot be updated, which is what `zendesk-ticket-update` fails on" }, priority = { type = "string", description = "One of `urgent`, `high`, `normal`, `low`. May be absent on a ticket that never had one set" }, type = { type = "string", description = "One of `problem`, `incident`, `question`, `task`" }, requester_id = { type = "integer", description = "The end user who asked" }, assignee_id = { type = "integer", description = "The agent it is assigned to, absent when unassigned" }, group_id = { type = "integer" }, organization_id = { type = "integer" }, tags = { type = "array", description = "The ticket's tags. Zendesk's own field table leaves this type blank; every documented example shows an array of strings, so no `items` is declared here" }, custom_fields = { type = "array", description = "An array of `{id, value}` pairs — NOT an object keyed by field name. The `id` is the numeric ticket-field id, which is per-account", items = { type = "object" } }, via = { type = "object", description = "How the ticket reached Zendesk: `{channel, source}`, where channel is `email`, `web`, `api`, `voice` and so on" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, url = { type = "string" } } } }
-
-# ---------------------------------------------------------------------------------------------
-
-[[operations]]
-id = "zendesk-ticket-comment-list"
-service = "default"
-method = "GET"
-path = "/api/v2/tickets/{ticket_id}/comments.json"
-description = "List a ticket's comments"
-risk = "low"
-idempotency = "idempotent"
-
-[[operations.params.path]]
-name = "ticket_id"
-description = "The ticket id"
-required = true
-schema = { type = "integer", format = "uint64", minimum = 1 }
-
-[[operations.params.query]]
-name = "page"
-description = "Page number, 1-based"
-required = false
-schema = { type = "integer", minimum = 1, default = 1 }
-
-[[operations.params.query]]
-name = "per_page"
-description = "Comments per page; Zendesk caps this at 100"
-required = false
-schema = { type = "integer", minimum = 1, maximum = 100, default = 100 }
-
-# `{"comments": […]}`, from the ticket-comments reference — and **only** that key. The reference
-# documents both offset and cursor pagination for this endpoint, yet its response example carries no
-# `next_page`, `count` or `meta`, so none is declared: the page above declares the `page`/`per_page`
-# quirk because the *request* takes them, and a paging consumer that expected a `next_page` here to
-# read back would find nothing. Declaring one on the strength of the sibling endpoints would be
-# exactly the plausible invention this schema exists to prevent.
-#
-# `public` is the field a support flow branches on and the one the connector's own
-# `zendesk-ticket-comment-add` sets deliberately: a `false` comment is an internal note the end user
-# never sees, so a summary that repeats one to a requester leaks agent-only context.
-[operations.response_schema]
-type = "object"
-required = ["comments"]
-properties = { comments = { type = "array", description = "The ticket's comments, oldest first. The first entry is the ticket's `description`", items = { type = "object", required = ["id"], properties = { id = { type = "integer" }, type = { type = "string", description = "`Comment`, or `VoiceComment` for a call recording" }, author_id = { type = "integer", description = "Who wrote it — an agent or the requester" }, body = { type = "string", description = "The comment as plain text" }, html_body = { type = "string", description = "The same comment as HTML" }, plain_body = { type = "string", description = "The comment with quoted-reply chains and signatures stripped, which is usually the text worth summarizing" }, public = { type = "boolean", description = "False for an internal note the end user cannot see. Check it before repeating a comment to a requester" }, audit_id = { type = "integer" }, created_at = { type = "string", format = "date-time" }, attachments = { type = "array", description = "Uploaded files, each with `file_name`, `content_type`, `content_url` and `size`", items = { type = "object" } }, via = { type = "object", description = "How the comment arrived: `{channel, source}`" }, metadata = { type = "object", description = "Zendesk's own audit metadata for the comment — the submitter's IP, client and custom flags" } } } } }
-
-[operations.quirks.pagination]
-page = { page_param = "page", size_param = "per_page", page_size = 100, max_pages = 10 }
-
-# ---------------------------------------------------------------------------------------------
-# Operations 5, 6 and 7 are all `PUT /api/v2/tickets/{ticket_id}.json`, distinguished *only* by
-# request body (inventory §3.3.1). The wire body nests —
-# `{"ticket": {"updated_stamp": …, "comment": {"body": …}}}` — and every field below declares the
-# JSON path it occupies with `wire` (C-29). That is a contract codegen compiles, not prose: before
-# `wire` existed the path lived in each `description` and all three operations emitted a **flat**
-# body, which Zendesk accepts, ignores, and answers 200 to.
-#
-# `ticket.safe_update = true` is a *constant* the plugin always sends, not a caller-supplied
-# parameter (§3.3.2). It is pinned with a JSON Schema `const`, which already means "this value and
-# no other": codegen sends it and keeps it out of the op signature, so no model has to guess it.
-#
-# SCHEMA GAP, still open: the plugin's preflight — at least one mutable field must be non-null
-# (`main.rs:201-209`) — has no representation. `Quirks` carries pagination, rate limits and error
-# envelopes, not preconditions.
-# ---------------------------------------------------------------------------------------------
-
-[[operations]]
-id = "zendesk-ticket-update"
-service = "default"
-method = "PUT"
-path = "/api/v2/tickets/{ticket_id}.json"
-description = "Safe-update selected ticket fields against the caller's updated_stamp; at least one of status, priority, assignee_id, group_id or type must be supplied"
-risk = "medium"
-# Optimistic concurrency: the same call replayed after the ticket moved is rejected by Zendesk
-# rather than applied, so repeating is safe only under the caller-supplied stamp. C-186 moved that
-# sentence out of this comment and into `repeatable_because`, where a host can read it.
-idempotency = "conditional"
-repeatable_because = "the caller supplies `updated_stamp` and Zendesk applies the write only if the ticket has not moved since; a replay after any other change is rejected rather than applied, so a retry either lands the caller's intended edit or fails loudly"
-
-[[operations.params.path]]
-name = "ticket_id"
-description = "The ticket id"
-required = true
-schema = { type = "integer", format = "uint64", minimum = 1 }
-
-[[operations.params.body]]
-name = "updated_stamp"
-wire = "ticket.updated_stamp"
-description = "Optimistic-concurrency stamp: Zendesk rejects the update if the ticket moved since this stamp"
-required = true
-schema = { type = "string" }
-
-[[operations.params.body]]
-name = "safe_update"
-wire = "ticket.safe_update"
-description = "Constant `true` — not caller-supplied; it is what makes updated_stamp binding. Dropping it turns every write into a last-write-wins race"
-required = true
-schema = { type = "boolean", const = true }
-
-[[operations.params.body]]
-name = "status"
-wire = "ticket.status"
-description = "The ticket's status"
-required = false
-schema = { type = "string" }
-
-[[operations.params.body]]
-name = "priority"
-wire = "ticket.priority"
-description = "The ticket's priority"
-required = false
-schema = { type = "string" }
-
-[[operations.params.body]]
-name = "assignee_id"
-wire = "ticket.assignee_id"
-description = "The agent the ticket is assigned to"
-required = false
-schema = { type = "integer", format = "uint64" }
-
-[[operations.params.body]]
-name = "group_id"
-wire = "ticket.group_id"
-description = "The group the ticket belongs to"
-required = false
-schema = { type = "integer", format = "uint64" }
-
-[[operations.params.body]]
-name = "type"
-wire = "ticket.type"
-description = "The ticket's type"
-required = false
-schema = { type = "string" }
-
-# THE AUDIT IS THE HALF OF THIS RESPONSE THAT MATTERS, and it is the reason all three writes below
-# declare a response shape at all.
-#
-# The tickets reference states it plainly: "An `audit` object is generated and included in the
-# response when you update a ticket." So a `PUT` answers with **two** top-level keys, `ticket` and
-# `audit`, and a consumer expecting the bare ticket this connector's *read* returns would be reading
-# the wrong document.
-#
-# Its value here is diagnostic. The failure mode this connector's `wire` paths exist to prevent — a
-# **flat** body, which Zendesk accepts, ignores, and answers `200` to (see the block comment above) —
-# produces a success indistinguishable from a real update by status code alone. `audit.events` names
-# the fields that actually changed, so it is the one place in the response where "we changed nothing"
-# and "we changed what you asked" look different.
-#
-# `events[].value` is left untyped deliberately: Zendesk's own example shows it holding a string
-# (`"open"`) for one event and an integer (`123`) for the next, so it is genuinely polymorphic and any
-# declared type here would be wrong half the time.
-[operations.response_schema]
-type = "object"
-required = ["ticket", "audit"]
-properties = { ticket = { type = "object", description = "The ticket **after** the update, in the same shape `zendesk-ticket-show` returns — including the new `updated_at`, which is the stamp a following safe update must send" }, audit = { type = "object", description = "What this call actually did. Its `events` array holds one entry per change, each `{id, type, field_name, value}` — and `value` is polymorphic across entries, a string for `status` and an integer for an id. An update that was accepted but changed nothing is visible here and nowhere else" } }
-
-# ---------------------------------------------------------------------------------------------
-
-[[operations]]
-id = "zendesk-ticket-comment-add"
-service = "default"
-method = "PUT"
-path = "/api/v2/tickets/{ticket_id}.json"
-description = "Add a comment to a ticket; the comment is an internal note unless public is explicitly true"
-risk = "medium"
-idempotency = "conditional"
-repeatable_because = "Zendesk does not deduplicate comments, so this is safe to repeat only when the caller supplies a fresh `updated_stamp` and lets the safe-update check reject a stale replay; without that condition a retry adds the comment a second time"
-
-[[operations.params.path]]
-name = "ticket_id"
-description = "The ticket id"
-required = true
-schema = { type = "integer", format = "uint64", minimum = 1 }
-
-[[operations.params.body]]
-name = "updated_stamp"
-wire = "ticket.updated_stamp"
-description = "Optimistic-concurrency stamp"
-required = true
-schema = { type = "string" }
-
-[[operations.params.body]]
-name = "safe_update"
-wire = "ticket.safe_update"
-description = "Constant `true` — not caller-supplied"
-required = true
-schema = { type = "boolean", const = true }
-
-[[operations.params.body]]
-name = "body"
-wire = "ticket.comment.body"
-description = "The comment text; must not be blank"
-required = true
-schema = { type = "string", minLength = 1 }
-
-# The safety default the plugin sets (`main.rs:79`): a generated op that inherited a "sensible"
-# default of `true` would leak internal notes to end users (inventory §3.3.4).
-[[operations.params.body]]
-name = "public"
-wire = "ticket.comment.public"
-description = "False (an internal note) unless explicitly set true"
-required = false
-schema = { type = "boolean", default = false }
-
-# The same `{ticket, audit}` pair every `PUT` on this resource returns — see the long comment on
-# `zendesk-ticket-update`. Note what is *not* here: the created comment. Zendesk returns the ticket
-# and the audit, and the comment appears only as an event inside `audit.events`, so a caller that
-# needs the comment's id has to read it from there rather than from a top-level member.
-[operations.response_schema]
-type = "object"
-required = ["ticket", "audit"]
-properties = { ticket = { type = "object", description = "The ticket after the comment was added, in the shape `zendesk-ticket-show` returns" }, audit = { type = "object", description = "The change this call made. The added comment is an event inside `events`, carrying its own `id` and `body` — it is not returned as a top-level member" } }
-
-# ---------------------------------------------------------------------------------------------
-
-[[operations]]
-id = "zendesk-ticket-tag-add"
-service = "default"
-method = "PUT"
-path = "/api/v2/tickets/{ticket_id}.json"
-description = "Add tags to a ticket without replacing the tags it already has"
-risk = "medium"
-idempotency = "conditional"
-repeatable_because = "tags are a set on Zendesk's side and this endpoint adds without replacing, so re-sending the same tags leaves the same set — conditional rather than idempotent because the response reflects the merged set, which a stored result must not stand in for"
-
-[[operations.params.path]]
-name = "ticket_id"
-description = "The ticket id"
-required = true
-schema = { type = "integer", format = "uint64", minimum = 1 }
-
-[[operations.params.body]]
-name = "updated_stamp"
-wire = "ticket.updated_stamp"
-description = "Optimistic-concurrency stamp"
-required = true
-schema = { type = "string" }
-
-[[operations.params.body]]
-name = "safe_update"
-wire = "ticket.safe_update"
-description = "Constant `true` — not caller-supplied"
-required = true
-schema = { type = "boolean", const = true }
-
-# `ticket.additional_tags`, never `ticket.tags`: sending `tags` *replaces* the ticket's tags, which
-# silently destroys data (inventory §3.3.3). The additive field is the whole point of this
-# operation, and the `wire` path below is the only thing that makes it so.
-[[operations.params.body]]
-name = "tags"
-wire = "ticket.additional_tags"
-description = "Tags to add; additive, so existing tags survive. Must be non-empty with no blank entries"
-required = true
-schema = { type = "array", minItems = 1, items = { type = "string", minLength = 1 } }
-
-# `{ticket, audit}` again. This is the operation where reading the response actually matters: the
-# additive `ticket.additional_tags` path is what stops this call from *replacing* the ticket's tags,
-# and `ticket.tags` in the response is the only place a caller can confirm the surviving set is the
-# union it expected rather than the two tags it just sent.
-[operations.response_schema]
-type = "object"
-required = ["ticket", "audit"]
-properties = { ticket = { type = "object", description = "The ticket after tagging. Its `tags` member is the full resulting set — read it to confirm the existing tags survived, which is the entire behaviour `additional_tags` buys" }, audit = { type = "object", description = "The change this call made, with the tag change as an event in `events`" } }
-
-# ---------------------------------------------------------------------------------------------
 # Configuration — what a product asks a human for before any of the above can run
 #
 # Three fields, which is the whole "Connect Zendesk" form. Note that all three are *connection*

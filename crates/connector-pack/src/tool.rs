@@ -626,7 +626,7 @@ mod tests {
     /// another.
     #[test]
     fn the_spec_does_not_change_between_calls() {
-        let tool = projected("zendesk-ticket-comment-add");
+        let tool = projected("zendesk-ticket-update");
         let first = serde_json::to_value(tool.spec()).expect("a spec serializes");
         let second = serde_json::to_value(tool.spec()).expect("a spec serializes");
 
@@ -661,7 +661,7 @@ mod tests {
 
         assert_eq!(
             tool.permission_subjects(&params),
-            vec!["https://acme.zendesk.com/api/v2/tickets/1.json".to_string()],
+            vec!["https://acme.zendesk.com/api/v2/tickets/1".to_string()],
             "the subject must be the URL `http.request` would have declared for itself"
         );
         assert_eq!(
@@ -669,7 +669,7 @@ mod tests {
             vec![Intent {
                 behavior: IntentBehavior::NetworkFetch,
                 target: IntentTarget::Url {
-                    url: "https://acme.zendesk.com/api/v2/tickets/1.json".to_string(),
+                    url: "https://acme.zendesk.com/api/v2/tickets/1".to_string(),
                 },
                 role: IntentRole::ReadTarget,
                 certainty: IntentCertainty::Certain,
@@ -678,7 +678,7 @@ mod tests {
     }
 
     /// A parameter the caller omitted is refused rather than interpolated away. Left alone,
-    /// `zendesk-ticket-show` without `ticket_id` would request `/api/v2/tickets/{ticket_id}.json` —
+    /// `zendesk-ticket-show` without `ticket_id` would request `/api/v2/tickets/{ticket_id}` —
     /// a URL the vendor answers, with a 404 that says nothing about the real mistake.
     #[test]
     fn an_omitted_parameter_is_refused_rather_than_left_in_the_url() {

@@ -1,15 +1,15 @@
-op zendesk-ticket-comment-list(ticket_id: Number, page: Number, per_page: Number) -> Any
-  description "List a ticket's comments"
+op zendesk-ticket-comment-list(ticket_id: Number, include_inline_images: Bool, per_page: Number) -> Any
+  description "List Comments"
   risk "low"
   idempotency "idempotent"
   effects ["network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/tickets/{ticket_id}/comments.json")
+  url = fmt("{base}/api/v2/tickets/{ticket_id}/comments")
   sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
+  when include_inline_images
+    url = fmt("{url}{sep}include_inline_images={include_inline_images}")
     sep = "&"
   when per_page
     url = fmt("{url}{sep}per_page={per_page}")

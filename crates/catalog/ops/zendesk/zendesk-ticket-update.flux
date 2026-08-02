@@ -1,14 +1,13 @@
-op zendesk-ticket-update(ticket_id: Number, updated_stamp: String, status: String, priority: String, assignee_id: Number, group_id: Number, type: String) -> Any
-  description "Safe-update selected ticket fields against the caller's updated_stamp; at least one of status, priority, assignee_id, group_id or type must be supplied"
+op zendesk-ticket-update(ticket_id: Number, ticket: Any) -> Any
+  description "Update Ticket"
   risk "medium"
-  idempotency "conditional"
+  idempotency "non_idempotent"
   effects ["network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/tickets/{ticket_id}.json")
+  url = fmt("{base}/api/v2/tickets/{ticket_id}")
   content_type = "application/json"
-  safe_update = true
-  payload = { ticket: { assignee_id, group_id, priority, safe_update, status, type, updated_stamp } }
+  payload = { ticket }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
   return response

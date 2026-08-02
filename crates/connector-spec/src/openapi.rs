@@ -27,7 +27,8 @@
 //! - **The document is not an OpenAPI 3.x document at all** — unparseable bytes, no `openapi` key, a
 //!   version this ingest does not read. That is an [`Err`], because nothing useful can follow.
 //! - **One endpoint is wrong** — a parameter with no schema, a `$ref` that points nowhere, a
-//!   `$ref` cycle, a body in a media type the IR cannot express. That is a [`Diagnostic`] naming the
+//!   `$ref` cycle in a request, a body in a media type the IR cannot express. That is a
+//!   [`Diagnostic`] naming the
 //!   offending path and method, and the operation is **skipped**. One bad endpoint must not cost the
 //!   other 397, and an operation that was skipped cannot be selected — so the failure surfaces as a
 //!   patch naming an operation that is not there, which the loader already refuses loudly.
@@ -115,6 +116,19 @@ const UNREPRESENTABLE_METHODS: [&str; 2] = ["options", "trace"];
 /// document that reaches this is far outside anything observed, which is the reason to report it
 /// neutrally rather than assert a cause.
 const EXPANSION_BUDGET: usize = 50_000;
+
+/// What to do when a schema reaches a `$ref` already on its current expansion path.
+///
+/// Requests are executable contracts and must resolve exactly, so a cycle still refuses the
+/// operation. Responses are descriptive and may be recursive by nature (trees, quoted messages,
+/// threaded replies). They retain one concrete occurrence of every schema on the path and replace
+/// only the back-edge with JSON Schema's `true` schema. That is an explicit over-approximation of
+/// the recursive continuation: it invents no finite depth while keeping the useful bounded prefix.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CyclePolicy {
+    Reject,
+    BoundResponse,
+}
 
 /// One thing wrong with a document that did not stop the ingest.
 ///
@@ -897,7 +911,7 @@ fn read_response(
         // and `response_schema_coverage.rs` measures exactly that rather than pretending otherwise.
         return Ok(None);
     };
-    resolver.expand(schema).map(Some)
+    resolver.expand_response(schema).map(Some)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -931,7 +945,18 @@ impl Resolver<'_> {
     fn expand(&self, value: &Value) -> Result<JsonSchema, String> {
         let mut seen = Vec::new();
         let mut budget = 0;
-        self.walk(value, &mut seen, &mut budget)
+        self.walk(value, &mut seen, &mut budget, CyclePolicy::Reject)
+    }
+
+    /// A response schema with recursive continuations represented by an explicit, bounded prefix.
+    ///
+    /// Unlike a request, a response is not material the connector constructs. Recursive response
+    /// models therefore remain useful when their repeated tail is admitted by `true`, the JSON
+    /// Schema spelling of any value. The ordinary node budget still applies to the retained prefix.
+    fn expand_response(&self, value: &Value) -> Result<JsonSchema, String> {
+        let mut seen = Vec::new();
+        let mut budget = 0;
+        self.walk(value, &mut seen, &mut budget, CyclePolicy::BoundResponse)
     }
 
     /// Follows a `$ref` chain one node deep, leaving the target's own children alone.
@@ -957,6 +982,7 @@ impl Resolver<'_> {
         value: &Value,
         seen: &mut Vec<String>,
         budget: &mut usize,
+        cycle_policy: CyclePolicy,
     ) -> Result<Value, String> {
         *budget += 1;
         if *budget > EXPANSION_BUDGET {
@@ -973,19 +999,24 @@ impl Resolver<'_> {
             Value::Array(entries) => Ok(Value::Array(
                 entries
                     .iter()
-                    .map(|entry| self.walk(entry, seen, budget))
+                    .map(|entry| self.walk(entry, seen, budget, cycle_policy))
                     .collect::<Result<Vec<_>, _>>()?,
             )),
             Value::Object(object) => {
                 if let Some(pointer) = reference(value) {
+                    if cycle_policy == CyclePolicy::BoundResponse
+                        && seen.iter().any(|had| had == pointer)
+                    {
+                        return Ok(bound_recursive_reference(value));
+                    }
                     let target = self.target(pointer, seen)?;
-                    let expanded = self.walk(&target, seen, budget)?;
+                    let expanded = self.walk(&target, seen, budget, cycle_policy)?;
                     seen.pop();
                     return Ok(merge_siblings(value, expanded));
                 }
                 let mut expanded = Map::new();
                 for (key, child) in object {
-                    expanded.insert(key.clone(), self.walk(child, seen, budget)?);
+                    expanded.insert(key.clone(), self.walk(child, seen, budget, cycle_policy)?);
                 }
                 Ok(Value::Object(expanded))
             }
@@ -1053,6 +1084,25 @@ impl Resolver<'_> {
         }
         node.cloned()
             .ok_or_else(|| format!("`$ref: {pointer:?}` names no node"))
+    }
+}
+
+/// Drop only a recursive `$ref` back-edge, retaining any sibling constraints or annotations.
+///
+/// With no siblings the result is `true`, JSON Schema's explicit unconstrained schema. With
+/// siblings, those remain a sound over-approximation because OpenAPI 3.1 combines them with the
+/// referenced target; dropping one conjunct broadens the accepted set and never fabricates a
+/// narrower finite recursive type. OpenAPI 3.0 forbids siblings, so its ordinary result is `true`.
+fn bound_recursive_reference(reference: &Value) -> Value {
+    let Some(object) = reference.as_object() else {
+        return Value::Bool(true);
+    };
+    let mut siblings = object.clone();
+    siblings.remove("$ref");
+    if siblings.is_empty() {
+        Value::Bool(true)
+    } else {
+        Value::Object(siblings)
     }
 }
 

@@ -313,7 +313,7 @@ fn a_tool_still_declares_its_host_when_the_request_cannot_be_built() {
 ///
 /// `Tool::execute` calls `http.request`'s `execute` directly, so this is the *only* place a host's
 /// egress allow-list is consulted for the inner call. A subject of
-/// `https://{subdomain}.zendesk.com/api/v2/tickets/1.json` asks that allow-list to match a string no
+/// `https://{subdomain}.zendesk.com/api/v2/tickets/1` asks that allow-list to match a string no
 /// host ever resolves to, and there are only two ways that ends: the call is refused for a reason
 /// that names nothing an operator can fix, or the operator widens the rule to a wildcard until it
 /// passes — which is the gate being removed rather than satisfied.

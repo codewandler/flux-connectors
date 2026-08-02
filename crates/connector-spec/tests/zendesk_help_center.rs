@@ -10,20 +10,26 @@ use connector_spec::{
 #[path = "support/shipped_provider.rs"]
 mod shipped_provider;
 
-const SUPPORT_OPERATIONS: [&str; 13] = [
-    "zendesk-test",
-    "zendesk-ticket-search",
-    "zendesk-ticket-show",
-    "zendesk-ticket-comment-list",
-    "zendesk-ticket-update",
-    "zendesk-ticket-comment-add",
-    "zendesk-ticket-tag-add",
+const SUPPORT_OPERATIONS: [&str; 19] = [
     "zendesk-ticket-audit-list",
     "zendesk-incremental-ticket-list",
     "zendesk-incremental-user-list",
     "zendesk-incremental-organization-list",
     "zendesk-incremental-ticket-event-list",
     "zendesk-custom-object-list",
+    "zendesk-ticket-recent-list",
+    "zendesk-view-ticket-list",
+    "zendesk-user-show",
+    "zendesk-organization-show",
+    "zendesk-group-list",
+    "zendesk-ticket-field-list",
+    "zendesk-ticket-form-list",
+    "zendesk-custom-status-list",
+    "zendesk-test",
+    "zendesk-ticket-search",
+    "zendesk-ticket-show",
+    "zendesk-ticket-comment-list",
+    "zendesk-ticket-update",
 ];
 
 const HELP_CENTER_OPERATIONS: [(&str, HttpMethod, &str); 7] = [
@@ -64,7 +70,7 @@ const HELP_CENTER_OPERATIONS: [(&str, HttpMethod, &str); 7] = [
     ),
 ];
 
-const SUPPORT_HASHES: [(&str, &str); 13] = [
+const SUPPORT_HASHES: [(&str, &str); 6] = [
     (
         "crates/catalog/ops/zendesk/zendesk-custom-object-list.flux",
         "3dbbc14f46c868dd4258f458309d67f32549cfa284ff5e756dd50e6e5a9b5218",
@@ -86,36 +92,8 @@ const SUPPORT_HASHES: [(&str, &str); 13] = [
         "fdddb2e407569ffb8d370c6305f44908864ce8d6d1cb4aa6c5bfa222e019bea7",
     ),
     (
-        "crates/catalog/ops/zendesk/zendesk-test.flux",
-        "56686f0978ad6ea218e6808c7adbe2032b0deb6a7ed571c68db11a48c38e3faf",
-    ),
-    (
         "crates/catalog/ops/zendesk/zendesk-ticket-audit-list.flux",
         "753452bcac1bcb16bb03eec70c55491d779b82f849c37803e25e0c28618263c0",
-    ),
-    (
-        "crates/catalog/ops/zendesk/zendesk-ticket-comment-add.flux",
-        "659c209e8f5e50dc2a44204edc65595fb9ae83df5b6a59f743fb8d1a1cc10087",
-    ),
-    (
-        "crates/catalog/ops/zendesk/zendesk-ticket-comment-list.flux",
-        "ee341766bc0adb93909690db2dff45e0d8863486fa19ef85097ae06739468ccf",
-    ),
-    (
-        "crates/catalog/ops/zendesk/zendesk-ticket-search.flux",
-        "16af6fb77f78869db2104e76c3a3cb349a0e707a4968568de8f1b4fdc483b6e6",
-    ),
-    (
-        "crates/catalog/ops/zendesk/zendesk-ticket-show.flux",
-        "021b276e0e8253ea81449ba4c7c6ffc47b518de9c19b3d2d097ed436d12370a7",
-    ),
-    (
-        "crates/catalog/ops/zendesk/zendesk-ticket-tag-add.flux",
-        "38375cfba5205a43e8359384090d9fef76e6c1c2e68bc91d3e5b11e21e472c8d",
-    ),
-    (
-        "crates/catalog/ops/zendesk/zendesk-ticket-update.flux",
-        "99daea2b462448a66ab1a1290cc596f53b405bb80d35b05e9681281c212faf2a",
     ),
 ];
 
@@ -164,8 +142,8 @@ fn help_center_is_a_named_service_without_moving_support() {
         .map(|operation| operation.id.as_str())
         .collect();
     assert!(
-        support_ids.starts_with(&SUPPORT_OPERATIONS),
-        "the pre-Help-Center Support operation prefix moved"
+        support_ids == SUPPORT_OPERATIONS,
+        "the Support operation set changed"
     );
     for id in SUPPORT_OPERATIONS {
         let operation = connector
@@ -346,7 +324,7 @@ fn help_center_queries_writes_configuration_and_verification_read_are_bounded() 
 }
 
 #[test]
-fn every_pre_help_center_support_operation_rendering_is_byte_identical() {
+fn unchanged_spec_backed_support_operation_rendering_is_byte_identical() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     for (relative, expected) in SUPPORT_HASHES {
         let path = root.join(relative);

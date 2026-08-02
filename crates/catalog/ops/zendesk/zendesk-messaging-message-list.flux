@@ -1,5 +1,5 @@
 op zendesk-messaging-message-list(conversationId: String) -> Any
-  description "List messages in one conversation without exposing deep-object cursor pagination"
+  description "List Messages"
   risk "low"
   idempotency "idempotent"
   effects ["network"]

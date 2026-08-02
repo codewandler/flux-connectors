@@ -517,10 +517,7 @@ async fn a_basic_user_half_reaches_the_header_from_the_configuration_port() {
         .await
         .expect("the store holds the token and the port holds the user half");
 
-    assert_eq!(
-        request.url,
-        "https://acme.zendesk.com/api/v2/tickets/1.json"
-    );
+    assert_eq!(request.url, "https://acme.zendesk.com/api/v2/tickets/1");
     assert_eq!(
         request.headers.get("Authorization").map(String::as_str),
         Some(format!("Basic {BASIC_EXPECTED}").as_str()),

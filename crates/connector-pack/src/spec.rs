@@ -288,12 +288,12 @@ mod tests {
     /// the integration test then applies to all 97.
     #[test]
     fn every_field_comes_from_the_declaration() {
-        let entry = operation("zendesk-ticket-comment-add");
+        let entry = operation("zendesk-ticket-update");
         let declaration =
             declaration_of(entry.id, entry.flux).expect("the entry embeds one declaration");
         let spec = project(entry).expect("the entry projects");
 
-        assert_eq!(spec.name, "zendesk.ticket.comment.add");
+        assert_eq!(spec.name, "zendesk.ticket.update");
         assert_eq!(spec.description, declaration.meta.description);
         assert_eq!(spec.risk, declaration.meta.risk);
         assert_eq!(spec.idempotency, declaration.meta.idempotency);
@@ -305,7 +305,7 @@ mod tests {
     /// `{"type": "object"}` would satisfy "the spec has an input schema" and tell a model nothing.
     #[test]
     fn the_declared_parameters_become_the_input_schema() {
-        let spec = project(operation("zendesk-ticket-comment-add")).expect("projects");
+        let spec = project(operation("zendesk-ticket-update")).expect("projects");
 
         let properties = spec.input_schema["properties"]
             .as_object()
@@ -314,12 +314,7 @@ mod tests {
             properties["ticket_id"],
             serde_json::json!({"type": "number"})
         );
-        assert_eq!(
-            properties["updated_stamp"],
-            serde_json::json!({"type": "string"})
-        );
-        assert_eq!(properties["body"], serde_json::json!({"type": "string"}));
-        assert_eq!(properties["public"], serde_json::json!({"type": "boolean"}));
+        assert_eq!(properties["ticket"], serde_json::json!({}));
 
         let required = spec.input_schema["required"]
             .as_array()

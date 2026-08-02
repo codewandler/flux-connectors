@@ -496,28 +496,21 @@ fn a_production_operation_refuses_an_escaping_caller_path_before_building_a_requ
     );
 }
 
-/// **A nested body nests.** `zendesk-ticket-comment-add` writes `ticket.comment.body`, and the flat
-/// spelling is a request Zendesk accepts and silently ignores — the comment never appears. The
-/// emitter assembles the wire paths into one record ([`connector_flux`]'s `body_tree`); the pack
-/// must land the caller's values at the same paths, or the two surfaces of one operation make two
-/// different calls.
+/// **A nested body nests.** The vendor's `UpdateTicket` operation accepts a `ticket` object under
+/// the request root. The pack must preserve that wrapper rather than flattening its contents, or
+/// the generated and hosted surfaces of one operation make different calls.
 #[test]
 fn a_nested_body_operation_nests_rather_than_flattening() {
     let request = request(
-        "zendesk-ticket-comment-add",
+        "zendesk-ticket-update",
         json!({
             "ticket_id": 42,
-            "updated_stamp": "2026-07-30T00:00:00Z",
-            "body": "the comment text",
-            "public": false,
+            "ticket": {"comment": {"body": "the comment text", "public": false}},
         }),
     );
 
     assert_eq!(request.method, "PUT");
-    assert_eq!(
-        request.url,
-        "https://acme.zendesk.com/api/v2/tickets/42.json"
-    );
+    assert_eq!(request.url, "https://acme.zendesk.com/api/v2/tickets/42");
 
     let body: Value = serde_json::from_str(
         request
@@ -530,20 +523,16 @@ fn a_nested_body_operation_nests_rather_than_flattening() {
     assert_eq!(
         body,
         json!({
-            "ticket": {
-                "comment": {"body": "the comment text", "public": false},
-                "safe_update": true,
-                "updated_stamp": "2026-07-30T00:00:00Z",
-            }
+            "ticket": {"comment": {"body": "the comment text", "public": false}}
         }),
-        "the wire paths must nest, and `ticket.safe_update` must be sent without being asked for"
+        "the vendor-declared `ticket` wrapper must reach the wire"
     );
 
-    // Not `{"ticket.comment.body": …}` — stated separately because it is the shape that would pass
-    // a "the body mentions the text" assertion while being the wrong request.
+    // Not `{"comment": …}` — stated separately because it is the shape that would pass a "the
+    // body mentions the text" assertion while being the wrong request.
     assert!(
-        !request.body.as_deref().unwrap().contains("ticket.comment"),
-        "a flattened dotted key is a request Zendesk accepts and ignores: {:?}",
+        request.body.as_deref().unwrap().starts_with("{\"ticket\":"),
+        "a flattened request drops the vendor-declared ticket wrapper: {:?}",
         request.body
     );
 
@@ -622,27 +611,22 @@ fn a_query_string_operation_separates_its_parameters() {
     assert_eq!(none.url, "https://acme.freshdesk.com/api/v2/tickets");
 }
 
-/// A required query parameter goes in the template and an optional one is guarded, so the two kinds
-/// have to agree about who owns the `?`. `zendesk-ticket-search` is the shipped case with both.
+/// A required query parameter owns the first `?` and remains part of the spec-selected request.
 #[test]
 fn a_required_query_parameter_opens_the_string_and_optional_ones_follow() {
     let both = request(
         "zendesk-ticket-search",
-        json!({"query": "type:ticket status:new", "page": 2, "per_page": 50}),
+        json!({"query": "type:ticket status:new"}),
     );
     assert_eq!(
         both.url,
-        "https://acme.zendesk.com/api/v2/search.json\
-         ?query=type:ticket status:new&page=2&per_page=50"
+        "https://acme.zendesk.com/api/v2/search?query=type:ticket status:new"
     );
 
-    let required_only = request(
-        "zendesk-ticket-search",
-        json!({"query": "type:ticket", "page": Value::Null, "per_page": Value::Null}),
-    );
+    let required_only = request("zendesk-ticket-search", json!({"query": "type:ticket"}));
     assert_eq!(
         required_only.url,
-        "https://acme.zendesk.com/api/v2/search.json?query=type:ticket"
+        "https://acme.zendesk.com/api/v2/search?query=type:ticket"
     );
 }
 
@@ -691,15 +675,15 @@ fn the_request_becomes_the_params_http_request_declares() {
     assert_eq!(
         show.to_params(),
         json!({
-            "url": "https://acme.zendesk.com/api/v2/tickets/7.json",
+            "url": "https://acme.zendesk.com/api/v2/tickets/7",
             "method": "GET",
             "headers": {"User-Agent": DEFAULT_USER_AGENT},
         })
     );
 
     let add = request(
-        "zendesk-ticket-comment-add",
-        json!({"ticket_id": 7, "updated_stamp": "s", "body": "b", "public": true}),
+        "zendesk-ticket-update",
+        json!({"ticket_id": 7, "ticket": {"comment": {"body": "b", "public": true}}}),
     );
     let params = add.to_params();
     assert_eq!(

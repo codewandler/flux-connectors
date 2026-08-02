@@ -1,5 +1,5 @@
 op zendesk-messaging-message-create(conversationId: String, author: Any, content: Any) -> Any
-  description "Send an externally visible text message to one conversation as the stated author"
+  description "Post Message"
   risk "high"
   idempotency "non_idempotent"
   effects ["network"]

@@ -10,4 +10,4 @@ runtime = "http"
 base_url = "https://{subdomain}.zendesk.com/sc"
 api_version = "v2"
 module = "zendesk-messaging.flux"
-operations = ["zendesk-messaging-message-create", "zendesk-messaging-message-list", "zendesk-messaging-conversation-create", "zendesk-messaging-conversation-get", "zendesk-messaging-conversation-update", "zendesk-messaging-participant-list", "zendesk-messaging-user-create", "zendesk-messaging-user-get", "zendesk-messaging-user-update"]
+operations = ["zendesk-messaging-conversation-create", "zendesk-messaging-conversation-get", "zendesk-messaging-conversation-update", "zendesk-messaging-participant-list", "zendesk-messaging-message-create", "zendesk-messaging-message-list", "zendesk-messaging-user-create", "zendesk-messaging-user-get", "zendesk-messaging-user-update"]

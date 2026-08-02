@@ -58,16 +58,19 @@ fn a_patch_selected_operation_retains_its_exact_vendor_source() {
 fn mixed_zendesk_services_classify_each_operation_instead_of_the_service() {
     let loaded = shipped_provider::load("zendesk");
 
-    assert_eq!(source(&loaded.connector, "zendesk-test"), None);
+    assert_eq!(
+        source(&loaded.connector, "zendesk-test").cloned(),
+        Some(expected(&loaded, "default", "ShowCurrentUser"))
+    );
     assert_eq!(
         source(&loaded.connector, "zendesk-ticket-audit-list").cloned(),
         Some(expected(&loaded, "default", "ListAuditsForTicket"))
     );
 
     assert_eq!(
-        source(&loaded.connector, "zendesk-messaging-message-create"),
-        None,
-        "the hand-authored bounded replacement for a recursive schema stays inline"
+        source(&loaded.connector, "zendesk-messaging-message-create").cloned(),
+        Some(expected(&loaded, "messaging", "PostMessage")),
+        "the bounded recursive response remains traceable to the vendor operation"
     );
     assert_eq!(
         source(&loaded.connector, "zendesk-messaging-conversation-get").cloned(),

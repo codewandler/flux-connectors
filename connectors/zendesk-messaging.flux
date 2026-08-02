@@ -3,34 +3,6 @@
 # Service: messaging
 # Regenerate with `flux-connectors build`.
 
-op zendesk-messaging-message-create(conversationId: String, author: Any, content: Any) -> Any
-  description "Send an externally visible text message to one conversation as the stated author"
-  risk "high"
-  idempotency "non_idempotent"
-  effects ["network"]
-  expose true
-
-  base = "https://{subdomain}.zendesk.com/sc"
-  appId = "{appId}"
-  url = fmt("{base}/v2/apps/{appId}/conversations/{conversationId}/messages")
-  content_type = "application/json"
-  payload = { author, content }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
-  return response
-
-op zendesk-messaging-message-list(conversationId: String) -> Any
-  description "List messages in one conversation without exposing deep-object cursor pagination"
-  risk "low"
-  idempotency "idempotent"
-  effects ["network"]
-  expose true
-
-  base = "https://{subdomain}.zendesk.com/sc"
-  appId = "{appId}"
-  url = fmt("{base}/v2/apps/{appId}/conversations/{conversationId}/messages")
-  response = http.request(method: "GET", url)
-  return response
-
 op zendesk-messaging-conversation-create -> Any
   description "Create an empty SDK group conversation in the configured Zendesk Messaging app"
   risk "high"
@@ -85,6 +57,34 @@ op zendesk-messaging-participant-list(conversationId: String) -> Any
   base = "https://{subdomain}.zendesk.com/sc"
   appId = "{appId}"
   url = fmt("{base}/v2/apps/{appId}/conversations/{conversationId}/participants")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-messaging-message-create(conversationId: String, author: Any, content: Any) -> Any
+  description "Post Message"
+  risk "high"
+  idempotency "non_idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com/sc"
+  appId = "{appId}"
+  url = fmt("{base}/v2/apps/{appId}/conversations/{conversationId}/messages")
+  content_type = "application/json"
+  payload = { author, content }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  return response
+
+op zendesk-messaging-message-list(conversationId: String) -> Any
+  description "List Messages"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com/sc"
+  appId = "{appId}"
+  url = fmt("{base}/v2/apps/{appId}/conversations/{conversationId}/messages")
   response = http.request(method: "GET", url)
   return response
 

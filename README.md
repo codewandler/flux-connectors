@@ -105,27 +105,26 @@ dependencies.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme-snippet-dark.svg">
-  <img alt="Generated Flux for zendesk-ticket-comment-add, syntax highlighted" src="assets/readme-snippet-light.svg">
+  <img alt="Generated Flux for zendesk-ticket-update, syntax highlighted" src="assets/readme-snippet-light.svg">
 </picture>
 
 <details>
 <summary>Same operation as copy-pasteable text</summary>
 
 ```flux
-op zendesk-ticket-comment-add(ticket_id: Number, updated_stamp: String, body: String, public: Bool) -> Any
-  description "Add a comment to a ticket; the comment is an internal note unless public is explicitly true"
+op zendesk-ticket-update(ticket_id: Number, ticket: Any) -> Any
+  description "Update Ticket"
   risk "medium"
-  idempotency "conditional"
+  idempotency "non_idempotent"
   effects ["network"]
   expose true
 
-  $base = "https://{subdomain}.zendesk.com"
-  $url = fmt("{base}/api/v2/tickets/{ticket_id}.json")
-  $content_type = "application/json"
-  $safe_update = true
-  $payload = { ticket: { comment: { body: $body, public: $public }, safe_update: $safe_update, updated_stamp: $updated_stamp } }
-  $response = http.request({ body: $payload, headers: { "content-type": $content_type }, method: "PUT", url: $url })
-  return $response
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/tickets/{ticket_id}")
+  content_type = "application/json"
+  payload = { ticket }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
+  return response
 ```
 
 </details>

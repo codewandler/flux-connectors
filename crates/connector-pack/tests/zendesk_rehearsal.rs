@@ -1,4 +1,4 @@
-//! C-462/C-466: the thirteen OpenAPI-backed Zendesk reads compose before catalogue integration.
+//! The OpenAPI-backed Zendesk Support operations compose before catalogue integration.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -107,6 +107,69 @@ fn thirteen_spec_backed_reads_compose_absolute_zendesk_requests() {
             "{id} gained a header beyond the host identity"
         );
         assert!(request.body.is_none(), "{id} gained a body");
+    }
+}
+
+#[test]
+fn five_greenfield_support_replacements_compose_the_vendor_requests() {
+    let cases: [(&str, &str, Value, &str, Option<Value>); 5] = [
+        (
+            "zendesk-test",
+            "GET",
+            json!({}),
+            "https://acme.zendesk.com/api/v2/users/me",
+            None,
+        ),
+        (
+            "zendesk-ticket-search",
+            "GET",
+            json!({"query": "type:ticket"}),
+            "https://acme.zendesk.com/api/v2/search?query=type:ticket",
+            None,
+        ),
+        (
+            "zendesk-ticket-show",
+            "GET",
+            json!({"ticket_id": 35436}),
+            "https://acme.zendesk.com/api/v2/tickets/35436",
+            None,
+        ),
+        (
+            "zendesk-ticket-comment-list",
+            "GET",
+            json!({"ticket_id": 35436, "include_inline_images": false, "per_page": 100}),
+            "https://acme.zendesk.com/api/v2/tickets/35436/comments?per_page=100",
+            None,
+        ),
+        (
+            "zendesk-ticket-update",
+            "PUT",
+            json!({"ticket_id": 35436, "ticket": {"status": "open"}}),
+            "https://acme.zendesk.com/api/v2/tickets/35436",
+            Some(json!({"ticket": {"status": "open"}})),
+        ),
+    ];
+
+    for (id, method, params, expected_url, expected_body) in cases {
+        let path = root().join(format!("crates/catalog/ops/zendesk/{id}.flux"));
+        let flux = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
+        let rehearsal = Rehearsal::of(id, "zendesk", "default", &flux)
+            .unwrap_or_else(|error| panic!("{id} does not rehearse: {error}"));
+        let request = rehearsal
+            .request(&configuration(), &params)
+            .unwrap_or_else(|error| panic!("{id} does not compose: {error}"));
+        assert_eq!(request.method, method);
+        assert_eq!(request.url, expected_url);
+        assert_eq!(
+            request
+                .body
+                .as_deref()
+                .map(serde_json::from_str::<Value>)
+                .transpose()
+                .unwrap_or_else(|error| panic!("{id} body is not JSON: {error}")),
+            expected_body
+        );
     }
 }
 

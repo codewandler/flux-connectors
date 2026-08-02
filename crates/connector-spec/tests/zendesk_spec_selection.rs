@@ -1,9 +1,7 @@
-//! C-461/C-462/C-466: exact operations selected from Zendesk's full Ticketing OpenAPI document.
+//! Exact operations selected from Zendesk's full Ticketing OpenAPI document.
 //!
 //! This is deliberately a per-provider test. It loads `zendesk` by name and never walks
-//! `providers/`: the seven already-published operations are a closed premise about this connector,
-//! while the spec-backed additions are the bounded audit, synchronization, and Support-foundation
-//! surface.
+//! `providers/`: the operation set is a closed premise about this connector.
 
 use std::path::Path;
 
@@ -12,38 +10,29 @@ use connector_spec::{sha256_hex, HttpMethod, Idempotency, Risk, DEFAULT_SERVICE}
 #[path = "support/shipped_provider.rs"]
 mod shipped_provider;
 
-const OPERATIONS: [(&str, HttpMethod, &str); 21] = [
-    ("zendesk-test", HttpMethod::Get, "/api/v2/users/me.json"),
-    (
-        "zendesk-ticket-search",
-        HttpMethod::Get,
-        "/api/v2/search.json",
-    ),
-    (
-        "zendesk-ticket-show",
-        HttpMethod::Get,
-        "/api/v2/tickets/{ticket_id}.json",
-    ),
-    (
-        "zendesk-ticket-comment-list",
-        HttpMethod::Get,
-        "/api/v2/tickets/{ticket_id}/comments.json",
-    ),
-    (
-        "zendesk-ticket-update",
-        HttpMethod::Put,
-        "/api/v2/tickets/{ticket_id}.json",
-    ),
-    (
-        "zendesk-ticket-comment-add",
-        HttpMethod::Put,
-        "/api/v2/tickets/{ticket_id}.json",
-    ),
-    (
-        "zendesk-ticket-tag-add",
-        HttpMethod::Put,
-        "/api/v2/tickets/{ticket_id}.json",
-    ),
+#[test]
+fn every_zendesk_operation_is_derived_from_a_vendored_spec() {
+    let loaded = shipped_provider::load("zendesk");
+    let inline: Vec<_> = loaded
+        .connector
+        .operations
+        .iter()
+        .filter(|operation| {
+            !loaded
+                .connector
+                .provenance
+                .operation_specs
+                .contains_key(&operation.id)
+        })
+        .map(|operation| operation.id.as_str())
+        .collect();
+    assert!(
+        inline.is_empty(),
+        "Zendesk still has inline operations: {inline:?}"
+    );
+}
+
+const OPERATIONS: [(&str, HttpMethod, &str); 19] = [
     (
         "zendesk-ticket-audit-list",
         HttpMethod::Get,
@@ -110,6 +99,23 @@ const OPERATIONS: [(&str, HttpMethod, &str); 21] = [
         HttpMethod::Get,
         "/api/v2/custom_statuses",
     ),
+    ("zendesk-test", HttpMethod::Get, "/api/v2/users/me"),
+    ("zendesk-ticket-search", HttpMethod::Get, "/api/v2/search"),
+    (
+        "zendesk-ticket-show",
+        HttpMethod::Get,
+        "/api/v2/tickets/{ticket_id}",
+    ),
+    (
+        "zendesk-ticket-comment-list",
+        HttpMethod::Get,
+        "/api/v2/tickets/{ticket_id}/comments",
+    ),
+    (
+        "zendesk-ticket-update",
+        HttpMethod::Put,
+        "/api/v2/tickets/{ticket_id}",
+    ),
 ];
 
 const OMITTED_QUERY: [&str; 7] = [
@@ -122,35 +128,7 @@ const OMITTED_QUERY: [&str; 7] = [
     "sort_order",
 ];
 
-const EXISTING_SUPPORT_FLUX: [(&str, &str); 13] = [
-    (
-        "zendesk-test",
-        "56686f0978ad6ea218e6808c7adbe2032b0deb6a7ed571c68db11a48c38e3faf",
-    ),
-    (
-        "zendesk-ticket-comment-add",
-        "659c209e8f5e50dc2a44204edc65595fb9ae83df5b6a59f743fb8d1a1cc10087",
-    ),
-    (
-        "zendesk-ticket-comment-list",
-        "ee341766bc0adb93909690db2dff45e0d8863486fa19ef85097ae06739468ccf",
-    ),
-    (
-        "zendesk-ticket-search",
-        "16af6fb77f78869db2104e76c3a3cb349a0e707a4968568de8f1b4fdc483b6e6",
-    ),
-    (
-        "zendesk-ticket-show",
-        "021b276e0e8253ea81449ba4c7c6ffc47b518de9c19b3d2d097ed436d12370a7",
-    ),
-    (
-        "zendesk-ticket-tag-add",
-        "38375cfba5205a43e8359384090d9fef76e6c1c2e68bc91d3e5b11e21e472c8d",
-    ),
-    (
-        "zendesk-ticket-update",
-        "99daea2b462448a66ab1a1290cc596f53b405bb80d35b05e9681281c212faf2a",
-    ),
+const EXISTING_SUPPORT_FLUX: [(&str, &str); 6] = [
     (
         "zendesk-ticket-audit-list",
         "753452bcac1bcb16bb03eec70c55491d779b82f849c37803e25e0c28618263c0",
@@ -177,7 +155,7 @@ const EXISTING_SUPPORT_FLUX: [(&str, &str); 13] = [
     ),
 ];
 
-const EXISTING_NAMED_SERVICE_OPERATION_FLUX: [(&str, &str); 16] = [
+const EXISTING_NAMED_SERVICE_OPERATION_FLUX: [(&str, &str); 14] = [
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-article-create.flux",
         "e3adcac4ed72f06d04001665206b9fd831f692059bf259c15656d29677d6cd54",
@@ -219,14 +197,6 @@ const EXISTING_NAMED_SERVICE_OPERATION_FLUX: [(&str, &str); 16] = [
         "c1380b8eddfc76055fa4ea3d9f9ba3f0e9ecd8599f5476d159e439902a8507ae",
     ),
     (
-        "crates/catalog/ops/zendesk/zendesk-messaging-message-create.flux",
-        "616be14b759c630fa6d37de713569da439b30ee83fbb5c7f77345651f24df271",
-    ),
-    (
-        "crates/catalog/ops/zendesk/zendesk-messaging-message-list.flux",
-        "9b1e2354fe80e0daaf990b47395a019ea073427a62b8062e9a079722ed72d21f",
-    ),
-    (
         "crates/catalog/ops/zendesk/zendesk-messaging-participant-list.flux",
         "4f7c6d0b3895979284c5d57cdcac51cb85757b4c2ce760af71859de2b469d1df",
     ),
@@ -245,7 +215,7 @@ const EXISTING_NAMED_SERVICE_OPERATION_FLUX: [(&str, &str); 16] = [
 ];
 
 #[test]
-fn the_seven_published_operations_stay_put_and_fourteen_exact_reads_join_them() {
+fn nineteen_support_operations_are_selected_with_the_vendor_paths() {
     let loaded = shipped_provider::load("zendesk");
     let connector = &loaded.connector;
     let actual: Vec<&str> = connector
@@ -260,7 +230,7 @@ fn the_seven_published_operations_stay_put_and_fourteen_exact_reads_join_them() 
             .operation(id)
             .unwrap_or_else(|| panic!("Zendesk must publish {id}"));
         assert_eq!(operation.method, method, "{id} changed method");
-        assert_eq!(operation.path, path, "{id} changed path");
+        assert_eq!(operation.path, path, "{id} does not carry the vendor path");
         assert_eq!(operation.service, DEFAULT_SERVICE, "{id} moved service");
         assert_eq!(
             connector
@@ -268,15 +238,31 @@ fn the_seven_published_operations_stay_put_and_fourteen_exact_reads_join_them() 
                 .unwrap_or_else(|| panic!("{id} must have an OIP"))
                 .to_string(),
             format!("com.zendesk.api:v2#{id}"),
-            "{id} moved its published address"
+            "{id} has the wrong published address"
         );
     }
 
-    let definition = shipped_provider::sources("zendesk").definition;
-    for id in OPERATIONS.iter().take(7).map(|(id, _, _)| id) {
+    for (id, source_id) in [
+        ("zendesk-test", "ShowCurrentUser"),
+        ("zendesk-ticket-search", "ListSearchResults"),
+        ("zendesk-ticket-show", "ShowTicket"),
+        ("zendesk-ticket-comment-list", "ListTicketComments"),
+        ("zendesk-ticket-update", "UpdateTicket"),
+    ] {
+        assert_eq!(
+            connector
+                .provenance
+                .operation_specs
+                .get(id)
+                .map(|source| source.operation_id.as_str()),
+            Some(source_id),
+            "{id} is not sourced from the official counterpart"
+        );
+    }
+    for removed in ["zendesk-ticket-comment-add", "zendesk-ticket-tag-add"] {
         assert!(
-            definition.contains(&format!("id = \"{id}\"")),
-            "C-461/C-462 must not convert original inline operation {id}"
+            connector.operation(removed).is_none(),
+            "the duplicate UpdateTicket alias {removed} survived"
         );
     }
 }
@@ -296,8 +282,8 @@ fn the_audit_read_is_selected_one_operation_id_at_a_time_and_is_query_free() {
         .collect();
     assert_eq!(
         support_patches.len(),
-        14,
-        "the audit, five synchronization, and eight foundation operationIds are selected"
+        19,
+        "all nineteen Support operationIds are selected explicitly"
     );
     let patch = support_patches[0];
     assert_eq!(patch.select, "ListAuditsForTicket");
@@ -688,7 +674,7 @@ fn three_unrepresentable_support_writes_remain_negatively_accounted() {
 }
 
 #[test]
-fn every_pre_c466_support_operation_flux_file_is_byte_identical() {
+fn unchanged_spec_backed_support_operation_flux_is_byte_identical() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     for (id, expected) in EXISTING_SUPPORT_FLUX {
         let path = root.join(format!("crates/catalog/ops/zendesk/{id}.flux"));

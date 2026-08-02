@@ -13,7 +13,7 @@
 //! `acme.zendesk.com@evil.example` turns everything before it into userinfo:
 //!
 //! ```text
-//! https://acme.zendesk.com@evil.example.zendesk.com/api/v2/tickets/1.json
+//! https://acme.zendesk.com@evil.example.zendesk.com/api/v2/tickets/1
 //!         └──────── userinfo ─────┘└─── the host that is actually resolved ───┘
 //! ```
 //!
@@ -143,10 +143,7 @@ fn an_ordinary_subdomain_still_resolves() {
 
     let request = built(&operation, json!({"ticket_id": 1})).expect("`acme` is a subdomain");
     assert_eq!(resolved_host(&request.url), "acme.zendesk.com");
-    assert_eq!(
-        request.url,
-        "https://acme.zendesk.com/api/v2/tickets/1.json"
-    );
+    assert_eq!(request.url, "https://acme.zendesk.com/api/v2/tickets/1");
 }
 
 /// Every other way a host value has been observed to move the authority, refused for the same

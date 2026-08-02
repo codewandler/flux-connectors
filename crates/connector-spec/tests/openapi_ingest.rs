@@ -250,36 +250,124 @@ fn refs_resolve_including_nested_and_repeated_ones() {
     );
 }
 
-/// A schema that contains itself is **reported and the operation skipped**, never expanded forever.
-///
-/// The excerpt's `OrganizationNode.children[]` points back at `OrganizationNode`, which is the shape
-/// every real vendor tree has. There is no honest truncation of it — a depth-limited approximation
-/// would publish a type contract the vendor never stated — so the operation does not reach the IR at
-/// all, and the diagnostic says which one and why.
+/// A response schema that contains itself keeps one useful level and explicitly admits any deeper
+/// continuation. It therefore cannot expand forever and does not invent a finite maximum depth.
 #[test]
-fn a_cyclic_ref_is_reported_rather_than_expanded_forever() {
+fn a_cyclic_response_ref_is_bounded_rather_than_expanded_forever() {
     let zendesk = zendesk();
-    assert!(
-        zendesk.operation("showOrganization").is_none(),
-        "an operation whose response schema contains itself must not reach the IR"
+    let response = operation(&zendesk, "showOrganization")
+        .response_schema
+        .as_ref()
+        .expect("the recursive response remains useful");
+    assert_eq!(
+        response.pointer("/properties/id/type"),
+        Some(&serde_json::json!("integer"))
     );
-    let reported = zendesk
-        .diagnostics
-        .iter()
-        .find(|diagnostic| diagnostic.location == "GET /api/v2/organizations/{organization_id}")
-        .unwrap_or_else(|| {
-            panic!(
-                "no diagnostic named the cyclic endpoint:\n{}",
-                diagnostics(&zendesk)
-            )
-        });
-    assert!(
-        reported.problem.contains("cycle"),
-        "the diagnostic must say what went wrong: {reported}"
+    assert_eq!(
+        response.pointer("/properties/children/items"),
+        Some(&serde_json::json!(true))
     );
+}
+
+/// Recursive response models are useful even though this IR cannot carry local references. The
+/// resolver keeps one concrete level and bounds the recursive continuation with JSON Schema's
+/// `true` schema; request schemas remain exact and therefore keep the stricter refusal above.
+#[test]
+fn a_recursive_response_is_bounded_without_dropping_the_operation() {
+    let ingested = openapi::ingest(
+        r##"{
+          "openapi": "3.0.3",
+          "servers": [{"url": "https://api.acme.example"}],
+          "paths": {
+            "/nodes": {
+              "get": {
+                "operationId": "listNodes",
+                "responses": {
+                  "200": {
+                    "description": "ok",
+                    "content": {
+                      "application/json": {
+                        "schema": {"$ref": "#/components/schemas/Node"}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "components": {
+            "schemas": {
+              "Node": {
+                "type": "object",
+                "properties": {
+                  "id": {"type": "string"},
+                  "children": {
+                    "type": "array",
+                    "items": {"$ref": "#/components/schemas/Node"}
+                  }
+                }
+              }
+            }
+          }
+        }"##,
+    )
+    .expect("a well-formed recursive response document");
+
+    let operation = operation(&ingested, "listNodes");
+    let response = operation
+        .response_schema
+        .as_ref()
+        .expect("the bounded response remains available");
+    assert_eq!(
+        response.pointer("/properties/id/type"),
+        Some(&serde_json::json!("string"))
+    );
+    assert_eq!(
+        response.pointer("/properties/children/items"),
+        Some(&serde_json::json!(true)),
+        "the recursive continuation is explicitly unconstrained rather than fabricated: {response}"
+    );
+}
+
+#[test]
+fn a_recursive_request_remains_an_exact_contract_and_is_refused() {
+    let ingested = openapi::ingest(
+        r##"{
+          "openapi": "3.0.3",
+          "servers": [{"url": "https://api.acme.example"}],
+          "paths": {
+            "/nodes": {
+              "post": {
+                "operationId": "createNode",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {"$ref": "#/components/schemas/Node"}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "components": {
+            "schemas": {
+              "Node": {
+                "type": "object",
+                "properties": {
+                  "child": {"$ref": "#/components/schemas/Node"}
+                }
+              }
+            }
+          }
+        }"##,
+    )
+    .expect("a well-formed recursive request document");
+
+    assert!(ingested.operation("createNode").is_none());
     assert!(
-        reported.problem.contains("OrganizationNode"),
-        "the diagnostic must name the schema the cycle runs through: {reported}"
+        diagnostics(&ingested).contains("$ref` cycle"),
+        "the executable request contract must not be truncated:\n{}",
+        diagnostics(&ingested)
     );
 }
 
@@ -288,7 +376,7 @@ fn a_cyclic_ref_is_reported_rather_than_expanded_forever() {
 // ---------------------------------------------------------------------------------------------
 
 /// One bad endpoint costs that endpoint and nothing else. Every deliberate defect in the Zendesk
-/// excerpt is reported by name, and the four sound operations beside them still ingest.
+/// excerpt is reported by name, and the five sound operations beside them still ingest.
 #[test]
 fn a_malformed_endpoint_is_a_diagnostic_naming_it_rather_than_a_failed_ingest() {
     let zendesk = zendesk();
@@ -297,7 +385,13 @@ fn a_malformed_endpoint_is_a_diagnostic_naming_it_rather_than_a_failed_ingest() 
     ingested.sort_unstable();
     assert_eq!(
         ingested,
-        vec!["createTicket", "deleteTicket", "listTickets", "showTicket"],
+        vec![
+            "createTicket",
+            "deleteTicket",
+            "listTickets",
+            "showOrganization",
+            "showTicket",
+        ],
         "the sound operations must survive their neighbours' defects"
     );
 

@@ -172,16 +172,16 @@ fn the_spec_carries_the_catalogue_entry_and_invents_nothing() {
     connector_pack::pack(&["zendesk"], http(), credentials(), configuration())(&mut registry)
         .expect("zendesk installs");
 
-    let operation = catalog::operation(OperationKey::id("zendesk-ticket-comment-add"))
-        .expect("the shipped catalogue carries zendesk-ticket-comment-add");
+    let operation = catalog::operation(OperationKey::id("zendesk-ticket-update"))
+        .expect("the shipped catalogue carries zendesk-ticket-update");
     let spec = registry
-        .get("zendesk.ticket.comment.add")
+        .get("zendesk.ticket.update")
         .expect("the operation registers under its dotted name")
         .spec();
 
     assert!(spec.description.starts_with(operation.description));
     assert_eq!(spec.risk, flux_spec::Risk::Medium);
-    assert_eq!(spec.idempotency, flux_spec::Idempotency::Conditional);
+    assert_eq!(spec.idempotency, flux_spec::Idempotency::NonIdempotent);
     assert_eq!(spec.effects, vec![flux_spec::Effect::Network]);
 
     // The declared parameters, as a real JSON Schema — not an empty object standing in for one.
@@ -192,8 +192,7 @@ fn the_spec_carries_the_catalogue_entry_and_invents_nothing() {
         properties["ticket_id"],
         serde_json::json!({"type": "number"})
     );
-    assert_eq!(properties["body"], serde_json::json!({"type": "string"}));
-    assert_eq!(properties["public"], serde_json::json!({"type": "boolean"}));
+    assert_eq!(properties["ticket"], serde_json::json!({}));
 
     // Fields the catalogue entry has no value for are absent rather than fabricated. Every
     // generated op returns `Any`, and no operation declares a tool group.

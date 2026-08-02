@@ -229,32 +229,22 @@ fn every_shipped_operation_reaches_its_module() {
     }
 }
 
-/// **The silent failure, pinned.** Zendesk's wire body is
-/// `{"ticket": {"updated_stamp": …, "safe_update": true, "comment": {"body": …, "public": …}}}`
-/// (`docs/designs/provider-operation-inventory.md` §3.3.1). A flat body is not an error Zendesk
-/// reports — it answers 200 and applies nothing — so the shape is asserted here in full rather than
-/// approximated by "the payload mentions `body`".
+/// Zendesk's spec-selected update contract keeps the vendor's `ticket` request wrapper. A caller
+/// supplies that object whole; the generated Flux must neither flatten it nor reconstruct a second,
+/// hand-maintained ticket schema.
 #[test]
 fn zendesk_writes_a_nested_body() {
     let module = planned("zendesk", "zendesk.flux");
 
     assert!(
-        module.contains(
-            "payload = { ticket: { comment: { body, public }, safe_update, updated_stamp } }"
-        ),
-        "`zendesk-ticket-comment-add` must nest its comment under `ticket.comment`:\n{module}"
+        module.contains("op zendesk-ticket-update(ticket_id: Number, ticket: Any) -> Any")
+            && module.contains("payload = { ticket }"),
+        "`zendesk-ticket-update` must preserve the vendor-declared ticket wrapper:\n{module}"
     );
     assert!(
-        module.contains(
-            "payload = { ticket: { additional_tags: tags, safe_update, updated_stamp } }"
-        ),
-        "`zendesk-ticket-tag-add` must write `ticket.additional_tags` — sending `tags` *replaces* \
-         the ticket's tags (inventory §3.3.3):\n{module}"
-    );
-    assert!(
-        !module.contains("payload = { body") && !module.contains(", updated_stamp }\n"),
-        "no Zendesk payload may put a ticket field at the root of the body — Zendesk ignores it \
-         and answers 200:\n{module}"
+        !module.contains("op zendesk-ticket-comment-add(")
+            && !module.contains("op zendesk-ticket-tag-add("),
+        "the two hand-authored UpdateTicket aliases must not survive beside the vendor operation:\n{module}"
     );
 }
 

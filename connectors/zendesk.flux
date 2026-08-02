@@ -2,111 +2,6 @@
 # Provider: zendesk
 # Regenerate with `flux-connectors build`.
 
-op zendesk-test -> Any
-  description "Verify credentials by fetching the authenticated Zendesk user"
-  risk "low"
-  idempotency "idempotent"
-  effects ["network"]
-  expose true
-
-  base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/users/me.json")
-  response = http.request(method: "GET", url)
-  return response
-
-op zendesk-ticket-search(query: String, page: Number, per_page: Number) -> Any
-  description "Search tickets with Zendesk search syntax, e.g. `type:ticket status:new`"
-  risk "low"
-  idempotency "idempotent"
-  effects ["network"]
-  expose true
-
-  base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/search.json?query={query}")
-  sep = "&"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when per_page
-    url = fmt("{url}{sep}per_page={per_page}")
-  response = http.request(method: "GET", url)
-  return response
-
-op zendesk-ticket-show(ticket_id: Number) -> Any
-  description "Show one ticket"
-  risk "low"
-  idempotency "idempotent"
-  effects ["network"]
-  expose true
-
-  base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/tickets/{ticket_id}.json")
-  response = http.request(method: "GET", url)
-  return response
-
-op zendesk-ticket-comment-list(ticket_id: Number, page: Number, per_page: Number) -> Any
-  description "List a ticket's comments"
-  risk "low"
-  idempotency "idempotent"
-  effects ["network"]
-  expose true
-
-  base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/tickets/{ticket_id}/comments.json")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when per_page
-    url = fmt("{url}{sep}per_page={per_page}")
-  response = http.request(method: "GET", url)
-  return response
-
-op zendesk-ticket-update(ticket_id: Number, updated_stamp: String, status: String, priority: String, assignee_id: Number, group_id: Number, type: String) -> Any
-  description "Safe-update selected ticket fields against the caller's updated_stamp; at least one of status, priority, assignee_id, group_id or type must be supplied"
-  risk "medium"
-  idempotency "conditional"
-  effects ["network"]
-  expose true
-
-  base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/tickets/{ticket_id}.json")
-  content_type = "application/json"
-  safe_update = true
-  payload = { ticket: { assignee_id, group_id, priority, safe_update, status, type, updated_stamp } }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
-  return response
-
-op zendesk-ticket-comment-add(ticket_id: Number, updated_stamp: String, body: String, public: Bool) -> Any
-  description "Add a comment to a ticket; the comment is an internal note unless public is explicitly true"
-  risk "medium"
-  idempotency "conditional"
-  effects ["network"]
-  expose true
-
-  base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/tickets/{ticket_id}.json")
-  content_type = "application/json"
-  safe_update = true
-  payload = { ticket: { comment: { body, public }, safe_update, updated_stamp } }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
-  return response
-
-op zendesk-ticket-tag-add(ticket_id: Number, updated_stamp: String, tags: List<String>) -> Any
-  description "Add tags to a ticket without replacing the tags it already has"
-  risk "medium"
-  idempotency "conditional"
-  effects ["network"]
-  expose true
-
-  base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/tickets/{ticket_id}.json")
-  content_type = "application/json"
-  safe_update = true
-  payload = { ticket: { additional_tags: tags, safe_update, updated_stamp } }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
-  return response
-
 op zendesk-ticket-audit-list(ticket_id: Number) -> Any
   description "List the read-only audit history for one ticket, including field changes, comments and notifications"
   risk "low"
@@ -282,4 +177,72 @@ op zendesk-custom-status-list -> Any
   base = "https://{subdomain}.zendesk.com"
   url = fmt("{base}/api/v2/custom_statuses")
   response = http.request(method: "GET", url)
+  return response
+
+op zendesk-test -> Any
+  description "Show Self"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/users/me")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-ticket-search(query: String) -> Any
+  description "List Search Results"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/search?query={query}")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-ticket-show(ticket_id: Number) -> Any
+  description "Show Ticket"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/tickets/{ticket_id}")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-ticket-comment-list(ticket_id: Number, include_inline_images: Bool, per_page: Number) -> Any
+  description "List Comments"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/tickets/{ticket_id}/comments")
+  sep = "?"
+  when include_inline_images
+    url = fmt("{url}{sep}include_inline_images={include_inline_images}")
+    sep = "&"
+  when per_page
+    url = fmt("{url}{sep}per_page={per_page}")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-ticket-update(ticket_id: Number, ticket: Any) -> Any
+  description "Update Ticket"
+  risk "medium"
+  idempotency "non_idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/tickets/{ticket_id}")
+  content_type = "application/json"
+  payload = { ticket }
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
   return response
