@@ -16,6 +16,32 @@ op anthropic-organization-get -> Any
   response = http.request(headers: { "anthropic-version": anthropic_version }, method: "GET", url)
   return response
 
+op anthropic-organization-members-list -> Any
+  description "List the people in this organization, with each member's name, email address, organization role and the date they joined. Returns personal data about real individuals. Unpaginated — this connector cannot request a further page, so on an organization larger than one page this is a sample and not a roster. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body."
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.anthropic.com"
+  url = fmt("{base}/v1/organizations/users")
+  anthropic_version = "2023-06-01"
+  response = http.request(headers: { "anthropic-version": anthropic_version }, method: "GET", url)
+  return response
+
+op anthropic-organization-member-get(user_id: String) -> Any
+  description "Retrieve one organization member by user id, returning their name, email address, organization role and join date. Returns personal data about a real individual. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body."
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.anthropic.com"
+  url = fmt("{base}/v1/organizations/users/{user_id}")
+  anthropic_version = "2023-06-01"
+  response = http.request(headers: { "anthropic-version": anthropic_version }, method: "GET", url)
+  return response
+
 op anthropic-workspaces-list -> Any
   description "List the organization's workspaces. Unpaginated and excludes archived workspaces by default — this connector cannot request a further page or ask for archived ones. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body."
   risk "low"
@@ -29,6 +55,45 @@ op anthropic-workspaces-list -> Any
   response = http.request(headers: { "anthropic-version": anthropic_version }, method: "GET", url)
   return response
 
+op anthropic-workspace-get(workspace_id: String) -> Any
+  description "Retrieve one workspace by id, including its name, creation date, whether it is archived, and its data-residency configuration. Unlike anthropic-workspaces-list this reaches an archived workspace, since the id is given rather than filtered for. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body."
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.anthropic.com"
+  url = fmt("{base}/v1/organizations/workspaces/{workspace_id}")
+  anthropic_version = "2023-06-01"
+  response = http.request(headers: { "anthropic-version": anthropic_version }, method: "GET", url)
+  return response
+
+op anthropic-workspace-members-list(workspace_id: String) -> Any
+  description "List who belongs to one workspace and the role each holds in it. Returns the user ids of real individuals; resolve one to a name and email with anthropic-organization-member-get. Unpaginated — this connector cannot request a further page, so on a workspace larger than one page this is a sample and not a roster. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body."
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.anthropic.com"
+  url = fmt("{base}/v1/organizations/workspaces/{workspace_id}/members")
+  anthropic_version = "2023-06-01"
+  response = http.request(headers: { "anthropic-version": anthropic_version }, method: "GET", url)
+  return response
+
+op anthropic-workspace-member-get(workspace_id: String, user_id: String) -> Any
+  description "Retrieve one person's membership of one workspace, and the role they hold in it. This is the direct answer to whether a given user is in a given workspace; it returns the user id of a real individual. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body."
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.anthropic.com"
+  url = fmt("{base}/v1/organizations/workspaces/{workspace_id}/members/{user_id}")
+  anthropic_version = "2023-06-01"
+  response = http.request(headers: { "anthropic-version": anthropic_version }, method: "GET", url)
+  return response
+
 op anthropic-api-keys-list -> Any
   description "List the organization's API keys, with each key's name, status and a redacted hint — never the key itself. Unpaginated and unfiltered. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body."
   risk "low"
@@ -38,6 +103,19 @@ op anthropic-api-keys-list -> Any
 
   base = "https://api.anthropic.com"
   url = fmt("{base}/v1/organizations/api_keys")
+  anthropic_version = "2023-06-01"
+  response = http.request(headers: { "anthropic-version": anthropic_version }, method: "GET", url)
+  return response
+
+op anthropic-invites-list -> Any
+  description "List the organization's invites, with the email address invited, the role offered, and whether the invite is still pending. Returns personal data — an email address for a real person. Unpaginated and unfiltered by status, so a `pending` invite must be selected from the returned entries rather than asked for. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body."
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.anthropic.com"
+  url = fmt("{base}/v1/organizations/invites")
   anthropic_version = "2023-06-01"
   response = http.request(headers: { "anthropic-version": anthropic_version }, method: "GET", url)
   return response

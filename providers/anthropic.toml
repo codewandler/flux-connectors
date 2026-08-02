@@ -83,13 +83,24 @@
 # `zendesk-ticket-search` is the standing demonstration AGENTS.md lists under *Intentional gaps*. So
 # every optional cursor-pagination parameter Anthropic documents — `after_id`, `before_id`, `limit`
 # on the models list, and `after_id`/`before_id`/`limit`/`include_archived` on the workspaces list,
-# and the same trio plus `status`/`workspace_id`/`created_by_user_id` on the API-keys list — is
-# excluded outright. Every operation below therefore returns Anthropic's first, unpaginated page
-# (20 items by default), which is a correct answer to "what does this account have" and not a
-# broken answer to "give me page 2". The path-shaped `model_id` on `anthropic-model-get` is left
-# alone for the same charset reason `providers/openai.toml` records for `GET /v1/models/{model}`:
-# Anthropic's model ids are drawn from `[A-Za-z0-9.-]` (`claude-opus-4-6`,
-# `claude-3-5-sonnet-20241022`), every character of which is already a valid URL path character.
+# and the same trio plus `status`/`workspace_id`/`created_by_user_id` on the API-keys list, and the
+# same trio again (plus `email`) on the organization-members, workspace-members and invites lists
+# C-441 adds — is excluded outright. Every operation below therefore returns Anthropic's first,
+# unpaginated page (20 items by default), which is a correct answer to "what does this account
+# have" and not a broken answer to "give me page 2". Each list says so in its own `description`,
+# because a caller who believes an unpaginated page is the whole organization draws a *wrong*
+# conclusion rather than an incomplete one — the failure this convention exists to prevent.
+#
+# The path-shaped parameters are left alone for the same charset reason `providers/openai.toml`
+# records for `GET /v1/models/{model}`. Anthropic's model ids are drawn from `[A-Za-z0-9.-]`
+# (`claude-opus-4-6`, `claude-3-5-sonnet-20241022`); the `user_id` and `workspace_id` C-441 adds are
+# vendor-minted opaque handles of the form `user_01WCz1Fkm…` and `wrkspc_01JwQvzr7…`, drawn from
+# `[A-Za-z0-9_]`. Every character of either is already a valid URL path character, so nothing about
+# an id can change the shape of the request. Note what that argument does and does not rest on: it
+# is a fact about what Anthropic *mints*, not a constraint this connector can enforce, and it is the
+# same standing exposure `status.rs` deliberately does not flag because C-30 scopes its refusal to
+# query values. A caller passing a hand-built id is outside what either the vendor or this file
+# describes.
 #
 # WHY THE SELECTION IS READ-ONLY.
 #
@@ -101,7 +112,46 @@
 # archiving workspaces, rotating API-key status) is real and useful, but each one needs a decision
 # about request/response shape this story does not need to make to satisfy its Goal, so it is left
 # out rather than guessed at — the standing rule this repository applies everywhere a shape is
-# unclear.
+# unclear. C-441 widened the *read* surface and left that sentence standing unchanged: one of the
+# two constraints it cites has since closed (C-186, idempotent POST/PATCH) and one has not (C-185,
+# a request body cannot contain an array), and neither is what decides the question, because a read
+# has no body to build either way.
+#
+# ---------------------------------------------------------------------------------------------
+# PERSONAL DATA: THE ADMIN API NAMES REAL PEOPLE.
+# ---------------------------------------------------------------------------------------------
+#
+# `anthropic-organization-members-list`, `anthropic-organization-member-get`,
+# `anthropic-workspace-members-list`, `anthropic-workspace-member-get` and
+# `anthropic-invites-list` return the names, email addresses and stable user ids of actual
+# individuals in an organization. That is a different kind of field from an API key's
+# `partial_key_hint` or a workspace's `display_color`, and this file marks it as one.
+#
+# Every field whose value identifies or contacts a person carries, in its own `description`, the
+# sentence `providers/bitbucket.toml` and `providers/discord.toml` already use:
+#
+#   Identifies a named person — read it for what the calling flow needs and do not persist it
+#   beyond that
+#
+# A `description` in this repository is the text a **model** receives as its tool contract, not UI
+# copy (AGENTS.md § Configuration contract), so this is an instruction to the thing that will
+# actually handle the value — which is the only place it can do any work.
+#
+# A user's `id` carries the sentence beside their `email` and `name`, deliberately: it is the handle
+# that addresses one person and resolves to both of the others through
+# `anthropic-organization-member-get`. `providers/discord.toml` marks a bare `owner_id` on exactly
+# that reasoning. `workspace_id`, `role`, `workspace_role` and `type` do not carry it — they
+# describe the membership, not the member.
+#
+# **No example person appears anywhere in this file.** Anthropic's own Admin API reference prints a
+# specimen name and address in every response sample; neither is reproduced here, in prose or in a
+# schema. That is `providers/docusign.toml`'s rule and its reason: a placeholder gets copied, and a
+# field whose entire content is personal data earns no illustration. No field exists here whose only
+# purpose is to surface an address more conveniently, either.
+#
+# `crates/connector-spec/tests/anthropic_admin_surface.rs` holds all of the above — the marked
+# locations by JSON Pointer, and the absence of an invented person — so it is a property of the
+# connector rather than of this comment.
 
 id = "anthropic"
 vendor = "Anthropic"
@@ -147,7 +197,7 @@ base_url = "https://api.anthropic.com"
 # C-55: the vendor-constant header, distributed by the loader onto every operation below.
 const_headers = { "anthropic-version" = "2023-06-01" }
 
-description = "Anthropic platform: the live model catalogue, and organization info, workspaces and API keys from the Admin API"
+description = "Anthropic platform: the live model catalogue, and organization info, members, workspaces, workspace members, API keys and outstanding invites from the Admin API — all read-only"
 
 # The Models API default. Admin operations override this individually — see the header comment.
 default_auth = [{ credentials = ["anthropic.api_key"] }]
@@ -177,7 +227,7 @@ scheme = { header = { name = "x-api-key" } }
 # same credential as `anthropic.api_key`. Provisionable only by an organization member with the
 # admin role, in the Anthropic Console.
 env = ["ANTHROPIC_ADMIN_KEY"]
-description = "Anthropic Admin API key (starts sk-ant-admin), sent as x-api-key. Required only for the organization, workspace and API-key operations below — the model catalogue uses the regular API key"
+description = "Anthropic Admin API key (starts sk-ant-admin), sent as x-api-key. Required only for the Admin API operations below — organization, members, workspaces, workspace members, API keys and invites — the model catalogue uses the regular API key"
 
 # ---------------------------------------------------------------------------------------------
 # Configuration — what a human supplies before any of this runs
@@ -204,7 +254,7 @@ binds = "credential.anthropic.api_key"
 name = "admin_key"
 service = "admin"
 label = "Admin API key"
-help = "Create an Admin API key in the Anthropic Console — only an organization member with the admin role can provision one. Required only for the organization, workspace and API-key operations; the model catalogue works with the API key above alone"
+help = "Create an Admin API key in the Anthropic Console — only an organization member with the admin role can provision one. Required only for the Admin API operations, which read organization info, members, workspaces, workspace members, API keys and invites; the model catalogue works with the API key above alone"
 format = "token"
 secret = true
 docs_url = "https://docs.anthropic.com/en/docs/manage-claude/admin-api-keys"
@@ -230,7 +280,7 @@ tags = ["ai"]
 description = "Admin API: organization info, workspaces, and API keys — read-only"
 
 # ---------------------------------------------------------------------------------------------
-# Operations — the models service (2), then the admin service (3). All five are GET, all
+# Operations — the models service (2), then the admin service (9). All eleven are GET, all
 # authenticated, and none takes a body.
 #
 # Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
@@ -298,8 +348,12 @@ message_pointer = "/error/message"
 code_pointer = "/error/type"
 
 # ---------------------------------------------------------------------------------------------
-# The three Admin operations. Each needs `anthropic.admin_key`, not the regular API key — see the
-# header comment.
+# The nine Admin operations. Each needs `anthropic.admin_key`, not the regular API key — see the
+# header comment. Five of them return personal data; see the PERSONAL DATA section of that comment
+# for the rule every such field follows.
+#
+# Ordered by what they address rather than by when they landed: the organization, then its members,
+# then its workspaces and their members, then API keys, then outstanding invites.
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
@@ -324,6 +378,66 @@ code_pointer = "/error/type"
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+id = "anthropic-organization-members-list"
+service = "admin"
+method = "GET"
+path = "/v1/organizations/users"
+description = "List the people in this organization, with each member's name, email address, organization role and the date they joined. Returns personal data about real individuals. Unpaginated — this connector cannot request a further page, so on an organization larger than one page this is a sample and not a roster"
+risk = "low"
+idempotency = "idempotent"
+auth = [{ credentials = ["anthropic.admin_key"] }]
+# No parameters. The vendor declares four optional query filters — `after_id`, `before_id`, `limit`
+# and `email` — all excluded; see the header comment. Losing `email` is the one that stings: it
+# turns "is this person a member" from a filtered lookup into a scan of the first page, and there
+# is no path-shaped route to a user by address. Recorded rather than worked around.
+
+# Every field naming or contacting a person carries the sentence, including `id` — see the header
+# comment's PERSONAL DATA section for why the id is on that list.
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "array", description = "One entry per member of the organization", items = { type = "object", required = ["id", "type"], properties = { id = { type = "string", description = "The member's stable user id, and what anthropic-organization-member-get and anthropic-workspace-member-get address them by. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that" }, name = { type = "string", description = "The member's name as Anthropic holds it. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that" }, email = { type = "string", description = "The member's email address. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that" }, role = { type = "string", description = "The member's organization role — one of admin, billing, claude_code_user, developer, managed, membership_admin, owner, primary_owner, user. An open set in practice: Anthropic has added to it and this connector does not constrain the value" }, added_at = { type = "string", format = "date-time", description = "When the member joined the organization" }, type = { const = "user" } } } }, first_id = { type = "string", description = "First id in `data`. This connector cannot use it as `before_id` — no query parameter is encodable (C-30)" }, last_id = { type = "string", description = "Last id in `data`, likewise unusable as `after_id` here" }, has_more = { type = "boolean", description = "True when the organization has more members than this unpaginated call returned" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/type"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "anthropic-organization-member-get"
+service = "admin"
+method = "GET"
+path = "/v1/organizations/users/{user_id}"
+description = "Retrieve one organization member by user id, returning their name, email address, organization role and join date. Returns personal data about a real individual"
+risk = "low"
+idempotency = "idempotent"
+auth = [{ credentials = ["anthropic.admin_key"] }]
+
+# SCHEMA GAP: a path parameter is interpolated as verbatim as a query parameter is, and `status.rs`
+# deliberately does not flag it — C-30 scopes its refusal to query values. Safe here on the same
+# ground `anthropic-model-get` records for `model_id`: an Anthropic user id is a vendor-minted
+# opaque handle of the form `user_01WCz1Fkm…`, drawn from `[A-Za-z0-9_]`, every character of which
+# is already a valid URL path character. That is a fact about what the vendor mints, not a
+# constraint this connector enforces.
+[[operations.params.path]]
+name = "user_id"
+description = "The member's user id, as returned in `id` by anthropic-organization-members-list or in `user_id` by anthropic-workspace-members-list"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["id", "type"]
+properties = { id = { type = "string", description = "The user id, echoed back. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that" }, name = { type = "string", description = "The member's name as Anthropic holds it. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that" }, email = { type = "string", description = "The member's email address. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that" }, role = { type = "string", description = "The member's organization role — one of admin, billing, claude_code_user, developer, managed, membership_admin, owner, primary_owner, user. An open set in practice; this connector does not constrain the value" }, added_at = { type = "string", format = "date-time", description = "When the member joined the organization" }, type = { const = "user" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/type"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
 id = "anthropic-workspaces-list"
 service = "admin"
 method = "GET"
@@ -338,7 +452,105 @@ auth = [{ credentials = ["anthropic.admin_key"] }]
 [operations.response_schema]
 type = "object"
 required = ["data"]
-properties = { data = { type = "array", description = "One entry per workspace: `id`, `name`, `type: \"workspace\"`, `created_at`, `archived_at` (absent unless the workspace is archived), plus `data_residency` and user-defined `tags` objects", items = { type = "object", required = ["id", "type"], properties = { id = { type = "string" }, name = { type = "string" }, type = { const = "workspace" }, created_at = { type = "string", format = "date-time" } } } }, first_id = { type = "string" }, last_id = { type = "string" }, has_more = { type = "boolean", description = "True when the organization has more workspaces than this unpaginated call returned" } }
+properties = { data = { type = "array", description = "One entry per workspace: `id`, `name`, `type: \"workspace\"`, `created_at`, `archived_at` (absent unless the workspace is archived), plus `data_residency` and user-defined `tags` objects", items = { type = "object", required = ["id", "type"], properties = { id = { type = "string" }, name = { type = "string" }, type = { const = "workspace" }, created_at = { type = "string", format = "date-time" } } } }, first_id = { type = "string", description = "First id in `data`. This connector cannot use it as `before_id` — no query parameter is encodable (C-30)" }, last_id = { type = "string", description = "Last id in `data`, likewise unusable as `after_id` here" }, has_more = { type = "boolean", description = "True when the organization has more workspaces than this unpaginated call returned" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/type"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "anthropic-workspace-get"
+service = "admin"
+method = "GET"
+path = "/v1/organizations/workspaces/{workspace_id}"
+description = "Retrieve one workspace by id, including its name, creation date, whether it is archived, and its data-residency configuration. Unlike anthropic-workspaces-list this reaches an archived workspace, since the id is given rather than filtered for"
+risk = "low"
+idempotency = "idempotent"
+auth = [{ credentials = ["anthropic.admin_key"] }]
+
+# Safe to interpolate for the reason the header comment records: a workspace id is a vendor-minted
+# opaque handle of the form `wrkspc_01JwQvzr7…`, drawn from `[A-Za-z0-9_]`.
+[[operations.params.path]]
+name = "workspace_id"
+description = "The workspace id, as returned in `id` by anthropic-workspaces-list"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# No personal data here — a workspace is a container, not a person. `external_key_id` names a
+# customer-managed encryption key *configuration*; it is an identifier and never key material, so it
+# is no more a secret than `partial_key_hint` on anthropic-api-keys-list is.
+[operations.response_schema]
+type = "object"
+required = ["id", "type"]
+properties = { id = { type = "string", description = "The workspace id, echoed back" }, name = { type = "string" }, type = { const = "workspace" }, created_at = { type = "string", format = "date-time" }, archived_at = { type = "string", format = "date-time", description = "When the workspace was archived, or null if it is not archived" }, display_color = { type = "string", description = "The hex colour the Anthropic Console shows this workspace in" }, data_residency = { type = "object", description = "Where this workspace's data is stored and which inference geos it permits", properties = { workspace_geo = { type = "string", description = "The region this workspace's data is stored in. Immutable after creation" }, default_inference_geo = { type = "string", description = "The inference geo applied when a request names none" }, allowed_inference_geos = { description = "The permitted inference geos: either an array of geo names or the string `unrestricted`. Left untyped rather than given a type, because the vendor documents it as either shape and this file states only what it can name with confidence" } } }, tags = { type = "object", description = "User-defined string key-value tags on the workspace. Keys may not begin with `anthropic`. Left otherwise untyped — the keys are the operator's own" }, compartment_id = { type = "string", description = "This workspace's encryption-compartment identifier, referenced in a customer-managed KMS key policy on AWS. An identifier, never key material" }, external_key_id = { type = "string", description = "The customer-managed encryption key configuration attached to this workspace, when one is. An identifier, never key material" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/type"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "anthropic-workspace-members-list"
+service = "admin"
+method = "GET"
+path = "/v1/organizations/workspaces/{workspace_id}/members"
+description = "List who belongs to one workspace and the role each holds in it. Returns the user ids of real individuals; resolve one to a name and email with anthropic-organization-member-get. Unpaginated — this connector cannot request a further page, so on a workspace larger than one page this is a sample and not a roster"
+risk = "low"
+idempotency = "idempotent"
+auth = [{ credentials = ["anthropic.admin_key"] }]
+# No parameters beyond the path. The vendor declares three optional query filters — `after_id`,
+# `before_id` and `limit` — all excluded; see the header comment.
+
+[[operations.params.path]]
+name = "workspace_id"
+description = "The workspace id, as returned in `id` by anthropic-workspaces-list"
+required = true
+schema = { type = "string", minLength = 1 }
+
+# A workspace member entry carries exactly one field that reaches a person — `user_id` — so that is
+# the field the personal-data sentence lands on. Without it this operation would return people with
+# nothing saying so.
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "array", description = "One entry per member of the workspace", items = { type = "object", required = ["type", "user_id"], properties = { type = { const = "workspace_member" }, user_id = { type = "string", description = "The member's organization-wide user id, and what anthropic-organization-member-get resolves to a name and email address. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that" }, workspace_id = { type = "string", description = "The workspace this membership is in — the same id that was passed in" }, workspace_role = { type = "string", description = "The member's role in this workspace — one of workspace_admin, workspace_billing, workspace_developer, workspace_restricted_developer, workspace_user. Distinct from the organization-wide `role` on anthropic-organization-members-list" } } } }, first_id = { type = "string", description = "First id in `data`. This connector cannot use it as `before_id` — no query parameter is encodable (C-30)" }, last_id = { type = "string", description = "Last id in `data`, likewise unusable as `after_id` here" }, has_more = { type = "boolean", description = "True when the workspace has more members than this unpaginated call returned" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/type"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "anthropic-workspace-member-get"
+service = "admin"
+method = "GET"
+path = "/v1/organizations/workspaces/{workspace_id}/members/{user_id}"
+description = "Retrieve one person's membership of one workspace, and the role they hold in it. This is the direct answer to whether a given user is in a given workspace; it returns the user id of a real individual"
+risk = "low"
+idempotency = "idempotent"
+auth = [{ credentials = ["anthropic.admin_key"] }]
+
+# Two path parameters, both vendor-minted opaque handles — see the header comment.
+[[operations.params.path]]
+name = "workspace_id"
+description = "The workspace id, as returned in `id` by anthropic-workspaces-list"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.path]]
+name = "user_id"
+description = "The member's user id, as returned in `id` by anthropic-organization-members-list"
+required = true
+schema = { type = "string", minLength = 1 }
+
+[operations.response_schema]
+type = "object"
+required = ["type", "user_id"]
+properties = { type = { const = "workspace_member" }, user_id = { type = "string", description = "The member's organization-wide user id, echoed back. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that" }, workspace_id = { type = "string", description = "The workspace this membership is in — the same id that was passed in" }, workspace_role = { type = "string", description = "The member's role in this workspace — one of workspace_admin, workspace_billing, workspace_developer, workspace_restricted_developer, workspace_user" } }
 
 [operations.quirks.error_envelope]
 message_pointer = "/error/message"
@@ -363,7 +575,34 @@ auth = [{ credentials = ["anthropic.admin_key"] }]
 [operations.response_schema]
 type = "object"
 required = ["data"]
-properties = { data = { type = "array", description = "One entry per API key: `id`, `name`, `status` (`active`, `inactive`, `archived` or `expired`), `type: \"api_key\"`, `created_at`, `expires_at` (absent for a key that never expires), `partial_key_hint` (a partially redacted display string, safe to show in a UI — never the key), `workspace_id` (absent for a key on the default workspace), and `created_by`/`principal` objects each `{id, type}`", items = { type = "object", required = ["id", "type", "status"], properties = { id = { type = "string" }, name = { type = "string" }, type = { const = "api_key" }, status = { type = "string", description = "One of active, inactive, archived, expired" }, created_at = { type = "string", format = "date-time" } } } }, first_id = { type = "string" }, last_id = { type = "string" }, has_more = { type = "boolean" } }
+properties = { data = { type = "array", description = "One entry per API key: `id`, `name`, `status` (`active`, `inactive`, `archived` or `expired`), `type: \"api_key\"`, `created_at`, `expires_at` (absent for a key that never expires), `partial_key_hint` (a partially redacted display string, safe to show in a UI — never the key), `workspace_id` (absent for a key on the default workspace), and `created_by`/`principal` objects each `{id, type}`", items = { type = "object", required = ["id", "type", "status"], properties = { id = { type = "string" }, name = { type = "string" }, type = { const = "api_key" }, status = { type = "string", description = "One of active, inactive, archived, expired" }, created_at = { type = "string", format = "date-time" } } } }, first_id = { type = "string", description = "First id in `data`. This connector cannot use it as `before_id` — no query parameter is encodable (C-30)" }, last_id = { type = "string", description = "Last id in `data`, likewise unusable as `after_id` here" }, has_more = { type = "boolean" } }
+
+[operations.quirks.error_envelope]
+message_pointer = "/error/message"
+code_pointer = "/error/type"
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "anthropic-invites-list"
+service = "admin"
+method = "GET"
+path = "/v1/organizations/invites"
+description = "List the organization's invites, with the email address invited, the role offered, and whether the invite is still pending. Returns personal data — an email address for a real person. Unpaginated and unfiltered by status, so a `pending` invite must be selected from the returned entries rather than asked for"
+risk = "low"
+idempotency = "idempotent"
+auth = [{ credentials = ["anthropic.admin_key"] }]
+# No parameters. The vendor declares three optional query filters — `after_id`, `before_id` and
+# `limit` — all excluded; see the header comment. There is no `status` filter to lose: the vendor
+# publishes none, which is why the description tells a caller to filter `status` themselves.
+
+# `email` is the field that reaches a person here. An invite `id` addresses the invitation rather
+# than the invitee, so it does not carry the sentence — see the header comment's PERSONAL DATA
+# section for where that line is drawn.
+[operations.response_schema]
+type = "object"
+required = ["data"]
+properties = { data = { type = "array", description = "One entry per invite, in whatever status the vendor holds it", items = { type = "object", required = ["id", "type", "status"], properties = { id = { type = "string", description = "The invite's own id — an identifier for the invitation, not for the person" }, type = { const = "invite" }, email = { type = "string", description = "The email address the invitation was sent to. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that" }, role = { type = "string", description = "The organization role the invitee is offered — one of admin, billing, claude_code_user, developer, managed, membership_admin, owner, primary_owner, user" }, status = { type = "string", description = "One of accepted, deleted, expired, pending. This call cannot filter on it" }, invited_at = { type = "string", format = "date-time", description = "When the invite was created" }, expires_at = { type = "string", format = "date-time", description = "When the invite expires" }, accepted_at = { type = "string", format = "date-time", description = "When the invite was accepted, or null if it has not been" }, rbac_group_ids = { type = "array", items = { type = "string" }, description = "RBAC group ids to assign on acceptance, `[]` when none. A Claude Enterprise beta field; present but empty on organizations not using it" } } } }, first_id = { type = "string", description = "First id in `data`. This connector cannot use it as `before_id` — no query parameter is encodable (C-30)" }, last_id = { type = "string", description = "Last id in `data`, likewise unusable as `after_id` here" }, has_more = { type = "boolean", description = "True when the organization has more invites than this unpaginated call returned" } }
 
 [operations.quirks.error_envelope]
 message_pointer = "/error/message"
