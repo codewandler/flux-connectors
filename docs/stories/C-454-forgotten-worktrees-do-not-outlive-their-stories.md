@@ -2,7 +2,7 @@
 id: C-454
 title: "Forgotten worktrees do not outlive their stories or the release that should contain them"
 pillar: Build
-status: in-progress
+status: done
 priority: 1
 areas: [build]
 note: "release audit 2026-08-02: C-403's obsolete rollback was pruned; concurrently-created C-455 was recovered as commit 6e421af; five completed stories and three blocker chains were reconciled before the v0.13.0 cut"
@@ -25,7 +25,7 @@ the work that actually landed.
       history. Close completed stories and update blockers that another completed story removed.
 - [x] No forgotten worktree metadata or unmerged local commit remains, and merged `worktree-agent-*`
       refs no longer masquerade as active work.
-- [ ] Regenerate the board, add the changelog entry, and run the full generated-artifact, Rust, web
+- [x] Regenerate the board, add the changelog entry, and run the full generated-artifact, Rust, web
       and host UI gates before cutting the release.
 
 ## Progress
@@ -96,3 +96,12 @@ After the concurrent process stopped, its replacement checkout at
 `main`. `git worktree remove` removed it and `git branch -d release/flux-0.49` removed the now-merged
 branch. The temporary salvage tag was then deleted: the canonical minor cut is the sole remaining
 release path.
+
+### Gate
+
+- 2026-08-02 — `connector-cli build` wrote nothing and `connector-cli diff` reported
+  `951 artifacts up to date (54 providers checked)`.
+- 2026-08-02 — The Rust build, `cargo test --workspace --no-fail-fast`, clippy and formatting gates
+  are green. The public site built and passed 42 tests; the host UI passed 15 tests.
+- 2026-08-02 — `scripts/publish-crates-io.sh --dry-run` packaged and verified the four-crate closure
+  without uploading it.

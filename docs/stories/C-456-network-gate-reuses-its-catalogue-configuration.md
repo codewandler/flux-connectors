@@ -2,7 +2,7 @@
 id: C-456
 title: "The catalogue network gate builds its configuration once, not once per operation"
 pillar: Build
-status: in-progress
+status: done
 priority: 0
 areas: [build]
 note: "release-gate finding 2026-08-02: three safety assertions are CPU-bound because every operation rebuilds configuration by projecting the whole catalogue"
@@ -24,7 +24,7 @@ quadratic setup cost from every local and release gate.
       production global or cache is introduced.
 - [x] All four assertions still enumerate the shipped catalogue and retain their non-empty controls.
 - [x] A warm targeted run is green and records its wall time against the same command.
-- [ ] The full release gate is green after the change.
+- [x] The full release gate is green after the change.
 
 ## Progress
 
@@ -39,6 +39,9 @@ quadratic setup cost from every local and release gate.
   immutable `Configuration` with `OnceLock` and cloning the port per projection, the same four tests
   completed in 1.48 seconds (1.86 seconds for the command; 2.82 user CPU-seconds): 129 times faster by
   the test harness's own wall-time figures.
+- 2026-08-02 — The full generated-artifact and Rust gates are green; the public site built and passed
+  42 tests, the host UI passed 15, and all four publishable crates package and verify under the clean-
+  tree dry run.
 
 ## Notes
 

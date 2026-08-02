@@ -35,7 +35,7 @@ minor line. The connector release is therefore a minor bump, never a patch.
 - [x] The workspace compiles against published crates only. No path or git dependency on `../flux`
       appears anywhere.
 - [x] Generated artifacts are rebuilt and `connector-cli diff` reports a fixed point.
-- [ ] The full Rust gate, public-site gate, host-page gate and crates.io dry-run closure are green.
+- [x] The full Rust gate, public-site gate, host-page gate and crates.io dry-run closure are green.
 - [x] The engineering and customer changelogs state the compatibility break and the required
       downstream action.
 - [ ] A minor release is tagged and pushed through CI; all four published crates are visible on
@@ -50,6 +50,9 @@ minor line. The connector release is therefore a minor bump, never a patch.
 - 2026-08-02 — Registry-source diff measured the boundary: core/web/credentials unchanged;
   runtime one additive constructor; lang canonicalization/CLI; system UDP/raw-ICMP dial variants.
   `connector-cli diff` reports `951 artifacts up to date (54 providers checked)`.
+- 2026-08-02 — The full Rust gate is green with `--no-fail-fast`; the public site built and passed
+  42 tests, the host UI passed 15, and the four-crate crates.io closure packaged and verified under
+  `--dry-run` without uploading.
 
 ## Notes
 - Precedent: [C-431](C-431-move-the-flux-pin-to-0-47.md), the 0.46 → 0.47 engine move. The value is compatibility at the public trait
