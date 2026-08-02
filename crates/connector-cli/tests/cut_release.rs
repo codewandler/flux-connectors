@@ -15,7 +15,9 @@
 //!    mints a phantom version section — the failure flux measured twice before scripting it.
 //! 3. **It stages only the release files.** Agents work concurrently here, so another session's
 //!    uncommitted or already-staged work must never ride along in a release commit.
-//! 4. **It pushes nothing and publishes nothing.**
+//! 4. **It runs every CI gate.** The public site and host operator page are Node suites, so a Rust-
+//!    only preflight can tag and publish while a required consumer surface is red (C-453).
+//! 5. **It pushes nothing and publishes nothing.**
 //!
 //! # Why a scratch repository and a stub `cargo`
 //!
@@ -70,6 +72,7 @@ impl Scratch {
         let scratch = Self { fixture };
         scratch.write_tree();
         scratch.write_stub_cargo();
+        scratch.write_stub_npm();
         scratch.init_git();
         scratch
     }
@@ -82,6 +85,11 @@ impl Scratch {
     /// `git status` — the transactional test compares that output byte for byte.
     fn cargo_log_path(&self) -> PathBuf {
         self.fixture.root().join("cargo-invocations.log")
+    }
+
+    /// As [`Scratch::cargo_log_path`], for the two Node gates (C-453).
+    fn npm_log_path(&self) -> PathBuf {
+        self.fixture.root().join("npm-invocations.log")
     }
 
     fn write(&self, relative: &str, contents: &str) {
@@ -242,6 +250,24 @@ exit 0
         make_executable(&path);
     }
 
+    /// A stub `npm` that records which package tree and command the release gate selected.
+    fn write_stub_npm(&self) {
+        let bin = self.fixture.root().join("bin");
+        fs::create_dir_all(&bin).expect("create stub bin");
+        let stub = r#"#!/usr/bin/env bash
+set -uo pipefail
+printf '%s\n' "$*" >>"$STUB_NPM_LOG"
+if [ "${STUB_NPM_GATE:-green}" = "red" ]; then
+  echo "error: the stub Node gate is red" >&2
+  exit 102
+fi
+exit 0
+"#;
+        let path = bin.join("npm");
+        fs::write(&path, stub).expect("write stub npm");
+        make_executable(&path);
+    }
+
     fn init_git(&self) {
         let root = self.root();
         self.git(&["-c", "init.defaultBranch=main", "init", "-q"]);
@@ -298,6 +324,7 @@ exit 0
             .env("HOME", self.fixture.root())
             .env("GIT_CEILING_DIRECTORIES", self.fixture.root())
             .env("STUB_LOG", self.cargo_log_path())
+            .env("STUB_NPM_LOG", self.npm_log_path())
             .env_remove("GIT_DIR")
             .env_remove("GIT_WORK_TREE")
             .env_remove("GIT_INDEX_FILE");
@@ -327,6 +354,10 @@ exit 0
 
     fn cargo_invocations(&self) -> String {
         fs::read_to_string(self.cargo_log_path()).unwrap_or_default()
+    }
+
+    fn npm_invocations(&self) -> String {
+        fs::read_to_string(self.npm_log_path()).unwrap_or_default()
     }
 
     fn status(&self) -> String {
@@ -501,6 +532,93 @@ fn a_red_gate_restores_the_tree_exactly() {
         1,
         "the re-run promoted [Unreleased] twice — the phantom version section"
     );
+}
+
+/// Both Node suites are release gates, not post-publication diagnostics (C-453).
+#[test]
+fn a_cut_runs_both_node_gates_before_it_tags() {
+    let scratch = Scratch::new("cut-release-node-gates");
+
+    let output = scratch.cut(&[TO]);
+    assert!(
+        output.status.success(),
+        "the cut failed\n{}",
+        describe(&output)
+    );
+    assert_eq!(
+        scratch.npm_invocations().lines().collect::<Vec<_>>(),
+        [
+            "--prefix web ci",
+            "--prefix web run build",
+            "--prefix web test",
+            "--prefix crates/connectors-api/ui ci",
+            "--prefix crates/connectors-api/ui test",
+        ],
+        "the release preflight did not run the same two Node gates as CI"
+    );
+    assert!(
+        scratch.tags().contains(&format!("v{TO}")),
+        "the green cut did not reach its tag"
+    );
+}
+
+/// A red Node suite has the same transactional guarantee as a red Rust gate.
+#[test]
+fn a_red_node_gate_restores_the_tree_and_creates_no_tag() {
+    let scratch = Scratch::new("cut-release-red-node-gate");
+    let status_before = scratch.status();
+    let tree_before = scratch.snapshot();
+    let log_before = scratch.log();
+
+    let output = scratch.cut_with_env(&[("STUB_NPM_GATE", "red")], &[TO]);
+
+    assert!(
+        !output.status.success(),
+        "a red Node gate must fail the cut\n{}",
+        describe(&output)
+    );
+    assert_eq!(
+        scratch.status(),
+        status_before,
+        "the index was not restored"
+    );
+    assert_tree_unchanged(
+        &tree_before,
+        &scratch.snapshot(),
+        &format!(
+            "a red Node gate did not restore the tree\n{}",
+            describe(&output)
+        ),
+    );
+    assert_eq!(scratch.log(), log_before, "a red Node gate committed");
+    assert_eq!(scratch.tags(), "", "a red Node gate tagged");
+}
+
+/// The promotable section must be first; otherwise a cut appends a new release below newer ones.
+#[test]
+fn a_cut_refuses_a_displaced_unreleased_section() {
+    let scratch = Scratch::new("cut-release-changelog-order");
+    let whats_new = scratch.read("WHATS-NEW.md").replacen(
+        "## [Unreleased]",
+        "## 0.9.1\n\n### Fixed\n\n- Already released.\n\n## [Unreleased]",
+        1,
+    );
+    scratch.write("WHATS-NEW.md", &whats_new);
+    let tree_before = scratch.snapshot();
+
+    let output = scratch.cut(&[TO]);
+
+    assert!(
+        !output.status.success(),
+        "a displaced [Unreleased] section must refuse the cut\n{}",
+        describe(&output)
+    );
+    assert_tree_unchanged(
+        &tree_before,
+        &scratch.snapshot(),
+        "the changelog-order refusal changed the tree",
+    );
+    assert_eq!(scratch.tags(), "", "a malformed customer changelog tagged");
 }
 
 /// A fatal signal mid-cut restores the tree too, and this is a measured hole rather than a

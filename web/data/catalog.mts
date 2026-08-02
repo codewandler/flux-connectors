@@ -172,6 +172,22 @@ export interface Credential {
   oauth2: boolean
 }
 
+/** One permitted value for a configuration field whose input is closed (C-225, C-453). */
+export interface Choice {
+  value: string
+  label: string
+}
+
+/** The closed input set for one addressed configuration field (C-225, C-453). */
+export interface ConfigChoices {
+  service: string
+  field: string
+  label: string
+  kind: string
+  name: string
+  choices: Choice[]
+}
+
 export interface Auth {
   schemes: string[]
   credentials: Credential[]
@@ -305,6 +321,8 @@ export interface Provider {
    * alike. Read it through {@link providerAuth}, never off the field.
    */
   auth: Published<Auth>
+  /** Configuration fields that a settings page must render as a choice, not free text. */
+  config_choices: ConfigChoices[]
   operation_count: number
   operations: Operation[]
   /** The events this connector receives — the inbound half of its surface. `[]` for most. */

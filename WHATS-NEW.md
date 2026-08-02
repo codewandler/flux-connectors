@@ -6,20 +6,15 @@
     - NO story IDs, NO crate names, NO internal jargon (engineering detail lives in
       CHANGELOG.md).
     - Per release, use only the sections that apply: "### New", "### Improved",
-      "### Fixed", "- **The operator console is usable at fleet scale.** Opening a connector is now one request instead
-  of about thirty, so the page responds immediately on a 54-connector catalogue. You can search across
-  connectors, vendors and operation names, narrow the list to what still needs setup, and see
-  operations grouped by the service they belong to. There is a parameter editor that catches malformed
-  input before it reaches a vendor, and a **dry run** that shows you exactly what would be sent —
-  including which credential would be used — without sending it or reading the secret itself.
-
-### Action needed" (breaking or attention-worthy changes).
+      "### Fixed", "### Action needed" (breaking or attention-worthy changes).
   Started at 0.8.0; earlier releases are described in CHANGELOG.md only.
 -->
 
 # What's new in flux-connectors
 
-## 0.12.0
+## [Unreleased]
+
+## [0.12.0] — 2026-08-02
 
 ### New
 
@@ -38,7 +33,7 @@
 - **If you build against the `connector-flux` crate and match exhaustively on its `Error` type, your
   build will break.** Three variants were added for the new refusals. Add the arms, or a `_` arm.
 
-## 0.11.0
+## [0.11.0] — 2026-08-02
 
 ### New
 
@@ -63,9 +58,6 @@
 - **If you build against the `codewandler-connector-spec` crate and construct a `Service` value
   directly, your build will break.** The struct gained a `tags` field; add `tags: Vec::new()` or use
   `..Default::default()`. Reading and writing connector files is unaffected.
-
-
-## [Unreleased]
 
 ## [0.10.1] — 2026-08-01
 

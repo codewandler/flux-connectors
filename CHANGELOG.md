@@ -7,6 +7,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A release cut now runs both Node consumer gates before it creates a tag** (C-453). v0.12.0
+  demonstrated the hole: its crates.io workflow published successfully while CI's public-site job
+  found three red assertions. `scripts/cut-release.sh` now runs the public-site build and 42 tests
+  plus the host page's 15 tests inside the same transaction as the Rust gate; a red Node suite
+  restores the tree and leaves no commit or tag. The release fixture executes and records those
+  commands, and proves the red path rather than inspecting shell text.
+
+  The three failures are closed too. `web/data/catalog.mts` now carries the emitted
+  `Provider.config_choices` / `ConfigChoices` / `Choice` shape, and the operation page says
+  “username” where the bare English word “user” collided with a newly shipped service name. The
+  guard that refuses hand-maintained catalogue data remains strict. `WHATS-NEW.md`'s displaced
+  `[Unreleased]` section and malformed 0.11.0 / 0.12.0 headings were repaired, and the cut now
+  refuses that ordering before it changes a file.
+
 ## [0.12.0] — 2026-08-02
 
 ### Changed — breaking for `connector-flux` consumers

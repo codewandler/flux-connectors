@@ -189,13 +189,13 @@ const declaration = computed(() => (operation.value ? signature(operation.value)
                   from
                   <code v-for="variable in credential(name)!.env" :key="variable">{{ variable }}</code>
                   <template v-if="credential(name)!.user_env.length">
-                    · user from
+                    · username from
                     <code v-for="variable in credential(name)!.user_env" :key="variable">{{
                       variable
                     }}</code>
                   </template>
                   <template v-if="credential(name)!.user_suffix">
-                    · user suffix <code>{{ credential(name)!.user_suffix }}</code>
+                    · username suffix <code>{{ credential(name)!.user_suffix }}</code>
                   </template>
                   <template v-if="credential(name)!.oauth2"> · acquired by OAuth2 </template>
                 </div>

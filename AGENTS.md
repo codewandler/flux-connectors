@@ -881,7 +881,7 @@ These failures are recorded decisions. Do not “fix” one without reading its 
 
 ## Validation
 
-The full repository gate is:
+The Rust workspace gate is:
 
 ```bash
 cargo fmt --all
@@ -891,8 +891,10 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
 
-**Two Node suites are part of CI and are not part of that block** — `crates/connectors-api/ui`
-(the host page) and `web/` (the public site). `ci.yml` runs `npm ci && npm test` in each, pinned.
+**Two Node suites are part of CI and are not part of that Rust block** —
+`crates/connectors-api/ui` (the host page) and `web/` (the public site). `ci.yml` runs them, pinned.
+They are also part of `scripts/cut-release.sh`'s transactional gate (C-453), so a release tag cannot
+be created locally while a consumer surface is red and then publish crates before CI reports it.
 
 ⚠ **In a fresh worktree neither has `node_modules`, so `npm test` fails with `MODULE_NOT_FOUND`
 rather than running** — which is not a pass and is easy to report as one. Measured 2026-08-01: a
@@ -1055,10 +1057,11 @@ against the diff, not against memory.
 
    That promotes both changelogs, bumps `[workspace.package].version`, every internal
    path-dependency requirement in `[workspace.dependencies]` and `README.md`, re-locks the
-   workspace, **regenerates every artifact**, runs the full [gate](#validation), commits
+   workspace, **regenerates every artifact**, runs the Rust gate plus both Node gates from
+   [Validation](#validation), commits
    `Release vX.Y.Z` and creates the annotated tag. It **does not push and never publishes**.
 
-   Three properties are worth knowing rather than rediscovering, and each is pinned by
+   Four properties are worth knowing rather than rediscovering, and each is pinned by
    `crates/connector-cli/tests/cut_release.rs`:
 
    - **Regeneration is not optional bookkeeping, and the script refuses to skip it.** This
@@ -1075,6 +1078,10 @@ against the diff, not against memory.
      pathspec (nothing another session merely *staged* rides along) and it **refuses to start** if
      a file it would rewrite — the manifest, the lockfile, the README, any generated artifact — is
      already dirty. Commit or stash that work first; a release is cut on top of committed work.
+   - **It runs both Node consumer gates before tagging** (C-453). v0.12.0 proved why the Rust block
+     is not sufficient: crates.io published green while the public-site job reported a missing
+     catalogue field and a rendered-word collision. A red site or host page now takes the same
+     transactional path as a red Rust test — no release commit and no tag survive.
 3. **Review what it made, while it is still local**: `git show`, and `git tag -l -n99 vX.Y.Z`. The
    tag body defaults to the customer-changelog section just promoted; `git show v0.8.0` is the model
    for the voice. Reword with `git commit --amend` and `git tag -a -f vX.Y.Z`, or pass the tag body

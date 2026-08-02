@@ -56,6 +56,8 @@ const ROOT = 'Catalog'
  */
 const MUST_BE_EXERCISED = [
   'Provider',
+  'ConfigChoices',
+  'Choice',
   'Service',
   'Operation',
   'Channel',

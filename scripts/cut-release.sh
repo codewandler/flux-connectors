@@ -195,6 +195,20 @@ if [ -n "$dirty" ]; then
   exit 1
 fi
 
+# The promotable section is the first release section in each file. Merely finding an
+# `[Unreleased]` somewhere is insufficient: v0.11.0 and v0.12.0 were hand-inserted above it in
+# WHATS-NEW.md, so the next promotion would have landed below two newer releases while still
+# reporting success (C-453).
+for changelog in "${CHANGELOG_PATHS[@]}"; do
+  first_section=$(grep -m1 '^## ' "$changelog" || true)
+  if [ "$first_section" != '## [Unreleased]' ]; then
+    echo "!! refusing to cut: $changelog's first release section is not ## [Unreleased]:" >&2
+    echo "!!   ${first_section:-<none>}" >&2
+    echo "!! Put one promotable [Unreleased] section above every released version." >&2
+    exit 1
+  fi
+done
+
 echo "== cutting $OLD -> $NEW =="
 
 # ---------------------------------------------------------------------------------------------
@@ -360,8 +374,10 @@ stamped=$({ grep -rl -- "flux-connectors $NEW" "${existing_generated[@]}" || tru
 echo "   $stamped generated file(s) now carry the $NEW generator string"
 
 # ---------------------------------------------------------------------------------------------
-# 7) The gate — AGENTS.md § Validation, in its order. `--no-fail-fast` is not optional: without it
-#    `cargo test --workspace` stops at the first failing binary and reports a number that is wrong.
+# 7) Every CI gate — AGENTS.md § Validation, in its order. `--no-fail-fast` is not optional: without
+#    it `cargo test --workspace` stops at the first failing binary and reports a number that is
+#    wrong. The two Node trees are explicit too: v0.12.0 proved that leaving them to post-push CI
+#    lets the tag publish crates before the site reports red (C-453).
 # ---------------------------------------------------------------------------------------------
 if [ "$NO_GATE" -eq 0 ]; then
   echo "== gate =="
@@ -374,6 +390,11 @@ if [ "$NO_GATE" -eq 0 ]; then
   gate cargo test --workspace --no-fail-fast
   gate cargo clippy --workspace --all-targets -- -D warnings
   gate cargo fmt --all --check
+  gate npm --prefix web ci
+  gate npm --prefix web run build
+  gate npm --prefix web test
+  gate npm --prefix crates/connectors-api/ui ci
+  gate npm --prefix crates/connectors-api/ui test
   echo "   gate green"
 else
   echo "== gate SKIPPED (--no-gate) — this cut will NOT be tagged =="
