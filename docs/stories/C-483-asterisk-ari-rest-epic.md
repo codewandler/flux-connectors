@@ -2,7 +2,7 @@
 id: C-483
 title: "Asterisk ARI ships as a spec-generated REST connector (epic)"
 pillar: Agent
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/asterisk-ari-rest.md
 epic: asterisk-ari-rest
@@ -26,7 +26,7 @@ the normal `flux-connectors` pipeline, with no Asterisk plugin or runtime invent
 - [x] Event WebSocket handling is absent and explicitly deferred to future channel work.
 - [x] C-486 regenerates the whole catalogue, passes every repository gate, and cuts the immediate
       new-provider release.
-- [ ] The separate Flux correction removes the entire Asterisk plugin rather than retaining AMI.
+- [x] The separate Flux correction removes the entire Asterisk plugin rather than retaining AMI.
 
 ## Progress
 
@@ -38,6 +38,9 @@ the normal `flux-connectors` pipeline, with no Asterisk plugin or runtime invent
 - 2026-08-02: `flux-connectors` v0.15.0 published the complete 108-operation REST connector after
   its crates.io workflow completed successfully; the epic remains open only for the separate Flux
   correction that removes the mistaken plugin.
+- 2026-08-02: Flux v0.52.0 and plugin pack v0.2.0 published the correction. The pack release
+  contains 92 assets for 18 non-Asterisk binaries across five targets plus its signed index pair,
+  and `gh release view` found zero Asterisk-named assets.
 
 ## Notes
 
