@@ -1039,6 +1039,74 @@ test('a dry run shows the request without sending it, and a refusal is shown as 
   }
 })
 
+test('a row with nowhere to break shrinks rather than widening the page', async () => {
+  // **Layout hygiene, borrowed rather than rediscovered.** `web/src/components/OperationRow.vue`'s
+  // comment records what the absence of these three rules cost the site: a flex or grid child
+  // defaults to `min-width: auto` and refuses to shrink below its content, and a path like
+  // `/v0/{baseId}/{tableIdOrName}/{recordId}` offers no break opportunity — so every row forced its
+  // track wider than the viewport and the page scrolled sideways by ~193px.
+  //
+  // Asserted through `getComputedStyle` on rows the page really drew, rather than by grepping the
+  // stylesheet for three strings: a rule written for a selector nothing matches greps identically
+  // to one that applies, and that is precisely the way this regression comes back.
+  const unbreakable = '/v0/{baseId}/{tableIdOrName}/{recordId}/attachments/{attachmentId}'
+  const connector = fixtureConnector({
+    operation_count: 1,
+    callable_operations: 1,
+    operations: [
+      {
+        ...fixtureOperations()[0],
+        id: 'fixture-long',
+        tool: `fixture.long${unbreakable.replaceAll('/', '.')}`,
+        description: unbreakable,
+      },
+    ],
+  })
+  const page = await render(signedIn(), {
+    '/v1/connectors': [connector],
+    '/v1/connectors/fixture': connector,
+  })
+  try {
+    rail(page.document)[0].click()
+    await page.settle()
+
+    const node = row(page.document, 'fixture.long')
+    assert.ok(node, 'the long-named operation was not rendered, so there is nothing to measure')
+    const computed = (element) => page.window.getComputedStyle(element)
+
+    assert.equal(
+      computed(node).flexWrap,
+      'wrap',
+      'an operation row does not wrap, so its content is laid out on one line however long it is'
+    )
+    for (const child of node.children) {
+      assert.equal(
+        computed(child).minWidth,
+        '0',
+        `a child of an operation row keeps \`min-width: auto\`, so it refuses to shrink below "${child.textContent}" and forces its track wider than the viewport`
+      )
+    }
+    // And the string with no break opportunity in it, which is the one that did the damage.
+    assert.equal(
+      computed(node.querySelector('.id')).overflowWrap,
+      'anywhere',
+      'a tool name with no space or hyphen in it has nowhere to break, and the page is told not to break it anyway'
+    )
+
+    // The rail is the other track, and it holds vendor names and counts rather than paths — so it
+    // is asserted for the same property rather than assumed to be safe by being narrower.
+    for (const child of rail(page.document)[0].children) {
+      assert.equal(
+        computed(child).minWidth,
+        '0',
+        'a child of a rail row keeps `min-width: auto`, so a long vendor name widens the rail instead of shrinking'
+      )
+    }
+  } finally {
+    await page.close()
+  }
+})
+
 test('the response is legible: status, headers and body are distinguished and JSON is formatted', async () => {
   // `exec::Outcome::content` is the JSON-encoded `{status, headers, body}` flux's `http.request`
   // makes canonical (C-403), and the page wrote the whole document into a `<pre>` verbatim. The

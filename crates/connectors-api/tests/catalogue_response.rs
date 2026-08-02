@@ -32,11 +32,12 @@ const OPERATOR: &str = "110169484474386276334";
 
 /// **The ceiling, uncompressed and in bytes.**
 ///
-/// 512 KiB, against a measured **284,623 bytes** for 54 connectors and 679 operations on
-/// 2026-08-01 — the assertion prints what it measured, so the number above is checkable rather than
-/// remembered. C-237's note estimated *"299 operations adds roughly 55 KB"*; the catalogue has since
-/// more than doubled and the five added fields cost about 320 bytes an operation, most of it
-/// `description`.
+/// 512 KiB, against a measured **284,623 bytes** for 54 connectors and 679 operations. The test
+/// prints that line whether or not it passes, so the figure is reproduced by
+/// `cargo test -p connectors-api --test catalogue_response -- --nocapture` rather than remembered —
+/// re-measured on 2026-08-02, after C-153's service tags landed, and unchanged from 2026-08-01.
+/// C-237's note estimated *"299 operations adds roughly 55 KB"*; the catalogue has since more than
+/// doubled and the five added fields cost about 320 bytes an operation, most of it `description`.
 ///
 /// **That is the right trade here and the reasoning is worth keeping.** This response is sent once
 /// per page load, over loopback, to a console; what it replaced was up to ~30 requests *per
@@ -133,6 +134,14 @@ async fn the_connector_list_carries_every_field_its_rail_renders() {
         }
     }
 
+    // Printed whether or not the ceiling holds, so the figure in `CEILING`'s doc comment is
+    // reproduced by a command rather than remembered from the session that wrote it —
+    // `cargo test -p connectors-api --test catalogue_response -- --nocapture`.
+    println!(
+        "GET /v1/connectors: {} bytes, {} connectors, {operations} operations",
+        body.len(),
+        connectors.len(),
+    );
     assert!(
         body.len() <= CEILING,
         "GET /v1/connectors is {} bytes for {} connectors and {operations} operations, over the \

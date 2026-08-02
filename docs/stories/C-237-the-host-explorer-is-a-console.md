@@ -51,41 +51,66 @@ and is unreachable from the page. An operator can store a credential and cannot 
 
 ## Acceptance
 
-- [ ] **Failing-first test:** opening a connector issues **one** request per operation the operator
+- [x] **Failing-first test:** opening a connector issues **one** request per operation the operator
       actually expands, not one per operation in the connector. It fails today at ~30. Name it.
       (See [C-239](C-239-a-test-harness-for-the-host-page.md) — if no harness exists yet, state how
       this was proved instead of asserting it was.)
-- [ ] Search and filter over the connector list, including by wiring state. *"Which of these still
+      → `ui/test/host-page.test.mjs::opening a connector fetches no operation detail, and expanding
+      one fetches exactly that one`, red at the merge base with the 30 URLs quoted, and
+      `tests/catalogue_response.rs::the_connector_list_carries_every_field_its_rail_renders` on the
+      server side of it.
+- [x] Search and filter over the connector list, including by wiring state. *"Which of these still
       need setup"* is the operator's real question and `wiring` already answers it.
-- [ ] Operations are grouped by `service`, and `idempotency` and `hosts` are rendered rather than
-      discarded.
-- [ ] A parameter editor that can hold a real body, with invalid JSON refused before sending rather
+      → `src/index.html:227-272` (`#search` over id, vendor, description and every operation's id,
+      tool, service and description) and `BANDS` at `:210-215`, keyed on the host's own `wiring`
+      tokens. Tests 8 and 9 of the Node suite.
+- [x] Operations are grouped by `service`, and `idempotency` and `hosts` are rendered rather than
+      discarded. → `src/index.html:453-484`; Node test 7.
+- [x] A parameter editor that can hold a real body, with invalid JSON refused before sending rather
       than by the vendor. **A schema-driven form needs no codegen**: `connector_pack::project(&entry)`
       is public (`crates/connector-pack/src/spec.rs:110`) and yields a real `input_schema`, so
       `OperationView` can carry one for ~5 lines. Every declared parameter is required by
       construction, so the form is flat — one control per property, no optionality logic. Keep the
       raw-JSON escape hatch.
-- [ ] The response is legible: status, headers and body distinguished, JSON bodies formatted. The
+      → `src/index.html:574-625`. `input_schema` reaches `OperationView` from
+      `connector_pack::project` (`src/api.rs:528`); Node test 12 types `{ "ticket_id": }` and
+      asserts nothing reached `/execute`.
+- [x] The response is legible: status, headers and body distinguished, JSON bodies formatted. The
       redactor's output must pass through unchanged — it is what stops a vendor echoing a token onto
-      this surface.
-- [ ] A credential can be removed through the page.
-- [ ] **Optional but high value: a dry-run preview.** `Operation::project(...).dry_run(params)`
+      this surface. → `renderResponse`, `src/index.html:514-536`. Node test 15 covers both halves:
+      the canonical document is split, and a response that is not one is shown whole with
+      `[REDACTED]` intact.
+- [x] A credential can be removed through the page. → `src/index.html:358-370`; Node test 12 asserts
+      the `DELETE /v1/credentials/fixture/fixture.api_key` that goes out.
+- [x] **Optional but high value: a dry-run preview.** `Operation::project(...).dry_run(params)`
       (`crates/connector-pack/src/tool.rs:271`) renders the exact request without sending it and
       without touching the secret store — C-145's seam. It answers *"why will this not work"*
       precisely: `MissingConfig` names the field and its service, `MissingCredential` names the
       address. Verify that it refuses usefully for an unbound configuration before committing to the
       panel's copy; that has not been run.
-- [ ] **Layout hygiene, borrowed rather than rediscovered.** `min-width: 0` on flex and grid
+      → It has been run now, and it refuses as promised:
+      `tests/dry_run.rs::an_unbound_configuration_field_is_refused_by_name` holds a 400 for
+      `zendesk-ticket-show` to naming `subdomain`, its service and the operation.
+      `POST /v1/operations/{id}/dry-run` is `src/lib.rs:107`, `src/api.rs:722`, `src/exec.rs:121`.
+- [x] **Layout hygiene, borrowed rather than rediscovered.** `min-width: 0` on flex and grid
       children, `flex-wrap: wrap`, `overflow-wrap: anywhere`. `OperationRow.vue`'s comment records
       what their absence cost the site: a path like `/v0/{baseId}/{tableIdOrName}/{recordId}` has no
       break opportunity, so every row forced its track wider than the viewport and the page scrolled
       sideways by ~193px.
-- [ ] Everything in `docs/designs/host-explorer.md` §"Constraints any implementation must hold" still
+      → `src/index.html:115-116` plus `flex-wrap: wrap` on six row rules, and — added on resume —
+      `ui/test/host-page.test.mjs::a row with nowhere to break shrinks rather than widening the
+      page`, which reads `getComputedStyle` on rows the page really drew rather than grepping the
+      stylesheet for three strings.
+- [x] Everything in `docs/designs/host-explorer.md` §"Constraints any implementation must hold" still
       holds — in particular `textContent` never `innerHTML`, POST-not-link for auth state changes,
       the dev button only under `status.dev`, and the `wiring` tokens character-identical to C-206's.
-- [ ] `cargo test --workspace --no-fail-fast` green, with
+      → Node tests 1–5 (all four constraints) and `tests/wiring_vocabulary.rs` (2), all green. These
+      are the ones the parking note recorded as **unproven**: the suite could not run in the parked
+      worktree because it had no `node_modules`.
+- [x] `cargo test --workspace --no-fail-fast` green, with
       `tests/host.rs::a_stored_credential_reaches_no_surface` and
       `without_a_google_registration_the_host_still_starts_and_explains_itself` both still passing.
+      → 170 targets, **1568 passed, 0 failed**, and both named tests run and pass.
 
 ## Notes
 
@@ -142,3 +167,42 @@ and is unreachable from the page. An operator can store a credential and cannot 
 - **To resume:** fresh worktree, `git merge --no-ff main` (it is behind C-437 and C-432),
   `npm ci` in `crates/connectors-api/ui` **before** claiming any gate, then the base proof the story
   never had.
+
+- **2026-08-02 — resumed, gated and finished.** Every item above is now ticked against a command run
+  in the session that ticked it. What the resume actually consisted of:
+  - **`main` merged in, not rebased**, so `37ba8f7` survives as the audit trail. The merge was
+    **clean**: 283 files arrived from `main` and not one of them was under `crates/connectors-api/`,
+    so nothing in the parked diff had to be reworked for it. The only overlap was this story file,
+    which auto-merged. `git diff --stat main...HEAD` is 7 files, all inside the crate.
+  - **The base proof the story never had.** Run in this worktree with its own `target/`, by
+    restoring `crates/connectors-api/src/` to `dd8d21a` — the merge base — and leaving the tests in
+    place. `ui/test/host-page.test.mjs` went **9 red of 14**, and the named one quoted the 30 URLs
+    verbatim: *"opening a connector fetched 30 operation details to render a list the host already
+    sent whole"*. `tests/catalogue_response.rs` (2) and `tests/dry_run.rs` (2) were red too — the
+    first on *"`airtable-record-get` carries no `tool`"*, the second on the dry-run route not
+    existing. The five sign-in and safety tests were green at the base and stayed green, which is
+    the correct result for tests C-239 wrote about behaviour this story does not change.
+  - **The parking note's three unproven safety constraints are now proven.** `npm ci` in
+    `crates/connectors-api/ui` was all that stood between the suite and running; `textContent`
+    never `innerHTML`, POST-not-link, and the dev button only under `status.dev` are Node tests 3,
+    4 and 1, and all three pass.
+  - **Nothing from `37ba8f7` was discarded.** Reviewed in full and kept as written; the backend
+    half is well-argued and the page's comments carry their own reasoning. Two things were
+    **added**: a fifteenth Node test for the layout-hygiene item, which nothing asserted (it reads
+    `getComputedStyle` on rows the page really drew, and is red with the `min-width: 0` rule
+    removed — verified), and an unconditional `println!` in `catalogue_response.rs` so the byte
+    figure in `CEILING`'s doc comment is reproduced by a command instead of remembered.
+  - **The response-size figure re-measured, and it holds.**
+    `cargo test -p connectors-api --test catalogue_response -- --nocapture` →
+    `GET /v1/connectors: 284623 bytes, 54 connectors, 679 operations`, against a 512 KiB ceiling.
+    Identical to the parked implementor's number even after C-153's service tags landed, because
+    tags do not reach `ConnectorView`.
+  - **Gate, all in this worktree:** `cargo test -p connectors-api` 107 passed / 0 failed;
+    `cargo test --workspace --no-fail-fast` 170 targets, **1568 passed, 0 failed**;
+    `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo fmt --all --check` clean;
+    `npm test` in `crates/connectors-api/ui` **15 passed, 0 failed**.
+  - **One thing to know when reading the diff.** The story's `note:` frontmatter says this phase
+    *"needs no backend work"*. That is wrong, and the story's own Notes say so two sections down —
+    *"the N+1 fix is a small backend change, not a client one"*. The diff does the backend change
+    the Notes describe (five fields onto `OperationWiring`, `input_schema` onto `OperationView`, a
+    `dry-run` route). The frontmatter note is the stale half; the body governed.
