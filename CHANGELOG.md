@@ -35,6 +35,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The host's explorer is an operator console, not a catalogue viewer** (C-237). Opening a connector
+  no longer fires ~30 requests to render a list the host already sent whole — `operations[]` carries
+  every field those responses did, so expanding one operation fetches exactly that one. Operations are
+  grouped by service with idempotency and hosts shown; the connector list is searchable by connector,
+  vendor and operation id, and filterable down to what still needs setup. A parameter editor refuses
+  invalid JSON before it reaches a vendor, and a **dry run** shows the composed request without
+  sending it — reaching no socket and no secret store, placing a credential *reference* where the
+  value would go.
+
+  Resumed from a preserved WIP commit after its first implementor was stopped mid-gate. The three
+  safety constraints that session left unproven were unproven only because a fresh worktree has no
+  `node_modules`; they are real tests and they pass.
+
+
 - **The Anthropic Admin service goes from three reads to nine** (C-441). Organization members (list
   and get), workspace members (list and get), one workspace by id, and outstanding invites. Every one
   is an authenticated, idempotent `GET` against `anthropic.admin_key`, and every one is
@@ -67,6 +81,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   have left `roles` dead beside it and pre-empted the mapping `connector-surfaces.md` owns.
 
 ### Fixed
+
+- **A route on the host's auth surface was gated but not pinned** (C-237, found in review). The new
+  dry-run route took a `Principal` like every other `/v1` route, but `tests/tenancy.rs`'s enumeration
+  was not extended, so removing the gate would have failed no test — the same omission that file's own
+  comment already records against C-204. Added at integration and falsified: dropping the `Principal`
+  now fails with *"POST /v1/operations/anthropic-models-list/dry-run answered without a session"*.
+
 
 - **`connector-cli`'s scaffold would have mistaken a tagged single-surface provider for a
   multi-service one** (C-153). `declares_services` asked `!services.is_empty()` when it meant "declares

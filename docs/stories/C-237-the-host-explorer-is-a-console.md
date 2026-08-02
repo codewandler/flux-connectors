@@ -2,12 +2,12 @@
 id: C-237
 title: "The host's explorer fires 30 requests to read three fields, has no search over 53 connectors, and throws away half of what the API returns"
 pillar: Surfaces
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/host-explorer.md
 epic: host-explorer
 areas: [host]
-note: "phase 1 — everything here is already on the wire and needs no backend work. C-212 added operations[].requires and .callable specifically so the N+1 would not be needed, and the page still does it"
+note: "phase 1. NB the earlier note claiming this needs no backend work was wrong and the story's own Notes contradicted it — the N+1 fix is a small backend change. Resumed from a preserved WIP commit after an infrastructure stop"
 ---
 
 # The host's explorer is not yet a console

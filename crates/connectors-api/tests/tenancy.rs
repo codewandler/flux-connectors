@@ -112,6 +112,10 @@ async fn an_unauthenticated_request_is_refused() {
         ("GET", "/v1/operations/anthropic-models-list"),
         ("PUT", "/v1/credentials/anthropic/anthropic.api_key"),
         ("POST", "/v1/operations/anthropic-models-list/execute"),
+        // C-237 added this route and did not enumerate it here, which is the same omission the
+        // comment above records against C-204: the gate was applied but nothing pinned it, so
+        // removing it would have failed no test. Added at integration.
+        ("POST", "/v1/operations/anthropic-models-list/dry-run"),
     ] {
         let request = match method {
             "GET" => client.get(format!("{base}{path}")),

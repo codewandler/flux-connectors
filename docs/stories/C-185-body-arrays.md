@@ -2,7 +2,7 @@
 id: C-185
 title: "A request body cannot contain an array, so an envelope-shaped vendor cannot be addressed"
 pillar: Codegen
-status: ready
+status: blocked
 priority: 2
 areas: [connector-flux, connector-spec]
 note: "found by C-168, then NARROWED by C-179: a flat single-level array DOES work (front's tag_ids emits as List<String>). What is blocked is an array a wire path must DECOMPOSE across nested segments, which is what SendGrid's personalizations[].to[] needs"
